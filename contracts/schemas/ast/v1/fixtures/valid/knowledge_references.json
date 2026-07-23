@@ -1,0 +1,42 @@
+{
+  "type": "document",
+  "schema_version": 1,
+  "children": [
+    {
+      "id": "0198a1b2-c3d4-7e5f-8a9b-0c1d2e3f4c01",
+      "type": "paragraph",
+      "content": [
+        { "type": "text", "text": "角色 " },
+        {
+          "type": "entity_reference",
+          "entity_id": "0198a1b2-c3d4-7e5f-8a9b-0c1d2e3f4d01",
+          "display_text": "安比·德玛拉"
+        },
+        { "type": "text", "text": " 的生日是 " },
+        {
+          "type": "claim_reference",
+          "claim_id": "0198a1b2-c3d4-7e5f-8a9b-0c1d2e3f4d02",
+          "display_text": "12 月 20 日"
+        },
+        { "type": "text", "text": "，见官方设定集" },
+        {
+          "type": "citation_reference",
+          "citation_id": "0198a1b2-c3d4-7e5f-8a9b-0c1d2e3f4d03",
+          "display_text": "《绝区零官方设定集》第 42 页"
+        },
+        { "type": "text", "text": "。" }
+      ]
+    },
+    {
+      "id": "0198a1b2-c3d4-7e5f-8a9b-0c1d2e3f4c02",
+      "type": "paragraph",
+      "content": [
+        { "type": "text", "text": "无 display_text 的引用" },
+        {
+          "type": "citation_reference",
+          "citation_id": "0198a1b2-c3d4-7e5f-8a9b-0c1d2e3f4d04"
+        }
+      ]
+    }
+  ]
+}

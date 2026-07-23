@@ -1,0 +1,10 @@
+{
+  "type": "document",
+  "schema_version": 1,
+  "children": [
+    {
+      "type": "paragraph",
+      "content": [{ "type": "text", "text": "缺少 id 的段落" }]
+    }
+  ]
+}

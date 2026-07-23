@@ -1,0 +1,14 @@
+{
+  "schema_version": 1,
+  "operation_type": "insert_block",
+  "base": { "revision_id": "00000000-0000-7000-8000-000000000501" },
+  "target": { "page_id": "00000000-0000-7000-8000-000000000502" },
+  "expected_hash": null,
+  "evidence": [{ "note": "人工要求补充简介" }],
+  "risk": { "level": "low", "reasons": [] },
+  "payload": {
+    "parent_block_id": null,
+    "index": 0,
+    "block": { "type": "paragraph", "id": "block-intro", "content": [] }
+  }
+}

@@ -1,0 +1,106 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://anby.wiki/schemas/extraction/v1/candidates.schema.json",
+  "title": "Anby Wiki Extraction Candidates v1",
+  "type": "object",
+  "required": ["schema_version", "source_version_id", "entities", "claims", "quality_score", "prompt_injection_detected"],
+  "properties": {
+    "schema_version": { "const": 1 },
+    "source_version_id": { "$ref": "#/$defs/uuid" },
+    "entities": {
+      "type": "array",
+      "items": { "$ref": "#/$defs/entity_candidate" },
+      "maxItems": 200
+    },
+    "claims": {
+      "type": "array",
+      "items": { "$ref": "#/$defs/claim_candidate" },
+      "maxItems": 500
+    },
+    "quality_score": { "type": "number", "minimum": 0, "maximum": 1 },
+    "prompt_injection_detected": { "type": "boolean" }
+  },
+  "additionalProperties": false,
+  "$defs": {
+    "uuid": { "type": "string", "format": "uuid" },
+    "evidence": {
+      "type": "object",
+      "required": ["chunk_id", "quotation", "char_start", "char_end"],
+      "properties": {
+        "chunk_id": { "$ref": "#/$defs/uuid" },
+        "quotation": { "type": "string", "minLength": 1, "maxLength": 2000 },
+        "char_start": { "type": "integer", "minimum": 0 },
+        "char_end": { "type": "integer", "minimum": 1 },
+        "page": { "type": "integer", "minimum": 1 }
+      },
+      "additionalProperties": false
+    },
+    "entity_candidate": {
+      "type": "object",
+      "required": ["candidate_id", "type_key", "label", "aliases", "confidence", "evidence"],
+      "properties": {
+        "candidate_id": { "$ref": "#/$defs/uuid" },
+        "type_key": { "type": "string", "minLength": 1, "maxLength": 100 },
+        "label": { "type": "string", "minLength": 1, "maxLength": 255 },
+        "aliases": {
+          "type": "array",
+          "items": { "type": "string", "minLength": 1, "maxLength": 255 },
+          "uniqueItems": true,
+          "maxItems": 50
+        },
+        "confidence": { "type": "number", "minimum": 0, "maximum": 1 },
+        "evidence": { "type": "array", "items": { "$ref": "#/$defs/evidence" }, "minItems": 1 }
+      },
+      "additionalProperties": false
+    },
+    "subject": {
+      "type": "object",
+      "properties": {
+        "candidate_id": { "$ref": "#/$defs/uuid" },
+        "entity_id": { "$ref": "#/$defs/uuid" }
+      },
+      "oneOf": [
+        { "required": ["candidate_id"] },
+        { "required": ["entity_id"] }
+      ],
+      "additionalProperties": false
+    },
+    "value": {
+      "type": "object",
+      "properties": {
+        "string": { "type": "string" },
+        "number": { "type": "number" },
+        "date": { "type": "string", "format": "date" },
+        "entity_id": { "$ref": "#/$defs/uuid" },
+        "coordinate": {
+          "type": "object",
+          "required": ["lat", "lon"],
+          "properties": {
+            "lat": { "type": "number", "minimum": -90, "maximum": 90 },
+            "lon": { "type": "number", "minimum": -180, "maximum": 180 }
+          },
+          "additionalProperties": false
+        },
+        "composite": { "type": "object" }
+      },
+      "minProperties": 1,
+      "maxProperties": 1,
+      "additionalProperties": false
+    },
+    "claim_candidate": {
+      "type": "object",
+      "required": ["candidate_id", "subject", "property_key", "value", "confidence", "evidence"],
+      "properties": {
+        "candidate_id": { "$ref": "#/$defs/uuid" },
+        "subject": { "$ref": "#/$defs/subject" },
+        "property_key": { "type": "string", "minLength": 1, "maxLength": 100 },
+        "value": { "$ref": "#/$defs/value" },
+        "valid_from": { "type": "string", "format": "date-time" },
+        "valid_to": { "type": "string", "format": "date-time" },
+        "confidence": { "type": "number", "minimum": 0, "maximum": 1 },
+        "evidence": { "type": "array", "items": { "$ref": "#/$defs/evidence" }, "minItems": 1 }
+      },
+      "additionalProperties": false
+    }
+  }
+}

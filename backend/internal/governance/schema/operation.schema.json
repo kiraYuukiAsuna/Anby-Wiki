@@ -1,0 +1,152 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://anby.wiki/schemas/proposal-operation/v1/operation.schema.json",
+  "title": "Anby Wiki ProposalOperation v1",
+  "description": "Proposal 中有序原子操作的权威跨语言契约。",
+  "allOf": [
+    { "$ref": "#/$defs/envelope" },
+    {
+      "oneOf": [
+        { "$ref": "#/$defs/create_page" },
+        { "$ref": "#/$defs/rename_page" },
+        { "$ref": "#/$defs/create_redirect" },
+        { "$ref": "#/$defs/insert_block" },
+        { "$ref": "#/$defs/delete_block" },
+        { "$ref": "#/$defs/move_block" },
+        { "$ref": "#/$defs/replace_block" },
+        { "$ref": "#/$defs/insert_page_reference" },
+        { "$ref": "#/$defs/retarget_page_reference" },
+        { "$ref": "#/$defs/insert_entity_reference" },
+        { "$ref": "#/$defs/retarget_entity_reference" },
+        { "$ref": "#/$defs/insert_claim_reference" },
+        { "$ref": "#/$defs/retarget_claim_reference" },
+        { "$ref": "#/$defs/insert_citation_reference" },
+        { "$ref": "#/$defs/retarget_citation_reference" },
+        { "$ref": "#/$defs/retarget_external_link" },
+        { "$ref": "#/$defs/create_entity" },
+        { "$ref": "#/$defs/create_claim" },
+        { "$ref": "#/$defs/supersede_claim" },
+        { "$ref": "#/$defs/add_claim_source" }
+      ]
+    }
+  ],
+  "unevaluatedProperties": false,
+  "$defs": {
+    "uuid": {
+      "type": "string",
+      "format": "uuid"
+    },
+    "base": {
+      "type": "object",
+      "properties": {
+        "revision_id": { "$ref": "#/$defs/uuid" },
+        "state_version": { "type": "integer", "minimum": 0 }
+      },
+      "additionalProperties": false,
+      "minProperties": 1
+    },
+    "target": {
+      "type": "object",
+      "properties": {
+        "wiki_id": { "$ref": "#/$defs/uuid" },
+        "namespace_id": { "$ref": "#/$defs/uuid" },
+        "page_id": { "$ref": "#/$defs/uuid" },
+        "block_id": { "type": "string", "minLength": 1 },
+        "node_id": { "type": "string", "minLength": 1 },
+        "entity_id": { "$ref": "#/$defs/uuid" },
+        "claim_id": { "$ref": "#/$defs/uuid" },
+        "citation_id": { "$ref": "#/$defs/uuid" },
+        "external_resource_id": { "$ref": "#/$defs/uuid" }
+      },
+      "additionalProperties": false,
+      "minProperties": 1
+    },
+    "evidence": {
+      "type": "object",
+      "properties": {
+        "citation_id": { "$ref": "#/$defs/uuid" },
+        "source_chunk_id": { "$ref": "#/$defs/uuid" },
+        "note": { "type": "string", "minLength": 1, "maxLength": 1000 }
+      },
+      "anyOf": [
+        { "required": ["citation_id"] },
+        { "required": ["source_chunk_id"] },
+        { "required": ["note"] }
+      ],
+      "additionalProperties": false
+    },
+    "risk": {
+      "type": "object",
+      "properties": {
+        "level": { "enum": ["low", "medium", "high", "critical"] },
+        "reasons": {
+          "type": "array",
+          "items": { "type": "string", "minLength": 1 },
+          "uniqueItems": true
+        }
+      },
+      "required": ["level", "reasons"],
+      "additionalProperties": false
+    },
+    "envelope": {
+      "type": "object",
+      "properties": {
+        "schema_version": { "const": 1 },
+        "operation_type": {
+          "enum": [
+            "create_page",
+            "rename_page",
+            "create_redirect",
+            "insert_block",
+            "delete_block",
+            "move_block",
+            "replace_block",
+            "insert_page_reference",
+            "retarget_page_reference",
+            "insert_entity_reference",
+            "retarget_entity_reference",
+            "insert_claim_reference",
+            "retarget_claim_reference",
+            "insert_citation_reference",
+            "retarget_citation_reference",
+            "retarget_external_link",
+            "create_entity",
+            "create_claim",
+            "supersede_claim",
+            "add_claim_source"
+          ]
+        },
+        "base": { "$ref": "#/$defs/base" },
+        "target": { "$ref": "#/$defs/target" },
+        "expected_hash": { "type": ["string", "null"], "minLength": 64, "maxLength": 64, "pattern": "^[0-9a-f]{64}$" },
+        "evidence": {
+          "type": "array",
+          "items": { "$ref": "#/$defs/evidence" }
+        },
+        "risk": { "$ref": "#/$defs/risk" },
+        "payload": { "type": "object" }
+      },
+      "required": ["schema_version", "operation_type", "base", "target", "expected_hash", "evidence", "risk", "payload"]
+    },
+    "create_page": { "properties": { "operation_type": { "const": "create_page" }, "target": { "required": ["wiki_id", "namespace_id"] } } },
+    "rename_page": { "properties": { "operation_type": { "const": "rename_page" }, "target": { "required": ["page_id"] } } },
+    "create_redirect": { "properties": { "operation_type": { "const": "create_redirect" }, "target": { "required": ["page_id"] } } },
+    "insert_block": { "properties": { "operation_type": { "const": "insert_block" }, "target": { "required": ["page_id"] } } },
+    "delete_block": { "properties": { "operation_type": { "const": "delete_block" }, "target": { "required": ["page_id", "block_id"] } } },
+    "move_block": { "properties": { "operation_type": { "const": "move_block" }, "target": { "required": ["page_id", "block_id"] } } },
+    "replace_block": { "properties": { "operation_type": { "const": "replace_block" }, "target": { "required": ["page_id", "block_id"] } } },
+    "insert_page_reference": { "properties": { "operation_type": { "const": "insert_page_reference" }, "target": { "required": ["page_id", "block_id"] } } },
+    "retarget_page_reference": { "properties": { "operation_type": { "const": "retarget_page_reference" }, "target": { "required": ["page_id", "block_id", "node_id"] } } },
+    "insert_entity_reference": { "properties": { "operation_type": { "const": "insert_entity_reference" }, "target": { "required": ["page_id", "block_id", "entity_id"] } } },
+    "retarget_entity_reference": { "properties": { "operation_type": { "const": "retarget_entity_reference" }, "target": { "required": ["page_id", "block_id", "node_id", "entity_id"] } } },
+    "insert_claim_reference": { "properties": { "operation_type": { "const": "insert_claim_reference" }, "target": { "required": ["page_id", "block_id", "claim_id"] } } },
+    "retarget_claim_reference": { "properties": { "operation_type": { "const": "retarget_claim_reference" }, "target": { "required": ["page_id", "block_id", "node_id", "claim_id"] } } },
+    "insert_citation_reference": { "properties": { "operation_type": { "const": "insert_citation_reference" }, "target": { "required": ["page_id", "block_id", "citation_id"] } } },
+    "retarget_citation_reference": { "properties": { "operation_type": { "const": "retarget_citation_reference" }, "target": { "required": ["page_id", "block_id", "node_id", "citation_id"] } } },
+    "retarget_external_link": { "properties": { "operation_type": { "const": "retarget_external_link" }, "target": { "required": ["page_id", "block_id", "node_id", "external_resource_id"] } } },
+    "create_entity": { "properties": { "operation_type": { "const": "create_entity" }, "target": { "required": ["wiki_id"] } } },
+    "create_claim": { "properties": { "operation_type": { "const": "create_claim" }, "target": { "required": ["entity_id"] } } },
+    "supersede_claim": { "properties": { "operation_type": { "const": "supersede_claim" }, "target": { "required": ["claim_id"] } } },
+    "add_claim_source": { "properties": { "operation_type": { "const": "add_claim_source" }, "target": { "required": ["claim_id", "citation_id"] } } }
+  }
+}

@@ -1,0 +1,10 @@
+{
+  "schema_version": 1,
+  "operation_type": "supersede_claim",
+  "base": { "state_version": 7 },
+  "target": { "claim_id": "00000000-0000-7000-8000-000000000503" },
+  "expected_hash": "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef",
+  "evidence": [{ "citation_id": "00000000-0000-7000-8000-000000000504" }],
+  "risk": { "level": "high", "reasons": ["覆盖人工验证 Claim"] },
+  "payload": { "property_key": "release_date", "value": { "date": "2026-07-22" } }
+}

@@ -1,0 +1,12 @@
+{
+  "schema_version": 1,
+  "operation_type": "delete_block",
+  "target": {
+    "page_id": "00000000-0000-7000-8000-000000000502",
+    "block_id": "block-intro"
+  },
+  "expected_hash": "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef",
+  "evidence": [],
+  "risk": { "level": "medium", "reasons": ["删除正文"] },
+  "payload": {}
+}

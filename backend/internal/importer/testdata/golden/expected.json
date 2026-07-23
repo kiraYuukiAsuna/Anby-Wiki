@@ -1,0 +1,14 @@
+{
+  "html": {
+    "contains": ["Anby Wiki", "Anby Wiki released on 2026-07-22."],
+    "forbidden": ["window.alert"]
+  },
+  "pdf": {
+    "contains": ["Anby Wiki released on 2026-07-22."],
+    "page": 1
+  },
+  "annotation": {
+    "entity": {"type_key": "software", "label": "Anby Wiki"},
+    "claim": {"property_key": "release_date", "value": {"date": "2026-07-22"}}
+  }
+}

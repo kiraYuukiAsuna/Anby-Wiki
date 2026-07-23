@@ -1,0 +1,27 @@
+# 构建产物
+bin/
+dist/
+build/
+out/
+
+# 依赖
+node_modules/
+
+# Go
+backend/bin/
+*.test
+coverage.out
+
+# 环境文件（模板 .env.example 除外）
+.env
+.env.local
+.env.*.local
+
+# 编辑器与系统
+.DS_Store
+.idea/
+.vscode/
+*.swp
+
+# 本地数据（docker volume 映射等）
+infra/local/data/

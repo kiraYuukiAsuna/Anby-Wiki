@@ -1,0 +1,187 @@
+name: anby-wiki-production
+
+x-runtime-security: &runtime-security
+  read_only: true
+  init: true
+  user: "10001:10001"
+  cap_drop:
+    - ALL
+  security_opt:
+    - no-new-privileges:true
+  restart: unless-stopped
+  networks:
+    - app
+
+x-app-environment: &app-environment
+  ENV: production
+  LOG_LEVEL: ${LOG_LEVEL:-info}
+  DATABASE_URL_FILE: /run/secrets/database_url
+  REDIS_URL_FILE: /run/secrets/redis_url
+  S3_ENDPOINT: ${S3_ENDPOINT:?set S3_ENDPOINT}
+  S3_REGION: ${S3_REGION:-us-east-1}
+  S3_BUCKET: ${S3_BUCKET:?set S3_BUCKET}
+  S3_ACCESS_KEY_FILE: /run/secrets/s3_access_key
+  S3_SECRET_KEY_FILE: /run/secrets/s3_secret_key
+  SEARCH_BACKEND: meilisearch
+  MEILI_URL: ${MEILI_URL:?set MEILI_URL}
+  MEILI_API_KEY_FILE: /run/secrets/meili_api_key
+  MEILI_INDEX: ${MEILI_INDEX:-anby_pages}
+  MEILI_TIMEOUT: ${MEILI_TIMEOUT:-15s}
+  OIDC_ENABLED: "true"
+  OIDC_ISSUER_URL: ${OIDC_ISSUER_URL:?set OIDC_ISSUER_URL}
+  OIDC_CLIENT_ID: ${OIDC_CLIENT_ID:?set OIDC_CLIENT_ID}
+  OIDC_CLIENT_SECRET_FILE: /run/secrets/oidc_client_secret
+  OIDC_REDIRECT_URL: ${OIDC_REDIRECT_URL:?set OIDC_REDIRECT_URL}
+  OIDC_SCOPES: ${OIDC_SCOPES:-profile email}
+  TRUSTED_ORIGINS: ${TRUSTED_ORIGINS:?set TRUSTED_ORIGINS}
+  SESSION_COOKIE_SECURE: "true"
+  AUTH_DEV_HEADER_ENABLED: "false"
+  WORKER_METRICS_ADDR: ":9091"
+  OBSERVABILITY_DB_INTERVAL: ${OBSERVABILITY_DB_INTERVAL:-30s}
+  OTEL_ENABLED: ${OTEL_ENABLED:-false}
+  OTEL_EXPORTER_OTLP_ENDPOINT: ${OTEL_EXPORTER_OTLP_ENDPOINT:-}
+  OTEL_EXPORTER_OTLP_INSECURE: ${OTEL_EXPORTER_OTLP_INSECURE:-false}
+  OTEL_TRACE_SAMPLE_RATE: ${OTEL_TRACE_SAMPLE_RATE:-0.1}
+  AI_IMPORT_ENABLED: ${AI_IMPORT_ENABLED:-false}
+
+x-app-secrets: &app-secrets
+  - database_url
+  - redis_url
+  - s3_access_key
+  - s3_secret_key
+  - meili_api_key
+  - oidc_client_secret
+
+services:
+  api:
+    <<: *runtime-security
+    image: ${API_IMAGE:?set API_IMAGE}
+    environment:
+      <<: *app-environment
+      PORT: "8080"
+    secrets: *app-secrets
+    tmpfs:
+      - /tmp:size=64m,mode=1777
+    healthcheck:
+      test: ["CMD", "wget", "-q", "-O", "/dev/null", "http://127.0.0.1:8080/readyz"]
+      interval: 10s
+      timeout: 3s
+      retries: 6
+      start_period: 15s
+
+  worker:
+    <<: *runtime-security
+    image: ${WORKER_IMAGE:?set WORKER_IMAGE}
+    environment: *app-environment
+    secrets: *app-secrets
+    tmpfs:
+      - /tmp:size=64m,mode=1777
+    healthcheck:
+      test: ["CMD", "wget", "-q", "-O", "/dev/null", "http://127.0.0.1:9091/metrics"]
+      interval: 10s
+      timeout: 3s
+      retries: 6
+      start_period: 20s
+
+  web:
+    <<: *runtime-security
+    image: ${WEB_IMAGE:?set WEB_IMAGE}
+    environment:
+      API_BASE_URL: http://api:8080
+      HOSTNAME: 0.0.0.0
+      NODE_ENV: production
+      PORT: "3000"
+    tmpfs:
+      - /tmp:size=64m,mode=1777
+      - /app/apps/web/.next/cache:size=128m,mode=1777
+    healthcheck:
+      test:
+        - CMD
+        - node
+        - -e
+        - "const n=require('net').connect(3000,'127.0.0.1',()=>{n.end();process.exit(0)});n.on('error',()=>process.exit(1))"
+      interval: 10s
+      timeout: 3s
+      retries: 6
+      start_period: 15s
+
+  nginx:
+    <<: *runtime-security
+    image: ${NGINX_IMAGE:?set NGINX_IMAGE}
+    user: "101:101"
+    depends_on:
+      api:
+        condition: service_healthy
+      web:
+        condition: service_healthy
+    ports:
+      - "${GATEWAY_BIND:-127.0.0.1}:${GATEWAY_PORT:-8080}:8080"
+    volumes:
+      - ./nginx.conf:/etc/nginx/nginx.conf:ro
+    tmpfs:
+      - /tmp:size=64m,mode=1777
+      - /var/cache/nginx:size=64m,mode=0755
+    healthcheck:
+      test: ["CMD", "wget", "-q", "-O", "/dev/null", "http://127.0.0.1:8080/gateway-healthz"]
+      interval: 10s
+      timeout: 3s
+      retries: 6
+      start_period: 10s
+
+  migrate:
+    <<: *runtime-security
+    profiles: ["tools"]
+    image: ${MIGRATE_IMAGE:?set MIGRATE_IMAGE}
+    environment: *app-environment
+    secrets: *app-secrets
+    restart: "no"
+    command: ["wiki-migrate"]
+
+  doctor:
+    <<: *runtime-security
+    profiles: ["tools"]
+    image: ${MIGRATE_IMAGE:?set MIGRATE_IMAGE}
+    environment: *app-environment
+    secrets: *app-secrets
+    restart: "no"
+    command: ["wiki-doctor", "-format", "json"]
+
+  seed:
+    <<: *runtime-security
+    profiles: ["seed"]
+    image: ${MIGRATE_IMAGE:?set MIGRATE_IMAGE}
+    environment:
+      PERF_DATABASE_URL_FILE: /run/secrets/perf_database_url
+      PERF_DATABASE_CONFIRM: ANBY_WIKI_PERF_ONLY
+    secrets:
+      - perf_database_url
+    restart: "no"
+    command: ["wiki-perf", "-profile", "smoke"]
+
+networks:
+  app:
+    external: true
+    name: ${APP_NETWORK:?set APP_NETWORK}
+
+secrets:
+  database_url:
+    external: true
+    name: ${DATABASE_URL_SECRET:?set DATABASE_URL_SECRET}
+  redis_url:
+    external: true
+    name: ${REDIS_URL_SECRET:?set REDIS_URL_SECRET}
+  s3_access_key:
+    external: true
+    name: ${S3_ACCESS_KEY_SECRET:?set S3_ACCESS_KEY_SECRET}
+  s3_secret_key:
+    external: true
+    name: ${S3_SECRET_KEY_SECRET:?set S3_SECRET_KEY_SECRET}
+  meili_api_key:
+    external: true
+    name: ${MEILI_API_KEY_SECRET:?set MEILI_API_KEY_SECRET}
+  oidc_client_secret:
+    external: true
+    name: ${OIDC_CLIENT_SECRET_SECRET:?set OIDC_CLIENT_SECRET_SECRET}
+  perf_database_url:
+    external: true
+    name: ${PERF_DATABASE_URL_SECRET:-anby-wiki-disabled-seed}

@@ -1,0 +1,186 @@
+# 本地开发基础设施（任务 M0-T04）
+#
+# 职责划分（ADR-0003 / ADR-0004）：
+#   - PostgreSQL：权威数据 + Outbox
+#   - Redis：仅缓存 / 限流 / 短期协调，不承载不可丢失的数据
+#   - MinIO：S3 兼容对象存储（本地 / CI），bucket 由 minio-init 一次性创建
+#   - Nginx（profile=gateway，可选）：反向代理宿主机开发进程
+#
+# 使用：cp .env.example .env 后执行根 Makefile 的 `make infra-up`。
+# 文件内所有相对路径相对本文件所在目录（infra/local/）解析。
+
+name: anby-wiki-local
+
+services:
+  postgres:
+    image: postgres:17-alpine
+    container_name: anby-wiki-postgres
+    environment:
+      POSTGRES_DB: ${POSTGRES_DB:-wiki}
+      POSTGRES_USER: ${POSTGRES_USER:-wiki}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-wiki_dev_password}
+    ports:
+      - "${POSTGRES_PORT:-5432}:5432"
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+      # 幂等初始化脚本，仅在数据卷为空（首次初始化）时执行
+      - ./postgres/init.sql:/docker-entrypoint-initdb.d/00-init.sql:ro
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U $${POSTGRES_USER:-wiki} -d $${POSTGRES_DB:-wiki}"]
+      interval: 5s
+      timeout: 3s
+      retries: 12
+      start_period: 5s
+    networks:
+      - wiki-net
+    restart: unless-stopped
+
+  redis:
+    image: redis:7-alpine
+    container_name: anby-wiki-redis
+    command: ["redis-server", "--appendonly", "no"]
+    ports:
+      - "${REDIS_PORT:-6379}:6379"
+    volumes:
+      - redisdata:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 12
+      start_period: 3s
+    networks:
+      - wiki-net
+    restart: unless-stopped
+
+  meilisearch:
+    image: getmeili/meilisearch:v1.50.0
+    container_name: anby-wiki-meilisearch
+    environment:
+      MEILI_ENV: development
+      MEILI_MASTER_KEY: ${MEILI_MASTER_KEY:-local-development-master-key}
+      MEILI_NO_ANALYTICS: "true"
+    ports:
+      - "${MEILI_PORT:-7700}:7700"
+    volumes:
+      - meilidata:/meili_data
+    healthcheck:
+      test: ["CMD", "curl", "--fail", "http://localhost:7700/health"]
+      interval: 5s
+      timeout: 3s
+      retries: 12
+      start_period: 5s
+    networks:
+      - wiki-net
+    restart: unless-stopped
+
+  minio:
+    # 最新稳定 tag（2025-09 查询 Docker Hub）
+    image: minio/minio:RELEASE.2025-09-07T16-13-09Z
+    container_name: anby-wiki-minio
+    command: ["server", "/data", "--console-address", ":9001"]
+    environment:
+      MINIO_ROOT_USER: ${MINIO_ROOT_USER:-minioadmin}
+      MINIO_ROOT_PASSWORD: ${MINIO_ROOT_PASSWORD:-minioadmin_dev}
+    ports:
+      - "${MINIO_API_PORT:-9000}:9000"   # S3 API
+      - "${MINIO_CONSOLE_PORT:-9001}:9001" # Web Console
+    volumes:
+      - miniodata:/data
+    healthcheck:
+      test: ["CMD", "curl", "--fail", "--silent", "http://127.0.0.1:9000/minio/health/live"]
+      interval: 5s
+      timeout: 3s
+      retries: 12
+      start_period: 5s
+    networks:
+      - wiki-net
+    restart: unless-stopped
+
+  minio-init:
+    # 一次性 job：创建 bucket 并关闭匿名访问，完成后退出
+    image: minio/mc:RELEASE.2025-08-13T08-35-41Z
+    container_name: anby-wiki-minio-init
+    depends_on:
+      minio:
+        condition: service_healthy
+    environment:
+      MINIO_ROOT_USER: ${MINIO_ROOT_USER:-minioadmin}
+      MINIO_ROOT_PASSWORD: ${MINIO_ROOT_PASSWORD:-minioadmin_dev}
+      MINIO_BUCKET: ${MINIO_BUCKET:-wiki-assets}
+    entrypoint: ["/bin/sh", "-c"]
+    command:
+      - |
+        set -e
+        mc alias set local http://minio:9000 "$${MINIO_ROOT_USER}" "$${MINIO_ROOT_PASSWORD}"
+        mc mb --ignore-existing "local/$${MINIO_BUCKET}"
+        # 匿名下载关闭：bucket 仅允许经认证的访问（含 Presign）
+        mc anonymous set none "local/$${MINIO_BUCKET}"
+        echo "minio-init: bucket '$${MINIO_BUCKET}' ready (anonymous access disabled)"
+    networks:
+      - wiki-net
+    restart: "no"
+
+  nginx:
+    image: nginx:1.27-alpine
+    container_name: anby-wiki-nginx
+    profiles:
+      - gateway
+    ports:
+      - "${NGINX_PORT:-8000}:80"
+    volumes:
+      - ../nginx/nginx.conf:/etc/nginx/nginx.conf:ro
+    extra_hosts:
+      # Linux 下解析宿主机；macOS/Windows 的 Docker Desktop 原生支持该域名
+      - "host.docker.internal:host-gateway"
+    networks:
+      - wiki-net
+    restart: unless-stopped
+
+  prometheus:
+    image: prom/prometheus:v3.5.0
+    container_name: anby-wiki-prometheus
+    profiles:
+      - observability
+    command:
+      - --config.file=/etc/prometheus/prometheus.yml
+      - --storage.tsdb.path=/prometheus
+    ports:
+      - "${PROMETHEUS_PORT:-9090}:9090"
+    volumes:
+      - ./observability/prometheus.yml:/etc/prometheus/prometheus.yml:ro
+      - ./observability/alerts.yml:/etc/prometheus/alerts.yml:ro
+      - prometheusdata:/prometheus
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+    networks:
+      - wiki-net
+    restart: unless-stopped
+
+  otel-collector:
+    image: otel/opentelemetry-collector-contrib:0.135.0
+    container_name: anby-wiki-otel-collector
+    profiles:
+      - observability
+    command:
+      - --config=/etc/otelcol-contrib/config.yaml
+    ports:
+      - "${OTEL_GRPC_PORT:-4317}:4317"
+      - "${OTEL_HTTP_PORT:-4318}:4318"
+      - "${OTEL_HEALTH_PORT:-13133}:13133"
+    volumes:
+      - ./observability/otel-collector.yml:/etc/otelcol-contrib/config.yaml:ro
+    networks:
+      - wiki-net
+    restart: unless-stopped
+
+networks:
+  wiki-net:
+    driver: bridge
+
+volumes:
+  pgdata:
+  redisdata:
+  miniodata:
+  meilidata:
+  prometheusdata:

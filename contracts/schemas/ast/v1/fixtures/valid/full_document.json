@@ -1,0 +1,136 @@
+{
+  "type": "document",
+  "schema_version": 1,
+  "children": [
+    {
+      "id": "0198a1b2-c3d4-7e5f-8a9b-0c1d2e3f4a01",
+      "type": "heading",
+      "level": 1,
+      "content": [
+        { "type": "text", "text": "示例页面", "marks": ["bold"] }
+      ]
+    },
+    {
+      "id": "0198a1b2-c3d4-7e5f-8a9b-0c1d2e3f4a02",
+      "type": "paragraph",
+      "content": [
+        { "type": "text", "text": "这是一个包含 " },
+        { "type": "text", "text": "多种", "marks": ["bold", "italic"] },
+        { "type": "text", "text": "格式的段落，还有 " },
+        { "type": "inline_code", "text": "inline_code" },
+        { "type": "text", "text": "、" },
+        {
+          "type": "page_reference",
+          "target_page_id": "0198a1b2-c3d4-7e5f-8a9b-0c1d2e3f4b01",
+          "target_heading_block_id": "0198a1b2-c3d4-7e5f-8a9b-0c1d2e3f4b02",
+          "display_text": "已解析页面"
+        },
+        { "type": "text", "text": "、" },
+        {
+          "type": "page_reference",
+          "resolution_status": "unresolved",
+          "target_namespace": "Main",
+          "normalized_title": "wei-lai-de-ye-mian",
+          "expected_entity_type": "Concept"
+        },
+        { "type": "text", "text": " 和 " },
+        {
+          "type": "external_link",
+          "url": "https://example.com/spec",
+          "display_text": "外部链接"
+        },
+        { "type": "text", "text": "。" }
+      ]
+    },
+    {
+      "id": "0198a1b2-c3d4-7e5f-8a9b-0c1d2e3f4a03",
+      "type": "bullet_list",
+      "children": [
+        {
+          "id": "0198a1b2-c3d4-7e5f-8a9b-0c1d2e3f4a04",
+          "type": "list_item",
+          "children": [
+            {
+              "id": "0198a1b2-c3d4-7e5f-8a9b-0c1d2e3f4a05",
+              "type": "paragraph",
+              "content": [{ "type": "text", "text": "第一项" }]
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "0198a1b2-c3d4-7e5f-8a9b-0c1d2e3f4a06",
+      "type": "ordered_list",
+      "children": [
+        {
+          "id": "0198a1b2-c3d4-7e5f-8a9b-0c1d2e3f4a07",
+          "type": "list_item",
+          "children": [
+            {
+              "id": "0198a1b2-c3d4-7e5f-8a9b-0c1d2e3f4a08",
+              "type": "paragraph",
+              "content": [{ "type": "text", "text": "步骤一" }]
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "0198a1b2-c3d4-7e5f-8a9b-0c1d2e3f4a09",
+      "type": "table",
+      "children": [
+        {
+          "id": "0198a1b2-c3d4-7e5f-8a9b-0c1d2e3f4a0a",
+          "type": "table_row",
+          "children": [
+            {
+              "id": "0198a1b2-c3d4-7e5f-8a9b-0c1d2e3f4a0b",
+              "type": "table_cell",
+              "children": [
+                {
+                  "id": "0198a1b2-c3d4-7e5f-8a9b-0c1d2e3f4a0c",
+                  "type": "paragraph",
+                  "content": [{ "type": "text", "text": "单元格" }]
+                }
+              ]
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "0198a1b2-c3d4-7e5f-8a9b-0c1d2e3f4a0d",
+      "type": "code",
+      "language": "go",
+      "content": "package main\n\nfunc main() {}\n"
+    },
+    {
+      "id": "0198a1b2-c3d4-7e5f-8a9b-0c1d2e3f4a0e",
+      "type": "quote",
+      "children": [
+        {
+          "id": "0198a1b2-c3d4-7e5f-8a9b-0c1d2e3f4a0f",
+          "type": "paragraph",
+          "content": [{ "type": "text", "text": "引用内容", "marks": ["strikethrough", "code"] }]
+        }
+      ]
+    },
+    {
+      "id": "0198a1b2-c3d4-7e5f-8a9b-0c1d2e3f4a10",
+      "type": "callout",
+      "kind": "warning",
+      "children": [
+        {
+          "id": "0198a1b2-c3d4-7e5f-8a9b-0c1d2e3f4a11",
+          "type": "paragraph",
+          "content": [{ "type": "text", "text": "注意！" }]
+        }
+      ]
+    },
+    {
+      "id": "0198a1b2-c3d4-7e5f-8a9b-0c1d2e3f4a12",
+      "type": "divider"
+    }
+  ]
+}

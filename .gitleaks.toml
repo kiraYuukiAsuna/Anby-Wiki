@@ -1,0 +1,12 @@
+title = "Anby Wiki secret scanning"
+
+[extend]
+useDefault = true
+
+[[allowlists]]
+description = "Ignore local Next.js generated build artifacts"
+paths = ['''^apps/web/\.next/''']
+
+[[allowlists]]
+description = "Ignore public fixed UUID idempotency keys in the upload API test"
+paths = ['''^backend/cmd/api/imports_test\.go$''']

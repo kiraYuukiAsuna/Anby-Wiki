@@ -1,0 +1,17 @@
+{
+  "type": "document",
+  "schema_version": 1,
+  "children": [
+    {
+      "id": "0198a1b2-c3d4-7e5f-8a9b-0c1d2e3f4e05",
+      "type": "paragraph",
+      "content": [
+        {
+          "type": "page_reference",
+          "target_namespace": "Main",
+          "normalized_title": "que-shi-de-resolution-status"
+        }
+      ]
+    }
+  ]
+}

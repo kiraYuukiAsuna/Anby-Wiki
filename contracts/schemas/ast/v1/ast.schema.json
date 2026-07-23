@@ -1,0 +1,335 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://anby.wiki/schemas/ast/v1/ast.schema.json",
+  "title": "Anby Wiki Typed Block AST v1",
+  "description": "Wiki 页面正文的权威格式：树形 Typed Block AST。每个可独立移动/引用/修改的 Block 持有稳定 UUIDv7 ID（见 ADR-0008）。v1 只允许 additive 演进。",
+  "type": "object",
+  "required": ["type", "schema_version", "children"],
+  "additionalProperties": false,
+  "properties": {
+    "type": { "const": "document" },
+    "schema_version": { "const": 1 },
+    "children": {
+      "type": "array",
+      "items": { "$ref": "#/$defs/block" }
+    }
+  },
+  "$defs": {
+    "blockId": {
+      "type": "string",
+      "format": "uuid",
+      "description": "稳定 Block ID，UUIDv7，标准 36 字符小写连字符形式（ADR-0008）。"
+    },
+    "block": {
+      "description": "Block 判别联合：按 type 字段判别。新增 Block 类型属于 additive 变更，在此追加分支。",
+      "oneOf": [
+        { "$ref": "#/$defs/headingBlock" },
+        { "$ref": "#/$defs/paragraphBlock" },
+        { "$ref": "#/$defs/bulletListBlock" },
+        { "$ref": "#/$defs/orderedListBlock" },
+        { "$ref": "#/$defs/listItemBlock" },
+        { "$ref": "#/$defs/tableBlock" },
+        { "$ref": "#/$defs/tableRowBlock" },
+        { "$ref": "#/$defs/tableCellBlock" },
+        { "$ref": "#/$defs/codeBlock" },
+        { "$ref": "#/$defs/quoteBlock" },
+        { "$ref": "#/$defs/calloutBlock" },
+        { "$ref": "#/$defs/componentBlock" },
+        { "$ref": "#/$defs/dividerBlock" }
+      ]
+    },
+    "headingBlock": {
+      "type": "object",
+      "required": ["id", "type", "level", "content"],
+      "additionalProperties": false,
+      "properties": {
+        "id": { "$ref": "#/$defs/blockId" },
+        "type": { "const": "heading" },
+        "level": { "type": "integer", "minimum": 1, "maximum": 6 },
+        "content": {
+          "type": "array",
+          "items": { "$ref": "#/$defs/inlineNode" }
+        }
+      }
+    },
+    "paragraphBlock": {
+      "type": "object",
+      "required": ["id", "type", "content"],
+      "additionalProperties": false,
+      "properties": {
+        "id": { "$ref": "#/$defs/blockId" },
+        "type": { "const": "paragraph" },
+        "content": {
+          "type": "array",
+          "items": { "$ref": "#/$defs/inlineNode" }
+        }
+      }
+    },
+    "bulletListBlock": {
+      "type": "object",
+      "required": ["id", "type", "children"],
+      "additionalProperties": false,
+      "properties": {
+        "id": { "$ref": "#/$defs/blockId" },
+        "type": { "const": "bullet_list" },
+        "children": {
+          "type": "array",
+          "items": { "$ref": "#/$defs/listItemBlock" },
+          "description": "容器规则：list 的 children 只能是 list_item。"
+        }
+      }
+    },
+    "orderedListBlock": {
+      "type": "object",
+      "required": ["id", "type", "children"],
+      "additionalProperties": false,
+      "properties": {
+        "id": { "$ref": "#/$defs/blockId" },
+        "type": { "const": "ordered_list" },
+        "children": {
+          "type": "array",
+          "items": { "$ref": "#/$defs/listItemBlock" },
+          "description": "容器规则：list 的 children 只能是 list_item。"
+        }
+      }
+    },
+    "listItemBlock": {
+      "type": "object",
+      "required": ["id", "type", "children"],
+      "additionalProperties": false,
+      "properties": {
+        "id": { "$ref": "#/$defs/blockId" },
+        "type": { "const": "list_item" },
+        "children": {
+          "type": "array",
+          "items": { "$ref": "#/$defs/block" },
+          "description": "list_item 可含 paragraph 等正文 Block 或嵌套 list（嵌套 list 仍必须经 list_item 包裹）。"
+        }
+      }
+    },
+    "tableBlock": {
+      "type": "object",
+      "required": ["id", "type", "children"],
+      "additionalProperties": false,
+      "properties": {
+        "id": { "$ref": "#/$defs/blockId" },
+        "type": { "const": "table" },
+        "children": {
+          "type": "array",
+          "items": { "$ref": "#/$defs/tableRowBlock" },
+          "description": "容器规则：table → table_row → table_cell。"
+        }
+      }
+    },
+    "tableRowBlock": {
+      "type": "object",
+      "required": ["id", "type", "children"],
+      "additionalProperties": false,
+      "properties": {
+        "id": { "$ref": "#/$defs/blockId" },
+        "type": { "const": "table_row" },
+        "children": {
+          "type": "array",
+          "items": { "$ref": "#/$defs/tableCellBlock" }
+        }
+      }
+    },
+    "tableCellBlock": {
+      "type": "object",
+      "required": ["id", "type", "children"],
+      "additionalProperties": false,
+      "properties": {
+        "id": { "$ref": "#/$defs/blockId" },
+        "type": { "const": "table_cell" },
+        "children": {
+          "type": "array",
+          "items": { "$ref": "#/$defs/block" }
+        }
+      }
+    },
+    "codeBlock": {
+      "type": "object",
+      "required": ["id", "type", "content"],
+      "additionalProperties": false,
+      "properties": {
+        "id": { "$ref": "#/$defs/blockId" },
+        "type": { "const": "code" },
+        "content": { "type": "string" },
+        "language": { "type": "string" }
+      }
+    },
+    "quoteBlock": {
+      "type": "object",
+      "required": ["id", "type", "children"],
+      "additionalProperties": false,
+      "properties": {
+        "id": { "$ref": "#/$defs/blockId" },
+        "type": { "const": "quote" },
+        "children": {
+          "type": "array",
+          "items": { "$ref": "#/$defs/block" }
+        }
+      }
+    },
+    "calloutBlock": {
+      "type": "object",
+      "required": ["id", "type", "kind", "children"],
+      "additionalProperties": false,
+      "properties": {
+        "id": { "$ref": "#/$defs/blockId" },
+        "type": { "const": "callout" },
+        "kind": { "enum": ["info", "warning", "danger"] },
+        "children": {
+          "type": "array",
+          "items": { "$ref": "#/$defs/block" }
+        }
+      }
+    },
+    "componentBlock": {
+      "description": "冻结版本的 Component 实例。Entity/Claim 值不复制进 AST，由渲染与依赖投影按稳定 ID 解析。",
+      "type": "object",
+      "required": ["id", "type", "component_id", "component_version", "entity_id", "display_config"],
+      "additionalProperties": false,
+      "properties": {
+        "id": { "$ref": "#/$defs/blockId" },
+        "type": { "const": "component" },
+        "component_id": { "type": "string", "format": "uuid" },
+        "component_version": { "type": "integer", "minimum": 1 },
+        "entity_id": { "type": "string", "format": "uuid" },
+        "display_config": {
+          "type": "object",
+          "description": "由对应 ComponentVersion props_schema_json 校验的展示配置。"
+        }
+      }
+    },
+    "dividerBlock": {
+      "type": "object",
+      "required": ["id", "type"],
+      "additionalProperties": false,
+      "properties": {
+        "id": { "$ref": "#/$defs/blockId" },
+        "type": { "const": "divider" }
+      },
+      "description": "divider 无内容：不允许 content/children 等任何额外字段。"
+    },
+    "inlineNode": {
+      "description": "行内节点判别联合：按 type 字段判别。EntityReference/ClaimReference/CitationReference 由 M4-T06 以 additive 方式追加。",
+      "oneOf": [
+        { "$ref": "#/$defs/textNode" },
+        { "$ref": "#/$defs/inlineCodeNode" },
+        { "$ref": "#/$defs/pageReferenceNode" },
+        { "$ref": "#/$defs/externalLinkNode" },
+        { "$ref": "#/$defs/entityReferenceNode" },
+        { "$ref": "#/$defs/claimReferenceNode" },
+        { "$ref": "#/$defs/citationReferenceNode" }
+      ]
+    },
+    "mark": {
+      "enum": ["bold", "italic", "strikethrough", "code"]
+    },
+    "textNode": {
+      "type": "object",
+      "required": ["type", "text"],
+      "additionalProperties": false,
+      "properties": {
+        "type": { "const": "text" },
+        "text": { "type": "string" },
+        "marks": {
+          "type": "array",
+          "items": { "$ref": "#/$defs/mark" },
+          "uniqueItems": true
+        }
+      }
+    },
+    "inlineCodeNode": {
+      "type": "object",
+      "required": ["type", "text"],
+      "additionalProperties": false,
+      "properties": {
+        "type": { "const": "inline_code" },
+        "text": { "type": "string" }
+      }
+    },
+    "pageReferenceNode": {
+      "description": "页面引用两种互斥形态（oneOf）：已解析（target_page_id）与未解析（resolution_status=unresolved + target_namespace + normalized_title）。页面改名不修改正文引用（设计 §5.1-5.2）。",
+      "oneOf": [
+        { "$ref": "#/$defs/resolvedPageReference" },
+        { "$ref": "#/$defs/unresolvedPageReference" }
+      ]
+    },
+    "resolvedPageReference": {
+      "type": "object",
+      "required": ["type", "target_page_id", "display_text"],
+      "additionalProperties": false,
+      "properties": {
+        "type": { "const": "page_reference" },
+        "target_page_id": { "type": "string", "format": "uuid" },
+        "target_heading_block_id": {
+          "type": "string",
+          "format": "uuid",
+          "description": "可选章节锚点：目标页面的 Heading Block ID（设计 §5.1、§9）。"
+        },
+        "display_text": { "type": "string" }
+      }
+    },
+    "unresolvedPageReference": {
+      "type": "object",
+      "required": ["type", "resolution_status", "target_namespace", "normalized_title"],
+      "additionalProperties": false,
+      "properties": {
+        "type": { "const": "page_reference" },
+        "resolution_status": { "const": "unresolved" },
+        "target_namespace": { "type": "string" },
+        "normalized_title": { "type": "string" },
+        "expected_entity_type": { "type": "string" }
+      }
+    },
+    "externalLinkNode": {
+      "type": "object",
+      "required": ["type", "url", "display_text"],
+      "additionalProperties": false,
+      "properties": {
+        "type": { "const": "external_link" },
+        "url": {
+          "type": "string",
+          "format": "uri",
+          "description": "v1 直接保存 URL；external_resource_id 规范化属于 M3，不在 v1。"
+        },
+        "display_text": { "type": "string" }
+      }
+    },
+    "entityReferenceNode": {
+      "description": "实体引用（设计 §5.3）：正文提到某个 Entity，使用稳定 entity_id；Entity 改名不修改正文引用。",
+      "type": "object",
+      "required": ["type", "entity_id", "display_text"],
+      "additionalProperties": false,
+      "properties": {
+        "type": { "const": "entity_reference" },
+        "entity_id": { "type": "string", "format": "uuid" },
+        "display_text": { "type": "string" }
+      }
+    },
+    "claimReferenceNode": {
+      "description": "Claim 引用（设计 §5.4）：display_text 为兜底文本，v1 渲染 display_text；实时取值（M9 信息框）属渲染层后续扩展。",
+      "type": "object",
+      "required": ["type", "claim_id", "display_text"],
+      "additionalProperties": false,
+      "properties": {
+        "type": { "const": "claim_reference" },
+        "claim_id": { "type": "string", "format": "uuid" },
+        "display_text": { "type": "string" }
+      }
+    },
+    "citationReferenceNode": {
+      "description": "Citation 引用（设计 §5.5）：渲染为上标样式的引用标记；display_text 可选，渲染层 title 取 display_text 或 citation 短 id。",
+      "type": "object",
+      "required": ["type", "citation_id"],
+      "additionalProperties": false,
+      "properties": {
+        "type": { "const": "citation_reference" },
+        "citation_id": { "type": "string", "format": "uuid" },
+        "display_text": { "type": "string" }
+      }
+    }
+  }
+}

@@ -1,0 +1,13 @@
+.git
+.github
+.env
+.env.*
+!.env.example
+**/.next
+**/node_modules
+**/test-results
+**/coverage
+backend/bin
+backend/perf
+Docs
+infra/local/data

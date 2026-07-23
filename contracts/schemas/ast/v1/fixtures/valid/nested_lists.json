@@ -1,0 +1,51 @@
+{
+  "type": "document",
+  "schema_version": 1,
+  "children": [
+    {
+      "id": "0198a1b2-c3d4-7e5f-8a9b-0c1d2e3f4c01",
+      "type": "bullet_list",
+      "children": [
+        {
+          "id": "0198a1b2-c3d4-7e5f-8a9b-0c1d2e3f4c02",
+          "type": "list_item",
+          "children": [
+            {
+              "id": "0198a1b2-c3d4-7e5f-8a9b-0c1d2e3f4c03",
+              "type": "paragraph",
+              "content": [{ "type": "text", "text": "外层第一项" }]
+            },
+            {
+              "id": "0198a1b2-c3d4-7e5f-8a9b-0c1d2e3f4c04",
+              "type": "ordered_list",
+              "children": [
+                {
+                  "id": "0198a1b2-c3d4-7e5f-8a9b-0c1d2e3f4c05",
+                  "type": "list_item",
+                  "children": [
+                    {
+                      "id": "0198a1b2-c3d4-7e5f-8a9b-0c1d2e3f4c06",
+                      "type": "paragraph",
+                      "content": [{ "type": "text", "text": "嵌套子项" }]
+                    }
+                  ]
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "id": "0198a1b2-c3d4-7e5f-8a9b-0c1d2e3f4c07",
+          "type": "list_item",
+          "children": [
+            {
+              "id": "0198a1b2-c3d4-7e5f-8a9b-0c1d2e3f4c08",
+              "type": "paragraph",
+              "content": [{ "type": "text", "text": "外层第二项" }]
+            }
+          ]
+        }
+      ]
+    }
+  ]
+}

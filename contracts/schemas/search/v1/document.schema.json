@@ -1,0 +1,80 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://anby.wiki/schemas/search/v1/document.schema.json",
+  "title": "SearchDocument v1",
+  "description": "Adapter-neutral page search projection rebuilt from an authoritative Current Revision.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_version",
+    "page_id",
+    "wiki_id",
+    "namespace",
+    "language",
+    "source_revision_id",
+    "display_title",
+    "normalized_title",
+    "aliases",
+    "body",
+    "entity_terms"
+  ],
+  "properties": {
+    "schema_version": {
+      "const": 1
+    },
+    "page_id": {
+      "type": "string",
+      "format": "uuid"
+    },
+    "wiki_id": {
+      "type": "string",
+      "format": "uuid"
+    },
+    "namespace": {
+      "type": "string",
+      "minLength": 1
+    },
+    "language": {
+      "type": "string",
+      "minLength": 1
+    },
+    "source_revision_id": {
+      "type": "string",
+      "format": "uuid"
+    },
+    "display_title": {
+      "type": "string",
+      "minLength": 1
+    },
+    "normalized_title": {
+      "type": "string",
+      "minLength": 1
+    },
+    "aliases": {
+      "type": "array",
+      "items": {
+        "type": "string",
+        "minLength": 1
+      },
+      "uniqueItems": true
+    },
+    "body": {
+      "type": "string"
+    },
+    "entity_id": {
+      "type": ["string", "null"],
+      "format": "uuid"
+    },
+    "entity_type": {
+      "type": "string"
+    },
+    "entity_terms": {
+      "type": "array",
+      "items": {
+        "type": "string",
+        "minLength": 1
+      },
+      "uniqueItems": true
+    }
+  }
+}

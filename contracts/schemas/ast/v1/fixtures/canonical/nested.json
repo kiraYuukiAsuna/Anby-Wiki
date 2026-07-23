@@ -1,0 +1,96 @@
+{
+  "type": "document",
+  "schema_version": 1,
+  "children": [
+    {
+      "id": "0198a1b2-c3d4-7e5f-8a9b-0c1d2e3f5201",
+      "type": "heading",
+      "level": 6,
+      "content": [{ "type": "text", "text": "深层嵌套" }]
+    },
+    {
+      "id": "0198a1b2-c3d4-7e5f-8a9b-0c1d2e3f5202",
+      "type": "bullet_list",
+      "children": [
+        {
+          "id": "0198a1b2-c3d4-7e5f-8a9b-0c1d2e3f5203",
+          "type": "list_item",
+          "children": [
+            {
+              "id": "0198a1b2-c3d4-7e5f-8a9b-0c1d2e3f5204",
+              "type": "paragraph",
+              "content": [
+                { "type": "text", "text": "见 " },
+                {
+                  "type": "page_reference",
+                  "resolution_status": "unresolved",
+                  "target_namespace": "Main",
+                  "normalized_title": "shen-ceng-qian-tao",
+                  "expected_entity_type": "Concept"
+                }
+              ]
+            },
+            {
+              "id": "0198a1b2-c3d4-7e5f-8a9b-0c1d2e3f5205",
+              "type": "ordered_list",
+              "children": [
+                {
+                  "id": "0198a1b2-c3d4-7e5f-8a9b-0c1d2e3f5206",
+                  "type": "list_item",
+                  "children": [
+                    {
+                      "id": "0198a1b2-c3d4-7e5f-8a9b-0c1d2e3f5207",
+                      "type": "paragraph",
+                      "content": [{ "type": "text", "text": "子步骤" }]
+                    }
+                  ]
+                }
+              ]
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "0198a1b2-c3d4-7e5f-8a9b-0c1d2e3f5208",
+      "type": "table",
+      "children": [
+        {
+          "id": "0198a1b2-c3d4-7e5f-8a9b-0c1d2e3f5209",
+          "type": "table_row",
+          "children": [
+            {
+              "id": "0198a1b2-c3d4-7e5f-8a9b-0c1d2e3f520a",
+              "type": "table_cell",
+              "children": [
+                {
+                  "id": "0198a1b2-c3d4-7e5f-8a9b-0c1d2e3f520b",
+                  "type": "paragraph",
+                  "content": [{ "type": "text", "text": "单元格" }]
+                }
+              ]
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "0198a1b2-c3d4-7e5f-8a9b-0c1d2e3f520c",
+      "type": "callout",
+      "kind": "danger",
+      "children": [
+        {
+          "id": "0198a1b2-c3d4-7e5f-8a9b-0c1d2e3f520d",
+          "type": "paragraph",
+          "content": [
+            {
+              "type": "external_link",
+              "url": "https://example.com/a?b=1&c=2",
+              "display_text": "参考"
+            }
+          ]
+        }
+      ]
+    }
+  ]
+}

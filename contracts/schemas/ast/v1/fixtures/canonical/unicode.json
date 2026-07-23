@@ -1,0 +1,24 @@
+{
+  "type": "document",
+  "schema_version": 1,
+  "children": [
+    {
+      "id": "0198a1b2-c3d4-7e5f-8a9b-0c1d2e3f5301",
+      "type": "paragraph",
+      "content": [
+        {
+          "type": "text",
+          "text": "HTML 字符 <b>&amp;</b> 不转义，引号 \"与\" 反斜杠 \\ 转义",
+          "marks": ["code"]
+        },
+        { "type": "text", "text": "换行\n制表\tSOH\u0001控制 表情 👩‍💻 汉字" }
+      ]
+    },
+    {
+      "id": "0198a1b2-c3d4-7e5f-8a9b-0c1d2e3f5302",
+      "type": "code",
+      "language": "go",
+      "content": "if a < b && c > d {\n\tprintln(\"ok\")\n}\n"
+    }
+  ]
+}

@@ -1,0 +1,78 @@
+groups:
+  - name: anby-wiki
+    rules:
+      - alert: WikiTargetDown
+        expr: up{job=~"wiki-api|wiki-worker"} == 0
+        for: 2m
+        labels:
+          severity: critical
+        annotations:
+          summary: Wiki process metrics target is unavailable
+
+      - alert: WikiHTTPHighErrorRate
+        expr: |
+          (
+            sum(rate(wiki_http_requests_total{status_class="5xx"}[5m]))
+            /
+            clamp_min(sum(rate(wiki_http_requests_total[5m])), 0.001)
+          ) > 0.01
+        for: 10m
+        labels:
+          severity: warning
+        annotations:
+          summary: API 5xx ratio is above the Beta SLO of 1 percent
+
+      - alert: WikiHTTPHighP95Latency
+        expr: |
+          histogram_quantile(
+            0.95,
+            sum by (le) (rate(wiki_http_request_duration_seconds_bucket[10m]))
+          ) > 1
+        for: 10m
+        labels:
+          severity: warning
+        annotations:
+          summary: API p95 latency is above the one second Beta SLO
+
+      - alert: WikiPublishHighP95Latency
+        expr: |
+          histogram_quantile(
+            0.95,
+            sum by (le) (rate(wiki_page_publish_duration_seconds_bucket{result="success"}[10m]))
+          ) > 2
+        for: 10m
+        labels:
+          severity: warning
+        annotations:
+          summary: Publish p95 latency is above the two second Beta SLO
+
+      - alert: WikiOutboxBacklogOld
+        expr: wiki_outbox_oldest_backlog_age_seconds > 300
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: Oldest Outbox event has waited more than five minutes
+
+      - alert: WikiOutboxDeadLetters
+        expr: wiki_outbox_events{status="dead"} > 0
+        for: 1m
+        labels:
+          severity: critical
+        annotations:
+          summary: Outbox dead letters require intervention
+
+      - alert: WikiProjectionErrors
+        expr: wiki_projection_states{state="error"} > 0
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: Projection states contain errors
+
+      - alert: WikiImporterFailures
+        expr: delta(wiki_importer_jobs{status="failed"}[15m]) > 0
+        labels:
+          severity: warning
+        annotations:
+          summary: New failed import jobs were persisted

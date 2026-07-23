@@ -1,0 +1,53 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://anby.wiki/schemas/collaboration/v1/message.schema.json",
+  "title": "Collaboration JSON Message v1",
+  "oneOf": [
+    {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "type",
+        "document_id",
+        "page_id",
+        "latest_sequence",
+        "schema_version",
+        "crdt_codec"
+      ],
+      "properties": {
+        "type": { "const": "hello" },
+        "document_id": { "type": "string", "format": "uuid" },
+        "page_id": { "type": "string", "format": "uuid" },
+        "base_revision_id": {
+          "type": ["string", "null"],
+          "format": "uuid"
+        },
+        "latest_sequence": { "type": "integer", "minimum": 0 },
+        "schema_version": { "const": 1 },
+        "crdt_codec": { "const": "yjs-v1" }
+      }
+    },
+    {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["type", "latest_sequence"],
+      "properties": {
+        "type": { "const": "ready" },
+        "latest_sequence": { "type": "integer", "minimum": 0 }
+      }
+    },
+    {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["type", "actor_id", "cursor"],
+      "properties": {
+        "type": { "const": "presence" },
+        "actor_id": { "type": "string", "format": "uuid" },
+        "cursor": {
+          "type": "object",
+          "additionalProperties": true
+        }
+      }
+    }
+  ]
+}

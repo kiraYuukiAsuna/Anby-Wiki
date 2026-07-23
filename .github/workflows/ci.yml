@@ -1,0 +1,303 @@
+# CI 质量门禁：backend / web / contracts / client-drift / migrations
+# 本地等价命令见 Makefile（make ci）与 Docs/ci.md。
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  # Go 静态检查 + 测试 + 构建（等价 make lint-go test-go build-go）
+  # postgres 服务容器用于迁移 + TEST_DATABASE_URL 集成测试（M1-T08 起：
+  # 追踪矩阵要求里程碑门禁测试在 CI 常绿，不能只跑 skip 后的单元测试）
+  backend:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: backend
+    services:
+      postgres:
+        image: postgres:17
+        env:
+          POSTGRES_USER: wiki
+          POSTGRES_PASSWORD: wiki
+          POSTGRES_DB: wiki
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U wiki -d wiki"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: backend/go.mod
+          cache-dependency-path: backend/go.sum
+      - name: 校验 Go module 完整性
+        run: go mod verify
+      - name: gofmt 检查
+        run: |
+          out=$(gofmt -l .)
+          if [ -n "$out" ]; then
+            echo "以下文件未通过 gofmt："
+            echo "$out"
+            exit 1
+          fi
+      - name: go vet
+        run: go vet ./...
+      - name: go test（单元；未设置 TEST_DATABASE_URL 时集成用例 skip）
+        run: go test ./...
+      - name: Observability 配置静态校验（YAML 与必需顶层结构）
+        run: go test ./internal/platform/observability -run TestObservabilityConfig -count=1
+      - name: 对集成测试库执行迁移
+        env:
+          DATABASE_URL: 'postgres://wiki:wiki@localhost:5432/wiki?sslmode=disable'
+          # 以下变量为 config.Load 必填但本步骤不使用，填占位值即可
+          REDIS_URL: 'redis://localhost:6379/0'
+          S3_ENDPOINT: 'http://localhost:9000'
+          S3_BUCKET: wiki
+          S3_ACCESS_KEY: ci-placeholder
+          S3_SECRET_KEY: ci-placeholder
+        run: go run ./cmd/migrate up
+      - name: PostgreSQL 集成测试（TEST_DATABASE_URL，-p 1 串行：用例 Reset 共享库，包间并行会互踩）
+        env:
+          TEST_DATABASE_URL: 'postgres://wiki:wiki@localhost:5432/wiki?sslmode=disable'
+        run: go test ./... -count=1 -p 1
+      - name: go build
+        run: go build ./...
+
+  # 前端类型检查 + lint + 测试 + 构建（等价 make lint-web test-web build-web）
+  web:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: apps/web
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+          cache-dependency-path: apps/web/package-lock.json
+      - name: 安装依赖
+        run: npm ci
+      - name: TypeScript 类型检查
+        run: npm run typecheck
+      - name: ESLint
+        run: npm run lint
+      - name: Vitest
+        run: npm run test
+      - name: Next.js 构建
+        run: npm run build
+
+  security:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: backend/go.mod
+          cache-dependency-path: backend/go.sum
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+          cache-dependency-path: apps/web/package-lock.json
+      - name: 密钥扫描（gitleaks v8.28.0）
+        run: go run github.com/zricethezav/gitleaks/v8@v8.28.0 dir . --config .gitleaks.toml --no-banner --redact
+      - name: Go module 完整性与漏洞扫描（govulncheck v1.1.4）
+        working-directory: backend
+        run: |
+          go mod verify
+          go run golang.org/x/vuln/cmd/govulncheck@v1.1.4 ./...
+      - name: 安装前端依赖
+        working-directory: apps/web
+        run: npm ci
+      - name: npm production high audit
+        working-directory: apps/web
+        run: npm audit --omit=dev --audit-level=high
+
+  # M7-T08: production manifest/static rollout tests plus real OCI target builds.
+  deploy:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Deployment config, migration gate, and rollout-order checks
+        run: make deploy-config-check
+      - name: Build API, Worker, Web, and migration tool OCI targets
+        env:
+          VERSION: ci-${{ github.sha }}
+        run: |
+          for target in api worker web migrate; do
+            docker build \
+              --target "$target" \
+              --build-arg VERSION="$VERSION" \
+              --build-arg VCS_REF="${{ github.sha }}" \
+              --build-arg BUILD_DATE="1970-01-01T00:00:00Z" \
+              -t "anby-wiki-$target:ci" .
+          done
+      - name: Verify runtime user and healthcheck metadata
+        run: |
+          test "$(docker image inspect anby-wiki-api:ci --format '{{.Config.User}}')" = "10001:10001"
+          test "$(docker image inspect anby-wiki-worker:ci --format '{{.Config.User}}')" = "10001:10001"
+          test "$(docker image inspect anby-wiki-web:ci --format '{{.Config.User}}')" = "node"
+          test "$(docker image inspect anby-wiki-migrate:ci --format '{{.Config.User}}')" = "10001:10001"
+          test "$(docker image inspect anby-wiki-api:ci --format '{{if .Config.Healthcheck}}yes{{end}}')" = "yes"
+          test "$(docker image inspect anby-wiki-worker:ci --format '{{if .Config.Healthcheck}}yes{{end}}')" = "yes"
+          test "$(docker image inspect anby-wiki-web:ci --format '{{if .Config.Healthcheck}}yes{{end}}')" = "yes"
+
+  # M2 浏览器里程碑：全程经真实 UI + Go API + PostgreSQL，禁止内部 API/手写 AST。
+  browser-e2e:
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:17
+        env:
+          POSTGRES_USER: wiki
+          POSTGRES_PASSWORD: wiki
+          POSTGRES_DB: wiki
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U wiki -d wiki"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: backend/go.mod
+          cache-dependency-path: backend/go.sum
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+          cache-dependency-path: apps/web/package-lock.json
+      - name: 安装前端依赖与 Chromium
+        working-directory: apps/web
+        run: |
+          npm ci
+          npx playwright install --with-deps chromium
+      - name: 对 E2E 数据库执行迁移
+        working-directory: backend
+        env:
+          DATABASE_URL: 'postgres://wiki:wiki@localhost:5432/wiki?sslmode=disable'
+          REDIS_URL: 'redis://localhost:6379/0'
+          S3_ENDPOINT: 'http://localhost:9000'
+          S3_BUCKET: wiki
+          S3_ACCESS_KEY: ci-placeholder
+          S3_SECRET_KEY: ci-placeholder
+        run: go run ./cmd/migrate up
+      - name: Playwright 页面全生命周期（MT-M2-BROWSER-LIFECYCLE）
+        working-directory: apps/web
+        env:
+          E2E_DATABASE_URL: 'postgres://wiki:wiki@localhost:5432/wiki?sslmode=disable'
+        run: npm run test:e2e
+
+  # 校验 OpenAPI 契约合法性（openapi-generator validate，需 Java）
+  contracts:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '21'
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+          cache-dependency-path: apps/web/package-lock.json
+      - name: 安装依赖（复用 devDependency 中的 openapi-generator-cli）
+        working-directory: apps/web
+        run: npm ci
+      - name: 校验 OpenAPI 契约
+        working-directory: apps/web
+        run: npx --no-install @openapitools/openapi-generator-cli validate -i ../../contracts/openapi/openapi.yaml
+      - name: 校验 AST 与 ProposalOperation Schema 内嵌副本
+        run: |
+          sh scripts/check-ast-schema-sync.sh
+          sh scripts/check-operation-schema-sync.sh
+          sh scripts/check-extraction-schema-sync.sh
+
+  # 生成物漂移检查：重新生成 TS 客户端并要求与仓库一致（等价 make gen-check）
+  client-drift:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '21'
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+          cache-dependency-path: apps/web/package-lock.json
+      - name: 安装依赖
+        working-directory: apps/web
+        run: npm ci
+      - name: 重新生成 TypeScript 客户端
+        working-directory: apps/web
+        run: npm run gen:client
+      - name: 检查生成物漂移
+        run: git diff --exit-code contracts/generated/typescript
+
+  # 迁移文件规范校验 + 对空库执行迁移（等价 sh scripts/check-migrations.sh + make migrate-up）
+  migrations:
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:17
+        env:
+          POSTGRES_USER: wiki
+          POSTGRES_PASSWORD: wiki
+          POSTGRES_DB: wiki
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U wiki -d wiki"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: backend/go.mod
+          cache-dependency-path: backend/go.sum
+      - name: 校验迁移文件命名与成对性
+        run: sh scripts/check-migrations.sh
+      # 空迁移目录阶段：golang-migrate 在空目录下 up 返回 fs.ErrNotExist（"file does not exist"）
+      # 而非 ErrNoChange，cmd/migrate 不豁免该错误，因此无迁移文件时跳过 up/version。
+      # 首个迁移文件合入后此分支自动失效，迁移将被真实执行。
+      - name: 对空库执行迁移
+        working-directory: backend
+        env:
+          DATABASE_URL: 'postgres://wiki:wiki@localhost:5432/wiki?sslmode=disable'
+          # 以下变量为 config.Load 必填但本步骤不使用，填占位值即可
+          REDIS_URL: 'redis://localhost:6379/0'
+          S3_ENDPOINT: 'http://localhost:9000'
+          S3_BUCKET: wiki
+          S3_ACCESS_KEY: ci-placeholder
+          S3_SECRET_KEY: ci-placeholder
+        run: |
+          if ls migrations/*.up.sql >/dev/null 2>&1; then
+            go run ./cmd/migrate up
+            go run ./cmd/migrate version
+          else
+            echo "backend/migrations 尚无迁移文件，跳过 migrate up/version（空迁移阶段）"
+          fi

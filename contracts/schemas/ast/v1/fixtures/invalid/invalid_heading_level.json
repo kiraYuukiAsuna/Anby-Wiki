@@ -1,0 +1,12 @@
+{
+  "type": "document",
+  "schema_version": 1,
+  "children": [
+    {
+      "id": "0198a1b2-c3d4-7e5f-8a9b-0c1d2e3f4e01",
+      "type": "heading",
+      "level": 7,
+      "content": [{ "type": "text", "text": "level 越界" }]
+    }
+  ]
+}

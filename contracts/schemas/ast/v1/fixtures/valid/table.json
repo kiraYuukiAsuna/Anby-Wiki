@@ -1,0 +1,81 @@
+{
+  "type": "document",
+  "schema_version": 1,
+  "children": [
+    {
+      "id": "0198a1b2-c3d4-7e5f-8a9b-0c1d2e3f4d01",
+      "type": "table",
+      "children": [
+        {
+          "id": "0198a1b2-c3d4-7e5f-8a9b-0c1d2e3f4d02",
+          "type": "table_row",
+          "children": [
+            {
+              "id": "0198a1b2-c3d4-7e5f-8a9b-0c1d2e3f4d03",
+              "type": "table_cell",
+              "children": [
+                {
+                  "id": "0198a1b2-c3d4-7e5f-8a9b-0c1d2e3f4d04",
+                  "type": "paragraph",
+                  "content": [{ "type": "text", "text": "表头一", "marks": ["bold"] }]
+                }
+              ]
+            },
+            {
+              "id": "0198a1b2-c3d4-7e5f-8a9b-0c1d2e3f4d05",
+              "type": "table_cell",
+              "children": [
+                {
+                  "id": "0198a1b2-c3d4-7e5f-8a9b-0c1d2e3f4d06",
+                  "type": "paragraph",
+                  "content": [{ "type": "text", "text": "表头二", "marks": ["bold"] }]
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "id": "0198a1b2-c3d4-7e5f-8a9b-0c1d2e3f4d07",
+          "type": "table_row",
+          "children": [
+            {
+              "id": "0198a1b2-c3d4-7e5f-8a9b-0c1d2e3f4d08",
+              "type": "table_cell",
+              "children": [
+                {
+                  "id": "0198a1b2-c3d4-7e5f-8a9b-0c1d2e3f4d09",
+                  "type": "paragraph",
+                  "content": [
+                    {
+                      "type": "page_reference",
+                      "target_page_id": "0198a1b2-c3d4-7e5f-8a9b-0c1d2e3f4b01",
+                      "display_text": "相关页面"
+                    }
+                  ]
+                }
+              ]
+            },
+            {
+              "id": "0198a1b2-c3d4-7e5f-8a9b-0c1d2e3f4d0a",
+              "type": "table_cell",
+              "children": [
+                {
+                  "id": "0198a1b2-c3d4-7e5f-8a9b-0c1d2e3f4d0b",
+                  "type": "callout",
+                  "kind": "info",
+                  "children": [
+                    {
+                      "id": "0198a1b2-c3d4-7e5f-8a9b-0c1d2e3f4d0c",
+                      "type": "paragraph",
+                      "content": [{ "type": "text", "text": "单元格内的 callout" }]
+                    }
+                  ]
+                }
+              ]
+            }
+          ]
+        }
+      ]
+    }
+  ]
+}
