@@ -12,10 +12,43 @@ import (
 
 	"github.com/google/uuid"
 
+	"github.com/anby/wiki/backend/internal/ai"
 	"github.com/anby/wiki/backend/internal/platform/config"
 	"github.com/anby/wiki/backend/internal/projection"
 	"github.com/anby/wiki/backend/testkit"
 )
+
+func TestNewImportProvider(t *testing.T) {
+	for _, test := range []struct {
+		name     string
+		provider string
+		assert   func(*testing.T, ai.Provider)
+	}{
+		{name: "openai compatible", provider: "openai-compatible", assert: func(t *testing.T, provider ai.Provider) {
+			if _, ok := provider.(*ai.OpenAICompatibleProvider); !ok {
+				t.Fatalf("provider=%T", provider)
+			}
+		}},
+		{name: "deepseek", provider: "deepseek", assert: func(t *testing.T, provider ai.Provider) {
+			if _, ok := provider.(*ai.DeepSeekProvider); !ok {
+				t.Fatalf("provider=%T", provider)
+			}
+		}},
+	} {
+		t.Run(test.name, func(t *testing.T) {
+			provider, err := newImportProvider(config.Config{
+				AIProvider: test.provider, AIBaseURL: "https://provider.invalid", AIAPIKey: "secret",
+			})
+			if err != nil {
+				t.Fatal(err)
+			}
+			test.assert(t, provider)
+		})
+	}
+	if _, err := newImportProvider(config.Config{AIProvider: "unknown"}); err == nil {
+		t.Fatal("不支持的 provider 应失败")
+	}
+}
 
 func TestAssembleImportRunner_BootstrapsAuthoritativePrompt(t *testing.T) {
 	if !setupEnv(t) {

@@ -14,16 +14,29 @@ import (
 
 const maxProviderResponseBytes = 4 << 20
 
-// OpenAICompatibleProvider adapts the widely supported chat/completions JSON
-// protocol to the provider-neutral Gateway boundary. Credentials and provider
-// response bodies are deliberately never included in returned errors.
-type OpenAICompatibleProvider struct {
+const (
+	responseFormatJSONSchema = "json_schema"
+	responseFormatJSONObject = "json_object"
+)
+
+// chatCompletionProvider adapts the chat/completions JSON protocol to the
+// provider-neutral Gateway boundary. Credentials and provider response bodies
+// are deliberately never included in returned errors.
+type chatCompletionProvider struct {
 	endpoint string
 	apiKey   string
 	client   *http.Client
+	format   string
+	thinking *chatThinking
 }
 
-func NewOpenAICompatibleProvider(baseURL, apiKey string, client *http.Client) (*OpenAICompatibleProvider, error) {
+type OpenAICompatibleProvider struct{ *chatCompletionProvider }
+
+// DeepSeekProvider uses DeepSeek's documented JSON Output mode. The Gateway
+// still validates the returned object against the authoritative local schema.
+type DeepSeekProvider struct{ *chatCompletionProvider }
+
+func newChatCompletionProvider(baseURL, apiKey string, client *http.Client) (*chatCompletionProvider, error) {
 	parsed, err := url.Parse(strings.TrimRight(strings.TrimSpace(baseURL), "/"))
 	if err != nil || parsed.Host == "" || (parsed.Scheme != "http" && parsed.Scheme != "https") || parsed.User != nil {
 		return nil, fmt.Errorf("%w: invalid provider base URL", ErrProvider)
@@ -34,13 +47,33 @@ func NewOpenAICompatibleProvider(baseURL, apiKey string, client *http.Client) (*
 	if client == nil {
 		client = http.DefaultClient
 	}
-	return &OpenAICompatibleProvider{endpoint: parsed.String() + "/chat/completions", apiKey: apiKey, client: client}, nil
+	return &chatCompletionProvider{endpoint: parsed.String() + "/chat/completions", apiKey: apiKey, client: client}, nil
+}
+
+func NewOpenAICompatibleProvider(baseURL, apiKey string, client *http.Client) (*OpenAICompatibleProvider, error) {
+	provider, err := newChatCompletionProvider(baseURL, apiKey, client)
+	if err != nil {
+		return nil, err
+	}
+	provider.format = responseFormatJSONSchema
+	return &OpenAICompatibleProvider{chatCompletionProvider: provider}, nil
+}
+
+func NewDeepSeekProvider(baseURL, apiKey string, client *http.Client) (*DeepSeekProvider, error) {
+	provider, err := newChatCompletionProvider(baseURL, apiKey, client)
+	if err != nil {
+		return nil, err
+	}
+	provider.format = responseFormatJSONObject
+	provider.thinking = &chatThinking{Type: "disabled"}
+	return &DeepSeekProvider{chatCompletionProvider: provider}, nil
 }
 
 type chatCompletionRequest struct {
 	Model          string                 `json:"model"`
 	Messages       []chatMessage          `json:"messages"`
 	ResponseFormat chatJSONResponseFormat `json:"response_format"`
+	Thinking       *chatThinking          `json:"thinking,omitempty"`
 }
 
 type chatMessage struct {
@@ -49,14 +82,18 @@ type chatMessage struct {
 }
 
 type chatJSONResponseFormat struct {
-	Type       string         `json:"type"`
-	JSONSchema chatJSONSchema `json:"json_schema"`
+	Type       string          `json:"type"`
+	JSONSchema *chatJSONSchema `json:"json_schema,omitempty"`
 }
 
 type chatJSONSchema struct {
 	Name   string          `json:"name"`
 	Strict bool            `json:"strict"`
 	Schema json.RawMessage `json:"schema"`
+}
+
+type chatThinking struct {
+	Type string `json:"type"`
 }
 
 type chatCompletionResponse struct {
@@ -71,9 +108,15 @@ type chatCompletionResponse struct {
 	} `json:"usage"`
 }
 
-func (p *OpenAICompatibleProvider) Generate(ctx context.Context, request ProviderRequest) (*ProviderResponse, error) {
+func (p *chatCompletionProvider) Generate(ctx context.Context, request ProviderRequest) (*ProviderResponse, error) {
 	if strings.TrimSpace(request.Model) == "" || len(request.JSONSchema) == 0 {
 		return nil, &ProviderError{Code: "invalid_request", Err: ErrProvider}
+	}
+	responseFormat := chatJSONResponseFormat{Type: p.format}
+	if p.format == responseFormatJSONSchema {
+		responseFormat.JSONSchema = &chatJSONSchema{
+			Name: "anby_structured_output", Strict: true, Schema: request.JSONSchema,
+		}
 	}
 	payload, err := json.Marshal(chatCompletionRequest{
 		Model: request.Model,
@@ -81,9 +124,8 @@ func (p *OpenAICompatibleProvider) Generate(ctx context.Context, request Provide
 			{Role: "system", Content: request.SystemPrompt},
 			{Role: "user", Content: request.UserPrompt},
 		},
-		ResponseFormat: chatJSONResponseFormat{Type: "json_schema", JSONSchema: chatJSONSchema{
-			Name: "anby_structured_output", Strict: true, Schema: request.JSONSchema,
-		}},
+		ResponseFormat: responseFormat,
+		Thinking:       p.thinking,
 	})
 	if err != nil {
 		return nil, &ProviderError{Code: "encode_request", Err: ErrProvider}

@@ -148,6 +148,7 @@ Compose 会把机密注入容器环境，因此具有 Docker 管理权限的人�
 | `POSTGRES_PASSWORD` | PostgreSQL 密码；只允许字母、数字、点、下划线和连字符，建议使用 `openssl rand -hex 32` 生成 |
 | `S3_ACCESS_KEY` `S3_SECRET_KEY` | 同时作为 MinIO root 凭据与应用 S3 凭据 |
 | `AUTH_REGISTRATION_ENABLED` | 是否允许公开注册；首个管理员建立后建议设为 `false` |
+| `AI_PROVIDER` `AI_BASE_URL` `AI_MODEL` | 模型 Adapter、API 根地址和模型 ID；DeepSeek 分别使用 `deepseek`、`https://api.deepseek.com` 和当前有效模型 ID |
 | `AI_API_KEY` | 仅在 `AI_IMPORT_ENABLED=true` 时填写；只注入 Worker |
 | `S3_BUCKET` | 对象存储桶名 |
 | `TRUSTED_ORIGINS` | 用户实际访问的精确 origin，如 `https://wiki.example.com` |

@@ -2,6 +2,7 @@ package main
 
 import (
 	"context"
+	"fmt"
 	"log/slog"
 
 	"github.com/jackc/pgx/v5/pgxpool"
@@ -44,7 +45,7 @@ func assembleImportRunner(ctx context.Context, pool *pgxpool.Pool, cfg config.Co
 	governanceService := governance.NewService(governanceRepo, txm, ids)
 	reviews := governance.NewReviewService(governanceRepo, txm, ids, governance.NewRiskEvaluator(knowledgeService))
 
-	provider, err := ai.NewOpenAICompatibleProvider(cfg.AIBaseURL, cfg.AIAPIKey, nil)
+	provider, err := newImportProvider(cfg)
 	if err != nil {
 		return nil, err
 	}
@@ -66,4 +67,15 @@ func assembleImportRunner(ctx context.Context, pool *pgxpool.Pool, cfg config.Co
 	})
 	return importer.NewRunner(jobs, pipeline, importer.RunnerConfig{WikiID: wikiID,
 		Provider: cfg.AIProvider, Model: cfg.AIModel, Logger: logger, UploadStore: objectStore}), nil
+}
+
+func newImportProvider(cfg config.Config) (ai.Provider, error) {
+	switch cfg.AIProvider {
+	case "openai-compatible":
+		return ai.NewOpenAICompatibleProvider(cfg.AIBaseURL, cfg.AIAPIKey, nil)
+	case "deepseek":
+		return ai.NewDeepSeekProvider(cfg.AIBaseURL, cfg.AIAPIKey, nil)
+	default:
+		return nil, fmt.Errorf("worker: 不支持的 AI_PROVIDER: %s", cfg.AIProvider)
+	}
 }

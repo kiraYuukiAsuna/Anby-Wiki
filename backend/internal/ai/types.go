@@ -5,6 +5,7 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"time"
 
 	"github.com/google/uuid"
@@ -100,6 +101,9 @@ type ProviderError struct {
 
 func (e *ProviderError) Error() string {
 	if e.Err != nil {
+		if e.Code != "" {
+			return fmt.Sprintf("%s: %s", e.Err.Error(), e.Code)
+		}
 		return e.Err.Error()
 	}
 	return "provider error: " + e.Code

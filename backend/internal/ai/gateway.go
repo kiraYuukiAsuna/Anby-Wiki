@@ -128,6 +128,11 @@ func (g *Gateway) Generate(ctx context.Context, request Request) (*Result, error
 		} else {
 			status, errorCode = UsageSucceeded, ""
 		}
+	} else {
+		var providerErr *ProviderError
+		if errors.As(callErr, &providerErr) && providerErr.Code != "" {
+			errorCode = providerErr.Code
+		}
 	}
 	usageID, idErr := g.ids.New()
 	if idErr != nil {

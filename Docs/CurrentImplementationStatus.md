@@ -1,6 +1,6 @@
 # 当前实现状态
 
-> 更新时间：2026-07-26
+> 更新时间：2026-07-27
 > 依据：[整体设计方案](WikiDesignOnePage.md) 与 [实施方案](WikiImplementationPlan.md)
 
 ## 总体结论
@@ -21,7 +21,7 @@ PostgreSQL 权威数据、Outbox 投影、治理审核、协作编辑和 P1 扩�
 | M3 投影与 Worker | PostgreSQL Outbox、租约/重试/死信、链接/大纲/锚点/外链/渲染投影、按页及全量重建 |
 | M4 知识与证据 | Entity/Property/Claim、标签与别名、Source/Version/Chunk/Citation、知识引用及反向使用投影 |
 | M5 治理 | Proposal/Operation、风险分级、ReviewTask、三方冲突、ChangeBatch、审计、权限与补偿回滚 |
-| M6 AI 与导入 | HTML/PDF 安全获取、解析与抽取流水线、Prompt 版本、用量记录、幂等任务、证据约束 Proposal |
+| M6 AI 与导入 | HTML/PDF 安全获取、解析与抽取流水线、OpenAI strict JSON Schema 与 DeepSeek JSON Object Adapter、Prompt 版本、用量记录、幂等任务、证据约束 Proposal |
 | M7 平台化 | PostgreSQL FTS Adapter、本地账号与服务端 Session、应用层限流与安全头、OTel、备份恢复、数据一致性 Doctor、部署流水线 |
 | M8 协作编辑 | Yjs AST 映射、WorkingDocument、WebSocket 增量同步、Presence、原子发布换基、AI 三方合并、人工冲突决议 |
 | M9 P1 扩展 | 稳定章节锚点、BlockRedirect、Component/Version/信息框、Collection、外链健康检查、Entity 合并、批量风险审核、可靠性与容量 smoke |

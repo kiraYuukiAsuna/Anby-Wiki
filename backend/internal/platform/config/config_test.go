@@ -129,6 +129,33 @@ func TestLoad_AIImportRequiresProviderConfiguration(t *testing.T) {
 	}
 }
 
+func TestLoad_AIProviderValidation(t *testing.T) {
+	for _, provider := range []string{"openai-compatible", "deepseek"} {
+		t.Run(provider, func(t *testing.T) {
+			setRequired(t)
+			t.Setenv("AI_IMPORT_ENABLED", "true")
+			t.Setenv("AI_PROVIDER", provider)
+			t.Setenv("AI_BASE_URL", "https://provider.invalid")
+			t.Setenv("AI_API_KEY", "secret")
+			t.Setenv("AI_MODEL", "model")
+			if _, err := Load(); err != nil {
+				t.Fatalf("AI_PROVIDER=%s 应有效: %v", provider, err)
+			}
+		})
+	}
+	t.Run("unsupported", func(t *testing.T) {
+		setRequired(t)
+		t.Setenv("AI_IMPORT_ENABLED", "true")
+		t.Setenv("AI_PROVIDER", "unknown")
+		t.Setenv("AI_BASE_URL", "https://provider.invalid")
+		t.Setenv("AI_API_KEY", "secret")
+		t.Setenv("AI_MODEL", "model")
+		if _, err := Load(); err == nil || !strings.Contains(err.Error(), "AI_PROVIDER") {
+			t.Fatalf("不支持的 AI_PROVIDER 应失败: %v", err)
+		}
+	})
+}
+
 func TestLoad_ProductionRejectsDevelopmentActorHeader(t *testing.T) {
 	setProductionRequired(t)
 	t.Setenv("AUTH_DEV_HEADER_ENABLED", "true")

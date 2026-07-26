@@ -49,9 +49,9 @@ type Config struct {
 	// AIImportEnabled 显式启用常驻 Worker 的来源导入消费；默认关闭，避免
 	// 未配置模型凭据时误消费任务。
 	AIImportEnabled bool `env:"AI_IMPORT_ENABLED" envDefault:"false"`
-	// AIProvider 是 Gateway 内的供应商键。当前内置 openai-compatible Adapter。
+	// AIProvider 是 Gateway 内的供应商键。内置 openai-compatible 与 deepseek Adapter。
 	AIProvider string `env:"AI_PROVIDER" envDefault:"openai-compatible"`
-	// AIBaseURL 是 OpenAI-compatible API 根地址（例如 https://host/v1）。
+	// AIBaseURL 是模型供应商 API 根地址（例如 https://host/v1）。
 	AIBaseURL string `env:"AI_BASE_URL"`
 	// AIAPIKey 只从进程环境注入；生产可由受保护的部署环境文件提供，禁止写入日志。
 	AIAPIKey string `env:"AI_API_KEY"`
@@ -150,7 +150,7 @@ func (c Config) validate() error {
 		if len(aiMissing) > 0 {
 			return fmt.Errorf("config: AI_IMPORT_ENABLED=true 时缺失环境变量: %s", strings.Join(aiMissing, ", "))
 		}
-		if c.AIProvider != "openai-compatible" {
+		if c.AIProvider != "openai-compatible" && c.AIProvider != "deepseek" {
 			return fmt.Errorf("config: 不支持的 AI_PROVIDER: %s", c.AIProvider)
 		}
 	}

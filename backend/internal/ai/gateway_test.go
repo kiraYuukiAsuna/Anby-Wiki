@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"strings"
 	"sync"
 	"sync/atomic"
 	"testing"
@@ -113,5 +114,23 @@ func TestGateway_TimeoutAndInvalidOutputAreRecorded(t *testing.T) {
 				t.Fatalf("usage=%+v", usage.items)
 			}
 		})
+	}
+}
+
+func TestGateway_RecordsSafeProviderErrorCode(t *testing.T) {
+	usage := &usageStub{}
+	provider := providerFunc(func(context.Context, ai.ProviderRequest) (*ai.ProviderResponse, error) {
+		return nil, &ai.ProviderError{Code: "http_400", Err: ai.ErrProvider}
+	})
+	gateway := ai.NewGateway(promptStub{testPrompt()}, usage, id.NewGenerator(),
+		map[string]ai.Provider{"fake": provider}, ai.GatewayConfig{MaxAttempts: 1})
+	_, err := gateway.Generate(context.Background(), ai.Request{Provider: "fake", Model: "m",
+		PromptKey: "extract", Variables: map[string]any{"source": "s", "text": "t"}})
+	if !errors.Is(err, ai.ErrProvider) || !strings.Contains(err.Error(), "http_400") {
+		t.Fatalf("err=%v", err)
+	}
+	if len(usage.items) != 1 || usage.items[0].Status != ai.UsageFailed ||
+		usage.items[0].ErrorCode != "http_400" {
+		t.Fatalf("usage=%+v", usage.items)
 	}
 }

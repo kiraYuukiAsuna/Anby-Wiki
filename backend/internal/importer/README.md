@@ -9,8 +9,11 @@ Page、Knowledge、Evidence 或 Governance 的权威表。所有正式写入均�
 API 的 `POST /api/v1/import-jobs` 只创建队列项。`cmd/worker` 在显式设置
 `AI_IMPORT_ENABLED=true` 后领取 `source_import`：
 
-- `AI_PROVIDER=openai-compatible`
-- `AI_BASE_URL`：支持 `/chat/completions` 和 JSON Schema structured output 的 API 根地址
+- `AI_PROVIDER=openai-compatible`：供应商必须支持 `/chat/completions` 的严格
+  `response_format=json_schema`
+- `AI_PROVIDER=deepseek`：使用 DeepSeek `response_format=json_object`，并在本地执行同一份
+  权威 JSON Schema 校验
+- `AI_BASE_URL`：供应商 API 根地址；DeepSeek 使用 `https://api.deepseek.com`
 - `AI_API_KEY`：只允许经环境变量注入
 - `AI_MODEL`：抽取模型 ID
 - `S3_ENDPOINT` / `S3_REGION` / `S3_BUCKET` / `S3_ACCESS_KEY` / `S3_SECRET_KEY`
