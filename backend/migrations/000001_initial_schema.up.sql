@@ -1085,18 +1085,6 @@ CREATE TABLE external_identity (
 
 CREATE INDEX external_identity_actor_idx ON external_identity (actor_id);
 
-CREATE TABLE oidc_login_attempt (
-    id                  uuid        PRIMARY KEY,
-    state_hash          bytea       NOT NULL UNIQUE,
-    browser_secret_hash bytea       NOT NULL,
-    nonce               text        NOT NULL,
-    code_verifier       text        NOT NULL,
-    expires_at          timestamptz NOT NULL,
-    created_at          timestamptz NOT NULL DEFAULT now()
-);
-
-CREATE INDEX oidc_login_attempt_expires_idx ON oidc_login_attempt (expires_at);
-
 CREATE TABLE auth_session (
     id         uuid        PRIMARY KEY,
     token_hash bytea       NOT NULL UNIQUE,

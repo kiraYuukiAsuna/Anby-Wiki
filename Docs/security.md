@@ -4,9 +4,9 @@
 
 production 启动前必须满足：
 
-- `TRUSTED_ORIGINS` 为逗号分隔的精确 HTTPS origin，例如 `https://wiki.example.com`；禁止 wildcard、path、query、fragment 和 userinfo。
-- `OIDC_ENABLED=true`，`OIDC_ISSUER_URL` 与 `OIDC_REDIRECT_URL` 使用 HTTPS，`OIDC_CLIENT_SECRET` 非空、至少 12 字符且不是常见占位值。
-- `SESSION_COOKIE_SECURE=true` 且 `AUTH_DEV_HEADER_ENABLED=false`。
+- `TRUSTED_ORIGINS` 为逗号分隔的精确 HTTP(S) origin；禁止 wildcard、path、query、fragment 和 userinfo。
+- `AUTH_DEV_LOGIN_ENABLED=true` 时，`AUTH_DEV_LOGIN_TOKEN` 必须非空、至少 12 字符且不是常见占位值。它是封闭早期环境的共享引导令牌，不验证真实身份。
+- `AUTH_DEV_HEADER_ENABLED=false`。外层实际提供 HTTPS 时必须设置 `SESSION_COOKIE_SECURE=true`；明文本地/封闭部署才允许 `false`。
 - `S3_ACCESS_KEY`/`S3_SECRET_KEY` 不使用 `minioadmin`、`minioadmin_dev`、`wiki_dev_password`、`ci-placeholder`、`changeme` 等开发/占位值，长度至少 12 字符。
 
 development 可配置精确 HTTP localhost，例如：
@@ -22,7 +22,7 @@ TRUSTED_ORIGINS=http://localhost:3000,http://localhost:8000
 1. 存在 `Origin` 时必须精确匹配 trusted origin。
 2. `Origin` 缺失时从 `Referer` 提取 origin 并精确匹配。
 3. 两者缺失、格式非法或不可信时返回 `403 forbidden`。
-4. 无 session cookie 的 development/test `X-Actor-ID` 请求不受该 cookie CSRF 规则影响；production 配置和 Nginx 均禁止该身份来源。
+4. 无 session cookie 的 development/test `X-Actor-ID` 请求不受该 cookie CSRF 规则影响；production 配置拒绝该开关，Go 中间件同时剥离该请求头。
 
 负向测试必须证明拒绝 logout 不撤销 session、拒绝 upload 不写对象、拒绝页面创建不写数据库。
 
@@ -32,13 +32,13 @@ TRUSTED_ORIGINS=http://localhost:3000,http://localhost:8000
 - AST 和 Citation 渲染再次调用 `safeHttpUrl`；异常或危险协议降级为不可点击文本。
 - 禁止直接把未校验 URL 写入 `href`，禁止 `dangerouslySetInnerHTML` 渲染 AST/API HTML。
 
-## Nginx
+## 应用边界控制
 
 - 普通 API 请求体上限 2 MiB；`/api/v1/import-jobs/uploads` 上限 11 MiB，业务文件上限仍为 10 MiB。
-- auth、upload、general API 分别限流；超限返回 429。
-- API 代理清空 `X-Actor-ID`、`X-Authenticated-User`、`X-Auth-Request-User`、`X-Remote-User`。
-- CSP、Permissions Policy、COOP/CORP、nosniff、frame 和 referrer 头在网关设置；localhost CSP 仅为 Next HMR 保留 `unsafe-eval`。
-- `Strict-Transport-Security` 只在 Nginx 自身处理 HTTPS 时发送，普通 HTTP 开发入口不发送。
+- auth、upload、general API 由 Go + Redis 分别限流；超限返回 429。Redis 不可达时放行并记录告警。
+- Go API 清空 `X-Authenticated-User`、`X-Auth-Request-User`、`X-Remote-User`；除显式 development/test 模式外也清空 `X-Actor-ID`。
+- Web 与 API 分别设置 CSP、COOP/CORP、nosniff、frame 和 referrer 头；Web 另设置 Permissions Policy，localhost CSP 仅为 Next HMR 保留 `unsafe-eval`。
+- 当前 Compose 不终结 TLS，因此应用不发送 HSTS。由外层 TLS 边界负责 HSTS 时，必须同步启用 Secure cookie。
 
 ## 扫描与已知阻塞
 
@@ -49,15 +49,22 @@ TRUSTED_ORIGINS=http://localhost:3000,http://localhost:8000
 - `npm audit --omit=dev --audit-level=high`
 - `gitleaks v8.28.0`
 
-2026-07-23 实跑发现并修复 Go `GO-2026-5970`（`x/text`）、`GO-2026-4945`（`go-jose`）和 `GO-2026-4394`（`go.opentelemetry.io/otel/sdk`）；OpenTelemetry Go v1 模块已统一升级到稳定版 `v1.40.0`。
+2026-07-23 实跑发现并修复 Go `GO-2026-5970`（`x/text`）、`GO-2026-4945`
+（`go-jose`）和 `GO-2026-4394`（`go.opentelemetry.io/otel/sdk`）。
 
-2026-07-24 最终门禁结果：
+2026-07-26 门禁又发现并修复 `GO-2026-5506`、`GO-2026-5158`
+（OpenTelemetry baggage header 解析资源消耗）与 `GO-2026-4559`
+（`x/net` HTTP/2 frame 可触发 panic）；OpenTelemetry Go v1 模块已统一升级到
+`v1.42.0`，`x/net` 已升级到 `v0.51.0`。
+最终门禁结果：
 
 - `govulncheck v1.1.4 ./...` 报告 0 个可达漏洞，Go 全量测试、vet 与构建通过；
-- npm registry 最新 Next 仍为 `16.2.11`，其 production 依赖 `sharp 0.34.5`
-  命中 `GHSA-f88m-g3jw-g9cj`（high），安全版本为 `sharp 0.35.3`；
-- Next 内嵌 `postcss <=8.5.11` 命中 `GHSA-qx2v-qp2m-jg93` 与
-  `GHSA-6g55-p6wh-862q`（high），npm 最新安全版本为 `postcss 8.5.22`；
+- 当前 Next `16.2.11` 的 production 依赖 `sharp 0.34.5`
+  命中 `GHSA-f88m-g3jw-g9cj`（high），修复要求 `sharp >=0.35.0`；
+- Next 内嵌 `postcss <=8.5.17` 命中 `GHSA-qx2v-qp2m-jg93`、
+  `GHSA-6g55-p6wh-862q` 与 `GHSA-r28c-9q8g-f849`（high）；
+- 非破坏性 `npm audit fix` 已升级可独立修复的 `brace-expansion`，production
+  审计仍报告 3 个 high 和 3 个 moderate；
 - npm 提供的 `audit fix --force` 会破坏性降级到 Next 9，不能采用，也不通过
   unsupported override 绕过框架锁定依赖。
 

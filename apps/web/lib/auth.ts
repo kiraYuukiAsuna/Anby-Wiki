@@ -9,7 +9,11 @@ import {
 import { authApi } from "@/lib/api";
 
 export const AUTH_SESSION_KEY = "auth:session";
-export const LOGIN_PATH = "/api/v1/auth/login";
+/**
+ * 站内登录页。早期阶段以引导令牌换取会话，没有身份提供方重定向，
+ * 因此这里是应用内路由而不是后端端点。
+ */
+export const LOGIN_PATH = "/login";
 
 export function isUnauthorized(error: unknown): error is ResponseError {
   return error instanceof ResponseError && error.response.status === 401;

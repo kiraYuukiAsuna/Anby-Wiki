@@ -28,10 +28,12 @@ import (
 	"github.com/anby/wiki/backend/internal/platform/id"
 	"github.com/anby/wiki/backend/internal/platform/logging"
 	"github.com/anby/wiki/backend/internal/platform/observability"
+	"github.com/anby/wiki/backend/internal/platform/ratelimit"
 	"github.com/anby/wiki/backend/internal/platform/storage"
 	"github.com/anby/wiki/backend/internal/projection"
 	wikisearch "github.com/anby/wiki/backend/internal/search"
 	"github.com/jackc/pgx/v5/pgxpool"
+	"github.com/redis/go-redis/v9"
 )
 
 // 版本信息，由构建期 -ldflags 注入。
@@ -67,17 +69,47 @@ func main() {
 		}
 	}()
 
+	allowDevActorHeader := cfg.AuthDevHeaderEnabled && cfg.Env != "production"
 	deps := Deps{
-		Service:        serviceName,
-		Version:        version,
-		Environment:    cfg.Env,
-		SessionCookie:  cfg.SessionCookieName,
-		TrustedOrigins: cfg.TrustedOrigins,
-		Metrics:        metrics,
+		Service:             serviceName,
+		Version:             version,
+		Environment:         cfg.Env,
+		SessionCookie:       cfg.SessionCookieName,
+		TrustedOrigins:      cfg.TrustedOrigins,
+		AllowDevActorHeader: allowDevActorHeader,
+		Metrics:             metrics,
 		Checks: map[string]CheckFunc{
 			"postgres": postgresCheck(cfg.DatabaseURL),
 			"redis":    redisCheck(cfg.RedisURL),
 		},
+	}
+
+	// Redis-backed limiter. The API is the only rate-limiting layer now that
+	// no reverse proxy fronts it, so this is configured before serving.
+	if cfg.RateLimitEnabled && strings.TrimSpace(cfg.RedisURL) != "" {
+		redisOptions, redisErr := redis.ParseURL(cfg.RedisURL)
+		if redisErr != nil {
+			logger.Error("REDIS_URL 无法解析，限流未启用", slog.Any("error", redisErr))
+			if cfg.Env == "production" {
+				os.Exit(1)
+			}
+		} else {
+			redisClient := redis.NewClient(redisOptions)
+			defer func() {
+				if err := redisClient.Close(); err != nil {
+					logger.Warn("关闭 Redis 连接失败", slog.Any("error", err))
+				}
+			}()
+			deps.RateLimiter = ratelimit.New(redisClient, time.Minute)
+			deps.RateLimitConfig = RateLimitConfig{
+				GeneralPerMinute: cfg.RateLimitGeneralPerMinute,
+				AuthPerMinute:    cfg.RateLimitAuthPerMinute,
+				UploadPerMinute:  cfg.RateLimitUploadPerMinute,
+				TrustedProxies:   ratelimit.TrustedProxySet(cfg.TrustedProxyIPs),
+			}
+		}
+	} else if cfg.Env == "production" && !cfg.RateLimitEnabled {
+		logger.Warn("production 未启用限流，API 暴露在请求洪峰下")
 	}
 
 	// 读写 API 需要数据库：连接、装配领域服务并解析缓存默认站点 ID。
@@ -117,26 +149,11 @@ func main() {
 		importAPI = NewImportAPI(importer.NewService(importRepo, db.NewTxManager(pool), id.NewGenerator()))
 		authService := authdomain.NewService(pool, db.NewTxManager(pool), id.NewGenerator(), cfg.SessionTTL)
 		deps.Authenticator = authdomain.NewAuthenticator(
-			authService, cfg.SessionCookieName, cfg.AuthDevHeaderEnabled && cfg.Env != "production",
+			authService, cfg.SessionCookieName, allowDevActorHeader,
 		)
-		var provider authdomain.OIDCProvider
-		if cfg.OIDCEnabled {
-			var providerErr error
-			provider, providerErr = authdomain.NewOIDCProvider(context.Background(), authdomain.OIDCConfig{
-				IssuerURL:    cfg.OIDCIssuerURL,
-				ClientID:     cfg.OIDCClientID,
-				ClientSecret: cfg.OIDCClientSecret,
-				RedirectURL:  cfg.OIDCRedirectURL,
-				Scopes:       strings.Fields(cfg.OIDCScopes),
-			})
-			if providerErr != nil {
-				logger.Error("OIDC discovery 失败，拒绝启动", slog.Any("error", providerErr))
-				os.Exit(1)
-			}
-		}
 		authAPI = NewAuthAPI(
-			authService, provider, cfg.SessionCookieName,
-			cfg.SessionCookieSecure, cfg.AuthPostLoginRedirect,
+			authService, cfg.SessionCookieName, cfg.SessionCookieSecure,
+			cfg.AuthDevLoginEnabled, cfg.AuthDevLoginToken,
 		)
 		collaborationService := collaboration.NewService(
 			pool, db.NewTxManager(pool), id.NewGenerator(),
@@ -272,20 +289,8 @@ func assembleAPIs(pool *pgxpool.Pool, searchBackends ...wikisearch.SearchAdapter
 		governanceAPI, nil
 }
 
-func configuredSearchBackend(ctx context.Context, pool *pgxpool.Pool, cfg config.Config) (wikisearch.SearchAdapter, error) {
-	adapter, err := wikisearch.NewBackend(pool, wikisearch.BackendConfig{
-		Backend: cfg.SearchBackend, MeiliURL: cfg.MeiliURL, MeiliAPIKey: cfg.MeiliAPIKey,
-		MeiliIndex: cfg.MeiliIndex, MeiliTimeout: cfg.MeiliTimeout,
-	})
-	if err != nil {
-		return nil, err
-	}
-	if meili, ok := adapter.(*wikisearch.MeilisearchAdapter); ok {
-		if err := meili.EnsureIndex(ctx); err != nil {
-			return nil, err
-		}
-	}
-	return adapter, nil
+func configuredSearchBackend(_ context.Context, pool *pgxpool.Pool, cfg config.Config) (wikisearch.SearchAdapter, error) {
+	return wikisearch.NewBackend(pool, wikisearch.BackendConfig{Backend: cfg.SearchBackend})
 }
 
 // postgresCheck 构造 PostgreSQL 就绪检查；未配置时返回 nil（降级 not_configured）。

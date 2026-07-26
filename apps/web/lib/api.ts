@@ -41,7 +41,7 @@ export function getBaseUrl(): string {
     );
   }
   // 浏览器默认走当前 Next.js origin；next.config.ts 将 /api 代理到 Go API。
-  // 生产 Nginx 也采用同源 /api，避免本地开发和部署都依赖跨域放行。
+  // 开发与生产均由 Next.js 同源转发 /api，浏览器不依赖跨域放行。
   return process.env.NEXT_PUBLIC_API_BASE_URL ?? window.location.origin;
 }
 
@@ -73,7 +73,7 @@ function makeConfig(overrides: ConfigurationParameters = {}): Configuration {
   });
 }
 
-/** OIDC 浏览器登录与服务端 session 客户端。 */
+/** 早期引导登录与服务端 session 客户端。 */
 export function authApi(overrides: ConfigurationParameters = {}): AuthApi {
   return new AuthApi(makeConfig(overrides));
 }

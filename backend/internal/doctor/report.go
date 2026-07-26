@@ -39,8 +39,7 @@ type Summary struct {
 }
 
 type RepairSummary struct {
-	ExpiredLoginAttempts int64 `json:"expired_login_attempts_deleted,omitempty"`
-	ExpiredSessions      int64 `json:"expired_sessions_deleted,omitempty"`
+	ExpiredSessions int64 `json:"expired_sessions_deleted,omitempty"`
 }
 
 type Report struct {
@@ -117,8 +116,7 @@ func WriteHuman(w io.Writer, report Report) error {
 		}
 	}
 	if report.Repairs != nil {
-		_, err := fmt.Fprintf(w, "修复: expired_login_attempts=%d expired_sessions=%d\n",
-			report.Repairs.ExpiredLoginAttempts, report.Repairs.ExpiredSessions)
+		_, err := fmt.Fprintf(w, "修复: expired_sessions=%d\n", report.Repairs.ExpiredSessions)
 		return err
 	}
 	return nil

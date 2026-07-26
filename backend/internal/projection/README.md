@@ -456,17 +456,12 @@ Current Revision 重建，避免软删除页或历史遗留文档残留。查询
 高亮、幂等更新与替换重建；`builder_search_test.go` 覆盖 AST/元数据构建和来源
 Revision；`cmd/api/search_test.go` 覆盖 HTTP 参数、分页、错误与响应契约。
 
-## 内部 Beta Meilisearch（M7-T11）
+## 早期阶段搜索收敛（ADR-0016）
 
-`search_document` 继续是可丢弃、可重建的 Adapter-neutral staging。SearchBuilder
-只在 Builder 数据库事务内更新 staging；事务提交后才同步 Meilisearch。远端同步
-开启新事务并 `SELECT page ... FOR UPDATE`，确认 staging 的
-`source_revision_id` 仍等于 Page Current 后发 HTTP 写入，并等待 Meilisearch task
-进入 `succeeded` 才释放行锁。发布事务更新同一 Page 行，因此新 Revision 不可能在
-最终检查和旧远端写之间插入；HTTP/task 失败返回 Outbox 重试，重复 `page_id` 写入
-幂等。旧事件晚到时只会 no-op，不会回退远端索引。
+独立搜索引擎 Adapter 已整体移除，API 与 Worker 只装配 PostgreSQL FTS。
+`search_document` 仍是可丢弃、可重建的搜索投影；SearchBuilder 只在数据库事务内
+更新它，不执行事务后的远端 HTTP 同步。显式按页/全量重建也只恢复该投影。
 
-显式按页/全量重建在 staging 事务提交后执行同一 post-commit 同步；全量重建先清空
-staging 与远端索引，再逐页恢复。API 与 Worker 由 `SEARCH_BACKEND` 装配：
-development 可用 `postgres`，production 强制 `meilisearch`。Meili key 只进入
-Authorization header，不写日志、错误消息或索引文档。
+ADR-0012 的 100k 页面容量结果仍有效：PostgreSQL FTS 未达到内部 Beta 吞吐门槛。
+当前早期阶段接受该限制；数据量或并发接近门槛时，应在 `SearchAdapter` 后重新评估
+独立引擎，并补齐容量、幂等、重试与全量重建验证。

@@ -11,15 +11,15 @@ info:
     name: Anby Wiki
 jsonSchemaDialect: https://json-schema.org/draft/2020-12/schema
 servers:
-  - url: http://localhost:8000
-    description: 本地 Nginx 网关（推荐，前缀 /api 由网关剥离规则见 infra/nginx）
+  - url: http://localhost:3000
+    description: 本地 Web 入口（Next.js 将 /api/* 转发到 Go API）
   - url: http://localhost:8080
     description: 本地直连 Go API
 tags:
   - name: meta
     description: 服务元信息与健康检查
   - name: auth
-    description: OIDC 浏览器登录与服务端会话
+    description: 早期引导登录与服务端会话
   - name: pages
     description: 页面创建、改名与 Revision 发布（写 API）
   - name: reading
@@ -39,46 +39,32 @@ tags:
   - name: imports
     description: AI 来源导入任务、阶段进度、取消与重试
 paths:
-  /api/v1/auth/login:
-    get:
-      operationId: login
+  /api/v1/auth/dev-login:
+    post:
+      operationId: devLogin
       tags: [auth]
-      summary: 开始 OIDC Authorization Code + PKCE 登录
+      summary: 用引导令牌换取服务端 session（早期阶段占位登录）
+      description: >-
+        早期阶段占位登录：以共享引导令牌换取 HttpOnly session cookie。
+        该端点不验证调用者真实身份，仅用于封闭的早期部署，
+        公网暴露前必须替换为真实身份提供方。
+        未启用时返回 404。
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/DevLoginRequest" }
       responses:
-        "302":
-          description: 重定向至身份提供方
-          headers:
-            Location:
-              schema: { type: string, format: uri }
-        "500": { $ref: "#/components/responses/Internal" }
-        "503": { $ref: "#/components/responses/Internal" }
-  /api/v1/auth/callback:
-    get:
-      operationId: callback
-      tags: [auth]
-      summary: 消费 OIDC callback 并建立服务端 session
-      parameters:
-        - name: code
-          in: query
-          required: false
-          schema: { type: string }
-        - name: state
-          in: query
-          required: false
-          schema: { type: string }
-        - name: error
-          in: query
-          required: false
-          schema: { type: string }
-      responses:
-        "302":
-          description: 登录成功，设置 HttpOnly session cookie 并重定向回站内
-          headers:
-            Location:
-              schema: { type: string }
+        "200":
+          description: 登录成功，设置 HttpOnly session cookie
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/DevLoginResult" }
+        "400": { $ref: "#/components/responses/BadRequest" }
         "401": { $ref: "#/components/responses/Unauthorized" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "429": { $ref: "#/components/responses/RateLimited" }
         "500": { $ref: "#/components/responses/Internal" }
-        "503": { $ref: "#/components/responses/Internal" }
   /api/v1/auth/session:
     get:
       operationId: getSession
@@ -1565,6 +1551,26 @@ components:
         maximum: 100
         default: 20
   schemas:
+    DevLoginRequest:
+      type: object
+      required: [token]
+      properties:
+        token:
+          type: string
+          description: 共享引导令牌；服务端只比较其哈希，不记录明文。
+        display_name:
+          type: string
+          maxLength: 128
+          description: 首次使用时创建的 Actor 显示名；重复使用会复用同一 Actor。
+    DevLoginResult:
+      type: object
+      required: [actor_id, display_name]
+      properties:
+        actor_id:
+          type: string
+          format: uuid
+        display_name:
+          type: string
     AuthSession:
       type: object
       required: [actor_id, actor_type, display_name, method]
@@ -3160,6 +3166,22 @@ components:
             $ref: "#/components/schemas/Error"
     Conflict:
       description: 并发冲突（含陈旧基线、幂等键冲突）
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/Error"
+    RateLimited:
+      description: 触发限流，需退避后重试
+      headers:
+        Retry-After:
+          description: 建议等待的秒数
+          schema: { type: integer }
+        X-RateLimit-Limit:
+          description: 当前窗口配额
+          schema: { type: integer }
+        X-RateLimit-Remaining:
+          description: 当前窗口剩余配额
+          schema: { type: integer }
       content:
         application/json:
           schema:

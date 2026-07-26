@@ -56,7 +56,7 @@ describe("AccountMenu", () => {
 
     expect(await screen.findByRole("link", { name: "登录" })).toHaveAttribute(
       "href",
-      "/api/v1/auth/login",
+      "/login",
     );
     expect(mocks.getSession).toHaveBeenCalledOnce();
   });

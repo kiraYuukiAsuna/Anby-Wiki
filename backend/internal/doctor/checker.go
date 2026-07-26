@@ -39,7 +39,6 @@ const (
 	CodePublishedClaimNoEvidence     = "EVIDENCE_PUBLISHED_CLAIM_WITHOUT_SOURCE"
 	CodeOutboxClaimStuck             = "OUTBOX_CLAIM_STUCK"
 	CodeOutboxDead                   = "OUTBOX_DEAD"
-	CodeLoginAttemptExpired          = "AUTH_LOGIN_ATTEMPT_EXPIRED"
 	CodeSessionExpired               = "AUTH_SESSION_EXPIRED"
 )
 
@@ -486,36 +485,26 @@ func (c *Checker) checkOutbox(ctx context.Context, issues *[]Issue) error {
 }
 
 func (c *Checker) checkExpiredAuth(ctx context.Context, issues *[]Issue) error {
-	for _, check := range []struct {
-		table, code, message string
-	}{
-		{"oidc_login_attempt", CodeLoginAttemptExpired, "存在过期 OIDC 登录临时态"},
-		{"auth_session", CodeSessionExpired, "存在过期认证会话"},
-	} {
-		var count int64
-		query := fmt.Sprintf(`SELECT count(*) FROM %s WHERE expires_at < $1`, check.table)
-		if err := c.pool.QueryRow(ctx, query, c.opts.Now).Scan(&count); err != nil {
-			return fmt.Errorf("doctor: 检查过期 auth 状态失败: %w", err)
-		}
-		if count > 0 {
-			appendIssue(issues, check.code, SeverityWarning, "auth", check.message,
-				"table", check.table, "运行 doctor --repair-expired-auth 显式清理；该操作不修改权威百科数据",
-				map[string]string{"count": strconv.FormatInt(count, 10)})
-		}
+	var count int64
+	if err := c.pool.QueryRow(ctx,
+		`SELECT count(*) FROM auth_session WHERE expires_at < $1`, c.opts.Now,
+	).Scan(&count); err != nil {
+		return fmt.Errorf("doctor: 检查过期认证会话失败: %w", err)
+	}
+	if count > 0 {
+		appendIssue(issues, CodeSessionExpired, SeverityWarning, "auth", "存在过期认证会话",
+			"table", "auth_session", "运行 doctor --repair-expired-sessions 显式清理；该操作不修改权威百科数据",
+			map[string]string{"count": strconv.FormatInt(count, 10)})
 	}
 	return nil
 }
 
-func CleanupExpiredAuth(ctx context.Context, pool *pgxpool.Pool, now time.Time) (RepairSummary, error) {
+func CleanupExpiredSessions(ctx context.Context, pool *pgxpool.Pool, now time.Time) (RepairSummary, error) {
 	tx, err := pool.BeginTx(ctx, pgx.TxOptions{})
 	if err != nil {
 		return RepairSummary{}, err
 	}
 	defer tx.Rollback(ctx)
-	loginTag, err := tx.Exec(ctx, `DELETE FROM oidc_login_attempt WHERE expires_at < $1`, now)
-	if err != nil {
-		return RepairSummary{}, fmt.Errorf("doctor: 清理过期登录临时态失败: %w", err)
-	}
 	sessionTag, err := tx.Exec(ctx, `DELETE FROM auth_session WHERE expires_at < $1`, now)
 	if err != nil {
 		return RepairSummary{}, fmt.Errorf("doctor: 清理过期会话失败: %w", err)
@@ -524,7 +513,6 @@ func CleanupExpiredAuth(ctx context.Context, pool *pgxpool.Pool, now time.Time) 
 		return RepairSummary{}, err
 	}
 	return RepairSummary{
-		ExpiredLoginAttempts: loginTag.RowsAffected(),
-		ExpiredSessions:      sessionTag.RowsAffected(),
+		ExpiredSessions: sessionTag.RowsAffected(),
 	}, nil
 }

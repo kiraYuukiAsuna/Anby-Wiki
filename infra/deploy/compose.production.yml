@@ -1,9 +1,21 @@
+# 生产部署参考清单。
+#
+# 与开发环境的区别：这里用 Docker 把数据层和应用一起拉起，
+# 包括 PostgreSQL / Redis / MinIO / api / worker / web。
+# 不再包含反向代理：web 是唯一对外发布端口的服务，
+# 并通过 Next.js rewrites 把 /api/* 转发到内网的 api。
+#
+# 因此本清单不终结 TLS。若需要 HTTPS，请在其外层（云负载均衡、
+# Cloudflare、宿主机上的独立代理等）终结，并同步调整
+# TRUSTED_ORIGINS 与 SESSION_COOKIE_SECURE。
+#
+# 用法见 Deploy.md。所有相对路径相对本文件所在目录解析。
+
 name: anby-wiki-production
 
 x-runtime-security: &runtime-security
   read_only: true
   init: true
-  user: "10001:10001"
   cap_drop:
     - ALL
   security_opt:
@@ -16,26 +28,27 @@ x-app-environment: &app-environment
   ENV: production
   LOG_LEVEL: ${LOG_LEVEL:-info}
   DATABASE_URL_FILE: /run/secrets/database_url
-  REDIS_URL_FILE: /run/secrets/redis_url
-  S3_ENDPOINT: ${S3_ENDPOINT:?set S3_ENDPOINT}
+  REDIS_URL: redis://redis:6379/0
+  S3_ENDPOINT: http://minio:9000
   S3_REGION: ${S3_REGION:-us-east-1}
   S3_BUCKET: ${S3_BUCKET:?set S3_BUCKET}
   S3_ACCESS_KEY_FILE: /run/secrets/s3_access_key
   S3_SECRET_KEY_FILE: /run/secrets/s3_secret_key
-  SEARCH_BACKEND: meilisearch
-  MEILI_URL: ${MEILI_URL:?set MEILI_URL}
-  MEILI_API_KEY_FILE: /run/secrets/meili_api_key
-  MEILI_INDEX: ${MEILI_INDEX:-anby_pages}
-  MEILI_TIMEOUT: ${MEILI_TIMEOUT:-15s}
-  OIDC_ENABLED: "true"
-  OIDC_ISSUER_URL: ${OIDC_ISSUER_URL:?set OIDC_ISSUER_URL}
-  OIDC_CLIENT_ID: ${OIDC_CLIENT_ID:?set OIDC_CLIENT_ID}
-  OIDC_CLIENT_SECRET_FILE: /run/secrets/oidc_client_secret
-  OIDC_REDIRECT_URL: ${OIDC_REDIRECT_URL:?set OIDC_REDIRECT_URL}
-  OIDC_SCOPES: ${OIDC_SCOPES:-profile email}
-  TRUSTED_ORIGINS: ${TRUSTED_ORIGINS:?set TRUSTED_ORIGINS}
-  SESSION_COOKIE_SECURE: "true"
+  SEARCH_BACKEND: postgres
+  # 早期阶段占位登录：以共享令牌换会话，不验证真实身份。
+  AUTH_DEV_LOGIN_ENABLED: ${AUTH_DEV_LOGIN_ENABLED:-true}
+  AUTH_DEV_LOGIN_TOKEN_FILE: /run/secrets/auth_dev_login_token
   AUTH_DEV_HEADER_ENABLED: "false"
+  # 无 TLS 终结时必须为 false，否则浏览器不会回传 cookie。
+  SESSION_COOKIE_SECURE: ${SESSION_COOKIE_SECURE:-false}
+  TRUSTED_ORIGINS: ${TRUSTED_ORIGINS:?set TRUSTED_ORIGINS}
+  RATE_LIMIT_ENABLED: ${RATE_LIMIT_ENABLED:-true}
+  RATE_LIMIT_GENERAL_PER_MINUTE: ${RATE_LIMIT_GENERAL_PER_MINUTE:-1200}
+  RATE_LIMIT_AUTH_PER_MINUTE: ${RATE_LIMIT_AUTH_PER_MINUTE:-10}
+  RATE_LIMIT_UPLOAD_PER_MINUTE: ${RATE_LIMIT_UPLOAD_PER_MINUTE:-3}
+  # 默认不信任 X-Forwarded-For：按直连的 web 容器计数。
+  # 只有该对端已可靠清洗来源头时，才把它的固定 IP 列入这里。
+  TRUSTED_PROXY_IPS: ${TRUSTED_PROXY_IPS:-}
   WORKER_METRICS_ADDR: ":9091"
   OBSERVABILITY_DB_INTERVAL: ${OBSERVABILITY_DB_INTERVAL:-30s}
   OTEL_ENABLED: ${OTEL_ENABLED:-false}
@@ -46,20 +59,149 @@ x-app-environment: &app-environment
 
 x-app-secrets: &app-secrets
   - database_url
-  - redis_url
   - s3_access_key
   - s3_secret_key
-  - meili_api_key
-  - oidc_client_secret
+  - auth_dev_login_token
 
 services:
+  # ---- 数据层 ----
+
+  storage-init:
+    # 一次性 job：只修正新建命名卷的根目录属主，使数据服务可始终以非 root 运行。
+    image: ${ALPINE_IMAGE:-alpine:3.22}
+    profiles: ["tools"]
+    user: "0:0"
+    read_only: true
+    cap_drop:
+      - ALL
+    cap_add:
+      - CHOWN
+    security_opt:
+      - no-new-privileges:true
+    network_mode: none
+    volumes:
+      - pgdata:/pgdata
+      - miniodata:/miniodata
+    entrypoint: ["/bin/sh", "-c"]
+    command:
+      - |
+        set -e
+        chown 70:70 /pgdata
+        chown 1000:1000 /miniodata
+    restart: "no"
+
+  postgres:
+    <<: *runtime-security
+    image: ${POSTGRES_IMAGE:-postgres:17-alpine}
+    user: "70:70"
+    environment:
+      POSTGRES_DB: ${POSTGRES_DB:-wiki}
+      POSTGRES_USER: ${POSTGRES_USER:-wiki}
+      POSTGRES_PASSWORD_FILE: /run/secrets/postgres_password
+      # 数据目录放在卷的子目录，避免与卷根的 lost+found 冲突。
+      PGDATA: /var/lib/postgresql/data/pgdata
+    secrets:
+      - postgres_password
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    tmpfs:
+      - /tmp:size=64m,mode=1777
+      - /run/postgresql:size=16m,mode=0755,uid=70,gid=70
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U $${POSTGRES_USER:-wiki} -d $${POSTGRES_DB:-wiki}"]
+      interval: 10s
+      timeout: 5s
+      retries: 12
+      start_period: 30s
+
+  redis:
+    <<: *runtime-security
+    image: ${REDIS_IMAGE:-redis:7-alpine}
+    user: "999:1000"
+    # 只做缓存与限流计数：关闭持久化，重启丢失可接受（ADR-0003）。
+    command: ["redis-server", "--appendonly", "no", "--save", ""]
+    tmpfs:
+      - /tmp:size=64m,mode=1777
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 3s
+      retries: 12
+      start_period: 10s
+
+  minio:
+    <<: *runtime-security
+    image: ${MINIO_IMAGE:-minio/minio:RELEASE.2025-09-07T16-13-09Z}
+    user: "1000:1000"
+    command: ["server", "/data", "--console-address", ":9001"]
+    environment:
+      MINIO_ROOT_USER_FILE: /run/secrets/s3_access_key
+      MINIO_ROOT_PASSWORD_FILE: /run/secrets/s3_secret_key
+    secrets:
+      - s3_access_key
+      - s3_secret_key
+    volumes:
+      - miniodata:/data
+    tmpfs:
+      - /tmp:size=64m,mode=1777
+    healthcheck:
+      test: ["CMD", "mc", "ready", "local"]
+      interval: 10s
+      timeout: 5s
+      retries: 12
+      start_period: 20s
+
+  minio-init:
+    # 一次性 job：创建 bucket 并关闭匿名访问，完成后退出。
+    image: ${MINIO_CLIENT_IMAGE:-minio/mc:RELEASE.2025-08-13T08-35-41Z}
+    profiles: ["tools"]
+    depends_on:
+      minio:
+        condition: service_healthy
+    environment:
+      MINIO_BUCKET: ${S3_BUCKET:?set S3_BUCKET}
+      MC_CONFIG_DIR: /tmp/.mc
+    secrets:
+      - s3_access_key
+      - s3_secret_key
+    user: "1000:1000"
+    read_only: true
+    cap_drop:
+      - ALL
+    security_opt:
+      - no-new-privileges:true
+    tmpfs:
+      - /tmp:size=16m,mode=1777
+    entrypoint: ["/bin/sh", "-c"]
+    command:
+      - |
+        set -e
+        mc alias set target http://minio:9000 \
+          "$$(cat /run/secrets/s3_access_key)" "$$(cat /run/secrets/s3_secret_key)"
+        mc mb --ignore-existing "target/$${MINIO_BUCKET}"
+        mc anonymous set none "target/$${MINIO_BUCKET}"
+        echo "minio-init: bucket '$${MINIO_BUCKET}' ready (anonymous access disabled)"
+    networks:
+      - app
+    restart: "no"
+
+  # ---- 应用层 ----
+
   api:
     <<: *runtime-security
     image: ${API_IMAGE:?set API_IMAGE}
+    user: "10001:10001"
     environment:
       <<: *app-environment
       PORT: "8080"
     secrets: *app-secrets
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      minio:
+        condition: service_healthy
     tmpfs:
       - /tmp:size=64m,mode=1777
     healthcheck:
@@ -72,8 +214,16 @@ services:
   worker:
     <<: *runtime-security
     image: ${WORKER_IMAGE:?set WORKER_IMAGE}
+    user: "10001:10001"
     environment: *app-environment
     secrets: *app-secrets
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      minio:
+        condition: service_healthy
     tmpfs:
       - /tmp:size=64m,mode=1777
     healthcheck:
@@ -86,11 +236,18 @@ services:
   web:
     <<: *runtime-security
     image: ${WEB_IMAGE:?set WEB_IMAGE}
+    user: "1000:1000"
     environment:
       API_BASE_URL: http://api:8080
       HOSTNAME: 0.0.0.0
       NODE_ENV: production
       PORT: "3000"
+    # 唯一对外发布的端口。默认只绑本机，由外层代理决定是否公开。
+    ports:
+      - "${WEB_BIND:-127.0.0.1}:${WEB_PORT:-3000}:3000"
+    depends_on:
+      api:
+        condition: service_healthy
     tmpfs:
       - /tmp:size=64m,mode=1777
       - /app/apps/web/.next/cache:size=128m,mode=1777
@@ -105,35 +262,18 @@ services:
       retries: 6
       start_period: 15s
 
-  nginx:
-    <<: *runtime-security
-    image: ${NGINX_IMAGE:?set NGINX_IMAGE}
-    user: "101:101"
-    depends_on:
-      api:
-        condition: service_healthy
-      web:
-        condition: service_healthy
-    ports:
-      - "${GATEWAY_BIND:-127.0.0.1}:${GATEWAY_PORT:-8080}:8080"
-    volumes:
-      - ./nginx.conf:/etc/nginx/nginx.conf:ro
-    tmpfs:
-      - /tmp:size=64m,mode=1777
-      - /var/cache/nginx:size=64m,mode=0755
-    healthcheck:
-      test: ["CMD", "wget", "-q", "-O", "/dev/null", "http://127.0.0.1:8080/gateway-healthz"]
-      interval: 10s
-      timeout: 3s
-      retries: 6
-      start_period: 10s
+  # ---- 运维工具（一次性任务） ----
 
   migrate:
     <<: *runtime-security
     profiles: ["tools"]
     image: ${MIGRATE_IMAGE:?set MIGRATE_IMAGE}
+    user: "10001:10001"
     environment: *app-environment
     secrets: *app-secrets
+    depends_on:
+      postgres:
+        condition: service_healthy
     restart: "no"
     command: ["wiki-migrate"]
 
@@ -141,47 +281,33 @@ services:
     <<: *runtime-security
     profiles: ["tools"]
     image: ${MIGRATE_IMAGE:?set MIGRATE_IMAGE}
+    user: "10001:10001"
     environment: *app-environment
     secrets: *app-secrets
+    depends_on:
+      postgres:
+        condition: service_healthy
     restart: "no"
     command: ["wiki-doctor", "-format", "json"]
 
-  seed:
-    <<: *runtime-security
-    profiles: ["seed"]
-    image: ${MIGRATE_IMAGE:?set MIGRATE_IMAGE}
-    environment:
-      PERF_DATABASE_URL_FILE: /run/secrets/perf_database_url
-      PERF_DATABASE_CONFIRM: ANBY_WIKI_PERF_ONLY
-    secrets:
-      - perf_database_url
-    restart: "no"
-    command: ["wiki-perf", "-profile", "smoke"]
-
 networks:
   app:
-    external: true
-    name: ${APP_NETWORK:?set APP_NETWORK}
+    driver: bridge
+
+volumes:
+  pgdata:
+  miniodata:
 
 secrets:
+  # 本地文件挂载为 secret。文件应位于仓库之外，权限 0600。
+  # （external: true 只在 Swarm 下可用，普通 compose 需要 file:）
   database_url:
-    external: true
-    name: ${DATABASE_URL_SECRET:?set DATABASE_URL_SECRET}
-  redis_url:
-    external: true
-    name: ${REDIS_URL_SECRET:?set REDIS_URL_SECRET}
+    file: ${SECRETS_DIR:?set SECRETS_DIR}/database_url
+  postgres_password:
+    file: ${SECRETS_DIR:?set SECRETS_DIR}/postgres_password
   s3_access_key:
-    external: true
-    name: ${S3_ACCESS_KEY_SECRET:?set S3_ACCESS_KEY_SECRET}
+    file: ${SECRETS_DIR:?set SECRETS_DIR}/s3_access_key
   s3_secret_key:
-    external: true
-    name: ${S3_SECRET_KEY_SECRET:?set S3_SECRET_KEY_SECRET}
-  meili_api_key:
-    external: true
-    name: ${MEILI_API_KEY_SECRET:?set MEILI_API_KEY_SECRET}
-  oidc_client_secret:
-    external: true
-    name: ${OIDC_CLIENT_SECRET_SECRET:?set OIDC_CLIENT_SECRET_SECRET}
-  perf_database_url:
-    external: true
-    name: ${PERF_DATABASE_URL_SECRET:-anby-wiki-disabled-seed}
+    file: ${SECRETS_DIR:?set SECRETS_DIR}/s3_secret_key
+  auth_dev_login_token:
+    file: ${SECRETS_DIR:?set SECRETS_DIR}/auth_dev_login_token

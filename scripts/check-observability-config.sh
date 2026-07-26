@@ -1,22 +1,16 @@
 #!/bin/sh
 set -eu
 
+# 观测配置校验。
+#
+# 本地 Prometheus / OTel Collector 的 compose 定义已随 infra/local 移除：
+# 开发环境不再用 Docker 起边车，指标由进程自身的 /metrics 暴露，
+# OTLP 只在显式配置 OTEL_EXPORTER_OTLP_ENDPOINT 时启用。
+# 因此这里只校验进程内观测配置的单元测试。
+
 ROOT=$(CDPATH= cd -- "$(dirname -- "$0")/.." && pwd)
 
 cd "$ROOT/backend"
-go test ./internal/platform/observability -run TestObservabilityConfig -count=1
+go test ./internal/platform/observability -count=1
 
-if ! command -v docker >/dev/null 2>&1 || ! docker info >/dev/null 2>&1; then
-  echo "observability config: Docker unavailable; static YAML validation passed"
-  exit 0
-fi
-
-cd "$ROOT"
-docker compose -f infra/local/docker-compose.yml --profile observability config --quiet
-docker run --rm --entrypoint /bin/promtool \
-  -v "$ROOT/infra/local/observability:/etc/prometheus:ro" \
-  prom/prometheus:v3.5.0 check config /etc/prometheus/prometheus.yml
-docker run --rm \
-  -v "$ROOT/infra/local/observability/otel-collector.yml:/etc/otelcol-contrib/config.yaml:ro" \
-  otel/opentelemetry-collector-contrib:0.135.0 \
-  validate --config=/etc/otelcol-contrib/config.yaml
+echo "observability config: in-process metrics and tracing configuration validated"

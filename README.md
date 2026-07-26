@@ -9,18 +9,21 @@ Source/Citation + Proposal/Review + Projection/Search。
 - [实施方案](Docs/WikiImplementationPlan.md)
 - [当前实现状态](Docs/CurrentImplementationStatus.md)
 - [待解决问题](Docs/OutstandingIssues.md)
+- [开发与部署指南](Deploy.md)
 - [ADR 索引](Docs/adr/README.md)
 
 ## 快速开始
 
-前置依赖：Go 1.24+、Node 20+、Docker（本地基础设施）。
+前置依赖：Go、Node.js，以及可连接的 PostgreSQL / Redis / S3 兼容对象存储。
+开发环境不使用 Docker——这三个组件由你自行提供，连接信息写进 `.env`。
 
 ```bash
-make bootstrap      # 安装前后端依赖
-make infra-up       # 启动 PostgreSQL / Redis / MinIO / Nginx
-make migrate-up     # 执行数据库迁移
-make dev            # 同时启动 API / Worker / Web（开发模式）
+cp .env.example .env   # 填入外部依赖连接串
+make bootstrap                 # 安装前后端依赖
+make dev                       # 迁移并启动 API / Worker / Web
 ```
+
+详细说明（含生产 Docker 部署）见 [Deploy.md](Deploy.md)。
 
 ## 目录
 
@@ -28,7 +31,7 @@ make dev            # 同时启动 API / Worker / Web（开发模式）
 apps/web/        Next.js 前端
 backend/         Go API + Worker（模块化单体）
 contracts/       OpenAPI 3.1 契约、JSON Schema、生成客户端
-infra/           Nginx、本地依赖、部署模板
+infra/deploy/    生产 Compose 清单与部署模板
 Docs/            设计、当前状态、ADR、运维与安全文档
 ```
 

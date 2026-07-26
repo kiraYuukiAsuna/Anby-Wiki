@@ -5,7 +5,8 @@ Endpoint:
 `GET /api/v1/pages/{page_id}/collaboration?client_id={uuid}&last_sequence={n}`
 
 The HTTP upgrade uses the normal server-side session. Development actor headers
-remain development-only and are stripped by Nginx.
+remain development-only; production configuration rejects the feature and the
+Go API strips spoofed identity headers.
 
 ## Server Messages
 

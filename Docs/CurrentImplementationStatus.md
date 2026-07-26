@@ -1,6 +1,6 @@
 # 当前实现状态
 
-> 更新时间：2026-07-24  
+> 更新时间：2026-07-26
 > 依据：[整体设计方案](WikiDesignOnePage.md) 与 [实施方案](WikiImplementationPlan.md)
 
 ## 总体结论
@@ -22,7 +22,7 @@ PostgreSQL 权威数据、Outbox 投影、治理审核、协作编辑和 P1 扩�
 | M4 知识与证据 | Entity/Property/Claim、标签与别名、Source/Version/Chunk/Citation、知识引用及反向使用投影 |
 | M5 治理 | Proposal/Operation、风险分级、ReviewTask、三方冲突、ChangeBatch、审计、权限与补偿回滚 |
 | M6 AI 与导入 | HTML/PDF 安全获取、解析与抽取流水线、Prompt 版本、用量记录、幂等任务、证据约束 Proposal |
-| M7 平台化 | PostgreSQL FTS/Meilisearch Adapter、OIDC 登录、服务端 Session、网关安全、OTel、备份恢复、数据一致性 Doctor、部署流水线 |
+| M7 平台化 | PostgreSQL FTS Adapter、引导令牌登录、服务端 Session、应用层限流与安全头、OTel、备份恢复、数据一致性 Doctor、部署流水线 |
 | M8 协作编辑 | Yjs AST 映射、WorkingDocument、WebSocket 增量同步、Presence、原子发布换基、AI 三方合并、人工冲突决议 |
 | M9 P1 扩展 | 稳定章节锚点、BlockRedirect、Component/Version/信息框、Collection、外链健康检查、Entity 合并、批量风险审核、可靠性与容量 smoke |
 
@@ -54,12 +54,18 @@ PostgreSQL 权威数据、Outbox 投影、治理审核、协作编辑和 P1 扩�
 
 - OpenAPI 3.1 是 HTTP 契约源，Web 只通过生成的 TypeScript 客户端访问 API。
 - Web 提供页面、编辑、历史、搜索、知识、治理、Collection 和协作入口。
-- 已实现通用 OIDC Authorization Code + PKCE 登录、服务端 Session Cookie、当前账户查询和退出。
-- 首次 OIDC 登录自动创建 `human` Actor；当前不提供本地用户名密码注册或密码表。
+- 早期阶段登录为 `POST /api/v1/auth/dev-login`：以共享引导令牌换取服务端 Session Cookie，
+  另提供当前账户查询和退出。OIDC 已整体移除（ADR-0016）。
+- **该登录不验证调用者真实身份**：令牌持有者即可以对应 Actor 身份写入，
+  审计无法区分自然人。仅适用于封闭的早期部署，公开前必须接入真实身份提供方。
+- 首次 bootstrap 登录创建一个 `human` Actor；同一共享令牌后续复用该 Actor，
+  显示名以首次创建时为准。不提供本地用户名密码注册或密码表。
 
 ### 运维与质量
 
 - 数据库在预发布阶段使用唯一 `000001_initial_schema` 初始化版本。
+- 开发环境由 `scripts/dev.sh` 直接启动 API、Worker 与 Web；生产 Compose
+  自带 PostgreSQL、Redis、MinIO 和应用进程，不包含 Nginx、Meilisearch 或 OIDC。
 - CI 覆盖 Go/Web lint、类型检查、单元与 PostgreSQL 集成测试、构建、契约、生成物漂移、迁移、部署配置和安全扫描。
 - 提供 OTel、Prometheus 指标、备份恢复、数据一致性 Doctor、Projection/Search 重建和部署 runbook。
 - PostgreSQL 集成测试必须 `-p 1` 串行，避免共享测试库的 Reset 相互干扰。

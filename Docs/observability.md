@@ -61,41 +61,37 @@ OTEL_TRACE_SAMPLE_RATE=1
 
 ## 本地运行
 
-先启动应用依赖和 API/Worker，再启动观测 profile：
+开发环境不再提供 Docker 观测 profile。先按 `Deploy.md` 配置外部依赖并启动
+API/Worker：
 
 ```bash
-make infra-up
-make dev-api
-make dev-worker
-make infra-observability-up
+sh scripts/dev.sh api worker
 ```
 
-- Prometheus：<http://localhost:9090>
 - API metrics：<http://localhost:8080/metrics>
 - Worker metrics：<http://localhost:9091/>
-- OTel gRPC/HTTP：`localhost:4317` / `localhost:4318`
 
-Collector 默认把 trace 摘要写到自身日志，不包含 Jaeger。需要持久化/查询时，应在部署
-Task 中替换 exporter；应用只依赖标准 OTLP，不绑定具体后端。
+需要 Prometheus 或 OTLP Collector 时自行提供，并用上述 metrics 地址及
+`OTEL_EXPORTER_OTLP_ENDPOINT` 接入；应用只依赖标准 Prometheus/OTLP 协议，
+不绑定具体观测后端。
 
 ## 告警与校验
 
-`infra/local/observability/alerts.yml` 覆盖 target down、API 5xx/p95、发布 p95、
-Outbox 老化/死信、Projection error 和 Importer failure。M7-T05/ADR-0012 将内部
-Beta 初始阈值定为 API 5xx `<1%`、API p95 `<=1s`、发布 p95 `<=2s`；容量基线及运行
-流量出现稳定偏差时通过后续 ADR 校准，不为消除告警直接放宽。
+仓库不再内置 Prometheus 告警文件。接入外部观测系统时至少覆盖 target down、
+API 5xx/p95、发布 p95、Outbox 老化/死信、Projection error 和 Importer failure。
+M7-T05/ADR-0012 的内部 Beta 初始阈值为 API 5xx `<1%`、API p95 `<=1s`、
+发布 p95 `<=2s`；容量基线及运行流量出现稳定偏差时通过后续 ADR 校准。
 
 ```bash
 make observability-config-check
 ```
 
-该命令始终执行 Go/YAML 静态校验；Docker daemon 可用时追加 Compose、`promtool` 和
-OTel Collector 官方校验。Docker 不可用不会跳过静态校验。
+该命令验证应用内 metrics/tracing 配置与 production Compose 的观测环境变量，
+不要求 Docker、Prometheus 或 Collector。
 
 ## 故障排查
 
-1. `up == 0`：确认 API/Worker 正在宿主机监听，并检查 Docker 的
-   `host.docker.internal` 映射。
+1. `up == 0`：确认 API/Worker 正在宿主机监听，并检查外部 Prometheus 的抓取地址与网络。
 2. Outbox age/dead 上升：先看 Worker 日志和 `wiki_projection_states`，再使用现有
    `worker -metrics`、`worker -check-consistency` 或受控 dead-letter replay。
 3. Importer failure 上升：按固定 stage/status 定位，再用日志中的 job_id 串联；

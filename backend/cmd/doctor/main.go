@@ -29,12 +29,12 @@ func run(ctx context.Context, args []string, stdout, stderr io.Writer) int {
 	fs.SetOutput(stderr)
 	format := fs.String("format", "human", "报告格式: human|json")
 	stuckAfter := fs.Duration("claimed-stuck-after", 5*time.Minute, "Outbox claimed 卡死阈值")
-	repairExpiredAuth := fs.Bool("repair-expired-auth", false, "显式删除过期 OIDC 登录临时态和认证会话")
+	repairExpiredSessions := fs.Bool("repair-expired-sessions", false, "显式删除过期认证会话")
 	if err := fs.Parse(args); err != nil {
 		return exitUsage
 	}
 	if fs.NArg() != 0 || (*format != "human" && *format != "json") || *stuckAfter <= 0 {
-		fmt.Fprintln(stderr, "用法: doctor [-format human|json] [-claimed-stuck-after 5m] [-repair-expired-auth]")
+		fmt.Fprintln(stderr, "用法: doctor [-format human|json] [-claimed-stuck-after 5m] [-repair-expired-sessions]")
 		return exitUsage
 	}
 	databaseURL := os.Getenv("DATABASE_URL")
@@ -51,10 +51,10 @@ func run(ctx context.Context, args []string, stdout, stderr io.Writer) int {
 
 	now := time.Now().UTC()
 	var repairs *doctor.RepairSummary
-	if *repairExpiredAuth {
-		summary, err := doctor.CleanupExpiredAuth(ctx, pool, now)
+	if *repairExpiredSessions {
+		summary, err := doctor.CleanupExpiredSessions(ctx, pool, now)
 		if err != nil {
-			fmt.Fprintf(stderr, "doctor: 修复过期 auth 临时态失败: %v\n", err)
+			fmt.Fprintf(stderr, "doctor: 清理过期认证会话失败: %v\n", err)
 			return exitRuntime
 		}
 		repairs = &summary

@@ -79,7 +79,7 @@ func (d *DB) Reset(t *testing.T) {
 			bulk_review_audit_event, bulk_review_batch_item, bulk_review_batch,
 			actor_role, page_protection,
 			import_run, import_stage_run, prompt_template, ai_request_usage, import_extraction,
-			external_identity, oidc_login_attempt, auth_session CASCADE`); err != nil {
+			external_identity, auth_session CASCADE`); err != nil {
 		t.Fatalf("testkit: TRUNCATE 失败: %v", err)
 	}
 	if _, err := d.Pool.Exec(ctx, `

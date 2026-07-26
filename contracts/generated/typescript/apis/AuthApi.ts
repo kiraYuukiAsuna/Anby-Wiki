@@ -18,11 +18,19 @@ import {
     AuthSessionFromJSON,
     AuthSessionToJSON,
 } from '../models/AuthSession';
+import {
+    type DevLoginRequest,
+    DevLoginRequestFromJSON,
+    DevLoginRequestToJSON,
+} from '../models/DevLoginRequest';
+import {
+    type DevLoginResult,
+    DevLoginResultFromJSON,
+    DevLoginResultToJSON,
+} from '../models/DevLoginResult';
 
-export interface CallbackRequest {
-    code?: string;
-    state?: string;
-    error?: string;
+export interface DevLoginOperationRequest {
+    devLoginRequest: DevLoginRequest;
 }
 
 /**
@@ -31,51 +39,52 @@ export interface CallbackRequest {
 export class AuthApi extends runtime.BaseAPI {
 
     /**
-     * Creates request options for callback without sending the request
+     * Creates request options for devLogin without sending the request
      */
-    async callbackRequestOpts(requestParameters: CallbackRequest): Promise<runtime.RequestOpts> {
+    async devLoginRequestOpts(requestParameters: DevLoginOperationRequest): Promise<runtime.RequestOpts> {
+        if (requestParameters['devLoginRequest'] == null) {
+            throw new runtime.RequiredError(
+                'devLoginRequest',
+                'Required parameter "devLoginRequest" was null or undefined when calling devLogin().'
+            );
+        }
+
         const queryParameters: any = {};
-
-        if (requestParameters['code'] != null) {
-            queryParameters['code'] = requestParameters['code'];
-        }
-
-        if (requestParameters['state'] != null) {
-            queryParameters['state'] = requestParameters['state'];
-        }
-
-        if (requestParameters['error'] != null) {
-            queryParameters['error'] = requestParameters['error'];
-        }
 
         const headerParameters: runtime.HTTPHeaders = {};
 
+        headerParameters['Content-Type'] = 'application/json';
 
-        let urlPath = `/api/v1/auth/callback`;
+
+        let urlPath = `/api/v1/auth/dev-login`;
 
         return {
             path: urlPath,
-            method: 'GET',
+            method: 'POST',
             headers: headerParameters,
             query: queryParameters,
+            body: DevLoginRequestToJSON(requestParameters['devLoginRequest']),
         };
     }
 
     /**
-     * 消费 OIDC callback 并建立服务端 session
+     * 早期阶段占位登录：以共享引导令牌换取 HttpOnly session cookie。 该端点不验证调用者真实身份，仅用于封闭的早期部署， 公网暴露前必须替换为真实身份提供方。 未启用时返回 404。
+     * 用引导令牌换取服务端 session（早期阶段占位登录）
      */
-    async callbackRaw(requestParameters: CallbackRequest, initOverrides?: RequestInit | runtime.InitOverrideFunction): Promise<runtime.ApiResponse<void>> {
-        const requestOptions = await this.callbackRequestOpts(requestParameters);
+    async devLoginRaw(requestParameters: DevLoginOperationRequest, initOverrides?: RequestInit | runtime.InitOverrideFunction): Promise<runtime.ApiResponse<DevLoginResult>> {
+        const requestOptions = await this.devLoginRequestOpts(requestParameters);
         const response = await this.request(requestOptions, initOverrides);
 
-        return new runtime.VoidApiResponse(response);
+        return new runtime.JSONApiResponse(response, (jsonValue) => DevLoginResultFromJSON(jsonValue));
     }
 
     /**
-     * 消费 OIDC callback 并建立服务端 session
+     * 早期阶段占位登录：以共享引导令牌换取 HttpOnly session cookie。 该端点不验证调用者真实身份，仅用于封闭的早期部署， 公网暴露前必须替换为真实身份提供方。 未启用时返回 404。
+     * 用引导令牌换取服务端 session（早期阶段占位登录）
      */
-    async callback(requestParameters: CallbackRequest = {}, initOverrides?: RequestInit | runtime.InitOverrideFunction): Promise<void> {
-        await this.callbackRaw(requestParameters, initOverrides);
+    async devLogin(requestParameters: DevLoginOperationRequest, initOverrides?: RequestInit | runtime.InitOverrideFunction): Promise<DevLoginResult> {
+        const response = await this.devLoginRaw(requestParameters, initOverrides);
+        return await response.value();
     }
 
     /**
@@ -113,42 +122,6 @@ export class AuthApi extends runtime.BaseAPI {
     async getSession(initOverrides?: RequestInit | runtime.InitOverrideFunction): Promise<AuthSession> {
         const response = await this.getSessionRaw(initOverrides);
         return await response.value();
-    }
-
-    /**
-     * Creates request options for login without sending the request
-     */
-    async loginRequestOpts(): Promise<runtime.RequestOpts> {
-        const queryParameters: any = {};
-
-        const headerParameters: runtime.HTTPHeaders = {};
-
-
-        let urlPath = `/api/v1/auth/login`;
-
-        return {
-            path: urlPath,
-            method: 'GET',
-            headers: headerParameters,
-            query: queryParameters,
-        };
-    }
-
-    /**
-     * 开始 OIDC Authorization Code + PKCE 登录
-     */
-    async loginRaw(initOverrides?: RequestInit | runtime.InitOverrideFunction): Promise<runtime.ApiResponse<void>> {
-        const requestOptions = await this.loginRequestOpts();
-        const response = await this.request(requestOptions, initOverrides);
-
-        return new runtime.VoidApiResponse(response);
-    }
-
-    /**
-     * 开始 OIDC Authorization Code + PKCE 登录
-     */
-    async login(initOverrides?: RequestInit | runtime.InitOverrideFunction): Promise<void> {
-        await this.loginRaw(initOverrides);
     }
 
     /**

@@ -16,40 +16,30 @@ import (
 	"github.com/anby/wiki/backend/internal/platform/db"
 )
 
-var (
-	ErrInvalidLogin    = errors.New("auth: invalid or expired login")
-	ErrUnauthenticated = errors.New("auth: unauthenticated")
-)
+var ErrUnauthenticated = errors.New("auth: unauthenticated")
 
-const loginLifetime = 10 * time.Minute
+// BootstrapIssuer marks identities created by the early-stage bootstrap token
+// login. It is not a real OpenID Connect issuer and performs no identity
+// verification; see AuthAPI.devLogin.
+const BootstrapIssuer = "urn:anby-wiki:bootstrap"
 
 type idGenerator interface {
 	New() (uuid.UUID, error)
 }
 
-// Identity is the verified subset of OIDC claims used by the domain.
+// Identity is the verified external identity used by the domain.
 type Identity struct {
 	Issuer      string
 	Subject     string
 	DisplayName string
 }
 
-// LoginAttempt contains browser-bound one-time values for Authorization Code
-// with PKCE. BrowserSecret is sent only in an HttpOnly transient cookie.
-type LoginAttempt struct {
-	State         string
-	BrowserSecret string
-	Nonce         string
-	CodeVerifier  string
-	CodeChallenge string
-	ExpiresAt     time.Time
-}
-
 // Session contains the opaque cookie value. Only its SHA-256 hash is stored.
 type Session struct {
-	Token     string
-	ActorID   uuid.UUID
-	ExpiresAt time.Time
+	Token       string
+	ActorID     uuid.UUID
+	DisplayName string
+	ExpiresAt   time.Time
 }
 
 // Service is the sole write path for external identities and auth sessions.
@@ -71,69 +61,6 @@ func NewService(pool db.Querier, txm *db.TxManager, ids idGenerator, sessionTTL 
 	}
 }
 
-// BeginLogin persists a short-lived, browser-bound OIDC transaction.
-func (s *Service) BeginLogin(ctx context.Context) (LoginAttempt, error) {
-	state, err := randomToken(32)
-	if err != nil {
-		return LoginAttempt{}, err
-	}
-	browserSecret, err := randomToken(32)
-	if err != nil {
-		return LoginAttempt{}, err
-	}
-	nonce, err := randomToken(32)
-	if err != nil {
-		return LoginAttempt{}, err
-	}
-	verifier, err := randomToken(48)
-	if err != nil {
-		return LoginAttempt{}, err
-	}
-	id, err := s.ids.New()
-	if err != nil {
-		return LoginAttempt{}, fmt.Errorf("auth: generate login id: %w", err)
-	}
-	expiresAt := s.now().Add(loginLifetime)
-	stateHash := tokenHash(state)
-	browserHash := tokenHash(browserSecret)
-	if _, err := s.pool.Exec(ctx, `INSERT INTO oidc_login_attempt
-		(id,state_hash,browser_secret_hash,nonce,code_verifier,expires_at)
-		VALUES ($1,$2,$3,$4,$5,$6)`,
-		id, stateHash[:], browserHash[:], nonce, verifier, expiresAt); err != nil {
-		return LoginAttempt{}, fmt.Errorf("auth: persist login attempt: %w", err)
-	}
-	challengeHash := sha256.Sum256([]byte(verifier))
-	return LoginAttempt{
-		State:         state,
-		BrowserSecret: browserSecret,
-		Nonce:         nonce,
-		CodeVerifier:  verifier,
-		CodeChallenge: base64.RawURLEncoding.EncodeToString(challengeHash[:]),
-		ExpiresAt:     expiresAt,
-	}, nil
-}
-
-// ConsumeLogin atomically consumes a login transaction before token exchange.
-func (s *Service) ConsumeLogin(ctx context.Context, state, browserSecret string) (LoginAttempt, error) {
-	if state == "" || browserSecret == "" {
-		return LoginAttempt{}, ErrInvalidLogin
-	}
-	stateHash := tokenHash(state)
-	browserHash := tokenHash(browserSecret)
-	var attempt LoginAttempt
-	err := s.pool.QueryRow(ctx, `DELETE FROM oidc_login_attempt
-		WHERE state_hash=$1 AND browser_secret_hash=$2 AND expires_at>now()
-		RETURNING nonce,code_verifier,expires_at`,
-		stateHash[:], browserHash[:]).Scan(&attempt.Nonce, &attempt.CodeVerifier, &attempt.ExpiresAt)
-	if errors.Is(err, pgx.ErrNoRows) {
-		return LoginAttempt{}, ErrInvalidLogin
-	}
-	if err != nil {
-		return LoginAttempt{}, fmt.Errorf("auth: consume login attempt: %w", err)
-	}
-	return attempt, nil
-}
-
 // EstablishSession maps the verified (issuer, subject) to one human Actor and
 // creates a new opaque server-side session in the same transaction.
 func (s *Service) EstablishSession(ctx context.Context, identity Identity) (Session, error) {
@@ -144,7 +71,7 @@ func (s *Service) EstablishSession(ctx context.Context, identity Identity) (Sess
 		return Session{}, fmt.Errorf("auth: verified identity lacks issuer or subject")
 	}
 	if identity.DisplayName == "" {
-		identity.DisplayName = "OIDC user"
+		identity.DisplayName = "Unnamed user"
 	}
 	token, err := randomToken(32)
 	if err != nil {
@@ -164,10 +91,12 @@ func (s *Service) EstablishSession(ctx context.Context, identity Identity) (Sess
 			return err
 		}
 		var actorStatus string
-		err := tx.QueryRow(ctx, `SELECT ei.actor_id,a.status FROM external_identity ei
+		err := tx.QueryRow(ctx, `SELECT ei.actor_id,a.status,a.display_name FROM external_identity ei
 			JOIN actor a ON a.id=ei.actor_id
 			WHERE ei.issuer=$1 AND ei.subject=$2`,
-			identity.Issuer, identity.Subject).Scan(&session.ActorID, &actorStatus)
+			identity.Issuer, identity.Subject).Scan(
+			&session.ActorID, &actorStatus, &session.DisplayName,
+		)
 		switch {
 		case err == nil:
 			if actorStatus != "active" {
@@ -187,6 +116,7 @@ func (s *Service) EstablishSession(ctx context.Context, identity Identity) (Sess
 				session.ActorID, identity.DisplayName); err != nil {
 				return err
 			}
+			session.DisplayName = identity.DisplayName
 			if _, err := tx.Exec(ctx, `INSERT INTO external_identity
 				(issuer,subject,actor_id) VALUES ($1,$2,$3)`,
 				identity.Issuer, identity.Subject, session.ActorID); err != nil {

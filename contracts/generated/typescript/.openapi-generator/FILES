@@ -37,6 +37,8 @@ docs/CreateImportJobRequest.md
 docs/CreatePageRequest.md
 docs/CreateProposalRequest.md
 docs/CursorPage.md
+docs/DevLoginRequest.md
+docs/DevLoginResult.md
 docs/DocumentDiff.md
 docs/DocumentOutline.md
 docs/EntityAlias.md
@@ -152,6 +154,8 @@ models/CreateImportJobRequest.ts
 models/CreatePageRequest.ts
 models/CreateProposalRequest.ts
 models/CursorPage.ts
+models/DevLoginRequest.ts
+models/DevLoginResult.ts
 models/DocumentDiff.ts
 models/DocumentOutline.ts
 models/EntityAlias.ts

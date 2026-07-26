@@ -58,7 +58,6 @@ COMMIT;
 
 BEGIN;
 DROP TABLE auth_session;
-DROP TABLE oidc_login_attempt;
 DROP TABLE external_identity;
 COMMIT;
 

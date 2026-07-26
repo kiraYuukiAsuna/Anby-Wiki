@@ -1,6 +1,7 @@
 package main
 
 import (
+	"bytes"
 	"context"
 	"encoding/json"
 	"io"
@@ -31,15 +32,16 @@ func setupAuthAPI(t *testing.T) (*testkit.DB, *authdomain.Service, http.Handler)
 	router := NewRouter(
 		slog.New(slog.NewTextHandler(io.Discard, nil)),
 		Deps{
-			Service:        "wiki-api",
-			Version:        "test",
-			Environment:    "test",
-			Authenticator:  authenticator,
-			SessionCookie:  "anby_session",
-			TrustedOrigins: []string{"https://wiki.example.com"},
+			Service:             "wiki-api",
+			Version:             "test",
+			Environment:         "test",
+			Authenticator:       authenticator,
+			SessionCookie:       "anby_session",
+			TrustedOrigins:      []string{"https://wiki.example.com"},
+			AllowDevActorHeader: true,
 		},
 		nil, nil, nil, nil, nil,
-		NewAuthAPI(service, nil, "anby_session", false, "/"),
+		NewAuthAPI(service, "anby_session", false, true, devLoginTestToken),
 	)
 	return tdb, service, router
 }
@@ -124,19 +126,98 @@ func TestAuthLogoutRejectsUntrustedBrowserWithoutRevokingSession(t *testing.T) {
 	}
 }
 
-func TestAuthOIDCEndpointsReportUnconfiguredProvider(t *testing.T) {
+// devLoginTestToken is a test-only bootstrap secret.
+const devLoginTestToken = "test-bootstrap-token-value"
+
+func TestDevLoginRejectsWrongToken(t *testing.T) {
 	_, _, router := setupAuthAPI(t)
-	for _, path := range []string{"/api/v1/auth/login", "/api/v1/auth/callback"} {
-		request := httptest.NewRequest(http.MethodGet, path, nil)
-		recorder := httptest.NewRecorder()
-		router.ServeHTTP(recorder, request)
-		if recorder.Code != http.StatusServiceUnavailable {
-			t.Fatalf("%s status=%d body=%s", path, recorder.Code, recorder.Body.String())
+	status, body := doJSON(t, router, http.MethodPost, "/api/v1/auth/dev-login",
+		map[string]any{"token": "not-the-token", "display_name": "Intruder"},
+		map[string]string{"Origin": "https://wiki.example.com"})
+	if status != http.StatusUnauthorized {
+		t.Fatalf("wrong token status=%d body=%v", status, body)
+	}
+	assertErrorShape(t, body, httpx.CodeUnauthorized)
+}
+
+func TestDevLoginIssuesSessionAndReusesActor(t *testing.T) {
+	_, service, router := setupAuthAPI(t)
+
+	first := doDevLogin(t, router, "Bootstrap Admin")
+	second := doDevLogin(t, router, "Ignored Rename")
+	if first.actorID != second.actorID {
+		t.Fatalf("same bootstrap identity mapped to %s and %s", first.actorID, second.actorID)
+	}
+	if second.displayName != "Bootstrap Admin" {
+		t.Fatalf("repeat login changed actor display name to %q", second.displayName)
+	}
+	principal, err := service.ResolveSession(context.Background(), first.token)
+	if err != nil {
+		t.Fatalf("resolve dev-login session: %v", err)
+	}
+	if principal.ActorID.String() != first.actorID {
+		t.Fatalf("principal actor=%s want %s", principal.ActorID, first.actorID)
+	}
+}
+
+func TestDevLoginDisabledReturnsNotFound(t *testing.T) {
+	tdb := testkit.Open(t)
+	tdb.Reset(t)
+	service := authdomain.NewService(tdb.Pool, db.NewTxManager(tdb.Pool), id.NewGenerator(), time.Hour)
+	router := NewRouter(
+		slog.New(slog.NewTextHandler(io.Discard, nil)),
+		Deps{
+			Service: "wiki-api", Version: "test", Environment: "test",
+			SessionCookie:  "anby_session",
+			TrustedOrigins: []string{"https://wiki.example.com"},
+		},
+		nil, nil, nil, nil, nil,
+		NewAuthAPI(service, "anby_session", false, false, devLoginTestToken),
+	)
+	status, body := doJSON(t, router, http.MethodPost, "/api/v1/auth/dev-login",
+		map[string]any{"token": devLoginTestToken},
+		map[string]string{"Origin": "https://wiki.example.com"})
+	if status != http.StatusNotFound {
+		t.Fatalf("disabled dev-login status=%d body=%v", status, body)
+	}
+}
+
+type devLoginResult struct {
+	actorID     string
+	displayName string
+	token       string
+}
+
+func doDevLogin(t *testing.T, router http.Handler, displayName string) devLoginResult {
+	t.Helper()
+	payload, err := json.Marshal(map[string]any{
+		"token": devLoginTestToken, "display_name": displayName,
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	request := httptest.NewRequest(http.MethodPost, "/api/v1/auth/dev-login", bytes.NewReader(payload))
+	request.Header.Set("Content-Type", "application/json")
+	request.Header.Set("Origin", "https://wiki.example.com")
+	recorder := httptest.NewRecorder()
+	router.ServeHTTP(recorder, request)
+	if recorder.Code != http.StatusOK {
+		t.Fatalf("dev-login status=%d body=%s", recorder.Code, recorder.Body.String())
+	}
+	var body map[string]string
+	if err := json.Unmarshal(recorder.Body.Bytes(), &body); err != nil {
+		t.Fatal(err)
+	}
+	var sessionToken string
+	for _, cookie := range recorder.Result().Cookies() {
+		if cookie.Name == "anby_session" {
+			sessionToken = cookie.Value
 		}
-		var body map[string]any
-		if err := json.Unmarshal(recorder.Body.Bytes(), &body); err != nil {
-			t.Fatal(err)
-		}
-		assertErrorShape(t, body, httpx.CodeInternal)
+	}
+	if sessionToken == "" {
+		t.Fatal("dev-login did not set a session cookie")
+	}
+	return devLoginResult{
+		actorID: body["actor_id"], displayName: body["display_name"], token: sessionToken,
 	}
 }

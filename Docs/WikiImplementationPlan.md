@@ -3,6 +3,10 @@
 > 依据：[WikiDesignOnePage.md](./WikiDesignOnePage.md)  
 > 文档状态：实施基线 v1  
 > 目标：将整体设计拆成可由 AI Coding Agent 独立执行、验证和合并的里程碑与 Task。
+>
+> 部署与认证部分记录的是原始里程碑验收口径；当前早期阶段形态已由
+> [ADR-0016](adr/0016-early-stage-deployment-simplification.md) 取代：
+> 开发环境直接运行本地进程，生产 Compose 不含 Nginx/Meilisearch/OIDC。
 
 ## 1. 交付目标与实施策略
 

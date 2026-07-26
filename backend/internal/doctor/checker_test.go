@@ -102,12 +102,6 @@ func TestCheckerDetectsFocusedPostgresFaultFixtures(t *testing.T) {
 	}
 	expiredAt := now.Add(-time.Hour)
 	if _, err := d.Pool.Exec(ctx, `
-		INSERT INTO oidc_login_attempt(id,state_hash,browser_secret_hash,nonce,code_verifier,expires_at)
-		VALUES($1,decode('01','hex'),decode('02','hex'),'nonce','verifier',$2)`,
-		d.NewID(t), expiredAt); err != nil {
-		t.Fatal(err)
-	}
-	if _, err := d.Pool.Exec(ctx, `
 		INSERT INTO auth_session(id,token_hash,actor_id,expires_at,created_at)
 		VALUES($1,decode('03','hex'),$2,$3,$4)`,
 		d.NewID(t), testkit.SystemActorID, expiredAt, now.Add(-2*time.Hour)); err != nil {
@@ -130,7 +124,6 @@ func TestCheckerDetectsFocusedPostgresFaultFixtures(t *testing.T) {
 		doctor.CodeSearchSourceStale,
 		doctor.CodeOutboxDead,
 		doctor.CodeOutboxClaimStuck,
-		doctor.CodeLoginAttemptExpired,
 		doctor.CodeSessionExpired,
 	)
 	foundComponentGate := false
@@ -183,21 +176,14 @@ func TestCheckerDetectsCitationChunkVersionMismatch(t *testing.T) {
 	requireCodes(t, report, doctor.CodeCitationChunkVersionMismatch)
 }
 
-func TestCleanupExpiredAuthOnlyDeletesExpiredRows(t *testing.T) {
+func TestCleanupExpiredSessionsOnlyDeletesExpiredRows(t *testing.T) {
 	d := testkit.Open(t)
 	d.Reset(t)
 	ctx := context.Background()
 	now := time.Now().UTC()
 
 	for i, expiry := range []time.Time{now.Add(-time.Minute), now.Add(time.Hour)} {
-		stateSum := sha256.Sum256([]byte(fmt.Sprintf("state-%d", i)))
 		tokenSum := sha256.Sum256([]byte(fmt.Sprintf("token-%d", i)))
-		if _, err := d.Pool.Exec(ctx, `
-			INSERT INTO oidc_login_attempt(id,state_hash,browser_secret_hash,nonce,code_verifier,expires_at)
-			VALUES($1,$2,$3,'nonce','verifier',$4)`,
-			d.NewID(t), stateSum[:], stateSum[:], expiry); err != nil {
-			t.Fatal(err)
-		}
 		if _, err := d.Pool.Exec(ctx, `
 			INSERT INTO auth_session(id,token_hash,actor_id,expires_at,created_at)
 			VALUES($1,$2,$3,$4,$5)`,
@@ -205,21 +191,21 @@ func TestCleanupExpiredAuthOnlyDeletesExpiredRows(t *testing.T) {
 			t.Fatal(err)
 		}
 	}
-	summary, err := doctor.CleanupExpiredAuth(ctx, d.Pool, now)
+	summary, err := doctor.CleanupExpiredSessions(ctx, d.Pool, now)
 	if err != nil {
 		t.Fatal(err)
 	}
-	if summary.ExpiredLoginAttempts != 1 || summary.ExpiredSessions != 1 {
-		t.Fatalf("修复汇总=%+v，期望各删除 1 行", summary)
+	if summary.ExpiredSessions != 1 {
+		t.Fatalf("修复汇总=%+v，期望删除 1 行", summary)
 	}
-	var loginCount, sessionCount int
-	if err := d.Pool.QueryRow(ctx, `
-		SELECT (SELECT count(*) FROM oidc_login_attempt),
-		       (SELECT count(*) FROM auth_session)`).Scan(&loginCount, &sessionCount); err != nil {
+	var sessionCount int
+	if err := d.Pool.QueryRow(ctx,
+		`SELECT count(*) FROM auth_session`,
+	).Scan(&sessionCount); err != nil {
 		t.Fatal(err)
 	}
-	if loginCount != 1 || sessionCount != 1 {
-		t.Fatalf("清理后 login=%d session=%d，期望各保留 1", loginCount, sessionCount)
+	if sessionCount != 1 {
+		t.Fatalf("清理后 session=%d，期望保留 1", sessionCount)
 	}
 }
 

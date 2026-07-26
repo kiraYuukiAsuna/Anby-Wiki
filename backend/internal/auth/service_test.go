@@ -22,25 +22,27 @@ func setup(t *testing.T) (*testkit.DB, *auth.Service) {
 	return tdb, auth.NewService(tdb.Pool, db.NewTxManager(tdb.Pool), id.NewGenerator(), time.Hour)
 }
 
-func TestLoginAttemptIsBrowserBoundAndSingleUse(t *testing.T) {
+func TestBootstrapIdentityMapsToStableActor(t *testing.T) {
 	_, service := setup(t)
 	ctx := context.Background()
-	attempt, err := service.BeginLogin(ctx)
+	identity := auth.Identity{
+		Issuer:      auth.BootstrapIssuer,
+		Subject:     "bootstrap admin",
+		DisplayName: "Bootstrap Admin",
+	}
+	first, err := service.EstablishSession(ctx, identity)
 	if err != nil {
 		t.Fatal(err)
 	}
-	if _, err := service.ConsumeLogin(ctx, attempt.State, "wrong-browser"); !errors.Is(err, auth.ErrInvalidLogin) {
-		t.Fatalf("wrong browser err=%v", err)
-	}
-	consumed, err := service.ConsumeLogin(ctx, attempt.State, attempt.BrowserSecret)
+	second, err := service.EstablishSession(ctx, identity)
 	if err != nil {
 		t.Fatal(err)
 	}
-	if consumed.Nonce != attempt.Nonce || consumed.CodeVerifier != attempt.CodeVerifier {
-		t.Fatal("consumed login values changed")
+	if first.ActorID != second.ActorID {
+		t.Fatalf("bootstrap subject mapped to %s and %s", first.ActorID, second.ActorID)
 	}
-	if _, err := service.ConsumeLogin(ctx, attempt.State, attempt.BrowserSecret); !errors.Is(err, auth.ErrInvalidLogin) {
-		t.Fatalf("replay err=%v", err)
+	if first.Token == second.Token {
+		t.Fatal("each login must mint a distinct opaque session token")
 	}
 }
 

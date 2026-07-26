@@ -400,7 +400,7 @@ describe("EditorSessionView", () => {
       ),
     );
     expect(mocks.publishRevision).toHaveBeenCalledOnce();
-    expect(mocks.push).toHaveBeenCalledWith("/api/v1/auth/login");
+    expect(mocks.push).toHaveBeenCalledWith("/login");
     expect(useEditorSession.getState().ast).toEqual(EDITED_AST);
   });
 

@@ -25,6 +25,8 @@ export * from './CreateImportJobRequest';
 export * from './CreatePageRequest';
 export * from './CreateProposalRequest';
 export * from './CursorPage';
+export * from './DevLoginRequest';
+export * from './DevLoginResult';
 export * from './DocumentDiff';
 export * from './DocumentOutline';
 export * from './EntityAlias';

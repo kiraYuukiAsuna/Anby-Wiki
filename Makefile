@@ -5,17 +5,16 @@ ifneq ($(wildcard /opt/homebrew/opt/openjdk/bin/java),)
 export PATH := /opt/homebrew/opt/openjdk/bin:$(PATH)
 endif
 
-COMPOSE := docker compose -f infra/local/docker-compose.yml
 WEB_DIR := apps/web
 BACKEND_DIR := backend
 GOVULNCHECK_VERSION := v1.1.4
 GITLEAKS_VERSION := v8.28.0
 
-.PHONY: help bootstrap infra-up infra-down infra-ps infra-observability-up migrate-up migrate-down \
+.PHONY: help bootstrap migrate-up migrate-down \
         dev dev-api dev-worker dev-web lint lint-go lint-web \
         test test-go test-web test-e2e build build-go build-web \
         gen-client contract-schema-check observability-config-check gen-check security security-go \
-        security-web security-secrets deploy-config-check perf-db perf-smoke perf-full perf-meili-full ci
+        security-web security-secrets deploy-config-check perf-db perf-smoke perf-full ci
 
 help: ## 显示全部可用命令
 	@grep -E '^[a-zA-Z_-]+:.*?## ' $(MAKEFILE_LIST) | awk 'BEGIN {FS = ":.*?## "}; {printf "  \033[36m%-16s\033[0m %s\n", $$1, $$2}'
@@ -25,18 +24,9 @@ bootstrap: ## 安装前后端依赖
 	cd $(WEB_DIR) && npm ci
 
 # ---- 本地基础设施 ----
-
-infra-up: ## 启动 PostgreSQL / Redis / Meilisearch / MinIO
-	$(COMPOSE) up -d --wait
-
-infra-down: ## 停止本地基础设施
-	$(COMPOSE) down
-
-infra-ps: ## 查看基础设施状态
-	$(COMPOSE) ps
-
-infra-observability-up: ## 启动本地 Prometheus / OTel Collector
-	$(COMPOSE) --profile observability up -d prometheus otel-collector
+#
+# 开发环境不再使用 Docker。PostgreSQL / Redis / MinIO 由你自行提供，
+# 连接信息写进仓库根的 .env（模板见 .env.example）。
 
 pg-start: ## 启动本地免 Docker PostgreSQL（Homebrew 版，端口 55432）
 	sh scripts/dev-pg.sh start
@@ -50,7 +40,6 @@ pg-reset: ## 重置本地 PostgreSQL 数据并重新迁移
 # ---- 数据库迁移 ----
 
 migrate-up: ## 执行全部迁移
-	$(COMPOSE) exec -T postgres sh -c 'true' # 确保依赖已启动
 	cd $(BACKEND_DIR) && go run ./cmd/migrate up
 
 migrate-down: ## 回滚一步迁移
@@ -58,8 +47,8 @@ migrate-down: ## 回滚一步迁移
 
 # ---- 开发 ----
 
-dev: ## 并行启动 API / Worker / Web
-	$(MAKE) -j3 dev-api dev-worker dev-web
+dev: ## 读取 .env 并启动 API / Worker / Web（无 Docker）
+	sh scripts/dev.sh
 
 dev-api:
 	cd $(BACKEND_DIR) && go run ./cmd/api
@@ -143,11 +132,6 @@ perf-smoke: ## 在独立性能库运行小规模快速基准
 
 perf-full: ## 在独立性能库运行 100k 页面完整基准
 	cd $(BACKEND_DIR) && PERF_DATABASE_CONFIRM=ANBY_WIKI_PERF_ONLY go run ./cmd/perf -profile full -output /tmp/anby-wiki-m7-t05-full.json
-
-perf-meili-full: ## 在独立性能库与 Meilisearch 运行 100k 完整基准
-	cd $(BACKEND_DIR) && PERF_DATABASE_CONFIRM=ANBY_WIKI_PERF_ONLY PERF_SEARCH_BACKEND=meilisearch \
-		MEILI_URL=$${MEILI_URL:-http://localhost:7700} MEILI_INDEX=$${MEILI_INDEX:-anby_pages_perf} \
-		go run ./cmd/perf -profile full -output /tmp/anby-wiki-m7-t11-meili-full.json
 
 gen-check: contract-schema-check ## CI：Schema 副本与生成物漂移检查
 	cd $(WEB_DIR) && npm run gen:client

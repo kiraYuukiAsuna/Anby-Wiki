@@ -30,8 +30,26 @@ grep -q '^USER 10001:10001$' "$DOCKERFILE" ||
   fail "Go runtime must use numeric non-root user"
 grep -q '^USER node$' "$DOCKERFILE" ||
   fail "Web runtime must use non-root node user"
-[ "$(grep -c '<<: \*runtime-security' "$COMPOSE_FILE")" -eq 7 ] ||
+# postgres redis minio api worker web migrate doctor = 8 (storage-init and
+# minio-init are short-lived jobs with dedicated security policies).
+[ "$(grep -c '<<: \*runtime-security' "$COMPOSE_FILE")" -eq 8 ] ||
   fail "every production service must inherit runtime security"
+if grep -qE '^  (nginx|meilisearch):' "$COMPOSE_FILE"; then
+  fail "production compose must not declare a reverse proxy or meilisearch service"
+fi
+grep -q '^  storage-init:' "$COMPOSE_FILE" ||
+  fail "production compose must initialize named-volume ownership"
+# Secrets must be file-based: external secrets only work under Swarm.
+if grep -qE '^\s+external: true' "$COMPOSE_FILE"; then
+  fail "compose secrets must use file: so plain docker compose can mount them"
+fi
+# Every declared secret must resolve under SECRETS_DIR.
+for secret in database_url postgres_password s3_access_key s3_secret_key \
+  auth_dev_login_token
+do
+  grep -q "SECRETS_DIR:?set SECRETS_DIR}/$secret" "$COMPOSE_FILE" ||
+    fail "compose is missing a file-based secret for $secret"
+done
 grep -q 'read_only: true' "$COMPOSE_FILE" || fail "read_only runtime policy missing"
 grep -q 'no-new-privileges:true' "$COMPOSE_FILE" || fail "no-new-privileges policy missing"
 grep -q 'cap_drop:' "$COMPOSE_FILE" || fail "capability drop policy missing"

@@ -77,7 +77,7 @@ describe("ReviewQueue", () => {
     fireEvent.click(screen.getByRole("button", { name: "拒绝" }));
 
     await waitFor(() =>
-      expect(mocks.push).toHaveBeenCalledWith("/api/v1/auth/login"),
+      expect(mocks.push).toHaveBeenCalledWith("/login"),
     );
     expect(mocks.decideReviewTask).toHaveBeenCalledOnce();
   });

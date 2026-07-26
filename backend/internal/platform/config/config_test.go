@@ -23,15 +23,9 @@ func setProductionRequired(t *testing.T) {
 	t.Setenv("ENV", "production")
 	t.Setenv("S3_ACCESS_KEY", "production-access")
 	t.Setenv("S3_SECRET_KEY", "production-secret-value")
-	t.Setenv("OIDC_ENABLED", "true")
-	t.Setenv("OIDC_ISSUER_URL", "https://id.example.com")
-	t.Setenv("OIDC_CLIENT_ID", "wiki")
-	t.Setenv("OIDC_CLIENT_SECRET", "production-oidc-secret")
-	t.Setenv("OIDC_REDIRECT_URL", "https://wiki.example.com/api/v1/auth/callback")
 	t.Setenv("TRUSTED_ORIGINS", "https://wiki.example.com")
-	t.Setenv("SEARCH_BACKEND", "meilisearch")
-	t.Setenv("MEILI_URL", "https://search.example.com")
-	t.Setenv("MEILI_API_KEY", "production-meili-secret")
+	t.Setenv("SEARCH_BACKEND", "postgres")
+	t.Setenv("AUTH_DEV_LOGIN_TOKEN", "production-bootstrap-token")
 }
 
 func TestLoad_Valid(t *testing.T) {
@@ -39,6 +33,9 @@ func TestLoad_Valid(t *testing.T) {
 	t.Setenv("PORT", "9090")
 	t.Setenv("LOG_LEVEL", "debug")
 	t.Setenv("ENV", "staging")
+	// Non-development environments must supply a bootstrap token whenever the
+	// placeholder dev login is enabled.
+	t.Setenv("AUTH_DEV_LOGIN_TOKEN", "staging-bootstrap-token")
 
 	cfg, err := Load()
 	if err != nil {
@@ -77,9 +74,12 @@ func TestLoad_Defaults(t *testing.T) {
 	if cfg.OTelEnabled || cfg.OTelSampleRate != 1 {
 		t.Errorf("OTel 默认值错误: enabled=%v sample=%v", cfg.OTelEnabled, cfg.OTelSampleRate)
 	}
-	if cfg.SearchBackend != "postgres" || cfg.MeiliIndex != "anby_pages" || cfg.MeiliTimeout != 15*time.Second {
-		t.Errorf("搜索默认值错误: backend=%q index=%q timeout=%s",
-			cfg.SearchBackend, cfg.MeiliIndex, cfg.MeiliTimeout)
+	if cfg.SearchBackend != "postgres" {
+		t.Errorf("搜索默认值错误: backend=%q", cfg.SearchBackend)
+	}
+	if !cfg.RateLimitEnabled || cfg.RateLimitGeneralPerMinute != 1200 ||
+		cfg.RateLimitAuthPerMinute != 10 || cfg.RateLimitUploadPerMinute != 3 {
+		t.Errorf("限流默认值错误: %+v", cfg)
 	}
 }
 
@@ -151,44 +151,67 @@ func TestLoad_SearchBackendValidation(t *testing.T) {
 			t.Fatalf("不支持的搜索后端应失败，err=%v", err)
 		}
 	})
-	t.Run("invalid Meili URL", func(t *testing.T) {
+	t.Run("meilisearch is no longer supported", func(t *testing.T) {
 		setRequired(t)
 		t.Setenv("SEARCH_BACKEND", "meilisearch")
-		t.Setenv("MEILI_URL", "http://user:secret@localhost:7700")
-		if _, err := Load(); err == nil || !strings.Contains(err.Error(), "MEILI_URL") {
-			t.Fatalf("带凭据的 Meili URL 应失败，err=%v", err)
-		}
-	})
-	t.Run("production requires Meili", func(t *testing.T) {
-		setProductionRequired(t)
-		t.Setenv("SEARCH_BACKEND", "postgres")
-		if _, err := Load(); err == nil || !strings.Contains(err.Error(), "SEARCH_BACKEND=meilisearch") {
-			t.Fatalf("production 应强制 Meili，err=%v", err)
-		}
-	})
-	t.Run("production requires API key", func(t *testing.T) {
-		setProductionRequired(t)
-		t.Setenv("MEILI_API_KEY", "")
-		if _, err := Load(); err == nil || !strings.Contains(err.Error(), "MEILI_API_KEY") {
-			t.Fatalf("production 应要求 Meili API key，err=%v", err)
+		if _, err := Load(); err == nil || !strings.Contains(err.Error(), "SEARCH_BACKEND") {
+			t.Fatalf("已移除的搜索后端应失败，err=%v", err)
 		}
 	})
 }
 
-func TestLoad_ProductionRequiresOIDCAndSecureCookie(t *testing.T) {
-	setProductionRequired(t)
-	t.Setenv("OIDC_ENABLED", "false")
-	if _, err := Load(); err == nil || !strings.Contains(err.Error(), "OIDC_ENABLED=true") {
-		t.Fatalf("production 应要求 OIDC，err=%v", err)
+func TestLoad_RateLimitValidation(t *testing.T) {
+	for _, name := range []string{
+		"RATE_LIMIT_GENERAL_PER_MINUTE",
+		"RATE_LIMIT_AUTH_PER_MINUTE",
+		"RATE_LIMIT_UPLOAD_PER_MINUTE",
+	} {
+		t.Run(name, func(t *testing.T) {
+			setRequired(t)
+			t.Setenv(name, "0")
+			if _, err := Load(); err == nil || !strings.Contains(err.Error(), name) {
+				t.Fatalf("%s=0 应失败，err=%v", name, err)
+			}
+		})
 	}
+}
 
-	t.Setenv("OIDC_ENABLED", "true")
-	t.Setenv("OIDC_ISSUER_URL", "https://id.example.com")
-	t.Setenv("OIDC_CLIENT_ID", "wiki")
-	t.Setenv("OIDC_REDIRECT_URL", "https://wiki.example.com/api/v1/auth/callback")
-	t.Setenv("SESSION_COOKIE_SECURE", "false")
-	if _, err := Load(); err == nil || !strings.Contains(err.Error(), "SESSION_COOKIE_SECURE=true") {
-		t.Fatalf("production 应要求 Secure cookie，err=%v", err)
+func TestLoad_DevLoginTokenRequiredOutsideDevelopment(t *testing.T) {
+	t.Run("missing token", func(t *testing.T) {
+		setProductionRequired(t)
+		t.Setenv("AUTH_DEV_LOGIN_TOKEN", "")
+		if _, err := Load(); err == nil || !strings.Contains(err.Error(), "AUTH_DEV_LOGIN_TOKEN") {
+			t.Fatalf("非 development 启用 dev login 应要求令牌，err=%v", err)
+		}
+	})
+	t.Run("weak token", func(t *testing.T) {
+		setProductionRequired(t)
+		t.Setenv("AUTH_DEV_LOGIN_TOKEN", "changeme")
+		if _, err := Load(); err == nil || !strings.Contains(err.Error(), "AUTH_DEV_LOGIN_TOKEN") {
+			t.Fatalf("弱令牌应被拒绝，err=%v", err)
+		}
+	})
+	t.Run("disabled needs no token", func(t *testing.T) {
+		setProductionRequired(t)
+		t.Setenv("AUTH_DEV_LOGIN_ENABLED", "false")
+		t.Setenv("AUTH_DEV_LOGIN_TOKEN", "")
+		if _, err := Load(); err != nil {
+			t.Fatalf("关闭 dev login 后不应要求令牌，err=%v", err)
+		}
+	})
+	t.Run("development needs no token", func(t *testing.T) {
+		setRequired(t)
+		if _, err := Load(); err != nil {
+			t.Fatalf("development 不应要求令牌，err=%v", err)
+		}
+	})
+}
+
+func TestLoad_TrustedProxyValidation(t *testing.T) {
+	setRequired(t)
+	t.Setenv("TRUSTED_PROXY_IPS", "10.0.0.1,not-an-ip")
+	if _, err := Load(); err == nil || !strings.Contains(err.Error(), "TRUSTED_PROXY_IPS") {
+		t.Fatalf("非法代理 IP 应失败，err=%v", err)
 	}
 }
 
@@ -199,7 +222,6 @@ func TestLoad_ProductionRequiresStrictTrustedOrigins(t *testing.T) {
 		want    string
 	}{
 		{name: "missing", origins: "", want: "TRUSTED_ORIGINS"},
-		{name: "http", origins: "http://wiki.example.com", want: "HTTPS"},
 		{name: "path", origins: "https://wiki.example.com/app", want: "path"},
 		{name: "wildcard", origins: "https://*.example.com", want: "wildcard"},
 		{name: "query", origins: "https://wiki.example.com?tenant=1", want: "query"},
@@ -215,7 +237,7 @@ func TestLoad_ProductionRequiresStrictTrustedOrigins(t *testing.T) {
 	}
 }
 
-func TestLoad_ProductionRejectsWeakSecretsAndInsecureOIDC(t *testing.T) {
+func TestLoad_ProductionRejectsWeakSecrets(t *testing.T) {
 	tests := []struct {
 		name  string
 		key   string
@@ -223,10 +245,7 @@ func TestLoad_ProductionRejectsWeakSecretsAndInsecureOIDC(t *testing.T) {
 		want  string
 	}{
 		{name: "weak s3", key: "S3_SECRET_KEY", value: "minioadmin_dev", want: "S3 弱默认"},
-		{name: "empty client secret", key: "OIDC_CLIENT_SECRET", value: "", want: "OIDC_CLIENT_SECRET"},
-		{name: "weak client secret", key: "OIDC_CLIENT_SECRET", value: "changeme", want: "OIDC 弱默认"},
-		{name: "http issuer", key: "OIDC_ISSUER_URL", value: "http://id.example.com", want: "HTTPS"},
-		{name: "http redirect", key: "OIDC_REDIRECT_URL", value: "http://wiki.example.com/callback", want: "HTTPS"},
+		{name: "weak bootstrap token", key: "AUTH_DEV_LOGIN_TOKEN", value: "changeme", want: "AUTH_DEV_LOGIN_TOKEN"},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
@@ -236,24 +255,6 @@ func TestLoad_ProductionRejectsWeakSecretsAndInsecureOIDC(t *testing.T) {
 				t.Fatalf("%s=%q 应失败并包含 %q，err=%v", tt.key, tt.value, tt.want, err)
 			}
 		})
-	}
-}
-
-func TestLoad_OIDCRequiresProtocolConfiguration(t *testing.T) {
-	setRequired(t)
-	t.Setenv("OIDC_ENABLED", "true")
-	t.Setenv("OIDC_ISSUER_URL", "")
-	t.Setenv("OIDC_CLIENT_ID", "")
-	t.Setenv("OIDC_REDIRECT_URL", "")
-
-	_, err := Load()
-	if err == nil {
-		t.Fatal("启用 OIDC 但缺少协议配置时应返回错误")
-	}
-	for _, name := range []string{"OIDC_ISSUER_URL", "OIDC_CLIENT_ID", "OIDC_REDIRECT_URL"} {
-		if !strings.Contains(err.Error(), name) {
-			t.Errorf("错误信息缺少字段名 %s: %v", name, err)
-		}
 	}
 }
 

@@ -12,7 +12,7 @@
 | `browser-e2e` | 启动独立 PostgreSQL 17、执行迁移、安装 Chromium，再由 Playwright 自动启动 Go API 与 Next.js，完成页面浏览器全生命周期（MT-M2-BROWSER-LIFECYCLE） | `make pg-start`（已自动迁移）后，`cd apps/web && npx playwright install chromium && npm run test:e2e`；使用系统 Chrome 可设 `PLAYWRIGHT_CHANNEL=chrome` |
 | `contracts` | 校验 OpenAPI 3.1，并运行 AST / ProposalOperation 权威 Schema 与 Go 内嵌副本的字节级防漂移检查 | `make contract-schema-check`；`cd apps/web && npm ci && npx @openapitools/openapi-generator-cli validate -i ../../contracts/openapi/openapi.yaml`（本地需 JDK） |
 | `client-drift` | JDK 21 + `npm ci` 后重新执行 `npm run gen:client`，再 `git diff --exit-code contracts/generated/typescript`；生成物与仓库不一致即失败 | `make gen-check`（本地需 JDK） |
-| `migrations` | 起 `postgres:17` 服务容器（库/用户均为 `wiki`），先 `sh scripts/check-migrations.sh` 校验迁移文件规范，再对空库执行 `go run ./cmd/migrate up` 与 `version` | `sh scripts/check-migrations.sh`；`make infra-up && make migrate-up` |
+| `migrations` | 起 `postgres:17` 服务容器（库/用户均为 `wiki`），先 `sh scripts/check-migrations.sh` 校验迁移文件规范，再对空库执行 `go run ./cmd/migrate up` 与 `version` | `sh scripts/check-migrations.sh`；为 `.env` 配置外部 PostgreSQL 后执行 `make migrate-up` |
 | `deploy` | 校验 Dockerfile/Compose/shell、迁移目标、失败停止和发布顺序；实构建 `api`/`worker`/`web`/`migrate` 四 target 并检查 non-root/health metadata | `make deploy-config-check`；Docker 可用时按 `Docs/runbooks/deployment.md` 实构建 |
 
 ### backend job 的 PostgreSQL 集成测试
@@ -67,8 +67,8 @@ Playwright browser context 的 `extraHTTPHeaders` 显式注入仅 test 环境启
 ## 部署配置门禁
 
 `make deploy-config-check` 始终执行 POSIX shell 语法、四 target、non-root、
-Compose 只读/cap-drop/no-new-privileges、最新迁移版本与示例 gate 版本同步、
-显式 seed 保护，以及 migrate/check/doctor -> API -> Worker -> Web -> Nginx
+Compose 只读/cap-drop/no-new-privileges、最新迁移版本与示例 gate 版本同步，
+以及 data tier/bucket/migrate/check/doctor → API → Worker → Web
 顺序和失败停止测试。Docker daemon 可用时追加 `docker compose config --quiet`。
 
 GitHub Actions 的 `deploy` job 进一步真实构建四个 OCI target，并通过 image

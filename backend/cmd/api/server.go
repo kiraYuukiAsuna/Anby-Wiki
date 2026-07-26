@@ -10,6 +10,7 @@ import (
 	authdomain "github.com/anby/wiki/backend/internal/auth"
 	"github.com/anby/wiki/backend/internal/platform/httpx"
 	"github.com/anby/wiki/backend/internal/platform/observability"
+	"github.com/anby/wiki/backend/internal/platform/ratelimit"
 )
 
 // CheckFunc 就绪检查函数，返回 nil 表示依赖可达。
@@ -24,7 +25,14 @@ type Deps struct {
 	Authenticator  *authdomain.Authenticator
 	SessionCookie  string
 	TrustedOrigins []string
-	Metrics        *observability.Metrics
+	// AllowDevActorHeader preserves X-Actor-ID only for explicit local
+	// development/test mode. Production always strips it before auth.
+	AllowDevActorHeader bool
+	Metrics             *observability.Metrics
+	// RateLimiter is nil when rate limiting is disabled or Redis is
+	// unavailable; the middleware is then skipped entirely.
+	RateLimiter     *ratelimit.Limiter
+	RateLimitConfig RateLimitConfig
 }
 
 // NewRouter 装配路由与中间件，handler 函数化以便单元测试。
@@ -55,6 +63,12 @@ func NewRouter(logger *slog.Logger, deps Deps, writeAPI *WriteAPI, readAPI *Read
 	}
 	r := chi.NewRouter()
 	r.Use(RequestID)
+	r.Use(SecurityHeaders)
+	r.Use(StripSpoofableAuthHeaders(deps.AllowDevActorHeader))
+	r.Use(RequestBodyLimit)
+	if deps.RateLimiter != nil {
+		r.Use(RateLimit(deps.RateLimiter, deps.RateLimitConfig, logger))
+	}
 	if deps.Metrics != nil {
 		r.Use(deps.Metrics.HTTPMiddleware(deps.Service))
 	}
@@ -72,8 +86,7 @@ func NewRouter(logger *slog.Logger, deps Deps, writeAPI *WriteAPI, readAPI *Read
 	if writeAPI != nil || readAPI != nil || historyAPI != nil || projectionAPI != nil || searchAPI != nil || knowledgeReadAPI != nil || governanceAPI != nil || importAPI != nil || authAPI != nil || collaborationAPI != nil || collectionAPI != nil {
 		r.Route("/api/v1", func(r chi.Router) {
 			if authAPI != nil {
-				r.Get("/auth/login", authAPI.login)
-				r.Get("/auth/callback", authAPI.callback)
+				r.Post("/auth/dev-login", authAPI.devLogin)
 				r.Get("/auth/session", authAPI.session)
 				r.Post("/auth/logout", authAPI.logout)
 			}

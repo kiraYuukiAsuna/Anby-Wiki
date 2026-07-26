@@ -26,13 +26,13 @@ DATABASE_URL='postgres://...' go run ./cmd/doctor -format json > doctor-report.j
 DATABASE_URL='postgres://...' go run ./cmd/doctor -claimed-stuck-after 15m
 ```
 
-显式清理过期 auth 临时态：
+显式清理过期服务端会话：
 
 ```bash
-DATABASE_URL='postgres://...' go run ./cmd/doctor -repair-expired-auth
+DATABASE_URL='postgres://...' go run ./cmd/doctor -repair-expired-sessions
 ```
 
-`-repair-expired-auth` 只删除执行时已过期的 `oidc_login_attempt` 和 `auth_session`。它不清理未过期或仅 revoked 的会话，也不触碰权威百科数据。
+`-repair-expired-sessions` 只删除执行时已过期的 `auth_session`。它不清理未过期或仅 revoked 的会话，也不触碰权威百科数据。
 
 ## 退出码
 
@@ -110,8 +110,7 @@ DATABASE_URL='postgres://...' go run ./cmd/worker -rebuild-all
 |---|---|---|
 | `OUTBOX_CLAIM_STUCK` | claimed 超过阈值 | 先确认无消费者仍持有，再按 Outbox 恢复流程处理 |
 | `OUTBOX_DEAD` | 事件进入 dead | 排查 `last_error`，使用既有 Worker 重放流程 |
-| `AUTH_LOGIN_ATTEMPT_EXPIRED` | 过期 OIDC 登录临时态 | 可显式运行 `-repair-expired-auth` |
-| `AUTH_SESSION_EXPIRED` | 过期服务端会话 | 可显式运行 `-repair-expired-auth` |
+| `AUTH_SESSION_EXPIRED` | 过期服务端会话 | 可显式运行 `-repair-expired-sessions` |
 
 doctor 不自动重放 dead 事件，也不自动释放 claimed 事件。
 

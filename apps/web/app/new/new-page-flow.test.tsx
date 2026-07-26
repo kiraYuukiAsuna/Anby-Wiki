@@ -96,13 +96,13 @@ describe("NewPageFlow", () => {
     expect(mocks.createPage).toHaveBeenCalledTimes(2);
   });
 
-  it("401：引导 OIDC 登录", async () => {
+  it("401：引导到站内登录页", async () => {
     mocks.createPage.mockRejectedValue(unauthorized401());
     render(<NewPageFlow />);
     expect(await screen.findByText("需要登录")).toBeInTheDocument();
     expect(
       screen.getByRole("link", { name: "前往登录" }),
-    ).toHaveAttribute("href", "/api/v1/auth/login");
+    ).toHaveAttribute("href", "/login");
     expect(mocks.createPage).toHaveBeenCalledOnce();
   });
 

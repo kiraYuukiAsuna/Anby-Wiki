@@ -54,9 +54,10 @@ require_digest_image() {
 
 confirm_production() {
   [ "${DEPLOY_ENV:-}" = "production" ] || fail "DEPLOY_ENV must be production"
-  for image in API_IMAGE WORKER_IMAGE WEB_IMAGE MIGRATE_IMAGE NGINX_IMAGE; do
+  for image in API_IMAGE WORKER_IMAGE WEB_IMAGE MIGRATE_IMAGE; do
     require_digest_image "$image"
   done
+  check_secrets
   expected="DEPLOY:${RELEASE_ID:?set RELEASE_ID}"
   [ "${DEPLOY_CONFIRM:-}" = "$expected" ] ||
     fail "set DEPLOY_CONFIRM=$expected for this release"
@@ -81,12 +82,44 @@ check_existing_schema() {
   compose --profile tools run --rm doctor
 }
 
+# check_secrets verifies every secret file exists and is non-empty before any
+# container tries to mount it.
+check_secrets() {
+  dir=${SECRETS_DIR:?set SECRETS_DIR}
+  [ -d "$dir" ] || fail "SECRETS_DIR does not exist: $dir"
+  for name in database_url postgres_password s3_access_key s3_secret_key \
+    auth_dev_login_token
+  do
+    file="$dir/$name"
+    [ -r "$file" ] || fail "missing secret file: $file"
+    [ -s "$file" ] || fail "secret file is empty: $file"
+    mode=$(
+      stat -c '%a' "$file" 2>/dev/null ||
+        stat -f '%Lp' "$file" 2>/dev/null ||
+        printf 'unknown'
+    )
+    case "$mode" in
+      *00) ;;
+      unknown) fail "cannot determine secret file permissions: $file" ;;
+      *) fail "secret file must not be group/world accessible: $file (mode $mode)" ;;
+    esac
+  done
+}
+
+# start_data_tier brings up PostgreSQL/Redis/MinIO and ensures the bucket
+# exists. These are stateful, so they are started before the application and
+# are never recreated as part of an application roll.
+start_data_tier() {
+  compose --profile tools run --rm storage-init
+  compose up -d --wait postgres redis minio
+  compose --profile tools run --rm minio-init
+}
+
 roll_services() {
   # Keep this order stable: readers/writers before async consumers, then edge.
   compose up -d --no-deps --wait api
   compose up -d --no-deps --wait worker
   compose up -d --no-deps --wait web
-  compose up -d --no-deps --wait nginx
 }
 
 command=${1:-}
@@ -97,6 +130,7 @@ case "$command" in
   migrate)
     confirm_production
     compose pull migrate
+    start_data_tier
     run_gate
     ;;
   doctor)
@@ -105,26 +139,21 @@ case "$command" in
   deploy)
     confirm_production
     compose config --quiet
-    compose pull api worker web migrate nginx
+    compose pull api worker web migrate
+    start_data_tier
     run_gate
     roll_services
     ;;
   rollback)
     confirm_production
     compose config --quiet
-    compose pull api worker web migrate nginx
+    compose pull api worker web migrate
     # Rollback never executes down migrations. The old image must explicitly
     # declare compatibility with the database version that is already live.
     check_existing_schema
     roll_services
     ;;
-  seed)
-    [ "${DEPLOY_ENV:-}" != "production" ] || fail "seed is forbidden in production"
-    [ "${SEED_CONFIRM:-}" = "SEED_NON_PRODUCTION_PERF_DATABASE" ] ||
-      fail "set SEED_CONFIRM=SEED_NON_PRODUCTION_PERF_DATABASE"
-    compose --profile seed run --rm seed
-    ;;
   *)
-    fail "usage: deploy.sh <config|migrate|doctor|deploy|rollback|seed>"
+    fail "usage: deploy.sh <config|migrate|doctor|deploy|rollback>"
     ;;
 esac

@@ -59,7 +59,7 @@ describe("RenamePageButton", () => {
     });
     fireEvent.click(screen.getByRole("button", { name: "确认改名" }));
     await waitFor(() =>
-      expect(mocks.push).toHaveBeenCalledWith("/api/v1/auth/login"),
+      expect(mocks.push).toHaveBeenCalledWith("/login"),
     );
     expect(mocks.toast.error).toHaveBeenCalledWith("请先登录后再改名");
   });

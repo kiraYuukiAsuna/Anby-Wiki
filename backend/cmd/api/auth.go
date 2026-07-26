@@ -1,90 +1,89 @@
 package main
 
 import (
+	"crypto/sha256"
+	"crypto/subtle"
+	"encoding/json"
 	"errors"
 	"net/http"
+	"strings"
 	"time"
+	"unicode/utf8"
 
 	authdomain "github.com/anby/wiki/backend/internal/auth"
 	"github.com/anby/wiki/backend/internal/platform/httpx"
 )
 
-// AuthAPI exposes the versioned browser OIDC and session contract.
+// AuthAPI exposes the versioned session contract.
+//
+// EARLY STAGE: the only login path is a shared bootstrap token exchanged for a
+// server-side session. There is no identity provider and therefore no real
+// authentication of *who* the caller is: anyone holding the token can act as
+// the named actor. This is acceptable only for a closed early-stage
+// deployment and must be replaced with a real identity provider before the
+// wiki is publicly reachable. Tracked in Docs/OutstandingIssues.md.
 type AuthAPI struct {
 	service           *authdomain.Service
-	provider          authdomain.OIDCProvider
 	sessionCookie     string
-	loginCookie       string
 	secureCookies     bool
-	postLoginRedirect string
+	devLoginEnabled   bool
+	devLoginTokenHash [sha256.Size]byte
+	hasDevLoginToken  bool
 }
 
-func NewAuthAPI(service *authdomain.Service, provider authdomain.OIDCProvider, sessionCookie string, secureCookies bool, postLoginRedirect string) *AuthAPI {
-	return &AuthAPI{
-		service:           service,
-		provider:          provider,
-		sessionCookie:     sessionCookie,
-		loginCookie:       sessionCookie + "_oidc",
-		secureCookies:     secureCookies,
-		postLoginRedirect: postLoginRedirect,
+func NewAuthAPI(service *authdomain.Service, sessionCookie string, secureCookies bool, devLoginEnabled bool, devLoginToken string) *AuthAPI {
+	api := &AuthAPI{
+		service:         service,
+		sessionCookie:   sessionCookie,
+		secureCookies:   secureCookies,
+		devLoginEnabled: devLoginEnabled,
 	}
+	if token := strings.TrimSpace(devLoginToken); token != "" {
+		api.devLoginTokenHash = sha256.Sum256([]byte(token))
+		api.hasDevLoginToken = true
+	}
+	return api
 }
 
-func (a *AuthAPI) login(w http.ResponseWriter, r *http.Request) {
-	if a.provider == nil {
-		httpx.WriteError(w, r, http.StatusServiceUnavailable, httpx.CodeInternal, "登录服务未配置")
-		return
-	}
-	attempt, err := a.service.BeginLogin(r.Context())
-	if err != nil {
-		httpx.WriteError(w, r, http.StatusInternalServerError, httpx.CodeInternal, "无法开始登录")
-		return
-	}
-	http.SetCookie(w, &http.Cookie{
-		Name:     a.loginCookie,
-		Value:    attempt.BrowserSecret,
-		Path:     "/api/v1/auth/callback",
-		HttpOnly: true,
-		Secure:   a.secureCookies,
-		SameSite: http.SameSiteLaxMode,
-		Expires:  attempt.ExpiresAt,
-		MaxAge:   int(time.Until(attempt.ExpiresAt).Seconds()),
-	})
-	http.Redirect(w, r, a.provider.AuthorizationURL(attempt.State, attempt.Nonce, attempt.CodeChallenge), http.StatusFound)
+// devLoginRequest is the bootstrap login payload.
+type devLoginRequest struct {
+	// Token is the shared bootstrap secret.
+	Token string `json:"token"`
+	// DisplayName names the actor created on first use.
+	DisplayName string `json:"display_name"`
 }
 
-func (a *AuthAPI) callback(w http.ResponseWriter, r *http.Request) {
-	if a.provider == nil {
-		a.clearLoginCookie(w)
-		httpx.WriteError(w, r, http.StatusServiceUnavailable, httpx.CodeInternal, "登录服务未配置")
+// devLogin exchanges the bootstrap token for a session cookie.
+func (a *AuthAPI) devLogin(w http.ResponseWriter, r *http.Request) {
+	if !a.devLoginEnabled || !a.hasDevLoginToken {
+		httpx.WriteError(w, r, http.StatusNotFound, httpx.CodeNotFound, "登录方式未启用")
 		return
 	}
-	if r.URL.Query().Get("error") != "" {
-		a.clearLoginCookie(w)
-		httpx.WriteError(w, r, http.StatusUnauthorized, httpx.CodeUnauthorized, "身份提供方拒绝登录")
+	var payload devLoginRequest
+	if err := json.NewDecoder(http.MaxBytesReader(w, r.Body, 4<<10)).Decode(&payload); err != nil {
+		httpx.WriteError(w, r, http.StatusBadRequest, httpx.CodeValidationFailed, "请求体无效")
 		return
 	}
-	loginCookie, err := r.Cookie(a.loginCookie)
-	if err != nil {
-		httpx.WriteError(w, r, http.StatusUnauthorized, httpx.CodeUnauthorized, "登录事务无效或已过期")
+	supplied := sha256.Sum256([]byte(strings.TrimSpace(payload.Token)))
+	// Constant-time compare so the token cannot be recovered by timing.
+	if subtle.ConstantTimeCompare(supplied[:], a.devLoginTokenHash[:]) != 1 {
+		httpx.WriteError(w, r, http.StatusUnauthorized, httpx.CodeUnauthorized, "令牌无效")
 		return
 	}
-	attempt, err := a.service.ConsumeLogin(r.Context(), r.URL.Query().Get("state"), loginCookie.Value)
-	a.clearLoginCookie(w)
-	if errors.Is(err, authdomain.ErrInvalidLogin) {
-		httpx.WriteError(w, r, http.StatusUnauthorized, httpx.CodeUnauthorized, "登录事务无效或已过期")
+	displayName := strings.TrimSpace(payload.DisplayName)
+	if displayName == "" {
+		displayName = "Bootstrap user"
+	}
+	if utf8.RuneCountInString(displayName) > 128 {
+		httpx.WriteError(w, r, http.StatusBadRequest, httpx.CodeValidationFailed,
+			"显示名不得超过 128 个字符")
 		return
 	}
-	if err != nil {
-		httpx.WriteError(w, r, http.StatusInternalServerError, httpx.CodeInternal, "无法完成登录")
-		return
-	}
-	identity, err := a.provider.ExchangeAndVerify(
-		r.Context(), r.URL.Query().Get("code"), attempt.CodeVerifier, attempt.Nonce,
-	)
-	if err != nil {
-		httpx.WriteError(w, r, http.StatusUnauthorized, httpx.CodeUnauthorized, "身份校验失败")
-		return
+	// A stable synthetic subject keeps repeat logins mapped to one Actor.
+	identity := authdomain.Identity{
+		Issuer:      authdomain.BootstrapIssuer,
+		Subject:     "bootstrap-user",
+		DisplayName: displayName,
 	}
 	session, err := a.service.EstablishSession(r.Context(), identity)
 	if errors.Is(err, authdomain.ErrUnauthenticated) {
@@ -105,7 +104,10 @@ func (a *AuthAPI) callback(w http.ResponseWriter, r *http.Request) {
 		Expires:  session.ExpiresAt,
 		MaxAge:   int(time.Until(session.ExpiresAt).Seconds()),
 	})
-	http.Redirect(w, r, a.postLoginRedirect, http.StatusFound)
+	httpx.WriteJSON(w, http.StatusOK, map[string]string{
+		"actor_id":     session.ActorID.String(),
+		"display_name": session.DisplayName,
+	})
 }
 
 func (a *AuthAPI) session(w http.ResponseWriter, r *http.Request) {
@@ -138,15 +140,4 @@ func (a *AuthAPI) logout(w http.ResponseWriter, r *http.Request) {
 		MaxAge:   -1,
 	})
 	w.WriteHeader(http.StatusNoContent)
-}
-
-func (a *AuthAPI) clearLoginCookie(w http.ResponseWriter) {
-	http.SetCookie(w, &http.Cookie{
-		Name:     a.loginCookie,
-		Path:     "/api/v1/auth/callback",
-		HttpOnly: true,
-		Secure:   a.secureCookies,
-		SameSite: http.SameSiteLaxMode,
-		MaxAge:   -1,
-	})
 }

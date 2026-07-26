@@ -1,5 +1,6 @@
 "use client";
 
+import Link from "next/link";
 import { LogIn, LogOut, UserRound } from "lucide-react";
 import { toast } from "sonner";
 import { useSWRConfig } from "swr";
@@ -24,10 +25,10 @@ export function AccountMenu() {
   if (!session) {
     return (
       <Button size="sm" variant="outline" asChild className="gap-1">
-        <a href={LOGIN_PATH}>
+        <Link href={LOGIN_PATH}>
           <LogIn aria-hidden />
           {error ? "重试登录" : "登录"}
-        </a>
+        </Link>
       </Button>
     );
   }

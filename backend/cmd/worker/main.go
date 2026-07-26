@@ -410,20 +410,8 @@ func registerBuilders(reg *projection.Registry, pool *pgxpool.Pool, logger *slog
 	return searchBuilder
 }
 
-func configuredWorkerSearchBackend(ctx context.Context, pool *pgxpool.Pool, cfg config.Config) (wikisearch.SearchAdapter, error) {
-	adapter, err := wikisearch.NewBackend(pool, wikisearch.BackendConfig{
-		Backend: cfg.SearchBackend, MeiliURL: cfg.MeiliURL, MeiliAPIKey: cfg.MeiliAPIKey,
-		MeiliIndex: cfg.MeiliIndex, MeiliTimeout: cfg.MeiliTimeout,
-	})
-	if err != nil {
-		return nil, err
-	}
-	if meili, ok := adapter.(*wikisearch.MeilisearchAdapter); ok {
-		if err := meili.EnsureIndex(ctx); err != nil {
-			return nil, err
-		}
-	}
-	return adapter, nil
+func configuredWorkerSearchBackend(_ context.Context, pool *pgxpool.Pool, cfg config.Config) (wikisearch.SearchAdapter, error) {
+	return wikisearch.NewBackend(pool, wikisearch.BackendConfig{Backend: cfg.SearchBackend})
 }
 
 // runRebuild 执行一次性重建命令，返回退出码。

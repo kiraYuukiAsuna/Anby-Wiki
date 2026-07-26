@@ -8,76 +8,48 @@ import (
 	"go.yaml.in/yaml/v3"
 )
 
-func TestObservabilityConfigYAML(t *testing.T) {
-	root := filepath.Join("..", "..", "..", "..")
-	tests := []struct {
-		path     string
-		required []string
-	}{
-		{
-			path:     filepath.Join(root, "infra", "local", "docker-compose.yml"),
-			required: []string{"services"},
-		},
-		{
-			path:     filepath.Join(root, "infra", "local", "observability", "prometheus.yml"),
-			required: []string{"scrape_configs", "rule_files"},
-		},
-		{
-			path:     filepath.Join(root, "infra", "local", "observability", "alerts.yml"),
-			required: []string{"groups"},
-		},
-		{
-			path:     filepath.Join(root, "infra", "local", "observability", "otel-collector.yml"),
-			required: []string{"receivers", "processors", "exporters", "service"},
-		},
-	}
-	for _, test := range tests {
-		t.Run(filepath.Base(test.path), func(t *testing.T) {
-			content, err := os.ReadFile(test.path)
-			if err != nil {
-				t.Fatalf("读取配置失败: %v", err)
-			}
-			var document map[string]any
-			if err := yaml.Unmarshal(content, &document); err != nil {
-				t.Fatalf("YAML 非法: %v", err)
-			}
-			for _, key := range test.required {
-				if _, ok := document[key]; !ok {
-					t.Errorf("缺少顶层键 %q", key)
-				}
-			}
-		})
+// productionCompose is the only compose manifest in the repository. The local
+// development stack no longer uses Docker, and the Prometheus/OTel sidecars
+// were removed with it: metrics are exposed in-process on /metrics and OTLP is
+// opt-in through OTEL_EXPORTER_OTLP_ENDPOINT.
+func productionComposePath() string {
+	return filepath.Join("..", "..", "..", "..", "infra", "deploy", "compose.production.yml")
+}
+
+func TestProductionComposeIsValidYAML(t *testing.T) {
+	document := readYAMLMap(t, productionComposePath())
+	if _, ok := document["services"]; !ok {
+		t.Error("缺少顶层键 \"services\"")
 	}
 }
 
-func TestObservabilityConfigStructure(t *testing.T) {
-	root := filepath.Join("..", "..", "..", "..", "infra", "local")
-	compose := readYAMLMap(t, filepath.Join(root, "docker-compose.yml"))
+func TestProductionComposeExposesObservabilityContract(t *testing.T) {
+	compose := readYAMLMap(t, productionComposePath())
 	services := childMap(t, compose, "services")
-	for _, service := range []string{"prometheus", "otel-collector"} {
+
+	// The data tier and the application must all be declared.
+	for _, service := range []string{"postgres", "redis", "minio", "api", "worker", "web"} {
 		if _, ok := services[service]; !ok {
 			t.Errorf("compose 缺少 %s service", service)
 		}
 	}
-
-	prometheus := readYAMLMap(t, filepath.Join(root, "observability", "prometheus.yml"))
-	if scrapes, ok := prometheus["scrape_configs"].([]any); !ok || len(scrapes) != 2 {
-		t.Errorf("Prometheus 应配置 API 与 Worker 两个 scrape job")
+	// No reverse proxy: web is the only externally published service.
+	if _, ok := services["nginx"]; ok {
+		t.Error("compose 不应再包含反向代理 service")
 	}
-	if rules, ok := prometheus["rule_files"].([]any); !ok || len(rules) == 0 {
-		t.Errorf("Prometheus 缺少 rule_files")
-	}
-
-	alerts := readYAMLMap(t, filepath.Join(root, "observability", "alerts.yml"))
-	if groups, ok := alerts["groups"].([]any); !ok || len(groups) == 0 {
-		t.Errorf("alerts 缺少规则组")
+	// Search runs on PostgreSQL only.
+	if _, ok := services["meilisearch"]; ok {
+		t.Error("compose 不应再包含 meilisearch service")
 	}
 
-	collector := readYAMLMap(t, filepath.Join(root, "observability", "otel-collector.yml"))
-	service := childMap(t, collector, "service")
-	pipelines := childMap(t, service, "pipelines")
-	if _, ok := pipelines["traces"]; !ok {
-		t.Errorf("OTel Collector 缺少 traces pipeline")
+	worker := childMap(t, services, "worker")
+	environment, ok := worker["environment"].(map[string]any)
+	if !ok {
+		t.Fatal("worker environment 不是 YAML map")
+	}
+	// Worker metrics must stay reachable for scraping.
+	if addr, ok := environment["WORKER_METRICS_ADDR"]; !ok || addr == "" {
+		t.Error("worker 缺少 WORKER_METRICS_ADDR")
 	}
 }
 

@@ -2,7 +2,7 @@
 //
 // 流程：无 title → 标题输入表单；有 title → pagesApi.createPage →
 // 成功跳 /pages/[id]/edit；标题冲突（409 conflict）→ toast + 跳既有页面阅读页；
-// 其他错误保留在本页可重试；401 引导 OIDC 登录。
+// 其他错误保留在本页可重试；401 引导到站内登录页。
 "use client";
 
 import { useEffect, useRef, useState } from "react";

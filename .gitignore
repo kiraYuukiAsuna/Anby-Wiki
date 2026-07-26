@@ -24,4 +24,3 @@ coverage.out
 *.swp
 
 # 本地数据（docker volume 映射等）
-infra/local/data/

@@ -3,8 +3,8 @@ set -eu
 
 # Resolve supported *_FILE variables without exposing secret values in logs.
 for name in \
-  DATABASE_URL REDIS_URL S3_ACCESS_KEY S3_SECRET_KEY MEILI_API_KEY \
-  OIDC_CLIENT_SECRET AI_API_KEY PERF_DATABASE_URL
+  DATABASE_URL REDIS_URL S3_ACCESS_KEY S3_SECRET_KEY \
+  AUTH_DEV_LOGIN_TOKEN AI_API_KEY PERF_DATABASE_URL
 do
   eval "file=\${${name}_FILE:-}"
   [ -n "$file" ] || continue

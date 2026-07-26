@@ -1,6 +1,6 @@
 # PagesApi
 
-All URIs are relative to *http://localhost:8000*
+All URIs are relative to *http://localhost:3000*
 
 | Method | HTTP request | Description |
 |------------- | ------------- | -------------|

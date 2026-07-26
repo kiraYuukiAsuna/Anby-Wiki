@@ -3,6 +3,7 @@ package config
 
 import (
 	"fmt"
+	"net"
 	"net/url"
 	"strings"
 	"time"
@@ -32,13 +33,10 @@ type Config struct {
 	LogLevel string `env:"LOG_LEVEL" envDefault:"info"`
 	// Env 运行环境（development/staging/production），默认 development。
 	Env string `env:"ENV" envDefault:"development"`
-	// SearchBackend selects postgres staging/fallback or Meilisearch.
+	// SearchBackend selects the SearchAdapter implementation. The early stage
+	// ships only the PostgreSQL FTS adapter; a dedicated engine can be added
+	// back behind the same interface when capacity requires it (ADR-0006).
 	SearchBackend string `env:"SEARCH_BACKEND" envDefault:"postgres"`
-	MeiliURL      string `env:"MEILI_URL" envDefault:"http://localhost:7700"`
-	// MeiliAPIKey is secret material and must never be logged.
-	MeiliAPIKey  string        `env:"MEILI_API_KEY"`
-	MeiliIndex   string        `env:"MEILI_INDEX" envDefault:"anby_pages"`
-	MeiliTimeout time.Duration `env:"MEILI_TIMEOUT" envDefault:"15s"`
 	// WorkerMetricsAddr 是 Worker 独立指标监听地址；空字符串可显式关闭。
 	WorkerMetricsAddr string `env:"WORKER_METRICS_ADDR" envDefault:":9091"`
 	// ObservabilityDBInterval 控制 Worker 从数据库刷新低侵入指标的周期。
@@ -59,20 +57,33 @@ type Config struct {
 	AIAPIKey string `env:"AI_API_KEY"`
 	// AIModel 是导入抽取使用的模型 ID。
 	AIModel string `env:"AI_MODEL"`
-	// OIDCEnabled controls generic OpenID Connect authentication.
-	OIDCEnabled      bool   `env:"OIDC_ENABLED" envDefault:"false"`
-	OIDCIssuerURL    string `env:"OIDC_ISSUER_URL"`
-	OIDCClientID     string `env:"OIDC_CLIENT_ID"`
-	OIDCClientSecret string `env:"OIDC_CLIENT_SECRET"`
-	OIDCRedirectURL  string `env:"OIDC_REDIRECT_URL"`
-	OIDCScopes       string `env:"OIDC_SCOPES" envDefault:"profile email"`
+	// AuthDevLoginEnabled exposes POST /api/v1/auth/dev-login, which mints a
+	// session from a shared bootstrap token instead of a verified identity.
+	// This is an explicit early-stage placeholder with no identity
+	// verification and must be replaced before public exposure.
+	AuthDevLoginEnabled bool `env:"AUTH_DEV_LOGIN_ENABLED" envDefault:"true"`
+	// AuthDevLoginToken is secret material and must never be logged. It is
+	// mandatory whenever dev login is enabled outside development.
+	AuthDevLoginToken string `env:"AUTH_DEV_LOGIN_TOKEN"`
+	// RateLimitEnabled turns on the Redis-backed fixed-window limiter. The
+	// application is now the only rate-limiting layer, because no reverse
+	// proxy sits in front of it.
+	RateLimitEnabled bool `env:"RATE_LIMIT_ENABLED" envDefault:"true"`
+	// RateLimitGeneralPerMinute caps ordinary API requests per client.
+	RateLimitGeneralPerMinute int `env:"RATE_LIMIT_GENERAL_PER_MINUTE" envDefault:"1200"`
+	// RateLimitAuthPerMinute caps auth endpoints to slow credential stuffing.
+	RateLimitAuthPerMinute int `env:"RATE_LIMIT_AUTH_PER_MINUTE" envDefault:"10"`
+	// RateLimitUploadPerMinute caps upload endpoints.
+	RateLimitUploadPerMinute int `env:"RATE_LIMIT_UPLOAD_PER_MINUTE" envDefault:"3"`
+	// TrustedProxyIPs lists proxy addresses whose X-Forwarded-For may be
+	// trusted for limiter client identity. Empty means use the socket peer.
+	TrustedProxyIPs []string `env:"TRUSTED_PROXY_IPS" envSeparator:","`
 	// AuthDevHeaderEnabled permits X-Actor-ID only in development/test.
-	AuthDevHeaderEnabled  bool          `env:"AUTH_DEV_HEADER_ENABLED" envDefault:"false"`
-	SessionCookieName     string        `env:"SESSION_COOKIE_NAME" envDefault:"anby_session"`
-	SessionCookieSecure   bool          `env:"SESSION_COOKIE_SECURE" envDefault:"true"`
-	SessionTTL            time.Duration `env:"SESSION_TTL" envDefault:"24h"`
-	AuthPostLoginRedirect string        `env:"AUTH_POST_LOGIN_REDIRECT" envDefault:"/"`
-	// TrustedOrigins 是允许携带 session cookie 发起写请求的精确 HTTPS origin。
+	AuthDevHeaderEnabled bool          `env:"AUTH_DEV_HEADER_ENABLED" envDefault:"false"`
+	SessionCookieName    string        `env:"SESSION_COOKIE_NAME" envDefault:"anby_session"`
+	SessionCookieSecure  bool          `env:"SESSION_COOKIE_SECURE" envDefault:"true"`
+	SessionTTL           time.Duration `env:"SESSION_TTL" envDefault:"24h"`
+	// TrustedOrigins 是允许携带 session cookie 发起写请求的精确 HTTP(S) origin。
 	TrustedOrigins []string `env:"TRUSTED_ORIGINS" envSeparator:","`
 }
 
@@ -111,21 +122,32 @@ func (c Config) validate() error {
 	}
 	switch c.SearchBackend {
 	case "postgres":
-	case "meilisearch":
-		if strings.TrimSpace(c.MeiliURL) == "" {
-			return fmt.Errorf("config: SEARCH_BACKEND=meilisearch 时缺失环境变量: MEILI_URL")
-		}
-		if strings.TrimSpace(c.MeiliIndex) == "" {
-			return fmt.Errorf("config: SEARCH_BACKEND=meilisearch 时 MEILI_INDEX 不能为空")
-		}
-		if c.MeiliTimeout <= 0 {
-			return fmt.Errorf("config: MEILI_TIMEOUT 必须大于 0")
-		}
-		if err := validateServiceURL(c.MeiliURL); err != nil {
-			return fmt.Errorf("config: MEILI_URL 非法: %w", err)
-		}
 	default:
 		return fmt.Errorf("config: 不支持的 SEARCH_BACKEND: %s", c.SearchBackend)
+	}
+	if c.RateLimitEnabled {
+		for name, value := range map[string]int{
+			"RATE_LIMIT_GENERAL_PER_MINUTE": c.RateLimitGeneralPerMinute,
+			"RATE_LIMIT_AUTH_PER_MINUTE":    c.RateLimitAuthPerMinute,
+			"RATE_LIMIT_UPLOAD_PER_MINUTE":  c.RateLimitUploadPerMinute,
+		} {
+			if value <= 0 {
+				return fmt.Errorf("config: RATE_LIMIT_ENABLED=true 时 %s 必须大于 0", name)
+			}
+		}
+	}
+	if c.AuthDevLoginEnabled && c.Env != "development" {
+		if strings.TrimSpace(c.AuthDevLoginToken) == "" {
+			return fmt.Errorf("config: AUTH_DEV_LOGIN_ENABLED=true 且非 development 时要求 AUTH_DEV_LOGIN_TOKEN 非空")
+		}
+		if weakSecret(c.AuthDevLoginToken) {
+			return fmt.Errorf("config: 拒绝弱 AUTH_DEV_LOGIN_TOKEN")
+		}
+	}
+	for _, raw := range c.TrustedProxyIPs {
+		if net.ParseIP(strings.TrimSpace(raw)) == nil {
+			return fmt.Errorf("config: TRUSTED_PROXY_IPS 包含非法 IP %q", raw)
+		}
 	}
 	if c.AIImportEnabled {
 		var aiMissing []string
@@ -146,20 +168,8 @@ func (c Config) validate() error {
 		}
 	}
 	if c.Env == "production" {
-		if c.SearchBackend != "meilisearch" {
-			return fmt.Errorf("config: production 要求 SEARCH_BACKEND=meilisearch")
-		}
-		if strings.TrimSpace(c.MeiliAPIKey) == "" {
-			return fmt.Errorf("config: production 要求 MEILI_API_KEY 非空")
-		}
 		if c.AuthDevHeaderEnabled {
 			return fmt.Errorf("config: production 严禁 AUTH_DEV_HEADER_ENABLED=true")
-		}
-		if !c.SessionCookieSecure {
-			return fmt.Errorf("config: production 要求 SESSION_COOKIE_SECURE=true")
-		}
-		if !c.OIDCEnabled {
-			return fmt.Errorf("config: production 要求 OIDC_ENABLED=true")
 		}
 		if len(c.TrustedOrigins) == 0 {
 			return fmt.Errorf("config: production 要求 TRUSTED_ORIGINS")
@@ -169,34 +179,8 @@ func (c Config) validate() error {
 		}
 	}
 	for _, origin := range c.TrustedOrigins {
-		if err := validateTrustedOrigin(origin, c.Env == "production"); err != nil {
+		if err := validateTrustedOrigin(origin); err != nil {
 			return fmt.Errorf("config: TRUSTED_ORIGINS 包含非法 origin %q: %w", origin, err)
-		}
-	}
-	if c.OIDCEnabled {
-		var oidcMissing []string
-		for name, value := range map[string]string{
-			"OIDC_ISSUER_URL":   c.OIDCIssuerURL,
-			"OIDC_CLIENT_ID":    c.OIDCClientID,
-			"OIDC_REDIRECT_URL": c.OIDCRedirectURL,
-		} {
-			if strings.TrimSpace(value) == "" {
-				oidcMissing = append(oidcMissing, name)
-			}
-		}
-		if len(oidcMissing) > 0 {
-			return fmt.Errorf("config: OIDC_ENABLED=true 时缺失环境变量: %s", strings.Join(oidcMissing, ", "))
-		}
-		if c.Env == "production" {
-			if strings.TrimSpace(c.OIDCClientSecret) == "" {
-				return fmt.Errorf("config: production 要求 OIDC_CLIENT_SECRET 非空")
-			}
-			if !isHTTPSURL(c.OIDCIssuerURL) || !isHTTPSURL(c.OIDCRedirectURL) {
-				return fmt.Errorf("config: production 要求 OIDC issuer 和 redirect 使用 HTTPS")
-			}
-			if weakSecret(c.OIDCClientSecret) {
-				return fmt.Errorf("config: production 拒绝 OIDC 弱默认 client secret")
-			}
 		}
 	}
 	if strings.TrimSpace(c.SessionCookieName) == "" {
@@ -214,25 +198,10 @@ func (c Config) validate() error {
 	if c.OTelEnabled && strings.TrimSpace(c.OTLPEndpoint) == "" {
 		return fmt.Errorf("config: OTEL_ENABLED=true 时缺失环境变量: OTEL_EXPORTER_OTLP_ENDPOINT")
 	}
-	if !strings.HasPrefix(c.AuthPostLoginRedirect, "/") || strings.HasPrefix(c.AuthPostLoginRedirect, "//") {
-		return fmt.Errorf("config: AUTH_POST_LOGIN_REDIRECT 必须是站内绝对路径")
-	}
 	return nil
 }
 
-func validateServiceURL(raw string) error {
-	parsed, err := url.Parse(strings.TrimSpace(raw))
-	if err != nil || parsed.Host == "" ||
-		(parsed.Scheme != "http" && parsed.Scheme != "https") {
-		return fmt.Errorf("必须是绝对 HTTP(S) URL")
-	}
-	if parsed.User != nil || parsed.RawQuery != "" || parsed.Fragment != "" {
-		return fmt.Errorf("禁止 userinfo、query 或 fragment")
-	}
-	return nil
-}
-
-func validateTrustedOrigin(raw string, requireHTTPS bool) error {
+func validateTrustedOrigin(raw string) error {
 	if strings.Contains(raw, "*") {
 		return fmt.Errorf("禁止 wildcard")
 	}
@@ -241,18 +210,10 @@ func validateTrustedOrigin(raw string, requireHTTPS bool) error {
 		(parsed.Scheme != "http" && parsed.Scheme != "https") {
 		return fmt.Errorf("必须是绝对 HTTP(S) origin")
 	}
-	if requireHTTPS && parsed.Scheme != "https" {
-		return fmt.Errorf("production 必须使用 HTTPS origin")
-	}
 	if parsed.User != nil || parsed.Path != "" || parsed.RawQuery != "" || parsed.Fragment != "" {
 		return fmt.Errorf("禁止 userinfo、path、query 或 fragment")
 	}
 	return nil
-}
-
-func isHTTPSURL(raw string) bool {
-	parsed, err := url.Parse(strings.TrimSpace(raw))
-	return err == nil && parsed.Scheme == "https" && parsed.Host != ""
 }
 
 func weakSecret(raw string) bool {

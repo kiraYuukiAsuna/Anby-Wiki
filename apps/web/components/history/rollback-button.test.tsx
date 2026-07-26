@@ -127,6 +127,6 @@ describe("RollbackButton", () => {
       expect(mocks.toast.error).toHaveBeenCalledWith("请先登录后再回滚"),
     );
     expect(mocks.rollbackPage).toHaveBeenCalledOnce();
-    expect(mocks.push).toHaveBeenCalledWith("/api/v1/auth/login");
+    expect(mocks.push).toHaveBeenCalledWith("/login");
   });
 });
