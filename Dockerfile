@@ -49,9 +49,10 @@ LABEL org.opencontainers.image.title="Anby Wiki API" \
       org.opencontainers.image.revision="${VCS_REF}" \
       org.opencontainers.image.created="${BUILD_DATE}"
 COPY --from=go-builder /out/wiki-api /usr/local/bin/wiki-api
+ENV API_PORT=8080
 EXPOSE 8080
 HEALTHCHECK --interval=10s --timeout=3s --start-period=10s --retries=6 \
-  CMD wget -q -O /dev/null http://127.0.0.1:8080/readyz || exit 1
+  CMD wget -q -O /dev/null "http://127.0.0.1:${API_PORT}/readyz" || exit 1
 CMD ["wiki-api"]
 
 FROM go-runtime AS worker

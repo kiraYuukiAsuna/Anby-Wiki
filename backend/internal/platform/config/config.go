@@ -13,8 +13,8 @@ import (
 
 // Config 应用配置，全部由环境变量注入。
 type Config struct {
-	// Port HTTP 监听端口，默认 8080。
-	Port int `env:"PORT" envDefault:"8080"`
+	// APIPort Go API HTTP 监听端口，默认 8080。
+	APIPort int `env:"API_PORT" envDefault:"8080"`
 	// DatabaseURL PostgreSQL 连接串，必填。
 	DatabaseURL string `env:"DATABASE_URL"`
 	// RedisURL Redis 连接串，必填。

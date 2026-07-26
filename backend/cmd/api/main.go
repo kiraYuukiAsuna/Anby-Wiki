@@ -204,7 +204,7 @@ func main() {
 	}
 
 	srv := &http.Server{
-		Addr:              fmt.Sprintf(":%d", cfg.Port),
+		Addr:              fmt.Sprintf(":%d", cfg.APIPort),
 		Handler:           NewRouter(logger, deps, writeAPI, readAPI, historyAPI, projectionAPI, searchAPI, knowledgeReadAPI, governanceAPI, importAPI, authAPI, collaborationAPI, collectionAPI),
 		ReadHeaderTimeout: 5 * time.Second,
 	}

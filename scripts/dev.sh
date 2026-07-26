@@ -55,6 +55,10 @@ set -a
 . "$ENV_FILE"
 set +a
 
+# Web 的内部反代地址由 API 监听端口推导，避免维护第二份端口配置。
+API_BASE_URL=${API_BASE_URL:-"http://localhost:${API_PORT:-8080}"}
+export API_BASE_URL
+
 # ---- 前置检查：缺什么就直接说清楚，不要留到运行时深层报错 ----
 
 command -v go >/dev/null 2>&1 || fail "go is not installed or not on PATH"
@@ -130,7 +134,7 @@ if [ "$WANT_WEB" -eq 1 ]; then
   start web env PORT="${WEB_PORT:-3000}" sh -c "cd '$ROOT/apps/web' && exec npm run dev"
 fi
 
-echo "dev: ready. API on ${PORT:-8080}, Web on ${WEB_PORT:-3000}. Ctrl-C to stop."
+echo "dev: ready. API on ${API_PORT:-8080}, Web on ${WEB_PORT:-3000}. Ctrl-C to stop."
 # 任一子进程退出即整体收敛，避免只剩半套服务在跑。
 set +e
 wait -n

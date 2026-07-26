@@ -29,7 +29,7 @@ func setProductionRequired(t *testing.T) {
 
 func TestLoad_Valid(t *testing.T) {
 	setRequired(t)
-	t.Setenv("PORT", "9090")
+	t.Setenv("API_PORT", "9090")
 	t.Setenv("LOG_LEVEL", "debug")
 	t.Setenv("ENV", "staging")
 
@@ -37,8 +37,8 @@ func TestLoad_Valid(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Load() 返回错误: %v", err)
 	}
-	if cfg.Port != 9090 {
-		t.Errorf("Port = %d, 期望 9090", cfg.Port)
+	if cfg.APIPort != 9090 {
+		t.Errorf("APIPort = %d, 期望 9090", cfg.APIPort)
 	}
 	if cfg.LogLevel != "debug" || cfg.Env != "staging" {
 		t.Errorf("LogLevel/Env 解析错误: %+v", cfg)
@@ -55,8 +55,8 @@ func TestLoad_Defaults(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Load() 返回错误: %v", err)
 	}
-	if cfg.Port != 8080 {
-		t.Errorf("Port 默认值 = %d, 期望 8080", cfg.Port)
+	if cfg.APIPort != 8080 {
+		t.Errorf("APIPort 默认值 = %d, 期望 8080", cfg.APIPort)
 	}
 	if cfg.LogLevel != "info" {
 		t.Errorf("LogLevel 默认值 = %q, 期望 info", cfg.LogLevel)
@@ -105,10 +105,10 @@ func TestLoad_MissingRequired(t *testing.T) {
 
 func TestLoad_InvalidPort(t *testing.T) {
 	setRequired(t)
-	t.Setenv("PORT", "not-a-number")
+	t.Setenv("API_PORT", "not-a-number")
 
 	if _, err := Load(); err == nil {
-		t.Fatal("Load() 非法 PORT 时应返回错误")
+		t.Fatal("Load() 非法 API_PORT 时应返回错误")
 	}
 }
 
