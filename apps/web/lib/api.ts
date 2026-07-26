@@ -73,7 +73,7 @@ function makeConfig(overrides: ConfigurationParameters = {}): Configuration {
   });
 }
 
-/** 早期引导登录与服务端 session 客户端。 */
+/** 本地账号注册、密码登录与服务端 session 客户端。 */
 export function authApi(overrides: ConfigurationParameters = {}): AuthApi {
   return new AuthApi(makeConfig(overrides));
 }

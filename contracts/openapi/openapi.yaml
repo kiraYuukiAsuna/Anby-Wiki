@@ -19,7 +19,7 @@ tags:
   - name: meta
     description: 服务元信息与健康检查
   - name: auth
-    description: 早期引导登录与服务端会话
+    description: 本地账号注册、密码登录与服务端会话
   - name: pages
     description: 页面创建、改名与 Revision 发布（写 API）
   - name: reading
@@ -39,30 +39,49 @@ tags:
   - name: imports
     description: AI 来源导入任务、阶段进度、取消与重试
 paths:
-  /api/v1/auth/dev-login:
+  /api/v1/auth/register:
     post:
-      operationId: devLogin
+      operationId: register
       tags: [auth]
-      summary: 用引导令牌换取服务端 session（早期阶段占位登录）
+      summary: 注册本地账号并建立会话
       description: >-
-        早期阶段占位登录：以共享引导令牌换取 HttpOnly session cookie。
-        该端点不验证调用者真实身份，仅用于封闭的早期部署，
-        公网暴露前必须替换为真实身份提供方。
-        未启用时返回 404。
+        用户名和邮箱均不区分大小写且全站唯一。首个本地账号获得管理员角色，
+        后续账号默认获得编辑者角色；注册默认关闭，部署方须通过
+        AUTH_REGISTRATION_ENABLED 显式开启。
       requestBody:
         required: true
         content:
           application/json:
-            schema: { $ref: "#/components/schemas/DevLoginRequest" }
+            schema: { $ref: "#/components/schemas/RegisterRequest" }
+      responses:
+        "201":
+          description: 注册成功，设置 HttpOnly session cookie
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/AuthResult" }
+        "400": { $ref: "#/components/responses/BadRequest" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "409": { $ref: "#/components/responses/Conflict" }
+        "429": { $ref: "#/components/responses/RateLimited" }
+        "500": { $ref: "#/components/responses/Internal" }
+  /api/v1/auth/login:
+    post:
+      operationId: login
+      tags: [auth]
+      summary: 使用用户名或邮箱和密码登录
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/LoginRequest" }
       responses:
         "200":
           description: 登录成功，设置 HttpOnly session cookie
           content:
             application/json:
-              schema: { $ref: "#/components/schemas/DevLoginResult" }
+              schema: { $ref: "#/components/schemas/AuthResult" }
         "400": { $ref: "#/components/responses/BadRequest" }
         "401": { $ref: "#/components/responses/Unauthorized" }
-        "404": { $ref: "#/components/responses/NotFound" }
         "429": { $ref: "#/components/responses/RateLimited" }
         "500": { $ref: "#/components/responses/Internal" }
   /api/v1/auth/session:
@@ -1551,18 +1570,47 @@ components:
         maximum: 100
         default: 20
   schemas:
-    DevLoginRequest:
+    RegisterRequest:
       type: object
-      required: [token]
+      additionalProperties: false
+      required: [username, email, password]
       properties:
-        token:
+        username:
           type: string
-          description: 共享引导令牌；服务端只比较其哈希，不记录明文。
+          minLength: 3
+          maxLength: 32
+          pattern: "^[A-Za-z0-9][A-Za-z0-9_.-]{2,31}$"
+          description: 不区分大小写；服务端规范化为小写。
+        email:
+          type: string
+          format: email
+          maxLength: 254
+          description: 不区分大小写。
+        password:
+          type: string
+          format: password
+          minLength: 12
+          maxLength: 128
         display_name:
           type: string
           maxLength: 128
-          description: 首次使用时创建的 Actor 显示名；重复使用会复用同一 Actor。
-    DevLoginResult:
+          description: 省略时使用规范化用户名。
+    LoginRequest:
+      type: object
+      additionalProperties: false
+      required: [identifier, password]
+      properties:
+        identifier:
+          type: string
+          minLength: 1
+          maxLength: 254
+          description: 用户名或邮箱，不区分大小写。
+        password:
+          type: string
+          format: password
+          minLength: 1
+          maxLength: 128
+    AuthResult:
       type: object
       required: [actor_id, display_name]
       properties:

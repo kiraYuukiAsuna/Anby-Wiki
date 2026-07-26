@@ -30,6 +30,12 @@ set -a
 . "$DEPLOY_ENV_FILE"
 set +a
 
+# Build provenance is derived from the checked-out source, not maintained by
+# operators in the environment file.
+VCS_REF=$(git -C "$ROOT" rev-parse HEAD 2>/dev/null || printf 'unknown')
+BUILD_DATE=$(date -u '+%Y-%m-%dT%H:%M:%SZ')
+export VCS_REF BUILD_DATE
+
 compose() {
   docker compose --env-file "$DEPLOY_ENV_FILE" -f "$COMPOSE_FILE" "$@"
 }
@@ -64,7 +70,9 @@ check_release_id() {
 }
 
 check_production_config() {
-  [ "${DEPLOY_ENV:-}" = "production" ] || fail "DEPLOY_ENV must be production"
+  [ "${ENV:-}" = "production" ] || fail "ENV must be production"
+  [ "${AUTH_DEV_HEADER_ENABLED:-false}" = "false" ] ||
+    fail "AUTH_DEV_HEADER_ENABLED must be false in production"
   check_release_id
   check_sensitive_env
 }
@@ -114,11 +122,18 @@ check_existing_schema() {
 # Production secrets live in DEPLOY_ENV_FILE. Refuse missing values before any
 # container is started.
 check_sensitive_env() {
-  for name in DATABASE_URL POSTGRES_PASSWORD S3_ACCESS_KEY S3_SECRET_KEY \
-    AUTH_DEV_LOGIN_TOKEN
+  for name in POSTGRES_DB POSTGRES_USER POSTGRES_PASSWORD S3_ACCESS_KEY S3_SECRET_KEY
   do
     eval "value=\${$name:-}"
     [ -n "$value" ] || fail "$name must be set in DEPLOY_ENV_FILE"
+  done
+  for name in POSTGRES_DB POSTGRES_USER POSTGRES_PASSWORD; do
+    eval "value=\${$name}"
+    case "$value" in
+      *[!a-zA-Z0-9._-]*)
+        fail "$name must contain only letters, digits, dot, underscore, or hyphen"
+        ;;
+    esac
   done
   if [ "${AI_IMPORT_ENABLED:-false}" = "true" ]; then
     for name in AI_BASE_URL AI_API_KEY AI_MODEL; do

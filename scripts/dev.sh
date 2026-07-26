@@ -127,10 +127,10 @@ if [ "$WANT_WORKER" -eq 1 ]; then
   start worker sh -c "cd '$ROOT/backend' && exec go run ./cmd/worker"
 fi
 if [ "$WANT_WEB" -eq 1 ]; then
-  start web sh -c "cd '$ROOT/apps/web' && exec npm run dev"
+  start web env PORT="${WEB_PORT:-3000}" sh -c "cd '$ROOT/apps/web' && exec npm run dev"
 fi
 
-echo "dev: ready. API on \${PORT:-8080}, Web on 3000. Ctrl-C to stop."
+echo "dev: ready. API on ${PORT:-8080}, Web on ${WEB_PORT:-3000}. Ctrl-C to stop."
 # 任一子进程退出即整体收敛，避免只剩半套服务在跑。
 set +e
 wait -n

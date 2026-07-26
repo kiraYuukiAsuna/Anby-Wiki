@@ -16,37 +16,37 @@ import { mapValues } from '../runtime';
 /**
  * 
  * @export
- * @interface DevLoginResult
+ * @interface AuthResult
  */
-export interface DevLoginResult {
+export interface AuthResult {
     /**
      * 
      * @type {string}
-     * @memberof DevLoginResult
+     * @memberof AuthResult
      */
     actorId: string;
     /**
      * 
      * @type {string}
-     * @memberof DevLoginResult
+     * @memberof AuthResult
      */
     displayName: string;
 }
 
 /**
- * Check if a given object implements the DevLoginResult interface.
+ * Check if a given object implements the AuthResult interface.
  */
-export function instanceOfDevLoginResult(value: object): value is DevLoginResult {
+export function instanceOfAuthResult(value: object): value is AuthResult {
     if ((!('actorId' in (value as Record<string, any>)) && !('actor_id' in (value as Record<string, any>))) || ((value as Record<string, any>)['actorId'] === undefined && (value as Record<string, any>)['actor_id'] === undefined)) return false;
     if ((!('displayName' in (value as Record<string, any>)) && !('display_name' in (value as Record<string, any>))) || ((value as Record<string, any>)['displayName'] === undefined && (value as Record<string, any>)['display_name'] === undefined)) return false;
     return true;
 }
 
-export function DevLoginResultFromJSON(json: any): DevLoginResult {
-    return DevLoginResultFromJSONTyped(json, false);
+export function AuthResultFromJSON(json: any): AuthResult {
+    return AuthResultFromJSONTyped(json, false);
 }
 
-export function DevLoginResultFromJSONTyped(json: any, ignoreDiscriminator: boolean): DevLoginResult {
+export function AuthResultFromJSONTyped(json: any, ignoreDiscriminator: boolean): AuthResult {
     if (json == null) {
         return json;
     }
@@ -57,11 +57,11 @@ export function DevLoginResultFromJSONTyped(json: any, ignoreDiscriminator: bool
     };
 }
 
-export function DevLoginResultToJSON(json: any): DevLoginResult {
-    return DevLoginResultToJSONTyped(json, false);
+export function AuthResultToJSON(json: any): AuthResult {
+    return AuthResultToJSONTyped(json, false);
 }
 
-export function DevLoginResultToJSONTyped(value?: DevLoginResult | null, ignoreDiscriminator: boolean = false): any {
+export function AuthResultToJSONTyped(value?: AuthResult | null, ignoreDiscriminator: boolean = false): any {
     if (value == null) {
         return value;
     }

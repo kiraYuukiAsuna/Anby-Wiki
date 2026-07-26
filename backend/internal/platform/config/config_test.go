@@ -25,7 +25,6 @@ func setProductionRequired(t *testing.T) {
 	t.Setenv("S3_SECRET_KEY", "production-secret-value")
 	t.Setenv("TRUSTED_ORIGINS", "https://wiki.example.com")
 	t.Setenv("SEARCH_BACKEND", "postgres")
-	t.Setenv("AUTH_DEV_LOGIN_TOKEN", "production-bootstrap-token")
 }
 
 func TestLoad_Valid(t *testing.T) {
@@ -33,9 +32,6 @@ func TestLoad_Valid(t *testing.T) {
 	t.Setenv("PORT", "9090")
 	t.Setenv("LOG_LEVEL", "debug")
 	t.Setenv("ENV", "staging")
-	// Non-development environments must supply a bootstrap token whenever the
-	// placeholder dev login is enabled.
-	t.Setenv("AUTH_DEV_LOGIN_TOKEN", "staging-bootstrap-token")
 
 	cfg, err := Load()
 	if err != nil {
@@ -176,37 +172,6 @@ func TestLoad_RateLimitValidation(t *testing.T) {
 	}
 }
 
-func TestLoad_DevLoginTokenRequiredOutsideDevelopment(t *testing.T) {
-	t.Run("missing token", func(t *testing.T) {
-		setProductionRequired(t)
-		t.Setenv("AUTH_DEV_LOGIN_TOKEN", "")
-		if _, err := Load(); err == nil || !strings.Contains(err.Error(), "AUTH_DEV_LOGIN_TOKEN") {
-			t.Fatalf("非 development 启用 dev login 应要求令牌，err=%v", err)
-		}
-	})
-	t.Run("weak token", func(t *testing.T) {
-		setProductionRequired(t)
-		t.Setenv("AUTH_DEV_LOGIN_TOKEN", "changeme")
-		if _, err := Load(); err == nil || !strings.Contains(err.Error(), "AUTH_DEV_LOGIN_TOKEN") {
-			t.Fatalf("弱令牌应被拒绝，err=%v", err)
-		}
-	})
-	t.Run("disabled needs no token", func(t *testing.T) {
-		setProductionRequired(t)
-		t.Setenv("AUTH_DEV_LOGIN_ENABLED", "false")
-		t.Setenv("AUTH_DEV_LOGIN_TOKEN", "")
-		if _, err := Load(); err != nil {
-			t.Fatalf("关闭 dev login 后不应要求令牌，err=%v", err)
-		}
-	})
-	t.Run("development needs no token", func(t *testing.T) {
-		setRequired(t)
-		if _, err := Load(); err != nil {
-			t.Fatalf("development 不应要求令牌，err=%v", err)
-		}
-	})
-}
-
 func TestLoad_TrustedProxyValidation(t *testing.T) {
 	setRequired(t)
 	t.Setenv("TRUSTED_PROXY_IPS", "10.0.0.1,not-an-ip")
@@ -245,7 +210,6 @@ func TestLoad_ProductionRejectsWeakSecrets(t *testing.T) {
 		want  string
 	}{
 		{name: "weak s3", key: "S3_SECRET_KEY", value: "minioadmin_dev", want: "S3 弱默认"},
-		{name: "weak bootstrap token", key: "AUTH_DEV_LOGIN_TOKEN", value: "changeme", want: "AUTH_DEV_LOGIN_TOKEN"},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {

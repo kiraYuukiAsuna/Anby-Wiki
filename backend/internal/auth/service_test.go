@@ -22,27 +22,50 @@ func setup(t *testing.T) (*testkit.DB, *auth.Service) {
 	return tdb, auth.NewService(tdb.Pool, db.NewTxManager(tdb.Pool), id.NewGenerator(), time.Hour)
 }
 
-func TestBootstrapIdentityMapsToStableActor(t *testing.T) {
-	_, service := setup(t)
+func TestRegisterAndLoginMapToStableActor(t *testing.T) {
+	tdb, service := setup(t)
 	ctx := context.Background()
-	identity := auth.Identity{
-		Issuer:      auth.BootstrapIssuer,
-		Subject:     "bootstrap admin",
-		DisplayName: "Bootstrap Admin",
-	}
-	first, err := service.EstablishSession(ctx, identity)
+	first, err := service.Register(ctx, auth.RegisterInput{
+		Username: "alice", Email: "alice@example.com",
+		Password: "correct horse battery staple", DisplayName: "Alice",
+	})
 	if err != nil {
 		t.Fatal(err)
 	}
-	second, err := service.EstablishSession(ctx, identity)
+	second, err := service.Login(ctx, auth.LoginInput{
+		Identifier: "ALICE@EXAMPLE.COM", Password: "correct horse battery staple",
+	})
 	if err != nil {
 		t.Fatal(err)
 	}
 	if first.ActorID != second.ActorID {
-		t.Fatalf("bootstrap subject mapped to %s and %s", first.ActorID, second.ActorID)
+		t.Fatalf("local account mapped to %s and %s", first.ActorID, second.ActorID)
 	}
 	if first.Token == second.Token {
 		t.Fatal("each login must mint a distinct opaque session token")
+	}
+	var roleKey string
+	if err := tdb.Pool.QueryRow(ctx, `SELECT r.role_key FROM actor_role ar
+		JOIN role r ON r.id=ar.role_id WHERE ar.actor_id=$1`, first.ActorID).Scan(&roleKey); err != nil {
+		t.Fatal(err)
+	}
+	if roleKey != "admin" {
+		t.Fatalf("first account role=%q want admin", roleKey)
+	}
+}
+
+func TestLoginRejectsInvalidPassword(t *testing.T) {
+	_, service := setup(t)
+	ctx := context.Background()
+	if _, err := service.Register(ctx, auth.RegisterInput{
+		Username: "alice", Email: "alice@example.com", Password: "correct horse battery staple",
+	}); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := service.Login(ctx, auth.LoginInput{
+		Identifier: "alice", Password: "incorrect password",
+	}); !errors.Is(err, auth.ErrInvalidCredentials) {
+		t.Fatalf("invalid password err=%v", err)
 	}
 }
 

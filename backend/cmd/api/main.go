@@ -153,7 +153,7 @@ func main() {
 		)
 		authAPI = NewAuthAPI(
 			authService, cfg.SessionCookieName, cfg.SessionCookieSecure,
-			cfg.AuthDevLoginEnabled, cfg.AuthDevLoginToken,
+			cfg.AuthRegistrationEnabled,
 		)
 		collaborationService := collaboration.NewService(
 			pool, db.NewTxManager(pool), id.NewGenerator(),

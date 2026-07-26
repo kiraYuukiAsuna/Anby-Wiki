@@ -41,7 +41,7 @@ func setupAuthAPI(t *testing.T) (*testkit.DB, *authdomain.Service, http.Handler)
 			AllowDevActorHeader: true,
 		},
 		nil, nil, nil, nil, nil,
-		NewAuthAPI(service, "anby_session", false, true, devLoginTestToken),
+		NewAuthAPI(service, "anby_session", false, true),
 	)
 	return tdb, service, router
 }
@@ -126,41 +126,43 @@ func TestAuthLogoutRejectsUntrustedBrowserWithoutRevokingSession(t *testing.T) {
 	}
 }
 
-// devLoginTestToken is a test-only bootstrap secret.
-const devLoginTestToken = "test-bootstrap-token-value"
+func TestRegisterAndLoginIssueIndependentSessions(t *testing.T) {
+	_, service, router := setupAuthAPI(t)
+	first := doAuthRequest(t, router, "/api/v1/auth/register", map[string]any{
+		"username": "alice", "email": "alice@example.com",
+		"password": "correct horse battery staple", "display_name": "Alice",
+	}, http.StatusCreated)
+	second := doAuthRequest(t, router, "/api/v1/auth/login", map[string]any{
+		"identifier": "ALICE@EXAMPLE.COM", "password": "correct horse battery staple",
+	}, http.StatusOK)
+	if first.actorID != second.actorID {
+		t.Fatalf("account actor changed from %s to %s", first.actorID, second.actorID)
+	}
+	if first.token == second.token {
+		t.Fatal("register and login must issue distinct session tokens")
+	}
+	principal, err := service.ResolveSession(context.Background(), second.token)
+	if err != nil || principal.ActorID.String() != first.actorID {
+		t.Fatalf("resolve principal=%+v err=%v", principal, err)
+	}
+}
 
-func TestDevLoginRejectsWrongToken(t *testing.T) {
+func TestLoginRejectsWrongPassword(t *testing.T) {
 	_, _, router := setupAuthAPI(t)
-	status, body := doJSON(t, router, http.MethodPost, "/api/v1/auth/dev-login",
-		map[string]any{"token": "not-the-token", "display_name": "Intruder"},
+	doAuthRequest(t, router, "/api/v1/auth/register", map[string]any{
+		"username": "alice", "email": "alice@example.com",
+		"password": "correct horse battery staple",
+	}, http.StatusCreated)
+	status, body := doJSON(t, router, http.MethodPost, "/api/v1/auth/login",
+		map[string]any{"identifier": "alice", "password": "wrong password"},
 		map[string]string{"Origin": "https://wiki.example.com"})
 	if status != http.StatusUnauthorized {
-		t.Fatalf("wrong token status=%d body=%v", status, body)
+		t.Fatalf("wrong password status=%d body=%v", status, body)
 	}
 	assertErrorShape(t, body, httpx.CodeUnauthorized)
 }
 
-func TestDevLoginIssuesSessionAndReusesActor(t *testing.T) {
-	_, service, router := setupAuthAPI(t)
-
-	first := doDevLogin(t, router, "Bootstrap Admin")
-	second := doDevLogin(t, router, "Ignored Rename")
-	if first.actorID != second.actorID {
-		t.Fatalf("same bootstrap identity mapped to %s and %s", first.actorID, second.actorID)
-	}
-	if second.displayName != "Bootstrap Admin" {
-		t.Fatalf("repeat login changed actor display name to %q", second.displayName)
-	}
-	principal, err := service.ResolveSession(context.Background(), first.token)
-	if err != nil {
-		t.Fatalf("resolve dev-login session: %v", err)
-	}
-	if principal.ActorID.String() != first.actorID {
-		t.Fatalf("principal actor=%s want %s", principal.ActorID, first.actorID)
-	}
-}
-
-func TestDevLoginDisabledReturnsNotFound(t *testing.T) {
+func TestRegistrationDisabledReturnsForbidden(t *testing.T) {
 	tdb := testkit.Open(t)
 	tdb.Reset(t)
 	service := authdomain.NewService(tdb.Pool, db.NewTxManager(tdb.Pool), id.NewGenerator(), time.Hour)
@@ -172,40 +174,41 @@ func TestDevLoginDisabledReturnsNotFound(t *testing.T) {
 			TrustedOrigins: []string{"https://wiki.example.com"},
 		},
 		nil, nil, nil, nil, nil,
-		NewAuthAPI(service, "anby_session", false, false, devLoginTestToken),
+		NewAuthAPI(service, "anby_session", false, false),
 	)
-	status, body := doJSON(t, router, http.MethodPost, "/api/v1/auth/dev-login",
-		map[string]any{"token": devLoginTestToken},
+	status, body := doJSON(t, router, http.MethodPost, "/api/v1/auth/register",
+		map[string]any{
+			"username": "alice", "email": "alice@example.com",
+			"password": "correct horse battery staple",
+		},
 		map[string]string{"Origin": "https://wiki.example.com"})
-	if status != http.StatusNotFound {
-		t.Fatalf("disabled dev-login status=%d body=%v", status, body)
+	if status != http.StatusForbidden {
+		t.Fatalf("disabled registration status=%d body=%v", status, body)
 	}
 }
 
-type devLoginResult struct {
+type authResult struct {
 	actorID     string
 	displayName string
 	token       string
 }
 
-func doDevLogin(t *testing.T, router http.Handler, displayName string) devLoginResult {
+func doAuthRequest(t *testing.T, router http.Handler, path string, body map[string]any, wantStatus int) authResult {
 	t.Helper()
-	payload, err := json.Marshal(map[string]any{
-		"token": devLoginTestToken, "display_name": displayName,
-	})
+	payload, err := json.Marshal(body)
 	if err != nil {
 		t.Fatal(err)
 	}
-	request := httptest.NewRequest(http.MethodPost, "/api/v1/auth/dev-login", bytes.NewReader(payload))
+	request := httptest.NewRequest(http.MethodPost, path, bytes.NewReader(payload))
 	request.Header.Set("Content-Type", "application/json")
 	request.Header.Set("Origin", "https://wiki.example.com")
 	recorder := httptest.NewRecorder()
 	router.ServeHTTP(recorder, request)
-	if recorder.Code != http.StatusOK {
-		t.Fatalf("dev-login status=%d body=%s", recorder.Code, recorder.Body.String())
+	if recorder.Code != wantStatus {
+		t.Fatalf("%s status=%d body=%s", path, recorder.Code, recorder.Body.String())
 	}
-	var body map[string]string
-	if err := json.Unmarshal(recorder.Body.Bytes(), &body); err != nil {
+	var resultBody map[string]string
+	if err := json.Unmarshal(recorder.Body.Bytes(), &resultBody); err != nil {
 		t.Fatal(err)
 	}
 	var sessionToken string
@@ -215,9 +218,9 @@ func doDevLogin(t *testing.T, router http.Handler, displayName string) devLoginR
 		}
 	}
 	if sessionToken == "" {
-		t.Fatal("dev-login did not set a session cookie")
+		t.Fatal("auth response did not set a session cookie")
 	}
-	return devLoginResult{
-		actorID: body["actor_id"], displayName: body["display_name"], token: sessionToken,
+	return authResult{
+		actorID: resultBody["actor_id"], displayName: resultBody["display_name"], token: sessionToken,
 	}
 }

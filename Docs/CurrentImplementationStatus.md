@@ -22,7 +22,7 @@ PostgreSQL 权威数据、Outbox 投影、治理审核、协作编辑和 P1 扩�
 | M4 知识与证据 | Entity/Property/Claim、标签与别名、Source/Version/Chunk/Citation、知识引用及反向使用投影 |
 | M5 治理 | Proposal/Operation、风险分级、ReviewTask、三方冲突、ChangeBatch、审计、权限与补偿回滚 |
 | M6 AI 与导入 | HTML/PDF 安全获取、解析与抽取流水线、Prompt 版本、用量记录、幂等任务、证据约束 Proposal |
-| M7 平台化 | PostgreSQL FTS Adapter、引导令牌登录、服务端 Session、应用层限流与安全头、OTel、备份恢复、数据一致性 Doctor、部署流水线 |
+| M7 平台化 | PostgreSQL FTS Adapter、本地账号与服务端 Session、应用层限流与安全头、OTel、备份恢复、数据一致性 Doctor、部署流水线 |
 | M8 协作编辑 | Yjs AST 映射、WorkingDocument、WebSocket 增量同步、Presence、原子发布换基、AI 三方合并、人工冲突决议 |
 | M9 P1 扩展 | 稳定章节锚点、BlockRedirect、Component/Version/信息框、Collection、外链健康检查、Entity 合并、批量风险审核、可靠性与容量 smoke |
 
@@ -54,12 +54,13 @@ PostgreSQL 权威数据、Outbox 投影、治理审核、协作编辑和 P1 扩�
 
 - OpenAPI 3.1 是 HTTP 契约源，Web 只通过生成的 TypeScript 客户端访问 API。
 - Web 提供页面、编辑、历史、搜索、知识、治理、Collection 和协作入口。
-- 早期阶段登录为 `POST /api/v1/auth/dev-login`：以共享引导令牌换取服务端 Session Cookie，
-  另提供当前账户查询和退出。OIDC 已整体移除（ADR-0016）。
-- **该登录不验证调用者真实身份**：令牌持有者即可以对应 Actor 身份写入，
-  审计无法区分自然人。仅适用于封闭的早期部署，公开前必须接入真实身份提供方。
-- 首次 bootstrap 登录创建一个 `human` Actor；同一共享令牌后续复用该 Actor，
-  显示名以首次创建时为准。不提供本地用户名密码注册或密码表。
+- 正式本地账号提供 `POST /api/v1/auth/register` 和 `POST /api/v1/auth/login`：
+  用户名、邮箱全站唯一且不区分大小写，密码只保存 Argon2id 哈希。
+- 每个账号绑定独立 `human` Actor；首个注册账号在串行事务中获得管理员角色，
+  后续账号默认获得编辑者角色。`AUTH_REGISTRATION_ENABLED=false` 可关闭公开注册。
+- 登录支持用户名或邮箱，成功后签发 HttpOnly 服务端 Session Cookie；数据库只保存
+  随机会话令牌的 SHA-256，并在每次请求重新检查 Actor 状态。
+- 邮箱验证、忘记密码、MFA 与登录设备管理尚未实现，继续列为商业发布阻塞项。
 
 ### 运维与质量
 

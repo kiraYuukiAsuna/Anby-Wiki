@@ -13,6 +13,7 @@ apis/index.ts
 docs/AnchorTarget.md
 docs/ApplyProposalResult.md
 docs/AuthApi.md
+docs/AuthResult.md
 docs/AuthSession.md
 docs/Backlink.md
 docs/BacklinkListPage.md
@@ -37,8 +38,6 @@ docs/CreateImportJobRequest.md
 docs/CreatePageRequest.md
 docs/CreateProposalRequest.md
 docs/CursorPage.md
-docs/DevLoginRequest.md
-docs/DevLoginResult.md
 docs/DocumentDiff.md
 docs/DocumentOutline.md
 docs/EntityAlias.md
@@ -59,6 +58,7 @@ docs/ImportRun.md
 docs/ImportStageRun.md
 docs/ImportsApi.md
 docs/KnowledgeApi.md
+docs/LoginRequest.md
 docs/MergeConflict.md
 docs/MergeEntityRequest.md
 docs/MergeProposalToWorkingDocumentRequest.md
@@ -111,6 +111,7 @@ docs/ReadingApi.md
 docs/ReadyResponse.md
 docs/ReferenceUsage.md
 docs/ReferenceUsageListPage.md
+docs/RegisterRequest.md
 docs/RenamePageRequest.md
 docs/ResolveMergeConflictRequest.md
 docs/ReviewDecisionRequest.md
@@ -131,6 +132,7 @@ docs/SubmitProposalResult.md
 index.ts
 models/AnchorTarget.ts
 models/ApplyProposalResult.ts
+models/AuthResult.ts
 models/AuthSession.ts
 models/Backlink.ts
 models/BacklinkListPage.ts
@@ -154,8 +156,6 @@ models/CreateImportJobRequest.ts
 models/CreatePageRequest.ts
 models/CreateProposalRequest.ts
 models/CursorPage.ts
-models/DevLoginRequest.ts
-models/DevLoginResult.ts
 models/DocumentDiff.ts
 models/DocumentOutline.ts
 models/EntityAlias.ts
@@ -172,6 +172,7 @@ models/ImportJob.ts
 models/ImportJobDetail.ts
 models/ImportRun.ts
 models/ImportStageRun.ts
+models/LoginRequest.ts
 models/MergeConflict.ts
 models/MergeEntityRequest.ts
 models/MergeProposalToWorkingDocumentRequest.ts
@@ -220,6 +221,7 @@ models/PublishRevisionRequest.ts
 models/ReadyResponse.ts
 models/ReferenceUsage.ts
 models/ReferenceUsageListPage.ts
+models/RegisterRequest.ts
 models/RenamePageRequest.ts
 models/ResolveMergeConflictRequest.ts
 models/ReviewDecisionRequest.ts

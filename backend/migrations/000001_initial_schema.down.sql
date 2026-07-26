@@ -58,6 +58,8 @@ COMMIT;
 
 BEGIN;
 DROP TABLE auth_session;
+ALTER TABLE actor DROP CONSTRAINT actor_user_id_fk;
+DROP TABLE local_account;
 DROP TABLE external_identity;
 COMMIT;
 

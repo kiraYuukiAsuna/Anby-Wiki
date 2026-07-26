@@ -10,7 +10,7 @@ Web 是唯一发布宿主机端口的服务，并经 Next.js rewrite 将 `/api/*
 Docker 内网 API。清单不包含 Nginx、Meilisearch 或外部身份提供方。
 
 Compose 本身不终结 TLS。默认 `WEB_BIND=127.0.0.1`，适合由宿主机代理、云负载
-均衡或隧道接入；如果直接改成公网监听，必须先评估明文引导令牌与 session cookie
+均衡或隧道接入；如果直接改成公网监听，必须先评估明文登录凭据与 session cookie
 风险。完整限制见 `Deploy.md` 与 `Docs/OutstandingIssues.md`。
 
 ## 本地构建策略
@@ -29,17 +29,20 @@ sh scripts/deploy.sh build
 ## 环境与机密
 
 复制 `infra/deploy/.env.example` 到仓库外的受保护路径并设置 `chmod 0600`。
-该文件同时保存普通配置与 `DATABASE_URL`、`POSTGRES_PASSWORD`、
-`S3_ACCESS_KEY`、`S3_SECRET_KEY`、`AUTH_DEV_LOGIN_TOKEN` 等机密。
+该文件同时保存普通配置与 `POSTGRES_PASSWORD`、
+`S3_ACCESS_KEY`、`S3_SECRET_KEY` 等机密。
 
-`DATABASE_URL` 必须使用 Compose 服务名 `postgres`，其密码与
-`POSTGRES_PASSWORD` 一致。S3 两个值同时作为 MinIO root 凭据与应用凭据。
-引导登录令牌必须为强随机值；该登录方式不验证真实身份，只允许封闭早期环境使用。
+Compose 使用 `POSTGRES_DB`、`POSTGRES_USER`、`POSTGRES_PASSWORD` 自动生成内部
+`DATABASE_URL`，无需重复填写。PostgreSQL 三个值只允许字母、数字、点、下划线
+和连字符；密码建议用
+`openssl rand -hex 32` 生成。S3 两个值同时作为 MinIO root 凭据与应用凭据。
+首次部署时保持 `AUTH_REGISTRATION_ENABLED=true`，从 `/register` 创建首个管理员；
+完成所需账号初始化后建议改为 `false` 并重新部署。
 启用 `AI_IMPORT_ENABLED` 时，`AI_API_KEY` 同样写入该文件，但只注入 Worker。
 
 Compose 会把这些值注入容器环境，Docker 管理员可通过 `docker inspect` 查看。
 不要提交环境文件，也不要把 Compose 展开结果、容器环境、CI 日志、指标或 trace
-写入工单。密码包含特殊字符时使用 shell 兼容的单引号，并对 URL 密码做 URL 编码。
+写入工单。
 
 ## 运行时安全
 

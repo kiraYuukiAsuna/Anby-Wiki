@@ -1,24 +1,24 @@
 
-# DevLoginResult
+# LoginRequest
 
 
 ## Properties
 
 Name | Type
 ------------ | -------------
-`actorId` | string
-`displayName` | string
+`identifier` | string
+`password` | string
 
 ## Example
 
 ```typescript
-import type { DevLoginResult } from ''
+import type { LoginRequest } from ''
 
 // TODO: Update the object below with actual values
 const example = {
-  "actorId": null,
-  "displayName": null,
-} satisfies DevLoginResult
+  "identifier": null,
+  "password": null,
+} satisfies LoginRequest
 
 console.log(example)
 
@@ -27,7 +27,7 @@ const exampleJSON: string = JSON.stringify(example)
 console.log(exampleJSON)
 
 // Parse the JSON string back to an object
-const exampleParsed = JSON.parse(exampleJSON) as DevLoginResult
+const exampleParsed = JSON.parse(exampleJSON) as LoginRequest
 console.log(exampleParsed)
 ```
 

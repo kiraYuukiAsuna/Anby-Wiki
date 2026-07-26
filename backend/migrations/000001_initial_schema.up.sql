@@ -1085,6 +1085,26 @@ CREATE TABLE external_identity (
 
 CREATE INDEX external_identity_actor_idx ON external_identity (actor_id);
 
+CREATE TABLE local_account (
+    id                  uuid        PRIMARY KEY,
+    actor_id            uuid        NOT NULL UNIQUE REFERENCES actor (id),
+    username            text        NOT NULL,
+    normalized_username text        NOT NULL UNIQUE,
+    email               text        NOT NULL,
+    normalized_email    text        NOT NULL UNIQUE,
+    password_hash       text        NOT NULL,
+    status              text        NOT NULL DEFAULT 'active'
+                                    CHECK (status IN ('active', 'disabled', 'locked')),
+    password_changed_at timestamptz NOT NULL DEFAULT now(),
+    last_login_at       timestamptz,
+    created_at          timestamptz NOT NULL DEFAULT now(),
+    updated_at          timestamptz NOT NULL DEFAULT now()
+);
+
+ALTER TABLE actor
+    ADD CONSTRAINT actor_user_id_fk
+    FOREIGN KEY (user_id) REFERENCES local_account (id);
+
 CREATE TABLE auth_session (
     id         uuid        PRIMARY KEY,
     token_hash bytea       NOT NULL UNIQUE,

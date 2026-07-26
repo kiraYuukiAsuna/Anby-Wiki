@@ -28,15 +28,15 @@ FAKE_STAT
 chmod +x "$TMP/bin/stat"
 
 cat >"$TMP/production.env" <<ENV
-DEPLOY_ENV=production
+ENV=production
 DEPLOY_CONFIRM=DEPLOY:test
 RELEASE_ID=test
-DATABASE_URL=postgres://wiki:test-password@postgres:5432/wiki?sslmode=disable
+POSTGRES_DB=wiki
+POSTGRES_USER=wiki
 POSTGRES_PASSWORD=test-password
 S3_BUCKET=test-bucket
 S3_ACCESS_KEY=test-access-key
 S3_SECRET_KEY=test-secret-key
-AUTH_DEV_LOGIN_TOKEN=test-bootstrap-login-token
 TRUSTED_ORIGINS=http://wiki.invalid
 MIGRATION_EXPECTED_VERSION=1
 SCHEMA_MIN_COMPATIBLE_VERSION=1
@@ -105,17 +105,17 @@ if DEPLOY_ENV_FILE="$TMP/invalid-release.env" /bin/sh "$ROOT/scripts/deploy.sh" 
 fi
 
 # A missing sensitive environment value must stop deployment before containers run.
-grep -v '^DATABASE_URL=' "$TMP/production.env" >"$TMP/missing-secret.env"
+grep -v '^POSTGRES_PASSWORD=' "$TMP/production.env" >"$TMP/missing-secret.env"
 if DEPLOY_ENV_FILE="$TMP/missing-secret.env" /bin/sh "$ROOT/scripts/deploy.sh" deploy >/dev/null 2>&1; then
-  fail "deploy unexpectedly succeeded with a missing DATABASE_URL"
+  fail "deploy unexpectedly succeeded with a missing POSTGRES_PASSWORD"
 fi
 
 # An empty sensitive environment value is also rejected.
 : >"$FAKE_DOCKER_LOG"
-sed 's#^DATABASE_URL=.*#DATABASE_URL=#' \
+sed 's#^POSTGRES_PASSWORD=.*#POSTGRES_PASSWORD=#' \
   "$TMP/production.env" >"$TMP/empty-secret.env"
 if DEPLOY_ENV_FILE="$TMP/empty-secret.env" /bin/sh "$ROOT/scripts/deploy.sh" deploy >/dev/null 2>&1; then
-  fail "deploy unexpectedly succeeded with an empty DATABASE_URL"
+  fail "deploy unexpectedly succeeded with an empty POSTGRES_PASSWORD"
 fi
 
 # Enabling AI import without its sensitive configuration is rejected before rollout.

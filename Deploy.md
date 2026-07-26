@@ -79,10 +79,10 @@ sh scripts/dev.sh web            # 只起前端
 
 ### 1.4 登录
 
-早期阶段没有身份提供方，登录使用共享引导令牌：
-
-1. 在 `.env` 设置 `AUTH_DEV_LOGIN_TOKEN=<任意值>`（`development` 下可留空则该端点不可用）；
-2. 打开 <http://localhost:3000/login> 输入该令牌。
+打开 <http://localhost:3000/register> 创建本地账号。首个注册账号自动成为站点
+管理员，后续账号默认为编辑者；已有账号从 <http://localhost:3000/login>
+使用用户名或邮箱和密码登录。建立所需账号后可设置
+`AUTH_REGISTRATION_ENABLED=false` 关闭公开注册。
 
 调试也可用 `AUTH_DEV_HEADER_ENABLED=true` + 请求头 `X-Actor-ID: <actor uuid>`，
 该开关在 `production` 下被配置校验强制拒绝。
@@ -144,11 +144,10 @@ Compose 会把机密注入容器环境，因此具有 Docker 管理权限的人�
 | 变量 | 说明 |
 |---|---|
 | `RELEASE_ID` | 本地镜像版本标签，只允许字母、数字、点、下划线和连字符 |
-| `VCS_REF` `BUILD_DATE` | 可选构建元数据；不设置时使用 `local` / `unknown` |
-| `POSTGRES_PASSWORD` | PostgreSQL 密码；建议使用 `openssl rand -hex 32` 生成 |
-| `DATABASE_URL` | host 必须是 `postgres`，密码与 `POSTGRES_PASSWORD` 一致 |
+| `POSTGRES_DB` `POSTGRES_USER` | PostgreSQL 数据库名和用户 |
+| `POSTGRES_PASSWORD` | PostgreSQL 密码；只允许字母、数字、点、下划线和连字符，建议使用 `openssl rand -hex 32` 生成 |
 | `S3_ACCESS_KEY` `S3_SECRET_KEY` | 同时作为 MinIO root 凭据与应用 S3 凭据 |
-| `AUTH_DEV_LOGIN_TOKEN` | 共享引导登录令牌；建议使用 `openssl rand -hex 32` 生成 |
+| `AUTH_REGISTRATION_ENABLED` | 是否允许公开注册；首个管理员建立后建议设为 `false` |
 | `AI_API_KEY` | 仅在 `AI_IMPORT_ENABLED=true` 时填写；只注入 Worker |
 | `S3_BUCKET` | 对象存储桶名 |
 | `TRUSTED_ORIGINS` | 用户实际访问的精确 origin，如 `https://wiki.example.com` |
@@ -156,8 +155,9 @@ Compose 会把机密注入容器环境，因此具有 Docker 管理权限的人�
 | `WEB_BIND` `WEB_PORT` | 对外端口；默认 `127.0.0.1:3000` 只绑本机 |
 | `TRUSTED_PROXY_IPS` | 仅在 API 直连对端可信且其传来的 `X-Forwarded-For` 已被清洗时填写；默认留空最安全 |
 
-环境文件必须保持 shell 兼容的 `KEY=VALUE` 格式。密码包含特殊字符时建议使用
-单引号，并对 `DATABASE_URL` 中的密码做 URL 编码。
+环境文件必须保持 shell 兼容的 `KEY=VALUE` 格式。生产 `DATABASE_URL` 由 Compose
+根据 `POSTGRES_DB`、`POSTGRES_USER`、`POSTGRES_PASSWORD` 自动生成，无需重复填写。
+`VCS_REF` 和 `BUILD_DATE` 由部署脚本从当前 Git 提交和 UTC 时间自动生成。
 
 ### 2.3 在部署机本地构建
 
@@ -192,7 +192,7 @@ sh scripts/deploy.sh deploy     # 本地构建并正式发布
 
 `deploy` 的执行顺序：
 
-1. 校验 `DEPLOY_ENV=production`、`RELEASE_ID`、机密变量和环境文件权限；
+1. 校验 `ENV=production`、`RELEASE_ID`、机密变量和环境文件权限；
 2. 从当前源码本地构建四个带 `RELEASE_ID` 标签的业务镜像；
 3. 运行 `storage-init` 修正命名卷根目录属主；
 4. 启动数据层 postgres / redis / minio 并等待健康；
@@ -224,18 +224,17 @@ sh scripts/deploy.sh rollback   # 切回 RELEASE_ID 对应的已有本地镜像
 
 ---
 
-## 3. 早期阶段限制
+## 3. 当前部署限制
 
 以下取舍是当前阶段的显式决定，**公网暴露前必须处理**。
 遗留项同时记录在 `Docs/OutstandingIssues.md`。
 
-1. **登录不验证真实身份。**
-   `POST /api/v1/auth/dev-login` 以共享令牌换取会话，
-   任何持有该令牌的人都能以对应 Actor 身份操作，且无法区分具体是谁。
-   仅适用于封闭的早期部署；接入真实身份提供方后应设 `AUTH_DEV_LOGIN_ENABLED=false`。
+1. **账号恢复与二次验证尚未提供。**
+   本地账号已使用独立用户名、邮箱和 Argon2id 密码哈希，但当前没有邮箱验证、
+   忘记密码、MFA 或登录设备管理。公网商业部署前应接入邮件服务并补齐这些能力。
 
 2. **默认无 TLS。**
-   Compose 不终结 HTTPS。明文暴露时会话 cookie 与引导令牌会在网络上可见，
+   Compose 不终结 HTTPS。明文暴露时会话 cookie 和登录凭据会在网络上可见，
    请务必在外层提供 HTTPS，并同步设置 `SESSION_COOKIE_SECURE=true`。
 
 3. **搜索只有 PostgreSQL FTS。**

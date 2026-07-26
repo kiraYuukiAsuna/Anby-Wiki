@@ -1,113 +1,96 @@
 package main
 
 import (
-	"crypto/sha256"
-	"crypto/subtle"
 	"encoding/json"
 	"errors"
+	"io"
 	"net/http"
-	"strings"
 	"time"
-	"unicode/utf8"
 
 	authdomain "github.com/anby/wiki/backend/internal/auth"
 	"github.com/anby/wiki/backend/internal/platform/httpx"
 )
 
-// AuthAPI exposes the versioned session contract.
-//
-// EARLY STAGE: the only login path is a shared bootstrap token exchanged for a
-// server-side session. There is no identity provider and therefore no real
-// authentication of *who* the caller is: anyone holding the token can act as
-// the named actor. This is acceptable only for a closed early-stage
-// deployment and must be replaced with a real identity provider before the
-// wiki is publicly reachable. Tracked in Docs/OutstandingIssues.md.
+// AuthAPI exposes local-account registration, password login and opaque
+// server-side sessions.
 type AuthAPI struct {
-	service           *authdomain.Service
-	sessionCookie     string
-	secureCookies     bool
-	devLoginEnabled   bool
-	devLoginTokenHash [sha256.Size]byte
-	hasDevLoginToken  bool
+	service             *authdomain.Service
+	sessionCookie       string
+	secureCookies       bool
+	registrationEnabled bool
 }
 
-func NewAuthAPI(service *authdomain.Service, sessionCookie string, secureCookies bool, devLoginEnabled bool, devLoginToken string) *AuthAPI {
-	api := &AuthAPI{
-		service:         service,
-		sessionCookie:   sessionCookie,
-		secureCookies:   secureCookies,
-		devLoginEnabled: devLoginEnabled,
+func NewAuthAPI(service *authdomain.Service, sessionCookie string, secureCookies, registrationEnabled bool) *AuthAPI {
+	return &AuthAPI{
+		service:             service,
+		sessionCookie:       sessionCookie,
+		secureCookies:       secureCookies,
+		registrationEnabled: registrationEnabled,
 	}
-	if token := strings.TrimSpace(devLoginToken); token != "" {
-		api.devLoginTokenHash = sha256.Sum256([]byte(token))
-		api.hasDevLoginToken = true
-	}
-	return api
 }
 
-// devLoginRequest is the bootstrap login payload.
-type devLoginRequest struct {
-	// Token is the shared bootstrap secret.
-	Token string `json:"token"`
-	// DisplayName names the actor created on first use.
+type registerRequest struct {
+	Username    string `json:"username"`
+	Email       string `json:"email"`
+	Password    string `json:"password"`
 	DisplayName string `json:"display_name"`
 }
 
-// devLogin exchanges the bootstrap token for a session cookie.
-func (a *AuthAPI) devLogin(w http.ResponseWriter, r *http.Request) {
-	if !a.devLoginEnabled || !a.hasDevLoginToken {
-		httpx.WriteError(w, r, http.StatusNotFound, httpx.CodeNotFound, "登录方式未启用")
+type loginRequest struct {
+	Identifier string `json:"identifier"`
+	Password   string `json:"password"`
+}
+
+func (a *AuthAPI) register(w http.ResponseWriter, r *http.Request) {
+	if !a.registrationEnabled {
+		httpx.WriteError(w, r, http.StatusForbidden, httpx.CodeForbidden, "账号注册已关闭")
 		return
 	}
-	var payload devLoginRequest
-	if err := json.NewDecoder(http.MaxBytesReader(w, r.Body, 4<<10)).Decode(&payload); err != nil {
-		httpx.WriteError(w, r, http.StatusBadRequest, httpx.CodeValidationFailed, "请求体无效")
+	var payload registerRequest
+	if !decodeAuthJSON(w, r, &payload) {
 		return
 	}
-	supplied := sha256.Sum256([]byte(strings.TrimSpace(payload.Token)))
-	// Constant-time compare so the token cannot be recovered by timing.
-	if subtle.ConstantTimeCompare(supplied[:], a.devLoginTokenHash[:]) != 1 {
-		httpx.WriteError(w, r, http.StatusUnauthorized, httpx.CodeUnauthorized, "令牌无效")
+	session, err := a.service.Register(r.Context(), authdomain.RegisterInput{
+		Username:    payload.Username,
+		Email:       payload.Email,
+		Password:    payload.Password,
+		DisplayName: payload.DisplayName,
+	})
+	var validationErr *authdomain.ValidationError
+	switch {
+	case errors.As(err, &validationErr):
+		httpx.WriteError(w, r, http.StatusBadRequest, httpx.CodeValidationFailed, validationErr.Message)
+		return
+	case errors.Is(err, authdomain.ErrAccountExists):
+		httpx.WriteError(w, r, http.StatusConflict, httpx.CodeConflict, "用户名或邮箱已被使用")
+		return
+	case err != nil:
+		httpx.WriteError(w, r, http.StatusInternalServerError, httpx.CodeInternal, "无法创建账号")
 		return
 	}
-	displayName := strings.TrimSpace(payload.DisplayName)
-	if displayName == "" {
-		displayName = "Bootstrap user"
-	}
-	if utf8.RuneCountInString(displayName) > 128 {
-		httpx.WriteError(w, r, http.StatusBadRequest, httpx.CodeValidationFailed,
-			"显示名不得超过 128 个字符")
+	a.setSessionCookie(w, session)
+	writeAuthResult(w, http.StatusCreated, session)
+}
+
+func (a *AuthAPI) login(w http.ResponseWriter, r *http.Request) {
+	var payload loginRequest
+	if !decodeAuthJSON(w, r, &payload) {
 		return
 	}
-	// A stable synthetic subject keeps repeat logins mapped to one Actor.
-	identity := authdomain.Identity{
-		Issuer:      authdomain.BootstrapIssuer,
-		Subject:     "bootstrap-user",
-		DisplayName: displayName,
-	}
-	session, err := a.service.EstablishSession(r.Context(), identity)
-	if errors.Is(err, authdomain.ErrUnauthenticated) {
-		httpx.WriteError(w, r, http.StatusUnauthorized, httpx.CodeUnauthorized, "Actor 已停用")
+	session, err := a.service.Login(r.Context(), authdomain.LoginInput{
+		Identifier: payload.Identifier,
+		Password:   payload.Password,
+	})
+	if errors.Is(err, authdomain.ErrInvalidCredentials) {
+		httpx.WriteError(w, r, http.StatusUnauthorized, httpx.CodeUnauthorized, "账号或密码错误")
 		return
 	}
 	if err != nil {
 		httpx.WriteError(w, r, http.StatusInternalServerError, httpx.CodeInternal, "无法创建会话")
 		return
 	}
-	http.SetCookie(w, &http.Cookie{
-		Name:     a.sessionCookie,
-		Value:    session.Token,
-		Path:     "/",
-		HttpOnly: true,
-		Secure:   a.secureCookies,
-		SameSite: http.SameSiteLaxMode,
-		Expires:  session.ExpiresAt,
-		MaxAge:   int(time.Until(session.ExpiresAt).Seconds()),
-	})
-	httpx.WriteJSON(w, http.StatusOK, map[string]string{
-		"actor_id":     session.ActorID.String(),
-		"display_name": session.DisplayName,
-	})
+	a.setSessionCookie(w, session)
+	writeAuthResult(w, http.StatusOK, session)
 }
 
 func (a *AuthAPI) session(w http.ResponseWriter, r *http.Request) {
@@ -140,4 +123,38 @@ func (a *AuthAPI) logout(w http.ResponseWriter, r *http.Request) {
 		MaxAge:   -1,
 	})
 	w.WriteHeader(http.StatusNoContent)
+}
+
+func decodeAuthJSON(w http.ResponseWriter, r *http.Request, destination any) bool {
+	decoder := json.NewDecoder(http.MaxBytesReader(w, r.Body, 16<<10))
+	decoder.DisallowUnknownFields()
+	if err := decoder.Decode(destination); err != nil {
+		httpx.WriteError(w, r, http.StatusBadRequest, httpx.CodeValidationFailed, "请求体无效")
+		return false
+	}
+	if err := decoder.Decode(&struct{}{}); !errors.Is(err, io.EOF) {
+		httpx.WriteError(w, r, http.StatusBadRequest, httpx.CodeValidationFailed, "请求体无效")
+		return false
+	}
+	return true
+}
+
+func (a *AuthAPI) setSessionCookie(w http.ResponseWriter, session authdomain.Session) {
+	http.SetCookie(w, &http.Cookie{
+		Name:     a.sessionCookie,
+		Value:    session.Token,
+		Path:     "/",
+		HttpOnly: true,
+		Secure:   a.secureCookies,
+		SameSite: http.SameSiteLaxMode,
+		Expires:  session.ExpiresAt,
+		MaxAge:   int(time.Until(session.ExpiresAt).Seconds()),
+	})
+}
+
+func writeAuthResult(w http.ResponseWriter, status int, session authdomain.Session) {
+	httpx.WriteJSON(w, status, map[string]string{
+		"actor_id":     session.ActorID.String(),
+		"display_name": session.DisplayName,
+	})
 }

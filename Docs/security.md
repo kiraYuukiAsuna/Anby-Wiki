@@ -5,7 +5,8 @@
 production 启动前必须满足：
 
 - `TRUSTED_ORIGINS` 为逗号分隔的精确 HTTP(S) origin；禁止 wildcard、path、query、fragment 和 userinfo。
-- `AUTH_DEV_LOGIN_ENABLED=true` 时，`AUTH_DEV_LOGIN_TOKEN` 必须非空、至少 12 字符且不是常见占位值。它是封闭早期环境的共享引导令牌，不验证真实身份。
+- 注册默认关闭。首次受控部署时显式设置 `AUTH_REGISTRATION_ENABLED=true`，
+  首个注册账号自动获得管理员角色；完成初始化后立即改回 `false`。
 - `AUTH_DEV_HEADER_ENABLED=false`。外层实际提供 HTTPS 时必须设置 `SESSION_COOKIE_SECURE=true`；明文本地/封闭部署才允许 `false`。
 - `S3_ACCESS_KEY`/`S3_SECRET_KEY` 不使用 `minioadmin`、`minioadmin_dev`、`wiki_dev_password`、`ci-placeholder`、`changeme` 等开发/占位值，长度至少 12 字符。
 
@@ -25,6 +26,19 @@ TRUSTED_ORIGINS=http://localhost:3000,http://localhost:8000
 4. 无 session cookie 的 development/test `X-Actor-ID` 请求不受该 cookie CSRF 规则影响；production 配置拒绝该开关，Go 中间件同时剥离该请求头。
 
 负向测试必须证明拒绝 logout 不撤销 session、拒绝 upload 不写对象、拒绝页面创建不写数据库。
+
+## 本地账号
+
+- 用户名和邮箱规范化后分别做数据库唯一约束；登录错误不区分账号不存在、密码错误
+  或账号停用，减少账号枚举。
+- 密码要求 12–128 个字符，使用 Argon2id（64 MiB、3 次迭代、并行度 2、
+  16-byte 随机 salt、32-byte key）保存为带参数的哈希字符串，不记录密码或哈希。
+- 注册、Actor 创建、初始角色和首个 session 在同一事务中完成；数据库 advisory lock
+  保证并发注册时只有一个首账号获得管理员角色。
+- session 使用 32-byte CSPRNG 随机令牌，客户端只收到 HttpOnly cookie，数据库只保存
+  SHA-256；退出立即设置 `revoked_at`。
+- 当前缺少邮箱验证、密码找回、MFA 和设备会话管理，见
+  [待解决问题](OutstandingIssues.md)。
 
 ## URL 与渲染
 

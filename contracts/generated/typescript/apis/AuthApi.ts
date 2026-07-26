@@ -14,78 +14,38 @@
 
 import * as runtime from '../runtime';
 import {
+    type AuthResult,
+    AuthResultFromJSON,
+    AuthResultToJSON,
+} from '../models/AuthResult';
+import {
     type AuthSession,
     AuthSessionFromJSON,
     AuthSessionToJSON,
 } from '../models/AuthSession';
 import {
-    type DevLoginRequest,
-    DevLoginRequestFromJSON,
-    DevLoginRequestToJSON,
-} from '../models/DevLoginRequest';
+    type LoginRequest,
+    LoginRequestFromJSON,
+    LoginRequestToJSON,
+} from '../models/LoginRequest';
 import {
-    type DevLoginResult,
-    DevLoginResultFromJSON,
-    DevLoginResultToJSON,
-} from '../models/DevLoginResult';
+    type RegisterRequest,
+    RegisterRequestFromJSON,
+    RegisterRequestToJSON,
+} from '../models/RegisterRequest';
 
-export interface DevLoginOperationRequest {
-    devLoginRequest: DevLoginRequest;
+export interface LoginOperationRequest {
+    loginRequest: LoginRequest;
+}
+
+export interface RegisterOperationRequest {
+    registerRequest: RegisterRequest;
 }
 
 /**
  * 
  */
 export class AuthApi extends runtime.BaseAPI {
-
-    /**
-     * Creates request options for devLogin without sending the request
-     */
-    async devLoginRequestOpts(requestParameters: DevLoginOperationRequest): Promise<runtime.RequestOpts> {
-        if (requestParameters['devLoginRequest'] == null) {
-            throw new runtime.RequiredError(
-                'devLoginRequest',
-                'Required parameter "devLoginRequest" was null or undefined when calling devLogin().'
-            );
-        }
-
-        const queryParameters: any = {};
-
-        const headerParameters: runtime.HTTPHeaders = {};
-
-        headerParameters['Content-Type'] = 'application/json';
-
-
-        let urlPath = `/api/v1/auth/dev-login`;
-
-        return {
-            path: urlPath,
-            method: 'POST',
-            headers: headerParameters,
-            query: queryParameters,
-            body: DevLoginRequestToJSON(requestParameters['devLoginRequest']),
-        };
-    }
-
-    /**
-     * 早期阶段占位登录：以共享引导令牌换取 HttpOnly session cookie。 该端点不验证调用者真实身份，仅用于封闭的早期部署， 公网暴露前必须替换为真实身份提供方。 未启用时返回 404。
-     * 用引导令牌换取服务端 session（早期阶段占位登录）
-     */
-    async devLoginRaw(requestParameters: DevLoginOperationRequest, initOverrides?: RequestInit | runtime.InitOverrideFunction): Promise<runtime.ApiResponse<DevLoginResult>> {
-        const requestOptions = await this.devLoginRequestOpts(requestParameters);
-        const response = await this.request(requestOptions, initOverrides);
-
-        return new runtime.JSONApiResponse(response, (jsonValue) => DevLoginResultFromJSON(jsonValue));
-    }
-
-    /**
-     * 早期阶段占位登录：以共享引导令牌换取 HttpOnly session cookie。 该端点不验证调用者真实身份，仅用于封闭的早期部署， 公网暴露前必须替换为真实身份提供方。 未启用时返回 404。
-     * 用引导令牌换取服务端 session（早期阶段占位登录）
-     */
-    async devLogin(requestParameters: DevLoginOperationRequest, initOverrides?: RequestInit | runtime.InitOverrideFunction): Promise<DevLoginResult> {
-        const response = await this.devLoginRaw(requestParameters, initOverrides);
-        return await response.value();
-    }
 
     /**
      * Creates request options for getSession without sending the request
@@ -125,6 +85,53 @@ export class AuthApi extends runtime.BaseAPI {
     }
 
     /**
+     * Creates request options for login without sending the request
+     */
+    async loginRequestOpts(requestParameters: LoginOperationRequest): Promise<runtime.RequestOpts> {
+        if (requestParameters['loginRequest'] == null) {
+            throw new runtime.RequiredError(
+                'loginRequest',
+                'Required parameter "loginRequest" was null or undefined when calling login().'
+            );
+        }
+
+        const queryParameters: any = {};
+
+        const headerParameters: runtime.HTTPHeaders = {};
+
+        headerParameters['Content-Type'] = 'application/json';
+
+
+        let urlPath = `/api/v1/auth/login`;
+
+        return {
+            path: urlPath,
+            method: 'POST',
+            headers: headerParameters,
+            query: queryParameters,
+            body: LoginRequestToJSON(requestParameters['loginRequest']),
+        };
+    }
+
+    /**
+     * 使用用户名或邮箱和密码登录
+     */
+    async loginRaw(requestParameters: LoginOperationRequest, initOverrides?: RequestInit | runtime.InitOverrideFunction): Promise<runtime.ApiResponse<AuthResult>> {
+        const requestOptions = await this.loginRequestOpts(requestParameters);
+        const response = await this.request(requestOptions, initOverrides);
+
+        return new runtime.JSONApiResponse(response, (jsonValue) => AuthResultFromJSON(jsonValue));
+    }
+
+    /**
+     * 使用用户名或邮箱和密码登录
+     */
+    async login(requestParameters: LoginOperationRequest, initOverrides?: RequestInit | runtime.InitOverrideFunction): Promise<AuthResult> {
+        const response = await this.loginRaw(requestParameters, initOverrides);
+        return await response.value();
+    }
+
+    /**
      * Creates request options for logout without sending the request
      */
     async logoutRequestOpts(): Promise<runtime.RequestOpts> {
@@ -158,6 +165,55 @@ export class AuthApi extends runtime.BaseAPI {
      */
     async logout(initOverrides?: RequestInit | runtime.InitOverrideFunction): Promise<void> {
         await this.logoutRaw(initOverrides);
+    }
+
+    /**
+     * Creates request options for register without sending the request
+     */
+    async registerRequestOpts(requestParameters: RegisterOperationRequest): Promise<runtime.RequestOpts> {
+        if (requestParameters['registerRequest'] == null) {
+            throw new runtime.RequiredError(
+                'registerRequest',
+                'Required parameter "registerRequest" was null or undefined when calling register().'
+            );
+        }
+
+        const queryParameters: any = {};
+
+        const headerParameters: runtime.HTTPHeaders = {};
+
+        headerParameters['Content-Type'] = 'application/json';
+
+
+        let urlPath = `/api/v1/auth/register`;
+
+        return {
+            path: urlPath,
+            method: 'POST',
+            headers: headerParameters,
+            query: queryParameters,
+            body: RegisterRequestToJSON(requestParameters['registerRequest']),
+        };
+    }
+
+    /**
+     * 用户名和邮箱均不区分大小写且全站唯一。首个本地账号获得管理员角色， 后续账号默认获得编辑者角色；注册默认关闭，部署方须通过 AUTH_REGISTRATION_ENABLED 显式开启。
+     * 注册本地账号并建立会话
+     */
+    async registerRaw(requestParameters: RegisterOperationRequest, initOverrides?: RequestInit | runtime.InitOverrideFunction): Promise<runtime.ApiResponse<AuthResult>> {
+        const requestOptions = await this.registerRequestOpts(requestParameters);
+        const response = await this.request(requestOptions, initOverrides);
+
+        return new runtime.JSONApiResponse(response, (jsonValue) => AuthResultFromJSON(jsonValue));
+    }
+
+    /**
+     * 用户名和邮箱均不区分大小写且全站唯一。首个本地账号获得管理员角色， 后续账号默认获得编辑者角色；注册默认关闭，部署方须通过 AUTH_REGISTRATION_ENABLED 显式开启。
+     * 注册本地账号并建立会话
+     */
+    async register(requestParameters: RegisterOperationRequest, initOverrides?: RequestInit | runtime.InitOverrideFunction): Promise<AuthResult> {
+        const response = await this.registerRaw(requestParameters, initOverrides);
+        return await response.value();
     }
 
 }

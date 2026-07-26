@@ -86,7 +86,8 @@ func NewRouter(logger *slog.Logger, deps Deps, writeAPI *WriteAPI, readAPI *Read
 	if writeAPI != nil || readAPI != nil || historyAPI != nil || projectionAPI != nil || searchAPI != nil || knowledgeReadAPI != nil || governanceAPI != nil || importAPI != nil || authAPI != nil || collaborationAPI != nil || collectionAPI != nil {
 		r.Route("/api/v1", func(r chi.Router) {
 			if authAPI != nil {
-				r.Post("/auth/dev-login", authAPI.devLogin)
+				r.Post("/auth/register", authAPI.register)
+				r.Post("/auth/login", authAPI.login)
 				r.Get("/auth/session", authAPI.session)
 				r.Post("/auth/logout", authAPI.logout)
 			}

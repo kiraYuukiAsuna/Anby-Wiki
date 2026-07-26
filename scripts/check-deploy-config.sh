@@ -5,6 +5,7 @@ ROOT=$(CDPATH= cd -- "$(dirname -- "$0")/.." && pwd)
 DOCKERFILE="$ROOT/Dockerfile"
 COMPOSE_FILE="$ROOT/infra/deploy/compose.production.yml"
 EXAMPLE_ENV="$ROOT/infra/deploy/.env.example"
+DEV_EXAMPLE_ENV="$ROOT/.env.example"
 
 fail() {
   echo "deploy config: $*" >&2
@@ -47,11 +48,18 @@ fi
 if grep -q '_FILE:' "$COMPOSE_FILE" || grep -q 'container-entrypoint' "$DOCKERFILE"; then
   fail "legacy file-based secret injection is still configured"
 fi
-for name in DATABASE_URL POSTGRES_PASSWORD S3_ACCESS_KEY S3_SECRET_KEY \
-  AUTH_DEV_LOGIN_TOKEN
+for name in POSTGRES_DB POSTGRES_USER POSTGRES_PASSWORD S3_ACCESS_KEY S3_SECRET_KEY
 do
   grep -q "^${name}=" "$EXAMPLE_ENV" ||
     fail "deployment environment example is missing $name"
+done
+# 生产模板必须覆盖开发模板中的全部通用应用变量；只允许额外增加生产部署变量。
+for name in $(sed -n 's/^\([A-Z][A-Z0-9_]*\)=.*/\1/p' "$DEV_EXAMPLE_ENV"); do
+  # Production Compose derives its internal PostgreSQL URL from the three
+  # POSTGRES_* values, so operators do not fill the same password twice.
+  [ "$name" = "DATABASE_URL" ] && continue
+  grep -q "^${name}=" "$EXAMPLE_ENV" ||
+    fail "production environment example is missing common variable $name"
 done
 if grep -Eq '^(API|WORKER|WEB|MIGRATE)_IMAGE=' "$EXAMPLE_ENV" ||
   grep -Eq '\$\{(API|WORKER|WEB|MIGRATE)_IMAGE' "$COMPOSE_FILE"; then
@@ -65,16 +73,20 @@ for target in api worker web migrate; do
 done
 [ "$(grep -c 'pull_policy: never' "$COMPOSE_FILE")" -eq 5 ] ||
   fail "all application and tool services must forbid registry pulls"
-grep -Fq 'DATABASE_URL: "${DATABASE_URL:?set DATABASE_URL}"' "$COMPOSE_FILE" ||
-  fail "application DATABASE_URL environment injection is missing"
+grep -Fq 'DATABASE_URL: "postgres://${POSTGRES_USER:?set POSTGRES_USER}:${POSTGRES_PASSWORD:?set POSTGRES_PASSWORD}@postgres:5432/${POSTGRES_DB:?set POSTGRES_DB}?sslmode=disable"' "$COMPOSE_FILE" ||
+  fail "application DATABASE_URL must be derived from POSTGRES_*"
 grep -Fq 'POSTGRES_PASSWORD: "${POSTGRES_PASSWORD:?set POSTGRES_PASSWORD}"' "$COMPOSE_FILE" ||
   fail "PostgreSQL password environment injection is missing"
 grep -Fq 'S3_ACCESS_KEY: "${S3_ACCESS_KEY:?set S3_ACCESS_KEY}"' "$COMPOSE_FILE" ||
   fail "application S3 access key environment injection is missing"
 grep -Fq 'S3_SECRET_KEY: "${S3_SECRET_KEY:?set S3_SECRET_KEY}"' "$COMPOSE_FILE" ||
   fail "application S3 secret environment injection is missing"
-grep -Fq 'AUTH_DEV_LOGIN_TOKEN: "${AUTH_DEV_LOGIN_TOKEN:?set AUTH_DEV_LOGIN_TOKEN}"' "$COMPOSE_FILE" ||
-  fail "bootstrap login token environment injection is missing"
+grep -Fq 'AUTH_REGISTRATION_ENABLED: ${AUTH_REGISTRATION_ENABLED:-false}' "$COMPOSE_FILE" ||
+  fail "account registration configuration is missing"
+if grep -Eq '\$\{(POSTGRES|REDIS|MINIO|MINIO_CLIENT|ALPINE)_IMAGE' "$COMPOSE_FILE" ||
+  grep -Eq '^(POSTGRES|REDIS|MINIO|MINIO_CLIENT|ALPINE)_IMAGE=' "$EXAMPLE_ENV"; then
+  fail "third-party image versions must be fixed in Compose, not the environment file"
+fi
 grep -q 'read_only: true' "$COMPOSE_FILE" || fail "read_only runtime policy missing"
 grep -q 'no-new-privileges:true' "$COMPOSE_FILE" || fail "no-new-privileges policy missing"
 grep -q 'cap_drop:' "$COMPOSE_FILE" || fail "capability drop policy missing"

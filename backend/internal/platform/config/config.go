@@ -57,14 +57,9 @@ type Config struct {
 	AIAPIKey string `env:"AI_API_KEY"`
 	// AIModel 是导入抽取使用的模型 ID。
 	AIModel string `env:"AI_MODEL"`
-	// AuthDevLoginEnabled exposes POST /api/v1/auth/dev-login, which mints a
-	// session from a shared bootstrap token instead of a verified identity.
-	// This is an explicit early-stage placeholder with no identity
-	// verification and must be replaced before public exposure.
-	AuthDevLoginEnabled bool `env:"AUTH_DEV_LOGIN_ENABLED" envDefault:"true"`
-	// AuthDevLoginToken is secret material and must never be logged. It is
-	// mandatory whenever dev login is enabled outside development.
-	AuthDevLoginToken string `env:"AUTH_DEV_LOGIN_TOKEN"`
+	// AuthRegistrationEnabled controls public local-account registration.
+	// Operators may disable it after provisioning the required accounts.
+	AuthRegistrationEnabled bool `env:"AUTH_REGISTRATION_ENABLED" envDefault:"false"`
 	// RateLimitEnabled turns on the Redis-backed fixed-window limiter. The
 	// application is now the only rate-limiting layer, because no reverse
 	// proxy sits in front of it.
@@ -134,14 +129,6 @@ func (c Config) validate() error {
 			if value <= 0 {
 				return fmt.Errorf("config: RATE_LIMIT_ENABLED=true 时 %s 必须大于 0", name)
 			}
-		}
-	}
-	if c.AuthDevLoginEnabled && c.Env != "development" {
-		if strings.TrimSpace(c.AuthDevLoginToken) == "" {
-			return fmt.Errorf("config: AUTH_DEV_LOGIN_ENABLED=true 且非 development 时要求 AUTH_DEV_LOGIN_TOKEN 非空")
-		}
-		if weakSecret(c.AuthDevLoginToken) {
-			return fmt.Errorf("config: 拒绝弱 AUTH_DEV_LOGIN_TOKEN")
 		}
 	}
 	for _, raw := range c.TrustedProxyIPs {

@@ -25,22 +25,22 @@ x-runtime-security: &runtime-security
     - app
 
 x-app-environment: &app-environment
-  ENV: production
+  ENV: ${ENV:-production}
   LOG_LEVEL: ${LOG_LEVEL:-info}
-  DATABASE_URL: "${DATABASE_URL:?set DATABASE_URL}"
-  REDIS_URL: redis://redis:6379/0
-  S3_ENDPOINT: http://minio:9000
+  DATABASE_URL: "postgres://${POSTGRES_USER:?set POSTGRES_USER}:${POSTGRES_PASSWORD:?set POSTGRES_PASSWORD}@postgres:5432/${POSTGRES_DB:?set POSTGRES_DB}?sslmode=disable"
+  REDIS_URL: ${REDIS_URL:-redis://redis:6379/0}
+  S3_ENDPOINT: ${S3_ENDPOINT:-http://minio:9000}
   S3_REGION: ${S3_REGION:-us-east-1}
   S3_BUCKET: ${S3_BUCKET:?set S3_BUCKET}
   S3_ACCESS_KEY: "${S3_ACCESS_KEY:?set S3_ACCESS_KEY}"
   S3_SECRET_KEY: "${S3_SECRET_KEY:?set S3_SECRET_KEY}"
-  SEARCH_BACKEND: postgres
-  # 早期阶段占位登录：以共享令牌换会话，不验证真实身份。
-  AUTH_DEV_LOGIN_ENABLED: ${AUTH_DEV_LOGIN_ENABLED:-true}
-  AUTH_DEV_LOGIN_TOKEN: "${AUTH_DEV_LOGIN_TOKEN:?set AUTH_DEV_LOGIN_TOKEN}"
-  AUTH_DEV_HEADER_ENABLED: "false"
+  SEARCH_BACKEND: ${SEARCH_BACKEND:-postgres}
+  AUTH_REGISTRATION_ENABLED: ${AUTH_REGISTRATION_ENABLED:-false}
+  AUTH_DEV_HEADER_ENABLED: ${AUTH_DEV_HEADER_ENABLED:-false}
+  SESSION_COOKIE_NAME: ${SESSION_COOKIE_NAME:-anby_session}
   # 无 TLS 终结时必须为 false，否则浏览器不会回传 cookie。
   SESSION_COOKIE_SECURE: ${SESSION_COOKIE_SECURE:-false}
+  SESSION_TTL: ${SESSION_TTL:-24h}
   TRUSTED_ORIGINS: ${TRUSTED_ORIGINS:?set TRUSTED_ORIGINS}
   RATE_LIMIT_ENABLED: ${RATE_LIMIT_ENABLED:-true}
   RATE_LIMIT_GENERAL_PER_MINUTE: ${RATE_LIMIT_GENERAL_PER_MINUTE:-1200}
@@ -49,7 +49,7 @@ x-app-environment: &app-environment
   # 默认不信任 X-Forwarded-For：按直连的 web 容器计数。
   # 只有该对端已可靠清洗来源头时，才把它的固定 IP 列入这里。
   TRUSTED_PROXY_IPS: ${TRUSTED_PROXY_IPS:-}
-  WORKER_METRICS_ADDR: ":9091"
+  WORKER_METRICS_ADDR: ${WORKER_METRICS_ADDR:-:9091}
   OBSERVABILITY_DB_INTERVAL: ${OBSERVABILITY_DB_INTERVAL:-30s}
   OTEL_ENABLED: ${OTEL_ENABLED:-false}
   OTEL_EXPORTER_OTLP_ENDPOINT: ${OTEL_EXPORTER_OTLP_ENDPOINT:-}
@@ -61,7 +61,7 @@ services:
 
   storage-init:
     # 一次性 job：只修正新建命名卷的根目录属主，使数据服务可始终以非 root 运行。
-    image: ${ALPINE_IMAGE:-alpine:3.22}
+    image: alpine:3.22
     profiles: ["tools"]
     user: "0:0"
     read_only: true
@@ -85,11 +85,11 @@ services:
 
   postgres:
     <<: *runtime-security
-    image: ${POSTGRES_IMAGE:-postgres:17-alpine}
+    image: postgres:17-alpine
     user: "70:70"
     environment:
-      POSTGRES_DB: ${POSTGRES_DB:-wiki}
-      POSTGRES_USER: ${POSTGRES_USER:-wiki}
+      POSTGRES_DB: ${POSTGRES_DB:?set POSTGRES_DB}
+      POSTGRES_USER: ${POSTGRES_USER:?set POSTGRES_USER}
       POSTGRES_PASSWORD: "${POSTGRES_PASSWORD:?set POSTGRES_PASSWORD}"
       # 数据目录放在卷的子目录，避免与卷根的 lost+found 冲突。
       PGDATA: /var/lib/postgresql/data/pgdata
@@ -107,7 +107,7 @@ services:
 
   redis:
     <<: *runtime-security
-    image: ${REDIS_IMAGE:-redis:7-alpine}
+    image: redis:7-alpine
     user: "999:1000"
     # 只做缓存与限流计数：关闭持久化，重启丢失可接受（ADR-0003）。
     command: ["redis-server", "--appendonly", "no", "--save", ""]
@@ -122,7 +122,7 @@ services:
 
   minio:
     <<: *runtime-security
-    image: ${MINIO_IMAGE:-minio/minio:RELEASE.2025-09-07T16-13-09Z}
+    image: minio/minio:RELEASE.2025-09-07T16-13-09Z
     user: "1000:1000"
     command: ["server", "/data", "--console-address", ":9001"]
     environment:
@@ -141,7 +141,7 @@ services:
 
   minio-init:
     # 一次性 job：创建 bucket 并关闭匿名访问，完成后退出。
-    image: ${MINIO_CLIENT_IMAGE:-minio/mc:RELEASE.2025-08-13T08-35-41Z}
+    image: minio/mc:RELEASE.2025-08-13T08-35-41Z
     profiles: ["tools"]
     depends_on:
       minio:
@@ -189,7 +189,7 @@ services:
     user: "10001:10001"
     environment:
       <<: *app-environment
-      PORT: "8080"
+      PORT: ${PORT:-8080}
     depends_on:
       postgres:
         condition: service_healthy
@@ -200,7 +200,7 @@ services:
     tmpfs:
       - /tmp:size=64m,mode=1777
     healthcheck:
-      test: ["CMD", "wget", "-q", "-O", "/dev/null", "http://127.0.0.1:8080/readyz"]
+      test: ["CMD-SHELL", "wget -q -O /dev/null http://127.0.0.1:$${PORT:-8080}/readyz"]
       interval: 10s
       timeout: 3s
       retries: 6
@@ -256,7 +256,7 @@ services:
         BUILD_DATE: ${BUILD_DATE:-unknown}
     user: "1000:1000"
     environment:
-      API_BASE_URL: http://api:8080
+      API_BASE_URL: ${API_BASE_URL:-http://api:8080}
       HOSTNAME: 0.0.0.0
       NODE_ENV: production
       PORT: "3000"
