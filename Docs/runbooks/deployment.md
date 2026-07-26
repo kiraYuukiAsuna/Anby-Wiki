@@ -13,28 +13,18 @@ Compose 本身不终结 TLS。默认 `WEB_BIND=127.0.0.1`，适合由宿主机�
 均衡或隧道接入；如果直接改成公网监听，必须先评估明文引导令牌与 session cookie
 风险。完整限制见 `Deploy.md` 与 `Docs/OutstandingIssues.md`。
 
-## 构建与发布镜像
+## 本地构建策略
 
-四个 OCI target 使用同一 release metadata 构建：
+商业业务镜像不发布到 registry。部署机使用当前受保护源码与 Dockerfile 本地构建
+`api`、`worker`、`web`、`migrate` 四个 target，并按 `RELEASE_ID` 标记为
+`anby-wiki-<target>:<release>`。Compose 对这些服务设置 `pull_policy: never`。
 
 ```sh
-VERSION=2026.07.26.1
-VCS_REF="$(git rev-parse HEAD)"
-BUILD_DATE="$(date -u +%Y-%m-%dT%H:%M:%SZ)"
-
-for target in api worker web migrate; do
-  docker build \
-    --target "$target" \
-    --build-arg VERSION="$VERSION" \
-    --build-arg VCS_REF="$VCS_REF" \
-    --build-arg BUILD_DATE="$BUILD_DATE" \
-    -t "registry.example.com/anby/anby-wiki-$target:$VERSION" .
-  docker push "registry.example.com/anby/anby-wiki-$target:$VERSION"
-done
+export DEPLOY_ENV_FILE=/etc/anby-wiki/.env
+sh scripts/deploy.sh build
 ```
 
-生产环境文件中的四个 `*_IMAGE` 必须是完整 `name@sha256:...` 引用；
-`scripts/deploy.sh` 拒绝 `latest` 和其他可变 tag。
+基础数据服务镜像仍来自各自上游；“不发布”仅指 Anby Wiki 自有业务镜像。
 
 ## 环境与机密
 
@@ -69,7 +59,7 @@ Compose 会把这些值注入容器环境，Docker 管理员可通过 `docker in
 ## 发布前检查
 
 1. `make deploy-check` 通过。
-2. 四个应用镜像均已推送并解析到 digest。
+2. 部署机具有完整受保护源码和足够的本地构建空间。
 3. PostgreSQL 与对象存储备份完成。
 4. `MIGRATION_EXPECTED_VERSION` 等于仓库最新迁移版本，并落在镜像兼容窗口内。
 5. 部署环境文件中的机密变量非空，且文件不允许 group/world 读取。
@@ -88,28 +78,30 @@ sh scripts/deploy.sh deploy
 
 固定顺序：
 
-1. 校验环境、digest、迁移窗口、机密变量与环境文件权限；
-2. 运行 `storage-init` 修正命名卷根目录属主；
-3. 启动并等待 PostgreSQL、Redis、MinIO；
-4. 运行 `minio-init` 创建私有 bucket；
-5. 执行 `wiki-migrate up` 与版本兼容检查；
-6. 运行 `wiki-doctor -format json`；
-7. 依次替换 API、Worker、Web，并等待各自 healthcheck。
+1. 校验环境、`RELEASE_ID`、迁移窗口、机密变量与环境文件权限；
+2. 从当前源码本地构建四个业务镜像；
+3. 运行 `storage-init` 修正命名卷根目录属主；
+4. 启动并等待 PostgreSQL、Redis、MinIO；
+5. 运行 `minio-init` 创建私有 bucket；
+6. 执行 `wiki-migrate up` 与版本兼容检查；
+7. 运行 `wiki-doctor -format json`；
+8. 依次替换 API、Worker、Web，并等待各自 healthcheck。
 
 任何步骤失败都会阻止后续替换。应用启动本身不自动迁移；禁止在生产执行
 `migrate down`。
 
 ## 回滚
 
-把环境文件中的应用 digest 和 `RELEASE_ID` 改为上一个版本，但保持线上数据库
-实际版本与兼容窗口正确，然后执行：
+把环境文件中的 `RELEASE_ID` 改为上一个版本，确认该版本的四个本地镜像仍保留，
+并保持线上数据库实际版本与兼容窗口正确，然后执行：
 
 ```sh
 sh scripts/deploy.sh rollback
 ```
 
-回滚只运行版本检查与 doctor，再按 API → Worker → Web 替换；不会执行 up/down
-迁移。如果旧镜像不兼容当前 Schema，禁止回滚，必须发布 forward fix。
+回滚不会构建、pull 或 push，只检查旧版本本地镜像、运行版本检查和 doctor，
+再按 API → Worker → Web 替换；不会执行 up/down 迁移。如果旧镜像不兼容当前
+Schema，禁止回滚，必须发布 forward fix。
 
 ## 故障处置
 

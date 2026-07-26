@@ -128,28 +128,7 @@ TEST_DATABASE_URL=postgres://wiki@127.0.0.1:5432/wiki_test?sslmode=disable \
 - 数据层（postgres/redis/minio）由 Compose 自己拉起，使用命名卷持久化。
 - 限流、安全响应头、身份头清洗全部在 Go API 内实现，不依赖代理。
 
-### 2.2 构建并推送镜像
-
-```sh
-VERSION=2026.07.25.1
-VCS_REF="$(git rev-parse HEAD)"
-BUILD_DATE="$(date -u +%Y-%m-%dT%H:%M:%SZ)"
-
-for target in api worker web migrate; do
-  docker build \
-    --target "$target" \
-    --build-arg VERSION="$VERSION" \
-    --build-arg VCS_REF="$VCS_REF" \
-    --build-arg BUILD_DATE="$BUILD_DATE" \
-    -t "registry.example.com/anby/anby-wiki-$target:$VERSION" .
-  docker push "registry.example.com/anby/anby-wiki-$target:$VERSION"
-done
-```
-
-不要部署可变的 `latest` tag。把每个镜像解析为 registry digest，
-并以 `name@sha256:...` 形式写入环境文件——`deploy.sh` 会强制校验这一点。
-
-### 2.3 准备环境文件
+### 2.2 准备环境文件
 
 ```sh
 cp infra/deploy/.env.example /etc/anby-wiki/.env
@@ -164,8 +143,8 @@ Compose 会把机密注入容器环境，因此具有 Docker 管理权限的人�
 
 | 变量 | 说明 |
 |---|---|
-| `API_IMAGE` `WORKER_IMAGE` `WEB_IMAGE` `MIGRATE_IMAGE` | `name@sha256:...` 不可变引用 |
-| `RELEASE_ID` | 本次发布标识 |
+| `RELEASE_ID` | 本地镜像版本标签，只允许字母、数字、点、下划线和连字符 |
+| `VCS_REF` `BUILD_DATE` | 可选构建元数据；不设置时使用 `local` / `unknown` |
 | `POSTGRES_PASSWORD` | PostgreSQL 密码；建议使用 `openssl rand -hex 32` 生成 |
 | `DATABASE_URL` | host 必须是 `postgres`，密码与 `POSTGRES_PASSWORD` 一致 |
 | `S3_ACCESS_KEY` `S3_SECRET_KEY` | 同时作为 MinIO root 凭据与应用 S3 凭据 |
@@ -180,6 +159,27 @@ Compose 会把机密注入容器环境，因此具有 Docker 管理权限的人�
 环境文件必须保持 shell 兼容的 `KEY=VALUE` 格式。密码包含特殊字符时建议使用
 单引号，并对 `DATABASE_URL` 中的密码做 URL 编码。
 
+### 2.3 在部署机本地构建
+
+Anby Wiki 是商业软件，业务镜像只在当前部署机从当前源码构建，不登录业务
+registry、不执行 push，也不会从 registry pull 业务镜像：
+
+```sh
+export DEPLOY_ENV_FILE=/etc/anby-wiki/.env
+sh scripts/deploy.sh build
+```
+
+生成四个带版本的本地镜像：
+
+- `anby-wiki-api:$RELEASE_ID`
+- `anby-wiki-worker:$RELEASE_ID`
+- `anby-wiki-web:$RELEASE_ID`
+- `anby-wiki-migrate:$RELEASE_ID`
+
+`deploy` 会自动再次执行本地增量构建，因此单独运行 `build` 只用于提前确认构建过程。
+PostgreSQL、Redis、MinIO、Alpine 等第三方基础镜像仍会在本机缺失时从其上游拉取。
+部署目录必须保留完整且受保护的商业源码与 Docker 构建上下文。
+
 ### 2.4 部署
 
 ```sh
@@ -187,31 +187,34 @@ export DEPLOY_ENV_FILE=/etc/anby-wiki/.env
 export DEPLOY_CONFIRM="DEPLOY:$(sed -n 's/^RELEASE_ID=//p' "$DEPLOY_ENV_FILE")"
 
 sh scripts/deploy.sh config     # 校验清单可解析
-sh scripts/deploy.sh deploy     # 正式发布
+sh scripts/deploy.sh deploy     # 本地构建并正式发布
 ```
 
 `deploy` 的执行顺序：
 
-1. 校验 `DEPLOY_ENV=production`、镜像为 digest、机密变量非空且环境文件权限安全；
-2. 运行 `storage-init` 修正命名卷根目录属主；
-3. 启动数据层 postgres / redis / minio 并等待健康；
-4. 运行 `minio-init` 创建 bucket 并关闭匿名访问；
-5. 执行迁移，再校验迁移版本落在镜像兼容窗口内；
-6. 运行 `doctor` 自检；
-7. 按 `api` → `worker` → `web` 顺序滚动替换。
+1. 校验 `DEPLOY_ENV=production`、`RELEASE_ID`、机密变量和环境文件权限；
+2. 从当前源码本地构建四个带 `RELEASE_ID` 标签的业务镜像；
+3. 运行 `storage-init` 修正命名卷根目录属主；
+4. 启动数据层 postgres / redis / minio 并等待健康；
+5. 运行 `minio-init` 创建 bucket 并关闭匿名访问；
+6. 执行迁移，再校验迁移版本落在镜像兼容窗口内；
+7. 运行 `doctor` 自检；
+8. 按 `api` → `worker` → `web` 顺序滚动替换。
 
 任一步失败即中止，不会继续替换应用容器。
 
 ### 2.5 其他命令
 
 ```sh
+sh scripts/deploy.sh build      # 只在本机构建四个业务镜像
 sh scripts/deploy.sh migrate    # 只跑迁移与闸门
 sh scripts/deploy.sh doctor     # 只跑自检
-sh scripts/deploy.sh rollback   # 回滚到环境文件中的旧镜像；不执行 down 迁移
+sh scripts/deploy.sh rollback   # 切回 RELEASE_ID 对应的已有本地镜像
 ```
 
-回滚**从不**执行 down 迁移：旧镜像必须显式声明与线上数据库版本兼容。
-需要缩表时，先发布一个兼容新旧两版的中间版本。
+回滚前把环境文件中的 `RELEASE_ID` 改为旧版本，并确认部署机仍保留对应的四个
+本地镜像。回滚不会重新构建、不会 pull，也**从不**执行 down 迁移；旧镜像必须
+显式兼容线上数据库版本。需要缩表时，先发布一个兼容新旧两版的中间版本。
 
 ### 2.6 备份
 

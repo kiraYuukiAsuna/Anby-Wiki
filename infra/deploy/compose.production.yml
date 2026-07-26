@@ -176,7 +176,16 @@ services:
 
   api:
     <<: *runtime-security
-    image: ${API_IMAGE:?set API_IMAGE}
+    image: anby-wiki-api:${RELEASE_ID:?set RELEASE_ID}
+    pull_policy: never
+    build:
+      context: ../..
+      dockerfile: Dockerfile
+      target: api
+      args:
+        VERSION: ${RELEASE_ID}
+        VCS_REF: ${VCS_REF:-local}
+        BUILD_DATE: ${BUILD_DATE:-unknown}
     user: "10001:10001"
     environment:
       <<: *app-environment
@@ -199,7 +208,16 @@ services:
 
   worker:
     <<: *runtime-security
-    image: ${WORKER_IMAGE:?set WORKER_IMAGE}
+    image: anby-wiki-worker:${RELEASE_ID:?set RELEASE_ID}
+    pull_policy: never
+    build:
+      context: ../..
+      dockerfile: Dockerfile
+      target: worker
+      args:
+        VERSION: ${RELEASE_ID}
+        VCS_REF: ${VCS_REF:-local}
+        BUILD_DATE: ${BUILD_DATE:-unknown}
     user: "10001:10001"
     environment:
       <<: *app-environment
@@ -226,7 +244,16 @@ services:
 
   web:
     <<: *runtime-security
-    image: ${WEB_IMAGE:?set WEB_IMAGE}
+    image: anby-wiki-web:${RELEASE_ID:?set RELEASE_ID}
+    pull_policy: never
+    build:
+      context: ../..
+      dockerfile: Dockerfile
+      target: web
+      args:
+        VERSION: ${RELEASE_ID}
+        VCS_REF: ${VCS_REF:-local}
+        BUILD_DATE: ${BUILD_DATE:-unknown}
     user: "1000:1000"
     environment:
       API_BASE_URL: http://api:8080
@@ -258,7 +285,16 @@ services:
   migrate:
     <<: *runtime-security
     profiles: ["tools"]
-    image: ${MIGRATE_IMAGE:?set MIGRATE_IMAGE}
+    image: anby-wiki-migrate:${RELEASE_ID:?set RELEASE_ID}
+    pull_policy: never
+    build:
+      context: ../..
+      dockerfile: Dockerfile
+      target: migrate
+      args:
+        VERSION: ${RELEASE_ID}
+        VCS_REF: ${VCS_REF:-local}
+        BUILD_DATE: ${BUILD_DATE:-unknown}
     user: "10001:10001"
     environment: *app-environment
     depends_on:
@@ -270,7 +306,8 @@ services:
   doctor:
     <<: *runtime-security
     profiles: ["tools"]
-    image: ${MIGRATE_IMAGE:?set MIGRATE_IMAGE}
+    image: anby-wiki-migrate:${RELEASE_ID:?set RELEASE_ID}
+    pull_policy: never
     user: "10001:10001"
     environment: *app-environment
     depends_on:

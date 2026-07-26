@@ -53,6 +53,18 @@ do
   grep -q "^${name}=" "$EXAMPLE_ENV" ||
     fail "deployment environment example is missing $name"
 done
+if grep -Eq '^(API|WORKER|WEB|MIGRATE)_IMAGE=' "$EXAMPLE_ENV" ||
+  grep -Eq '\$\{(API|WORKER|WEB|MIGRATE)_IMAGE' "$COMPOSE_FILE"; then
+  fail "application images must not depend on registry image variables"
+fi
+for target in api worker web migrate; do
+  grep -Fq "image: anby-wiki-${target}:\${RELEASE_ID:?set RELEASE_ID}" "$COMPOSE_FILE" ||
+    fail "local versioned image is missing for $target"
+  grep -Eq "^[[:space:]]+target: ${target}$" "$COMPOSE_FILE" ||
+    fail "Compose local build target is missing for $target"
+done
+[ "$(grep -c 'pull_policy: never' "$COMPOSE_FILE")" -eq 5 ] ||
+  fail "all application and tool services must forbid registry pulls"
 grep -Fq 'DATABASE_URL: "${DATABASE_URL:?set DATABASE_URL}"' "$COMPOSE_FILE" ||
   fail "application DATABASE_URL environment injection is missing"
 grep -Fq 'POSTGRES_PASSWORD: "${POSTGRES_PASSWORD:?set POSTGRES_PASSWORD}"' "$COMPOSE_FILE" ||

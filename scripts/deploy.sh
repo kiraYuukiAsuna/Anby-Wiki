@@ -53,28 +53,43 @@ check_window() {
     fail "expected migration is outside the image compatibility window"
 }
 
-require_digest_image() {
-  name=$1
-  eval "reference=\${$name:-}"
-  case "$reference" in
-    *@sha256:*) digest=${reference##*@sha256:} ;;
-    *) fail "$name must be an immutable name@sha256:... reference" ;;
+check_release_id() {
+  release=${RELEASE_ID:-}
+  case "$release" in
+    "" | *[!a-zA-Z0-9._-]* | .* | -.* | _.*)
+      fail "RELEASE_ID must be a Docker-tag-safe version identifier"
+      ;;
   esac
-  case "$digest" in
-    *[!0-9a-f]*) fail "$name has an invalid sha256 digest" ;;
-  esac
-  [ "${#digest}" -eq 64 ] || fail "$name sha256 digest must contain 64 hex characters"
+  [ "${#release}" -le 128 ] || fail "RELEASE_ID must not exceed 128 characters"
+}
+
+check_production_config() {
+  [ "${DEPLOY_ENV:-}" = "production" ] || fail "DEPLOY_ENV must be production"
+  check_release_id
+  check_sensitive_env
 }
 
 confirm_production() {
-  [ "${DEPLOY_ENV:-}" = "production" ] || fail "DEPLOY_ENV must be production"
-  for image in API_IMAGE WORKER_IMAGE WEB_IMAGE MIGRATE_IMAGE; do
-    require_digest_image "$image"
-  done
-  check_sensitive_env
+  check_production_config
   expected="DEPLOY:${RELEASE_ID:?set RELEASE_ID}"
   [ "${DEPLOY_CONFIRM:-}" = "$expected" ] ||
     fail "set DEPLOY_CONFIRM=$expected for this release"
+}
+
+build_local_images() {
+  compose build api worker web migrate
+}
+
+require_local_images() {
+  for image in \
+    "anby-wiki-api:$RELEASE_ID" \
+    "anby-wiki-worker:$RELEASE_ID" \
+    "anby-wiki-web:$RELEASE_ID" \
+    "anby-wiki-migrate:$RELEASE_ID"
+  do
+    docker image inspect "$image" >/dev/null 2>&1 ||
+      fail "local rollback image is missing: $image"
+  done
 }
 
 run_gate() {
@@ -134,9 +149,14 @@ case "$command" in
   config)
     compose config --quiet
     ;;
+  build)
+    check_production_config
+    compose config --quiet
+    build_local_images
+    ;;
   migrate)
     confirm_production
-    compose pull migrate
+    compose build migrate
     start_data_tier
     run_gate
     ;;
@@ -146,7 +166,7 @@ case "$command" in
   deploy)
     confirm_production
     compose config --quiet
-    compose pull api worker web migrate
+    build_local_images
     start_data_tier
     run_gate
     roll_services
@@ -154,13 +174,13 @@ case "$command" in
   rollback)
     confirm_production
     compose config --quiet
-    compose pull api worker web migrate
+    require_local_images
     # Rollback never executes down migrations. The old image must explicitly
     # declare compatibility with the database version that is already live.
     check_existing_schema
     roll_services
     ;;
   *)
-    fail "usage: deploy.sh <config|migrate|doctor|deploy|rollback>"
+    fail "usage: deploy.sh <config|build|migrate|doctor|deploy|rollback>"
     ;;
 esac

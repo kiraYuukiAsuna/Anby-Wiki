@@ -31,10 +31,6 @@ cat >"$TMP/production.env" <<ENV
 DEPLOY_ENV=production
 DEPLOY_CONFIRM=DEPLOY:test
 RELEASE_ID=test
-API_IMAGE=registry.invalid/anby-api@sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa
-WORKER_IMAGE=registry.invalid/anby-worker@sha256:bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb
-WEB_IMAGE=registry.invalid/anby-web@sha256:cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc
-MIGRATE_IMAGE=registry.invalid/anby-migrate@sha256:dddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd
 DATABASE_URL=postgres://wiki:test-password@postgres:5432/wiki?sslmode=disable
 POSTGRES_PASSWORD=test-password
 S3_BUCKET=test-bucket
@@ -57,6 +53,7 @@ line_of() {
   awk -v pattern="$1" 'index($0, pattern) { print NR; exit }' "$FAKE_DOCKER_LOG"
 }
 
+build_line=$(line_of "build api worker web migrate")
 storage_line=$(line_of "run --rm storage-init")
 data_line=$(line_of "up -d --wait postgres redis minio")
 bucket_line=$(line_of "run --rm minio-init")
@@ -67,9 +64,11 @@ api_line=$(line_of "up -d --no-deps --wait api")
 worker_line=$(line_of "up -d --no-deps --wait worker")
 web_line=$(line_of "up -d --no-deps --wait web")
 
+[ -n "$build_line" ] || fail "local application images were not built"
 [ -n "$storage_line" ] || fail "storage ownership init was not run"
 [ -n "$data_line" ] || fail "data tier was not started"
-[ "$storage_line" -lt "$data_line" ] &&
+[ "$build_line" -lt "$storage_line" ] &&
+  [ "$storage_line" -lt "$data_line" ] &&
   [ "$data_line" -lt "$bucket_line" ] &&
   [ "$bucket_line" -lt "$migrate_line" ] &&
   [ "$migrate_line" -lt "$check_line" ] &&
@@ -77,7 +76,7 @@ web_line=$(line_of "up -d --no-deps --wait web")
   [ "$doctor_line" -lt "$api_line" ] &&
   [ "$api_line" -lt "$worker_line" ] &&
   [ "$worker_line" -lt "$web_line" ] ||
-  fail "rollout order is not storage/data/bucket/migrate/check/doctor/api/worker/web"
+  fail "rollout order is not build/storage/data/bucket/migrate/check/doctor/api/worker/web"
 
 if grep -Eq 'test-password|test-access-key|test-secret-key|test-bootstrap-login-token' \
   "$FAKE_DOCKER_LOG"; then
@@ -86,6 +85,8 @@ fi
 
 grep -q "up -d --no-deps --wait nginx" "$FAKE_DOCKER_LOG" &&
   fail "nginx must no longer be part of the rollout"
+grep -Eq '(^| )pull( |$)|(^| )push( |$)' "$FAKE_DOCKER_LOG" &&
+  fail "commercial application images must not be pulled or pushed"
 
 : >"$FAKE_DOCKER_LOG"
 export FAKE_FAIL_TOKEN="wiki-migrate up"
@@ -97,10 +98,10 @@ if grep -q "up -d --no-deps --wait api" "$FAKE_DOCKER_LOG"; then
 fi
 unset FAKE_FAIL_TOKEN
 
-sed 's#^API_IMAGE=.*#API_IMAGE=registry.invalid/anby-api:latest#' \
-  "$TMP/production.env" >"$TMP/mutable.env"
-if DEPLOY_ENV_FILE="$TMP/mutable.env" /bin/sh "$ROOT/scripts/deploy.sh" deploy >/dev/null 2>&1; then
-  fail "mutable production image unexpectedly succeeded"
+sed 's#^RELEASE_ID=.*#RELEASE_ID=invalid/release#' \
+  "$TMP/production.env" >"$TMP/invalid-release.env"
+if DEPLOY_ENV_FILE="$TMP/invalid-release.env" /bin/sh "$ROOT/scripts/deploy.sh" deploy >/dev/null 2>&1; then
+  fail "invalid local release tag unexpectedly succeeded"
 fi
 
 # A missing sensitive environment value must stop deployment before containers run.
