@@ -66,6 +66,8 @@ PostgreSQL 权威数据、Outbox 投影、治理审核、协作编辑和 P1 扩�
 - 数据库在预发布阶段使用唯一 `000001_initial_schema` 初始化版本。
 - 开发环境由 `scripts/dev.sh` 直接启动 API、Worker 与 Web；生产 Compose
   自带 PostgreSQL、Redis、MinIO 和应用进程，不包含 Nginx、Meilisearch 或 OIDC。
+- 生产部署的普通配置与机密统一从仓库外 `DEPLOY_ENV_FILE` 注入；部署脚本校验
+  必填机密非空以及环境文件不允许 group/world 读取（ADR-0017）。
 - CI 覆盖 Go/Web lint、类型检查、单元与 PostgreSQL 集成测试、构建、契约、生成物漂移、迁移、部署配置和安全扫描。
 - 提供 OTel、Prometheus 指标、备份恢复、数据一致性 Doctor、Projection/Search 重建和部署 runbook。
 - PostgreSQL 集成测试必须 `-p 1` 串行，避免共享测试库的 Reset 相互干扰。

@@ -27,17 +27,17 @@ x-runtime-security: &runtime-security
 x-app-environment: &app-environment
   ENV: production
   LOG_LEVEL: ${LOG_LEVEL:-info}
-  DATABASE_URL_FILE: /run/secrets/database_url
+  DATABASE_URL: "${DATABASE_URL:?set DATABASE_URL}"
   REDIS_URL: redis://redis:6379/0
   S3_ENDPOINT: http://minio:9000
   S3_REGION: ${S3_REGION:-us-east-1}
   S3_BUCKET: ${S3_BUCKET:?set S3_BUCKET}
-  S3_ACCESS_KEY_FILE: /run/secrets/s3_access_key
-  S3_SECRET_KEY_FILE: /run/secrets/s3_secret_key
+  S3_ACCESS_KEY: "${S3_ACCESS_KEY:?set S3_ACCESS_KEY}"
+  S3_SECRET_KEY: "${S3_SECRET_KEY:?set S3_SECRET_KEY}"
   SEARCH_BACKEND: postgres
   # 早期阶段占位登录：以共享令牌换会话，不验证真实身份。
   AUTH_DEV_LOGIN_ENABLED: ${AUTH_DEV_LOGIN_ENABLED:-true}
-  AUTH_DEV_LOGIN_TOKEN_FILE: /run/secrets/auth_dev_login_token
+  AUTH_DEV_LOGIN_TOKEN: "${AUTH_DEV_LOGIN_TOKEN:?set AUTH_DEV_LOGIN_TOKEN}"
   AUTH_DEV_HEADER_ENABLED: "false"
   # 无 TLS 终结时必须为 false，否则浏览器不会回传 cookie。
   SESSION_COOKIE_SECURE: ${SESSION_COOKIE_SECURE:-false}
@@ -55,13 +55,6 @@ x-app-environment: &app-environment
   OTEL_EXPORTER_OTLP_ENDPOINT: ${OTEL_EXPORTER_OTLP_ENDPOINT:-}
   OTEL_EXPORTER_OTLP_INSECURE: ${OTEL_EXPORTER_OTLP_INSECURE:-false}
   OTEL_TRACE_SAMPLE_RATE: ${OTEL_TRACE_SAMPLE_RATE:-0.1}
-  AI_IMPORT_ENABLED: ${AI_IMPORT_ENABLED:-false}
-
-x-app-secrets: &app-secrets
-  - database_url
-  - s3_access_key
-  - s3_secret_key
-  - auth_dev_login_token
 
 services:
   # ---- 数据层 ----
@@ -97,11 +90,9 @@ services:
     environment:
       POSTGRES_DB: ${POSTGRES_DB:-wiki}
       POSTGRES_USER: ${POSTGRES_USER:-wiki}
-      POSTGRES_PASSWORD_FILE: /run/secrets/postgres_password
+      POSTGRES_PASSWORD: "${POSTGRES_PASSWORD:?set POSTGRES_PASSWORD}"
       # 数据目录放在卷的子目录，避免与卷根的 lost+found 冲突。
       PGDATA: /var/lib/postgresql/data/pgdata
-    secrets:
-      - postgres_password
     volumes:
       - pgdata:/var/lib/postgresql/data
     tmpfs:
@@ -135,11 +126,8 @@ services:
     user: "1000:1000"
     command: ["server", "/data", "--console-address", ":9001"]
     environment:
-      MINIO_ROOT_USER_FILE: /run/secrets/s3_access_key
-      MINIO_ROOT_PASSWORD_FILE: /run/secrets/s3_secret_key
-    secrets:
-      - s3_access_key
-      - s3_secret_key
+      MINIO_ROOT_USER: "${S3_ACCESS_KEY:?set S3_ACCESS_KEY}"
+      MINIO_ROOT_PASSWORD: "${S3_SECRET_KEY:?set S3_SECRET_KEY}"
     volumes:
       - miniodata:/data
     tmpfs:
@@ -160,10 +148,9 @@ services:
         condition: service_healthy
     environment:
       MINIO_BUCKET: ${S3_BUCKET:?set S3_BUCKET}
+      MINIO_ACCESS_KEY: "${S3_ACCESS_KEY:?set S3_ACCESS_KEY}"
+      MINIO_SECRET_KEY: "${S3_SECRET_KEY:?set S3_SECRET_KEY}"
       MC_CONFIG_DIR: /tmp/.mc
-    secrets:
-      - s3_access_key
-      - s3_secret_key
     user: "1000:1000"
     read_only: true
     cap_drop:
@@ -177,7 +164,7 @@ services:
       - |
         set -e
         mc alias set target http://minio:9000 \
-          "$$(cat /run/secrets/s3_access_key)" "$$(cat /run/secrets/s3_secret_key)"
+          "$${MINIO_ACCESS_KEY}" "$${MINIO_SECRET_KEY}"
         mc mb --ignore-existing "target/$${MINIO_BUCKET}"
         mc anonymous set none "target/$${MINIO_BUCKET}"
         echo "minio-init: bucket '$${MINIO_BUCKET}' ready (anonymous access disabled)"
@@ -194,7 +181,6 @@ services:
     environment:
       <<: *app-environment
       PORT: "8080"
-    secrets: *app-secrets
     depends_on:
       postgres:
         condition: service_healthy
@@ -215,8 +201,13 @@ services:
     <<: *runtime-security
     image: ${WORKER_IMAGE:?set WORKER_IMAGE}
     user: "10001:10001"
-    environment: *app-environment
-    secrets: *app-secrets
+    environment:
+      <<: *app-environment
+      AI_IMPORT_ENABLED: ${AI_IMPORT_ENABLED:-false}
+      AI_PROVIDER: ${AI_PROVIDER:-openai-compatible}
+      AI_BASE_URL: "${AI_BASE_URL:-}"
+      AI_API_KEY: "${AI_API_KEY:-}"
+      AI_MODEL: "${AI_MODEL:-}"
     depends_on:
       postgres:
         condition: service_healthy
@@ -270,7 +261,6 @@ services:
     image: ${MIGRATE_IMAGE:?set MIGRATE_IMAGE}
     user: "10001:10001"
     environment: *app-environment
-    secrets: *app-secrets
     depends_on:
       postgres:
         condition: service_healthy
@@ -283,7 +273,6 @@ services:
     image: ${MIGRATE_IMAGE:?set MIGRATE_IMAGE}
     user: "10001:10001"
     environment: *app-environment
-    secrets: *app-secrets
     depends_on:
       postgres:
         condition: service_healthy
@@ -297,17 +286,3 @@ networks:
 volumes:
   pgdata:
   miniodata:
-
-secrets:
-  # 本地文件挂载为 secret。文件应位于仓库之外，权限 0600。
-  # （external: true 只在 Swarm 下可用，普通 compose 需要 file:）
-  database_url:
-    file: ${SECRETS_DIR:?set SECRETS_DIR}/database_url
-  postgres_password:
-    file: ${SECRETS_DIR:?set SECRETS_DIR}/postgres_password
-  s3_access_key:
-    file: ${SECRETS_DIR:?set SECRETS_DIR}/s3_access_key
-  s3_secret_key:
-    file: ${SECRETS_DIR:?set SECRETS_DIR}/s3_secret_key
-  auth_dev_login_token:
-    file: ${SECRETS_DIR:?set SECRETS_DIR}/auth_dev_login_token

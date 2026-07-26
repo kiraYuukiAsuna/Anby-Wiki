@@ -38,21 +38,18 @@ done
 
 ## 环境与机密
 
-复制 `infra/deploy/.env.example` 到仓库外的受保护路径。该文件只放非机密配置。
-以下机密各占一个文件，目录由 `SECRETS_DIR` 指定：
+复制 `infra/deploy/.env.example` 到仓库外的受保护路径并设置 `chmod 0600`。
+该文件同时保存普通配置与 `DATABASE_URL`、`POSTGRES_PASSWORD`、
+`S3_ACCESS_KEY`、`S3_SECRET_KEY`、`AUTH_DEV_LOGIN_TOKEN` 等机密。
 
-- `database_url`
-- `postgres_password`
-- `s3_access_key`
-- `s3_secret_key`
-- `auth_dev_login_token`
-
-`database_url` 必须使用 Compose 服务名 `postgres`，其密码与
-`postgres_password` 一致。S3 两个值同时作为 MinIO root 凭据与应用凭据。
+`DATABASE_URL` 必须使用 Compose 服务名 `postgres`，其密码与
+`POSTGRES_PASSWORD` 一致。S3 两个值同时作为 MinIO root 凭据与应用凭据。
 引导登录令牌必须为强随机值；该登录方式不验证真实身份，只允许封闭早期环境使用。
+启用 `AI_IMPORT_ENABLED` 时，`AI_API_KEY` 同样写入该文件，但只注入 Worker。
 
-容器入口只解析受支持的 `*_FILE`，不打印 secret。不要把 secret 放进镜像层、
-Compose 命令行、环境文件、CI 日志、指标或 trace。
+Compose 会把这些值注入容器环境，Docker 管理员可通过 `docker inspect` 查看。
+不要提交环境文件，也不要把 Compose 展开结果、容器环境、CI 日志、指标或 trace
+写入工单。密码包含特殊字符时使用 shell 兼容的单引号，并对 URL 密码做 URL 编码。
 
 ## 运行时安全
 
@@ -75,7 +72,7 @@ Compose 命令行、环境文件、CI 日志、指标或 trace。
 2. 四个应用镜像均已推送并解析到 digest。
 3. PostgreSQL 与对象存储备份完成。
 4. `MIGRATION_EXPECTED_VERSION` 等于仓库最新迁移版本，并落在镜像兼容窗口内。
-5. 机密文件存在、非空、权限正确。
+5. 部署环境文件中的机密变量非空，且文件不允许 group/world 读取。
 6. `TRUSTED_ORIGINS` 与实际用户 origin 完全一致。
 7. 若外层终结 HTTPS，设置 `SESSION_COOKIE_SECURE=true`。
 
@@ -91,7 +88,7 @@ sh scripts/deploy.sh deploy
 
 固定顺序：
 
-1. 校验环境、digest、迁移窗口与 secret；
+1. 校验环境、digest、迁移窗口、机密变量与环境文件权限；
 2. 运行 `storage-init` 修正命名卷根目录属主；
 3. 启动并等待 PostgreSQL、Redis、MinIO；
 4. 运行 `minio-init` 创建私有 bucket；
@@ -116,7 +113,7 @@ sh scripts/deploy.sh rollback
 
 ## 故障处置
 
-- 数据层启动失败：保留卷与容器日志，修复用户、tmpfs、secret 或卷权限后重试。
+- 数据层启动失败：保留卷与容器日志，修复用户、tmpfs、环境变量或卷权限后重试。
 - `minio-init` 失败：确认 root 凭据与应用 S3 凭据一致，bucket 名合法。
 - 迁移失败或 dirty：停止发布，在备份恢复副本上准备幂等前向修复。
 - doctor 返回 error/critical：按

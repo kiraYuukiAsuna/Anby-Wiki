@@ -27,15 +27,6 @@ printf '%s\n' "${FAKE_STAT_MODE:-600}"
 FAKE_STAT
 chmod +x "$TMP/bin/stat"
 
-# Secret files must exist before deploy.sh will proceed.
-mkdir -p "$TMP/secrets"
-for name in database_url postgres_password s3_access_key s3_secret_key \
-  auth_dev_login_token
-do
-  printf 'test-value\n' >"$TMP/secrets/$name"
-  chmod 0600 "$TMP/secrets/$name"
-done
-
 cat >"$TMP/production.env" <<ENV
 DEPLOY_ENV=production
 DEPLOY_CONFIRM=DEPLOY:test
@@ -44,8 +35,12 @@ API_IMAGE=registry.invalid/anby-api@sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa
 WORKER_IMAGE=registry.invalid/anby-worker@sha256:bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb
 WEB_IMAGE=registry.invalid/anby-web@sha256:cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc
 MIGRATE_IMAGE=registry.invalid/anby-migrate@sha256:dddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd
-SECRETS_DIR=$TMP/secrets
+DATABASE_URL=postgres://wiki:test-password@postgres:5432/wiki?sslmode=disable
+POSTGRES_PASSWORD=test-password
 S3_BUCKET=test-bucket
+S3_ACCESS_KEY=test-access-key
+S3_SECRET_KEY=test-secret-key
+AUTH_DEV_LOGIN_TOKEN=test-bootstrap-login-token
 TRUSTED_ORIGINS=http://wiki.invalid
 MIGRATION_EXPECTED_VERSION=1
 SCHEMA_MIN_COMPATIBLE_VERSION=1
@@ -84,6 +79,11 @@ web_line=$(line_of "up -d --no-deps --wait web")
   [ "$worker_line" -lt "$web_line" ] ||
   fail "rollout order is not storage/data/bucket/migrate/check/doctor/api/worker/web"
 
+if grep -Eq 'test-password|test-access-key|test-secret-key|test-bootstrap-login-token' \
+  "$FAKE_DOCKER_LOG"; then
+  fail "sensitive environment value appeared in deployment command log"
+fi
+
 grep -q "up -d --no-deps --wait nginx" "$FAKE_DOCKER_LOG" &&
   fail "nginx must no longer be part of the rollout"
 
@@ -103,26 +103,31 @@ if DEPLOY_ENV_FILE="$TMP/mutable.env" /bin/sh "$ROOT/scripts/deploy.sh" deploy >
   fail "mutable production image unexpectedly succeeded"
 fi
 
-# A missing secret file must stop the deployment before any container runs.
-sed "s#^SECRETS_DIR=.*#SECRETS_DIR=$TMP/absent#" \
-  "$TMP/production.env" >"$TMP/nosecrets.env"
-if DEPLOY_ENV_FILE="$TMP/nosecrets.env" /bin/sh "$ROOT/scripts/deploy.sh" deploy >/dev/null 2>&1; then
-  fail "deploy unexpectedly succeeded with a missing secrets directory"
+# A missing sensitive environment value must stop deployment before containers run.
+grep -v '^DATABASE_URL=' "$TMP/production.env" >"$TMP/missing-secret.env"
+if DEPLOY_ENV_FILE="$TMP/missing-secret.env" /bin/sh "$ROOT/scripts/deploy.sh" deploy >/dev/null 2>&1; then
+  fail "deploy unexpectedly succeeded with a missing DATABASE_URL"
 fi
 
-# An empty secret file is also rejected.
+# An empty sensitive environment value is also rejected.
 : >"$FAKE_DOCKER_LOG"
-: >"$TMP/secrets/database_url"
-if /bin/sh "$ROOT/scripts/deploy.sh" deploy >/dev/null 2>&1; then
-  fail "deploy unexpectedly succeeded with an empty secret file"
+sed 's#^DATABASE_URL=.*#DATABASE_URL=#' \
+  "$TMP/production.env" >"$TMP/empty-secret.env"
+if DEPLOY_ENV_FILE="$TMP/empty-secret.env" /bin/sh "$ROOT/scripts/deploy.sh" deploy >/dev/null 2>&1; then
+  fail "deploy unexpectedly succeeded with an empty DATABASE_URL"
 fi
-printf 'test-value\n' >"$TMP/secrets/database_url"
-chmod 0600 "$TMP/secrets/database_url"
 
-# Group/world-readable secret files are rejected.
+# Enabling AI import without its sensitive configuration is rejected before rollout.
+printf '%s\n' 'AI_IMPORT_ENABLED=true' >>"$TMP/ai-missing.env"
+grep -v '^AI_IMPORT_ENABLED=' "$TMP/production.env" >>"$TMP/ai-missing.env"
+if DEPLOY_ENV_FILE="$TMP/ai-missing.env" /bin/sh "$ROOT/scripts/deploy.sh" deploy >/dev/null 2>&1; then
+  fail "deploy unexpectedly accepted incomplete AI import configuration"
+fi
+
+# A group/world-readable deployment environment file is rejected.
 export FAKE_STAT_MODE=644
 if /bin/sh "$ROOT/scripts/deploy.sh" deploy >/dev/null 2>&1; then
-  fail "deploy unexpectedly succeeded with broad secret permissions"
+  fail "deploy unexpectedly succeeded with broad environment-file permissions"
 fi
 unset FAKE_STAT_MODE
 

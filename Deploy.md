@@ -149,34 +149,16 @@ done
 不要部署可变的 `latest` tag。把每个镜像解析为 registry digest，
 并以 `name@sha256:...` 形式写入环境文件——`deploy.sh` 会强制校验这一点。
 
-### 2.3 准备机密
-
-机密以文件形式挂载，不写进环境文件，避免出现在 `docker inspect` 与日志中。
-
-```sh
-sudo install -d -m 0700 /etc/anby-wiki/secrets
-cd /etc/anby-wiki/secrets
-
-# 数据库连接串。host 必须是 compose 服务名 postgres。
-printf 'postgres://wiki:<PASSWORD>@postgres:5432/wiki?sslmode=disable' | sudo tee database_url >/dev/null
-printf '<PASSWORD>'              | sudo tee postgres_password      >/dev/null
-printf '<S3_ACCESS_KEY>'         | sudo tee s3_access_key          >/dev/null
-printf '<S3_SECRET_KEY>'         | sudo tee s3_secret_key          >/dev/null
-# 引导登录令牌。必须足够强：配置校验会拒绝弱值。
-openssl rand -hex 32             | sudo tee auth_dev_login_token   >/dev/null
-
-sudo chmod 0600 *
-```
-
-`database_url` 里的密码需与 `postgres_password` 一致，
-`s3_access_key` / `s3_secret_key` 同时用作 MinIO 的 root 凭据与应用凭据。
-
-### 2.4 准备环境文件
+### 2.3 准备环境文件
 
 ```sh
 cp infra/deploy/.env.example /etc/anby-wiki/.env
 sudo chmod 0600 /etc/anby-wiki/.env
 ```
+
+该文件同时包含普通配置和机密，必须位于仓库之外且仅允许部署用户读取。
+Compose 会把机密注入容器环境，因此具有 Docker 管理权限的人可通过
+`docker inspect` 查看；不要把环境文件、Compose 展开结果或容器环境写入日志和工单。
 
 必须修改的项：
 
@@ -184,14 +166,21 @@ sudo chmod 0600 /etc/anby-wiki/.env
 |---|---|
 | `API_IMAGE` `WORKER_IMAGE` `WEB_IMAGE` `MIGRATE_IMAGE` | `name@sha256:...` 不可变引用 |
 | `RELEASE_ID` | 本次发布标识 |
-| `SECRETS_DIR` | 机密目录，如 `/etc/anby-wiki/secrets` |
+| `POSTGRES_PASSWORD` | PostgreSQL 密码；建议使用 `openssl rand -hex 32` 生成 |
+| `DATABASE_URL` | host 必须是 `postgres`，密码与 `POSTGRES_PASSWORD` 一致 |
+| `S3_ACCESS_KEY` `S3_SECRET_KEY` | 同时作为 MinIO root 凭据与应用 S3 凭据 |
+| `AUTH_DEV_LOGIN_TOKEN` | 共享引导登录令牌；建议使用 `openssl rand -hex 32` 生成 |
+| `AI_API_KEY` | 仅在 `AI_IMPORT_ENABLED=true` 时填写；只注入 Worker |
 | `S3_BUCKET` | 对象存储桶名 |
 | `TRUSTED_ORIGINS` | 用户实际访问的精确 origin，如 `https://wiki.example.com` |
 | `SESSION_COOKIE_SECURE` | 外层提供 HTTPS 时设 `true`，否则 `false` |
 | `WEB_BIND` `WEB_PORT` | 对外端口；默认 `127.0.0.1:3000` 只绑本机 |
 | `TRUSTED_PROXY_IPS` | 仅在 API 直连对端可信且其传来的 `X-Forwarded-For` 已被清洗时填写；默认留空最安全 |
 
-### 2.5 部署
+环境文件必须保持 shell 兼容的 `KEY=VALUE` 格式。密码包含特殊字符时建议使用
+单引号，并对 `DATABASE_URL` 中的密码做 URL 编码。
+
+### 2.4 部署
 
 ```sh
 export DEPLOY_ENV_FILE=/etc/anby-wiki/.env
@@ -203,7 +192,7 @@ sh scripts/deploy.sh deploy     # 正式发布
 
 `deploy` 的执行顺序：
 
-1. 校验 `DEPLOY_ENV=production`、镜像为 digest、机密文件存在且非空；
+1. 校验 `DEPLOY_ENV=production`、镜像为 digest、机密变量非空且环境文件权限安全；
 2. 运行 `storage-init` 修正命名卷根目录属主；
 3. 启动数据层 postgres / redis / minio 并等待健康；
 4. 运行 `minio-init` 创建 bucket 并关闭匿名访问；
@@ -213,7 +202,7 @@ sh scripts/deploy.sh deploy     # 正式发布
 
 任一步失败即中止，不会继续替换应用容器。
 
-### 2.6 其他命令
+### 2.5 其他命令
 
 ```sh
 sh scripts/deploy.sh migrate    # 只跑迁移与闸门
@@ -224,7 +213,7 @@ sh scripts/deploy.sh rollback   # 回滚到环境文件中的旧镜像；不执�
 回滚**从不**执行 down 迁移：旧镜像必须显式声明与线上数据库版本兼容。
 需要缩表时，先发布一个兼容新旧两版的中间版本。
 
-### 2.7 备份
+### 2.6 备份
 
 数据在命名卷 `pgdata` 与 `miniodata` 中，随 `docker compose down` 保留，
 但 `down -v` 会删除。备份脚本见 `scripts/backup/postgres-backup.sh`、

@@ -37,10 +37,8 @@ RUN npm run build
 FROM ${RUNTIME_IMAGE} AS go-runtime
 RUN apk add --no-cache ca-certificates wget && \
     addgroup -S -g 10001 wiki && adduser -S -D -H -u 10001 -G wiki wiki
-COPY --chmod=0555 infra/deploy/container-entrypoint.sh /usr/local/bin/container-entrypoint
 USER 10001:10001
 WORKDIR /app
-ENTRYPOINT ["/usr/local/bin/container-entrypoint"]
 
 FROM go-runtime AS api
 ARG VERSION=dev
@@ -97,13 +95,11 @@ ENV NEXT_TELEMETRY_DISABLED=1
 ENV HOSTNAME=0.0.0.0
 ENV PORT=3000
 WORKDIR /app/apps/web
-COPY --chmod=0555 infra/deploy/container-entrypoint.sh /usr/local/bin/container-entrypoint
 COPY --from=web-builder --chown=node:node /src/apps/web/.next/standalone /app/
 COPY --from=web-builder --chown=node:node /src/apps/web/public ./public
 COPY --from=web-builder --chown=node:node /src/apps/web/.next/static ./.next/static
 USER node
 EXPOSE 3000
-ENTRYPOINT ["/usr/local/bin/container-entrypoint"]
 HEALTHCHECK --interval=10s --timeout=3s --start-period=15s --retries=6 \
   CMD node -e "const n=require('net').connect(3000,'127.0.0.1',()=>{n.end();process.exit(0)});n.on('error',()=>process.exit(1))"
 CMD ["node", "server.js"]

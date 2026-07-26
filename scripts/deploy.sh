@@ -10,7 +10,21 @@ fail() {
   exit 1
 }
 
+check_env_file_permissions() {
+  mode=$(
+    stat -c '%a' "$DEPLOY_ENV_FILE" 2>/dev/null ||
+      stat -f '%Lp' "$DEPLOY_ENV_FILE" 2>/dev/null ||
+      printf 'unknown'
+  )
+  case "$mode" in
+    *00) ;;
+    unknown) fail "cannot determine DEPLOY_ENV_FILE permissions" ;;
+    *) fail "DEPLOY_ENV_FILE must not be group/world accessible (mode $mode)" ;;
+  esac
+}
+
 [ -r "$DEPLOY_ENV_FILE" ] || fail "environment file is not readable: $DEPLOY_ENV_FILE"
+check_env_file_permissions
 set -a
 # Deployment env files must remain shell-compatible KEY=VALUE files.
 . "$DEPLOY_ENV_FILE"
@@ -57,7 +71,7 @@ confirm_production() {
   for image in API_IMAGE WORKER_IMAGE WEB_IMAGE MIGRATE_IMAGE; do
     require_digest_image "$image"
   done
-  check_secrets
+  check_sensitive_env
   expected="DEPLOY:${RELEASE_ID:?set RELEASE_ID}"
   [ "${DEPLOY_CONFIRM:-}" = "$expected" ] ||
     fail "set DEPLOY_CONFIRM=$expected for this release"
@@ -82,28 +96,21 @@ check_existing_schema() {
   compose --profile tools run --rm doctor
 }
 
-# check_secrets verifies every secret file exists and is non-empty before any
-# container tries to mount it.
-check_secrets() {
-  dir=${SECRETS_DIR:?set SECRETS_DIR}
-  [ -d "$dir" ] || fail "SECRETS_DIR does not exist: $dir"
-  for name in database_url postgres_password s3_access_key s3_secret_key \
-    auth_dev_login_token
+# Production secrets live in DEPLOY_ENV_FILE. Refuse missing values before any
+# container is started.
+check_sensitive_env() {
+  for name in DATABASE_URL POSTGRES_PASSWORD S3_ACCESS_KEY S3_SECRET_KEY \
+    AUTH_DEV_LOGIN_TOKEN
   do
-    file="$dir/$name"
-    [ -r "$file" ] || fail "missing secret file: $file"
-    [ -s "$file" ] || fail "secret file is empty: $file"
-    mode=$(
-      stat -c '%a' "$file" 2>/dev/null ||
-        stat -f '%Lp' "$file" 2>/dev/null ||
-        printf 'unknown'
-    )
-    case "$mode" in
-      *00) ;;
-      unknown) fail "cannot determine secret file permissions: $file" ;;
-      *) fail "secret file must not be group/world accessible: $file (mode $mode)" ;;
-    esac
+    eval "value=\${$name:-}"
+    [ -n "$value" ] || fail "$name must be set in DEPLOY_ENV_FILE"
   done
+  if [ "${AI_IMPORT_ENABLED:-false}" = "true" ]; then
+    for name in AI_BASE_URL AI_API_KEY AI_MODEL; do
+      eval "value=\${$name:-}"
+      [ -n "$value" ] || fail "$name must be set when AI_IMPORT_ENABLED=true"
+    done
+  fi
 }
 
 # start_data_tier brings up PostgreSQL/Redis/MinIO and ensures the bucket

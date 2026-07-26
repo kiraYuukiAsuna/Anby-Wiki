@@ -53,7 +53,7 @@ type Config struct {
 	AIProvider string `env:"AI_PROVIDER" envDefault:"openai-compatible"`
 	// AIBaseURL 是 OpenAI-compatible API 根地址（例如 https://host/v1）。
 	AIBaseURL string `env:"AI_BASE_URL"`
-	// AIAPIKey 只从进程环境注入；禁止写入配置文件或日志。
+	// AIAPIKey 只从进程环境注入；生产可由受保护的部署环境文件提供，禁止写入日志。
 	AIAPIKey string `env:"AI_API_KEY"`
 	// AIModel 是导入抽取使用的模型 ID。
 	AIModel string `env:"AI_MODEL"`

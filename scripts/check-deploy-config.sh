@@ -11,11 +11,13 @@ fail() {
   exit 1
 }
 
-/bin/sh -n \
-  "$ROOT/infra/deploy/container-entrypoint.sh" \
+for script in \
   "$ROOT/scripts/deploy.sh" \
   "$ROOT/scripts/check-deploy-config.sh" \
   "$ROOT/scripts/tests/deploy-test.sh"
+do
+  /bin/sh -n "$script"
+done
 
 if command -v ruby >/dev/null 2>&1; then
   ruby -e "require 'yaml'; YAML.safe_load(File.read(ARGV.fetch(0)), aliases: true)" "$COMPOSE_FILE"
@@ -39,17 +41,28 @@ if grep -qE '^  (nginx|meilisearch):' "$COMPOSE_FILE"; then
 fi
 grep -q '^  storage-init:' "$COMPOSE_FILE" ||
   fail "production compose must initialize named-volume ownership"
-# Secrets must be file-based: external secrets only work under Swarm.
-if grep -qE '^\s+external: true' "$COMPOSE_FILE"; then
-  fail "compose secrets must use file: so plain docker compose can mount them"
+if grep -Eq '^[[:space:]]*secrets:' "$COMPOSE_FILE"; then
+  fail "production compose must read secrets from DEPLOY_ENV_FILE, not Compose secrets"
 fi
-# Every declared secret must resolve under SECRETS_DIR.
-for secret in database_url postgres_password s3_access_key s3_secret_key \
-  auth_dev_login_token
+if grep -q '_FILE:' "$COMPOSE_FILE" || grep -q 'container-entrypoint' "$DOCKERFILE"; then
+  fail "legacy file-based secret injection is still configured"
+fi
+for name in DATABASE_URL POSTGRES_PASSWORD S3_ACCESS_KEY S3_SECRET_KEY \
+  AUTH_DEV_LOGIN_TOKEN
 do
-  grep -q "SECRETS_DIR:?set SECRETS_DIR}/$secret" "$COMPOSE_FILE" ||
-    fail "compose is missing a file-based secret for $secret"
+  grep -q "^${name}=" "$EXAMPLE_ENV" ||
+    fail "deployment environment example is missing $name"
 done
+grep -Fq 'DATABASE_URL: "${DATABASE_URL:?set DATABASE_URL}"' "$COMPOSE_FILE" ||
+  fail "application DATABASE_URL environment injection is missing"
+grep -Fq 'POSTGRES_PASSWORD: "${POSTGRES_PASSWORD:?set POSTGRES_PASSWORD}"' "$COMPOSE_FILE" ||
+  fail "PostgreSQL password environment injection is missing"
+grep -Fq 'S3_ACCESS_KEY: "${S3_ACCESS_KEY:?set S3_ACCESS_KEY}"' "$COMPOSE_FILE" ||
+  fail "application S3 access key environment injection is missing"
+grep -Fq 'S3_SECRET_KEY: "${S3_SECRET_KEY:?set S3_SECRET_KEY}"' "$COMPOSE_FILE" ||
+  fail "application S3 secret environment injection is missing"
+grep -Fq 'AUTH_DEV_LOGIN_TOKEN: "${AUTH_DEV_LOGIN_TOKEN:?set AUTH_DEV_LOGIN_TOKEN}"' "$COMPOSE_FILE" ||
+  fail "bootstrap login token environment injection is missing"
 grep -q 'read_only: true' "$COMPOSE_FILE" || fail "read_only runtime policy missing"
 grep -q 'no-new-privileges:true' "$COMPOSE_FILE" || fail "no-new-privileges policy missing"
 grep -q 'cap_drop:' "$COMPOSE_FILE" || fail "capability drop policy missing"
