@@ -5,8 +5,8 @@ umask 077
 LC_ALL=C
 export LC_ALL
 
-ROOT=$(CDPATH= cd -- "$(dirname -- "$0")/.." && pwd)
-. "$ROOT/scripts/lib/backup-common.sh"
+ROOT=$(CDPATH= cd -- "$(dirname -- "$0")/../.." && pwd)
+. "$ROOT/scripts/backup/common.sh"
 
 require_drill_environment
 

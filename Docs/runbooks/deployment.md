@@ -71,7 +71,7 @@ Compose 命令行、环境文件、CI 日志、指标或 trace。
 
 ## 发布前检查
 
-1. `make deploy-config-check` 通过。
+1. `make deploy-check` 通过。
 2. 四个应用镜像均已推送并解析到 digest。
 3. PostgreSQL 与对象存储备份完成。
 4. `MIGRATION_EXPECTED_VERSION` 等于仓库最新迁移版本，并落在镜像兼容窗口内。

@@ -35,7 +35,7 @@ Proposed、双 Diff、证据与影响统计，不创建 Revision/Claim/Audit/Out
 
 - 权威 Schema：`contracts/schemas/proposal-operation/v1/operation.schema.json`；
 - Go 内嵌副本：`schema/operation.schema.json`；
-- 防漂移：`make contract-schema-check`；
+- 防漂移：`make contracts-check`；
 - 集成测试必须设置 `TEST_DATABASE_URL` 并 `-p 1` 串行。`safety_test.go`、
   `apply_test.go`、`conflict_test.go`、`rollback` 相关用例覆盖伪造批准、越权、陈旧基线、
   重复请求、提交前故障与补偿回滚。

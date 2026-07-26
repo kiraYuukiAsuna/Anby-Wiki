@@ -5,8 +5,8 @@ umask 077
 LC_ALL=C
 export LC_ALL
 
-ROOT=$(CDPATH= cd -- "$(dirname -- "$0")/.." && pwd)
-. "$ROOT/scripts/lib/backup-common.sh"
+ROOT=$(CDPATH= cd -- "$(dirname -- "$0")/../.." && pwd)
+. "$ROOT/scripts/backup/common.sh"
 
 require_command pg_dump
 require_command pg_restore
@@ -33,7 +33,7 @@ pg_dump --dbname="$SOURCE_DB_NAME" --format=custom --compress=9 \
   --no-owner --no-privileges --file="$BACKUP_DIR/database.dump"
 pg_restore --list "$BACKUP_DIR/database.dump" >/dev/null
 
-/bin/sh "$ROOT/scripts/postgres-authority-snapshot.sh" \
+/bin/sh "$ROOT/scripts/backup/postgres-authority-snapshot.sh" \
   "$SOURCE_DB_NAME" "$BACKUP_DIR/authority.tsv"
 
 dump_sha=$(sha256_file "$BACKUP_DIR/database.dump")

@@ -80,7 +80,7 @@ export OBJECT_CLI=aws
 
 BACKUP_DIR="$TMP/object-backup"
 export BACKUP_DIR
-/bin/sh "$ROOT/scripts/object-storage-backup.sh" >"$TMP/backup.log"
+/bin/sh "$ROOT/scripts/backup/object-storage-backup.sh" >"$TMP/backup.log"
 [ -f "$BACKUP_DIR/manifest.tsv.sha256" ] || fail "manifest checksum was not created"
 grep -q "file with spaces.txt" "$BACKUP_DIR/manifest.tsv" ||
   fail "object with spaces is missing from manifest"
@@ -92,7 +92,7 @@ OBJECT_RESTORE_CLEANUP=always
 RESTORE_ENVIRONMENT=drill
 export RESTORE_BUCKET OBJECT_RESTORE_CONFIRM OBJECT_RESTORE_REPORT OBJECT_RESTORE_CLEANUP
 export RESTORE_ENVIRONMENT
-/bin/sh "$ROOT/scripts/object-storage-restore-verify.sh" >"$TMP/restore.log"
+/bin/sh "$ROOT/scripts/backup/object-storage-restore-verify.sh" >"$TMP/restore.log"
 [ ! -e "$TMP/s3/$RESTORE_BUCKET" ] || fail "drill bucket was not cleaned up"
 grep -q '^restored_object_sha256=pass$' "$OBJECT_RESTORE_REPORT" ||
   fail "restore report did not record SHA256 success"
@@ -100,7 +100,7 @@ grep -q '^restored_object_sha256=pass$' "$OBJECT_RESTORE_REPORT" ||
 printf 'tampered\n' >>"$BACKUP_DIR/objects/a.txt"
 OBJECT_RESTORE_REPORT="$TMP/tampered-restore.env"
 export OBJECT_RESTORE_REPORT
-if /bin/sh "$ROOT/scripts/object-storage-restore-verify.sh" >"$TMP/tampered.log" 2>&1; then
+if /bin/sh "$ROOT/scripts/backup/object-storage-restore-verify.sh" >"$TMP/tampered.log" 2>&1; then
   fail "tampered object backup was accepted"
 fi
 
@@ -120,7 +120,7 @@ done
 SAFETY_LOG="$TMP/safety.log"
 export SAFETY_LOG
 if PATH="$TMP/safety-bin:$PATH" ENV=production \
-  /bin/sh "$ROOT/scripts/postgres-restore-verify.sh" >"$TMP/production.log" 2>&1; then
+  /bin/sh "$ROOT/scripts/backup/postgres-restore-verify.sh" >"$TMP/production.log" 2>&1; then
   fail "production PostgreSQL restore was accepted"
 fi
 [ ! -e "$SAFETY_LOG" ] || fail "a PostgreSQL command ran before production refusal"

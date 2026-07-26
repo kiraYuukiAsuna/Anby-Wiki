@@ -1,4 +1,4 @@
-# CI 质量门禁：backend / web / contracts / client-drift / migrations
+# CI 质量门禁：backend / web / contracts / client-drift / migrations / security / deploy / browser-e2e
 # 本地等价命令见 Makefile（make ci）与 Docs/ci.md。
 name: CI
 
@@ -135,7 +135,7 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       - name: Deployment config, migration gate, and rollout-order checks
-        run: make deploy-config-check
+        run: make deploy-check
       - name: Build API, Worker, Web, and migration tool OCI targets
         env:
           VERSION: ci-${{ github.sha }}
@@ -227,11 +227,8 @@ jobs:
       - name: 校验 OpenAPI 契约
         working-directory: apps/web
         run: npx --no-install @openapitools/openapi-generator-cli validate -i ../../contracts/openapi/openapi.yaml
-      - name: 校验 AST 与 ProposalOperation Schema 内嵌副本
-        run: |
-          sh scripts/check-ast-schema-sync.sh
-          sh scripts/check-operation-schema-sync.sh
-          sh scripts/check-extraction-schema-sync.sh
+      - name: 校验 AST、ProposalOperation 与 Extraction Schema 内嵌副本
+        run: make contracts-check
 
   # 生成物漂移检查：重新生成 TS 客户端并要求与仓库一致（等价 make gen-check）
   client-drift:
@@ -280,10 +277,9 @@ jobs:
           go-version-file: backend/go.mod
           cache-dependency-path: backend/go.sum
       - name: 校验迁移文件命名与成对性
-        run: sh scripts/check-migrations.sh
-      # 空迁移目录阶段：golang-migrate 在空目录下 up 返回 fs.ErrNotExist（"file does not exist"）
-      # 而非 ErrNoChange，cmd/migrate 不豁免该错误，因此无迁移文件时跳过 up/version。
-      # 首个迁移文件合入后此分支自动失效，迁移将被真实执行。
+        run: make migration-check
+      # 保留空迁移目录兼容：golang-migrate 对空目录返回 fs.ErrNotExist，
+      # 因此仅在存在 .up.sql 时执行。当前仓库已有初始化迁移，会走真实迁移分支。
       - name: 对空库执行迁移
         working-directory: backend
         env:

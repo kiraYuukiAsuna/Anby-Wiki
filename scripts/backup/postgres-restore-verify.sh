@@ -5,8 +5,8 @@ umask 077
 LC_ALL=C
 export LC_ALL
 
-ROOT=$(CDPATH= cd -- "$(dirname -- "$0")/.." && pwd)
-. "$ROOT/scripts/lib/backup-common.sh"
+ROOT=$(CDPATH= cd -- "$(dirname -- "$0")/../.." && pwd)
+. "$ROOT/scripts/backup/common.sh"
 
 require_drill_environment
 for command in psql createdb dropdb pg_restore go; do
@@ -80,7 +80,7 @@ created=1
 pg_restore --exit-on-error --no-owner --no-privileges \
   --dbname="$RESTORE_DB_NAME" "$BACKUP_DIR/database.dump"
 
-/bin/sh "$ROOT/scripts/postgres-authority-snapshot.sh" \
+/bin/sh "$ROOT/scripts/backup/postgres-authority-snapshot.sh" \
   "$RESTORE_DB_NAME" "$REPORT_DIR/authority-before-rebuild.tsv"
 cmp "$BACKUP_DIR/authority.tsv" "$REPORT_DIR/authority-before-rebuild.tsv" ||
   die "postgres-restore: authoritative counts or hashes differ after restore"
@@ -118,7 +118,7 @@ case "$doctor_after" in
   *) die "postgres-restore: doctor failed to execute after rebuild" ;;
 esac
 
-/bin/sh "$ROOT/scripts/postgres-authority-snapshot.sh" \
+/bin/sh "$ROOT/scripts/backup/postgres-authority-snapshot.sh" \
   "$RESTORE_DB_NAME" "$REPORT_DIR/authority-after-rebuild.tsv"
 cmp "$BACKUP_DIR/authority.tsv" "$REPORT_DIR/authority-after-rebuild.tsv" ||
   die "postgres-restore: rebuild changed authoritative counts or hashes"

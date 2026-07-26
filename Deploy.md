@@ -90,8 +90,8 @@ sh scripts/dev.sh web            # 只起前端
 ### 1.5 质量门禁
 
 ```sh
-make lint test          # 静态检查 + 单元测试
-make ci                 # 本地等价 CI
+make check              # 提交前质量门禁
+make ci                 # check + 生成物漂移 + 安全扫描
 ```
 
 集成测试需要独立数据库：
@@ -227,8 +227,8 @@ sh scripts/deploy.sh rollback   # 回滚到环境文件中的旧镜像；不执�
 ### 2.7 备份
 
 数据在命名卷 `pgdata` 与 `miniodata` 中，随 `docker compose down` 保留，
-但 `down -v` 会删除。备份脚本见 `scripts/postgres-backup.sh`、
-`scripts/object-storage-backup.sh`。
+但 `down -v` 会删除。备份脚本见 `scripts/backup/postgres-backup.sh`、
+`scripts/backup/object-storage-backup.sh`。
 
 ---
 

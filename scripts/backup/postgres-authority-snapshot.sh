@@ -2,8 +2,8 @@
 # Emits stable counts and SHA256 hashes for authoritative PostgreSQL tables.
 set -eu
 
-ROOT=$(CDPATH= cd -- "$(dirname -- "$0")/.." && pwd)
-. "$ROOT/scripts/lib/backup-common.sh"
+ROOT=$(CDPATH= cd -- "$(dirname -- "$0")/../.." && pwd)
+. "$ROOT/scripts/backup/common.sh"
 
 require_command psql
 

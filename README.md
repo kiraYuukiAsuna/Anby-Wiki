@@ -38,8 +38,8 @@ Docs/            设计、当前状态、ADR、运维与安全文档
 ## 质量门禁
 
 ```bash
-make lint         # Go + 前端静态检查
-make test         # Go + 前端测试
+make help         # 查看按职责分组的全部公共命令
+make check        # 静态检查、单测、构建、契约与部署脚本检查
 make gen-client   # 从 OpenAPI 重新生成 TS 客户端（生成物禁止手改）
-make ci           # 本地跑完整 CI 等价检查
+make ci           # check + 生成物漂移 + 安全扫描
 ```

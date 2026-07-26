@@ -22,7 +22,7 @@ export SOURCE_DB_NAME=wiki
 export BACKUP_DIR=/secure/backups/anby-pg-$(date -u +%Y%m%dT%H%M%SZ)
 export BACKUP_WRITE_QUIESCED=YES
 
-/bin/sh scripts/postgres-backup.sh
+/bin/sh scripts/backup/postgres-backup.sh
 ```
 
 产物：
@@ -54,7 +54,7 @@ export RESTORE_ENVIRONMENT=drill
 export RESTORE_CONFIRM="CREATE_NEW_DATABASE:$RESTORE_DB_NAME"
 export RESTORE_CLEANUP=always
 
-/bin/sh scripts/postgres-restore-verify.sh
+/bin/sh scripts/backup/postgres-restore-verify.sh
 ```
 
 固定执行顺序：
@@ -88,7 +88,7 @@ export S3_SECRET_KEY=...
 export OBJECT_CLI=aws
 export BACKUP_DIR=/secure/backups/anby-objects-$(date -u +%Y%m%dT%H%M%SZ)
 
-/bin/sh scripts/object-storage-backup.sh
+/bin/sh scripts/backup/object-storage-backup.sh
 ```
 
 产物包含 `objects/`、`manifest.tsv`、`manifest.tsv.sha256` 和 `metadata.env`。manifest 每行只记录 SHA256、字节数和 key，不记录对象正文、endpoint 或凭据。
@@ -103,7 +103,7 @@ export OBJECT_RESTORE_CONFIRM="CREATE_NEW_BUCKET:$RESTORE_BUCKET"
 export OBJECT_RESTORE_REPORT=/secure/reports/wiki-assets-restore-20260723.env
 export OBJECT_RESTORE_CLEANUP=always
 
-/bin/sh scripts/object-storage-restore-verify.sh
+/bin/sh scripts/backup/object-storage-restore-verify.sh
 ```
 
 恢复先验证 manifest 自身和本地镜像，再创建新 bucket、上传全部对象、重新下载到临时目录并重算 manifest。任意缺失、额外对象、size 或 SHA256 差异都会失败。默认失败时删除仅由本次脚本创建的 bucket；绝不删除预先存在的 bucket。

@@ -83,11 +83,10 @@ M7-T05/ADR-0012 的内部 Beta 初始阈值为 API 5xx `<1%`、API p95 `<=1s`、
 发布 p95 `<=2s`；容量基线及运行流量出现稳定偏差时通过后续 ADR 校准。
 
 ```bash
-make observability-config-check
+make test-observability
 ```
 
-该命令验证应用内 metrics/tracing 配置与 production Compose 的观测环境变量，
-不要求 Docker、Prometheus 或 Collector。
+该命令验证应用内 metrics/tracing 配置，不要求 Docker、Prometheus 或 Collector。
 
 ## 故障排查
 

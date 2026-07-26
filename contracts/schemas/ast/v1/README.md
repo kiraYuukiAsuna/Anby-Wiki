@@ -65,7 +65,7 @@ Wiki 页面正文的权威格式（设计依据：`Docs/WikiDesignOnePage.md` §
 `go:embed` 不能跨 Go module 边界引用 `../../contracts`，因此采用副本 + 自动化校验：
 
 - `backend/internal/ast/schema/ast.schema.json` 是 `ast.schema.json` 的字节级副本（Go 侧 `go:embed` 用）。
-- `scripts/check-ast-schema-sync.sh` 校验两份文件字节一致（供 CI / 手工调用）。
+- `scripts/check-contracts.sh` 校验所有权威 Schema 与 Go 内嵌副本字节一致。
 - `backend/internal/ast` 的单测内嵌副本与 `contracts/` 原文件做一致性断言，`go test` 即暴露漂移。
 
 修改 Schema 时始终先改 `contracts/schemas/ast/v1/ast.schema.json`，再同步副本。

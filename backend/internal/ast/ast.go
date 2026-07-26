@@ -2,7 +2,7 @@
 //
 // 权威契约是 contracts/schemas/ast/v1/ast.schema.json（JSON Schema draft 2020-12），
 // 本包内嵌其字节级副本（schema/ast.schema.json）用于运行时校验；
-// 副本与原文件的一致性由单测与 scripts/check-ast-schema-sync.sh 保证。
+// 副本与原文件的一致性由单测与 scripts/check-contracts.sh 保证。
 package ast
 
 import (

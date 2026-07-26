@@ -1,102 +1,147 @@
 .DEFAULT_GOAL := help
 
-# OpenAPI Generator 需要 Java；Homebrew openjdk 未链接进 PATH 时从 keg 补齐
-ifneq ($(wildcard /opt/homebrew/opt/openjdk/bin/java),)
-export PATH := /opt/homebrew/opt/openjdk/bin:$(PATH)
-endif
-
 WEB_DIR := apps/web
 BACKEND_DIR := backend
+SH := sh
 GOVULNCHECK_VERSION := v1.1.4
 GITLEAKS_VERSION := v8.28.0
 
-.PHONY: help bootstrap migrate-up migrate-down \
-        dev dev-api dev-worker dev-web lint lint-go lint-web \
-        test test-go test-web test-e2e build build-go build-web \
-        gen-client contract-schema-check observability-config-check gen-check security security-go \
-        security-web security-secrets deploy-config-check perf-db perf-smoke perf-full ci
+# Homebrew 的 Java 通常不进入默认 PATH；保留该路径以兼容 macOS 本地生成客户端。
+JAVA_HOMEBREW_BIN := /opt/homebrew/opt/openjdk/bin
+ifneq ("$(wildcard $(JAVA_HOMEBREW_BIN)/java)","")
+export PATH := $(JAVA_HOMEBREW_BIN):$(PATH)
+endif
 
-help: ## 显示全部可用命令
-	@grep -E '^[a-zA-Z_-]+:.*?## ' $(MAKEFILE_LIST) | awk 'BEGIN {FS = ":.*?## "}; {printf "  \033[36m%-16s\033[0m %s\n", $$1, $$2}'
+.PHONY: \
+	help bootstrap \
+	dev dev-api dev-worker dev-web \
+	pg-start pg-stop pg-reset migrate-up migrate-down migrate-version migration-check \
+	format-check typecheck lint lint-go lint-web \
+	test test-go test-go-integration test-web test-e2e test-observability test-scripts \
+	build build-go build-web check \
+	gen-client contracts-check gen-check \
+	deploy-check \
+	security security-go security-web security-secrets \
+	perf-db perf-smoke perf-full \
+	ci \
+	contract-schema-check observability-config-check deploy-config-check
 
-bootstrap: ## 安装前后端依赖
+## Makefile 是仓库命令的公共入口；scripts/ 保存实现脚本与需显式执行的运维操作。
+
+help: ## 显示分组命令帮助
+	@awk 'BEGIN {FS = ":.*## "; printf "\nUsage: make <target>\n"} \
+		/^##@/ {printf "\n\033[1m%s\033[0m\n", substr($$0, 5); next} \
+		/^[a-zA-Z0-9_-]+:.*## / {printf "  \033[36m%-22s\033[0m %s\n", $$1, $$2}' \
+		$(MAKEFILE_LIST)
+
+##@ 初始化与开发
+
+bootstrap: ## 安装 Go 与 Web 依赖
 	cd $(BACKEND_DIR) && go mod download
 	cd $(WEB_DIR) && npm ci
 
-# ---- 本地基础设施 ----
-#
-# 开发环境不再使用 Docker。PostgreSQL / Redis / MinIO 由你自行提供，
-# 连接信息写进仓库根的 .env（模板见 .env.example）。
+dev: ## 从根目录 .env 启动 API、Worker 与 Web
+	$(SH) scripts/dev.sh
 
-pg-start: ## 启动本地免 Docker PostgreSQL（Homebrew 版，端口 55432）
-	sh scripts/dev-pg.sh start
+dev-api: ## 使用当前 shell 环境启动 API
+	cd $(BACKEND_DIR) && go run ./cmd/api
+
+dev-worker: ## 使用当前 shell 环境启动 Worker
+	cd $(BACKEND_DIR) && go run ./cmd/worker
+
+dev-web: ## 使用当前 shell 环境启动 Web
+	cd $(WEB_DIR) && npm run dev
+
+##@ 本地数据库
+
+pg-start: ## 启动免 Docker 的本地 PostgreSQL
+	$(SH) scripts/dev-pg.sh start
 
 pg-stop: ## 停止本地 PostgreSQL
-	sh scripts/dev-pg.sh stop
+	$(SH) scripts/dev-pg.sh stop
 
-pg-reset: ## 重置本地 PostgreSQL 数据并重新迁移
-	sh scripts/dev-pg.sh reset
+pg-reset: ## 重建本地 PostgreSQL 数据库
+	$(SH) scripts/dev-pg.sh reset
 
-# ---- 数据库迁移 ----
-
-migrate-up: ## 执行全部迁移
+migrate-up: ## 执行全部向上迁移
 	cd $(BACKEND_DIR) && go run ./cmd/migrate up
 
 migrate-down: ## 回滚一步迁移
 	cd $(BACKEND_DIR) && go run ./cmd/migrate down 1
 
-# ---- 开发 ----
+migrate-version: ## 显示当前迁移版本
+	cd $(BACKEND_DIR) && go run ./cmd/migrate version
 
-dev: ## 读取 .env 并启动 API / Worker / Web（无 Docker）
-	sh scripts/dev.sh
+migration-check: ## 校验迁移文件命名、配对与连续性
+	$(SH) scripts/check-migrations.sh
 
-dev-api:
-	cd $(BACKEND_DIR) && go run ./cmd/api
+##@ 质量检查
 
-dev-worker:
-	cd $(BACKEND_DIR) && go run ./cmd/worker
+format-check: ## 检查 Go 文件是否经过 gofmt
+	$(SH) scripts/check-go-format.sh
 
-dev-web:
-	cd $(WEB_DIR) && npm run dev
+typecheck: ## 执行 Web TypeScript 类型检查
+	cd $(WEB_DIR) && npm run typecheck
 
-# ---- 质量门禁 ----
+lint: lint-go lint-web ## 执行 Go 与 Web 静态检查
 
-lint: lint-go lint-web ## 全部静态检查
-
-lint-go:
-	cd $(BACKEND_DIR) && gofmt -l . | grep . && exit 1 || true
+lint-go: format-check ## 执行 Go 格式与 vet 检查
 	cd $(BACKEND_DIR) && go vet ./...
 
-lint-web:
+lint-web: typecheck ## 执行 Web 类型与 ESLint 检查
 	cd $(WEB_DIR) && npm run lint
 
-test: test-go test-web ## 全部测试
+test: test-go test-web test-scripts ## 执行不依赖外部服务的测试
 
-# 集成测试共享同一个 TEST_DATABASE_URL 且每个用例 Reset 全库，
-# 包间并行会互相 TRUNCATE，因此集成测试必须 -p 1 串行（单元测试不受影响）。
-test-go:
-	cd $(BACKEND_DIR) && go test ./...
+test-go: ## 执行 Go 单元测试并显式跳过数据库集成测试
+	cd $(BACKEND_DIR) && TEST_DATABASE_URL= go test ./...
 
-test-go-integration: ## 带 TEST_DATABASE_URL 的集成测试（串行）
+test-go-integration: ## 串行执行 PostgreSQL 集成测试
+	@test -n "$$TEST_DATABASE_URL" || { echo 'TEST_DATABASE_URL is required; use an isolated database.'; exit 1; }
 	cd $(BACKEND_DIR) && go test ./... -count=1 -p 1
 
-test-web:
+test-web: ## 执行 Web 单元与组件测试
 	cd $(WEB_DIR) && npm run test
 
-test-e2e: ## Playwright 浏览器生命周期（需 PostgreSQL 已迁移及 Chromium）
+test-e2e: ## 执行 Web 到 API 的端到端冒烟
 	cd $(WEB_DIR) && npm run test:e2e
 
-build: build-go build-web ## 全部构建
+test-observability: ## 校验可观测性配置与指标契约
+	cd $(BACKEND_DIR) && go test ./internal/platform/observability -count=1
 
-build-go:
+test-scripts: ## 检查 Shell 语法并执行脚本回归测试
+	find scripts infra/deploy -type f -name '*.sh' -exec $(SH) -n {} \;
+	$(SH) scripts/tests/backup-restore-test.sh
+
+build: build-go build-web ## 构建 Go 与 Web
+
+build-go: ## 构建全部 Go 命令与包
 	cd $(BACKEND_DIR) && go build ./...
 
-build-web:
+build-web: ## 构建 Next.js Web
 	cd $(WEB_DIR) && npm run build
 
-# ---- 安全与供应链 ----
+check: lint test build contracts-check migration-check deploy-check ## 执行提交前质量门禁
 
-security: security-go security-web security-secrets ## 依赖完整性、漏洞、生产依赖与密钥扫描
+##@ 契约与生成物
+
+gen-client: ## 从 OpenAPI 重新生成 TypeScript 客户端
+	cd $(WEB_DIR) && npm run gen:client
+
+contracts-check: ## 校验权威 Schema 与嵌入副本一致
+	$(SH) scripts/check-contracts.sh
+
+gen-check: contracts-check gen-client ## 校验生成客户端没有漂移
+	git diff --exit-code -- contracts/generated/typescript
+
+##@ 部署与运维检查
+
+deploy-check: test-scripts ## 静态校验生产部署与运维脚本
+	$(SH) scripts/check-deploy-config.sh
+
+##@ 安全
+
+security: security-go security-web security-secrets ## 执行依赖与密钥扫描
 
 security-go:
 	cd $(BACKEND_DIR) && go mod verify
@@ -108,33 +153,22 @@ security-web:
 security-secrets:
 	go run github.com/zricethezav/gitleaks/v8@$(GITLEAKS_VERSION) dir . --config .gitleaks.toml --no-banner --redact
 
-# ---- 契约与客户端 ----
+##@ 性能
 
-gen-client: ## 从 OpenAPI 生成 TypeScript 客户端
-	cd $(WEB_DIR) && npm run gen:client
+perf-db: ## 重建独立性能测试数据库
+	$(SH) scripts/perf-db.sh
 
-contract-schema-check: ## 校验 AST / ProposalOperation / Extraction 权威 Schema 与 Go 内嵌副本
-	sh scripts/check-ast-schema-sync.sh
-	sh scripts/check-operation-schema-sync.sh
-	sh scripts/check-extraction-schema-sync.sh
-
-observability-config-check: ## 静态校验观测配置；Docker 可用时追加官方校验
-	sh scripts/check-observability-config.sh
-
-deploy-config-check: ## 校验 OCI/Compose/迁移 gate 与发布顺序；Docker 可用时追加 Compose 校验
-	sh scripts/check-deploy-config.sh
-
-perf-db: ## 重建并迁移独立性能库 wiki_perf_m7t05
-	sh scripts/perf-db.sh
-
-perf-smoke: ## 在独立性能库运行小规模快速基准
+perf-smoke: ## 执行性能冒烟
 	cd $(BACKEND_DIR) && PERF_DATABASE_CONFIRM=ANBY_WIKI_PERF_ONLY go run ./cmd/perf -profile smoke
 
-perf-full: ## 在独立性能库运行 100k 页面完整基准
+perf-full: ## 执行完整性能压测
 	cd $(BACKEND_DIR) && PERF_DATABASE_CONFIRM=ANBY_WIKI_PERF_ONLY go run ./cmd/perf -profile full -output /tmp/anby-wiki-m7-t05-full.json
 
-gen-check: contract-schema-check ## CI：Schema 副本与生成物漂移检查
-	cd $(WEB_DIR) && npm run gen:client
-	git diff --exit-code contracts/generated/typescript
+##@ 汇总
 
-ci: lint test build gen-check observability-config-check deploy-config-check security ## 本地等价 CI
+ci: check gen-check security ## 执行本地等价 CI
+
+# 兼容旧入口；不在 help 中展示。
+contract-schema-check: contracts-check
+observability-config-check: test-observability
+deploy-config-check: deploy-check

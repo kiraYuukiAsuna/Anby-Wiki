@@ -32,12 +32,13 @@
 ## 3. 常用命令
 
 ```bash
+make help           # 查看按职责分组的公共命令
 make bootstrap      # 安装依赖
 # 开发环境不使用 Docker：PostgreSQL/Redis/MinIO 自备，连接串写进 .env
 # （模板见 .env.example）。
 make migrate-up     # 执行迁移
 make dev            # 读取 .env 并启动 API + Worker + Web（= sh scripts/dev.sh）
-make lint test      # 质量门禁
+make check          # 提交前质量门禁
 make gen-client     # 重新生成 TS 客户端（需 Java，Makefile 已处理 Homebrew keg 路径）
 make ci             # 本地等价 CI
 ```
