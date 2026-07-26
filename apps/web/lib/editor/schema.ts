@@ -64,7 +64,7 @@ export const AST_BLOCK_TYPES = [
 
 export type AstBlockType = (typeof AST_BLOCK_TYPES)[number];
 
-/** AST block 类型 → BlockNote 承载方式（测试用它断言映射表完整性）。 */
+/** AST block 类型 → BlockNote 承载方式。 */
 export const AST_TO_BLOCKNOTE_BLOCK: Record<AstBlockType, string> = {
   heading: "heading",
   paragraph: "paragraph",

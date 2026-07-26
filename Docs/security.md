@@ -25,7 +25,7 @@ TRUSTED_ORIGINS=http://localhost:3000,http://localhost:8000
 3. 两者缺失、格式非法或不可信时返回 `403 forbidden`。
 4. 无 session cookie 的 development/test `X-Actor-ID` 请求不受该 cookie CSRF 规则影响；production 配置拒绝该开关，Go 中间件同时剥离该请求头。
 
-负向测试必须证明拒绝 logout 不撤销 session、拒绝 upload 不写对象、拒绝页面创建不写数据库。
+拒绝 logout 不得撤销 session、拒绝 upload 不得写对象、拒绝页面创建不得写数据库。
 
 ## 本地账号
 
@@ -72,7 +72,7 @@ TRUSTED_ORIGINS=http://localhost:3000,http://localhost:8000
 `v1.42.0`，`x/net` 已升级到 `v0.51.0`。
 最终门禁结果：
 
-- `govulncheck v1.1.4 ./...` 报告 0 个可达漏洞，Go 全量测试、vet 与构建通过；
+- `govulncheck v1.1.4 ./...` 报告 0 个可达漏洞，Go vet 与构建通过；
 - 当前 Next `16.2.11` 的 production 依赖 `sharp 0.34.5`
   命中 `GHSA-f88m-g3jw-g9cj`（high），修复要求 `sharp >=0.35.0`；
 - Next 内嵌 `postcss <=8.5.17` 命中 `GHSA-qx2v-qp2m-jg93`、
@@ -83,6 +83,6 @@ TRUSTED_ORIGINS=http://localhost:3000,http://localhost:8000
   unsupported override 绕过框架锁定依赖。
 
 因此 npm security gate 保持失败，production 发布继续阻塞，直到 Next 发布兼容安全
-sharp/postcss 的版本，并重新通过 typecheck、Lint、unit、build、E2E 与 audit 全部门禁。
+sharp/postcss 的版本，并重新通过 typecheck、Lint、build 与 audit 门禁。
 
-gitleaks 首次无白名单扫描只命中 Next `.next` 生成密钥和 `imports_test.go` 固定 UUID 幂等键；`.gitleaks.toml` 仅精确豁免这两个路径，其他规则与源码继续扫描。
+`.gitleaks.toml` 仅精确豁免 Next `.next` 生成目录，其他规则与源码继续扫描。

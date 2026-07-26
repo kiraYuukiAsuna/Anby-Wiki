@@ -1,7 +1,7 @@
 // AST v1 内容哈希：SHA-256(canonicalJson) 的小写 hex。
 //
 // 与 backend/internal/ast.ContentHash 对同一文档产出相同哈希。
-// 使用 node:crypto（同步 API）；仅在 Node 环境（测试 / 服务端）可用，
+// 使用 node:crypto（同步 API）；仅在 Node 服务端环境可用，
 // 浏览器端如需哈希请改用 Web Crypto（异步），不要在客户端组件中引入本模块。
 import { createHash } from "node:crypto";
 

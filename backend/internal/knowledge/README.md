@@ -35,7 +35,7 @@ M7 全文检索落地前的权威数据直连实现（不引入 pg_trgm）：
 ## 合并边界
 
 - **同名不自动合并**（MT-M4-NO-AUTOMERGE）：创建只按 `canonical_key` 判重；
-  标签/别名相同的已有实体不影响创建，搜索返回全部候选（`TestSearchEntities_NoAutoMerge`）。
+  标签/别名相同的已有实体不影响创建，搜索返回全部候选。
 - **merged 实体**：全部写操作（标签/别名/绑定）拒绝 `ErrEntityMerged`；搜索默认排除。
   合并功能本身（状态流转、引用修复、EntityMerge 映射）属 M9-T06。
 
@@ -96,8 +96,7 @@ proposed ────────────► published  ◄─────�
 - rejected/deprecated/superseded 为终态；公开流转方法从不以 superseded 为目标。
 - 单值不变量：`is_multivalued=false` 时同 subject+property 至多一个 published——
   CreateClaim 创建侧拒绝（提示先 Supersede），PublishClaim 发布侧兜底（防御性），
-  计数均在 subject 实体行锁内，序列化并发（并发创建恰一成功有集成测试）。
-- 状态机全矩阵单测：`TestClaimStatusTransitionMatrix`。
+  计数均在 subject 实体行锁内，序列化并发。
 
 ## 验证状态（claim.verification_status，与业务状态正交）
 
@@ -121,7 +120,7 @@ proposed ────────────► published  ◄─────�
   `ErrClaimSubjectMismatch`（防止基于过期认知替换值）。
 - `OriginType` 空时继承旧 claim；新 claim 初始状态仍按 origin 映射。
 - 并发：旧 claim 行锁（FOR UPDATE）序列化，并发双 supersede 恰一成功
-  （`TestSupersedeClaim_Concurrent`）。
+  ，另一请求得到状态冲突。
 - 写入顺序：先插新 claim 再置旧 claim（`superseded_by` 外键要求被指向行已存在），
   任一步失败整体回滚。
 

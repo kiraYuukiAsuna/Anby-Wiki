@@ -35,9 +35,9 @@ type Deps struct {
 	RateLimitConfig RateLimitConfig
 }
 
-// NewRouter 装配路由与中间件，handler 函数化以便单元测试。
+// NewRouter 装配路由与中间件。
 // writeAPI/readAPI/historyAPI/projectionAPI/searchAPI 为 nil 时（未配置数据库）只暴露探针端点。
-// optionalAPIs 使用类型化可选参数，兼容只装配 Page API 的测试与工具调用方。
+// optionalAPIs 使用类型化可选参数，允许按启动能力增量装配。
 func NewRouter(logger *slog.Logger, deps Deps, writeAPI *WriteAPI, readAPI *ReadAPI, historyAPI *HistoryAPI, projectionAPI *ProjectionAPI, searchAPI *SearchAPI, optionalAPIs ...any) http.Handler {
 	var knowledgeReadAPI *KnowledgeReadAPI
 	var governanceAPI *GovernanceAPI

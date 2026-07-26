@@ -8,8 +8,8 @@
 //
 // 框架保证「至少一次」投递：事件在 Handler 返回成功前可能因进程崩溃、
 // 租约过期被重新领取而重复投递。Event.IdempotencyKey 等于事件 ID 的字符串形式，
-// 事件本身唯一，Handler 必须以它为去重键实现幂等（可用 ProcessedKeys 或
-// 带唯一约束的投影表 UPSERT）。Handler 还需做版本防护：旧 Revision 触发的
+// 事件本身唯一，Handler 必须以它为去重键实现幂等（使用带唯一约束的投影表
+// UPSERT）。Handler 还需做版本防护：旧 Revision 触发的
 // 事件不得覆盖新投影（设计 §15，M3-T02+ 的 Projection Builder 负责落实）。
 //
 // # 崩溃恢复与租约
@@ -27,7 +27,6 @@ import (
 	"fmt"
 	"log/slog"
 	"math/rand/v2"
-	"sync"
 	"time"
 
 	"github.com/google/uuid"
@@ -371,28 +370,4 @@ func backoff(base time.Duration, attempt int) time.Duration {
 	}
 	jitter := 1 + (rand.Float64()*2-1)*backoffJitter
 	return time.Duration(float64(d) * jitter)
-}
-
-// ProcessedKeys 基于内存的幂等去重器，供 Handler 以 Event.IdempotencyKey
-// 去重（主要用于测试与单进程场景；跨进程幂等应依赖投影表唯一约束/UPSERT）。
-// 注意：进程重启后记录丢失，不能替代存储层幂等。
-type ProcessedKeys struct {
-	mu   sync.Mutex
-	keys map[string]struct{}
-}
-
-// NewProcessedKeys 创建空的 ProcessedKeys。
-func NewProcessedKeys() *ProcessedKeys {
-	return &ProcessedKeys{keys: make(map[string]struct{})}
-}
-
-// CheckAndMark 若 key 已处理过返回 true（调用方应跳过）；否则记录并返回 false。
-func (p *ProcessedKeys) CheckAndMark(key string) bool {
-	p.mu.Lock()
-	defer p.mu.Unlock()
-	if _, seen := p.keys[key]; seen {
-		return true
-	}
-	p.keys[key] = struct{}{}
-	return false
 }

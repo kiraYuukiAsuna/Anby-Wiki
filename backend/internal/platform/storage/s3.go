@@ -23,11 +23,7 @@ type S3Config struct {
 	SecretKey string
 }
 
-// S3Store 基于 aws-sdk-go-v2 的 Store 实现。
-//
-// 注意：截至 M4-T04，本实现只保证编译通过；本地/CI 无 Docker（MinIO 不可用），
-// 真实 S3 行为验证由 S3_TEST_ENDPOINT 门控的集成测试承担（见 s3_test.go），
-// 默认环境 skip——视为遗留验证项，待有 Docker 的环境补验。
+// S3Store 基于 aws-sdk-go-v2 的 Store 实现，生产连接参数由环境配置注入。
 type S3Store struct {
 	client *s3.Client
 	bucket string

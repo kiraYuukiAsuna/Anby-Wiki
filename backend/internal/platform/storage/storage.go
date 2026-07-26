@@ -4,10 +4,7 @@
 // 对象键按内容寻址：{env}/{domain}/{content_hash前2位}/{content_hash}
 // （ContentKey 构造），同内容天然去重。
 //
-// 实现：
-//   - S3Store：aws-sdk-go-v2，endpoint 可配（MinIO/任意 S3 兼容服务）；
-//   - Fake：内存实现，供全部单元/集成测试使用（本机无 Docker 时
-//     真实 MinIO 验证以 S3_TEST_ENDPOINT 环境变量门控，见 s3_test.go）。
+// 实现：S3Store 使用 aws-sdk-go-v2，endpoint 可配（MinIO/任意 S3 兼容服务）。
 //
 // PresignGet 暂缓，M6 需要时再加。
 package storage

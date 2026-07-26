@@ -4,8 +4,6 @@ Wiki 页面正文的权威格式（设计依据：`Docs/WikiDesignOnePage.md` §
 本目录是 AST 的语言无关公共契约，下游编辑器、Renderer、Patch Engine、Proposal 均以此为准。
 
 - 权威 Schema：`ast.schema.json`（JSON Schema draft 2020-12，`$id: https://anby.wiki/schemas/ast/v1/ast.schema.json`）
-- 校验样例：`fixtures/valid/*.json`（必须全部通过）、`fixtures/invalid/*.json`（必须全部拒绝）
-- 序列化样例：`fixtures/canonical/{name}.json` + `{name}.canonical.json` + `{name}.sha256`（Go `CanonicalizeJSON` 与 Zod 侧 `canonicalJson` 必须逐字节一致，哈希为前者的 SHA-256；规则见 `backend/internal/ast/serialize.go` 头注释）
 - 语言绑定：`backend/internal/ast`（Go，`santhosh-tekuri/jsonschema/v6` 校验）、`apps/web/lib/ast/schema.ts`（Zod v4）
 
 ## 结构概要
@@ -41,7 +39,7 @@ Wiki 页面正文的权威格式（设计依据：`Docs/WikiDesignOnePage.md` §
 ## 版本规则
 
 - `schema_version` 为 const `1`。
-- **v1 只允许 additive 演进**，以下变更可在 v1 内进行（同步更新 Go/Zod 绑定与 fixtures）：
+- **v1 只允许 additive 演进**，以下变更可在 v1 内进行（同步更新 Go/Zod 绑定）：
   - 新增 Block 类型（在 `block` 的 `oneOf` 追加分支，使用新的 `type` 判别值）；
   - 新增 Inline 节点类型（在 `inlineNode` 的 `oneOf` 追加分支；M4-T06 的 EntityReference / ClaimReference / CitationReference 即按此方式扩展）；
   - 为已有节点新增**可选**字段；
@@ -57,8 +55,7 @@ Wiki 页面正文的权威格式（设计依据：`Docs/WikiDesignOnePage.md` §
 1. 在 `ast.schema.json` 的 `$defs` 新增节点定义（`type` const 判别 + `additionalProperties: false`），并加入 `inlineNode` 的 `oneOf`。
 2. `backend/internal/ast`：在 Go 类型中补充对应常量/字段；将最新 Schema 同步到 `backend/internal/ast/schema/ast.schema.json`（见下）。
 3. `apps/web/lib/ast/schema.ts`：新增等价 Zod schema 并加入 `inlineNodeSchema` union。
-4. 在 `fixtures/valid/` 增加覆盖新节点的样例；若新增校验规则，在 `fixtures/invalid/` 增加反例。
-5. 跑通两侧测试：`cd backend && go test ./internal/ast/...`；`cd apps/web && npm run typecheck && npm run test`。
+4. 运行 `make contracts-check`、`make typecheck` 与 `make build`。
 
 ## Schema 同源与漂移防护
 
@@ -66,10 +63,9 @@ Wiki 页面正文的权威格式（设计依据：`Docs/WikiDesignOnePage.md` §
 
 - `backend/internal/ast/schema/ast.schema.json` 是 `ast.schema.json` 的字节级副本（Go 侧 `go:embed` 用）。
 - `scripts/check-contracts.sh` 校验所有权威 Schema 与 Go 内嵌副本字节一致。
-- `backend/internal/ast` 的单测内嵌副本与 `contracts/` 原文件做一致性断言，`go test` 即暴露漂移。
 
 修改 Schema 时始终先改 `contracts/schemas/ast/v1/ast.schema.json`，再同步副本。
 
 ## 已知实现差异
 
-- `external_link.url`：JSON Schema 用 `format: uri`（RFC 3986，允许相对引用）；Zod 侧用 `z.url()`（要求绝对 URL）。生产方应始终写绝对 URL，fixtures 与测试均按绝对 URL 覆盖。
+- `external_link.url`：JSON Schema 用 `format: uri`（RFC 3986，允许相对引用）；Zod 侧用 `z.url()`（要求绝对 URL）。生产方应始终写绝对 URL。

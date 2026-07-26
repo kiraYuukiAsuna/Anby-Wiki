@@ -1,6 +1,6 @@
 #!/bin/sh
-# 本地开发/测试用 PostgreSQL 实例管理（Homebrew postgresql@17，免 Docker）。
-# 数据目录在 /tmp（重启即失，仅用于开发与测试），端口 55432 避免与系统 Postgres 冲突。
+# 本地开发用 PostgreSQL 实例管理（Homebrew postgresql@17，免 Docker）。
+# 数据目录在 /tmp（重启即失，仅用于本地开发），端口 55432 避免与系统 Postgres 冲突。
 #
 # 用法：
 #   sh scripts/dev-pg.sh start   # 初始化（如需）并启动，创建 wiki 库并应用迁移

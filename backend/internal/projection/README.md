@@ -16,8 +16,7 @@ M3-T03+ 的各投影（链接/渲染/搜索）都作为本框架的 Handler 接�
 ## Handler 幂等契约
 
 - 每个 `Event` 携带 `IdempotencyKey`（= 事件 ID 的字符串形式，事件本身唯一），
-  Handler 以它为去重键。本包提供 `ProcessedKeys`（内存去重器）供测试与
-  单进程场景使用；跨进程/重启场景的幂等应落在存储层（投影表唯一约束 +
+  Handler 以它为去重键。跨进程/重启场景的幂等必须落在存储层（投影表唯一约束 +
   UPSERT，按 `IdempotencyKey` 或 `(projection, source_revision_id)` 去重）。
 - 版本防护（设计 §15）：投影 Handler 更新前必须确认事件的 `revision_id`
   仍是页面当前 Revision，旧 Revision 触发的事件不得覆盖新投影——
@@ -280,12 +279,6 @@ consumer.Register(page.OutboxEventRevisionPublished,
     resolver.WrapPublishedHandler(projection.NewRevisionPublishedHandler(pool, registry, logger)))
 ```
 
-## 测试（`resolver_test.go`，真实 PostgreSQL）
-
-创建/改名触发解析（AST 原样断言）、同名页面+别名歧义保持 unresolved、
-created 先于 published 的乱序兜底、v2 发布后旧 Revision 投影的版本防护、
-同一事件重复投递幂等、非法 payload 返回错误进入退避重试。
-
 ---
 
 # projection — RenderedPage 渲染投影（M3-T05）
@@ -317,13 +310,6 @@ ast.ContentHash(doc)`，与 content_snapshot 的哈希同源）。
 - **幂等**：同一 `(pageID, revisionID)` 重复 Rebuild 产出同一行
   （`created_at` 刷新但内容列不变），承受至少一次投递。
 
-## 测试（`builder_render_test.go` + `cmd/api/reading_rendered_test.go`）
-
-Builder 侧：投影行 html 与实时渲染一致、revision/renderer_version/content_hash
-与权威一致、重发新版覆盖更新、删行后 RebuildPage 恢复（INV-03）、重复事件幂等。
-API 侧：SQL 篡改投影 html 为标记串断言命中走投影（by-title/by-id）、删行后实时
-兜底、投影 Revision 落后 current 时兜底、renderer_version 不匹配时兜底。
-
 ---
 
 # projection — 外链使用投影（M3-T06）
@@ -353,8 +339,7 @@ usage 是可丢弃投影，`external_resource` 则是 Source 与普通外链共�
 
 健康检查通过 `evidence.UpdateExternalResourceStatus` 只更新资源自身的 status、
 HTTP 状态、hash、canonical/redirect 与检查时间；它不写 Page、Revision 或 Outbox，
-因此资源可用性变化不会伪造正文版本。集成测试
-`TestUpdateExternalResourceStatusDoesNotCreateRevision` 固化 INV-12。
+因此资源可用性变化不会伪造正文版本。
 
 ---
 
@@ -385,15 +370,7 @@ go run ./cmd/worker -check-consistency -sample-size 100
 对稳定排序后的最多 N 个活跃已发布页面，逐一检查所有已注册 Builder 的
 `projection_state`：缺失、status=error、source_revision_id 落后 Current 都记问题；
 有问题退出码 1，可据 page_id + projection_type 执行 `-rebuild-page` 修复。
-内容级等价由各 Builder 的 INV-03 重建测试保障，抽检负责发现运行态控制面漂移。
-
-## 故障注入与整体恢复门禁
-
-- `TestFaultInjectionDelayedAndDuplicateMessages`：新版消息重复两次后旧版延迟到达，
-  最终投影仍唯一且指向 Current；
-- `TestM3AllPageProjectionsRebuild`：删除同页 page links、outline/anchor、rendered page、
-  external links 与全部 state 后，按页重建得到等价快照；
-- `TestProjectionStateOKAndError`：Builder 失败只写 error 状态，不回滚已发布 Revision。
+抽检负责发现运行态控制面漂移。
 
 ---
 
@@ -414,14 +391,6 @@ go run ./cmd/worker -check-consistency -sample-size 100
 `revision_id`、`block_id`、`node_id`；Entity 额外返回 mention_text，Citation
 保留可空 claim_id。查询 SQL 只读投影表并要求投影 revision 等于 Page Current，
 不解析或扫描 AST JSON；投影缺失时返回空列表而不是同步回源。
-
-测试：`builder_knowledge_test.go` 覆盖构建、重复重建、重发删旧行、反向查询与
-“删投影后返回空（证明不扫 AST）”；`cmd/api/projection_test.go` 覆盖真实 HTTP
-分页、Revision/Block/Node 定位与 400/404。
-
-M4 里程碑验收由 `cmd/api/evidence_chain_test.go` 串起 Page Current AST、
-ClaimUsage、ClaimSource 与 Citation/SourceChunk，并证明 Supersede 后旧投影与证据链
-仍可按稳定 ID 审计。
 
 ---
 
@@ -451,10 +420,6 @@ title/alias/body/entity，元数据过滤支持 namespace/language/entity_type�
 全量重建开始前 Search Builder 清空搜索文档，再由 `RebuildAll` 扫描全部活页面的
 Current Revision 重建，避免软删除页或历史遗留文档残留。查询端只读搜索投影，不实时
 扫描 AST；投影积压、错误和陈旧状态沿用 Outbox 与 `projection_state` 运维口径。
-
-测试：`internal/search/postgres_test.go` 覆盖标题/别名/中英文正文/Entity、过滤、
-高亮、幂等更新与替换重建；`builder_search_test.go` 覆盖 AST/元数据构建和来源
-Revision；`cmd/api/search_test.go` 覆盖 HTTP 参数、分页、错误与响应契约。
 
 ## 早期阶段搜索收敛（ADR-0016）
 

@@ -94,15 +94,8 @@ make check              # 提交前质量门禁
 make ci                 # check + 生成物漂移 + 安全扫描
 ```
 
-集成测试需要独立数据库：
-
-```sh
-TEST_DATABASE_URL=postgres://wiki@127.0.0.1:5432/wiki_test?sslmode=disable \
-  make test-go-integration
-```
-
-未设置 `TEST_DATABASE_URL` 时集成测试会 skip。集成用例每例 Reset 全库，
-必须 `-p 1` 串行；并行开发时请为每个 Agent 建独立库。
+仓库当前不维护自动化测试套件；上述门禁执行格式化、静态分析、类型检查、构建、
+契约漂移、迁移规范、部署静态检查和安全扫描。
 
 ---
 

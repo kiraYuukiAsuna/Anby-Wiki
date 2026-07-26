@@ -32,8 +32,8 @@ type Decision struct {
 	RetryAfter time.Duration
 }
 
-// Counter is the minimal Redis surface the limiter needs, so tests can supply
-// an in-memory double instead of a live server.
+// Counter is the minimal Redis surface the limiter needs, allowing alternate
+// implementations without coupling the limiter to a concrete Redis client.
 type Counter interface {
 	Incr(ctx context.Context, key string) *redis.IntCmd
 	PExpire(ctx context.Context, key string, ttl time.Duration) *redis.BoolCmd

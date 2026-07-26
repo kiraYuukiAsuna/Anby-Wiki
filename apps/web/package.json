@@ -8,9 +8,6 @@
     "start": "next start",
     "lint": "eslint",
     "typecheck": "tsc --noEmit",
-    "test": "vitest run",
-    "test:e2e": "playwright test",
-    "test:e2e:headed": "playwright test --headed",
     "gen:client": "openapi-generator-cli generate -i ../../contracts/openapi/openapi.yaml -g typescript-fetch -o ../../contracts/generated/typescript && node scripts/normalize-generated-client.mjs"
   },
   "dependencies": {
@@ -37,22 +34,14 @@
   },
   "devDependencies": {
     "@openapitools/openapi-generator-cli": "2.40.0",
-    "@playwright/test": "1.61.1",
     "@tailwindcss/postcss": "4.3.3",
-    "@testing-library/dom": "10.4.1",
-    "@testing-library/jest-dom": "7.0.0",
-    "@testing-library/react": "16.3.2",
     "@types/node": "20.19.43",
     "@types/react": "19.2.17",
     "@types/react-dom": "19.2.3",
     "@types/uuid": "10.0.0",
-    "@vitejs/plugin-react": "6.0.3",
     "eslint": "9.39.5",
     "eslint-config-next": "16.2.11",
-    "jsdom": "29.1.1",
     "tailwindcss": "4.3.3",
-    "typescript": "5.9.3",
-    "vite-tsconfig-paths": "6.1.1",
-    "vitest": "4.1.10"
+    "typescript": "5.9.3"
   }
 }

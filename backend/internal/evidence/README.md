@@ -16,7 +16,7 @@ Evidence 领域服务：媒体资产（Asset）上传、外部资源（ExternalR
 对象键内容寻址：`{env}/asset/{content_hash前2位}/{content_hash}`，
 由 `platform/storage.ContentKey` 构造，`content_hash` 为内容的小写 hex SHA-256。
 `StoreAsset` 流式计算摘要（`io.TeeReader`，内容只读一遍），再以该键
-`Put` 到 `storage.Store`（生产为 S3 兼容服务，测试为内存 Fake）。
+`Put` 到生产 S3 兼容 `storage.Store`。
 
 ## 去重语义
 
@@ -37,26 +37,15 @@ Evidence 领域服务：媒体资产（Asset）上传、外部资源（ExternalR
 
 - `asset_revision` / `source_version` / `source_chunk` / `citation`：
   000007 复用 000001 的 `reject_immutable_mutation()` 触发器拒绝 UPDATE/DELETE
-  （TRUNCATE 不触发行级触发器，testkit Reset 可安全清库）。
+  （TRUNCATE 不触发行级触发器）。
 - `asset` 允许 UPDATE（status / name / current_revision_id 流转），软删除经
   `status='deleted'`，删除后名字可被新资产复用（与 page 标题同模式）。
-
-## 测试
-
-- `service_test.go`：testkit + 内存 Fake Store 的集成测试——上传落库与存储布局、
-  去重（不重复 Put）、新内容新 revision、入参与 Actor 校验，
-  以及 SQL 级不可变触发器与 `claim_source_citation_fk` 外键验证。
-- `normalize_test.go`：URL 规范化纯函数表驱动单测（无 DB）。
-- `source_service_test.go`：ExternalResource 幂等查重、CreateSource 三种关联与
-  Actor 校验、AddSourceVersion 幂等/ordinal/locator/raw_asset 校验、
-  CreateCitation 校验矩阵。
-- 未设 `TEST_DATABASE_URL` 时集成用例全部 skip。
 
 ## Source / Citation（M4-T05）
 
 ### URL 规范化（`normalize.go`，纯函数）
 
-`NormalizeURL` 是 external_resource 查重键的唯一来源，规则（表驱动单测覆盖）：
+`NormalizeURL` 是 external_resource 查重键的唯一来源，规则如下：
 
 - 仅接受 http/https 绝对 URL，其余返回 `ErrInvalidURL`；
 - scheme 与 host 小写；剔除默认端口（http:80 / https:443），非默认端口保留；
@@ -124,6 +113,5 @@ DB 外键 `claim_source_citation_fk` 兜底）。
 `ExternalResource`。HTTP `GET /api/v1/citations/{id}` 将该定位链匿名只读暴露；
 前端 `/citations/{id}` 显示引文、Locator、Chunk 原文、版本哈希和规范化外部 URL。
 
-`backend/cmd/api/evidence_chain_test.go` 的 `TestM4EvidenceChain` 从页面
-ClaimReference 出发，经使用投影、ClaimSource、Citation 到 SourceChunk，随后
-Supersede Claim 并断言旧事实、旧证据绑定与已发布 AST 引用均不被改写。
+从页面 ClaimReference 可经使用投影、ClaimSource、Citation 追溯到 SourceChunk；
+Supersede Claim 不改写旧事实、旧证据绑定与已发布 AST 引用。

@@ -18,10 +18,3 @@ HTTP 层只暴露匿名列表、详情和成员查询；写入由领域服务校
 Collection 按 `(title, id)` 排序，Membership 按
 `(sort_key, member_type, target_id)` 排序。游标是 URL-safe Base64 编码的内部键，
 缺字段、空 UUID、未知成员类型或非法编码均返回 `ErrInvalidCursor`。
-
-## 验证
-
-```bash
-TEST_DATABASE_URL=postgres://wiki@127.0.0.1:55432/wiki?sslmode=disable \
-  go test ./internal/collection ./cmd/api ./migrations -count=1 -p 1
-```

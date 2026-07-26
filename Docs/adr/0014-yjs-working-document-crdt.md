@@ -29,16 +29,6 @@ AST v1 无损往返。BlockNote 已声明 Yjs/y-prosemirror 协作生态兼容�
 - CRDT 只解决操作层收敛。Base/Current/Proposed 的语义冲突继续使用三方合并和
   `MergeConflict`，不得自动裁决。
 
-## 验证结果
-
-`apps/web/lib/collaboration/yjs-ast.test.ts` 覆盖：
-
-- 全部代表性 AST v1 fixture 无损物化；
-- 两个离线副本并发字符编辑后收敛；
-- Block 增加、删除、移动及属性修改保持稳定 ID；
-- 重复和乱序 binary update 幂等收敛；
-- 非法工作副本在物化边界被 AST Schema 拒绝。
-
 ## 备选方案
 
 - Automerge：数据模型清晰且自带同步协议，但当前编辑器生态需要新增独立
@@ -54,4 +44,4 @@ AST v1 无损往返。BlockNote 已声明 Yjs/y-prosemirror 协作生态兼容�
   Presence 是易失数据，不写入权威表。
 - M8-T04 只能经现有 `BlockEditor`/AST Adapter 边界接入，不允许业务组件直接依赖
   Yjs 或 BlockNote 内部结构。
-- Yjs major 升级或 CRDT 根结构变化必须新增 codec version，并提供旧快照恢复测试。
+- Yjs major 升级或 CRDT 根结构变化必须新增 codec version，并提供旧快照恢复方案。

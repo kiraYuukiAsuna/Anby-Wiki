@@ -115,5 +115,5 @@ Schema，禁止回滚，必须发布 forward fix。
   [data-consistency-doctor.md](./data-consistency-doctor.md) 处理后重跑。
 - 应用 healthcheck 失败：不要手动跳过；确认配置、依赖与镜像内 health 工具。
 
-Docker 不可用的开发机只能完成静态清单和脚本测试，不能作为真实镜像/Compose
+Docker 不可用的开发机只能完成静态清单和 Shell 语法检查，不能作为真实镜像/Compose
 通过的证据；CI deploy job 或具备 Docker daemon 的发布机仍需执行真实校验。

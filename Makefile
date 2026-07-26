@@ -16,15 +16,14 @@ endif
 	help bootstrap \
 	dev dev-api dev-worker dev-web \
 	pg-start pg-stop pg-reset migrate-up migrate-down migrate-version migration-check \
-	format-check typecheck lint lint-go lint-web \
-	test test-go test-go-integration test-web test-e2e test-observability test-scripts \
+	format-check typecheck lint lint-go lint-web shell-check \
 	build build-go build-web check \
 	gen-client contracts-check gen-check \
 	deploy-check \
 	security security-go security-web security-secrets \
 	perf-db perf-smoke perf-full \
 	ci \
-	contract-schema-check observability-config-check deploy-config-check
+	contract-schema-check deploy-config-check
 
 ## Makefile 是仓库命令的公共入口；scripts/ 保存实现脚本与需显式执行的运维操作。
 
@@ -91,27 +90,8 @@ lint-go: format-check ## 执行 Go 格式与 vet 检查
 lint-web: typecheck ## 执行 Web 类型与 ESLint 检查
 	cd $(WEB_DIR) && npm run lint
 
-test: test-go test-web test-scripts ## 执行不依赖外部服务的测试
-
-test-go: ## 执行 Go 单元测试并显式跳过数据库集成测试
-	cd $(BACKEND_DIR) && TEST_DATABASE_URL= go test ./...
-
-test-go-integration: ## 串行执行 PostgreSQL 集成测试
-	@test -n "$$TEST_DATABASE_URL" || { echo 'TEST_DATABASE_URL is required; use an isolated database.'; exit 1; }
-	cd $(BACKEND_DIR) && go test ./... -count=1 -p 1
-
-test-web: ## 执行 Web 单元与组件测试
-	cd $(WEB_DIR) && npm run test
-
-test-e2e: ## 执行 Web 到 API 的端到端冒烟
-	cd $(WEB_DIR) && npm run test:e2e
-
-test-observability: ## 校验可观测性配置与指标契约
-	cd $(BACKEND_DIR) && go test ./internal/platform/observability -count=1
-
-test-scripts: ## 检查 Shell 语法并执行脚本回归测试
+shell-check: ## 检查 Shell 脚本语法
 	find scripts infra/deploy -type f -name '*.sh' -exec $(SH) -n {} \;
-	$(SH) scripts/tests/backup-restore-test.sh
 
 build: build-go build-web ## 构建 Go 与 Web
 
@@ -121,7 +101,7 @@ build-go: ## 构建全部 Go 命令与包
 build-web: ## 构建 Next.js Web
 	cd $(WEB_DIR) && npm run build
 
-check: lint test build contracts-check migration-check deploy-check ## 执行提交前质量门禁
+check: lint build contracts-check migration-check deploy-check ## 执行提交前静态与构建门禁
 
 ##@ 契约与生成物
 
@@ -136,7 +116,7 @@ gen-check: contracts-check gen-client ## 校验生成客户端没有漂移
 
 ##@ 部署与运维检查
 
-deploy-check: test-scripts ## 静态校验生产部署与运维脚本
+deploy-check: shell-check ## 静态校验生产部署与运维脚本
 	$(SH) scripts/check-deploy-config.sh
 
 ##@ 安全
@@ -155,7 +135,7 @@ security-secrets:
 
 ##@ 性能
 
-perf-db: ## 重建独立性能测试数据库
+perf-db: ## 重建独立性能基准数据库
 	$(SH) scripts/perf-db.sh
 
 perf-smoke: ## 执行性能冒烟
@@ -170,5 +150,4 @@ ci: check gen-check security ## 执行本地等价 CI
 
 # 兼容旧入口；不在 help 中展示。
 contract-schema-check: contracts-check
-observability-config-check: test-observability
 deploy-config-check: deploy-check

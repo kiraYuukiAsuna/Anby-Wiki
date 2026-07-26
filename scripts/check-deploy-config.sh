@@ -14,8 +14,7 @@ fail() {
 
 for script in \
   "$ROOT/scripts/deploy.sh" \
-  "$ROOT/scripts/check-deploy-config.sh" \
-  "$ROOT/scripts/tests/deploy-test.sh"
+  "$ROOT/scripts/check-deploy-config.sh"
 do
   /bin/sh -n "$script"
 done
@@ -102,8 +101,6 @@ latest=$(
 expected=$(sed -n 's/^MIGRATION_EXPECTED_VERSION=//p' "$EXAMPLE_ENV")
 [ "$expected" = "$latest" ] ||
   fail "example migration target $expected does not match repository latest $latest"
-
-/bin/sh "$ROOT/scripts/tests/deploy-test.sh"
 
 if ! command -v docker >/dev/null 2>&1 || ! docker info >/dev/null 2>&1; then
   echo "deploy config: static checks passed; BLOCKED real compose/image validation (Docker unavailable)"

@@ -48,9 +48,6 @@ M3 引入 RenderedPage 投影与缓存时复用本包，并按 `RendererVersion`
 3. 不输出任何事件属性（`on*`）、`<script>`、`<iframe>` 等元素；
    未解析引用不带 href，杜绝构造跳转。
 
-XSS 回归用例见 `render_test.go`：`<script>` 文本、`onerror` 属性注入、
-`javascript:` URL、`data:` URL、URL/属性中的引号逃逸，以及知识引用展示文本/标题转义。
-
 ## 版本策略
 
 `RendererVersion` 当前为 `"v3"`。v3 让 Claim/Citation 引用可导航到只读详情页。规则：

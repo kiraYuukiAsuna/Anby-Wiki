@@ -15,7 +15,7 @@
 - 10 个基础 EntityType 与 8 个基础 Property。
 - `editor`、`reviewer`、`applier`、`admin` 四个内置 Role。
 
-`down` 删除完整 Schema，仅用于开发、测试和尚未承载生产数据的环境。执行会永久删除全部业务数据。
+`down` 删除完整 Schema，仅用于本地开发和尚未承载生产数据的环境。执行会永久删除全部业务数据。
 
 ## 预发布规则
 

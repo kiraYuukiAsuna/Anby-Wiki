@@ -100,7 +100,7 @@ func seedPage(ctx context.Context, pages *page.Service, search *wikisearch.Postg
 		PageID: p.ID, WikiID: defaultWikiID, Namespace: "main", Language: "zh-Hans",
 		SourceRevisionID: revisionID, DisplayTitle: title, NormalizedTitle: title,
 		Aliases: []string{fmt.Sprintf("别名 %06d", index)},
-		Body:    fmt.Sprintf("共同基准词 postgres fts 容量测试正文 分片 %03d", index%1000),
+		Body:    fmt.Sprintf("共同基准词 postgres fts 容量基准正文 分片 %03d", index%1000),
 	})
 	return fixture{PageID: p.ID, RevisionID: revisionID, Title: title}, err
 }

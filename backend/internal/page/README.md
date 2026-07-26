@@ -45,8 +45,7 @@ API handler、Worker、Agent 不得绕过本包直接写 `page` / `revision` / `
 - **并发**：两个以相同 expected 并发发布的请求，行锁保证恰一个成功，
   另一个拿到 `ErrStaleRevision`（HTTP 409 `stale_revision`），不产生双写。
 - **失败原子性**：任一步失败整体回滚——不留孤立 snapshot/revision/audit/outbox，
-  current 指针不移动。集成测试用包内钩子 `beforePublishCommit`
-  （publish.go，生产恒为 nil）在全部写入后、提交前注入错误验证回滚。
+  current 指针不移动。
 - **不可变性**：Revision 与 ContentSnapshot 发布后不可修改，
   由 000001 迁移的行级触发器拒绝 UPDATE/DELETE；正文修改只能产生新 Revision。
 
@@ -115,15 +114,3 @@ API handler、Worker、Agent 不得绕过本包直接写 `page` / `revision` / `
 
 错误响应体统一由 `backend/internal/platform/httpx` 写出，
 `request_id` 取自 RequestID 中间件写入的上下文（与响应头 `X-Request-ID` 一致）。
-
-## 测试
-
-- `service_test.go` / `title_test.go`：页面身份与重定向（M1-T04），
-  以及 page.created / page.renamed 的审计与 Outbox 事件 payload（M3-T04）。
-- `publish_test.go`：首发布→二次发布、事件 payload、陈旧基线、并发双发布
-  （barrier 同时放行）、非法 AST、Actor 规则、页面不存在。
-- `publish_internal_test.go`：提交前注入失败的回滚原子性。
-- `history_test.go`：历史顺序与游标分页、单版详情与跨页 404、结构 Diff、
-  回滚（新 Revision + 快照去重复用 + rolled_back 审计 + INV-02 未改动断言）、
-  回滚与并发发布交错的陈旧基线拒绝。
-- 均需 `TEST_DATABASE_URL`（未设置时 testkit 自动 skip）。

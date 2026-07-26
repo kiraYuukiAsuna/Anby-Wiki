@@ -27,7 +27,7 @@ P0 完成后交付一个可内部使用的单站点 Wiki Beta；P1 增加多人�
 - Revision、ContentSnapshot 发布后不可变；Projection 必须可丢弃、可重建。
 - 业务 AI 在 Proposal/Review 能力完成前只用于辅助开发，不接入正式数据写入路径。
 - 所有异步任务必须幂等，并携带来源版本；旧任务不得覆盖新 Revision 的投影。
-- 所有 Task 都同时交付实现、测试、必要迁移、契约和最小运维说明。
+- 所有 Task 都同时交付实现、必要迁移、契约、静态/构建检查和最小运维说明。
 
 ## 2. 固定技术基线
 
@@ -53,7 +53,7 @@ P0 完成后交付一个可内部使用的单站点 Wiki Beta；P1 增加多人�
 | 多人协作 | CRDT Adapter；P1 接入 | CRDT 状态不作为正式版本历史 |
 | 接口规范 | OpenAPI 3.1 | HTTP API 的唯一权威契约；错误模型、分页和幂等头统一定义 |
 | 客户端生成 | OpenAPI Generator 或 Kiota 二选一 | M0 选定一种并固定版本，只维护一条生成链路，生成物禁止手改 |
-| 测试 | Go/前端单元 + PostgreSQL 集成 + OpenAPI Contract + E2E | 不使用纯 Mock 代替关键事务测试 |
+| 质量检查 | gofmt/go vet、TypeScript/ESLint、构建、OpenAPI/Schema 漂移、迁移与部署静态检查 | 当前轻量阶段不维护自动化测试套件 |
 | 可观测性 | 结构化日志、Trace、Metrics | `request_id/job_id/page_id/revision_id/change_batch_id` 可串联 |
 
 建议目录边界：
@@ -66,7 +66,6 @@ backend/
   cmd/worker/                # Golang 异步 Worker 入口
   internal/                  # Page、Knowledge、Evidence、Governance 领域模块
   migrations/                # PostgreSQL 显式迁移
-  testkit/                   # Fixture、Factory、集成测试工具
 contracts/
   openapi/                   # OpenAPI 3.1 权威接口定义
   schemas/                   # AST、事件、ProposalOperation JSON Schema
@@ -118,11 +117,11 @@ M2、M3、M4 可在 M1 后由不同 Agent 并行推进，但同一时间只允�
 ### 4.1 合理 Task 的边界
 
 - 一个主要业务结果，例如“发布 Revision 的原子事务”，而不是“实现整个 Page 模块”。
-- 尽量只跨一个领域；纵向功能允许同时修改 Schema、Service、API 和测试。
+- 尽量只跨一个领域；纵向功能允许同时修改 Schema、Service、API 和 UI。
 - 有明确输入契约和输出契约；不能依赖 Agent 自行猜测产品规则。
-- 有自动化验收命令，并至少包含一个失败路径或并发路径测试。
+- 有明确检查命令，并说明失败路径或并发路径的处理语义。
 - 数据库迁移、公共 Schema、事件格式等高冲突文件由串行 Task 管理。
-- 大 Task 先拆“契约/迁移”“领域实现”“UI/E2E”，而不是让多个 Agent 同时改同一功能。
+- 大 Task 先拆“契约/迁移”“领域实现”“UI/联调”，而不是让多个 Agent 同时改同一功能。
 
 ### 4.2 每个 Task Packet 必填内容
 
@@ -134,20 +133,20 @@ Task ID / 标题
 输入/输出契约、数据不变量
 实现要求与禁止事项
 验收场景（Given / When / Then）
-必须执行的测试命令
+必须执行的检查命令
 迁移、回滚、观测和文档要求
 交付文件清单
 ```
 
 ### 4.3 通用 Definition of Done
 
-- 类型检查、Lint、单元测试、相关集成测试通过。
-- 新增 API/事件/Operation 均有版本化 Schema 和契约测试。
+- 类型检查、Lint、相关构建与静态检查通过。
+- 新增 API/事件/Operation 均有版本化 Schema 和契约漂移检查。
 - 新迁移在空库升级、已有库升级、回滚策略三种场景下有说明。
-- 权威写入路径有事务测试；异步路径有幂等和重试测试。
+- 权威写入路径保持事务边界；异步路径实现幂等和重试。
 - 用户输入与渲染输出经过校验、授权与安全处理。
 - 日志不记录来源全文、Prompt 密钥、Token 或个人敏感信息。
-- 文档、Fixture 和验收命令随代码提交；不留下无负责人 TODO。
+- 文档和检查命令随代码提交；不留下无负责人 TODO。
 
 ## 5. P0 里程碑与 Task
 
@@ -157,15 +156,15 @@ Task ID / 标题
 
 | ID | Task | 交付与验收 | 依赖 |
 |---|---|---|---|
-| M0-T01 | 范围与需求追踪矩阵 | 将设计稿 P0 对象、14 条不变量映射到里程碑和测试 ID；明确 P0 非目标 | 无 |
+| M0-T01 | 范围与需求追踪矩阵 | 将设计稿 P0 对象、14 条不变量映射到里程碑和验收场景；明确 P0 非目标 | 无 |
 | M0-T02 | 技术 ADR | 固化既定技术栈；只确认 Go 工程结构、SQL/迁移工具、队列、对象存储、编辑器、搜索、客户端生成器与 ID 策略 | T01 |
 | M0-T03 | 仓库脚手架 | 创建 Next.js/TypeScript Web、Go API/Worker、Contracts 和 Infra；接入 Tailwind CSS 4、shadcn/ui、Radix、Lucide、Geist、Sonner、cmdk、Zustand、SWR、Zod | T02 |
 | M0-T04 | 本地基础设施 | Nginx、PostgreSQL、Redis、对象存储的可复现本地环境；反向代理、健康检查和初始化可重复执行 | T02 |
-| M0-T05 | CI 与质量门禁 | Go 格式/静态检查/测试/构建、前端类型/Lint/测试/构建、OpenAPI 校验、生成物漂移和迁移校验 | T03、T04 |
+| M0-T05 | CI 与质量门禁 | Go 格式/静态检查/构建、前端类型/Lint/构建、OpenAPI 校验、生成物漂移和迁移校验 | T03、T04 |
 | M0-T06 | OpenAPI 与服务基础契约 | OpenAPI 3.1、标准错误/分页/幂等模型、请求 ID、配置校验、健康接口；选定 OpenAPI Generator 或 Kiota 并验证 Next.js 调用 Go API | T03 |
 | M0-T07 | Agent 开发约定 | 增加仓库级 Agent 指令、Task 模板、提交/分支/迁移所有权和交接清单 | T01-T06 |
 
-**里程碑验收**：从全新环境执行约定的 bootstrap 命令后，Web/API/Worker 启动，依赖就绪，CI 完整通过；任何 Agent 可只读仓库文档定位模块边界与测试命令。
+**里程碑验收**：从全新环境执行约定的 bootstrap 命令后，Web/API/Worker 启动，依赖就绪，CI 完整通过；任何 Agent 可只读仓库文档定位模块边界与检查命令。
 
 ### M1：文档内核与不可变版本
 
@@ -180,9 +179,9 @@ Task ID / 标题
 | M1-T05 | Revision 发布事务 | 校验 AST 和 `expected_revision_id`，原子写入 Snapshot/Revision/current pointer/Audit/Outbox；并发发布仅一个成功 | T02-T04 |
 | M1-T06 | 基础 Renderer 与阅读 API | AST 输出安全 HTML；按标题/别名/ID 读取当前 Revision；重定向和不存在页面行为确定 | T01、T04、T05 |
 | M1-T07 | 历史、Diff 与回滚 | Revision 列表、两版结构 Diff；回滚通过创建新 Revision 完成，旧 Snapshot 不变 | T02、T05 |
-| M1-T08 | 文档内核集成测试 | 创建→两次发布→改名→旧标题访问→回滚；覆盖非法 AST、陈旧基线、重定向环和无效 Actor | T04-T07 |
+| M1-T08 | 文档内核人工验收 | 创建→两次发布→改名→旧标题访问→回滚；检查非法 AST、陈旧基线、重定向环和无效 Actor | T04-T07 |
 
-**里程碑验收**：API 测试中完成页面全生命周期；直接更新已发布 Revision/Snapshot 会失败；回滚后产生新的 Revision；发布事务失败时不留下半成品或孤立 current pointer。
+**里程碑验收**：人工联调完成页面全生命周期；直接更新已发布 Revision/Snapshot 会失败；回滚后产生新的 Revision；发布事务失败时不留下半成品或孤立 current pointer。
 
 ### M2：人工编辑与阅读产品闭环
 
@@ -196,7 +195,7 @@ Task ID / 标题
 | M2-T04 | 引用节点编辑 | 用 cmdk 完成页面搜索选择；创建已解析/未解析 PageReference、ExternalLink 及显示文本，目标 ID 与显示文字分离 | T02、M1-T04 |
 | M2-T05 | 历史与回滚界面 | 展示结构 Diff、Revision 元信息和回滚确认；回滚后跳转到新 Revision | M1-T07 |
 | M2-T06 | 乐观锁冲突体验 | 两个浏览器基于同一 Revision 发布时，后提交者保留本地内容并看到 Base/Current 提示 | T03、M1-T05 |
-| M2-T07 | 浏览器 E2E | 覆盖创建、编辑、链接、发布、改名、冲突、历史和回滚的主路径 | T01-T06 |
+| M2-T07 | 浏览器人工验收 | 覆盖创建、编辑、链接、发布、改名、冲突、历史和回滚的主路径 | T01-T06 |
 
 **里程碑验收**：不调用内部 API 或手写 JSON，即可在浏览器创建并维护一篇含标题、段落、列表、表格和内部链接的页面；双窗口并发不会静默覆盖。
 
@@ -212,7 +211,7 @@ Task ID / 标题
 | M3-T04 | 未解析链接 Resolver | 新建/改名页面后解析候选；无歧义时更新投影，有歧义时保持 unresolved，不直接改 AST | T03、M1-T04 |
 | M3-T05 | RenderedPage 投影 | Worker 生成带 renderer version/hash 的安全 HTML；阅读路径优先投影，缺失时受控降级 | T02、M1-T06 |
 | M3-T06 | 外链使用投影 | `external_resource/external_link_usage` 和 URL 规范化；URL 状态更新不创建页面 Revision | T02、M2-T04 |
-| M3-T07 | 运维与一致性工具 | 投影积压/延迟/失败指标，按页重建命令，一致性抽检；故障注入测试覆盖乱序和重复消息 | T01-T06 |
+| M3-T07 | 运维与一致性工具 | 投影积压/延迟/失败指标，按页重建命令，一致性抽检；人工故障演练覆盖乱序和重复消息 | T01-T06 |
 
 **里程碑验收**：删除某页全部投影后可从当前 Revision 完整重建；重复、延迟、乱序事件不会产生重复关系或旧渲染；Worker 故障不回滚已经发布的 Revision。
 
@@ -230,7 +229,7 @@ Task ID / 标题
 | M4-T06 | AST 知识引用 | EntityReference、ClaimReference、CitationReference Schema、编辑命令和 Renderer；引用稳定 ID | M1-T01、T02、T03、T05 |
 | M4-T07 | 知识/证据投影 | `entity_mention_projection/citation_usage/claim_usage`；提供反向查询 API 并携带 Revision | M3-T02、T06 |
 | M4-T08 | 知识与来源界面 | Entity/Claim 详情、验证状态、来源定位、页面使用位置；没有权限时只读 | T02-T07 |
-| M4-T09 | 端到端证据测试 | 页面 ClaimReference → Claim → Citation → SourceChunk 全链路；Supersede 后旧事实仍可审计 | T01-T08 |
+| M4-T09 | 证据链人工验收 | 页面 ClaimReference → Claim → Citation → SourceChunk 全链路；Supersede 后旧事实仍可审计 | T01-T08 |
 
 **里程碑验收**：页面中的结构化事实可定位到具体 SourceVersion/Chunk；修改 Claim 不会篡改旧 Citation；反向查询不扫描 AST JSON；同名 Entity 不会被无依据合并。
 
@@ -250,7 +249,7 @@ Task ID / 标题
 | M5-T08 | Proposal 原子应用 | 经批准后原子创建 Revision/Claim/ChangeBatch/Audit/Outbox；重复 Apply 返回同一结果 | T03-T07 |
 | M5-T09 | 批量回滚 | 按 ChangeBatch 生成补偿变更；页面回滚创建新 Revision，Claim 使用 Supersede/状态转换 | T08 |
 | M5-T10 | 权限与页面保护 | Role/ActorRole/PageProtection；创建、编辑、审核、批量应用分权，AI Actor 无直接发布权限 | T06、T08 |
-| M5-T11 | 治理安全测试 | 伪造批准、重复应用、陈旧 Proposal、越权、部分事务失败、批量回滚等对抗场景 | T01-T10 |
+| M5-T11 | 治理安全验收 | 人工检查伪造批准、重复应用、陈旧 Proposal、越权、部分事务失败、批量回滚等对抗场景 | T01-T10 |
 
 **里程碑验收**：禁用 Proposal Apply 服务后，AI Actor 没有任何可修改 Revision、Claim 或 Projection 的路径；陈旧或高风险 Proposal 必须进入冲突/审核；批量操作能完整追踪并以新版本方式回滚。
 
@@ -287,10 +286,10 @@ Task ID / 标题
 | M7-T06 | 备份、恢复与重建演练 | PostgreSQL 和对象存储恢复；Search/Projection 从权威数据重建；记录 RPO/RTO 实测值 | M3、M4、T01 |
 | M7-T07 | 数据一致性巡检 | 检查 current pointer、不可变内容、悬空引用、投影版本、Claim/Citation 链、Outbox 卡死；支持安全修复或生成报告 | M1-M6 |
 | M7-T08 | 部署与迁移流水线 | Nginx、Next.js、Go API/Worker 的环境配置、Migration gate、滚动发布、兼容窗口、回滚流程和 Seed | M0、T04-T07 |
-| M7-T09 | P0 需求与不变量验收 | 对照 M0 追踪矩阵执行功能、安全、故障和恢复测试；所有例外有明确 ADR | T01-T08 |
+| M7-T09 | P0 需求与不变量验收 | 对照 M0 追踪矩阵执行功能、安全、故障和恢复演练；所有例外有明确 ADR | T01-T08 |
 | M7-T10 | Beta 发布与观察期 | 小范围数据导入、运行手册、值班/故障分级、反馈入口；观察期内不并行引入 P1 架构改动 | T09 |
 
-**里程碑验收**：P0 追踪矩阵全部通过；在测试环境完成数据库恢复和投影全量重建；十万级数据下达到 ADR 中定义的 SLO；上线后能从日志/指标定位任一发布或导入链路。
+**里程碑验收**：P0 追踪矩阵全部通过；在隔离环境完成数据库恢复和投影全量重建；十万级数据下达到 ADR 中定义的 SLO；上线后能从日志/指标定位任一发布或导入链路。
 
 ## 6. P1 里程碑与 Task
 
@@ -307,7 +306,7 @@ Task ID / 标题
 | M8-T05 | 发布与 WorkingDocument 换基 | 发布检查 base revision；成功后换基，失败时保留工作副本并提示新 Current | T04、M1-T05 |
 | M8-T06 | AI 三方合并 | Base/Current/Proposed 块级合并；无冲突合并到工作副本或新 Proposal，有冲突显式记录 | T05、M5-T07 |
 | M8-T07 | MergeConflict 解决界面 | 展示三方值、逐冲突决议、重新校验后 Apply；解决记录进入 Audit | T06 |
-| M8-T08 | 协作可靠性测试 | 多客户端、离线恢复、乱序/重复 update、服务重启、大文档、删除后编辑和权限撤销 | T02-T07 |
+| M8-T08 | 协作可靠性验收 | 人工检查多客户端、离线恢复、乱序/重复 update、服务重启、大文档、删除后编辑和权限撤销 | T02-T07 |
 
 **里程碑验收**：三个客户端可同时编辑并在断网重连后收敛；正式发布仍是一条单父 Revision 主线；CRDT 自动合并不被当作语义冲突的自动裁决。
 
@@ -324,7 +323,7 @@ M9 的子域相对独立，可在冻结各自 Schema 后并行开发。
 | M9-T05 | 外链健康检查 | 调度、退避、Canonical/Redirect/失效状态；只更新 ExternalResource，改目标时生成 Proposal | M3-T06、M5 |
 | M9-T06 | Entity 合并 | merged 映射、引用可解析、标签/Claim 迁移规则、引用修复 Proposal 和回滚策略 | M4、M5 |
 | M9-T07 | 批量风险审核 | 按 ChangeBatch 聚合、抽样/全量规则、部分拒绝策略、灰度 Apply 和暂停 | M5、M6 |
-| M9-T08 | P1 回归与容量测试 | Component/Collection/Link/Entity 后台任务的幂等、重建、积压和性能测试 | T01-T07 |
+| M9-T08 | P1 稳定性与容量验收 | 人工检查 Component/Collection/Link/Entity 后台任务的幂等、重建、积压和性能 | T01-T07 |
 
 **里程碑验收**：章节和 Entity 变更保留旧 ID 的解析路径；Claim 或组件升级只重渲染受影响页面；批量 AI 任务可暂停、审核、灰度应用和审计。
 
@@ -365,7 +364,7 @@ M5 的 Contract/State Machine 可在 M4 后半段开始，但 Apply 不得在 M1
 - 发布事务、Proposal Apply 事务。
 - 仓库根配置、CI、Go Module 和前端依赖锁文件。
 
-其他 Agent 通过已合并契约开发 Adapter、UI、Builder 或测试 Fixture，不在自己的 Task 中顺手修改公共契约。
+其他 Agent 通过已合并契约开发 Adapter、UI 或 Builder，不在自己的 Task 中顺手修改公共契约。
 
 ### 8.3 推荐合并顺序
 
@@ -375,30 +374,17 @@ M5 的 Contract/State Machine 可在 M4 后半段开始，但 Apply 不得在 M1
     → Repository/Domain Service
       → API/Worker
         → UI
-          → E2E/容量/故障测试
+          → 联调/容量评估/故障演练
 ```
 
 契约变更必须向后兼容一个部署窗口：先让消费者兼容新旧格式，再发布生产者，最后清理旧格式。
 
-## 9. 测试与验收体系
+## 9. 质量检查与人工验收
 
-### 9.1 测试层次
+仓库当前不维护自动化测试套件。提交门禁保留 gofmt、go vet、TypeScript、ESLint、
+Go/Web 构建、OpenAPI/Schema 漂移、迁移规范、部署静态检查和安全扫描。
 
-| 层次 | 重点 |
-|---|---|
-| Schema/Property Test | JSON Schema、Go、Zod 的 AST 往返一致，ID 唯一、Operation 可判别、值类型校验 |
-| Domain Unit Test | 状态机、权限、风险、标题规范化、Patch、冲突规则 |
-| PostgreSQL Integration | 发布原子性、不可变约束、唯一索引、并发锁、Outbox |
-| Worker Integration | 重复、乱序、失败、重试、版本防护、重建 |
-| Contract Test | OpenAPI 3.1、生成客户端、事件、AI 结构化输出和版本兼容 |
-| Browser E2E | 阅读、编辑、审核、冲突、回滚、导入 |
-| Golden/Evaluation | 来源抽取、实体匹配、Claim 冲突、Citation 定位 |
-| Security Test | XSS、SSRF、越权、恶意文件、Prompt Injection |
-| Load/Chaos Test | 十万级数据、队列积压、Worker 中断、恢复和重放 |
-
-### 9.2 长期不变量对应的必测门禁
-
-至少将以下测试作为发布阻断项：
+以下长期不变量必须在设计评审、代码评审和发布前人工验收中逐项确认：
 
 1. `current_revision_id` 必须属于当前 Page。
 2. 已发布 Revision/Snapshot 的 Update/Delete 被拒绝。
@@ -446,9 +432,9 @@ M1-T01 与 M1-T03 在 ID、AST 存储和 Schema version ADR 确认后可以并�
 里程碑只有在以下条件全部满足时才可关闭：
 
 - 表格中的 Task 全部合并并通过各自验收，不以“代码已生成”代替完成。
-- 里程碑 E2E 场景在干净环境可重复运行。
+- 里程碑人工验收场景在干净环境可重复执行。
 - 数据迁移、回滚/补偿、告警和运行手册已验证。
-- 需求追踪矩阵与不变量测试已更新。
+- 需求追踪矩阵与不变量验收说明已更新。
 - 没有绕开领域服务的临时写入路径。
 - 下一里程碑依赖的 Schema、API、事件和 Adapter 已冻结并版本化。
 

@@ -39,9 +39,3 @@ HTTP 产品入口同时接收受控公网 URL 与 multipart 文件上传。上�
 - Compose 后的 Operation 再经 Operation v1 Schema；Apply 仍需 M5 权限、审核、冲突和
   原子事务门禁。
 - `error_json` 只保存阶段与稳定错误码，不保存来源全文、Prompt、密钥或供应商响应体。
-
-## 验证
-
-核心回归位于 `pipeline_test.go`、`golden_test.go`、`acquisition_test.go`、
-`extraction_test.go`、`matching_test.go`、`classifier_test.go`、`composer_test.go`。
-PostgreSQL 用例必须按仓库约定设置 `TEST_DATABASE_URL` 并使用 `-p 1` 串行执行。

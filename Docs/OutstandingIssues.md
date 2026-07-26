@@ -17,7 +17,7 @@
 
 1. 上游 Next.js 发布包含安全版本 `sharp` 和 `postcss` 的兼容版本，或提供受支持的升级路径。
 2. 升级 Next.js 及锁文件，不使用 unsupported override 或强制降级。
-3. 重新通过 `npm audit --omit=dev --audit-level=high`、Web 全量测试和生产构建。
+3. 重新通过 `npm audit --omit=dev --audit-level=high`、Web 类型/Lint 和生产构建。
 4. 更新 [安全基线](security.md) 并记录实际修复版本。
 
 ## 2. 账号恢复与二次验证未完成

@@ -16,7 +16,6 @@
   - `backend/internal/<domain>`：领域模块，首批为 `page`、`knowledge`、`evidence`、`governance`、`projection`，另有 `platform`（配置、日志、DB、HTTP 基础设施）。
   - `backend/internal/<domain>` 内部固定分层：`service`（领域服务，唯一权威写入入口）、`repository`（SQL）、`api`（HTTP handler）、`events`（Outbox 载荷）。
   - `backend/migrations`：显式 SQL 迁移（见 ADR-0002）。
-  - `backend/testkit`：Fixture、Factory、集成测试工具。
 - 依赖规则（由 `go vet` + 代码评审执行，后续可接 `go-arch-lint`）：
   - `cmd/*` 可以依赖所有 `internal/*`；`internal/*` 之间允许通过**接口**单向依赖，`platform` 不依赖任何领域模块。
   - HTTP handler、Worker 不得直接调用 `repository` 修改权威状态，必须经 `service`。

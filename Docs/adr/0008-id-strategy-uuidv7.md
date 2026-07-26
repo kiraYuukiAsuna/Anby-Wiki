@@ -25,4 +25,4 @@ Page、Revision、Block、Entity、Claim、Source、Citation 等对象需要稳�
 ## 影响
 
 - 所有迁移中的主键列统一 `uuid PRIMARY KEY`（无外键语义的特殊列除外）。
-- `platform/id` 提供唯一生成入口，测试可注入固定时钟。
+- `platform/id` 提供唯一生成入口，并统一使用系统时钟生成 UUIDv7。

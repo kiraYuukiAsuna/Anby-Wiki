@@ -102,7 +102,7 @@ func (r ConsistencyReport) Healthy() bool { return len(r.Issues) == 0 }
 
 // CheckConsistency 对最多 sampleSize 个活跃已发布页面做控制面一致性抽检。
 // 抽样按 Page ID 稳定排序，方便同一数据集重复定位；内容投影等价重建由各 Builder
-// 的 INV-03 测试与 Rebuilder 负责，这里专注发现缺状态、失败状态和陈旧来源。
+// 与 Rebuilder 的实现保证，这里专注发现缺状态、失败状态和陈旧来源。
 func CheckConsistency(ctx context.Context, pool *pgxpool.Pool, reg *Registry, sampleSize int) (ConsistencyReport, error) {
 	if reg == nil {
 		return ConsistencyReport{}, fmt.Errorf("projection: 一致性抽检缺少 Builder Registry")

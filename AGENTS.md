@@ -43,9 +43,8 @@ make gen-client     # 重新生成 TS 客户端（需 Java，Makefile 已处理 
 make ci             # 本地等价 CI
 ```
 
-端到端冒烟（Web → Go API）：启动 API 后 `SMOKE_API_URL=http://localhost:8080 npm run test`（apps/web 目录）。
-
-PostgreSQL 集成测试：用 `make pg-start` 启动免 Docker 本地实例（Homebrew postgresql@17，端口 55432，数据在 /tmp），然后 `TEST_DATABASE_URL=postgres://wiki@127.0.0.1:55432/wiki?sslmode=disable make test-go-integration`（或手动 `go test ./... -count=1 -p 1`）。未设置 `TEST_DATABASE_URL` 时集成测试必须 skip，单元测试不得依赖数据库。**集成用例每例 Reset 全库，多包并行（或多 Agent 共用同一库）会互相 TRUNCATE——必须 `-p 1` 串行；并行开发时请为每个 Agent 建独立库**（`createdb` 后 `cmd/migrate up`）。
+仓库当前不维护自动化测试套件。`make check` 保留 gofmt、go vet、TypeScript、
+ESLint、Go/Web 构建、契约副本、迁移文件和部署静态检查。
 
 ## 4. 不可违反的规则
 
@@ -77,17 +76,17 @@ PostgreSQL 集成测试：用 `make pg-start` 启动免 Docker 本地实例（Ho
 
 ## 7. Definition of Done（实施方案 §4.3 摘要）
 
-- 类型检查、Lint、单元测试、相关集成测试通过；
-- 新 API/事件/Operation 有版本化 Schema 与契约测试；
+- 类型检查、Lint、相关构建与静态检查通过；
+- 新 API/事件/Operation 有版本化 Schema，并通过契约副本漂移检查；
 - Schema 变更同步维护初始化 up/down，并验证空库 up、完整 down、再次 up；
-- 权威写入路径有事务测试，异步路径有幂等与重试测试；
+- 权威写入继续只经领域服务，异步路径继续实现幂等与重试；
 - 实现范围变化时更新 `Docs/CurrentImplementationStatus.md`；
 - 不留无负责人 TODO。
 
 ## 8. 交接清单（每个 Task 结束时）
 
 1. 变更文件清单与一句话说明；
-2. 执行的验证命令与结果（含失败路径测试）；
+2. 执行的构建、Lint、类型、契约或部署静态检查与结果；
 3. 当前状态/ADR/运维文档的同步更新；
 4. 释放的高冲突资源声明；
 5. 遗留问题与建议的后续 Task ID。

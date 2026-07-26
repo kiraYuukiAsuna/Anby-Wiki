@@ -58,7 +58,7 @@ func main() {
 	os.Exit(run(os.Args[1:]))
 }
 
-// run 解析参数并执行，返回进程退出码（拆出以便测试重建命令路径）。
+// run 解析参数并执行，返回进程退出码。
 func run(args []string) int {
 	fs := flag.NewFlagSet(serviceName, flag.ContinueOnError)
 	rebuildPage := fs.String("rebuild-page", "", "重建指定 Page ID 的全部已注册投影后退出")

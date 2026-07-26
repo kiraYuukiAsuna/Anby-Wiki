@@ -2,7 +2,7 @@
 
 operation.schema.json 是 Proposal 有序原子操作的跨语言权威契约（JSON Schema
 draft 2020-12）。Go 运行时在 backend/internal/governance/schema/ 内嵌字节级副本，
-两者由 `scripts/check-contracts.sh` 和 Go 契约测试共同防漂移。
+两者由 `scripts/check-contracts.sh` 防漂移。
 
 所有操作必须携带：
 

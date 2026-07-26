@@ -26,10 +26,6 @@ import (
 	"github.com/anby/wiki/backend/internal/ast"
 )
 
-// beforePublishCommit 发布事务提交前的钩子，仅用于测试注入「写库之后、提交之前」
-// 的失败以验证回滚原子性（集成测试在包内赋值，用例结束复位）。生产代码恒为 nil。
-var beforePublishCommit func(ctx context.Context, tx pgx.Tx) error
-
 // PublishParams 发布 Revision 的入参。
 // ExpectedRevisionID 为发布基线：首发布必须为 nil，后续发布必须等于页面当前 Revision。
 // AST 为 Typed Block AST 原始 JSON；content hash/size 由服务端计算，客户端提供的值不被信任。
@@ -104,9 +100,6 @@ func (s *Service) runPublishTx(ctx context.Context, d publishDraft) (*Revision, 
 		rev, err = s.publishWithinTx(ctx, tx, d)
 		if err != nil {
 			return err
-		}
-		if beforePublishCommit != nil {
-			return beforePublishCommit(ctx, tx)
 		}
 		return nil
 	})

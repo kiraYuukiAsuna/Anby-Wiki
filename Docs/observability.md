@@ -75,18 +75,15 @@ sh scripts/dev.sh api worker
 `OTEL_EXPORTER_OTLP_ENDPOINT` 接入；应用只依赖标准 Prometheus/OTLP 协议，
 不绑定具体观测后端。
 
-## 告警与校验
+## 告警与检查
 
 仓库不再内置 Prometheus 告警文件。接入外部观测系统时至少覆盖 target down、
 API 5xx/p95、发布 p95、Outbox 老化/死信、Projection error 和 Importer failure。
 M7-T05/ADR-0012 的内部 Beta 初始阈值为 API 5xx `<1%`、API p95 `<=1s`、
 发布 p95 `<=2s`；容量基线及运行流量出现稳定偏差时通过后续 ADR 校准。
 
-```bash
-make test-observability
-```
-
-该命令验证应用内 metrics/tracing 配置，不要求 Docker、Prometheus 或 Collector。
+应用内 metrics/tracing 配置随 `make build-go` 编译检查；运行时接入需在目标环境
+人工确认指标端点、OTLP 连接与告警规则。
 
 ## 故障排查
 

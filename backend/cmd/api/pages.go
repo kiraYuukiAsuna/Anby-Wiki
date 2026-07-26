@@ -34,7 +34,7 @@ func NewWriteAPI(pages *page.Service, wikiID uuid.UUID) *WriteAPI {
 }
 
 // WithAuthorization 在生产装配中启用 Role 与 PageProtection 检查。
-// 测试和迁移期工具可不注入，保持 Page 领域服务本身的 Actor 类型边界。
+// 未注入时只保留 Page 领域服务本身的 Actor 类型边界。
 func (a *WriteAPI) WithAuthorization(auth *governance.AuthorizationService) *WriteAPI {
 	a.auth = auth
 	return a
