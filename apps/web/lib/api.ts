@@ -47,7 +47,21 @@ export function getBaseUrl(): string {
 
 /** 生成请求 ID，用于全链路追踪（trace/log 关联）。 */
 export function makeRequestId(): string {
-  return globalThis.crypto.randomUUID();
+  const webCrypto = globalThis.crypto;
+  if (typeof webCrypto?.randomUUID === "function") {
+    return webCrypto.randomUUID();
+  }
+
+  // randomUUID 仅在可信浏览器上下文可用；公网 HTTP IP 部署仍可使用
+  // getRandomValues 生成不承载认证语义的链路追踪 ID。
+  if (typeof webCrypto?.getRandomValues === "function") {
+    const bytes = new Uint8Array(16);
+    webCrypto.getRandomValues(bytes);
+    return Array.from(bytes, (byte) => byte.toString(16).padStart(2, "0")).join("");
+  }
+
+  // 极旧浏览器没有 Web Crypto 时让服务端覆盖；这里只需保证同一页面内尽量唯一。
+  return `web-${Date.now().toString(16)}-${Math.random().toString(16).slice(2)}`;
 }
 
 /** 为每个请求注入 X-Request-ID（服务端透传或重新生成，见契约 components/headers）。 */

@@ -62,6 +62,8 @@ PostgreSQL 权威数据、Outbox 投影、治理审核、协作编辑和 P1 扩�
   随机会话令牌的 SHA-256，并在每次请求重新检查 Actor 状态。
 - ADR-0020 已移除写请求 Origin/Referer CSRF 门禁以及 COOP/CORP 响应头；
   session cookie 继续使用 `SameSite=Lax`，浏览器 API 请求仍经同源 `/api/*` rewrite。
+- 客户端请求 ID 在可信上下文使用 `crypto.randomUUID()`，公网 HTTP IP 环境回退到
+  `crypto.getRandomValues()`，避免请求在进入 `fetch` 前失败。
 - 邮箱验证、忘记密码、MFA 与登录设备管理尚未实现，继续列为商业发布阻塞项。
 
 ### 运维与质量
