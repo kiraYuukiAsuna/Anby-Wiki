@@ -10,6 +10,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { importsApi } from "@/lib/api";
 import { isUnauthorized, LOGIN_PATH } from "@/lib/auth";
+import { clientUUID } from "@/lib/client-uuid";
 import { httpUrlSchema, safeHttpUrl } from "@/lib/http-url";
 
 const sourceSchema = z.object({
@@ -51,7 +52,7 @@ export function ImportJobForm() {
     }
     setSubmitting(true);
     try {
-      const common = { idempotencyKey: globalThis.crypto.randomUUID() };
+      const common = { idempotencyKey: clientUUID() };
       const job = sourceKind === "url"
         ? await importsApi().createImportJob({
             ...common,

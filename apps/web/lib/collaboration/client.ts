@@ -1,6 +1,7 @@
 import * as Y from "yjs";
 
 import type { Document } from "@/lib/ast/schema";
+import { clientUUID } from "@/lib/client-uuid";
 import {
   getYjsAstRoot,
   materializeYjsAst,
@@ -169,7 +170,7 @@ export class CollaborationClient {
     ) {
       return;
     }
-    const updateID = uuidBytes(crypto.randomUUID());
+    const updateID = uuidBytes(clientUUID());
     const frame = new Uint8Array(updateID.length + update.length);
     frame.set(updateID);
     frame.set(update, updateID.length);
@@ -285,7 +286,7 @@ function defaultSocketFactory(url: string): WebSocket {
 function browserClientId(): string {
   const existing = window.sessionStorage.getItem(CLIENT_ID_KEY);
   if (existing) return existing;
-  const id = crypto.randomUUID();
+  const id = clientUUID();
   window.sessionStorage.setItem(CLIENT_ID_KEY, id);
   return id;
 }

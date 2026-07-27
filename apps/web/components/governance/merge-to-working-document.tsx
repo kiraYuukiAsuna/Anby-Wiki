@@ -12,6 +12,7 @@ import {
   CollaborationClient,
   type CollaborationStatus,
 } from "@/lib/collaboration/client";
+import { clientUUID } from "@/lib/client-uuid";
 import { applyPageProposalOperations } from "@/lib/governance-page-patch";
 
 export function MergeToWorkingDocument({
@@ -73,7 +74,7 @@ export function MergeToWorkingDocument({
           workingDocumentId: documentId,
           expectedSequence: prepared.expectedSequence,
           clientId: client.getClientId(),
-          clientUpdateId: crypto.randomUUID(),
+          clientUpdateId: clientUUID(),
           currentAst: current as unknown as Record<string, unknown>,
           mergedAst: merged as unknown as Record<string, unknown>,
           updateBase64: bytesToBase64(prepared.update),
