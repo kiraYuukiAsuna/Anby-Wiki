@@ -280,7 +280,7 @@ Task ID / 标题
 |---|---|---|---|
 | M7-T01 | 搜索投影与 Adapter | 标题、别名、正文、Entity、字段过滤和高亮；索引由 Outbox 更新，可全量重建 | M3、M4 |
 | M7-T02 | 身份认证与权限收口 | 经 Nginx/Go API 接入实际身份系统，完成 Actor 映射、会话安全和权限缓存失效；匿名/人工/AI/System 边界清晰 | M5-T10 |
-| M7-T03 | Web 与网关安全硬化 | Next.js XSS/CSP/CSRF、Nginx 安全头/上传限制、文件隔离、URL 获取策略、速率限制、Secret 管理和依赖扫描 | M2、M6-T03 |
+| M7-T03 | Web 与网关安全硬化 | Next.js XSS/CSP、Nginx 安全头/上传限制、文件隔离、URL 获取策略、速率限制、Secret 管理和依赖扫描；Origin CSRF 与 COOP/CORP 后由 ADR-0020 移除 | M2、M6-T03 |
 | M7-T04 | 可观测性与告警 | API 延迟/错误、发布失败、队列积压、投影延迟、导入耗时/失败、模型用量；Trace 串联全链路 | M3、M6 |
 | M7-T05 | 性能与容量基线 | 构造十万级页面/Revision/投影数据，压测阅读、发布、反链、审核和导入；建立容量预算和慢查询基线 | T01、T04 |
 | M7-T06 | 备份、恢复与重建演练 | PostgreSQL 和对象存储恢复；Search/Projection 从权威数据重建；记录 RPO/RTO 实测值 | M3、M4、T01 |

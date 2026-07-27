@@ -4,7 +4,6 @@ package config
 import (
 	"fmt"
 	"net"
-	"net/url"
 	"strings"
 	"time"
 
@@ -78,8 +77,6 @@ type Config struct {
 	SessionCookieName    string        `env:"SESSION_COOKIE_NAME" envDefault:"anby_session"`
 	SessionCookieSecure  bool          `env:"SESSION_COOKIE_SECURE" envDefault:"true"`
 	SessionTTL           time.Duration `env:"SESSION_TTL" envDefault:"24h"`
-	// TrustedOrigins 是允许携带 session cookie 发起写请求的精确 HTTP(S) origin。
-	TrustedOrigins []string `env:"TRUSTED_ORIGINS" envSeparator:","`
 }
 
 // Load 从进程环境变量加载配置并校验必填项。
@@ -158,16 +155,8 @@ func (c Config) validate() error {
 		if c.AuthDevHeaderEnabled {
 			return fmt.Errorf("config: production 严禁 AUTH_DEV_HEADER_ENABLED=true")
 		}
-		if len(c.TrustedOrigins) == 0 {
-			return fmt.Errorf("config: production 要求 TRUSTED_ORIGINS")
-		}
 		if weakSecret(c.S3AccessKey) || weakSecret(c.S3SecretKey) {
 			return fmt.Errorf("config: production 拒绝 S3 弱默认 Secret")
-		}
-	}
-	for _, origin := range c.TrustedOrigins {
-		if err := validateTrustedOrigin(origin); err != nil {
-			return fmt.Errorf("config: TRUSTED_ORIGINS 包含非法 origin %q: %w", origin, err)
 		}
 	}
 	if strings.TrimSpace(c.SessionCookieName) == "" {
@@ -184,21 +173,6 @@ func (c Config) validate() error {
 	}
 	if c.OTelEnabled && strings.TrimSpace(c.OTLPEndpoint) == "" {
 		return fmt.Errorf("config: OTEL_ENABLED=true 时缺失环境变量: OTEL_EXPORTER_OTLP_ENDPOINT")
-	}
-	return nil
-}
-
-func validateTrustedOrigin(raw string) error {
-	if strings.Contains(raw, "*") {
-		return fmt.Errorf("禁止 wildcard")
-	}
-	parsed, err := url.Parse(strings.TrimSpace(raw))
-	if err != nil || parsed.Host == "" ||
-		(parsed.Scheme != "http" && parsed.Scheme != "https") {
-		return fmt.Errorf("必须是绝对 HTTP(S) origin")
-	}
-	if parsed.User != nil || parsed.Path != "" || parsed.RawQuery != "" || parsed.Fragment != "" {
-		return fmt.Errorf("禁止 userinfo、path、query 或 fragment")
 	}
 	return nil
 }

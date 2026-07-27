@@ -74,8 +74,6 @@ func main() {
 		Service:             serviceName,
 		Version:             version,
 		Environment:         cfg.Env,
-		SessionCookie:       cfg.SessionCookieName,
-		TrustedOrigins:      cfg.TrustedOrigins,
 		AllowDevActorHeader: allowDevActorHeader,
 		Metrics:             metrics,
 		Checks: map[string]CheckFunc{

@@ -7,7 +7,7 @@
 #
 # 因此本清单不终结 TLS。若需要 HTTPS，请在其外层（云负载均衡、
 # Cloudflare、宿主机上的独立代理等）终结，并同步调整
-# TRUSTED_ORIGINS 与 SESSION_COOKIE_SECURE。
+# SESSION_COOKIE_SECURE。
 #
 # 用法见 Deploy.md。所有相对路径相对本文件所在目录解析。
 
@@ -41,7 +41,6 @@ x-app-environment: &app-environment
   # 无 TLS 终结时必须为 false，否则浏览器不会回传 cookie。
   SESSION_COOKIE_SECURE: ${SESSION_COOKIE_SECURE:-false}
   SESSION_TTL: ${SESSION_TTL:-24h}
-  TRUSTED_ORIGINS: ${TRUSTED_ORIGINS:?set TRUSTED_ORIGINS}
   RATE_LIMIT_ENABLED: ${RATE_LIMIT_ENABLED:-true}
   RATE_LIMIT_GENERAL_PER_MINUTE: ${RATE_LIMIT_GENERAL_PER_MINUTE:-1200}
   RATE_LIMIT_AUTH_PER_MINUTE: ${RATE_LIMIT_AUTH_PER_MINUTE:-10}

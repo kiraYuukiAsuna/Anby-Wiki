@@ -218,8 +218,6 @@ func SecurityHeaders(next http.Handler) http.Handler {
 		h.Set("X-Content-Type-Options", "nosniff")
 		h.Set("X-Frame-Options", "DENY")
 		h.Set("Referrer-Policy", "strict-origin-when-cross-origin")
-		h.Set("Cross-Origin-Opener-Policy", "same-origin")
-		h.Set("Cross-Origin-Resource-Policy", "same-origin")
 		h.Set("Content-Security-Policy", "default-src 'none'; frame-ancestors 'none'; base-uri 'none'")
 		next.ServeHTTP(w, r)
 	})

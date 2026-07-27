@@ -52,8 +52,11 @@ Compose 会把这些值注入容器环境，Docker 管理员可通过 `docker in
 - 普通请求体 2 MiB，上传 envelope 11 MiB，文件内容仍限制 10 MiB；
 - auth、upload、general 三类 Redis 固定窗口限流；
 - production 清除可伪造的身份头；
-- API 添加 CSP、nosniff、frame、referrer 与跨源安全头；
-- 携 session cookie 的写请求执行精确 Origin/Referer 校验。
+- API 添加 CSP、nosniff、frame 与 referrer 安全头。
+
+ADR-0020 已移除 Origin/Referer CSRF 门禁和 COOP/CORP。Session cookie 仍为
+HttpOnly、SameSite=Lax；该简化只适用于当前受控早期部署，公网发布前必须重新评估
+显式 CSRF 防护。
 
 默认不信任 `X-Forwarded-For`，因此 Web → API 拓扑下限流按 Web 容器这个直连
 对端计数。只有上游已可靠清洗来源头，且 API 直连对端 IP 已明确配置到
@@ -66,8 +69,7 @@ Compose 会把这些值注入容器环境，Docker 管理员可通过 `docker in
 3. PostgreSQL 与对象存储备份完成。
 4. `MIGRATION_EXPECTED_VERSION` 等于仓库最新迁移版本，并落在镜像兼容窗口内。
 5. 部署环境文件中的机密变量非空，且文件不允许 group/world 读取。
-6. `TRUSTED_ORIGINS` 与实际用户 origin 完全一致。
-7. 若外层终结 HTTPS，设置 `SESSION_COOKIE_SECURE=true`。
+6. 若外层终结 HTTPS，设置 `SESSION_COOKIE_SECURE=true`。
 
 ## 部署与迁移闸门
 

@@ -12,7 +12,7 @@
 | [ADR-0008](./0008-id-strategy-uuidv7.md) | ID 策略：UUIDv7 | 已接受 |
 | [ADR-0009](./0009-observability-baseline.md) | 可观测性：slog + OpenTelemetry + Prometheus | 已接受 |
 | [ADR-0010](./0010-oidc-server-side-session.md) | 通用 OIDC、Actor 映射与服务端会话 | OIDC 部分被 ADR-0016 取代 |
-| [ADR-0011](./0011-web-gateway-security-baseline.md) | Web、cookie 写请求与网关安全基线 | 网关部分被 ADR-0016 取代 |
+| [ADR-0011](./0011-web-gateway-security-baseline.md) | Web、cookie 写请求与网关安全基线 | 网关部分被 ADR-0016、Origin CSRF/COOP/CORP 部分被 ADR-0020 取代 |
 | [ADR-0012](./0012-internal-beta-slo-and-search-capacity.md) | 内部 Beta SLO 与搜索容量门槛 | 已接受（搜索结论被 ADR-0016 推翻） |
 | [ADR-0013](./0013-defer-beta-gates-for-p1-development.md) | 延后 Beta 门禁但继续 P1 研发 | 已接受 |
 | [ADR-0014](./0014-yjs-working-document-crdt.md) | WorkingDocument CRDT 采用 Yjs | 已接受 |
@@ -21,6 +21,7 @@
 | [ADR-0017](./0017-production-secrets-in-env-file.md) | 生产机密统一写入部署环境文件 | 已接受 |
 | [ADR-0018](./0018-local-only-commercial-images.md) | 商业业务镜像仅在部署机本地构建和使用 | 已接受 |
 | [ADR-0019](./0019-local-account-authentication.md) | 正式本地账号、密码哈希与首账号管理员初始化 | 已接受 |
+| [ADR-0020](./0020-remove-origin-csrf-and-cross-origin-headers.md) | 移除 Origin CSRF 门禁与 COOP/CORP | 已接受 |
 
 新增 ADR 规则：编号只增不复用；状态为「提议 / 已接受 / 已废弃 / 被 ADR-XXXX 取代」；
 涉及实施方案 §8.2 高冲突资源的决策变更必须先更新 ADR 再改代码。

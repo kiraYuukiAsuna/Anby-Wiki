@@ -144,7 +144,6 @@ Compose 会把机密注入容器环境，因此具有 Docker 管理权限的人�
 | `AI_PROVIDER` `AI_BASE_URL` `AI_MODEL` | 模型 Adapter、API 根地址和模型 ID；DeepSeek 分别使用 `deepseek`、`https://api.deepseek.com` 和当前有效模型 ID |
 | `AI_API_KEY` | 仅在 `AI_IMPORT_ENABLED=true` 时填写；只注入 Worker |
 | `S3_BUCKET` | 对象存储桶名 |
-| `TRUSTED_ORIGINS` | 用户实际访问的精确 origin，如 `https://wiki.example.com` |
 | `SESSION_COOKIE_SECURE` | 外层提供 HTTPS 时设 `true`，否则 `false` |
 | `WEB_BIND` `WEB_PORT` | 对外端口；默认 `127.0.0.1:3000` 只绑本机 |
 | `TRUSTED_PROXY_IPS` | 仅在 API 直连对端可信且其传来的 `X-Forwarded-For` 已被清洗时填写；默认留空最安全 |

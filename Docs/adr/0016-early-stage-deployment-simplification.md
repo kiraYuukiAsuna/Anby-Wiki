@@ -1,6 +1,6 @@
 # ADR-0016：早期阶段部署简化
 
-- 状态：已接受（第 3 节被 ADR-0019、第 6 节被 ADR-0017 取代）
+- 状态：已接受（第 3 节被 ADR-0019、第 5 节部分被 ADR-0020、第 6 节被 ADR-0017 取代）
 - 日期：2026-07-25
 
 ## 背景
@@ -61,8 +61,8 @@ Nginx 原先独有的四项职责改由 API 中间件承担：
 ### 5. 不再默认终结 TLS
 
 Compose 不提供 HTTPS。配置校验相应放宽：不再强制
-`SESSION_COOKIE_SECURE=true`，`TRUSTED_ORIGINS` 允许 HTTP origin。
-需要 HTTPS 时在外层终结并同步调整这两项。
+`SESSION_COOKIE_SECURE=true`。`TRUSTED_ORIGINS` 与 Origin 校验后由 ADR-0020
+整体移除；需要 HTTPS 时在外层终结并启用 Secure cookie。
 
 ### 6. Secrets 改为文件挂载
 

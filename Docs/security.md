@@ -4,28 +4,20 @@
 
 production 启动前必须满足：
 
-- `TRUSTED_ORIGINS` 为逗号分隔的精确 HTTP(S) origin；禁止 wildcard、path、query、fragment 和 userinfo。
 - 注册默认关闭。首次受控部署时显式设置 `AUTH_REGISTRATION_ENABLED=true`，
   首个注册账号自动获得管理员角色；完成初始化后立即改回 `false`。
 - `AUTH_DEV_HEADER_ENABLED=false`。外层实际提供 HTTPS 时必须设置 `SESSION_COOKIE_SECURE=true`；明文本地/封闭部署才允许 `false`。
 - `S3_ACCESS_KEY`/`S3_SECRET_KEY` 不使用 `minioadmin`、`minioadmin_dev`、`wiki_dev_password`、`ci-placeholder`、`changeme` 等开发/占位值，长度至少 12 字符。
 
-development 可配置精确 HTTP localhost，例如：
-
-```dotenv
-TRUSTED_ORIGINS=http://localhost:3000,http://localhost:8000
-```
-
 ## 浏览器写请求
 
-携带 `SESSION_COOKIE_NAME` cookie 的 `POST/PUT/PATCH/DELETE` 在进入业务 handler 前执行来源校验：
+ADR-0020 已删除 `BrowserWriteGuard` 和 `TRUSTED_ORIGINS`。携带 session cookie 的
+`POST/PUT/PATCH/DELETE` 不再检查 `Origin` 或 `Referer`。
 
-1. 存在 `Origin` 时必须精确匹配 trusted origin。
-2. `Origin` 缺失时从 `Referer` 提取 origin 并精确匹配。
-3. 两者缺失、格式非法或不可信时返回 `403 forbidden`。
-4. 无 session cookie 的 development/test `X-Actor-ID` 请求不受该 cookie CSRF 规则影响；production 配置拒绝该开关，Go 中间件同时剥离该请求头。
-
-拒绝 logout 不得撤销 session、拒绝 upload 不得写对象、拒绝页面创建不得写数据库。
+Session cookie 仍设置 HttpOnly 与 `SameSite=Lax`，Web 仍通过当前 origin 的
+`/api/*` rewrite 访问 Go API。此配置没有启用 CORS，也不支持跨 origin 携凭据直接
+访问 API。`SameSite=Lax` 不是完整 CSRF 防护；正式公网发布前必须恢复同步 token、
+Fetch Metadata 或等价来源校验，并且不得在缺少等价防护时使用 `SameSite=None`。
 
 ## 本地账号
 
@@ -50,8 +42,8 @@ TRUSTED_ORIGINS=http://localhost:3000,http://localhost:8000
 
 - 普通 API 请求体上限 2 MiB；`/api/v1/import-jobs/uploads` 上限 11 MiB，业务文件上限仍为 10 MiB。
 - auth、upload、general API 由 Go + Redis 分别限流；超限返回 429。Redis 不可达时放行并记录告警。
-- Go API 清空 `X-Authenticated-User`、`X-Auth-Request-User`、`X-Remote-User`；除显式 development/test 模式外也清空 `X-Actor-ID`。
-- Web 与 API 分别设置 CSP、COOP/CORP、nosniff、frame 和 referrer 头；Web 另设置 Permissions Policy，localhost CSP 仅为 Next HMR 保留 `unsafe-eval`。
+- Go API 清空 `X-Authenticated-User`、`X-Auth-Request-User`、`X-Remote-User`；除显式本地开发模式外也清空 `X-Actor-ID`。
+- Web 与 API 分别设置 CSP、nosniff、frame 和 referrer 头；Web 另设置 Permissions Policy，localhost CSP 仅为 Next HMR 保留 `unsafe-eval`。COOP/CORP 已由 ADR-0020 移除。
 - 当前 Compose 不终结 TLS，因此应用不发送 HSTS。由外层 TLS 边界负责 HSTS 时，必须同步启用 Secure cookie。
 
 ## 扫描与已知阻塞

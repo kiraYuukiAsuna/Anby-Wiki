@@ -42,14 +42,16 @@
 
 - 生产 Compose 已移除反向代理，不再终结 TLS；`web` 是唯一发布端口的服务。
 - 明文暴露时，会话 cookie 和登录凭据在网络上可见。
-- 配置校验不再强制 `SESSION_COOKIE_SECURE=true` 与 HTTPS origin，
-  以便早期阶段用明文 HTTP 跑通。
+- 配置校验不再强制 `SESSION_COOKIE_SECURE=true`，以便早期阶段用明文 HTTP 跑通。
+- ADR-0020 已移除 Origin/Referer CSRF 门禁和 COOP/CORP。`SameSite=Lax` 仍保留，
+  但正式公网发布需要恢复等价的显式 CSRF 防护。
 
 ### 关闭条件
 
 1. 在外层（云 LB / Cloudflare / 独立代理）终结 HTTPS。
-2. 设置 `SESSION_COOKIE_SECURE=true`，并把 `TRUSTED_ORIGINS` 改为 HTTPS origin。
-3. 若要按最终客户端 IP 限流，先确保外层清洗 `X-Forwarded-For`，再仅将 API
+2. 设置 `SESSION_COOKIE_SECURE=true`。
+3. 采用同步 CSRF token、Fetch Metadata 或重新启用可信来源校验，并完成浏览器人工验证。
+4. 若要按最终客户端 IP 限流，先确保外层清洗 `X-Forwarded-For`，再仅将 API
    的可信直连对端加入 `TRUSTED_PROXY_IPS`；否则保持为空并接受按代理 IP 聚合。
 
 ## 4. 搜索容量不足

@@ -1,6 +1,6 @@
 # 当前实现状态
 
-> 更新时间：2026-07-27
+> 更新时间：2026-07-28
 > 依据：[整体设计方案](WikiDesignOnePage.md) 与 [实施方案](WikiImplementationPlan.md)
 
 ## 总体结论
@@ -60,6 +60,8 @@ PostgreSQL 权威数据、Outbox 投影、治理审核、协作编辑和 P1 扩�
   后续账号默认获得编辑者角色。`AUTH_REGISTRATION_ENABLED=false` 可关闭公开注册。
 - 登录支持用户名或邮箱，成功后签发 HttpOnly 服务端 Session Cookie；数据库只保存
   随机会话令牌的 SHA-256，并在每次请求重新检查 Actor 状态。
+- ADR-0020 已移除写请求 Origin/Referer CSRF 门禁以及 COOP/CORP 响应头；
+  session cookie 继续使用 `SameSite=Lax`，浏览器 API 请求仍经同源 `/api/*` rewrite。
 - 邮箱验证、忘记密码、MFA 与登录设备管理尚未实现，继续列为商业发布阻塞项。
 
 ### 运维与质量

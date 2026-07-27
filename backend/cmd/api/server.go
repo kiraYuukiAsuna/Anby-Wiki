@@ -18,13 +18,11 @@ type CheckFunc func(ctx context.Context) error
 
 // Deps /readyz 的依赖检查集合，key 为依赖名（postgres、redis）。
 type Deps struct {
-	Service        string
-	Version        string
-	Checks         map[string]CheckFunc
-	Environment    string
-	Authenticator  *authdomain.Authenticator
-	SessionCookie  string
-	TrustedOrigins []string
+	Service       string
+	Version       string
+	Checks        map[string]CheckFunc
+	Environment   string
+	Authenticator *authdomain.Authenticator
 	// AllowDevActorHeader preserves X-Actor-ID only for explicit local
 	// development/test mode. Production always strips it before auth.
 	AllowDevActorHeader bool
@@ -75,7 +73,6 @@ func NewRouter(logger *slog.Logger, deps Deps, writeAPI *WriteAPI, readAPI *Read
 	r.Use(Recoverer(logger, deps.Service, deps.Metrics))
 	r.Use(AccessLog(logger))
 	r.Use(Authentication(deps.Authenticator, deps.Environment == ""))
-	r.Use(BrowserWriteGuard(deps.SessionCookie, deps.TrustedOrigins))
 
 	r.Get("/healthz", healthzHandler(deps.Service, deps.Version))
 	r.Get("/readyz", readyzHandler(deps.Checks))
