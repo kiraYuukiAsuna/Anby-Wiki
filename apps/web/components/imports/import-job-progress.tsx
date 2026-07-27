@@ -15,6 +15,23 @@ const LABELS: Record<string, string> = {
   fetch: "获取与安全扫描", parse: "解析与分块", extract: "结构化抽取",
   match: "实体与 Claim 匹配", compose: "Proposal 合成", review: "进入审核",
 };
+const ERROR_MESSAGES: Record<string, string> = {
+  parse_failed: "来源内容无法解析。",
+  pdf_extractor_unavailable: "服务器缺少 PDF 文本提取组件，请联系管理员。",
+  pdf_text_too_large: "PDF 解压后的文本超过处理上限。",
+  pdf_ocr_required: "PDF 没有可提取的文本层，当前版本尚不支持扫描件 OCR。",
+  extraction_failed: "结构化抽取失败，请稍后重试。",
+  extraction_invalid_output: "模型返回的结构不符合抽取 Schema，请重试或更换模型。",
+  extraction_provider_failed: "模型供应商调用失败，请检查模型、额度和 API Key。",
+  extraction_timeout: "模型调用超时，请稍后重试。",
+  extraction_evidence_invalid: "模型返回的引用无法与来源文本核对。",
+};
+
+function importErrorMessage(error: unknown) {
+  if (!error || typeof error !== "object" || !("code" in error)) return null;
+  const code = (error as { code?: unknown }).code;
+  return typeof code === "string" ? ERROR_MESSAGES[code] ?? null : null;
+}
 
 export function ImportJobProgress({ id }: { id: string }) {
   const router = useRouter();
@@ -55,6 +72,7 @@ export function ImportJobProgress({ id }: { id: string }) {
   if (error) return <p className="rounded-lg border border-destructive/30 p-5 text-sm text-destructive">导入任务加载失败，或当前 Actor 无权读取它。</p>;
   if (!data) return <p className="text-sm text-muted-foreground">正在加载导入进度…</p>;
   const latestByStage = new Map(data.stages.map((stage) => [stage.stage, stage]));
+  const errorMessage = importErrorMessage(data.job.error);
 
   return (
     <div className="space-y-6">
@@ -74,7 +92,8 @@ export function ImportJobProgress({ id }: { id: string }) {
         <div className="mt-4 h-2 overflow-hidden rounded-full bg-muted" aria-label={`进度 ${data.job.progress}%`}>
           <div className="h-full bg-primary transition-[width]" style={{ width: `${data.job.progress}%` }} />
         </div>
-        {data.job.error ? <pre className="mt-4 rounded-lg bg-muted p-3 text-xs text-destructive">{JSON.stringify(data.job.error, null, 2)}</pre> : null}
+        {errorMessage ? <p className="mt-4 rounded-lg bg-destructive/10 p-3 text-sm text-destructive">{errorMessage}</p> : null}
+        {data.job.error ? <pre className="mt-2 rounded-lg bg-muted p-3 text-xs text-destructive">{JSON.stringify(data.job.error, null, 2)}</pre> : null}
       </section>
 
       <ol className="grid gap-3 sm:grid-cols-2">

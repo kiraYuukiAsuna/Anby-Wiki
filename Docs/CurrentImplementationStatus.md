@@ -21,7 +21,7 @@ PostgreSQL 权威数据、Outbox 投影、治理审核、协作编辑和 P1 扩�
 | M3 投影与 Worker | PostgreSQL Outbox、租约/重试/死信、链接/大纲/锚点/外链/渲染投影、按页及全量重建 |
 | M4 知识与证据 | Entity/Property/Claim、标签与别名、Source/Version/Chunk/Citation、知识引用及反向使用投影 |
 | M5 治理 | Proposal/Operation、风险分级、ReviewTask、三方冲突、ChangeBatch、审计、权限与补偿回滚 |
-| M6 AI 与导入 | HTML/PDF 安全获取、解析与抽取流水线、OpenAI strict JSON Schema 与 DeepSeek JSON Object Adapter、Prompt 版本、用量记录、幂等任务、证据约束 Proposal |
+| M6 AI 与导入 | HTML/文本/PDF 安全获取、Poppler 文本层解析与抽取流水线、OpenAI strict JSON Schema 与 DeepSeek JSON Object + 本地 Schema Adapter、Prompt 版本、用量记录、幂等任务、证据约束 Proposal |
 | M7 平台化 | PostgreSQL FTS Adapter、本地账号与服务端 Session、应用层限流与安全头、OTel、备份恢复、数据一致性 Doctor、部署流水线 |
 | M8 协作编辑 | Yjs AST 映射、WorkingDocument、WebSocket 增量同步、Presence、原子发布换基、AI 三方合并、人工冲突决议 |
 | M9 P1 扩展 | 稳定章节锚点、BlockRedirect、Component/Version/信息框、Collection、外链健康检查、Entity 合并、批量风险审核、可靠性与容量 smoke |
@@ -49,6 +49,10 @@ PostgreSQL 权威数据、Outbox 投影、治理审核、协作编辑和 P1 扩�
 - Worker 使用租约、退避、重试和死信机制消费 Outbox。
 - 外链检查包含 URL、Redirect 和实际 Dial 三层 SSRF 防护，并使用 lease token fencing。
 - Claim 变化通过 `claim_usage` 与 `component_dependency` 精确定位需重渲染页面。
+- PDF 导入由 Worker 内的 Poppler 从 stdin 提取 UTF-8 文本并保留页码，不落临时来源文件；
+  解压文本设 32 MiB 上限，纯图片扫描件明确返回需 OCR，当前不自动识别。
+- DeepSeek JSON Object 请求显式包含权威抽取 Schema，返回后仍由 Gateway 与 Evidence
+  服务依次验证结构、SourceVersion、Chunk、引文及字符范围。
 
 ### Web、API 与认证
 

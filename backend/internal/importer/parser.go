@@ -2,8 +2,12 @@ package importer
 
 import (
 	"bytes"
+	"context"
 	"errors"
+	"fmt"
 	"html"
+	"io"
+	"os/exec"
 	"regexp"
 	"strings"
 	"unicode/utf8"
@@ -11,7 +15,14 @@ import (
 	"github.com/anby/wiki/backend/internal/evidence"
 )
 
-var ErrParseFailed = errors.New("importer: 来源解析失败")
+var (
+	ErrParseFailed             = errors.New("importer: 来源解析失败")
+	ErrPDFExtractorUnavailable = fmt.Errorf("%w: PDF 文本提取器不可用", ErrParseFailed)
+	ErrPDFTextTooLarge         = fmt.Errorf("%w: PDF 解压后的文本过大", ErrParseFailed)
+	ErrPDFNoExtractableText    = fmt.Errorf("%w: PDF 没有可提取的文本层，可能需要 OCR", ErrParseFailed)
+)
+
+const maxPDFTextBytes = 32 << 20
 
 type TextBlock struct {
 	Text    string
@@ -36,17 +47,16 @@ var (
 	headingPattern  = regexp.MustCompile(`(?is)<h[1-6][^>]*>(.*?)</h[1-6]>`)
 	breakPattern    = regexp.MustCompile(`(?is)</?(p|div|li|tr|br|section|article)[^>]*>`)
 	tagPattern      = regexp.MustCompile(`(?s)<[^>]+>`)
-	pdfTextPattern  = regexp.MustCompile(`(?s)\(((?:\\.|[^\\)])*)\)\s*Tj`)
 )
 
-func (p *Parser) Parse(mimeType string, content []byte) ([]evidence.ChunkInput, error) {
+func (p *Parser) Parse(ctx context.Context, mimeType string, content []byte) ([]evidence.ChunkInput, error) {
 	var blocks []TextBlock
 	var err error
 	switch mimeType {
 	case "text/html":
 		blocks, err = parseHTML(content)
 	case "application/pdf":
-		blocks, err = parsePDF(content)
+		blocks, err = parsePDF(ctx, content)
 	case "text/plain":
 		blocks = []TextBlock{{Text: string(content)}}
 	default:
@@ -97,31 +107,60 @@ func parseHTML(content []byte) ([]TextBlock, error) {
 	return blocks, nil
 }
 
-func parsePDF(content []byte) ([]TextBlock, error) {
-	if !bytes.HasPrefix(bytes.TrimSpace(content), []byte("%PDF-")) ||
-		bytes.Contains(content, []byte("/Encrypt")) {
+func parsePDF(ctx context.Context, content []byte) ([]TextBlock, error) {
+	if !bytes.HasPrefix(bytes.TrimSpace(content), []byte("%PDF-")) {
 		return nil, ErrParseFailed
 	}
-	pages := regexp.MustCompile(`(?m)^%%Page[^\n]*`).Split(string(content), -1)
-	blocks := []TextBlock{}
-	pageNumber := int32(0)
-	for index, page := range pages {
-		if index == 0 && len(pages) > 1 {
+	path, err := exec.LookPath("pdftotext")
+	if err != nil {
+		return nil, ErrPDFExtractorUnavailable
+	}
+	command := exec.CommandContext(ctx, path, "-enc", "UTF-8", "-eol", "unix", "-", "-")
+	// The child only needs stdin/stdout. Do not expose the Worker's provider or
+	// storage credentials through inherited environment variables.
+	command.Env = []string{}
+	command.Stdin = bytes.NewReader(content)
+	command.Stderr = io.Discard
+	stdout, err := command.StdoutPipe()
+	if err != nil {
+		return nil, fmt.Errorf("%w: output pipe", ErrPDFExtractorUnavailable)
+	}
+	if err := command.Start(); err != nil {
+		return nil, fmt.Errorf("%w: start", ErrPDFExtractorUnavailable)
+	}
+	extracted, readErr := io.ReadAll(io.LimitReader(stdout, maxPDFTextBytes+1))
+	if int64(len(extracted)) > maxPDFTextBytes {
+		_ = command.Process.Kill()
+		_ = command.Wait()
+		return nil, ErrPDFTextTooLarge
+	}
+	if readErr != nil {
+		_ = command.Process.Kill()
+		_ = command.Wait()
+		return nil, fmt.Errorf("%w: read output", ErrParseFailed)
+	}
+	if err := command.Wait(); err != nil {
+		if ctx.Err() != nil {
+			return nil, ctx.Err()
+		}
+		return nil, fmt.Errorf("%w: pdftotext failed", ErrParseFailed)
+	}
+	if !utf8.Valid(extracted) {
+		return nil, ErrParseFailed
+	}
+
+	pages := strings.Split(string(extracted), "\f")
+	blocks := make([]TextBlock, 0, len(pages))
+	for index, pageText := range pages {
+		text := strings.Join(strings.Fields(pageText), " ")
+		if text == "" {
 			continue
 		}
-		pageNumber++
-		matches := pdfTextPattern.FindAllStringSubmatch(page, -1)
-		for _, match := range matches {
-			text := strings.NewReplacer(`\(`, `(`, `\)`, `)`, `\\`, `\`).Replace(match[1])
-			text = strings.Join(strings.Fields(text), " ")
-			if text != "" {
-				page := pageNumber
-				blocks = append(blocks, TextBlock{Text: text, Page: &page})
-			}
-		}
+		pageNumber := int32(index + 1)
+		blocks = append(blocks, TextBlock{Text: text, Page: &pageNumber})
 	}
 	if len(blocks) == 0 {
-		return nil, ErrParseFailed
+		return nil, ErrPDFNoExtractableText
 	}
 	return blocks, nil
 }

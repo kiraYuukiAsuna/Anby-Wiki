@@ -112,16 +112,23 @@ func (p *chatCompletionProvider) Generate(ctx context.Context, request ProviderR
 	if strings.TrimSpace(request.Model) == "" || len(request.JSONSchema) == 0 {
 		return nil, &ProviderError{Code: "invalid_request", Err: ErrProvider}
 	}
+	systemPrompt := request.SystemPrompt
 	responseFormat := chatJSONResponseFormat{Type: p.format}
 	if p.format == responseFormatJSONSchema {
 		responseFormat.JSONSchema = &chatJSONSchema{
 			Name: "anby_structured_output", Strict: true, Schema: request.JSONSchema,
 		}
+	} else {
+		// JSON Object mode guarantees syntax only. Give adapters without native
+		// JSON Schema enforcement the same authoritative contract that the
+		// Gateway validates after the response.
+		systemPrompt += "\n\nReturn exactly one JSON object whose root matches this JSON Schema. " +
+			"Do not add a wrapper object or markdown fences.\nJSON Schema:\n" + string(request.JSONSchema)
 	}
 	payload, err := json.Marshal(chatCompletionRequest{
 		Model: request.Model,
 		Messages: []chatMessage{
-			{Role: "system", Content: request.SystemPrompt},
+			{Role: "system", Content: systemPrompt},
 			{Role: "user", Content: request.UserPrompt},
 		},
 		ResponseFormat: responseFormat,

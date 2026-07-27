@@ -59,6 +59,9 @@ FROM go-runtime AS worker
 ARG VERSION=dev
 ARG VCS_REF=unknown
 ARG BUILD_DATE=unknown
+USER root
+RUN apk add --no-cache poppler-utils
+USER 10001:10001
 LABEL org.opencontainers.image.title="Anby Wiki Worker" \
       org.opencontainers.image.version="${VERSION}" \
       org.opencontainers.image.revision="${VCS_REF}" \

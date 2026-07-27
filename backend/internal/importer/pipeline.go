@@ -12,6 +12,7 @@ import (
 
 	"github.com/google/uuid"
 
+	"github.com/anby/wiki/backend/internal/ai"
 	"github.com/anby/wiki/backend/internal/evidence"
 	"github.com/anby/wiki/backend/internal/governance"
 	"github.com/anby/wiki/backend/internal/platform/storage"
@@ -210,11 +211,11 @@ func (p *Pipeline) run(ctx context.Context, request PipelineRequest, acquire acq
 	if err != nil {
 		return nil, err
 	}
-	chunks, err := p.parser.Parse(acquired.MIMEType, acquired.Content)
+	chunks, err := p.parser.Parse(ctx, acquired.MIMEType, acquired.Content)
 	if err != nil {
 		// Asset and Source were deliberately persisted before parsing so a failed
 		// parser never destroys the original evidence.
-		return fail(current, "parse_failed", err)
+		return fail(current, parseErrorCode(err), err)
 	}
 	version, err := p.evidence.AddSourceVersion(ctx, evidence.AddSourceVersionParams{
 		SourceID: *sourceID, VersionHash: acquired.ContentHash, RawAssetID: &asset.Revision.ID,
@@ -260,7 +261,7 @@ func (p *Pipeline) run(ctx context.Context, request PipelineRequest, acquire acq
 		Chunks: version.Chunks, Provider: request.Provider, Model: request.Model,
 		ImportJobID: &request.JobID, ImportRunID: &run.ID})
 	if err != nil {
-		return fail(current, "extraction_failed", err)
+		return fail(current, extractionErrorCode(err), err)
 	}
 	threshold := request.QualityThreshold
 	if threshold <= 0 {
@@ -352,6 +353,34 @@ func acquisitionErrorCode(err error) string {
 		return "malware_detected"
 	default:
 		return "fetch_failed"
+	}
+}
+
+func parseErrorCode(err error) string {
+	switch {
+	case errors.Is(err, ErrPDFExtractorUnavailable):
+		return "pdf_extractor_unavailable"
+	case errors.Is(err, ErrPDFTextTooLarge):
+		return "pdf_text_too_large"
+	case errors.Is(err, ErrPDFNoExtractableText):
+		return "pdf_ocr_required"
+	default:
+		return "parse_failed"
+	}
+}
+
+func extractionErrorCode(err error) string {
+	switch {
+	case errors.Is(err, ai.ErrInvalidOutput):
+		return "extraction_invalid_output"
+	case errors.Is(err, ai.ErrProvider):
+		return "extraction_provider_failed"
+	case errors.Is(err, ai.ErrTimeout), errors.Is(err, context.DeadlineExceeded):
+		return "extraction_timeout"
+	case errors.Is(err, ErrEvidenceRequired):
+		return "extraction_evidence_invalid"
+	default:
+		return "extraction_failed"
 	}
 }
 
