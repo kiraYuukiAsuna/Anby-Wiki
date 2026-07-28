@@ -19,7 +19,10 @@ import (
 	"github.com/anby/wiki/backend/internal/platform/id"
 )
 
-const ExtractionSchemaURL = "https://anby.wiki/schemas/extraction/v1/candidates.schema.json"
+const (
+	ExtractionSchemaURL = "https://anby.wiki/schemas/extraction/v1/candidates.schema.json"
+	ExtractionPromptKey = "source-extraction-v2"
+)
 
 //go:embed schema/candidates.schema.json
 var extractionSchemaJSON []byte
@@ -108,6 +111,7 @@ func NewExtractionService(repo *Repository, chunks ChunkLookup, gateway Structur
 
 type ExtractParams struct {
 	SourceVersionID uuid.UUID
+	SourceLabel     string
 	Chunks          []evidence.SourceChunk
 	Provider        string
 	Model           string
@@ -140,8 +144,9 @@ func (s *ExtractionService) Extract(ctx context.Context, params ExtractParams) (
 	}
 	chunksJSON, _ := json.Marshal(chunkViews)
 	result, err := s.ai.Generate(ctx, ai.Request{Provider: params.Provider, Model: params.Model,
-		PromptKey: "source-extraction-v1", Variables: map[string]any{
-			"source_version_id": params.SourceVersionID.String(), "chunks_json": string(chunksJSON),
+		PromptKey: ExtractionPromptKey, Variables: map[string]any{
+			"source_version_id": params.SourceVersionID.String(), "source_label": strings.TrimSpace(params.SourceLabel),
+			"chunks_json": string(chunksJSON),
 		}, ImportJobID: params.ImportJobID, ImportRunID: params.ImportRunID})
 	if err != nil {
 		return nil, err
@@ -203,16 +208,18 @@ func ValidateCandidates(ctx context.Context, raw []byte, sourceVersionID uuid.UU
 	}
 	ids := map[uuid.UUID]bool{}
 	entityIDs := map[uuid.UUID]bool{}
-	for _, candidate := range candidates.Entities {
+	for i := range candidates.Entities {
+		candidate := &candidates.Entities[i]
 		if ids[candidate.CandidateID] {
 			return nil, nil, fmt.Errorf("%w: duplicate candidate", ai.ErrInvalidOutput)
 		}
 		ids[candidate.CandidateID], entityIDs[candidate.CandidateID] = true, true
-		if err := validateEvidence(ctx, sourceVersionID, candidate.Evidence, chunks); err != nil {
+		if err := normalizeEvidence(ctx, sourceVersionID, candidate.Evidence, chunks); err != nil {
 			return nil, nil, err
 		}
 	}
-	for _, candidate := range candidates.Claims {
+	for i := range candidates.Claims {
+		candidate := &candidates.Claims[i]
 		if ids[candidate.CandidateID] {
 			return nil, nil, fmt.Errorf("%w: duplicate candidate", ai.ErrInvalidOutput)
 		}
@@ -223,7 +230,7 @@ func ValidateCandidates(ctx context.Context, raw []byte, sourceVersionID uuid.UU
 		if candidate.ValidFrom != nil && candidate.ValidTo != nil && !candidate.ValidTo.After(*candidate.ValidFrom) {
 			return nil, nil, fmt.Errorf("%w: valid time", ai.ErrInvalidOutput)
 		}
-		if err := validateEvidence(ctx, sourceVersionID, candidate.Evidence, chunks); err != nil {
+		if err := normalizeEvidence(ctx, sourceVersionID, candidate.Evidence, chunks); err != nil {
 			return nil, nil, err
 		}
 	}
@@ -231,20 +238,51 @@ func ValidateCandidates(ctx context.Context, raw []byte, sourceVersionID uuid.UU
 	return &candidates, canonical, nil
 }
 
-func validateEvidence(ctx context.Context, sourceVersionID uuid.UUID, items []CandidateEvidence, lookup ChunkLookup) error {
+// normalizeEvidence verifies the immutable quotation and derives rune offsets
+// when a model counted bytes or otherwise supplied an inaccurate range. For a
+// repeated quotation, the exact occurrence nearest the supplied start is used;
+// an equal-distance tie remains ambiguous and is rejected.
+func normalizeEvidence(ctx context.Context, sourceVersionID uuid.UUID, items []CandidateEvidence, lookup ChunkLookup) error {
 	if len(items) == 0 {
 		return ErrEvidenceRequired
 	}
-	for _, item := range items {
+	for index := range items {
+		item := &items[index]
 		chunk, err := lookup.GetSourceChunkByID(ctx, nil, item.ChunkID)
 		if err != nil || chunk.SourceVersionID != sourceVersionID {
 			return fmt.Errorf("%w: chunk", ErrEvidenceRequired)
 		}
 		runes := []rune(chunk.TextContent)
-		if item.CharStart < 0 || item.CharEnd <= item.CharStart || item.CharEnd > len(runes) ||
-			string(runes[item.CharStart:item.CharEnd]) != item.Quotation {
+		if item.CharStart >= 0 && item.CharEnd > item.CharStart && item.CharEnd <= len(runes) &&
+			string(runes[item.CharStart:item.CharEnd]) == item.Quotation {
+			continue
+		}
+		quotation := []rune(item.Quotation)
+		matchStart := -1
+		matchDistance := len(runes) + len(quotation) + 1
+		tied := false
+		for start := 0; start+len(quotation) <= len(runes); start++ {
+			if string(runes[start:start+len(quotation)]) != item.Quotation {
+				continue
+			}
+			distance := start - item.CharStart
+			if distance < 0 {
+				distance = -distance
+			}
+			if distance < matchDistance {
+				matchStart, matchDistance, tied = start, distance, false
+			} else if distance == matchDistance {
+				tied = true
+			}
+		}
+		if matchStart < 0 {
 			return fmt.Errorf("%w: quotation/range", ErrEvidenceRequired)
 		}
+		if tied {
+			return fmt.Errorf("%w: ambiguous quotation", ErrEvidenceRequired)
+		}
+		item.CharStart = matchStart
+		item.CharEnd = matchStart + len(quotation)
 	}
 	return nil
 }

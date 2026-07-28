@@ -257,11 +257,18 @@ func (p *Pipeline) run(ctx context.Context, request PipelineRequest, acquire acq
 	if err != nil {
 		return nil, err
 	}
+	sourceLabel := strings.TrimSpace(request.Title)
+	if sourceLabel == "" {
+		sourceLabel = acquired.Filename
+	}
 	extracted, err := p.extraction.Extract(ctx, ExtractParams{SourceVersionID: version.Version.ID,
-		Chunks: version.Chunks, Provider: request.Provider, Model: request.Model,
+		SourceLabel: sourceLabel, Chunks: version.Chunks, Provider: request.Provider, Model: request.Model,
 		ImportJobID: &request.JobID, ImportRunID: &run.ID})
 	if err != nil {
 		return fail(current, extractionErrorCode(err), err)
+	}
+	if len(extracted.Candidates.Entities) == 0 && len(extracted.Candidates.Claims) == 0 {
+		return fail(current, "no_candidates_extracted", ErrQualityGate)
 	}
 	threshold := request.QualityThreshold
 	if threshold <= 0 {

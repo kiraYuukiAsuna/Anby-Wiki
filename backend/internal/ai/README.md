@@ -7,10 +7,14 @@
 
 内置 `OpenAICompatibleProvider` 调用 `/chat/completions` 的严格 `json_schema` 输出模式；
 `DeepSeekProvider` 使用 DeepSeek 的 `json_object` 输出模式并关闭 thinking，返回内容仍由
-Gateway 使用同一份权威 JSON Schema 严格校验。两者都不会把 Authorization、请求 Prompt
-或供应商错误响应体写入错误；只记录 `http_400` 等稳定安全错误码。429、408 和 5xx 标记
-为可重试，其他 4xx 不重试。新增供应商时实现窄 `Provider` 接口，供应商 DTO 必须留在本包。
+Gateway 使用同一份权威 JSON Schema 严格校验；JSON Object 抽取固定
+`temperature=0`，避免同一来源在重试间随机变为空候选。两者都不会把 Authorization、
+请求 Prompt 或供应商错误响应体写入错误；只记录 `http_400` 等稳定安全错误码。429、
+408 和 5xx 标记为可重试，其他 4xx 不重试。新增供应商时实现窄 `Provider` 接口，
+供应商 DTO 必须留在本包。
 
-Worker 首次启用来源导入时，幂等登记 `source-extraction-v1` Prompt；若运维已激活更高版本，
-装配会保留当前活动版本。输出 Schema 直接复用 `importer` 内嵌的权威 Extraction v1 副本。
+Worker 首次启用来源导入时，幂等登记当前 `source-extraction-v2` Prompt；该版本明确区分
+临时候选 UUID 与持久化 Entity ID，并提供运行时支持的 Entity type / Claim property
+词表。输出 Schema 继续直接复用 `importer` 内嵌的权威 Extraction v1 副本。Prompt key
+升级使用新 key，避免覆盖或静默改写运维已激活的旧 Prompt。
 

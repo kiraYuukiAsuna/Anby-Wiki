@@ -25,6 +25,8 @@ const ERROR_MESSAGES: Record<string, string> = {
   extraction_provider_failed: "模型供应商调用失败，请检查模型、额度和 API Key。",
   extraction_timeout: "模型调用超时，请稍后重试。",
   extraction_evidence_invalid: "模型返回的引用无法与来源文本核对。",
+  no_candidates_extracted: "来源中没有抽取到可审核的百科实体或受支持事实。",
+  no_reviewable_proposal: "候选已完成匹配，但没有形成可写入的审核操作。",
 };
 
 function importErrorMessage(error: unknown) {

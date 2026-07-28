@@ -52,7 +52,15 @@ PostgreSQL 权威数据、Outbox 投影、治理审核、协作编辑和 P1 扩�
 - PDF 导入由 Worker 内的 Poppler 从 stdin 提取 UTF-8 文本并保留页码，不落临时来源文件；
   解压文本设 32 MiB 上限，纯图片扫描件明确返回需 OCR，当前不自动识别。
 - DeepSeek JSON Object 请求显式包含权威抽取 Schema，返回后仍由 Gateway 与 Evidence
-  服务依次验证结构、SourceVersion、Chunk、引文及字符范围。
+  服务依次验证结构、SourceVersion、Chunk、引文及字符范围；抽取固定 `temperature=0`
+  以避免相同来源在重试间随机变为空候选。
+- `source-extraction-v2` 向模型提供固定 Entity type / Claim property 词表，区分临时
+  candidate UUID 与持久化 Entity ID；空候选在 Extract 阶段返回明确错误，不再延迟到
+  Proposal Compose 阶段。
+- Evidence 校验要求引文逐字存在；rune 范围由服务端确定性校正，重复引文选择离模型
+  提示位置最近的精确匹配、等距并列时拒绝，避免 Unicode 字节/字符计数偏差削弱证据链。
+- 来源标题/文件名仅作为主体发现上下文，需求、规格与报告中的产品/软件等实体仍必须由
+  Chunk 正文逐字证据支持，避免因非百科文体产生高质量空结果。
 
 ### Web、API 与认证
 

@@ -74,6 +74,7 @@ type chatCompletionRequest struct {
 	Messages       []chatMessage          `json:"messages"`
 	ResponseFormat chatJSONResponseFormat `json:"response_format"`
 	Thinking       *chatThinking          `json:"thinking,omitempty"`
+	Temperature    *float64               `json:"temperature,omitempty"`
 }
 
 type chatMessage struct {
@@ -113,12 +114,15 @@ func (p *chatCompletionProvider) Generate(ctx context.Context, request ProviderR
 		return nil, &ProviderError{Code: "invalid_request", Err: ErrProvider}
 	}
 	systemPrompt := request.SystemPrompt
+	var temperature *float64
 	responseFormat := chatJSONResponseFormat{Type: p.format}
 	if p.format == responseFormatJSONSchema {
 		responseFormat.JSONSchema = &chatJSONSchema{
 			Name: "anby_structured_output", Strict: true, Schema: request.JSONSchema,
 		}
 	} else {
+		deterministic := 0.0
+		temperature = &deterministic
 		// JSON Object mode guarantees syntax only. Give adapters without native
 		// JSON Schema enforcement the same authoritative contract that the
 		// Gateway validates after the response.
@@ -133,6 +137,7 @@ func (p *chatCompletionProvider) Generate(ctx context.Context, request ProviderR
 		},
 		ResponseFormat: responseFormat,
 		Thinking:       p.thinking,
+		Temperature:    temperature,
 	})
 	if err != nil {
 		return nil, &ProviderError{Code: "encode_request", Err: ErrProvider}

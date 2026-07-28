@@ -33,7 +33,18 @@ Worker 使用 Poppler `pdftotext` 从标准输入读取 PDF、从标准输出取
 
 DeepSeek 的 JSON Object 模式只保证返回合法 JSON，因此 Adapter 会把与 Gateway
 本地校验完全相同的权威 JSON Schema 注入 system message，禁止额外包装层；OpenAI
-compatible Adapter 继续使用供应商原生 strict JSON Schema。
+compatible Adapter 继续使用供应商原生 strict JSON Schema。DeepSeek 抽取使用
+`temperature=0`，避免同一来源在重试之间产生随机空结果。
+
+`source-extraction-v2` Prompt 同时提供当前固定 Entity type / Claim property 词表，
+明确要求模型生成临时 `candidate_id`、禁止猜测持久化 Entity ID，并在来源包含明确主体
+但没有受支持 Claim 时仍生成 Entity 候选。合法但空的候选集合会在 Extract 阶段以
+`no_candidates_extracted` 停止，不再到 Compose 阶段才显示无 Proposal。模型提供的
+引文必须逐字存在；服务端会重新推导 rune 范围以纠正模型常见的 Unicode/字节计数偏差。
+引文重复出现时选择离模型提示位置最近的精确匹配，最近距离并列才拒绝；模糊匹配、翻译
+或改写文本始终不能成为证据。
+来源标题或上传文件名会作为主体发现上下文，但不能单独构成证据；需求、规格和技术报告
+中的候选仍必须由 Chunk 内逐字引文支持。
 
 ## 安全边界
 
