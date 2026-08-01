@@ -113,7 +113,9 @@ func seedM9(ctx context.Context, pool *pgxpool.Pool, pages []fixture) (m9Fixture
 	if err != nil {
 		return m9Fixtures{}, err
 	}
-	if err := collectionService.ReplaceManualMembers(ctx, set.ID, defaultSystemActor, members); err != nil {
+	if err := collectionService.ReplaceManualMembers(
+		ctx, defaultWikiID, set.ID, defaultSystemActor, members,
+	); err != nil {
 		return m9Fixtures{}, err
 	}
 	return m9Fixtures{ComponentID: definition.ID, CollectionID: set.ID, EntityIDs: entities}, nil

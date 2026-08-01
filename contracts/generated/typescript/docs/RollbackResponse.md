@@ -16,6 +16,8 @@ Name | Type
 `visibility` | string
 `contentHash` | string
 `schemaVersion` | number
+`storageTier` | string
+`archivedAt` | Date
 `createdAt` | Date
 `rolledBackTo` | string
 
@@ -36,6 +38,8 @@ const example = {
   "visibility": public,
   "contentHash": 3a6eb0790f39ac87c94f3856b2dd2c5d110e6811602261a9a923d3bb50adc8b7,
   "schemaVersion": 1,
+  "storageTier": null,
+  "archivedAt": null,
   "createdAt": null,
   "rolledBackTo": null,
 } satisfies RollbackResponse

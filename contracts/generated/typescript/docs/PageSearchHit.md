@@ -10,6 +10,9 @@ Name | Type
 `id` | string
 `displayTitle` | string
 `namespace` | string
+`language` | string
+`entityId` | string
+`entityType` | string
 `matchedOn` | string
 `highlight` | string
 `score` | number
@@ -24,6 +27,9 @@ const example = {
   "id": null,
   "displayTitle": Anby Demara,
   "namespace": main,
+  "language": zh-CN,
+  "entityId": null,
+  "entityType": null,
   "matchedOn": null,
   "highlight": A quiet [[swordswoman]] from the Cunning Hares.,
   "score": null,

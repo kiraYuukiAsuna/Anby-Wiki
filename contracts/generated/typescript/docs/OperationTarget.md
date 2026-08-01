@@ -12,6 +12,7 @@ Name | Type
 `blockId` | string
 `nodeId` | string
 `entityId` | string
+`collectionId` | string
 `claimId` | string
 `citationId` | string
 `externalResourceId` | string
@@ -29,6 +30,7 @@ const example = {
   "blockId": null,
   "nodeId": null,
   "entityId": null,
+  "collectionId": null,
   "claimId": null,
   "citationId": null,
   "externalResourceId": null,

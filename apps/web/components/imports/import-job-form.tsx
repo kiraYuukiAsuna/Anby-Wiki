@@ -27,8 +27,18 @@ const uploadSchema = z.object({
     }, "请选择来源文件")
     .refine((file) => file.size <= 10 * 1024 * 1024, "文件不能超过 10 MiB")
     .refine(
-      (file) => ["text/html", "text/plain", "application/pdf"].includes(file.type),
-      "仅支持 HTML、纯文本或 PDF",
+      (file) =>
+        [
+          "text/html",
+          "text/plain",
+          "text/csv",
+          "application/json",
+          "application/pdf",
+          "image/png",
+          "image/jpeg",
+        ].includes(file.type) ||
+        /\.(html?|txt|csv|json|pdf|png|jpe?g)$/i.test(file.name),
+      "仅支持 HTML、文本、JSON、CSV、PDF、PNG 或 JPEG",
     ),
   title: z.string().trim().max(255).optional(),
 });
@@ -94,9 +104,9 @@ export function ImportJobForm() {
       ) : (
         <div className="space-y-2">
           <Label htmlFor="source-file">来源文件</Label>
-          <Input id="source-file" type="file" accept=".html,.htm,.txt,.pdf,text/html,text/plain,application/pdf"
+          <Input id="source-file" type="file" accept=".html,.htm,.txt,.csv,.json,.pdf,.png,.jpg,.jpeg,text/html,text/plain,text/csv,application/json,application/pdf,image/png,image/jpeg"
             onChange={(event) => setFile(event.target.files?.[0] ?? null)} required />
-          <p className="text-xs text-muted-foreground">支持 HTML、纯文本与 PDF，最大 10 MiB；上传前后均校验类型、内容签名与哈希。</p>
+          <p className="text-xs text-muted-foreground">支持网页、文本、JSON/CSV 数据、PDF 与图片，最大 10 MiB；扫描件和图片会执行受限 OCR。</p>
         </div>
       )}
       <div className="space-y-2">

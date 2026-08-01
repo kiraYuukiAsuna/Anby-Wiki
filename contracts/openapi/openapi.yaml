@@ -32,8 +32,16 @@ tags:
     description: 页面搜索（编辑器引用选择器，匿名可读）
   - name: knowledge
     description: Entity、Claim 与 Citation 稳定 ID 详情（匿名只读）
+  - name: assets
+    description: 媒体资产目录、不可变版本与内容读取
+  - name: sources
+    description: 来源目录、不可变来源版本、可定位分片与 Citation 证据
+  - name: datasets
+    description: 可查询结构化数据、记录 Schema 与保存视图
+  - name: components
+    description: 信息框组件注册、不可变版本、可信渲染器与预览
   - name: collections
-    description: Manual/Rule Collection 与物化成员查询（匿名只读）
+    description: Manual/Rule/Dynamic Collection、成员维护与安全查询
   - name: governance
     description: Proposal、风险审核、预览、原子 Apply 与 ChangeBatch 回滚
   - name: imports
@@ -111,6 +119,31 @@ paths:
           description: 已退出；无活动 session 时同样成功
         "500": { $ref: "#/components/responses/Internal" }
   /api/v1/import-jobs:
+    get:
+      operationId: listImportJobs
+      tags: [imports]
+      summary: 分页列出当前账号的导入任务
+      description: 按创建时间倒序返回，刷新或重新登录后仍可恢复完整导入队列。
+      security:
+        - sessionCookie: []
+      parameters:
+        - $ref: "#/components/parameters/Cursor"
+        - $ref: "#/components/parameters/PageSize"
+        - name: status
+          in: query
+          required: false
+          schema:
+            type: string
+            enum: [queued, running, succeeded, failed, cancelled]
+      responses:
+        "200":
+          description: 当前账号的导入任务
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/ImportJobListPage" }
+        "400": { $ref: "#/components/responses/BadRequest" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "500": { $ref: "#/components/responses/Internal" }
     post:
       operationId: createImportJob
       tags: [imports]
@@ -135,6 +168,597 @@ paths:
         "403": { $ref: "#/components/responses/Forbidden" }
         "409": { $ref: "#/components/responses/Conflict" }
         "422": { $ref: "#/components/responses/UnprocessableEntity" }
+  /api/v1/assets:
+    get:
+      operationId: listAssets
+      tags: [assets]
+      summary: 列出当前站点的媒体资产
+      parameters:
+        - $ref: "#/components/parameters/Cursor"
+        - $ref: "#/components/parameters/PageSize"
+        - name: kind
+          in: query
+          schema:
+            type: string
+            enum: [image, video, other]
+      responses:
+        "200":
+          description: 资产目录游标分页结果
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/AssetListPage" }
+        "400": { $ref: "#/components/responses/BadRequest" }
+        "503": { $ref: "#/components/responses/Internal" }
+    post:
+      operationId: uploadAsset
+      tags: [assets]
+      summary: 上传媒体资产并创建不可变版本
+      security:
+        - sessionCookie: []
+      requestBody:
+        required: true
+        content:
+          multipart/form-data:
+            schema:
+              type: object
+              required: [file]
+              properties:
+                file:
+                  type: string
+                  format: binary
+                name:
+                  type: string
+      responses:
+        "200":
+          description: 内容去重命中，返回既有资产版本
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Asset" }
+        "201":
+          description: 新资产或新版本
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Asset" }
+        "400": { $ref: "#/components/responses/BadRequest" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "413": { $ref: "#/components/responses/BadRequest" }
+        "503": { $ref: "#/components/responses/Internal" }
+  /api/v1/assets/revisions/{revision_id}:
+    get:
+      operationId: getAssetRevision
+      tags: [assets]
+      summary: 读取不可变资产版本元数据
+      parameters:
+        - $ref: "#/components/parameters/AssetRevisionId"
+      responses:
+        "200":
+          description: 资产版本元数据
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/AssetRevision" }
+        "400": { $ref: "#/components/responses/BadRequest" }
+        "404": { $ref: "#/components/responses/NotFound" }
+  /api/v1/assets/revisions/{revision_id}/content:
+    get:
+      operationId: getAssetRevisionContent
+      tags: [assets]
+      summary: 流式读取不可变资产版本内容
+      parameters:
+        - $ref: "#/components/parameters/AssetRevisionId"
+      responses:
+        "200":
+          description: 带 immutable 缓存头的原始资产内容
+          headers:
+            ETag:
+              schema: { type: string }
+            Cache-Control:
+              schema: { type: string }
+          content:
+            application/octet-stream:
+              schema:
+                type: string
+                format: binary
+        "304":
+          description: ETag 未变化
+        "400": { $ref: "#/components/responses/BadRequest" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "503": { $ref: "#/components/responses/Internal" }
+  /api/v1/sources:
+    get:
+      operationId: listSources
+      tags: [sources]
+      summary: 分页浏览逻辑来源目录
+      description: 只查询来源元数据，不读取 SourceChunk 正文。
+      parameters:
+        - $ref: "#/components/parameters/Cursor"
+        - $ref: "#/components/parameters/PageSize"
+        - name: source_type
+          in: query
+          schema:
+            type: string
+            enum: [webpage, pdf, book, image, video, api, database]
+        - name: q
+          in: query
+          description: 标题、作者或发布者的元数据搜索，最长 200 字符。
+          schema:
+            type: string
+            maxLength: 200
+      responses:
+        "200":
+          description: 来源目录
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/EvidenceSourceListPage" }
+        "400": { $ref: "#/components/responses/BadRequest" }
+        "500": { $ref: "#/components/responses/Internal" }
+    post:
+      operationId: createSource
+      tags: [sources]
+      summary: 登记逻辑来源
+      description: URL 会经领域服务规范化并幂等关联 ExternalResource。
+      security:
+        - sessionCookie: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/CreateEvidenceSourceRequest" }
+      responses:
+        "201":
+          description: 已创建来源
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/EvidenceSource" }
+        "400": { $ref: "#/components/responses/BadRequest" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "500": { $ref: "#/components/responses/Internal" }
+  /api/v1/sources/{id}:
+    get:
+      operationId: getSource
+      tags: [sources]
+      summary: 读取来源与规范化外部资源
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: string, format: uuid }
+      responses:
+        "200":
+          description: 来源详情
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/EvidenceSourceDetail" }
+        "400": { $ref: "#/components/responses/BadRequest" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "500": { $ref: "#/components/responses/Internal" }
+  /api/v1/sources/{id}/versions:
+    get:
+      operationId: listSourceVersions
+      tags: [sources]
+      summary: 分页列出来源的不可变版本
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: string, format: uuid }
+        - $ref: "#/components/parameters/Cursor"
+        - $ref: "#/components/parameters/PageSize"
+      responses:
+        "200":
+          description: 来源版本目录
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/EvidenceSourceVersionListPage" }
+        "400": { $ref: "#/components/responses/BadRequest" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "500": { $ref: "#/components/responses/Internal" }
+  /api/v1/source-versions/{id}/chunks:
+    get:
+      operationId: listSourceChunks
+      tags: [sources]
+      summary: 分页列出不可变来源版本的可定位分片
+      description: SourceChunk 正文可能包含来源全文片段，不写入日志。
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: string, format: uuid }
+        - $ref: "#/components/parameters/Cursor"
+        - $ref: "#/components/parameters/PageSize"
+      responses:
+        "200":
+          description: 来源分片目录
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/EvidenceSourceChunkListPage" }
+        "400": { $ref: "#/components/responses/BadRequest" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "500": { $ref: "#/components/responses/Internal" }
+  /api/v1/citations:
+    post:
+      operationId: createCitation
+      tags: [sources]
+      summary: 创建不可变 Citation
+      description: 引文若绑定 SourceChunk，必须是该分片文本的真实子串。
+      security:
+        - sessionCookie: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/CreateCitationRequest" }
+      responses:
+        "201":
+          description: 已创建 Citation
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/CitationRecord" }
+        "400": { $ref: "#/components/responses/BadRequest" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "500": { $ref: "#/components/responses/Internal" }
+  /api/v1/datasets:
+    get:
+      operationId: listDatasets
+      tags: [datasets]
+      summary: 列出站点 Dataset
+      parameters:
+        - $ref: "#/components/parameters/Cursor"
+        - $ref: "#/components/parameters/PageSize"
+      responses:
+        "200":
+          description: Dataset 游标分页结果
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/DatasetListPage" }
+        "400": { $ref: "#/components/responses/BadRequest" }
+    post:
+      operationId: createDataset
+      tags: [datasets]
+      summary: 创建带 JSON Schema 的 Dataset
+      security:
+        - sessionCookie: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/CreateDatasetRequest" }
+      responses:
+        "201":
+          description: Dataset
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Dataset" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "409": { $ref: "#/components/responses/Conflict" }
+        "422": { $ref: "#/components/responses/UnprocessableEntity" }
+  /api/v1/datasets/{id}:
+    get:
+      operationId: getDataset
+      tags: [datasets]
+      summary: 读取 Dataset 定义
+      parameters:
+        - $ref: "#/components/parameters/GovernanceId"
+      responses:
+        "200":
+          description: Dataset
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Dataset" }
+        "400": { $ref: "#/components/responses/BadRequest" }
+        "404": { $ref: "#/components/responses/NotFound" }
+  /api/v1/datasets/{id}/records:
+    get:
+      operationId: listDatasetRecords
+      tags: [datasets]
+      summary: 按稳定默认顺序列出 DatasetRecord
+      parameters:
+        - $ref: "#/components/parameters/GovernanceId"
+        - $ref: "#/components/parameters/Cursor"
+        - $ref: "#/components/parameters/PageSize"
+      responses:
+        "200":
+          description: DatasetRecord 分页结果
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/DatasetRecordPage" }
+        "400": { $ref: "#/components/responses/BadRequest" }
+        "404": { $ref: "#/components/responses/NotFound" }
+    post:
+      operationId: createDatasetRecord
+      tags: [datasets]
+      summary: 创建经 Dataset Schema 校验的记录
+      security:
+        - sessionCookie: []
+      parameters:
+        - $ref: "#/components/parameters/GovernanceId"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/WriteDatasetRecordRequest" }
+      responses:
+        "201":
+          description: DatasetRecord
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/DatasetRecord" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "422": { $ref: "#/components/responses/UnprocessableEntity" }
+  /api/v1/datasets/{id}/views:
+    get:
+      operationId: listDatasetViews
+      tags: [datasets]
+      summary: 列出 Dataset 的保存视图
+      parameters:
+        - $ref: "#/components/parameters/GovernanceId"
+      responses:
+        "200":
+          description: DatasetView 列表
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/DatasetViewList" }
+        "404": { $ref: "#/components/responses/NotFound" }
+    post:
+      operationId: createDatasetView
+      tags: [datasets]
+      summary: 创建筛选、排序与分组视图
+      security:
+        - sessionCookie: []
+      parameters:
+        - $ref: "#/components/parameters/GovernanceId"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/CreateDatasetViewRequest" }
+      responses:
+        "201":
+          description: DatasetView
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/DatasetView" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "422": { $ref: "#/components/responses/UnprocessableEntity" }
+  /api/v1/dataset-records/{id}:
+    put:
+      operationId: updateDatasetRecord
+      tags: [datasets]
+      summary: 更新记录并重新执行 Dataset Schema 校验
+      security:
+        - sessionCookie: []
+      parameters:
+        - $ref: "#/components/parameters/GovernanceId"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/WriteDatasetRecordRequest" }
+      responses:
+        "200":
+          description: DatasetRecord
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/DatasetRecord" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "422": { $ref: "#/components/responses/UnprocessableEntity" }
+  /api/v1/dataset-views/{id}:
+    get:
+      operationId: getDatasetView
+      tags: [datasets]
+      summary: 读取保存的 DatasetView
+      parameters:
+        - $ref: "#/components/parameters/GovernanceId"
+      responses:
+        "200":
+          description: DatasetView
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/DatasetView" }
+        "404": { $ref: "#/components/responses/NotFound" }
+  /api/v1/dataset-views/{id}/records:
+    get:
+      operationId: queryDatasetView
+      tags: [datasets]
+      summary: 执行保存视图的筛选、排序与分组
+      parameters:
+        - $ref: "#/components/parameters/GovernanceId"
+        - $ref: "#/components/parameters/Cursor"
+        - $ref: "#/components/parameters/PageSize"
+      responses:
+        "200":
+          description: DatasetView 查询结果
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/DatasetRecordPage" }
+        "400": { $ref: "#/components/responses/BadRequest" }
+        "404": { $ref: "#/components/responses/NotFound" }
+  /api/v1/components:
+    get:
+      operationId: listWikiComponents
+      tags: [components]
+      summary: 列出组件注册项
+      parameters:
+        - $ref: "#/components/parameters/Cursor"
+        - $ref: "#/components/parameters/PageSize"
+      responses:
+        "200":
+          description: 组件游标分页结果
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/WikiComponentListPage" }
+        "400": { $ref: "#/components/responses/BadRequest" }
+    post:
+      operationId: createWikiComponent
+      tags: [components]
+      summary: 创建稳定组件注册项
+      security:
+        - sessionCookie: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/CreateWikiComponentRequest" }
+      responses:
+        "201":
+          description: 组件
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/WikiComponent" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "409": { $ref: "#/components/responses/Conflict" }
+        "422": { $ref: "#/components/responses/UnprocessableEntity" }
+  /api/v1/components/{id}:
+    get:
+      operationId: getWikiComponent
+      tags: [components]
+      summary: 读取组件注册项
+      parameters:
+        - $ref: "#/components/parameters/GovernanceId"
+      responses:
+        "200":
+          description: 组件
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/WikiComponent" }
+        "400": { $ref: "#/components/responses/BadRequest" }
+        "404": { $ref: "#/components/responses/NotFound" }
+  /api/v1/components/{id}/versions:
+    get:
+      operationId: listWikiComponentVersions
+      tags: [components]
+      summary: 列出组件版本
+      parameters:
+        - $ref: "#/components/parameters/GovernanceId"
+      responses:
+        "200":
+          description: 组件版本列表
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/WikiComponentVersionList" }
+        "404": { $ref: "#/components/responses/NotFound" }
+    post:
+      operationId: createWikiComponentVersion
+      tags: [components]
+      summary: 创建可编辑的组件草稿版本
+      security:
+        - sessionCookie: []
+      parameters:
+        - $ref: "#/components/parameters/GovernanceId"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/WriteWikiComponentVersionRequest" }
+      responses:
+        "201":
+          description: 草稿版本
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/WikiComponentVersion" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "422": { $ref: "#/components/responses/UnprocessableEntity" }
+  /api/v1/components/{id}/versions/{version}:
+    put:
+      operationId: updateWikiComponentVersion
+      tags: [components]
+      summary: 更新尚未发布的组件草稿
+      security:
+        - sessionCookie: []
+      parameters:
+        - $ref: "#/components/parameters/GovernanceId"
+        - $ref: "#/components/parameters/ComponentVersion"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/WriteWikiComponentVersionRequest" }
+      responses:
+        "200":
+          description: 更新后的草稿
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/WikiComponentVersion" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "409": { $ref: "#/components/responses/Conflict" }
+        "422": { $ref: "#/components/responses/UnprocessableEntity" }
+  /api/v1/components/{id}/versions/{version}/publish:
+    post:
+      operationId: publishWikiComponentVersion
+      tags: [components]
+      summary: 发布并冻结组件版本
+      security:
+        - sessionCookie: []
+      parameters:
+        - $ref: "#/components/parameters/GovernanceId"
+        - $ref: "#/components/parameters/ComponentVersion"
+      responses:
+        "200":
+          description: 已发布版本
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/WikiComponentVersion" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "409": { $ref: "#/components/responses/Conflict" }
+  /api/v1/components/{id}/versions/{version}/deprecate:
+    post:
+      operationId: deprecateWikiComponentVersion
+      tags: [components]
+      summary: 废弃已发布组件版本
+      security:
+        - sessionCookie: []
+      parameters:
+        - $ref: "#/components/parameters/GovernanceId"
+        - $ref: "#/components/parameters/ComponentVersion"
+      responses:
+        "200":
+          description: 已废弃版本
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/WikiComponentVersion" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "409": { $ref: "#/components/responses/Conflict" }
+  /api/v1/components/{id}/versions/{version}/preview:
+    post:
+      operationId: previewWikiComponentVersion
+      tags: [components]
+      summary: 按 Props Schema 校验并用可信渲染器预览组件
+      parameters:
+        - $ref: "#/components/parameters/GovernanceId"
+        - $ref: "#/components/parameters/ComponentVersion"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/PreviewWikiComponentRequest" }
+      responses:
+        "200":
+          description: 可信服务端渲染 HTML
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/PreviewWikiComponentResult" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "422": { $ref: "#/components/responses/UnprocessableEntity" }
   /api/v1/import-jobs/uploads:
     post:
       operationId: createImportUploadJob
@@ -143,9 +767,11 @@ paths:
       security:
         - sessionCookie: []
       description: |
-        接受最大 10 MiB 的 HTML、纯文本或 PDF。API 在排队前执行 MIME/magic、大小与
-        恶意签名检查，并经 Evidence 领域服务写入私有对象存储；Worker 获取后会再次
-        校验内容哈希与全部安全门禁。原始内容不写入 ImportJob config 或诊断日志。
+        接受最大 10 MiB 的 HTML、纯文本、JSON、CSV、PDF、PNG 或 JPEG。API 在排队前
+        执行 MIME/magic、大小与恶意签名检查，并经 Evidence 领域服务写入私有对象存储；
+        Worker 获取后会再次校验内容哈希与全部安全门禁。图片与无文本层 PDF 进入受限
+        OCR；JSON API 快照与 CSV/JSON 数据库导出保留为可定位 SourceChunk。原始内容
+        不写入 ImportJob config 或诊断日志。
       parameters:
         - $ref: "#/components/parameters/Idempotency-Key"
       requestBody:
@@ -232,6 +858,35 @@ paths:
         "404": { $ref: "#/components/responses/NotFound" }
         "409": { $ref: "#/components/responses/Conflict" }
   /api/v1/proposals:
+    get:
+      operationId: listProposals
+      tags: [governance]
+      summary: 列出当前 Actor 创建的 Proposal
+      security:
+        - sessionCookie: []
+      parameters:
+        - $ref: "#/components/parameters/Cursor"
+        - $ref: "#/components/parameters/PageSize"
+        - name: status
+          in: query
+          schema:
+            type: string
+            enum: [draft, submitted, in_review, approved, rejected, conflicted, applying, applied, failed, rolled_back]
+        - name: target_type
+          in: query
+          schema:
+            type: string
+            enum: [page, entity, claim, collection, external_resource]
+      responses:
+        "200":
+          description: 当前 Actor 的 Proposal 游标分页结果
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ProposalListPage"
+        "400": { $ref: "#/components/responses/BadRequest" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/Forbidden" }
     post:
       operationId: createProposal
       tags: [governance]
@@ -479,6 +1134,29 @@ paths:
         "403": { $ref: "#/components/responses/Forbidden" }
         "409": { $ref: "#/components/responses/Conflict" }
   /api/v1/bulk-review-batches:
+    get:
+      operationId: listBulkReviewBatches
+      tags: [governance]
+      summary: 查询当前 Wiki 的批量审核批次
+      security:
+        - sessionCookie: []
+      parameters:
+        - name: status
+          in: query
+          schema:
+            type: string
+            enum: [reviewing, ready, applying, paused, completed]
+        - $ref: "#/components/parameters/Cursor"
+        - $ref: "#/components/parameters/PageSize"
+      responses:
+        "200":
+          description: 按创建时间倒序的批量审核批次
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/BulkReviewBatchListPage" }
+        "400": { $ref: "#/components/responses/BadRequest" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/Forbidden" }
     post:
       operationId: createBulkReviewBatch
       tags: [governance]
@@ -639,14 +1317,291 @@ paths:
               schema: { $ref: "#/components/schemas/BulkReviewAuditEventList" }
         "401": { $ref: "#/components/responses/Unauthorized" }
         "404": { $ref: "#/components/responses/NotFound" }
+  /api/v1/roles:
+    get:
+      operationId: listRoles
+      tags: [governance]
+      summary: 列出 PageProtection 可用角色
+      security:
+        - sessionCookie: []
+      responses:
+        "200":
+          description: 角色目录
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/RoleList" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+  /api/v1/page-protections:
+    get:
+      operationId: listPageProtections
+      tags: [governance]
+      summary: 列出当前 Wiki 的 PageProtection
+      security:
+        - sessionCookie: []
+      parameters:
+        - name: page_id
+          in: query
+          schema: { type: string, format: uuid }
+        - name: include_expired
+          in: query
+          schema: { type: boolean, default: false }
+      responses:
+        "200":
+          description: PageProtection 列表
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/PageProtectionList" }
+        "400": { $ref: "#/components/responses/BadRequest" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+    post:
+      operationId: createPageProtection
+      tags: [governance]
+      summary: 创建页面或标题范围的保护规则
+      security:
+        - sessionCookie: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/CreatePageProtectionRequest" }
+      responses:
+        "201":
+          description: 已创建保护规则
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/PageProtection" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "422": { $ref: "#/components/responses/UnprocessableEntity" }
+  /api/v1/page-protections/{id}:
+    delete:
+      operationId: deletePageProtection
+      tags: [governance]
+      summary: 撤销 PageProtection（审计历史保留）
+      security:
+        - sessionCookie: []
+      parameters:
+        - $ref: "#/components/parameters/GovernanceId"
+      responses:
+        "204": { description: 已撤销 }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+  /api/v1/ai-trust-profiles:
+    get:
+      operationId: listAITrustProfiles
+      tags: [governance]
+      summary: 列出 AI/Import Actor 的信任与抽样策略
+      security:
+        - sessionCookie: []
+      responses:
+        "200":
+          description: 未配置 Actor 以 untrusted/100% 的保守默认值返回
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/AITrustProfileList" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+  /api/v1/ai-trust-profiles/{actor_id}:
+    put:
+      operationId: updateAITrustProfile
+      tags: [governance]
+      summary: 更新 AI 信任等级与低风险人工抽样比例
+      security:
+        - sessionCookie: []
+      parameters:
+        - name: actor_id
+          in: path
+          required: true
+          schema: { type: string, format: uuid }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/UpdateAITrustProfileRequest" }
+      responses:
+        "200":
+          description: 当前信任档案
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/AITrustProfile" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "422": { $ref: "#/components/responses/UnprocessableEntity" }
+  /api/v1/revision-storage:
+    get:
+      operationId: getRevisionStorageStats
+      tags: [governance]
+      summary: 查看 Revision 快照冷热分层状态
+      description: >-
+        仅管理员可见。统计不可变 ContentSnapshot 的物理存储层、
+        到期候选数与归档能力，不返回 AST 正文或对象存储键。
+      security:
+        - sessionCookie: []
+      responses:
+        "200":
+          description: 当前冷热分层统计
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/RevisionStorageStats"
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "500": { $ref: "#/components/responses/Internal" }
+  /api/v1/revision-storage/archive:
+    post:
+      operationId: archiveRevisionSnapshots
+      tags: [governance]
+      summary: 手动执行一批到期 Revision 快照归档
+      description: >-
+        仅管理员可执行。对象上传与校验完成后，Page 领域服务才把非当前
+        hot 快照原子切换到 cold；当前 Revision 永远保留在 hot tier。
+      security:
+        - sessionCookie: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/ArchiveRevisionSnapshotsRequest"
+      responses:
+        "200":
+          description: 本批归档结果
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/SnapshotArchiveResult"
+        "400": { $ref: "#/components/responses/BadRequest" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "503": { $ref: "#/components/responses/Internal" }
+  /api/v1/change-tags:
+    get:
+      operationId: listChangeTags
+      tags: [governance]
+      summary: 列出不可变变更标签词表
+      responses:
+        "200":
+          description: 全局 ChangeTag 词表
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/ChangeTagList" }
+        "500": { $ref: "#/components/responses/Internal" }
+    post:
+      operationId: createChangeTag
+      tags: [governance]
+      summary: 创建不可变 ChangeTag
+      security:
+        - sessionCookie: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/CreateChangeTagRequest" }
+      responses:
+        "201":
+          description: 已创建标签
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/ChangeTag" }
+        "400": { $ref: "#/components/responses/BadRequest" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "500": { $ref: "#/components/responses/Internal" }
+  /api/v1/change-tags/{id}/assignments:
+    post:
+      operationId: assignChangeTag
+      tags: [governance]
+      summary: 给 Revision、Proposal 或 AuditEvent 追加不可变标签
+      security:
+        - sessionCookie: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          description: ChangeTag ID
+          schema: { type: string, format: uuid }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/AssignChangeTagRequest" }
+      responses:
+        "200":
+          description: 已赋予标签；重复请求幂等成功
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/ChangeTagAssignmentResult" }
+        "400": { $ref: "#/components/responses/BadRequest" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "500": { $ref: "#/components/responses/Internal" }
+  /api/v1/audit-events:
+    get:
+      operationId: listAuditEvents
+      tags: [governance]
+      summary: 分页查询当前 Wiki 的不可变审计流
+      description: 需要 reviewer 或 admin 角色；响应 payload 只包含领域服务写入的结构化审计数据。
+      security:
+        - sessionCookie: []
+      parameters:
+        - $ref: "#/components/parameters/Cursor"
+        - $ref: "#/components/parameters/PageSize"
+        - name: event_type
+          in: query
+          schema: { type: string, maxLength: 120 }
+        - name: aggregate_type
+          in: query
+          schema: { type: string, maxLength: 64 }
+        - name: change_batch_id
+          in: query
+          schema: { type: string, format: uuid }
+        - name: tag_key
+          in: query
+          schema:
+            type: string
+            pattern: "^[a-z][a-z0-9._-]{0,63}$"
+      responses:
+        "200":
+          description: 当前 Wiki 审计事件
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/AuditEventListPage" }
+        "400": { $ref: "#/components/responses/BadRequest" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "500": { $ref: "#/components/responses/Internal" }
+  /api/v1/search/capabilities:
+    get:
+      operationId: getSearchCapabilities
+      summary: 获取搜索引擎能力
+      description: |
+        匿名可读。返回当前 SearchAdapter 的真实后端、可用排序模式和聚合维度；
+        未配置向量 Embedder 时不会宣称支持 hybrid / semantic。
+      tags: [search]
+      responses:
+        "200":
+          description: 当前搜索能力
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/SearchCapabilities"
+        "500":
+          $ref: "#/components/responses/Internal"
   /api/v1/pages/search:
     get:
       operationId: searchPages
       summary: 搜索活页面
       description: |
-        PostgreSQL FTS SearchAdapter 的匿名查询端点（M7-T01，无需登录）。
+        独立搜索引擎 SearchAdapter 的匿名查询端点（无需登录）。
         搜索文档由 Outbox 驱动的 Current Revision 投影生成，覆盖标题、旧别名、
-        正文和主 Entity 文本；支持字段、命名空间、语言与 Entity 类型过滤。
+        正文和主 Entity 文本；支持关键词、混合、纯语义搜索，以及字段、
+        命名空间、语言与 Entity 类型过滤和聚合。
+        PostgreSQL 仅作为可重建权威 staging 与开发回退；回退环境只支持 keyword。
         高亮使用 [[ 与 ]] 标记，调用方必须按纯文本处理，不能作为 HTML 注入。
         q 为空（trim 后）返回空列表；limit 缺省 10、最大 50。
       tags: [search]
@@ -661,10 +1616,9 @@ paths:
         - name: namespace
           in: query
           required: false
-          description: 命名空间 key（缺省 main）
+          description: 命名空间 key；缺省不过滤
           schema:
             type: string
-            default: main
             example: main
         - name: language
           in: query
@@ -691,6 +1645,24 @@ paths:
               enum: [title, alias, body, entity]
           style: form
           explode: true
+        - name: mode
+          in: query
+          required: false
+          description: 排序模式；hybrid / semantic 仅在能力端点声明可用时使用
+          schema:
+            type: string
+            enum: [keyword, hybrid, semantic]
+            default: keyword
+        - name: semantic_ratio
+          in: query
+          required: false
+          description: hybrid 模式下语义结果权重；缺省 0.5
+          schema:
+            type: number
+            format: double
+            minimum: 0
+            maximum: 1
+            default: 0.5
         - name: limit
           in: query
           required: false
@@ -755,6 +1727,7 @@ paths:
           schema:
             type: string
             example: Anby Demara
+        - $ref: "#/components/parameters/ContentMode"
       responses:
         "200":
           description: 页面元信息 + 当前 Revision 元信息 + AST + 渲染 HTML
@@ -786,6 +1759,7 @@ paths:
       tags: [reading]
       parameters:
         - $ref: "#/components/parameters/PageId"
+        - $ref: "#/components/parameters/ContentMode"
       responses:
         "200":
           description: 页面元信息 + 当前 Revision 元信息 + AST + 渲染 HTML
@@ -886,6 +1860,133 @@ paths:
           $ref: "#/components/responses/Conflict"
         "500":
           $ref: "#/components/responses/Internal"
+  /api/v1/pages/{id}/redirect:
+    get:
+      operationId: getPageRedirect
+      summary: 读取页面当前重定向
+      tags: [pages]
+      parameters:
+        - $ref: "#/components/parameters/PageId"
+      responses:
+        "200":
+          description: 当前权威重定向
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/PageRedirect"
+        "400": { $ref: "#/components/responses/BadRequest" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "500": { $ref: "#/components/responses/Internal" }
+    post:
+      operationId: createPageRedirect
+      summary: 创建或更新页面重定向
+      description: >-
+        支持同 Wiki Page、Page 稳定章节、尚未解析的命名空间/标题和外部 Wiki URL。
+        服务端验证判别联合、章节身份与完整内部链路，拒绝自重定向、循环和已删除目标。
+      tags: [pages]
+      security:
+        - sessionCookie: []
+      parameters:
+        - $ref: "#/components/parameters/PageId"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CreatePageRedirectRequest"
+      responses:
+        "200":
+          description: 已写入重定向
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/PageRedirect"
+        "400": { $ref: "#/components/responses/BadRequest" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "410": { $ref: "#/components/responses/Gone" }
+        "422": { $ref: "#/components/responses/UnprocessableEntity" }
+        "500": { $ref: "#/components/responses/Internal" }
+    delete:
+      operationId: deletePageRedirect
+      summary: 删除页面当前重定向
+      tags: [pages]
+      security:
+        - sessionCookie: []
+      parameters:
+        - $ref: "#/components/parameters/PageId"
+      responses:
+        "204":
+          description: 重定向已删除
+        "400": { $ref: "#/components/responses/BadRequest" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "500": { $ref: "#/components/responses/Internal" }
+  /api/v1/pages/{id}/block-redirects:
+    get:
+      operationId: listBlockRedirects
+      summary: 列出页面的稳定章节迁移映射
+      tags: [pages]
+      parameters:
+        - $ref: "#/components/parameters/PageId"
+      responses:
+        "200":
+          description: BlockRedirect 列表
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/BlockRedirectList" }
+        "400": { $ref: "#/components/responses/BadRequest" }
+        "404": { $ref: "#/components/responses/NotFound" }
+  /api/v1/pages/{id}/block-redirects/{block_id}:
+    put:
+      operationId: upsertBlockRedirect
+      summary: 创建或更新稳定章节迁移映射
+      description: 目标会解析并折叠到当前有效 Heading Block；服务端拒绝环和悬空目标。
+      tags: [pages]
+      security:
+        - sessionCookie: []
+      parameters:
+        - $ref: "#/components/parameters/PageId"
+        - name: block_id
+          in: path
+          required: true
+          schema: { type: string, format: uuid }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/UpsertBlockRedirectRequest" }
+      responses:
+        "200":
+          description: 当前 BlockRedirect
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/BlockRedirect" }
+        "400": { $ref: "#/components/responses/BadRequest" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "422": { $ref: "#/components/responses/UnprocessableEntity" }
+    delete:
+      operationId: deleteBlockRedirect
+      summary: 删除错误的章节迁移映射（审计历史保留）
+      tags: [pages]
+      security:
+        - sessionCookie: []
+      parameters:
+        - $ref: "#/components/parameters/PageId"
+        - name: block_id
+          in: path
+          required: true
+          schema: { type: string, format: uuid }
+      responses:
+        "204": { description: 已删除 }
+        "400": { $ref: "#/components/responses/BadRequest" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
   /api/v1/pages/{id}/revisions:
     get:
       operationId: listRevisions
@@ -1147,6 +2248,68 @@ paths:
           $ref: "#/components/responses/Gone"
         "500":
           $ref: "#/components/responses/Internal"
+  /api/v1/pages/{id}/sections:
+    get:
+      operationId: getPageSections
+      summary: 读取当前 Revision 的章节分片清单
+      description: >-
+        匿名读取可重建的章节投影。仅当所有行匹配 Page.current_revision_id 与当前
+        renderer_version 时 ready=true；否则返回 ready=false，客户端应使用全文阅读。
+      tags: [projection]
+      parameters:
+        - $ref: "#/components/parameters/PageId"
+      responses:
+        "200":
+          description: 当前章节分片清单
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/PageSectionManifest" }
+        "400": { $ref: "#/components/responses/BadRequest" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "410": { $ref: "#/components/responses/Gone" }
+        "500": { $ref: "#/components/responses/Internal" }
+  /api/v1/pages/{id}/sections/{section_key}:
+    get:
+      operationId: getPageSection
+      summary: 按需读取一个当前章节分片
+      tags: [projection]
+      parameters:
+        - $ref: "#/components/parameters/PageId"
+        - name: section_key
+          in: path
+          required: true
+          schema: { type: string, minLength: 1, maxLength: 64 }
+      responses:
+        "200":
+          description: AST 分片与安全 HTML 缓存
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/RenderedPageSection" }
+        "400": { $ref: "#/components/responses/BadRequest" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "410": { $ref: "#/components/responses/Gone" }
+        "500": { $ref: "#/components/responses/Internal" }
+  /api/v1/pages/{id}/section-locator/{block_id}:
+    get:
+      operationId: locatePageSection
+      summary: 将稳定 Block ID 定位到其章节分片
+      tags: [projection]
+      parameters:
+        - $ref: "#/components/parameters/PageId"
+        - name: block_id
+          in: path
+          required: true
+          schema: { type: string, format: uuid }
+      responses:
+        "200":
+          description: Block 所在的当前章节 key
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/PageSectionLocator" }
+        "400": { $ref: "#/components/responses/BadRequest" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "410": { $ref: "#/components/responses/Gone" }
+        "500": { $ref: "#/components/responses/Internal" }
   /api/v1/pages/{id}/anchors/{slug}:
     get:
       operationId: resolvePageAnchor
@@ -1185,6 +2348,153 @@ paths:
           $ref: "#/components/responses/UnprocessableEntity"
         "500":
           $ref: "#/components/responses/Internal"
+  /api/v1/pages/{id}/entity-bindings:
+    get:
+      operationId: listPageEntityBindings
+      summary: 列出 Page 的 Entity 绑定
+      description: 匿名读取主实体与显式提及绑定；primary 与 page.primary_entity_id 由数据库延迟约束保证一致。
+      tags: [knowledge]
+      parameters:
+        - $ref: "#/components/parameters/PageId"
+      responses:
+        "200":
+          description: 页面 Entity 绑定
+          headers:
+            X-Request-ID:
+              $ref: "#/components/headers/X-Request-ID"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/PageEntityBindingList"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "500":
+          $ref: "#/components/responses/Internal"
+    put:
+      operationId: setPageEntityBinding
+      summary: 设置 Page 的 Entity 绑定
+      description: |
+        编辑者设置绑定。primary 角色会原子替换现有主绑定并同步 page.primary_entity_id；
+        完全相同的请求幂等成功。mentioned 角色按 (page, entity, role) 去重。
+      tags: [knowledge]
+      security:
+        - sessionCookie: []
+      parameters:
+        - $ref: "#/components/parameters/PageId"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/SetPageEntityBindingRequest"
+      responses:
+        "200":
+          description: 当前绑定
+          headers:
+            X-Request-ID:
+              $ref: "#/components/headers/X-Request-ID"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/PageEntityBinding"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "409":
+          $ref: "#/components/responses/Conflict"
+        "500":
+          $ref: "#/components/responses/Internal"
+  /api/v1/pages/{id}/entity-bindings/{entity_id}:
+    delete:
+      operationId: removePageEntityBinding
+      summary: 删除 Page 的 Entity 绑定
+      description: 删除 primary 时同事务清空 page.primary_entity_id。
+      tags: [knowledge]
+      security:
+        - sessionCookie: []
+      parameters:
+        - $ref: "#/components/parameters/PageId"
+        - name: entity_id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+        - name: role
+          in: query
+          required: true
+          schema:
+            type: string
+            enum: [primary, mentioned]
+      responses:
+        "204":
+          description: 绑定已删除
+          headers:
+            X-Request-ID:
+              $ref: "#/components/headers/X-Request-ID"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "500":
+          $ref: "#/components/responses/Internal"
+  /api/v1/entities:
+    get:
+      operationId: listEntities
+      summary: 浏览与检索 Entity 目录
+      description: |
+        匿名读取当前 Wiki 的稳定 Entity 身份。查询匹配 canonical key、标签与别名；
+        游标按 updated_at、id 稳定排序。all 状态含 active 与 merged，但始终排除 deleted。
+      tags: [knowledge]
+      parameters:
+        - $ref: "#/components/parameters/Cursor"
+        - $ref: "#/components/parameters/PageSize"
+        - name: q
+          in: query
+          required: false
+          schema:
+            type: string
+            maxLength: 255
+          description: 可选名称、别名或 canonical key 查询
+        - name: type_key
+          in: query
+          required: false
+          schema:
+            type: string
+            maxLength: 100
+          description: 精确 EntityType key；不传时不过滤
+        - name: status
+          in: query
+          required: false
+          schema:
+            type: string
+            enum: [active, merged, all]
+            default: active
+      responses:
+        "200":
+          description: Entity 目录页
+          headers:
+            X-Request-ID:
+              $ref: "#/components/headers/X-Request-ID"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/EntityListPage"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "500":
+          $ref: "#/components/responses/Internal"
   /api/v1/entities/{id}:
     get:
       operationId: getEntity
@@ -1209,7 +2519,530 @@ paths:
           $ref: "#/components/responses/NotFound"
         "500":
           $ref: "#/components/responses/Internal"
+  /api/v1/entities/{id}/labels:
+    post:
+      operationId: addEntityLabel
+      summary: 新增 Entity 标签
+      description: 编辑者为活动 Entity 新增多语言标签；权威写入、审计与投影失效在同一事务提交。
+      tags: [knowledge]
+      security:
+        - sessionCookie: []
+      parameters:
+        - $ref: "#/components/parameters/ReferenceTargetId"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/AddEntityLabelRequest"
+      responses:
+        "201":
+          description: 已创建的标签
+          headers:
+            X-Request-ID:
+              $ref: "#/components/headers/X-Request-ID"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/EntityLabel"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "409":
+          $ref: "#/components/responses/Conflict"
+        "500":
+          $ref: "#/components/responses/Internal"
+    delete:
+      operationId: removeEntityLabel
+      summary: 删除 Entity 标签
+      description: 编辑者删除精确匹配的标签；实体始终至少保留一个主标签。
+      tags: [knowledge]
+      security:
+        - sessionCookie: []
+      parameters:
+        - $ref: "#/components/parameters/ReferenceTargetId"
+        - name: language
+          in: query
+          required: true
+          schema:
+            type: string
+            minLength: 1
+        - name: label
+          in: query
+          required: true
+          schema:
+            type: string
+            minLength: 1
+            maxLength: 255
+      responses:
+        "204":
+          description: 标签已删除
+          headers:
+            X-Request-ID:
+              $ref: "#/components/headers/X-Request-ID"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "409":
+          $ref: "#/components/responses/Conflict"
+        "500":
+          $ref: "#/components/responses/Internal"
+  /api/v1/entities/{id}/labels/primary:
+    put:
+      operationId: setPrimaryEntityLabel
+      summary: 设置 Entity 主标签
+      description: 编辑者在指定语言内切换主标签；标签必须已存在。
+      tags: [knowledge]
+      security:
+        - sessionCookie: []
+      parameters:
+        - $ref: "#/components/parameters/ReferenceTargetId"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/SetPrimaryEntityLabelRequest"
+      responses:
+        "204":
+          description: 主标签已更新；已是主标签时幂等成功
+          headers:
+            X-Request-ID:
+              $ref: "#/components/headers/X-Request-ID"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "409":
+          $ref: "#/components/responses/Conflict"
+        "500":
+          $ref: "#/components/responses/Internal"
+  /api/v1/entities/{id}/aliases:
+    post:
+      operationId: addEntityAlias
+      summary: 新增 Entity 别名
+      description: 编辑者新增规范化去重的别名、历史名称、缩写或导入名称。
+      tags: [knowledge]
+      security:
+        - sessionCookie: []
+      parameters:
+        - $ref: "#/components/parameters/ReferenceTargetId"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/AddEntityAliasRequest"
+      responses:
+        "201":
+          description: 已创建的别名
+          headers:
+            X-Request-ID:
+              $ref: "#/components/headers/X-Request-ID"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/EntityAlias"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "409":
+          $ref: "#/components/responses/Conflict"
+        "500":
+          $ref: "#/components/responses/Internal"
+  /api/v1/entities/{id}/aliases/{alias_id}:
+    delete:
+      operationId: removeEntityAlias
+      summary: 删除 Entity 别名
+      tags: [knowledge]
+      security:
+        - sessionCookie: []
+      parameters:
+        - $ref: "#/components/parameters/ReferenceTargetId"
+        - name: alias_id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        "204":
+          description: 别名已删除
+          headers:
+            X-Request-ID:
+              $ref: "#/components/headers/X-Request-ID"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "409":
+          $ref: "#/components/responses/Conflict"
+        "500":
+          $ref: "#/components/responses/Internal"
+  /api/v1/federated-wikis:
+    get:
+      operationId: listFederatedWikis
+      summary: 列出跨 Wiki 联邦目录
+      description: 匿名读取当前 Wiki 已登记的远端 Wiki、信任等级与 Entity 链接模板。
+      tags: [knowledge]
+      parameters:
+        - name: include_disabled
+          in: query
+          required: false
+          schema:
+            type: boolean
+            default: false
+          description: 是否包含已停用的远端 Wiki
+      responses:
+        "200":
+          description: 远端 Wiki 目录
+          headers:
+            X-Request-ID:
+              $ref: "#/components/headers/X-Request-ID"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/FederatedWikiList"
+        "500":
+          $ref: "#/components/responses/Internal"
+    post:
+      operationId: registerFederatedWiki
+      summary: 登记远端 Wiki
+      description: 管理员登记一个可用于 Entity Federation 的远端 Wiki；wiki_key 在创建后不可变。
+      tags: [knowledge]
+      security:
+        - sessionCookie: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CreateFederatedWikiRequest"
+      responses:
+        "201":
+          description: 已登记的远端 Wiki
+          headers:
+            X-Request-ID:
+              $ref: "#/components/headers/X-Request-ID"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/FederatedWiki"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "409":
+          $ref: "#/components/responses/Conflict"
+        "500":
+          $ref: "#/components/responses/Internal"
+  /api/v1/federated-wikis/{id}:
+    put:
+      operationId: updateFederatedWiki
+      summary: 更新远端 Wiki 配置
+      description: 管理员替换远端 Wiki 的展示、链接模板、信任等级和启停状态；wiki_key 保持不变。
+      tags: [knowledge]
+      security:
+        - sessionCookie: []
+      parameters:
+        - $ref: "#/components/parameters/ReferenceTargetId"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/UpdateFederatedWikiRequest"
+      responses:
+        "200":
+          description: 更新后的远端 Wiki
+          headers:
+            X-Request-ID:
+              $ref: "#/components/headers/X-Request-ID"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/FederatedWiki"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "409":
+          $ref: "#/components/responses/Conflict"
+        "500":
+          $ref: "#/components/responses/Internal"
+  /api/v1/federation-links:
+    get:
+      operationId: listFederationLinks
+      summary: 浏览跨 Wiki Entity 映射
+      description: 匿名分页读取本地 Entity 与远端 Entity 的可追溯映射。
+      tags: [knowledge]
+      parameters:
+        - $ref: "#/components/parameters/Cursor"
+        - $ref: "#/components/parameters/PageSize"
+        - name: q
+          in: query
+          required: false
+          schema:
+            type: string
+            maxLength: 255
+          description: 匹配本地或远端 key、标签与远端 Entity ID
+        - name: remote_wiki_id
+          in: query
+          required: false
+          schema:
+            type: string
+            format: uuid
+        - name: status
+          in: query
+          required: false
+          schema:
+            type: string
+            enum: [active, deprecated, all]
+            default: active
+      responses:
+        "200":
+          description: 一页 Federation 映射
+          headers:
+            X-Request-ID:
+              $ref: "#/components/headers/X-Request-ID"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/EntityFederationLinkListPage"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "500":
+          $ref: "#/components/responses/Internal"
+  /api/v1/federation-links/{id}:
+    put:
+      operationId: updateFederationLink
+      summary: 更新或弃用 Entity Federation 映射
+      tags: [knowledge]
+      security:
+        - sessionCookie: []
+      parameters:
+        - $ref: "#/components/parameters/ReferenceTargetId"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/UpdateEntityFederationLinkRequest"
+      responses:
+        "200":
+          description: 更新后的映射
+          headers:
+            X-Request-ID:
+              $ref: "#/components/headers/X-Request-ID"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/EntityFederationLink"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "409":
+          $ref: "#/components/responses/Conflict"
+        "500":
+          $ref: "#/components/responses/Internal"
+  /api/v1/entities/{id}/federation-links:
+    get:
+      operationId: listEntityFederationLinks
+      summary: 列出一个 Entity 的跨 Wiki 映射
+      tags: [knowledge]
+      parameters:
+        - $ref: "#/components/parameters/ReferenceTargetId"
+        - name: status
+          in: query
+          required: false
+          schema:
+            type: string
+            enum: [active, deprecated, all]
+            default: active
+      responses:
+        "200":
+          description: Entity 的 Federation 映射
+          headers:
+            X-Request-ID:
+              $ref: "#/components/headers/X-Request-ID"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/EntityFederationLinkListPage"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "500":
+          $ref: "#/components/responses/Internal"
+    post:
+      operationId: createEntityFederationLink
+      summary: 为 Entity 创建跨 Wiki 映射
+      tags: [knowledge]
+      security:
+        - sessionCookie: []
+      parameters:
+        - $ref: "#/components/parameters/ReferenceTargetId"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CreateEntityFederationLinkRequest"
+      responses:
+        "201":
+          description: 已创建的映射
+          headers:
+            X-Request-ID:
+              $ref: "#/components/headers/X-Request-ID"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/EntityFederationLink"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "409":
+          $ref: "#/components/responses/Conflict"
+        "500":
+          $ref: "#/components/responses/Internal"
+  /api/v1/entities/{id}/graph:
+    get:
+      operationId: getEntityGraph
+      summary: 查询 Entity 关系图
+      description: |
+        匿名读取由当前已发布 entity-valued Claim 派生的关系边投影。
+        查询不扫描 Claim 或页面 AST；遍历深度最多 3、节点最多 100、边最多 250，
+        并在达到硬上限时返回 truncated=true。
+      tags: [knowledge]
+      parameters:
+        - $ref: "#/components/parameters/ReferenceTargetId"
+        - name: direction
+          in: query
+          required: false
+          schema:
+            type: string
+            enum: [outbound, inbound, both]
+            default: both
+        - name: property_key
+          in: query
+          required: false
+          schema:
+            type: string
+          description: 只沿指定 Property 的边遍历
+        - name: depth
+          in: query
+          required: false
+          schema:
+            type: integer
+            minimum: 1
+            maximum: 3
+            default: 1
+        - name: max_nodes
+          in: query
+          required: false
+          schema:
+            type: integer
+            minimum: 2
+            maximum: 100
+            default: 60
+      responses:
+        "200":
+          description: 有界 Entity 子图
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/EntityGraph"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "500":
+          $ref: "#/components/responses/Internal"
+  /api/v1/entity-graph/rebuild:
+    post:
+      operationId: rebuildEntityGraph
+      summary: 全量重建 Entity 关系图投影
+      description: 管理员运维入口；从已发布 Claim 原子替换当前 Wiki 的全部关系边。
+      tags: [knowledge]
+      security:
+        - sessionCookie: []
+      responses:
+        "200":
+          description: 重建统计
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/EntityGraphRebuildResult"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "500":
+          $ref: "#/components/responses/Internal"
   /api/v1/entities/{id}/merge:
+    get:
+      operationId: getEntityMerge
+      summary: 读取 Entity 的最近合并记录
+      description: 匿名读取源 Entity 的最近一次合并及其不可变标签、Claim 映射账本。
+      tags: [knowledge]
+      parameters:
+        - $ref: "#/components/parameters/ReferenceTargetId"
+      responses:
+        "200":
+          description: Entity 合并记录
+          headers:
+            X-Request-ID:
+              $ref: "#/components/headers/X-Request-ID"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/EntityMergeResult"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "500":
+          $ref: "#/components/responses/Internal"
     post:
       operationId: mergeEntity
       summary: 合并重复 Entity
@@ -1247,6 +3080,40 @@ paths:
           $ref: "#/components/responses/Conflict"
         "500":
           $ref: "#/components/responses/Internal"
+  /api/v1/entity-merges/{id}/rollback:
+    post:
+      operationId: rollbackEntityMerge
+      summary: 补偿回滚 Entity 合并
+      description: |
+        仅管理员可执行。服务端在一个事务中恢复源 Entity，补偿合并产生的 Claim，
+        移除只由该合并复制且未被后续修改的标签，并追加审计；任何状态漂移都会拒绝整笔回滚。
+      tags: [knowledge]
+      security:
+        - sessionCookie: []
+      parameters:
+        - $ref: "#/components/parameters/ReferenceTargetId"
+      responses:
+        "200":
+          description: Entity 合并补偿结果；重复请求幂等返回
+          headers:
+            X-Request-ID:
+              $ref: "#/components/headers/X-Request-ID"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/RollbackEntityMergeResult"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "409":
+          $ref: "#/components/responses/Conflict"
+        "500":
+          $ref: "#/components/responses/Internal"
   /api/v1/claims/{id}:
     get:
       operationId: getClaim
@@ -1269,6 +3136,115 @@ paths:
           $ref: "#/components/responses/BadRequest"
         "404":
           $ref: "#/components/responses/NotFound"
+        "422":
+          $ref: "#/components/responses/UnprocessableEntity"
+        "500":
+          $ref: "#/components/responses/Internal"
+  /api/v1/claims/{id}/verification:
+    put:
+      operationId: updateClaimVerification
+      summary: 更新 Claim 人工/AI 核验状态
+      description: |
+        reviewer 或 admin 可提交核验状态。领域服务仍按 Actor 类型执行防御性矩阵：
+        human 可设置全部状态，AI 仅可设置 ai_checked；变更与审计、精准重渲染事件原子提交。
+      tags: [knowledge]
+      security:
+        - sessionCookie: []
+      parameters:
+        - $ref: "#/components/parameters/ReferenceTargetId"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/UpdateClaimVerificationRequest"
+      responses:
+        "204":
+          description: 核验状态已更新；状态未变化时幂等成功
+          headers:
+            X-Request-ID:
+              $ref: "#/components/headers/X-Request-ID"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "500":
+          $ref: "#/components/responses/Internal"
+  /api/v1/fact-consistency-issues:
+    get:
+      operationId: listFactConsistencyIssues
+      summary: 列出自动事实一致性问题
+      description: >-
+        从当前已发布 Claim、Property 约束与 ClaimSource 派生的可重建问题队列。
+        默认只返回 open 问题；需要 reviewer 或 admin 权限。
+      tags: [knowledge]
+      security:
+        - sessionCookie: []
+      parameters:
+        - name: status
+          in: query
+          schema:
+            type: string
+            enum: [open, resolved, all]
+            default: open
+        - name: issue_type
+          in: query
+          schema:
+            type: string
+            enum:
+              - single_value_conflict
+              - multiple_preferred_values
+              - verified_without_support
+              - merged_entity_target
+              - evidence_disagreement
+        - $ref: "#/components/parameters/Cursor"
+        - $ref: "#/components/parameters/PageSize"
+      responses:
+        "200":
+          description: 一页事实一致性问题
+          headers:
+            X-Request-ID:
+              $ref: "#/components/headers/X-Request-ID"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/FactConsistencyIssueListPage"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "500":
+          $ref: "#/components/responses/Internal"
+  /api/v1/fact-consistency-scans:
+    post:
+      operationId: scanFactConsistency
+      summary: 全量重建事实一致性问题
+      description: >-
+        管理员按 Entity 扫描当前 Wiki；发现的问题幂等更新，
+        已消失的问题标记 resolved，不修改任何权威 Claim。
+      tags: [knowledge]
+      security:
+        - sessionCookie: []
+      responses:
+        "200":
+          description: 本次扫描统计
+          headers:
+            X-Request-ID:
+              $ref: "#/components/headers/X-Request-ID"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/FactConsistencyScanResult"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
         "500":
           $ref: "#/components/responses/Internal"
   /api/v1/citations/{id}:
@@ -1300,8 +3276,8 @@ paths:
       operationId: listCollections
       summary: Collection 列表
       description: |
-        匿名读取当前 Wiki 的 Manual/Rule Collection，按 title、id 稳定游标分页。
-        该端点只读取权威 Collection 定义，不实时执行 Rule。
+        匿名读取当前 Wiki 的 Manual/Rule/Dynamic Collection，按 title、id
+        稳定游标分页。列表只读权威定义，不执行查询。
       tags: [collections]
       parameters:
         - $ref: "#/components/parameters/Cursor"
@@ -1320,11 +3296,31 @@ paths:
           $ref: "#/components/responses/BadRequest"
         "500":
           $ref: "#/components/responses/Internal"
+    post:
+      operationId: createCollection
+      summary: 创建 Manual、Rule 或 Dynamic Collection
+      tags: [collections]
+      security:
+        - sessionCookie: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/CreateCollectionRequest" }
+      responses:
+        "201":
+          description: Collection
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Collection" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "422": { $ref: "#/components/responses/UnprocessableEntity" }
   /api/v1/collections/{id}:
     get:
       operationId: getCollection
       summary: Collection 详情
-      description: 匿名读取 Collection 定义；Manual 的 query 为 null，Rule 的 query 为 v1 判别联合。
+      description: 匿名读取 Collection 定义；Manual 的 query 为 null，其余类型使用版本化安全查询。
       tags: [collections]
       parameters:
         - $ref: "#/components/parameters/ReferenceTargetId"
@@ -1349,8 +3345,8 @@ paths:
       operationId: listCollectionMembers
       summary: Collection 物化成员
       description: |
-        匿名读取已物化 Membership，按 sort_key、member_type、target id 稳定游标分页。
-        本端点不扫描 AST，也不在请求时执行 Rule。
+        Manual/Rule 匿名读取物化 Membership；Dynamic 执行受限版本化查询。
+        两者均按 sort_key、member_type、target id 稳定游标分页，绝不扫描 AST。
       tags: [collections]
       parameters:
         - $ref: "#/components/parameters/ReferenceTargetId"
@@ -1372,6 +3368,50 @@ paths:
           $ref: "#/components/responses/NotFound"
         "500":
           $ref: "#/components/responses/Internal"
+    put:
+      operationId: replaceManualCollectionMembers
+      summary: 原子替换 Manual Collection 的全部成员
+      tags: [collections]
+      security:
+        - sessionCookie: []
+      parameters:
+        - $ref: "#/components/parameters/ReferenceTargetId"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/ReplaceCollectionMembersRequest" }
+      responses:
+        "204":
+          description: 成员已替换
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "422": { $ref: "#/components/responses/UnprocessableEntity" }
+  /api/v1/collections/{id}/rebuild:
+    post:
+      operationId: rebuildRuleCollection
+      summary: 从 Entity/Claim 权威数据重建 Rule Collection 成员
+      tags: [collections]
+      security:
+        - sessionCookie: []
+      parameters:
+        - $ref: "#/components/parameters/ReferenceTargetId"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/RebuildCollectionRequest" }
+      responses:
+        "200":
+          description: 重建结果
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/RebuildCollectionResult" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "422": { $ref: "#/components/responses/UnprocessableEntity" }
   /api/v1/entities/{id}/mentions:
     get:
       operationId: listEntityMentions
@@ -1450,6 +3490,67 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/ReferenceUsageListPage"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "500":
+          $ref: "#/components/responses/Internal"
+  /api/v1/sources/{id}/usages:
+    get:
+      operationId: listSourceUsages
+      summary: Source 页面使用位置
+      description: |
+        匿名反向查询一个 Source 经 SourceVersion、Citation 被当前页面使用的位置。
+        只读 citation_usage 及证据身份链，不扫描 AST JSON。
+      tags: [projection]
+      parameters:
+        - $ref: "#/components/parameters/ReferenceTargetId"
+        - $ref: "#/components/parameters/Cursor"
+        - $ref: "#/components/parameters/PageSize"
+      responses:
+        "200":
+          description: 一页 Source 使用位置
+          headers:
+            X-Request-ID:
+              $ref: "#/components/headers/X-Request-ID"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/SourceUsageListPage"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "500":
+          $ref: "#/components/responses/Internal"
+  /api/v1/components/{id}/usages:
+    get:
+      operationId: listComponentUsages
+      summary: Component 页面依赖位置
+      description: |
+        匿名反向查询当前页面引用一个 Component 的位置。只读
+        component_dependency，不扫描 AST JSON；可按不可变版本过滤。
+      tags: [projection]
+      parameters:
+        - $ref: "#/components/parameters/ReferenceTargetId"
+        - name: version
+          in: query
+          schema:
+            type: integer
+            minimum: 1
+        - $ref: "#/components/parameters/Cursor"
+        - $ref: "#/components/parameters/PageSize"
+      responses:
+        "200":
+          description: 一页 Component 使用位置
+          headers:
+            X-Request-ID:
+              $ref: "#/components/headers/X-Request-ID"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ComponentUsageListPage"
         "400":
           $ref: "#/components/responses/BadRequest"
         "404":
@@ -1542,6 +3643,33 @@ components:
       schema:
         type: string
         format: uuid
+    ContentMode:
+      name: content_mode
+      in: query
+      required: false
+      description: >-
+        auto 对大于 64 KiB 且分片投影就绪的页面返回 sections；full 强制全文；
+        sections 在投影就绪时强制分片，否则安全降级为 full。
+      schema:
+        type: string
+        enum: [auto, full, sections]
+        default: auto
+    AssetRevisionId:
+      name: revision_id
+      in: path
+      required: true
+      description: 不可变 AssetRevision ID
+      schema:
+        type: string
+        format: uuid
+    ComponentVersion:
+      name: version
+      in: path
+      required: true
+      description: 正整数组件版本
+      schema:
+        type: integer
+        minimum: 1
     Idempotency-Key:
       name: Idempotency-Key
       in: header
@@ -1632,6 +3760,392 @@ components:
           type: string
         method:
           type: string
+    AssetRevision:
+      type: object
+      required: [id, asset_id, content_hash, mime_type, size_bytes, width, height, created_at]
+      properties:
+        id: { type: string, format: uuid }
+        asset_id: { type: string, format: uuid }
+        content_hash: { type: string }
+        mime_type: { type: string }
+        size_bytes: { type: integer, format: int64, minimum: 0 }
+        width: { type: integer, nullable: true }
+        height: { type: integer, nullable: true }
+        created_at: { type: string, format: date-time }
+    Asset:
+      type: object
+      required: [id, name, status, current_revision, created_at, updated_at]
+      properties:
+        id: { type: string, format: uuid }
+        name: { type: string }
+        status: { type: string, enum: [active, deleted] }
+        current_revision: { $ref: "#/components/schemas/AssetRevision" }
+        created_at: { type: string, format: date-time }
+        updated_at: { type: string, format: date-time }
+    AssetListPage:
+      type: object
+      required: [items, next_cursor]
+      properties:
+        items:
+          type: array
+          items: { $ref: "#/components/schemas/Asset" }
+        next_cursor:
+          type: string
+          nullable: true
+    EvidenceSource:
+      type: object
+      required: [id, source_type, title, metadata]
+      properties:
+        id: { type: string, format: uuid }
+        source_type:
+          type: string
+          enum: [webpage, pdf, book, image, video, api, database]
+        title: { type: string }
+        author: { type: string, nullable: true }
+        publisher: { type: string, nullable: true }
+        published_at: { type: string, format: date-time, nullable: true }
+        metadata: { type: object, additionalProperties: true }
+    EvidenceSourceListPage:
+      type: object
+      required: [items]
+      properties:
+        items:
+          type: array
+          items: { $ref: "#/components/schemas/EvidenceSource" }
+        next_cursor: { type: string, nullable: true }
+    CreateEvidenceSourceRequest:
+      type: object
+      additionalProperties: false
+      required: [source_type, title]
+      properties:
+        source_type:
+          type: string
+          enum: [webpage, pdf, book, image, video, api, database]
+        external_resource_id: { type: string, format: uuid }
+        url: { type: string, format: uri, maxLength: 4096 }
+        asset_id: { type: string, format: uuid }
+        title: { type: string, minLength: 1, maxLength: 500 }
+        author: { type: string, maxLength: 500 }
+        publisher: { type: string, maxLength: 500 }
+        published_at: { type: string, format: date-time }
+        metadata: { type: object, additionalProperties: true }
+    ExternalResourceDetail:
+      type: object
+      required:
+        [id, original_url, normalized_url, domain, status, consecutive_failures]
+      properties:
+        id: { type: string, format: uuid }
+        original_url: { type: string, format: uri }
+        normalized_url: { type: string, format: uri }
+        canonical_url: { type: string, format: uri, nullable: true }
+        domain: { type: string }
+        http_status: { type: integer, nullable: true }
+        status:
+          type: string
+          enum: [unknown, ok, redirect, broken, blocked]
+        last_checked_at: { type: string, format: date-time, nullable: true }
+        last_success_at: { type: string, format: date-time, nullable: true }
+        consecutive_failures: { type: integer, minimum: 0 }
+    EvidenceSourceDetail:
+      allOf:
+        - $ref: "#/components/schemas/EvidenceSource"
+        - type: object
+          properties:
+            external_resource:
+              nullable: true
+              allOf:
+                - $ref: "#/components/schemas/ExternalResourceDetail"
+    EvidenceSourceVersion:
+      type: object
+      required: [id, source_id, version_hash, fetched_at, created_at]
+      properties:
+        id: { type: string, format: uuid }
+        source_id: { type: string, format: uuid }
+        version_hash: { type: string }
+        raw_asset_id: { type: string, format: uuid, nullable: true }
+        extracted_asset_id: { type: string, format: uuid, nullable: true }
+        fetched_at: { type: string, format: date-time }
+        created_at: { type: string, format: date-time }
+    EvidenceSourceVersionListPage:
+      type: object
+      required: [items]
+      properties:
+        items:
+          type: array
+          items: { $ref: "#/components/schemas/EvidenceSourceVersion" }
+        next_cursor: { type: string, nullable: true }
+    EvidenceSourceChunk:
+      type: object
+      required: [id, ordinal, locator, text_content, text_hash]
+      properties:
+        id: { type: string, format: uuid }
+        ordinal: { type: integer, minimum: 0 }
+        locator: { $ref: "#/components/schemas/EvidenceLocator" }
+        text_content: { type: string }
+        text_hash: { type: string }
+    EvidenceSourceChunkListPage:
+      type: object
+      required: [items]
+      properties:
+        items:
+          type: array
+          items: { $ref: "#/components/schemas/EvidenceSourceChunk" }
+        next_cursor: { type: string, nullable: true }
+    EvidenceImageRegion:
+      type: object
+      additionalProperties: false
+      required: [x, y, width, height, image_width, image_height, unit]
+      properties:
+        x: { type: integer, minimum: 0 }
+        y: { type: integer, minimum: 0 }
+        width: { type: integer, minimum: 1 }
+        height: { type: integer, minimum: 1 }
+        image_width: { type: integer, minimum: 1 }
+        image_height: { type: integer, minimum: 1 }
+        unit: { type: string, enum: [pixel] }
+    EvidenceOCRInfo:
+      type: object
+      additionalProperties: false
+      required: [engine, languages]
+      properties:
+        engine: { type: string, minLength: 1 }
+        languages:
+          type: array
+          minItems: 1
+          uniqueItems: true
+          items: { type: string, minLength: 1 }
+        confidence:
+          type: number
+          format: double
+          minimum: 0
+          maximum: 1
+    EvidenceLocator:
+      type: object
+      additionalProperties: false
+      properties:
+        page: { type: integer, minimum: 1 }
+        section: { type: string, minLength: 1 }
+        char_start: { type: integer, minimum: 0 }
+        char_end: { type: integer, minimum: 0 }
+        image_region: { $ref: "#/components/schemas/EvidenceImageRegion" }
+        ocr: { $ref: "#/components/schemas/EvidenceOCRInfo" }
+    CreateCitationRequest:
+      type: object
+      additionalProperties: false
+      required: [source_version_id]
+      properties:
+        source_version_id: { type: string, format: uuid }
+        source_chunk_id: { type: string, format: uuid }
+        locator: { $ref: "#/components/schemas/EvidenceLocator" }
+        quotation: { type: string }
+    CitationRecord:
+      type: object
+      required: [id, source_version_id, created_by, created_at]
+      properties:
+        id: { type: string, format: uuid }
+        source_version_id: { type: string, format: uuid }
+        source_chunk_id: { type: string, format: uuid, nullable: true }
+        locator: { type: object, nullable: true, additionalProperties: true }
+        quotation: { type: string, nullable: true }
+        quotation_hash: { type: string, nullable: true }
+        created_by: { type: string, format: uuid }
+        created_at: { type: string, format: date-time }
+    Dataset:
+      type: object
+      required: [id, wiki_id, name, schema, created_by, created_at]
+      properties:
+        id: { type: string, format: uuid }
+        wiki_id: { type: string, format: uuid }
+        name: { type: string }
+        schema: { type: object, additionalProperties: true }
+        created_by: { type: string, format: uuid }
+        created_at: { type: string, format: date-time }
+    CreateDatasetRequest:
+      type: object
+      additionalProperties: false
+      required: [name, schema]
+      properties:
+        name: { type: string, minLength: 1 }
+        schema:
+          type: object
+          additionalProperties: true
+          description: 根 type 必须为 object，且至少定义一个 properties 字段。
+    DatasetListPage:
+      type: object
+      required: [items, next_cursor]
+      properties:
+        items:
+          type: array
+          items: { $ref: "#/components/schemas/Dataset" }
+        next_cursor: { type: string, nullable: true }
+    DatasetRecord:
+      type: object
+      required: [id, dataset_id, entity_id, values, created_at, updated_at]
+      properties:
+        id: { type: string, format: uuid }
+        dataset_id: { type: string, format: uuid }
+        entity_id: { type: string, format: uuid, nullable: true }
+        values: { type: object, additionalProperties: true }
+        created_at: { type: string, format: date-time }
+        updated_at: { type: string, format: date-time }
+    WriteDatasetRecordRequest:
+      type: object
+      additionalProperties: false
+      required: [values]
+      properties:
+        entity_id: { type: string, format: uuid, nullable: true }
+        values: { type: object, additionalProperties: true }
+    DatasetViewFilter:
+      type: object
+      additionalProperties: false
+      required: [field, operator]
+      properties:
+        field: { type: string }
+        operator:
+          type: string
+          enum: [eq, contains, gt, gte, lt, lte, exists]
+        value: {}
+    DatasetViewSort:
+      type: object
+      additionalProperties: false
+      required: [field, direction]
+      properties:
+        field: { type: string }
+        direction: { type: string, enum: [asc, desc] }
+    DatasetViewConfig:
+      type: object
+      additionalProperties: false
+      properties:
+        columns:
+          type: array
+          uniqueItems: true
+          items: { type: string }
+        filter: { $ref: "#/components/schemas/DatasetViewFilter" }
+        sort: { $ref: "#/components/schemas/DatasetViewSort" }
+        group_by: { type: string }
+    DatasetView:
+      type: object
+      required: [id, dataset_id, view_type, name, config, created_by, created_at]
+      properties:
+        id: { type: string, format: uuid }
+        dataset_id: { type: string, format: uuid }
+        view_type: { type: string, enum: [table, cards, chart] }
+        name: { type: string }
+        config: { $ref: "#/components/schemas/DatasetViewConfig" }
+        created_by: { type: string, format: uuid }
+        created_at: { type: string, format: date-time }
+    CreateDatasetViewRequest:
+      type: object
+      additionalProperties: false
+      required: [view_type, name, config]
+      properties:
+        view_type: { type: string, enum: [table, cards, chart] }
+        name: { type: string, minLength: 1 }
+        config: { $ref: "#/components/schemas/DatasetViewConfig" }
+    DatasetViewList:
+      type: object
+      required: [items]
+      properties:
+        items:
+          type: array
+          items: { $ref: "#/components/schemas/DatasetView" }
+    DatasetGroupCount:
+      type: object
+      required: [value, count]
+      properties:
+        value: { type: string }
+        count: { type: integer, minimum: 0 }
+    DatasetRecordPage:
+      type: object
+      required: [items, next_cursor, groups]
+      properties:
+        items:
+          type: array
+          items: { $ref: "#/components/schemas/DatasetRecord" }
+        next_cursor: { type: string, nullable: true }
+        groups:
+          type: array
+          items: { $ref: "#/components/schemas/DatasetGroupCount" }
+    WikiComponent:
+      type: object
+      required: [id, component_key, name, created_by, created_at, updated_at]
+      properties:
+        id: { type: string, format: uuid }
+        component_key: { type: string }
+        name: { type: string }
+        created_by: { type: string, format: uuid }
+        created_at: { type: string, format: date-time }
+        updated_at: { type: string, format: date-time }
+    WikiComponentListPage:
+      type: object
+      required: [items, next_cursor]
+      properties:
+        items:
+          type: array
+          items: { $ref: "#/components/schemas/WikiComponent" }
+        next_cursor: { type: string, nullable: true }
+    CreateWikiComponentRequest:
+      type: object
+      additionalProperties: false
+      required: [component_key, name]
+      properties:
+        component_key:
+          type: string
+          pattern: "^[a-z][a-z0-9._-]{0,63}$"
+        name: { type: string, minLength: 1 }
+    WikiComponentVersion:
+      type: object
+      required: [component_id, version, props_schema, renderer_ref, status, created_by, created_at]
+      properties:
+        component_id: { type: string, format: uuid }
+        version: { type: integer, minimum: 1 }
+        props_schema:
+          type: object
+          additionalProperties: true
+        renderer_ref:
+          type: string
+          enum: [builtin.key_value, builtin.entity_claim_infobox]
+        status:
+          type: string
+          enum: [draft, published, deprecated]
+        created_by: { type: string, format: uuid }
+        created_at: { type: string, format: date-time }
+        published_at: { type: string, format: date-time, nullable: true }
+    WikiComponentVersionList:
+      type: object
+      required: [items]
+      properties:
+        items:
+          type: array
+          items: { $ref: "#/components/schemas/WikiComponentVersion" }
+    WriteWikiComponentVersionRequest:
+      type: object
+      additionalProperties: false
+      required: [props_schema, renderer_ref]
+      properties:
+        props_schema:
+          type: object
+          additionalProperties: true
+          description: 根 type 必须为 object 的 JSON Schema。
+        renderer_ref:
+          type: string
+          enum: [builtin.key_value, builtin.entity_claim_infobox]
+    PreviewWikiComponentRequest:
+      type: object
+      additionalProperties: false
+      required: [props]
+      properties:
+        props:
+          type: object
+          additionalProperties: true
+        entity_id: { type: string, format: uuid, nullable: true }
+    PreviewWikiComponentResult:
+      type: object
+      required: [html]
+      properties:
+        html:
+          type: string
+          description: 来自白名单内置渲染器、值已转义的 HTML。
     CreateImportJobRequest:
       type: object
       required: [config]
@@ -1661,6 +4175,20 @@ components:
         started_at: { type: string, format: date-time, nullable: true }
         finished_at: { type: string, format: date-time, nullable: true }
         updated_at: { type: string, format: date-time }
+    ImportJobListPage:
+      allOf:
+        - $ref: "#/components/schemas/CursorPage"
+        - type: object
+          required: [items, next_cursor]
+          description: 当前账号的导入任务（created_at DESC, id DESC 游标分页）
+          properties:
+            items:
+              type: array
+              items: { $ref: "#/components/schemas/ImportJob" }
+            next_cursor:
+              type: string
+              nullable: true
+              description: 下一页游标；null 表示没有更多
     ImportRun:
       type: object
       required: [id, import_job_id, attempt, idempotency_key, status, started_at]
@@ -1725,6 +4253,7 @@ components:
         block_id: { type: string, minLength: 1 }
         node_id: { type: string, minLength: 1 }
         entity_id: { type: string, format: uuid }
+        collection_id: { type: string, format: uuid }
         claim_id: { type: string, format: uuid }
         citation_id: { type: string, format: uuid }
         external_resource_id: { type: string, format: uuid }
@@ -1769,11 +4298,52 @@ components:
           type: object
           additionalProperties: true
     OperationCreatePage:
-      allOf: [{$ref: "#/components/schemas/ProposalOperationEnvelope"}, {type: object, properties: {operation_type: {type: string, enum: [create_page]}}}]
+      allOf:
+        - $ref: "#/components/schemas/ProposalOperationEnvelope"
+        - type: object
+          properties:
+            operation_type: { type: string, enum: [create_page] }
+            payload:
+              type: object
+              required: [title]
+              additionalProperties: false
+              properties:
+                title: { type: string, minLength: 1, maxLength: 255 }
+                language: { type: string, minLength: 1, maxLength: 32 }
+                content_model: { type: string, minLength: 1, maxLength: 64 }
+                initial_ast: { type: object, additionalProperties: true }
+                summary: { type: string, maxLength: 1000 }
     OperationRenamePage:
-      allOf: [{$ref: "#/components/schemas/ProposalOperationEnvelope"}, {type: object, properties: {operation_type: {type: string, enum: [rename_page]}}}]
+      allOf:
+        - $ref: "#/components/schemas/ProposalOperationEnvelope"
+        - type: object
+          properties:
+            operation_type: { type: string, enum: [rename_page] }
+            payload:
+              type: object
+              required: [new_title]
+              additionalProperties: false
+              properties:
+                new_title: { type: string, minLength: 1, maxLength: 255 }
     OperationCreateRedirect:
-      allOf: [{$ref: "#/components/schemas/ProposalOperationEnvelope"}, {type: object, properties: {operation_type: {type: string, enum: [create_redirect]}}}]
+      allOf:
+        - $ref: "#/components/schemas/ProposalOperationEnvelope"
+        - type: object
+          properties:
+            operation_type: { type: string, enum: [create_redirect] }
+            payload:
+              type: object
+              required: [target_kind]
+              additionalProperties: false
+              properties:
+                target_kind:
+                  type: string
+                  enum: [page, page_section, unresolved, interwiki]
+                target_page_id: { type: string, format: uuid }
+                target_namespace_id: { type: string, format: uuid }
+                target_title: { type: string, minLength: 1, maxLength: 255 }
+                target_anchor_block_id: { type: string, format: uuid }
+                target_interwiki: { type: string, format: uri, maxLength: 2048 }
     OperationInsertBlock:
       allOf: [{$ref: "#/components/schemas/ProposalOperationEnvelope"}, {type: object, properties: {operation_type: {type: string, enum: [insert_block]}}}]
     OperationDeleteBlock:
@@ -1802,12 +4372,47 @@ components:
       allOf: [{$ref: "#/components/schemas/ProposalOperationEnvelope"}, {type: object, properties: {operation_type: {type: string, enum: [retarget_external_link]}}}]
     OperationCreateEntity:
       allOf: [{$ref: "#/components/schemas/ProposalOperationEnvelope"}, {type: object, properties: {operation_type: {type: string, enum: [create_entity]}}}]
+    OperationMergeEntity:
+      allOf:
+        - $ref: "#/components/schemas/ProposalOperationEnvelope"
+        - type: object
+          properties:
+            operation_type: { type: string, enum: [merge_entity] }
+            payload:
+              type: object
+              required: [target_entity_id]
+              additionalProperties: false
+              properties:
+                target_entity_id: { type: string, format: uuid }
+                reason: { type: string, maxLength: 1000 }
     OperationCreateClaim:
       allOf: [{$ref: "#/components/schemas/ProposalOperationEnvelope"}, {type: object, properties: {operation_type: {type: string, enum: [create_claim]}}}]
     OperationSupersedeClaim:
       allOf: [{$ref: "#/components/schemas/ProposalOperationEnvelope"}, {type: object, properties: {operation_type: {type: string, enum: [supersede_claim]}}}]
     OperationAddClaimSource:
       allOf: [{$ref: "#/components/schemas/ProposalOperationEnvelope"}, {type: object, properties: {operation_type: {type: string, enum: [add_claim_source]}}}]
+    OperationAddCollectionMembership:
+      allOf:
+        - $ref: "#/components/schemas/ProposalOperationEnvelope"
+        - type: object
+          properties:
+            operation_type: { type: string, enum: [add_collection_membership] }
+            payload:
+              type: object
+              required: [sort_key, source_revision_id]
+              additionalProperties: false
+              properties:
+                sort_key: { type: string, minLength: 1, maxLength: 500 }
+                source_revision_id: { type: string, format: uuid }
+    OperationRemoveCollectionMembership:
+      allOf:
+        - $ref: "#/components/schemas/ProposalOperationEnvelope"
+        - type: object
+          properties:
+            operation_type: { type: string, enum: [remove_collection_membership] }
+            payload:
+              type: object
+              maxProperties: 0
     ProposalOperationV1:
       discriminator:
         propertyName: operation_type
@@ -1829,9 +4434,12 @@ components:
           retarget_citation_reference: "#/components/schemas/OperationRetargetCitationReference"
           retarget_external_link: "#/components/schemas/OperationRetargetExternalLink"
           create_entity: "#/components/schemas/OperationCreateEntity"
+          merge_entity: "#/components/schemas/OperationMergeEntity"
           create_claim: "#/components/schemas/OperationCreateClaim"
           supersede_claim: "#/components/schemas/OperationSupersedeClaim"
           add_claim_source: "#/components/schemas/OperationAddClaimSource"
+          add_collection_membership: "#/components/schemas/OperationAddCollectionMembership"
+          remove_collection_membership: "#/components/schemas/OperationRemoveCollectionMembership"
       oneOf:
         - { $ref: "#/components/schemas/OperationCreatePage" }
         - { $ref: "#/components/schemas/OperationRenamePage" }
@@ -1850,9 +4458,12 @@ components:
         - { $ref: "#/components/schemas/OperationRetargetCitationReference" }
         - { $ref: "#/components/schemas/OperationRetargetExternalLink" }
         - { $ref: "#/components/schemas/OperationCreateEntity" }
+        - { $ref: "#/components/schemas/OperationMergeEntity" }
         - { $ref: "#/components/schemas/OperationCreateClaim" }
         - { $ref: "#/components/schemas/OperationSupersedeClaim" }
         - { $ref: "#/components/schemas/OperationAddClaimSource" }
+        - { $ref: "#/components/schemas/OperationAddCollectionMembership" }
+        - { $ref: "#/components/schemas/OperationRemoveCollectionMembership" }
     ProposalOperationRecord:
       type: object
       required: [id, sequence, operation]
@@ -1880,6 +4491,191 @@ components:
         resolution: { type: object, additionalProperties: true, nullable: true }
         resolved_at: { type: string, format: date-time, nullable: true }
         created_at: { type: string, format: date-time }
+    RoleSummary:
+      type: object
+      required: [id, key, name, description]
+      properties:
+        id: { type: string, format: uuid }
+        key: { type: string }
+        name: { type: string }
+        description: { type: string }
+    RoleList:
+      type: object
+      required: [items]
+      properties:
+        items:
+          type: array
+          items: { $ref: "#/components/schemas/RoleSummary" }
+    PageProtection:
+      type: object
+      required:
+        - id
+        - action_type
+        - required_role_id
+        - required_role_key
+        - required_role_name
+        - created_by
+        - created_at
+      properties:
+        id: { type: string, format: uuid }
+        page_id: { type: string, format: uuid, nullable: true }
+        page_title: { type: string, nullable: true }
+        namespace_id: { type: string, format: uuid, nullable: true }
+        namespace_key: { type: string, nullable: true }
+        normalized_title: { type: string, nullable: true }
+        action_type:
+          type: string
+          enum: [create, edit, rename, review, apply, batch_rollback]
+        required_role_id: { type: string, format: uuid }
+        required_role_key: { type: string }
+        required_role_name: { type: string }
+        expires_at: { type: string, format: date-time, nullable: true }
+        created_by: { type: string, format: uuid }
+        created_at: { type: string, format: date-time }
+        revoked_at: { type: string, format: date-time, nullable: true }
+        revoked_by: { type: string, format: uuid, nullable: true }
+    PageProtectionList:
+      type: object
+      required: [items]
+      properties:
+        items:
+          type: array
+          items: { $ref: "#/components/schemas/PageProtection" }
+    CreatePageProtectionRequest:
+      type: object
+      required: [action_type, required_role_key]
+      properties:
+        page_id:
+          type: string
+          format: uuid
+          nullable: true
+          description: 已存在 Page 范围；与 namespace_key/normalized_title 二选一
+        namespace_key:
+          type: string
+          nullable: true
+          minLength: 1
+          maxLength: 64
+          description: create 标题范围；服务端在当前 Wiki 内解析为 Namespace ID
+        normalized_title:
+          type: string
+          maxLength: 255
+          description: create 标题范围；服务端统一规范化
+        action_type:
+          type: string
+          enum: [create, edit, rename, review, apply, batch_rollback]
+        required_role_key: { type: string, minLength: 1, maxLength: 64 }
+        expires_at: { type: string, format: date-time, nullable: true }
+    AITrustProfile:
+      type: object
+      required:
+        - wiki_id
+        - actor_id
+        - actor_type
+        - actor_display_name
+        - trust_level
+        - required_sample_percent
+        - configured
+      properties:
+        wiki_id: { type: string, format: uuid }
+        actor_id: { type: string, format: uuid }
+        actor_type: { type: string, enum: [ai, import] }
+        actor_display_name: { type: string }
+        trust_level:
+          type: string
+          enum: [untrusted, assisted, trusted]
+        required_sample_percent:
+          type: integer
+          minimum: 0
+          maximum: 100
+        configured: { type: boolean }
+        updated_by: { type: string, format: uuid, nullable: true }
+        created_at: { type: string, format: date-time, nullable: true }
+        updated_at: { type: string, format: date-time, nullable: true }
+    AITrustProfileList:
+      type: object
+      required: [items]
+      properties:
+        items:
+          type: array
+          items: { $ref: "#/components/schemas/AITrustProfile" }
+    UpdateAITrustProfileRequest:
+      type: object
+      additionalProperties: false
+      required: [trust_level, required_sample_percent]
+      properties:
+        trust_level:
+          type: string
+          enum: [untrusted, assisted, trusted]
+        required_sample_percent:
+          type: integer
+          minimum: 0
+          maximum: 100
+    RevisionStorageStats:
+      type: object
+      additionalProperties: false
+      required:
+        - archive_available
+        - retention_seconds
+        - default_batch_size
+        - hot_snapshots
+        - cold_snapshots
+        - hot_bytes
+        - cold_bytes
+        - eligible_snapshots
+      properties:
+        archive_available:
+          type: boolean
+          description: API 与 Worker 是否已装配 Revision 对象存储
+        retention_seconds:
+          type: integer
+          format: int64
+          minimum: 1
+        default_batch_size:
+          type: integer
+          minimum: 1
+          maximum: 500
+        hot_snapshots:
+          type: integer
+          format: int64
+          minimum: 0
+        cold_snapshots:
+          type: integer
+          format: int64
+          minimum: 0
+        hot_bytes:
+          type: integer
+          format: int64
+          minimum: 0
+        cold_bytes:
+          type: integer
+          format: int64
+          minimum: 0
+        eligible_snapshots:
+          type: integer
+          format: int64
+          minimum: 0
+        oldest_hot_created_at:
+          type: string
+          format: date-time
+          nullable: true
+    ArchiveRevisionSnapshotsRequest:
+      type: object
+      additionalProperties: false
+      properties:
+        limit:
+          type: integer
+          minimum: 1
+          maximum: 500
+          description: 省略时使用服务端默认批次大小
+    SnapshotArchiveResult:
+      type: object
+      additionalProperties: false
+      required: [examined, archived, skipped, archived_bytes]
+      properties:
+        examined: { type: integer, minimum: 0 }
+        archived: { type: integer, minimum: 0 }
+        skipped: { type: integer, minimum: 0 }
+        archived_bytes: { type: integer, format: int64, minimum: 0 }
     Proposal:
       type: object
       required: [id, target_type, status, risk_level, risk_reasons, policy_decision, created_by, idempotency_key, created_at, updated_at, operations, conflicts]
@@ -1896,10 +4692,25 @@ components:
         policy_decision: { type: object, additionalProperties: true }
         created_by: { type: string, format: uuid }
         idempotency_key: { type: string }
+        change_batch_id: { type: string, format: uuid, nullable: true }
+        change_batch_status:
+          type: string
+          enum: [applying, applied, failed, rollback_pending, rolled_back]
+          nullable: true
         created_at: { type: string, format: date-time }
         updated_at: { type: string, format: date-time }
         operations: { type: array, items: { $ref: "#/components/schemas/ProposalOperationRecord" } }
         conflicts: { type: array, items: { $ref: "#/components/schemas/MergeConflict" } }
+    ProposalListPage:
+      type: object
+      required: [items, next_cursor]
+      properties:
+        items:
+          type: array
+          items: { $ref: "#/components/schemas/Proposal" }
+        next_cursor:
+          type: string
+          nullable: true
     PreviewDocument:
       type: object
       required: [revision_id, content_hash, ast]
@@ -1941,7 +4752,7 @@ components:
         policy: { type: string }
     ReviewTask:
       type: object
-      required: [id, proposal_id, status, reviewer_id, decision_reason, created_at, reviewed_at]
+      required: [id, proposal_id, status, created_at]
       properties:
         id: { type: string, format: uuid }
         proposal_id: { type: string, format: uuid }
@@ -1970,11 +4781,15 @@ components:
         reason: { type: string }
     ApplyProposalResult:
       type: object
-      required: [proposal_id, change_batch_id, claim_ids, idempotent]
+      required: [proposal_id, change_batch_id, page_ids, entity_ids, entity_merge_ids, collection_ids, claim_ids, idempotent]
       properties:
         proposal_id: { type: string, format: uuid }
         change_batch_id: { type: string, format: uuid }
         revision_id: { type: string, format: uuid, nullable: true }
+        page_ids: { type: array, items: { type: string, format: uuid } }
+        entity_ids: { type: array, items: { type: string, format: uuid } }
+        entity_merge_ids: { type: array, items: { type: string, format: uuid } }
+        collection_ids: { type: array, items: { type: string, format: uuid } }
         claim_ids: { type: array, items: { type: string, format: uuid } }
         idempotent: { type: boolean }
     MergeProposalToWorkingDocumentRequest:
@@ -2030,11 +4845,29 @@ components:
           maxLength: 1000
     RollbackChangeBatchResult:
       type: object
-      required: [change_batch_id, revision_ids, compensation_claim_ids, idempotent]
+      required:
+        - change_batch_id
+        - revision_ids
+        - compensation_claim_ids
+        - compensated_page_ids
+        - deleted_page_ids
+        - deleted_entity_ids
+        - restored_entity_ids
+        - entity_merge_ids
+        - collection_ids
+        - removed_claim_source_count
+        - idempotent
       properties:
         change_batch_id: { type: string, format: uuid }
         revision_ids: { type: array, items: { type: string, format: uuid } }
         compensation_claim_ids: { type: array, items: { type: string, format: uuid } }
+        compensated_page_ids: { type: array, items: { type: string, format: uuid } }
+        deleted_page_ids: { type: array, items: { type: string, format: uuid } }
+        deleted_entity_ids: { type: array, items: { type: string, format: uuid } }
+        restored_entity_ids: { type: array, items: { type: string, format: uuid } }
+        entity_merge_ids: { type: array, items: { type: string, format: uuid } }
+        collection_ids: { type: array, items: { type: string, format: uuid } }
+        removed_claim_source_count: { type: integer, minimum: 0 }
         idempotent: { type: boolean }
     CreateBulkReviewBatchRequest:
       type: object
@@ -2064,13 +4897,7 @@ components:
         - wave
         - selected_for_review
         - decision
-        - decision_reason
-        - reviewed_by
-        - reviewed_at
         - apply_status
-        - change_batch_id
-        - apply_error_code
-        - applied_at
       properties:
         batch_id: { type: string, format: uuid }
         proposal_id: { type: string, format: uuid }
@@ -2094,20 +4921,18 @@ components:
       description: 独立批量审核聚合，不替代或合并 ChangeBatch
       required:
         - id
+        - wiki_id
         - created_by
         - status
         - sampling_mode
         - sample_percent
-        - force_full_reason
         - wave_size
         - current_wave
         - created_at
-        - finalized_at
-        - paused_at
-        - completed_at
         - items
       properties:
         id: { type: string, format: uuid }
+        wiki_id: { type: string, format: uuid }
         created_by: { type: string, format: uuid }
         status: { type: string, enum: [reviewing, ready, applying, paused, completed] }
         sampling_mode: { type: string, enum: [sampled, full] }
@@ -2125,6 +4950,55 @@ components:
         items:
           type: array
           items: { $ref: "#/components/schemas/BulkReviewItem" }
+    BulkReviewBatchSummary:
+      type: object
+      required:
+        - id
+        - wiki_id
+        - created_by
+        - status
+        - sampling_mode
+        - sample_percent
+        - wave_size
+        - current_wave
+        - item_count
+        - pending_decisions
+        - approved_count
+        - rejected_count
+        - applied_count
+        - failed_count
+        - created_at
+      properties:
+        id: { type: string, format: uuid }
+        wiki_id: { type: string, format: uuid }
+        created_by: { type: string, format: uuid }
+        status: { type: string, enum: [reviewing, ready, applying, paused, completed] }
+        sampling_mode: { type: string, enum: [sampled, full] }
+        sample_percent: { type: integer, minimum: 1, maximum: 100 }
+        force_full_reason:
+          type: string
+          nullable: true
+          enum: [high_or_critical_risk, forced_by_reviewer]
+        wave_size: { type: integer, minimum: 1, maximum: 1000 }
+        current_wave: { type: integer, minimum: 0 }
+        item_count: { type: integer, minimum: 1 }
+        pending_decisions: { type: integer, minimum: 0 }
+        approved_count: { type: integer, minimum: 0 }
+        rejected_count: { type: integer, minimum: 0 }
+        applied_count: { type: integer, minimum: 0 }
+        failed_count: { type: integer, minimum: 0 }
+        created_at: { type: string, format: date-time }
+        completed_at: { type: string, format: date-time, nullable: true }
+    BulkReviewBatchListPage:
+      type: object
+      required: [items]
+      properties:
+        items:
+          type: array
+          items: { $ref: "#/components/schemas/BulkReviewBatchSummary" }
+        next_cursor:
+          type: string
+          nullable: true
     BulkReviewWaveResult:
       type: object
       required: [batch_id, wave, status, items]
@@ -2137,7 +5011,7 @@ components:
           items: { $ref: "#/components/schemas/BulkReviewItem" }
     BulkReviewAuditEvent:
       type: object
-      required: [id, batch_id, actor_id, event_type, proposal_id, wave, payload, created_at]
+      required: [id, batch_id, actor_id, event_type, payload, created_at]
       properties:
         id: { type: string, format: uuid }
         batch_id: { type: string, format: uuid }
@@ -2154,6 +5028,75 @@ components:
         items:
           type: array
           items: { $ref: "#/components/schemas/BulkReviewAuditEvent" }
+    ChangeTag:
+      type: object
+      required: [id, tag_key, name, description, created_at]
+      properties:
+        id: { type: string, format: uuid }
+        tag_key:
+          type: string
+          pattern: "^[a-z][a-z0-9._-]{0,63}$"
+        name: { type: string }
+        description: { type: string }
+        created_at: { type: string, format: date-time }
+    ChangeTagList:
+      type: object
+      required: [items]
+      properties:
+        items:
+          type: array
+          items: { $ref: "#/components/schemas/ChangeTag" }
+    CreateChangeTagRequest:
+      type: object
+      additionalProperties: false
+      required: [tag_key, name]
+      properties:
+        tag_key:
+          type: string
+          pattern: "^[a-z][a-z0-9._-]{0,63}$"
+        name: { type: string, minLength: 1, maxLength: 120 }
+        description: { type: string, maxLength: 1000 }
+    AssignChangeTagRequest:
+      type: object
+      additionalProperties: false
+      required: [target_type, target_id]
+      properties:
+        target_type:
+          type: string
+          enum: [revision, proposal, audit_event]
+        target_id: { type: string, format: uuid }
+    ChangeTagAssignmentResult:
+      type: object
+      required: [assigned, idempotent]
+      properties:
+        assigned: { type: boolean }
+        idempotent: { type: boolean }
+    AuditEvent:
+      type: object
+      required:
+        [id, actor_id, actor_display_name, event_type, aggregate_type,
+         aggregate_id, payload, tags, created_at]
+      properties:
+        id: { type: string, format: uuid }
+        actor_id: { type: string, format: uuid }
+        actor_display_name: { type: string }
+        event_type: { type: string }
+        aggregate_type: { type: string }
+        aggregate_id: { type: string, format: uuid }
+        change_batch_id: { type: string, format: uuid, nullable: true }
+        payload: { type: object, additionalProperties: true }
+        tags:
+          type: array
+          items: { $ref: "#/components/schemas/ChangeTag" }
+        created_at: { type: string, format: date-time }
+    AuditEventListPage:
+      type: object
+      required: [items]
+      properties:
+        items:
+          type: array
+          items: { $ref: "#/components/schemas/AuditEvent" }
+        next_cursor: { type: string, nullable: true }
     HealthResponse:
       type: object
       required: [service, version]
@@ -2248,6 +5191,7 @@ components:
         - visibility
         - content_hash
         - schema_version
+        - storage_tier
         - created_at
       properties:
         id:
@@ -2283,6 +5227,15 @@ components:
           type: integer
           description: AST Schema 版本（当前恒为 1）
           example: 1
+        storage_tier:
+          type: string
+          enum: [hot, cold]
+          description: 快照当前物理存储层；不影响 Revision 的逻辑不可变性
+        archived_at:
+          type: string
+          format: date-time
+          nullable: true
+          description: 迁移到 cold tier 的时间；hot 时为 null
         created_at:
           type: string
           format: date-time
@@ -2316,6 +5269,106 @@ components:
           minLength: 1
           maxLength: 255
           example: Anby Demara (New)
+    CreatePageRedirectRequest:
+      type: object
+      additionalProperties: false
+      required: [target]
+      properties:
+        target:
+          $ref: "#/components/schemas/PageRedirectTarget"
+    PageRedirectTarget:
+      type: object
+      additionalProperties: false
+      required: [kind]
+      description: >-
+        判别式重定向目标。page 需要 target_page_id；page_section 还需要
+        anchor_block_id；unresolved 需要 namespace 与 target_title；
+        interwiki 需要 target_title 与 external_url。
+      properties:
+        kind:
+          type: string
+          enum: [page, page_section, unresolved, interwiki]
+        target_page_id:
+          type: string
+          format: uuid
+        target_page_title:
+          type: string
+          readOnly: true
+        namespace_id:
+          type: string
+          format: uuid
+          readOnly: true
+        namespace:
+          type: string
+          minLength: 1
+          maxLength: 64
+        target_title:
+          type: string
+          minLength: 1
+          maxLength: 255
+        anchor_block_id:
+          type: string
+          format: uuid
+        external_url:
+          type: string
+          format: uri
+          maxLength: 2048
+    PageRedirect:
+      type: object
+      required:
+        [source_page_id, target, created_by, updated_by, created_at, updated_at]
+      properties:
+        source_page_id:
+          type: string
+          format: uuid
+        target:
+          $ref: "#/components/schemas/PageRedirectTarget"
+        created_by:
+          type: string
+          format: uuid
+        updated_by:
+          type: string
+          format: uuid
+        created_at:
+          type: string
+          format: date-time
+        updated_at:
+          type: string
+          format: date-time
+    UpsertBlockRedirectRequest:
+      type: object
+      additionalProperties: false
+      required: [target_page_id, target_block_id]
+      properties:
+        target_page_id: { type: string, format: uuid }
+        target_block_id: { type: string, format: uuid }
+    BlockRedirect:
+      type: object
+      required:
+        - source_page_id
+        - source_block_id
+        - target_page_id
+        - target_block_id
+        - target_page_title
+        - target_current_slug
+        - created_by
+        - created_at
+      properties:
+        source_page_id: { type: string, format: uuid }
+        source_block_id: { type: string, format: uuid }
+        target_page_id: { type: string, format: uuid }
+        target_block_id: { type: string, format: uuid }
+        target_page_title: { type: string }
+        target_current_slug: { type: string }
+        created_by: { type: string, format: uuid }
+        created_at: { type: string, format: date-time }
+    BlockRedirectList:
+      type: object
+      required: [items]
+      properties:
+        items:
+          type: array
+          items: { $ref: "#/components/schemas/BlockRedirect" }
     PublishRevisionRequest:
       type: object
       required: [ast]
@@ -2366,8 +5419,11 @@ components:
         redirect:
           type: object
           nullable: true
-          description: 请求命中站内重定向源时出现；响应返回的是落地页
-          required: [from_page_id, from_title]
+          description: >-
+            请求命中重定向源时出现。resolved=true 时 page/content 是本地落地页；
+            unresolved 或 interwiki 终点返回 resolved=false、content=null，并由 target
+            给出可治理的目标。
+          required: [from_page_id, from_title, target, resolved, hops]
           properties:
             from_page_id:
               type: string
@@ -2376,21 +5432,39 @@ components:
             from_title:
               type: string
               description: 重定向源页面显示标题
+            target:
+              $ref: "#/components/schemas/PageRedirectTarget"
+            resolved:
+              type: boolean
+            hops:
+              type: integer
+              minimum: 1
     PageContent:
       type: object
-      required: [revision, ast_json, html, renderer_version]
-      description: 已发布页面的当前 Revision 内容
+      required:
+        [revision, delivery_mode, section_count, ast_json, html, renderer_version]
+      description: >-
+        已发布页面的当前 Revision 内容。delivery_mode=sections 时全文 AST/HTML
+        为 null，客户端按 PageSectionManifest 加载可重建分片。
       properties:
         revision:
           $ref: "#/components/schemas/Revision"
+        delivery_mode:
+          type: string
+          enum: [full, sections]
+        section_count:
+          type: integer
+          minimum: 1
         ast_json:
           type: object
+          nullable: true
           additionalProperties: true
           description: |
             当前 Revision 的 canonical Typed Block AST
             （权威 Schema：contracts/schemas/ast/v1/ast.schema.json）。
         html:
           type: string
+          nullable: true
           description: 由 ast_json 渲染的安全 HTML 片段（不含 html/head；安全规则见 backend/internal/render/README.md）
         renderer_version:
           type: string
@@ -2470,6 +5544,65 @@ components:
           type: array
           items:
             $ref: "#/components/schemas/OutlineItem"
+    PageSectionSummary:
+      type: object
+      required: [key, position, title, size_bytes]
+      properties:
+        key:
+          type: string
+          description: lead 或稳定顶层 Heading Block ID
+        position:
+          type: integer
+          minimum: 0
+        heading_block_id:
+          type: string
+          format: uuid
+        level:
+          type: integer
+          minimum: 1
+          maximum: 6
+        title:
+          type: string
+        size_bytes:
+          type: integer
+          minimum: 0
+    PageSectionManifest:
+      type: object
+      required: [ready, citation_order, items]
+      properties:
+        ready:
+          type: boolean
+        revision_id:
+          type: string
+          format: uuid
+        renderer_version:
+          type: string
+        citation_order:
+          type: array
+          items: { type: string, format: uuid }
+        items:
+          type: array
+          items: { $ref: "#/components/schemas/PageSectionSummary" }
+    RenderedPageSection:
+      allOf:
+        - $ref: "#/components/schemas/PageSectionSummary"
+        - type: object
+          required: [revision_id, ast_json, html, renderer_version]
+          properties:
+            revision_id: { type: string, format: uuid }
+            ast_json:
+              type: object
+              additionalProperties: true
+            html:
+              type: string
+            renderer_version:
+              type: string
+    PageSectionLocator:
+      type: object
+      required: [section_key, block_id]
+      properties:
+        section_key: { type: string }
+        block_id: { type: string, format: uuid }
     AnchorTarget:
       type: object
       required: [page_id, block_id, current_slug, via_alias, via_redirect]
@@ -2532,6 +5665,69 @@ components:
               type: string
               nullable: true
               description: 下一页游标；null 表示没有更多
+    SourceUsage:
+      type: object
+      required:
+        - page_id
+        - page_title
+        - revision_id
+        - block_id
+        - node_id
+        - citation_id
+      properties:
+        page_id: { type: string, format: uuid }
+        page_title: { type: string }
+        revision_id:
+          type: string
+          format: uuid
+          description: 产生该投影的当前 Revision
+        block_id: { type: string, format: uuid }
+        node_id: { type: string }
+        citation_id: { type: string, format: uuid }
+        claim_id:
+          type: string
+          format: uuid
+          nullable: true
+          description: 通过 Claim 展示证据时的上下文；正文直接引用时为空
+    SourceUsageListPage:
+      type: object
+      required: [items]
+      properties:
+        items:
+          type: array
+          items: { $ref: "#/components/schemas/SourceUsage" }
+        next_cursor:
+          type: string
+          nullable: true
+    ComponentUsage:
+      type: object
+      required:
+        - page_id
+        - page_title
+        - revision_id
+        - block_id
+        - component_version
+        - entity_id
+      properties:
+        page_id: { type: string, format: uuid }
+        page_title: { type: string }
+        revision_id:
+          type: string
+          format: uuid
+          description: 产生该投影的当前 Revision
+        block_id: { type: string, format: uuid }
+        component_version: { type: integer, minimum: 1 }
+        entity_id: { type: string, format: uuid }
+    ComponentUsageListPage:
+      type: object
+      required: [items]
+      properties:
+        items:
+          type: array
+          items: { $ref: "#/components/schemas/ComponentUsage" }
+        next_cursor:
+          type: string
+          nullable: true
     EntityTypeSummary:
       type: object
       required: [id, type_key, name]
@@ -2568,9 +5764,178 @@ components:
           type: string
         alias_type:
           type: string
+          enum: [common, historical, abbreviation, import]
+    AddEntityLabelRequest:
+      type: object
+      additionalProperties: false
+      required: [language, label, description, is_primary]
+      properties:
+        language:
+          type: string
+          minLength: 1
+          maxLength: 64
+        label:
+          type: string
+          minLength: 1
+          maxLength: 255
+        description:
+          type: string
+          maxLength: 1000
+        is_primary:
+          type: boolean
+    SetPrimaryEntityLabelRequest:
+      type: object
+      additionalProperties: false
+      required: [language, label]
+      properties:
+        language:
+          type: string
+          minLength: 1
+          maxLength: 64
+        label:
+          type: string
+          minLength: 1
+          maxLength: 255
+    AddEntityAliasRequest:
+      type: object
+      additionalProperties: false
+      required: [language, alias, alias_type]
+      properties:
+        language:
+          type: string
+          minLength: 1
+          maxLength: 64
+        alias:
+          type: string
+          minLength: 1
+          maxLength: 255
+        alias_type:
+          type: string
+          enum: [common, historical, abbreviation, import]
+    PageEntityBinding:
+      type: object
+      additionalProperties: false
+      required: [page_id, entity_id, role, language, created_at]
+      properties:
+        page_id:
+          type: string
+          format: uuid
+        entity_id:
+          type: string
+          format: uuid
+        role:
+          type: string
+          enum: [primary, mentioned]
+        language:
+          type: string
+        created_at:
+          type: string
+          format: date-time
+    PageEntityBindingList:
+      type: object
+      additionalProperties: false
+      required: [items]
+      properties:
+        items:
+          type: array
+          items:
+            $ref: "#/components/schemas/PageEntityBinding"
+    SetPageEntityBindingRequest:
+      type: object
+      additionalProperties: false
+      required: [entity_id, role, language]
+      properties:
+        entity_id:
+          type: string
+          format: uuid
+        role:
+          type: string
+          enum: [primary, mentioned]
+        language:
+          type: string
+          minLength: 1
+          maxLength: 64
+    UpdateClaimVerificationRequest:
+      type: object
+      additionalProperties: false
+      required: [verification_status]
+      properties:
+        verification_status:
+          type: string
+          enum: [unverified, ai_checked, human_verified, disputed]
+    EntityCatalogItem:
+      type: object
+      required:
+        - id
+        - wiki_id
+        - canonical_key
+        - status
+        - entity_type
+        - display_label
+        - display_language
+        - description
+        - label_count
+        - alias_count
+        - claim_count
+        - page_count
+        - created_at
+        - updated_at
+      properties:
+        id:
+          type: string
+          format: uuid
+        wiki_id:
+          type: string
+          format: uuid
+        canonical_key:
+          type: string
+        status:
+          type: string
+          enum: [active, merged]
+        merged_into_entity_id:
+          type: string
+          format: uuid
+          nullable: true
+        entity_type:
+          $ref: "#/components/schemas/EntityTypeSummary"
+        display_label:
+          type: string
+        display_language:
+          type: string
+        description:
+          type: string
+        label_count:
+          type: integer
+          minimum: 0
+        alias_count:
+          type: integer
+          minimum: 0
+        claim_count:
+          type: integer
+          minimum: 0
+        page_count:
+          type: integer
+          minimum: 0
+        created_at:
+          type: string
+          format: date-time
+        updated_at:
+          type: string
+          format: date-time
+    EntityListPage:
+      type: object
+      required: [items, next_cursor]
+      properties:
+        items:
+          type: array
+          items:
+            $ref: "#/components/schemas/EntityCatalogItem"
+        next_cursor:
+          type: string
+          nullable: true
     EntityDetail:
       type: object
-      required: [id, wiki_id, canonical_key, status, merged_into_entity_id, entity_type, labels, aliases, created_at, updated_at]
+      required: [id, wiki_id, canonical_key, status, entity_type, labels, aliases, created_at, updated_at]
       properties:
         id:
           type: string
@@ -2603,6 +5968,287 @@ components:
         updated_at:
           type: string
           format: date-time
+    FederatedWiki:
+      type: object
+      additionalProperties: false
+      required:
+        - id
+        - wiki_id
+        - wiki_key
+        - display_name
+        - base_url
+        - entity_url_template
+        - trust_level
+        - status
+        - metadata
+        - created_by
+        - created_at
+        - updated_at
+      properties:
+        id:
+          type: string
+          format: uuid
+        wiki_id:
+          type: string
+          format: uuid
+        wiki_key:
+          type: string
+          pattern: "^[a-z][a-z0-9._-]{0,99}$"
+        display_name:
+          type: string
+          minLength: 1
+          maxLength: 255
+        base_url:
+          type: string
+          format: uri
+        entity_url_template:
+          type: string
+          description: 必须包含 {entity_id}，且与 base_url 同源。
+        trust_level:
+          type: string
+          enum: [untrusted, reference, trusted]
+        status:
+          type: string
+          enum: [active, disabled]
+        metadata:
+          type: object
+          additionalProperties: true
+        created_by:
+          type: string
+          format: uuid
+        created_at:
+          type: string
+          format: date-time
+        updated_at:
+          type: string
+          format: date-time
+    FederatedWikiList:
+      type: object
+      additionalProperties: false
+      required: [items]
+      properties:
+        items:
+          type: array
+          items:
+            $ref: "#/components/schemas/FederatedWiki"
+    CreateFederatedWikiRequest:
+      type: object
+      additionalProperties: false
+      required:
+        [wiki_key, display_name, base_url, entity_url_template,
+         trust_level, status, metadata]
+      properties:
+        wiki_key:
+          type: string
+          pattern: "^[a-z][a-z0-9._-]{0,99}$"
+        display_name:
+          type: string
+          minLength: 1
+          maxLength: 255
+        base_url:
+          type: string
+          format: uri
+        entity_url_template:
+          type: string
+          minLength: 1
+          description: 必须包含 {entity_id}，且与 base_url 同源。
+        trust_level:
+          type: string
+          enum: [untrusted, reference, trusted]
+          default: reference
+        status:
+          type: string
+          enum: [active, disabled]
+          default: active
+        metadata:
+          type: object
+          additionalProperties: true
+          default: {}
+    UpdateFederatedWikiRequest:
+      type: object
+      additionalProperties: false
+      required:
+        [display_name, base_url, entity_url_template, trust_level, status, metadata]
+      properties:
+        display_name:
+          type: string
+          minLength: 1
+          maxLength: 255
+        base_url:
+          type: string
+          format: uri
+        entity_url_template:
+          type: string
+          minLength: 1
+          description: 必须包含 {entity_id}，且与 base_url 同源。
+        trust_level:
+          type: string
+          enum: [untrusted, reference, trusted]
+        status:
+          type: string
+          enum: [active, disabled]
+        metadata:
+          type: object
+          additionalProperties: true
+    EntityFederationLink:
+      type: object
+      additionalProperties: false
+      required:
+        - id
+        - wiki_id
+        - local_entity_id
+        - local_canonical_key
+        - local_label
+        - local_status
+        - remote_wiki_id
+        - remote_wiki_key
+        - remote_wiki_name
+        - remote_wiki_status
+        - remote_trust_level
+        - remote_entity_id
+        - remote_canonical_key
+        - remote_label
+        - remote_entity_url
+        - relation_type
+        - verification_status
+        - status
+        - metadata
+        - created_by
+        - updated_by
+        - created_at
+        - updated_at
+      properties:
+        id:
+          type: string
+          format: uuid
+        wiki_id:
+          type: string
+          format: uuid
+        local_entity_id:
+          type: string
+          format: uuid
+        local_canonical_key:
+          type: string
+        local_label:
+          type: string
+        local_status:
+          type: string
+          enum: [active, merged, deleted]
+        remote_wiki_id:
+          type: string
+          format: uuid
+        remote_wiki_key:
+          type: string
+        remote_wiki_name:
+          type: string
+        remote_wiki_status:
+          type: string
+          enum: [active, disabled]
+        remote_trust_level:
+          type: string
+          enum: [untrusted, reference, trusted]
+        remote_entity_id:
+          type: string
+        remote_canonical_key:
+          type: string
+        remote_label:
+          type: string
+        remote_entity_url:
+          type: string
+          format: uri
+        relation_type:
+          type: string
+          enum: [same_as, broader, narrower, related]
+        verification_status:
+          type: string
+          enum: [unverified, human_verified, disputed]
+        status:
+          type: string
+          enum: [active, deprecated]
+        metadata:
+          type: object
+          additionalProperties: true
+        created_by:
+          type: string
+          format: uuid
+        updated_by:
+          type: string
+          format: uuid
+        created_at:
+          type: string
+          format: date-time
+        updated_at:
+          type: string
+          format: date-time
+    EntityFederationLinkListPage:
+      type: object
+      additionalProperties: false
+      required: [items, next_cursor]
+      properties:
+        items:
+          type: array
+          items:
+            $ref: "#/components/schemas/EntityFederationLink"
+        next_cursor:
+          type: string
+          nullable: true
+    CreateEntityFederationLinkRequest:
+      type: object
+      additionalProperties: false
+      required:
+        [remote_wiki_id, remote_entity_id, remote_canonical_key, remote_label,
+         relation_type, verification_status, metadata]
+      properties:
+        remote_wiki_id:
+          type: string
+          format: uuid
+        remote_entity_id:
+          type: string
+          minLength: 1
+          maxLength: 512
+        remote_canonical_key:
+          type: string
+          maxLength: 255
+        remote_label:
+          type: string
+          maxLength: 255
+        relation_type:
+          type: string
+          enum: [same_as, broader, narrower, related]
+          default: same_as
+        verification_status:
+          type: string
+          enum: [unverified, human_verified, disputed]
+          default: unverified
+        metadata:
+          type: object
+          additionalProperties: true
+          default: {}
+    UpdateEntityFederationLinkRequest:
+      type: object
+      additionalProperties: false
+      required:
+        [remote_canonical_key, remote_label, relation_type,
+         verification_status, status, metadata]
+      properties:
+        remote_canonical_key:
+          type: string
+          maxLength: 255
+        remote_label:
+          type: string
+          maxLength: 255
+        relation_type:
+          type: string
+          enum: [same_as, broader, narrower, related]
+        verification_status:
+          type: string
+          enum: [unverified, human_verified, disputed]
+        status:
+          type: string
+          enum: [active, deprecated]
+        metadata:
+          type: object
+          additionalProperties: true
     MergeEntityRequest:
       type: object
       additionalProperties: false
@@ -2680,6 +6326,144 @@ components:
           type: array
           items:
             $ref: "#/components/schemas/EntityMergeClaimMapping"
+    RollbackEntityMergeResult:
+      type: object
+      additionalProperties: false
+      required:
+        [merge_id, restored_entity_id, compensated_claim_ids,
+         removed_target_labels, idempotent]
+      properties:
+        merge_id:
+          type: string
+          format: uuid
+        restored_entity_id:
+          type: string
+          format: uuid
+        compensated_claim_ids:
+          type: array
+          items:
+            type: string
+            format: uuid
+        removed_target_labels:
+          type: integer
+          minimum: 0
+        idempotent:
+          type: boolean
+    EntityGraphNode:
+      type: object
+      additionalProperties: false
+      required:
+        [id, canonical_key, status, entity_type_key, entity_type_name,
+         label, language, description, depth]
+      properties:
+        id:
+          type: string
+          format: uuid
+        canonical_key:
+          type: string
+        status:
+          type: string
+          enum: [active, merged]
+        entity_type_key:
+          type: string
+        entity_type_name:
+          type: string
+        label:
+          type: string
+        language:
+          type: string
+        description:
+          type: string
+        depth:
+          type: integer
+          minimum: 0
+          maximum: 3
+    EntityGraphEdge:
+      type: object
+      additionalProperties: false
+      required:
+        [claim_id, subject_entity_id, target_entity_id, property_id,
+         property_key, property_name, rank, verification_status,
+         claim_created_at, projected_at]
+      properties:
+        claim_id:
+          type: string
+          format: uuid
+          description: 生成该投影边的不可变 Claim 标识
+        subject_entity_id:
+          type: string
+          format: uuid
+        target_entity_id:
+          type: string
+          format: uuid
+        property_id:
+          type: string
+          format: uuid
+        property_key:
+          type: string
+        property_name:
+          type: string
+        rank:
+          type: string
+          enum: [preferred, normal, deprecated]
+        verification_status:
+          type: string
+          enum: [unverified, ai_checked, human_verified, disputed]
+        claim_created_at:
+          type: string
+          format: date-time
+        projected_at:
+          type: string
+          format: date-time
+    EntityGraph:
+      type: object
+      additionalProperties: false
+      required:
+        [root_id, direction, property_key, requested_depth, reached_depth,
+         nodes, edges, truncated]
+      properties:
+        root_id:
+          type: string
+          format: uuid
+        direction:
+          type: string
+          enum: [outbound, inbound, both]
+        property_key:
+          type: string
+          description: 空字符串表示所有 Property
+        requested_depth:
+          type: integer
+          minimum: 1
+          maximum: 3
+        reached_depth:
+          type: integer
+          minimum: 0
+          maximum: 3
+        nodes:
+          type: array
+          items:
+            $ref: "#/components/schemas/EntityGraphNode"
+        edges:
+          type: array
+          items:
+            $ref: "#/components/schemas/EntityGraphEdge"
+        truncated:
+          type: boolean
+        projection_updated_at:
+          type: string
+          format: date-time
+          description: 返回边中最新的投影更新时间；无边时省略
+    EntityGraphRebuildResult:
+      type: object
+      additionalProperties: false
+      required: [subjects, edges]
+      properties:
+        subjects:
+          type: integer
+          minimum: 0
+        edges:
+          type: integer
+          minimum: 0
     PropertySummary:
       type: object
       required: [id, property_key, name, value_type, is_multivalued, schema]
@@ -2768,6 +6552,105 @@ components:
           type: array
           items:
             $ref: "#/components/schemas/ClaimSource"
+    FactConsistencyIssue:
+      type: object
+      required:
+        - id
+        - wiki_id
+        - subject_entity_id
+        - subject_label
+        - property_id
+        - property_key
+        - property_name
+        - issue_key
+        - issue_type
+        - severity
+        - claim_ids
+        - details
+        - status
+        - detected_at
+        - last_checked_at
+        - resolved_at
+      properties:
+        id:
+          type: string
+          format: uuid
+        wiki_id:
+          type: string
+          format: uuid
+        subject_entity_id:
+          type: string
+          format: uuid
+        subject_label:
+          type: string
+        property_id:
+          type: string
+          format: uuid
+          nullable: true
+        property_key:
+          type: string
+          nullable: true
+        property_name:
+          type: string
+          nullable: true
+        issue_key:
+          type: string
+        issue_type:
+          type: string
+          enum:
+            - single_value_conflict
+            - multiple_preferred_values
+            - verified_without_support
+            - merged_entity_target
+            - evidence_disagreement
+        severity:
+          type: string
+          enum: [warning, error]
+        claim_ids:
+          type: array
+          items:
+            type: string
+            format: uuid
+        details:
+          type: object
+          additionalProperties: true
+        status:
+          type: string
+          enum: [open, resolved]
+        detected_at:
+          type: string
+          format: date-time
+        last_checked_at:
+          type: string
+          format: date-time
+        resolved_at:
+          type: string
+          format: date-time
+          nullable: true
+    FactConsistencyIssueListPage:
+      type: object
+      required: [items, next_cursor]
+      properties:
+        items:
+          type: array
+          items:
+            $ref: "#/components/schemas/FactConsistencyIssue"
+        next_cursor:
+          type: string
+          nullable: true
+    FactConsistencyScanResult:
+      type: object
+      required: [scanned_subjects, open_issues, resolved_issues]
+      properties:
+        scanned_subjects:
+          type: integer
+          minimum: 0
+        open_issues:
+          type: integer
+          minimum: 0
+        resolved_issues:
+          type: integer
+          minimum: 0
     SourceSummary:
       type: object
       required: [id, source_type, title, author, publisher, published_at, metadata]
@@ -2885,9 +6768,65 @@ components:
           nullable: true
           allOf:
             - $ref: "#/components/schemas/ExternalResourceSummary"
+    SearchFacetValue:
+      type: object
+      additionalProperties: false
+      required: [value, count]
+      properties:
+        value:
+          type: string
+        count:
+          type: integer
+          minimum: 0
+    SearchFacets:
+      type: object
+      additionalProperties: false
+      required: [namespaces, languages, entity_types]
+      properties:
+        namespaces:
+          type: array
+          items:
+            $ref: "#/components/schemas/SearchFacetValue"
+        languages:
+          type: array
+          items:
+            $ref: "#/components/schemas/SearchFacetValue"
+        entity_types:
+          type: array
+          items:
+            $ref: "#/components/schemas/SearchFacetValue"
+    SearchCapabilities:
+      type: object
+      additionalProperties: false
+      required:
+        [backend, modes, default_mode, default_semantic_ratio, aggregation_keys]
+      properties:
+        backend:
+          type: string
+          enum: [postgres, meilisearch]
+        modes:
+          type: array
+          minItems: 1
+          uniqueItems: true
+          items:
+            type: string
+            enum: [keyword, hybrid, semantic]
+        default_mode:
+          type: string
+          enum: [keyword, hybrid, semantic]
+        default_semantic_ratio:
+          type: number
+          format: double
+          minimum: 0
+          maximum: 1
+        aggregation_keys:
+          type: array
+          items:
+            type: string
+            enum: [namespace, language, entity_type]
     PageSearchHit:
       type: object
-      required: [id, display_title, namespace, matched_on, highlight, score]
+      required: [id, display_title, namespace, language, matched_on, highlight, score]
       description: 页面搜索结果条目
       properties:
         id:
@@ -2902,6 +6841,17 @@ components:
           type: string
           description: 页面所在命名空间 key
           example: main
+        language:
+          type: string
+          description: 页面语言
+          example: zh-CN
+        entity_id:
+          type: string
+          format: uuid
+          description: 页面主 Entity；没有时省略
+        entity_type:
+          type: string
+          description: 页面主 Entity 类型 key；没有时省略
         matched_on:
           type: string
           enum: [title, alias, body, entity]
@@ -2916,7 +6866,7 @@ components:
           description: Adapter 相关性分数；仅用于同一次查询内排序
     PageSearchResults:
       type: object
-      required: [items, total]
+      required: [items, total, mode, facets]
       description: 页面搜索结果
       properties:
         items:
@@ -2927,6 +6877,12 @@ components:
           type: integer
           minimum: 0
           description: 应用分页前的命中总数
+        mode:
+          type: string
+          enum: [keyword, hybrid, semantic]
+          description: 实际执行的搜索模式
+        facets:
+          $ref: "#/components/schemas/SearchFacets"
     CollectionRule:
       type: object
       required: [version, kind]
@@ -2944,6 +6900,35 @@ components:
         property:
           type: string
           description: kind=claim_exists 时必填，按 Property.property_key 匹配 published Claim
+    CollectionDynamicQuery:
+      type: object
+      additionalProperties: false
+      required: [version, member_type]
+      description: Dynamic Collection v1 受限查询；不接受 SQL 或 AST 扫描表达式。
+      properties:
+        version:
+          type: integer
+          enum: [1]
+        member_type:
+          type: string
+          enum: [page, entity]
+        text:
+          type: string
+          maxLength: 200
+          description: 页面标题/别名或 Entity 标签/别名的模糊匹配。
+        namespace:
+          type: string
+          description: member_type=page 时的可选 Namespace key。
+        entity_type:
+          type: string
+          description: member_type=entity 时的可选 EntityType key。
+        property:
+          type: string
+          description: member_type=entity 时要求存在 published Claim 的 Property key。
+    CollectionQuery:
+      oneOf:
+        - $ref: "#/components/schemas/CollectionRule"
+        - $ref: "#/components/schemas/CollectionDynamicQuery"
     Collection:
       type: object
       required: [id, wiki_id, collection_type, title, description_page_id, query, created_at, updated_at]
@@ -2956,7 +6941,7 @@ components:
           format: uuid
         collection_type:
           type: string
-          enum: [manual, rule]
+          enum: [manual, rule, dynamic]
         title:
           type: string
         description_page_id:
@@ -2966,13 +6951,30 @@ components:
         query:
           nullable: true
           allOf:
-            - $ref: "#/components/schemas/CollectionRule"
+            - $ref: "#/components/schemas/CollectionQuery"
         created_at:
           type: string
           format: date-time
         updated_at:
           type: string
           format: date-time
+    CreateCollectionRequest:
+      type: object
+      additionalProperties: false
+      required: [collection_type, title]
+      properties:
+        collection_type:
+          type: string
+          enum: [manual, rule, dynamic]
+        title: { type: string, minLength: 1 }
+        description_page_id:
+          type: string
+          format: uuid
+          nullable: true
+        query:
+          nullable: true
+          allOf:
+            - $ref: "#/components/schemas/CollectionQuery"
     CollectionListPage:
       allOf:
         - $ref: "#/components/schemas/CursorPage"
@@ -2988,7 +6990,7 @@ components:
               nullable: true
     CollectionMembership:
       type: object
-      required: [member_type, page_id, entity_id, display_title, source_type, sort_key, source_revision_id, created_at]
+      required: [member_type, display_title, source_type, sort_key, created_at]
       properties:
         member_type:
           type: string
@@ -3005,12 +7007,13 @@ components:
           type: string
         source_type:
           type: string
-          enum: [manual, rule]
+          enum: [manual, rule, dynamic]
         sort_key:
           type: string
         source_revision_id:
           type: string
           format: uuid
+          nullable: true
         created_at:
           type: string
           format: date-time
@@ -3027,6 +7030,44 @@ components:
             next_cursor:
               type: string
               nullable: true
+    WriteCollectionMember:
+      type: object
+      additionalProperties: false
+      required: [member_type, sort_key, source_revision_id]
+      properties:
+        member_type:
+          type: string
+          enum: [page, entity]
+        page_id:
+          type: string
+          format: uuid
+          nullable: true
+        entity_id:
+          type: string
+          format: uuid
+          nullable: true
+        sort_key: { type: string, minLength: 1 }
+        source_revision_id: { type: string, format: uuid }
+    ReplaceCollectionMembersRequest:
+      type: object
+      additionalProperties: false
+      required: [items]
+      properties:
+        items:
+          type: array
+          maxItems: 10000
+          items: { $ref: "#/components/schemas/WriteCollectionMember" }
+    RebuildCollectionRequest:
+      type: object
+      additionalProperties: false
+      required: [source_revision_id]
+      properties:
+        source_revision_id: { type: string, format: uuid }
+    RebuildCollectionResult:
+      type: object
+      required: [member_count]
+      properties:
+        member_count: { type: integer, minimum: 0 }
     Error:
       type: object
       required: [code, message, request_id]

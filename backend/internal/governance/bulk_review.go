@@ -3,6 +3,7 @@ package governance
 import (
 	"context"
 	"crypto/sha256"
+	"encoding/base64"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -18,9 +19,11 @@ import (
 )
 
 var (
-	ErrBulkReviewNotFound   = errors.New("governance: 批量审核不存在")
-	ErrBulkReviewIncomplete = errors.New("governance: 抽样审核尚未完成")
-	ErrBulkReviewPaused     = errors.New("governance: 批量审核已暂停")
+	ErrBulkReviewNotFound      = errors.New("governance: 批量审核不存在")
+	ErrBulkReviewIncomplete    = errors.New("governance: 抽样审核尚未完成")
+	ErrBulkReviewPaused        = errors.New("governance: 批量审核已暂停")
+	ErrInvalidBulkReviewCursor = errors.New("governance: 批量审核 cursor 非法")
+	ErrInvalidBulkReviewStatus = errors.New("governance: 批量审核 status 非法")
 )
 
 const (
@@ -45,6 +48,7 @@ const (
 
 type BulkReviewBatch struct {
 	ID              uuid.UUID        `json:"id"`
+	WikiID          uuid.UUID        `json:"wiki_id"`
 	CreatedBy       uuid.UUID        `json:"created_by"`
 	Status          string           `json:"status"`
 	SamplingMode    string           `json:"sampling_mode"`
@@ -101,12 +105,43 @@ type BulkReviewWaveResult struct {
 	Items   []BulkReviewItem `json:"items"`
 }
 
+type BulkReviewBatchSummary struct {
+	ID               uuid.UUID  `json:"id"`
+	WikiID           uuid.UUID  `json:"wiki_id"`
+	CreatedBy        uuid.UUID  `json:"created_by"`
+	Status           string     `json:"status"`
+	SamplingMode     string     `json:"sampling_mode"`
+	SamplePercent    int        `json:"sample_percent"`
+	ForceFullReason  *string    `json:"force_full_reason"`
+	WaveSize         int        `json:"wave_size"`
+	CurrentWave      int        `json:"current_wave"`
+	ItemCount        int        `json:"item_count"`
+	PendingDecisions int        `json:"pending_decisions"`
+	ApprovedCount    int        `json:"approved_count"`
+	RejectedCount    int        `json:"rejected_count"`
+	AppliedCount     int        `json:"applied_count"`
+	FailedCount      int        `json:"failed_count"`
+	CreatedAt        time.Time  `json:"created_at"`
+	CompletedAt      *time.Time `json:"completed_at"`
+}
+
+type BulkReviewBatchPage struct {
+	Items      []BulkReviewBatchSummary `json:"items"`
+	NextCursor *string                  `json:"next_cursor"`
+}
+
+type bulkReviewCursor struct {
+	CreatedAt time.Time `json:"t"`
+	ID        uuid.UUID `json:"i"`
+}
+
 type BulkReviewService struct {
-	repo  *Repository
-	apply *ApplyService
-	txm   *db.TxManager
-	ids   *id.Generator
-	auth  *AuthorizationService
+	repo   *Repository
+	apply  *ApplyService
+	txm    *db.TxManager
+	ids    *id.Generator
+	auth   *AuthorizationService
+	wikiID uuid.UUID
 }
 
 func NewBulkReviewService(repo *Repository, apply *ApplyService, txm *db.TxManager, ids *id.Generator) *BulkReviewService {
@@ -118,9 +153,15 @@ func (s *BulkReviewService) WithAuthorization(auth *AuthorizationService) *BulkR
 	return s
 }
 
+func (s *BulkReviewService) WithWikiID(wikiID uuid.UUID) *BulkReviewService {
+	s.wikiID = wikiID
+	return s
+}
+
 // Create freezes membership, deterministic sampling and wave assignment.
 func (s *BulkReviewService) Create(ctx context.Context, in CreateBulkReviewParams) (*BulkReviewBatch, error) {
-	if in.CreatedBy == uuid.Nil || len(in.ProposalIDs) == 0 || len(in.ProposalIDs) > 1000 {
+	if s.wikiID == uuid.Nil || in.CreatedBy == uuid.Nil ||
+		len(in.ProposalIDs) == 0 || len(in.ProposalIDs) > 1000 {
 		return nil, ErrInvalidProposal
 	}
 	if in.SamplePercent <= 0 || in.SamplePercent > 100 || in.WaveSize <= 0 || in.WaveSize > 1000 {
@@ -156,6 +197,9 @@ func (s *BulkReviewService) Create(ctx context.Context, in CreateBulkReviewParam
 			if proposal.Status != ProposalInReview {
 				return fmt.Errorf("%w: proposal=%s status=%s", ErrInvalidTransition, proposalID, proposal.Status)
 			}
+			if wikiIDForProposal(ctx, tx, s.repo, proposal) != s.wikiID {
+				return ErrPermissionDenied
+			}
 			if err := s.checkReviewAuthorization(ctx, tx, in.CreatedBy, proposal); err != nil {
 				return err
 			}
@@ -177,9 +221,10 @@ func (s *BulkReviewService) Create(ctx context.Context, in CreateBulkReviewParam
 			reasonPtr = &reason
 		}
 		if _, err := tx.Exec(ctx, `INSERT INTO bulk_review_batch
-			(id,created_by,status,sampling_mode,sample_percent,force_full_reason,wave_size)
-			VALUES ($1,$2,$3,$4,$5,$6,$7)`,
-			batchID, in.CreatedBy, BulkReviewReviewing, mode, in.SamplePercent, reasonPtr, in.WaveSize); err != nil {
+			(id,wiki_id,created_by,status,sampling_mode,sample_percent,force_full_reason,wave_size)
+			VALUES ($1,$2,$3,$4,$5,$6,$7,$8)`,
+			batchID, s.wikiID, in.CreatedBy, BulkReviewReviewing, mode,
+			in.SamplePercent, reasonPtr, in.WaveSize); err != nil {
 			return err
 		}
 		selected := sampledProposalIDs(batchID, in.ProposalIDs, in.SamplePercent, full)
@@ -202,6 +247,91 @@ func (s *BulkReviewService) Create(ctx context.Context, in CreateBulkReviewParam
 		return err
 	})
 	return result, err
+}
+
+func (s *BulkReviewService) List(
+	ctx context.Context, actorID uuid.UUID, status, cursor string, limit int,
+) (*BulkReviewBatchPage, error) {
+	if s.wikiID == uuid.Nil {
+		return nil, ErrPermissionDenied
+	}
+	if err := s.requireHuman(ctx, actorID); err != nil {
+		return nil, err
+	}
+	if s.auth != nil {
+		if err := s.auth.Check(ctx, actorID, s.wikiID, ActionReview, nil); err != nil {
+			return nil, err
+		}
+	}
+	status = strings.TrimSpace(status)
+	if status != "" && status != BulkReviewReviewing && status != BulkReviewReady &&
+		status != BulkReviewApplying && status != BulkReviewPaused &&
+		status != BulkReviewCompleted {
+		return nil, ErrInvalidBulkReviewStatus
+	}
+	if limit <= 0 {
+		limit = 20
+	}
+	if limit > 100 {
+		limit = 100
+	}
+	var afterTime *time.Time
+	afterID := uuid.Nil
+	if cursor != "" {
+		var value bulkReviewCursor
+		raw, err := base64.RawURLEncoding.DecodeString(cursor)
+		if err != nil || json.Unmarshal(raw, &value) != nil ||
+			value.CreatedAt.IsZero() || value.ID == uuid.Nil {
+			return nil, ErrInvalidBulkReviewCursor
+		}
+		afterTime = &value.CreatedAt
+		afterID = value.ID
+	}
+	rows, err := s.repo.q(nil).Query(ctx, `SELECT b.id,b.wiki_id,b.created_by,b.status,
+			b.sampling_mode,b.sample_percent,b.force_full_reason,b.wave_size,b.current_wave,
+			count(i.proposal_id),
+			count(*) FILTER (WHERE i.decision='pending'),
+			count(*) FILTER (WHERE i.decision='approved'),
+			count(*) FILTER (WHERE i.decision='rejected'),
+			count(*) FILTER (WHERE i.apply_status='applied'),
+			count(*) FILTER (WHERE i.apply_status='failed'),
+			b.created_at,b.completed_at
+		FROM bulk_review_batch b
+		JOIN bulk_review_batch_item i ON i.batch_id=b.id
+		WHERE b.wiki_id=$1 AND ($2='' OR b.status=$2)
+		  AND ($3::timestamptz IS NULL OR (b.created_at,b.id)<($3,$4))
+		GROUP BY b.id
+		ORDER BY b.created_at DESC,b.id DESC
+		LIMIT $5`, s.wikiID, status, afterTime, afterID, limit+1)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	result := &BulkReviewBatchPage{Items: make([]BulkReviewBatchSummary, 0, limit)}
+	for rows.Next() {
+		var item BulkReviewBatchSummary
+		if err := rows.Scan(
+			&item.ID, &item.WikiID, &item.CreatedBy, &item.Status,
+			&item.SamplingMode, &item.SamplePercent, &item.ForceFullReason,
+			&item.WaveSize, &item.CurrentWave, &item.ItemCount,
+			&item.PendingDecisions, &item.ApprovedCount, &item.RejectedCount,
+			&item.AppliedCount, &item.FailedCount, &item.CreatedAt, &item.CompletedAt,
+		); err != nil {
+			return nil, err
+		}
+		result.Items = append(result.Items, item)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	if len(result.Items) > limit {
+		last := result.Items[limit-1]
+		raw, _ := json.Marshal(bulkReviewCursor{CreatedAt: last.CreatedAt, ID: last.ID})
+		next := base64.RawURLEncoding.EncodeToString(raw)
+		result.NextCursor = &next
+		result.Items = result.Items[:limit]
+	}
+	return result, nil
 }
 
 func sampledProposalIDs(batchID uuid.UUID, proposalIDs []uuid.UUID, percent int, full bool) map[uuid.UUID]bool {
@@ -577,13 +707,14 @@ func (s *BulkReviewService) Audit(ctx context.Context, batchID, actorID uuid.UUI
 }
 
 func (s *BulkReviewService) getTx(ctx context.Context, tx pgx.Tx, batchID uuid.UUID, forUpdate bool) (*BulkReviewBatch, error) {
-	query := `SELECT id,created_by,status,sampling_mode,sample_percent,force_full_reason,wave_size,
+	query := `SELECT id,wiki_id,created_by,status,sampling_mode,sample_percent,force_full_reason,wave_size,
 		current_wave,created_at,finalized_at,paused_at,completed_at FROM bulk_review_batch WHERE id=$1`
 	if forUpdate {
 		query += ` FOR UPDATE`
 	}
 	var batch BulkReviewBatch
-	err := s.repo.q(tx).QueryRow(ctx, query, batchID).Scan(&batch.ID, &batch.CreatedBy, &batch.Status,
+	err := s.repo.q(tx).QueryRow(ctx, query, batchID).Scan(
+		&batch.ID, &batch.WikiID, &batch.CreatedBy, &batch.Status,
 		&batch.SamplingMode, &batch.SamplePercent, &batch.ForceFullReason, &batch.WaveSize,
 		&batch.CurrentWave, &batch.CreatedAt, &batch.FinalizedAt, &batch.PausedAt, &batch.CompletedAt)
 	if errors.Is(err, pgx.ErrNoRows) {
@@ -655,6 +786,9 @@ func (s *BulkReviewService) checkReviewAuthorization(ctx context.Context, tx pgx
 
 func (s *BulkReviewService) checkBatchAuthorization(ctx context.Context, tx pgx.Tx, actorID uuid.UUID,
 	batch *BulkReviewBatch, action string) error {
+	if s.wikiID == uuid.Nil || batch.WikiID != s.wikiID {
+		return ErrBulkReviewNotFound
+	}
 	if s.auth == nil {
 		return nil
 	}

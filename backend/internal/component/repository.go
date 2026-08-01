@@ -2,8 +2,11 @@ package component
 
 import (
 	"context"
+	"encoding/base64"
+	"encoding/json"
 	"errors"
 	"fmt"
+	"time"
 
 	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5"
@@ -72,6 +75,70 @@ func (r *Repository) Get(ctx context.Context, tx pgx.Tx, id uuid.UUID) (*Compone
 	return value, err
 }
 
+type componentCursor struct {
+	CreatedAt time.Time `json:"t"`
+	ID        uuid.UUID `json:"i"`
+}
+
+func encodeComponentCursor(value componentCursor) string {
+	raw, _ := json.Marshal(value)
+	return base64.RawURLEncoding.EncodeToString(raw)
+}
+
+func decodeComponentCursor(raw string) (componentCursor, error) {
+	var value componentCursor
+	data, err := base64.RawURLEncoding.DecodeString(raw)
+	if err != nil {
+		return value, err
+	}
+	err = json.Unmarshal(data, &value)
+	return value, err
+}
+
+func (r *Repository) List(
+	ctx context.Context, cursor string, limit int,
+) (*ComponentPage, error) {
+	var afterTime *time.Time
+	afterID := uuid.Nil
+	if cursor != "" {
+		after, err := decodeComponentCursor(cursor)
+		if err != nil || after.CreatedAt.IsZero() || after.ID == uuid.Nil {
+			return nil, ErrInvalidCursor
+		}
+		afterTime, afterID = &after.CreatedAt, after.ID
+	}
+	rows, err := r.pool.Query(ctx, `SELECT
+		id,component_key,name,created_by,created_at,updated_at
+		FROM component
+		WHERE ($1::timestamptz IS NULL OR (created_at,id)<($1,$2))
+		ORDER BY created_at DESC,id DESC LIMIT $3`,
+		afterTime, afterID, limit+1)
+	if err != nil {
+		return nil, fmt.Errorf("component: list: %w", err)
+	}
+	defer rows.Close()
+	result := &ComponentPage{Items: make([]Component, 0, limit)}
+	for rows.Next() {
+		value, err := scanComponent(rows)
+		if err != nil {
+			return nil, err
+		}
+		result.Items = append(result.Items, *value)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	if len(result.Items) > limit {
+		last := result.Items[limit-1]
+		next := encodeComponentCursor(componentCursor{
+			CreatedAt: last.CreatedAt, ID: last.ID,
+		})
+		result.NextCursor = &next
+		result.Items = result.Items[:limit]
+	}
+	return result, nil
+}
+
 func (r *Repository) Lock(ctx context.Context, tx pgx.Tx, id uuid.UUID) (*Component, error) {
 	value, err := scanComponent(tx.QueryRow(ctx, `SELECT
 		id,component_key,name,created_by,created_at,updated_at
@@ -111,6 +178,35 @@ func (r *Repository) GetVersion(
 			ErrVersionNotFound, componentID, version)
 	}
 	return value, err
+}
+
+func (r *Repository) ListVersions(
+	ctx context.Context, componentID uuid.UUID,
+) (*VersionList, error) {
+	if _, err := r.Get(ctx, nil, componentID); err != nil {
+		return nil, err
+	}
+	rows, err := r.pool.Query(ctx, `SELECT
+		component_id,version,props_schema_json,renderer_ref,status,created_by,
+		created_at,published_at
+		FROM component_version WHERE component_id=$1 ORDER BY version DESC`,
+		componentID)
+	if err != nil {
+		return nil, fmt.Errorf("component: list versions: %w", err)
+	}
+	defer rows.Close()
+	result := &VersionList{Items: []Version{}}
+	for rows.Next() {
+		value, err := scanVersion(rows)
+		if err != nil {
+			return nil, err
+		}
+		result.Items = append(result.Items, *value)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return result, nil
 }
 
 func (r *Repository) LockVersion(

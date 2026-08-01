@@ -18,6 +18,8 @@ Name | Type
 `policyDecision` | { [key: string]: any; }
 `createdBy` | string
 `idempotencyKey` | string
+`changeBatchId` | string
+`changeBatchStatus` | string
 `createdAt` | Date
 `updatedAt` | Date
 `operations` | [Array&lt;ProposalOperationRecord&gt;](ProposalOperationRecord.md)
@@ -42,6 +44,8 @@ const example = {
   "policyDecision": null,
   "createdBy": null,
   "idempotencyKey": null,
+  "changeBatchId": null,
+  "changeBatchStatus": null,
   "createdAt": null,
   "updatedAt": null,
   "operations": null,

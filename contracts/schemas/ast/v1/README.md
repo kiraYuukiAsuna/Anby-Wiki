@@ -9,7 +9,7 @@ Wiki 页面正文的权威格式（设计依据：`Docs/WikiDesignOnePage.md` §
 ## 结构概要
 
 - 根节点：`{ type: "document", schema_version: 1, children: Block[] }`。
-- Block 是按 `type` 判别的联合：`heading`（level 1-6）、`paragraph`、`bullet_list` / `ordered_list` / `list_item`、`table` / `table_row` / `table_cell`、`code`（language 可选）、`quote`、`callout`（kind: info/warning/danger）、`divider`。
+- Block 是按 `type` 判别的联合：`heading`（level 1-6）、`paragraph`、`bullet_list` / `ordered_list` / `list_item`、`table` / `table_row` / `table_cell`、`code`（language 可选）、`quote`、`callout`（kind: info/warning/danger）、`component`、`image`、`video`、`dataset_view`、`embed`、`divider`。
 - 容器规则：
   - `bullet_list` / `ordered_list` 的 `children` 只能是 `list_item`；
   - `table` → `table_row` → `table_cell` 逐层包裹；
@@ -17,7 +17,7 @@ Wiki 页面正文的权威格式（设计依据：`Docs/WikiDesignOnePage.md` §
   - `heading` / `paragraph` 持有 `content: InlineNode[]`，没有 `children`；
   - `code` 持有 `content: string`；
   - `divider` 无任何内容字段。
-- Inline 节点：`text`（可选 `marks`：bold/italic/strikethrough/code）、`inline_code`、`page_reference`、`external_link`、`entity_reference`、`claim_reference`、`citation_reference`。
+- Inline 节点：`text`（可选 `marks`：bold/italic/strikethrough/code）、`inline_code`、`page_reference`、`page_anchor_reference`、`external_link`、`entity_reference`、`claim_reference`、`citation_reference`、`math`、`mention`。
 - `page_reference` 两种互斥形态（`oneOf`）：
   - 已解析：`target_page_id`（uuid）+ `display_text`，可选 `target_heading_block_id`（章节锚点，设计 §9）；
   - 未解析：`resolution_status: "unresolved"` + `target_namespace` + `normalized_title`，可选 `expected_entity_type`。
@@ -27,6 +27,10 @@ Wiki 页面正文的权威格式（设计依据：`Docs/WikiDesignOnePage.md` §
   - `entity_reference`：`entity_id` + `display_text`；
   - `claim_reference`：`claim_id` + `display_text`；
   - `citation_reference`：`citation_id` + 可选 `display_text`（Renderer 用作文献提示）。
+- 媒体 Block 固定到不可变 `asset_revision_id`；视频封面同样使用 AssetRevision。
+- `dataset_view` 只保存稳定 `dataset_view_id`，查询记录不复制进正文快照。
+- `embed` 只允许 http/https URL，Renderer 输出安全链接卡片，不执行第三方脚本。
+- `math` 保存 LaTeX 源文本；`mention` 保存稳定 Actor ID 与展示文本。
 - 所有对象均 `additionalProperties: false`，严格校验。
 
 ## ID 规则（ADR-0008）

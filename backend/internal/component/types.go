@@ -24,6 +24,7 @@ var (
 	ErrRendererRegistered = errors.New("component: renderer already registered")
 	ErrVersionFrozen      = errors.New("component: version is frozen")
 	ErrInvalidTransition  = errors.New("component: invalid version transition")
+	ErrInvalidCursor      = errors.New("component: invalid cursor")
 )
 
 type Component struct {
@@ -44,6 +45,15 @@ type Version struct {
 	CreatedBy   uuid.UUID
 	CreatedAt   time.Time
 	PublishedAt *time.Time
+}
+
+type ComponentPage struct {
+	Items      []Component `json:"items"`
+	NextCursor *string     `json:"next_cursor"`
+}
+
+type VersionList struct {
+	Items []Version `json:"items"`
 }
 
 type CreateParams struct {

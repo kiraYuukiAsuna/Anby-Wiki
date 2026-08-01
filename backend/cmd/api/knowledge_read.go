@@ -3,8 +3,10 @@
 package main
 
 import (
+	"context"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"net/http"
 	"time"
 
@@ -14,25 +16,44 @@ import (
 	"github.com/anby/wiki/backend/internal/governance"
 	"github.com/anby/wiki/backend/internal/knowledge"
 	"github.com/anby/wiki/backend/internal/platform/httpx"
+	"github.com/anby/wiki/backend/internal/projection"
 )
 
 type KnowledgeReadAPI struct {
 	knowledge     *knowledge.Service
 	evidence      *evidence.Service
 	authorization *governance.AuthorizationService
+	consistency   *knowledge.FactConsistencyService
+	entityGraph   *projection.EntityGraphService
 	wikiID        uuid.UUID
 }
 
-func NewKnowledgeReadAPI(knowledgeService *knowledge.Service, evidenceService *evidence.Service) *KnowledgeReadAPI {
-	return &KnowledgeReadAPI{knowledge: knowledgeService, evidence: evidenceService}
+func NewKnowledgeReadAPI(
+	knowledgeService *knowledge.Service,
+	evidenceService *evidence.Service,
+	wikiID uuid.UUID,
+) *KnowledgeReadAPI {
+	return &KnowledgeReadAPI{knowledge: knowledgeService, evidence: evidenceService, wikiID: wikiID}
 }
 
 func (a *KnowledgeReadAPI) WithMergeAuthorization(
 	authorization *governance.AuthorizationService,
-	wikiID uuid.UUID,
 ) *KnowledgeReadAPI {
 	a.authorization = authorization
-	a.wikiID = wikiID
+	return a
+}
+
+func (a *KnowledgeReadAPI) WithFactConsistency(
+	service *knowledge.FactConsistencyService,
+) *KnowledgeReadAPI {
+	a.consistency = service
+	return a
+}
+
+func (a *KnowledgeReadAPI) WithEntityGraph(
+	service *projection.EntityGraphService,
+) *KnowledgeReadAPI {
+	a.entityGraph = service
 	return a
 }
 
@@ -67,6 +88,29 @@ type entityDetailResponse struct {
 	Aliases            []entityAliasResponse `json:"aliases"`
 	CreatedAt          time.Time             `json:"created_at"`
 	UpdatedAt          time.Time             `json:"updated_at"`
+}
+
+type entityCatalogItemResponse struct {
+	ID                 uuid.UUID          `json:"id"`
+	WikiID             uuid.UUID          `json:"wiki_id"`
+	CanonicalKey       string             `json:"canonical_key"`
+	Status             string             `json:"status"`
+	MergedIntoEntityID *uuid.UUID         `json:"merged_into_entity_id"`
+	EntityType         entityTypeResponse `json:"entity_type"`
+	DisplayLabel       string             `json:"display_label"`
+	DisplayLanguage    string             `json:"display_language"`
+	Description        string             `json:"description"`
+	LabelCount         int                `json:"label_count"`
+	AliasCount         int                `json:"alias_count"`
+	ClaimCount         int                `json:"claim_count"`
+	PageCount          int                `json:"page_count"`
+	CreatedAt          time.Time          `json:"created_at"`
+	UpdatedAt          time.Time          `json:"updated_at"`
+}
+
+type entityCatalogPageResponse struct {
+	Items      []entityCatalogItemResponse `json:"items"`
+	NextCursor *string                     `json:"next_cursor"`
 }
 
 type propertyResponse struct {
@@ -152,12 +196,45 @@ type citationDetailResponse struct {
 	ExternalResource *externalResourceResponse `json:"external_resource"`
 }
 
+func (a *KnowledgeReadAPI) listEntities(w http.ResponseWriter, r *http.Request) {
+	limit, ok := pageSizeFrom(w, r)
+	if !ok {
+		return
+	}
+	page, err := a.knowledge.ListEntities(r.Context(), knowledge.EntityCatalogParams{
+		WikiID: a.wikiID, Query: r.URL.Query().Get("q"),
+		TypeKey: r.URL.Query().Get("type_key"), Status: r.URL.Query().Get("status"),
+		Cursor: r.URL.Query().Get("cursor"), Limit: limit,
+	})
+	if err != nil {
+		a.writeError(w, r, err)
+		return
+	}
+	items := make([]entityCatalogItemResponse, len(page.Items))
+	for i, item := range page.Items {
+		items[i] = entityCatalogItemResponse{
+			ID: item.ID, WikiID: item.WikiID, CanonicalKey: item.CanonicalKey,
+			Status: item.Status, MergedIntoEntityID: item.MergedIntoEntityID,
+			EntityType: entityTypeResponse{
+				ID: item.EntityType.ID, TypeKey: item.EntityType.TypeKey, Name: item.EntityType.Name,
+			},
+			DisplayLabel: item.DisplayLabel, DisplayLanguage: item.DisplayLanguage,
+			Description: item.Description, LabelCount: item.LabelCount,
+			AliasCount: item.AliasCount, ClaimCount: item.ClaimCount,
+			PageCount: item.PageCount, CreatedAt: item.CreatedAt, UpdatedAt: item.UpdatedAt,
+		}
+	}
+	httpx.WriteJSON(w, http.StatusOK, entityCatalogPageResponse{
+		Items: items, NextCursor: page.NextCursor,
+	})
+}
+
 func (a *KnowledgeReadAPI) getEntity(w http.ResponseWriter, r *http.Request) {
 	id, ok := pageIDFrom(w, r)
 	if !ok {
 		return
 	}
-	entity, err := a.knowledge.GetEntity(r.Context(), id)
+	entity, err := a.currentWikiEntity(r.Context(), id)
 	if err != nil {
 		a.writeError(w, r, err)
 		return
@@ -205,6 +282,12 @@ func (a *KnowledgeReadAPI) getClaim(w http.ResponseWriter, r *http.Request) {
 		a.writeError(w, r, err)
 		return
 	}
+	if _, err := a.currentWikiEntity(
+		r.Context(), claim.SubjectEntityID,
+	); err != nil {
+		a.writeError(w, r, knowledge.ErrClaimNotFound)
+		return
+	}
 	property, err := a.knowledge.GetProperty(r.Context(), claim.PropertyID)
 	if err != nil {
 		a.writeError(w, r, err)
@@ -231,6 +314,22 @@ func (a *KnowledgeReadAPI) getClaim(w http.ResponseWriter, r *http.Request) {
 			SupportType: source.SupportType, CreatedAt: source.CreatedAt}
 	}
 	httpx.WriteJSON(w, http.StatusOK, resp)
+}
+
+// currentWikiEntity turns an opaque Entity ID into a site-scoped lookup.
+// A foreign-Wiki ID is deliberately indistinguishable from a missing ID.
+func (a *KnowledgeReadAPI) currentWikiEntity(
+	ctx context.Context,
+	id uuid.UUID,
+) (*knowledge.Entity, error) {
+	entity, err := a.knowledge.GetEntity(ctx, id)
+	if err != nil {
+		return nil, err
+	}
+	if entity.WikiID != a.wikiID {
+		return nil, fmt.Errorf("%w: id=%s", knowledge.ErrEntityNotFound, id)
+	}
+	return entity, nil
 }
 
 func (a *KnowledgeReadAPI) getCitation(w http.ResponseWriter, r *http.Request) {
@@ -269,13 +368,100 @@ func (a *KnowledgeReadAPI) getCitation(w http.ResponseWriter, r *http.Request) {
 	httpx.WriteJSON(w, http.StatusOK, resp)
 }
 
+func (a *KnowledgeReadAPI) listFactConsistencyIssues(
+	w http.ResponseWriter,
+	r *http.Request,
+) {
+	actorID, ok := actorIDFrom(w, r)
+	if !ok {
+		return
+	}
+	if a.authorization == nil {
+		a.writeError(w, r, governance.ErrPermissionDenied)
+		return
+	}
+	if err := a.authorization.Check(
+		r.Context(), actorID, a.wikiID, governance.ActionReview, nil,
+	); err != nil {
+		a.writeError(w, r, err)
+		return
+	}
+	limit, ok := pageSizeFrom(w, r)
+	if !ok {
+		return
+	}
+	result, err := a.consistency.List(
+		r.Context(), knowledge.FactConsistencyListParams{
+			WikiID: a.wikiID, Status: r.URL.Query().Get("status"),
+			IssueType: r.URL.Query().Get("issue_type"),
+			Cursor:    r.URL.Query().Get("cursor"), Limit: limit,
+		},
+	)
+	if err != nil {
+		a.writeError(w, r, err)
+		return
+	}
+	httpx.WriteJSON(w, http.StatusOK, result)
+}
+
+func (a *KnowledgeReadAPI) scanFactConsistency(
+	w http.ResponseWriter,
+	r *http.Request,
+) {
+	actorID, ok := actorIDFrom(w, r)
+	if !ok {
+		return
+	}
+	if a.authorization == nil {
+		a.writeError(w, r, governance.ErrPermissionDenied)
+		return
+	}
+	if err := a.authorization.Check(
+		r.Context(), actorID, a.wikiID, governance.ActionManage, nil,
+	); err != nil {
+		a.writeError(w, r, err)
+		return
+	}
+	result, err := a.consistency.ScanWiki(r.Context(), a.wikiID)
+	if err != nil {
+		a.writeError(w, r, err)
+		return
+	}
+	httpx.WriteJSON(w, http.StatusOK, result)
+}
+
 func (a *KnowledgeReadAPI) writeError(w http.ResponseWriter, r *http.Request, err error) {
+	if errors.Is(err, knowledge.ErrInvalidEntityCursor) ||
+		errors.Is(err, knowledge.ErrInvalidEntityFilter) ||
+		errors.Is(err, knowledge.ErrInvalidLabel) ||
+		errors.Is(err, knowledge.ErrInvalidConsistencyFilter) ||
+		errors.Is(err, knowledge.ErrInvalidConsistencyCursor) ||
+		errors.Is(err, knowledge.ErrInvalidFederation) ||
+		errors.Is(err, projection.ErrInvalidGraphQuery) {
+		httpx.WriteError(w, r, http.StatusBadRequest, httpx.CodeBadRequest, err.Error())
+		return
+	}
+	if errors.Is(err, governance.ErrPermissionDenied) ||
+		errors.Is(err, governance.ErrInvalidActor) {
+		httpx.WriteError(w, r, http.StatusForbidden, httpx.CodeForbidden, err.Error())
+		return
+	}
 	if errors.Is(err, knowledge.ErrEntityNotFound) || errors.Is(err, knowledge.ErrEntityTypeNotFound) ||
 		errors.Is(err, knowledge.ErrClaimNotFound) || errors.Is(err, knowledge.ErrPropertyNotFound) ||
+		errors.Is(err, knowledge.ErrFederatedWikiNotFound) ||
+		errors.Is(err, knowledge.ErrFederationLinkNotFound) ||
+		errors.Is(err, projection.ErrGraphEntityNotFound) ||
+		errors.Is(err, projection.ErrGraphPropertyNotFound) ||
 		errors.Is(err, evidence.ErrCitationNotFound) || errors.Is(err, evidence.ErrSourceNotFound) ||
 		errors.Is(err, evidence.ErrSourceVersionNotFound) || errors.Is(err, evidence.ErrSourceChunkNotFound) ||
 		errors.Is(err, evidence.ErrExternalResourceNotFound) {
 		httpx.WriteError(w, r, http.StatusNotFound, httpx.CodeNotFound, err.Error())
+		return
+	}
+	if errors.Is(err, knowledge.ErrFederatedWikiExists) ||
+		errors.Is(err, knowledge.ErrFederationLinkExists) ||
+		errors.Is(err, knowledge.ErrFederatedWikiDisabled) {
+		httpx.WriteError(w, r, http.StatusConflict, httpx.CodeConflict, err.Error())
 		return
 	}
 	httpx.WriteError(w, r, http.StatusInternalServerError, httpx.CodeInternal, "内部错误")

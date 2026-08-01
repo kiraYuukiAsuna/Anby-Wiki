@@ -9,6 +9,13 @@ Name | Type
 `changeBatchId` | string
 `revisionIds` | Array&lt;string&gt;
 `compensationClaimIds` | Array&lt;string&gt;
+`compensatedPageIds` | Array&lt;string&gt;
+`deletedPageIds` | Array&lt;string&gt;
+`deletedEntityIds` | Array&lt;string&gt;
+`restoredEntityIds` | Array&lt;string&gt;
+`entityMergeIds` | Array&lt;string&gt;
+`collectionIds` | Array&lt;string&gt;
+`removedClaimSourceCount` | number
 `idempotent` | boolean
 
 ## Example
@@ -21,6 +28,13 @@ const example = {
   "changeBatchId": null,
   "revisionIds": null,
   "compensationClaimIds": null,
+  "compensatedPageIds": null,
+  "deletedPageIds": null,
+  "deletedEntityIds": null,
+  "restoredEntityIds": null,
+  "entityMergeIds": null,
+  "collectionIds": null,
+  "removedClaimSourceCount": null,
   "idempotent": null,
 } satisfies RollbackChangeBatchResult
 

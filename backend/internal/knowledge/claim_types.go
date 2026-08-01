@@ -1,6 +1,7 @@
 package knowledge
 
 import (
+	"bytes"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -8,6 +9,7 @@ import (
 	"time"
 
 	"github.com/google/uuid"
+	"github.com/santhosh-tekuri/jsonschema/v6"
 )
 
 // Claim 领域的哨兵错误，调用方用 errors.Is 判定；具体上下文通过 %w 包装附加。
@@ -51,6 +53,8 @@ var (
 	ErrInvalidSupportType = errors.New("knowledge: support_type 非法")
 	// ErrClaimSourceExists 同 (claim, citation) 来源已存在（幂等拒绝）。
 	ErrClaimSourceExists = errors.New("knowledge: claim 来源已存在")
+	// ErrClaimSourceNotFound 同 (claim, citation) 来源不存在；补偿时表示关系已被后续修改。
+	ErrClaimSourceNotFound = errors.New("knowledge: claim 来源不存在")
 	// ErrClaimTerminal claim 已 superseded/deprecated，拒绝新增来源。
 	ErrClaimTerminal = errors.New("knowledge: claim 已终结，拒绝新增来源")
 	// ErrCitationNotFound 绑定的 citation 不存在（INV-07 存在性校验，M4-T05 落地）。
@@ -179,6 +183,13 @@ type ClaimSource struct {
 	CreatedAt   time.Time
 }
 
+// RollbackClaimBatchResult describes one compensation for a contiguous
+// supersede chain created by the same ChangeBatch.
+type RollbackClaimBatchResult struct {
+	Current          *Claim
+	ConsumedClaimIDs []uuid.UUID
+}
+
 // Coordinate 坐标值（lat ∈ [-90,90]，lon ∈ [-180,180]）。
 type Coordinate struct {
 	Lat float64 `json:"lat"`
@@ -216,27 +227,18 @@ func CoordinateValue(lat, lon float64) Value {
 // CompositeValue 构造复合值（自由 JSON object）。
 func CompositeValue(raw json.RawMessage) Value { return Value{Composite: raw} }
 
-// propertySchema property.schema_json 的服务层约定子集（000004 种子注释：
-// 类型约束由服务层按 schema_json 校验）。全部字段可选；空 object 表示无附加约束。
-// TODO(M5): 这是简版实现——composite 只支持 required + 基本类型、subject/target
-// 只支持单一 type_key；完整 JSON Schema 校验与多类型约束由 M5 治理迭代时完善。
+// propertySchema 是 property.schema_json 的服务层约定。subject_type /
+// target_type 约束实体类型；value 与 qualifiers 分别是完整 JSON Schema
+// 2020-12 子文档。空 object 表示无附加约束。
 type propertySchema struct {
 	// SubjectType subject 实体必须属于的 entity_type.type_key（与 SubjectTypeID 列并列校验）。
 	SubjectType string `json:"subject_type"`
 	// TargetType entity 值目标必须属于的 entity_type.type_key（与 TargetTypeID 列并列校验）。
 	TargetType string `json:"target_type"`
-	// Value composite 值的最小 JSON-Schema 子集：required 必填键 +
-	// properties.<key>.type 基本类型（string/number/boolean/object/array/null）。
-	Value *compositeSchema `json:"value"`
-}
-
-type compositeSchema struct {
-	Required   []string                    `json:"required"`
-	Properties map[string]compositeTypeDef `json:"properties"`
-}
-
-type compositeTypeDef struct {
-	Type string `json:"type"`
+	// Value 约束 composite Claim 的 value_json。
+	Value json.RawMessage `json:"value"`
+	// Qualifiers 约束任意值类型 Claim 的 qualifiers_json。
+	Qualifiers json.RawMessage `json:"qualifiers"`
 }
 
 // parsePropertySchema 解析 property.schema_json；空/{} 返回零值 schema（无附加约束）。
@@ -303,10 +305,13 @@ func normalizeValue(prop *Property, v Value) (valueJSON json.RawMessage, targetE
 		if serr != nil {
 			return nil, nil, serr
 		}
-		if schema.Value != nil {
-			if verr := validateComposite(schema.Value, obj); verr != nil {
-				return nil, nil, fmt.Errorf("%w: property=%q %v", ErrInvalidClaimValue, prop.PropertyKey, verr)
-			}
+		if verr := validateJSONSchema(
+			schema.Value, v.Composite, "composite value",
+		); verr != nil {
+			return nil, nil, fmt.Errorf(
+				"%w: property=%q %v",
+				ErrInvalidClaimValue, prop.PropertyKey, verr,
+			)
 		}
 		valueJSON = v.Composite
 	default:
@@ -318,52 +323,37 @@ func normalizeValue(prop *Property, v Value) (valueJSON json.RawMessage, targetE
 	return valueJSON, targetEntityID, nil
 }
 
-// validateComposite 按 compositeSchema 子集校验 composite 值对象。
-func validateComposite(schema *compositeSchema, obj map[string]json.RawMessage) error {
-	for _, key := range schema.Required {
-		if _, ok := obj[key]; !ok {
-			return fmt.Errorf("composite 缺少必填键 %q", key)
-		}
+// validateJSONSchema 使用与 AST / Operation 相同的 JSON Schema 2020-12
+// 引擎校验 Property 约束。未声明或显式 null 表示不附加约束。
+func validateJSONSchema(
+	schemaRaw, instanceRaw json.RawMessage,
+	label string,
+) error {
+	if len(schemaRaw) == 0 || bytes.Equal(bytes.TrimSpace(schemaRaw), []byte("null")) {
+		return nil
 	}
-	for key, def := range schema.Properties {
-		raw, ok := obj[key]
-		if !ok {
-			continue
-		}
-		if !jsonTypeMatches(raw, def.Type) {
-			return fmt.Errorf("composite 键 %q 类型应为 %q", key, def.Type)
-		}
+	schemaDocument, err := jsonschema.UnmarshalJSON(bytes.NewReader(schemaRaw))
+	if err != nil {
+		return fmt.Errorf("%s Schema 不是合法 JSON: %v", label, err)
+	}
+	compiler := jsonschema.NewCompiler()
+	compiler.AssertFormat()
+	const schemaURL = "https://anby.wiki/schemas/property-constraint.json"
+	if err := compiler.AddResource(schemaURL, schemaDocument); err != nil {
+		return fmt.Errorf("%s Schema 注册失败: %v", label, err)
+	}
+	compiled, err := compiler.Compile(schemaURL)
+	if err != nil {
+		return fmt.Errorf("%s Schema 编译失败: %v", label, err)
+	}
+	instance, err := jsonschema.UnmarshalJSON(bytes.NewReader(instanceRaw))
+	if err != nil {
+		return fmt.Errorf("%s 不是合法 JSON: %v", label, err)
+	}
+	if err := compiled.Validate(instance); err != nil {
+		return fmt.Errorf("%s 不符合 Property Schema: %v", label, err)
 	}
 	return nil
-}
-
-// jsonTypeMatches 判断 JSON 值的基本类型（string/number/boolean/object/array/null）。
-func jsonTypeMatches(raw json.RawMessage, typ string) bool {
-	var v any
-	if err := json.Unmarshal(raw, &v); err != nil {
-		return false
-	}
-	switch typ {
-	case "string":
-		_, ok := v.(string)
-		return ok
-	case "number":
-		_, ok := v.(float64)
-		return ok
-	case "boolean":
-		_, ok := v.(bool)
-		return ok
-	case "object":
-		_, ok := v.(map[string]any)
-		return ok
-	case "array":
-		_, ok := v.([]any)
-		return ok
-	case "null":
-		return v == nil
-	default:
-		return false
-	}
 }
 
 // claimStatusTransitions 业务状态机（设计 §6.5）：

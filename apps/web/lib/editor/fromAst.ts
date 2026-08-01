@@ -90,6 +90,25 @@ function inlineNodeToBN(node: InlineNode): Record<string, unknown> {
           expectedEntityType: "",
         },
       };
+    case "page_anchor_reference":
+      return {
+        type: "pageAnchorReference",
+        props: {
+          targetPageId: node.target_page_id,
+          targetHeadingBlockId: node.target_heading_block_id,
+          displayText: node.display_text,
+        },
+      };
+    case "math":
+      return {
+        type: "math",
+        props: { expression: node.expression },
+      };
+    case "mention":
+      return {
+        type: "mention",
+        props: { actorId: node.actor_id, displayText: node.display_text },
+      };
   }
 }
 
@@ -185,6 +204,39 @@ function blockToBN(block: Block, state: AdapterState): BNPartialBlock {
           entityId: block.entity_id,
           displayConfig: JSON.stringify(block.display_config),
         },
+      };
+    case "image":
+      return {
+        id: block.id,
+        type: "imageAsset",
+        props: {
+          assetRevisionId: block.asset_revision_id,
+          altText: block.alt_text,
+          caption: block.caption ?? "",
+        },
+      };
+    case "video":
+      return {
+        id: block.id,
+        type: "videoAsset",
+        props: {
+          assetRevisionId: block.asset_revision_id,
+          posterAssetRevisionId: block.poster_asset_revision_id ?? "",
+          title: block.title ?? "",
+          caption: block.caption ?? "",
+        },
+      };
+    case "dataset_view":
+      return {
+        id: block.id,
+        type: "datasetView",
+        props: { datasetViewId: block.dataset_view_id },
+      };
+    case "embed":
+      return {
+        id: block.id,
+        type: "embed",
+        props: { url: block.url, title: block.title ?? "" },
       };
     case "table":
       return { id: block.id, type: "table", children: blocksToBN(block.children, state) };

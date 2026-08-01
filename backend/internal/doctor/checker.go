@@ -6,6 +6,7 @@ import (
 	"encoding/hex"
 	"fmt"
 	"strconv"
+	"strings"
 	"time"
 
 	"github.com/google/uuid"
@@ -13,6 +14,7 @@ import (
 	"github.com/jackc/pgx/v5/pgxpool"
 
 	"github.com/anby/wiki/backend/internal/ast"
+	"github.com/anby/wiki/backend/internal/page"
 )
 
 const (
@@ -28,6 +30,9 @@ const (
 	CodeEntityReferenceOrphan        = "REF_ENTITY_ORPHAN"
 	CodeClaimReferenceOrphan         = "REF_CLAIM_ORPHAN"
 	CodeCitationReferenceOrphan      = "REF_CITATION_ORPHAN"
+	CodeAssetRevisionReferenceOrphan = "REF_ASSET_REVISION_ORPHAN"
+	CodeActorReferenceOrphan         = "REF_ACTOR_ORPHAN"
+	CodeDatasetViewReferenceOrphan   = "REF_DATASET_VIEW_ORPHAN"
 	CodeProjectionStateMissing       = "PROJECTION_STATE_MISSING"
 	CodeProjectionStateError         = "PROJECTION_STATE_ERROR"
 	CodeProjectionSourceStale        = "PROJECTION_SOURCE_REVISION_STALE"
@@ -154,7 +159,11 @@ func (c *Checker) checkImmutableTriggers(ctx context.Context, issues *[]Issue) e
 }
 
 func (c *Checker) checkContent(ctx context.Context, issues *[]Issue) error {
-	rows, err := c.pool.Query(ctx, `SELECT id, ast_json::text, content_hash, size_bytes FROM content_snapshot ORDER BY id`)
+	rows, err := c.pool.Query(ctx, `
+		SELECT id,ast_json::text,content_hash,size_bytes,
+			storage_tier,storage_key,archived_at
+		FROM content_snapshot
+		ORDER BY id`)
 	if err != nil {
 		return fmt.Errorf("doctor: 读取内容快照失败: %w", err)
 	}
@@ -164,8 +173,38 @@ func (c *Checker) checkContent(ctx context.Context, issues *[]Issue) error {
 		var raw []byte
 		var storedHash string
 		var storedSize int
-		if err := rows.Scan(&id, &raw, &storedHash, &storedSize); err != nil {
+		var tier string
+		var storageKey *string
+		var archivedAt *time.Time
+		if err := rows.Scan(
+			&id, &raw, &storedHash, &storedSize,
+			&tier, &storageKey, &archivedAt,
+		); err != nil {
 			return err
+		}
+		if tier == page.SnapshotTierCold {
+			if len(raw) != 0 || storageKey == nil ||
+				strings.TrimSpace(*storageKey) == "" || archivedAt == nil {
+				appendIssue(
+					issues, CodeContentInvalid, SeverityCritical,
+					"immutability", "冷快照物理存储状态不完整",
+					"content_snapshot", id.String(),
+					"停止归档 Worker，检查初始化 Schema 与对象存储迁移事务",
+					map[string]string{"storage_tier": tier},
+				)
+			}
+			continue
+		}
+		if tier != page.SnapshotTierHot || len(raw) == 0 ||
+			storageKey != nil || archivedAt != nil {
+			appendIssue(
+				issues, CodeContentInvalid, SeverityCritical,
+				"immutability", "热快照物理存储状态不完整",
+				"content_snapshot", id.String(),
+				"停止写入并检查初始化 Schema 与归档事务",
+				map[string]string{"storage_tier": tier},
+			)
+			continue
 		}
 		canonical, err := ast.CanonicalizeJSON(raw)
 		if err != nil {
@@ -281,11 +320,31 @@ func (c *Checker) checkCurrentASTReferences(ctx context.Context, issues *[]Issue
 		}
 		var refs []astReference
 		if err := ast.Walk(doc, func(node ast.WalkNode) bool {
+			if node.Block != nil {
+				switch node.Block.Type {
+				case ast.BlockImage, ast.BlockVideo:
+					refs = append(refs, astReference{
+						CodeAssetRevisionReferenceOrphan, "asset_revision",
+						"AssetRevision", node.Block.AssetRevisionID,
+					})
+					if node.Block.PosterAssetRevisionID != "" {
+						refs = append(refs, astReference{
+							CodeAssetRevisionReferenceOrphan, "asset_revision",
+							"AssetRevision", node.Block.PosterAssetRevisionID,
+						})
+					}
+				case ast.BlockDatasetView:
+					refs = append(refs, astReference{
+						CodeDatasetViewReferenceOrphan, "dataset_view",
+						"DatasetView", node.Block.DatasetViewID,
+					})
+				}
+			}
 			if node.Inline == nil {
 				return true
 			}
 			switch node.Inline.Type {
-			case ast.InlinePageReference:
+			case ast.InlinePageReference, ast.InlinePageAnchorReference:
 				if node.Inline.TargetPageID != "" {
 					refs = append(refs, astReference{CodePageReferenceOrphan, "page", "Page", node.Inline.TargetPageID})
 				}
@@ -295,6 +354,8 @@ func (c *Checker) checkCurrentASTReferences(ctx context.Context, issues *[]Issue
 				refs = append(refs, astReference{CodeClaimReferenceOrphan, "claim", "Claim", node.Inline.ClaimID})
 			case ast.InlineCitationReference:
 				refs = append(refs, astReference{CodeCitationReferenceOrphan, "citation", "Citation", node.Inline.CitationID})
+			case ast.InlineMention:
+				refs = append(refs, astReference{CodeActorReferenceOrphan, "actor", "Actor", node.Inline.ActorID})
 			}
 			return true
 		}); err != nil {

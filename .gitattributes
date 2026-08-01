@@ -1,0 +1,6 @@
+*.sh text eol=lf
+Dockerfile text eol=lf
+Makefile text eol=lf
+.env.example text eol=lf
+infra/deploy/.env.example text eol=lf
+infra/deploy/*.yml text eol=lf

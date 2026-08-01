@@ -15,8 +15,9 @@ import (
 )
 
 const (
-	DefaultPageSize = 20
-	MaxPageSize     = 100
+	DefaultPageSize  = 20
+	MaxPageSize      = 100
+	MaxManualMembers = 10000
 )
 
 type Service struct {
@@ -34,7 +35,8 @@ func NewService(
 
 func (s *Service) Create(ctx context.Context, params CreateParams) (*Collection, error) {
 	title := strings.TrimSpace(params.Title)
-	if title == "" || (params.CollectionType != TypeManual && params.CollectionType != TypeRule) {
+	if title == "" || (params.CollectionType != TypeManual &&
+		params.CollectionType != TypeRule && params.CollectionType != TypeDynamic) {
 		return nil, ErrInvalidDefinition
 	}
 	var rule Rule
@@ -44,12 +46,21 @@ func (s *Service) Create(ctx context.Context, params CreateParams) (*Collection,
 		if len(params.Rule) != 0 && string(params.Rule) != "null" {
 			return nil, ErrInvalidDefinition
 		}
-	} else {
+	} else if params.CollectionType == TypeRule {
 		rule, err = ParseRule(params.Rule)
 		if err != nil {
 			return nil, err
 		}
 		query, err = json.Marshal(rule)
+		if err != nil {
+			return nil, err
+		}
+	} else {
+		dynamic, parseErr := ParseDynamicQuery(params.Rule)
+		if parseErr != nil {
+			return nil, parseErr
+		}
+		query, err = json.Marshal(dynamic)
 		if err != nil {
 			return nil, err
 		}
@@ -66,6 +77,16 @@ func (s *Service) Create(ctx context.Context, params CreateParams) (*Collection,
 		}
 		if params.CollectionType == TypeRule {
 			if err := s.repo.ValidateRuleReference(ctx, tx, rule); err != nil {
+				return err
+			}
+		} else if params.CollectionType == TypeDynamic {
+			dynamic, err := ParseDynamicQuery(query)
+			if err != nil {
+				return err
+			}
+			if err := s.repo.ValidateDynamicReferences(
+				ctx, tx, params.WikiID, dynamic,
+			); err != nil {
 				return err
 			}
 		}
@@ -85,8 +106,12 @@ func (s *Service) Create(ctx context.Context, params CreateParams) (*Collection,
 }
 
 func (s *Service) ReplaceManualMembers(
-	ctx context.Context, collectionID, actorID uuid.UUID, inputs []MemberInput,
+	ctx context.Context, wikiID, collectionID, actorID uuid.UUID,
+	inputs []MemberInput,
 ) error {
+	if len(inputs) > MaxManualMembers {
+		return fmt.Errorf("%w: at most %d members are allowed", ErrInvalidMember, MaxManualMembers)
+	}
 	return s.txm.InTx(ctx, func(tx pgx.Tx) error {
 		if err := s.actors.CheckWriteActor(ctx, tx, actorID); err != nil {
 			return err
@@ -94,6 +119,9 @@ func (s *Service) ReplaceManualMembers(
 		value, err := s.repo.Lock(ctx, tx, collectionID)
 		if err != nil {
 			return err
+		}
+		if value.WikiID != wikiID {
+			return ErrNotFound
 		}
 		if value.CollectionType != TypeManual {
 			return ErrInvalidDefinition
@@ -117,6 +145,103 @@ func (s *Service) ReplaceManualMembers(
 	})
 }
 
+// ApplyManualMemberInTx is the authoritative single-member boundary used by
+// Proposal Apply. add=false removes the exact target; both paths are audited
+// and emit an Outbox event in the caller's ChangeBatch transaction.
+func (s *Service) ApplyManualMemberInTx(
+	ctx context.Context,
+	tx pgx.Tx,
+	wikiID, collectionID, actorID uuid.UUID,
+	input MemberInput,
+	add bool,
+	changeBatchID *uuid.UUID,
+) (Membership, error) {
+	if err := s.actors.CheckWriteActor(ctx, tx, actorID); err != nil {
+		return Membership{}, err
+	}
+	value, err := s.repo.Lock(ctx, tx, collectionID)
+	if err != nil {
+		return Membership{}, err
+	}
+	if value.WikiID != wikiID {
+		return Membership{}, ErrNotFound
+	}
+	if value.CollectionType != TypeManual {
+		return Membership{}, ErrInvalidDefinition
+	}
+	var member Membership
+	if add {
+		member, err = s.validateManualMember(ctx, tx, value.WikiID, input)
+		if err != nil {
+			return Membership{}, err
+		}
+		member.CollectionID = collectionID
+		if err := s.repo.AddMember(ctx, tx, collectionID, member); err != nil {
+			return Membership{}, err
+		}
+	} else {
+		member = Membership{
+			PageID: input.PageID, EntityID: input.EntityID,
+			MemberType: input.MemberType, SourceType: TypeManual,
+		}
+		switch input.MemberType {
+		case MemberPage:
+			if input.PageID == nil || input.EntityID != nil {
+				return Membership{}, ErrInvalidMember
+			}
+		case MemberEntity:
+			if input.EntityID == nil || input.PageID != nil {
+				return Membership{}, ErrInvalidMember
+			}
+		default:
+			return Membership{}, ErrInvalidMember
+		}
+		member, err = s.repo.GetMemberForUpdate(
+			ctx, tx, collectionID, member.MemberType, member.PageID, member.EntityID,
+		)
+		if err != nil {
+			return Membership{}, err
+		}
+		if err := s.repo.RemoveMember(
+			ctx, tx, collectionID, member.MemberType, member.PageID, member.EntityID,
+		); err != nil {
+			return Membership{}, err
+		}
+	}
+	if err := s.repo.Touch(ctx, tx, collectionID); err != nil {
+		return Membership{}, err
+	}
+	auditID, err := s.ids.New()
+	if err != nil {
+		return Membership{}, err
+	}
+	outboxID, err := s.ids.New()
+	if err != nil {
+		return Membership{}, err
+	}
+	eventType := OutboxEventMembershipRemoved
+	if add {
+		eventType = OutboxEventMembershipAdded
+	}
+	payload, _ := json.Marshal(map[string]any{
+		"collection_id":      collectionID,
+		"member_type":        member.MemberType,
+		"page_id":            member.PageID,
+		"entity_id":          member.EntityID,
+		"sort_key":           member.SortKey,
+		"source_type":        member.SourceType,
+		"source_revision_id": member.SourceRevisionID,
+		"change_batch_id":    changeBatchID,
+	})
+	if err := s.repo.InsertMembershipEvent(
+		ctx, tx, auditID, outboxID, collectionID, actorID,
+		changeBatchID, eventType, payload,
+	); err != nil {
+		return Membership{}, err
+	}
+	return member, nil
+}
+
 func (s *Service) validateManualMember(
 	ctx context.Context, tx pgx.Tx, wikiID uuid.UUID, input MemberInput,
 ) (Membership, error) {
@@ -129,7 +254,8 @@ func (s *Service) validateManualMember(
 	}
 	member := Membership{
 		PageID: input.PageID, EntityID: input.EntityID, MemberType: input.MemberType,
-		SourceType: TypeManual, SortKey: sortKey, SourceRevisionID: input.SourceRevisionID,
+		SourceType: TypeManual, SortKey: sortKey,
+		SourceRevisionID: &input.SourceRevisionID,
 	}
 	switch input.MemberType {
 	case MemberPage:
@@ -153,7 +279,7 @@ func (s *Service) validateManualMember(
 }
 
 func (s *Service) RebuildRule(
-	ctx context.Context, collectionID, sourceRevisionID, actorID uuid.UUID,
+	ctx context.Context, wikiID, collectionID, sourceRevisionID, actorID uuid.UUID,
 ) (int, error) {
 	count := 0
 	err := s.txm.InTx(ctx, func(tx pgx.Tx) error {
@@ -163,6 +289,9 @@ func (s *Service) RebuildRule(
 		value, err := s.repo.Lock(ctx, tx, collectionID)
 		if err != nil {
 			return err
+		}
+		if value.WikiID != wikiID {
+			return ErrNotFound
 		}
 		if value.CollectionType != TypeRule {
 			return ErrInvalidDefinition
@@ -186,7 +315,7 @@ func (s *Service) RebuildRule(
 			id := entityID
 			members = append(members, Membership{
 				EntityID: &id, MemberType: MemberEntity, SourceType: TypeRule,
-				SortKey: entityID.String(), SourceRevisionID: sourceRevisionID,
+				SortKey: entityID.String(), SourceRevisionID: &sourceRevisionID,
 			})
 		}
 		count = len(members)
@@ -202,8 +331,17 @@ func memberTarget(member Membership) uuid.UUID {
 	return *member.EntityID
 }
 
-func (s *Service) Get(ctx context.Context, id uuid.UUID) (*Collection, error) {
-	return s.repo.Get(ctx, nil, id)
+func (s *Service) Get(
+	ctx context.Context, wikiID, id uuid.UUID,
+) (*Collection, error) {
+	value, err := s.repo.Get(ctx, nil, id)
+	if err != nil {
+		return nil, err
+	}
+	if value.WikiID != wikiID {
+		return nil, ErrNotFound
+	}
+	return value, nil
 }
 
 func (s *Service) List(
@@ -213,10 +351,20 @@ func (s *Service) List(
 }
 
 func (s *Service) ListMembers(
-	ctx context.Context, collectionID uuid.UUID, cursor string, limit int,
+	ctx context.Context, wikiID, collectionID uuid.UUID, cursor string, limit int,
 ) (*MembershipPage, error) {
-	if _, err := s.repo.Get(ctx, nil, collectionID); err != nil {
+	value, err := s.Get(ctx, wikiID, collectionID)
+	if err != nil {
 		return nil, err
+	}
+	if value.CollectionType == TypeDynamic {
+		query, err := ParseDynamicQuery(value.QueryJSON)
+		if err != nil {
+			return nil, err
+		}
+		return s.repo.ListDynamicMembers(
+			ctx, collectionID, wikiID, query, cursor, normalizeLimit(limit),
+		)
 	}
 	return s.repo.ListMembers(ctx, collectionID, cursor, normalizeLimit(limit))
 }

@@ -6,6 +6,7 @@ import {
   DetailSection,
   DetailShell,
 } from "@/components/knowledge/detail-shell";
+import { ClaimVerificationControl } from "@/components/knowledge/claim-verification-control";
 import { UsageList } from "@/components/knowledge/usage-list";
 import { fetchClaimDetail } from "@/lib/knowledge";
 
@@ -70,6 +71,10 @@ export default async function ClaimDetailPage({
             },
           ]}
         />
+      </DetailSection>
+
+      <DetailSection title="核验治理">
+        <ClaimVerificationControl initialDetail={detail} />
       </DetailSection>
 
       <DetailSection title={`证据 (${detail.sources.length})`}>

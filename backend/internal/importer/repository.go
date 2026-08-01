@@ -2,8 +2,11 @@ package importer
 
 import (
 	"context"
+	"encoding/base64"
+	"encoding/json"
 	"errors"
 	"fmt"
+	"time"
 
 	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5"
@@ -70,6 +73,71 @@ func (r *Repository) GetJobByKey(ctx context.Context, actorID uuid.UUID, key str
 		return nil, ErrJobNotFound
 	}
 	return job, err
+}
+
+type jobListCursor struct {
+	CreatedAt time.Time `json:"t"`
+	ID        uuid.UUID `json:"i"`
+}
+
+func encodeJobCursor(value jobListCursor) string {
+	raw, _ := json.Marshal(value)
+	return base64.RawURLEncoding.EncodeToString(raw)
+}
+
+func decodeJobCursor(cursor string) (jobListCursor, error) {
+	var value jobListCursor
+	raw, err := base64.RawURLEncoding.DecodeString(cursor)
+	if err != nil {
+		return value, err
+	}
+	if err := json.Unmarshal(raw, &value); err != nil {
+		return value, err
+	}
+	return value, nil
+}
+
+func (r *Repository) ListOwnedJobs(
+	ctx context.Context, actorID uuid.UUID, status, cursor string, limit int,
+) (*JobPage, error) {
+	var afterTime *time.Time
+	afterID := uuid.Nil
+	if cursor != "" {
+		after, err := decodeJobCursor(cursor)
+		if err != nil || after.CreatedAt.IsZero() || after.ID == uuid.Nil {
+			return nil, ErrInvalidCursor
+		}
+		afterTime = &after.CreatedAt
+		afterID = after.ID
+	}
+	rows, err := r.pool.Query(ctx, `SELECT `+jobColumns+` FROM import_job
+		WHERE initiated_by=$1
+		  AND ($2='' OR status=$2)
+		  AND ($3::timestamptz IS NULL OR (created_at,id) < ($3,$4))
+		ORDER BY created_at DESC,id DESC
+		LIMIT $5`, actorID, status, afterTime, afterID, limit+1)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	result := &JobPage{Items: make([]Job, 0, limit)}
+	for rows.Next() {
+		job, err := scanJob(rows)
+		if err != nil {
+			return nil, err
+		}
+		result.Items = append(result.Items, *job)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	if len(result.Items) > limit {
+		last := result.Items[limit-1]
+		next := encodeJobCursor(jobListCursor{CreatedAt: last.CreatedAt, ID: last.ID})
+		result.NextCursor = &next
+		result.Items = result.Items[:limit]
+	}
+	return result, nil
 }
 
 func (r *Repository) InsertJobIfAbsent(ctx context.Context, job *Job) (bool, error) {

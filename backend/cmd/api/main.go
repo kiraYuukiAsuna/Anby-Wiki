@@ -18,6 +18,8 @@ import (
 	authdomain "github.com/anby/wiki/backend/internal/auth"
 	"github.com/anby/wiki/backend/internal/collaboration"
 	"github.com/anby/wiki/backend/internal/collection"
+	"github.com/anby/wiki/backend/internal/component"
+	"github.com/anby/wiki/backend/internal/dataset"
 	"github.com/anby/wiki/backend/internal/evidence"
 	"github.com/anby/wiki/backend/internal/governance"
 	"github.com/anby/wiki/backend/internal/importer"
@@ -123,6 +125,10 @@ func main() {
 	var authAPI *AuthAPI
 	var collaborationAPI *CollaborationAPI
 	var collectionAPI *CollectionAPI
+	var assetAPI *AssetAPI
+	var datasetAPI *DatasetAPI
+	var componentAPI *ComponentAPI
+	var sourceAPI *SourceAPI
 	var pool *pgxpool.Pool
 	if cfg.DatabaseURL != "" {
 		var err error
@@ -143,6 +149,22 @@ func main() {
 			os.Exit(1)
 		}
 		writeAPI.pages.WithPublishObserver(metrics)
+		var objectStore storage.Store
+		if cfg.S3Endpoint != "" && cfg.S3Bucket != "" &&
+			cfg.S3AccessKey != "" && cfg.S3SecretKey != "" {
+			objectStore = storage.NewS3Store(storage.S3Config{
+				Endpoint: cfg.S3Endpoint, Region: cfg.S3Region,
+				Bucket: cfg.S3Bucket, AccessKey: cfg.S3AccessKey,
+				SecretKey: cfg.S3SecretKey,
+			})
+			writeAPI.pages.WithSnapshotStorage(page.SnapshotStorageConfig{
+				Store: objectStore, Environment: cfg.Env,
+				MaxBytes:  cfg.RevisionArchiveMaxBytes,
+				Retention: cfg.RevisionArchiveRetention,
+				BatchSize: cfg.RevisionArchiveBatchSize,
+			})
+		}
+		governanceAPI.WithRevisionStorage(writeAPI.pages)
 		importRepo := importer.NewRepository(pool)
 		importAPI = NewImportAPI(importer.NewService(importRepo, db.NewTxManager(pool), id.NewGenerator()))
 		authService := authdomain.NewService(pool, db.NewTxManager(pool), id.NewGenerator(), cfg.SessionTTL)
@@ -170,6 +192,24 @@ func main() {
 			),
 			writeAPI.wikiID,
 		)
+		datasetAPI = NewDatasetAPI(
+			dataset.NewService(
+				dataset.NewRepository(pool), page.NewRepository(pool),
+				db.NewTxManager(pool), id.NewGenerator(),
+			),
+			writeAPI.wikiID,
+		)
+		componentAPI = NewComponentAPI(
+			component.NewService(
+				component.NewRepository(pool), page.NewRepository(pool),
+				db.NewTxManager(pool), id.NewGenerator(),
+				component.NewKnowledgeRegistry(pool),
+			),
+		)
+		sourceAPI = NewSourceAPI(evidence.NewService(
+			evidence.NewRepository(pool), page.NewRepository(pool), nil, cfg.Env,
+			db.NewTxManager(pool), id.NewGenerator(),
+		))
 		governanceAPI.WithWorkingDocumentMerge(
 			governance.NewMergeWorkingDocumentService(
 				governanceAPI.repo,
@@ -186,24 +226,23 @@ func main() {
 				governanceAPI.repo, db.NewTxManager(pool), id.NewGenerator(),
 			).WithAuthorization(governance.NewAuthorizationService(pool)),
 		)
-		if cfg.S3Endpoint != "" && cfg.S3Bucket != "" && cfg.S3AccessKey != "" && cfg.S3SecretKey != "" {
+		if objectStore != nil {
 			pageRepo := page.NewRepository(pool)
 			wikiID, wikiErr := pageRepo.GetWikiIDBySiteKey(context.Background(), nil, "default")
 			if wikiErr != nil {
 				logger.Error("装配上传导入失败", slog.Any("error", wikiErr))
 				os.Exit(1)
 			}
-			objectStore := storage.NewS3Store(storage.S3Config{Endpoint: cfg.S3Endpoint, Region: cfg.S3Region,
-				Bucket: cfg.S3Bucket, AccessKey: cfg.S3AccessKey, SecretKey: cfg.S3SecretKey})
 			evidenceService := evidence.NewService(evidence.NewRepository(pool), pageRepo, objectStore,
 				cfg.Env, db.NewTxManager(pool), id.NewGenerator())
 			importAPI.WithUploads(evidenceService, wikiID)
+			assetAPI = NewAssetAPI(evidenceService, wikiID)
 		}
 	}
 
 	srv := &http.Server{
 		Addr:              fmt.Sprintf(":%d", cfg.APIPort),
-		Handler:           NewRouter(logger, deps, writeAPI, readAPI, historyAPI, projectionAPI, searchAPI, knowledgeReadAPI, governanceAPI, importAPI, authAPI, collaborationAPI, collectionAPI),
+		Handler:           NewRouter(logger, deps, writeAPI, readAPI, historyAPI, projectionAPI, searchAPI, knowledgeReadAPI, governanceAPI, importAPI, authAPI, collaborationAPI, collectionAPI, assetAPI, datasetAPI, componentAPI, sourceAPI),
 		ReadHeaderTimeout: 5 * time.Second,
 	}
 
@@ -248,25 +287,48 @@ func assembleAPIs(pool *pgxpool.Pool, searchBackends ...wikisearch.SearchAdapter
 	}
 	evidenceRepo := evidence.NewRepository(pool)
 	evidenceService := evidence.NewService(evidenceRepo, repo, nil, "development", txm, ids)
-	knowledgeService := knowledge.NewService(knowledge.NewRepository(pool), repo, txm, ids).
+	knowledgeRepo := knowledge.NewRepository(pool)
+	knowledgeService := knowledge.NewService(knowledgeRepo, repo, txm, ids).
 		WithCitationChecker(evidenceRepo)
+	factConsistency := knowledge.NewFactConsistencyService(
+		knowledgeRepo, txm, ids,
+	)
 	governanceRepo := governance.NewRepository(pool)
 	proposalService := governance.NewService(governanceRepo, txm, ids)
 	pagePatch := governance.NewPagePatchEngine()
 	knowledgePatch := governance.NewKnowledgePatchEngine(knowledgeService)
+	collectionService := collection.NewService(
+		collection.NewRepository(pool), repo, txm, ids,
+	)
 	authorization := governance.NewAuthorizationService(pool)
+	aiTrustService := governance.NewAITrustService(
+		governanceRepo, authorization, txm, ids,
+	)
 	conflictService := governance.NewConflictService(governanceRepo, svc, knowledgeService, txm, ids)
 	reviewService := governance.NewReviewService(governanceRepo, txm, ids,
-		governance.NewRiskEvaluator(knowledgeService)).WithAuthorization(authorization)
+		governance.NewRiskEvaluator(knowledgeService)).
+		WithAuthorization(authorization).
+		WithAITrust(aiTrustService)
 	applyService := governance.NewApplyService(governanceRepo, svc, pagePatch, knowledgePatch,
-		conflictService, txm, ids).WithAuthorization(authorization)
+		conflictService, txm, ids).
+		WithAuthorization(authorization).
+		WithCollections(collectionService)
 	rollbackService := governance.NewRollbackService(governanceRepo, svc, knowledgePatch, txm, ids).
-		WithAuthorization(authorization)
+		WithAuthorization(authorization).
+		WithCollections(collectionService)
 	governanceAPI := NewGovernanceAPI(proposalService, governanceRepo,
 		governance.NewPreviewService(governanceRepo, svc, pagePatch), reviewService,
 		applyService, rollbackService).WithBulkReview(
 		governance.NewBulkReviewService(governanceRepo, applyService, txm, ids).
-			WithAuthorization(authorization),
+			WithAuthorization(authorization).
+			WithWikiID(wikiID),
+	).WithAudit(governance.NewAuditService(
+		governanceRepo, authorization, txm, ids, wikiID,
+	)).WithAuthorization(authorization).WithAITrust(aiTrustService).WithProtection(
+		governance.NewProtectionService(
+			governanceRepo, authorization, txm, ids,
+		),
+		wikiID,
 	)
 	searchBackend := wikisearch.SearchAdapter(wikisearch.NewPostgresAdapter(pool))
 	if len(searchBackends) > 0 && searchBackends[0] != nil {
@@ -279,16 +341,35 @@ func assembleAPIs(pool *pgxpool.Pool, searchBackends ...wikisearch.SearchAdapter
 	return NewWriteAPI(svc, wikiID).
 			WithAuthorization(authorization).
 			WithCollaborationPublisher(collaboration.NewPublisher(txm, ids, svc)),
-		NewReadAPI(svc, wikiID), NewHistoryAPI(svc),
-		NewProjectionAPI(svc, projection.NewQueries(pool)),
+		NewReadAPI(svc, wikiID, projection.NewQueries(pool)).
+			WithDynamicRenderer(projection.NewDynamicHTMLRenderer(pool)),
+		NewHistoryAPI(svc, wikiID),
+		NewProjectionAPI(svc, projection.NewQueries(pool), wikiID),
 		searchAPI,
-		NewKnowledgeReadAPI(knowledgeService, evidenceService).
-			WithMergeAuthorization(authorization, wikiID),
+		NewKnowledgeReadAPI(knowledgeService, evidenceService, wikiID).
+			WithMergeAuthorization(authorization).
+			WithFactConsistency(factConsistency).
+			WithEntityGraph(projection.NewEntityGraphService(pool)),
 		governanceAPI, nil
 }
 
-func configuredSearchBackend(_ context.Context, pool *pgxpool.Pool, cfg config.Config) (wikisearch.SearchAdapter, error) {
-	return wikisearch.NewBackend(pool, wikisearch.BackendConfig{Backend: cfg.SearchBackend})
+func configuredSearchBackend(ctx context.Context, pool *pgxpool.Pool, cfg config.Config) (wikisearch.SearchAdapter, error) {
+	adapter, err := wikisearch.NewBackend(pool, wikisearch.BackendConfig{
+		Backend: cfg.SearchBackend, MeiliURL: cfg.MeiliURL, MeiliAPIKey: cfg.MeiliAPIKey,
+		MeiliIndex: cfg.MeiliIndex, MeiliTimeout: cfg.MeiliTimeout,
+		MeiliTaskTimeout: cfg.MeiliTaskTimeout, SemanticEnabled: cfg.SearchSemanticEnabled,
+		MeiliEmbedderName: cfg.MeiliEmbedderName, MeiliEmbedderSource: cfg.MeiliEmbedderSource,
+		MeiliEmbedderModel: cfg.MeiliEmbedderModel, MeiliEmbedderAPIKey: cfg.MeiliEmbedderAPIKey,
+	})
+	if err != nil {
+		return nil, err
+	}
+	if meili, ok := adapter.(*wikisearch.MeilisearchAdapter); ok {
+		if err := meili.EnsureIndex(ctx); err != nil {
+			return nil, err
+		}
+	}
+	return adapter, nil
 }
 
 // postgresCheck 构造 PostgreSQL 就绪检查；未配置时返回 nil（降级 not_configured）。

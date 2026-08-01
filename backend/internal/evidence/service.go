@@ -33,7 +33,8 @@ import (
 //  5. 事务内锁定/创建 asset，复查去重，插入 asset_revision 并更新
 //     asset.current_revision_id（上传使该内容成为 current）。
 //
-// source / source_version / source_chunk / citation 的服务属 M4-T05，不在本包。
+// source / source_version / source_chunk / citation 的服务实现在同包
+// source_service.go，共享 Repository、事务与 Actor 准入边界。
 type Service struct {
 	repo  *Repository
 	pages *page.Repository

@@ -14,6 +14,8 @@ var (
 	ErrJobNotFound         = errors.New("importer: ImportJob 不存在")
 	ErrRunNotFound         = errors.New("importer: ImportRun 不存在")
 	ErrInvalidJob          = errors.New("importer: ImportJob 参数非法")
+	ErrInvalidCursor       = errors.New("importer: cursor 非法")
+	ErrInvalidStatus       = errors.New("importer: status 非法")
 	ErrInvalidTransition   = errors.New("importer: 状态转换非法")
 	ErrIdempotencyMismatch = errors.New("importer: 幂等键请求不一致")
 	ErrCancelled           = errors.New("importer: 导入已取消")
@@ -96,4 +98,9 @@ type JobDetail struct {
 	Job    *Job       `json:"job"`
 	Runs   []Run      `json:"runs"`
 	Stages []StageRun `json:"stages"`
+}
+
+type JobPage struct {
+	Items      []Job   `json:"items"`
+	NextCursor *string `json:"next_cursor"`
 }

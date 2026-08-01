@@ -6,6 +6,8 @@
     "dev": "next dev",
     "build": "next build",
     "start": "next start",
+    "postinstall": "node scripts/patch-minimatch-brace-expansion.mjs",
+    "prelint": "node scripts/patch-minimatch-brace-expansion.mjs",
     "lint": "eslint",
     "typecheck": "tsc --noEmit",
     "gen:client": "openapi-generator-cli generate -i ../../contracts/openapi/openapi.yaml -g typescript-fetch -o ../../contracts/generated/typescript && node scripts/normalize-generated-client.mjs"
@@ -18,11 +20,10 @@
     "clsx": "2.1.1",
     "cmdk": "1.1.1",
     "lucide-react": "1.25.0",
-    "next": "16.2.11",
+    "next": "16.2.12",
     "radix-ui": "1.6.4",
     "react": "19.2.4",
     "react-dom": "19.2.4",
-    "shadcn": "4.13.1",
     "sonner": "2.0.7",
     "swr": "2.4.2",
     "tailwind-merge": "3.6.0",
@@ -33,15 +34,24 @@
     "zustand": "5.0.14"
   },
   "devDependencies": {
-    "@openapitools/openapi-generator-cli": "2.40.0",
+    "@openapitools/openapi-generator-cli": "2.40.1",
     "@tailwindcss/postcss": "4.3.3",
     "@types/node": "20.19.43",
     "@types/react": "19.2.17",
     "@types/react-dom": "19.2.3",
     "@types/uuid": "10.0.0",
     "eslint": "9.39.5",
-    "eslint-config-next": "16.2.11",
+    "eslint-config-next": "16.2.12",
+    "shadcn": "4.16.0",
     "tailwindcss": "4.3.3",
     "typescript": "5.9.3"
+  },
+  "overrides": {
+    "@hono/node-server": "2.0.12",
+    "@modelcontextprotocol/sdk": "1.30.0",
+    "brace-expansion": "5.0.9",
+    "postcss": "8.5.25",
+    "sharp": "0.35.3",
+    "shell-quote": "1.10.0"
   }
 }

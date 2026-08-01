@@ -15,6 +15,8 @@ var (
 	ErrInvalidActor          = errors.New("governance: 无效 Actor")
 	ErrActorNotAllowed       = errors.New("governance: Actor 无权执行治理操作")
 	ErrInvalidProposal       = errors.New("governance: Proposal 参数非法")
+	ErrInvalidProposalCursor = errors.New("governance: Proposal cursor 非法")
+	ErrInvalidProposalStatus = errors.New("governance: Proposal status 非法")
 	ErrIdempotencyMismatch   = errors.New("governance: 幂等键对应的请求参数不一致")
 	ErrInvalidTransition     = errors.New("governance: Proposal 状态转换非法")
 	ErrProposalNotDraft      = errors.New("governance: Proposal 已提交，Operation 不可修改")
@@ -70,20 +72,28 @@ var proposalTransitions = map[string]map[string]bool{
 
 // Proposal 是一组尚未正式生效的有序变更建议。
 type Proposal struct {
-	ID               uuid.UUID       `json:"id"`
-	ImportJobID      *uuid.UUID      `json:"import_job_id"`
-	TargetType       string          `json:"target_type"`
-	TargetID         *uuid.UUID      `json:"target_id"`
-	BaseRevisionID   *uuid.UUID      `json:"base_revision_id"`
-	BaseStateVersion *int            `json:"base_state_version"`
-	Status           string          `json:"status"`
-	RiskLevel        string          `json:"risk_level"`
-	RiskReasons      json.RawMessage `json:"risk_reasons"`
-	PolicyDecision   json.RawMessage `json:"policy_decision"`
-	CreatedBy        uuid.UUID       `json:"created_by"`
-	IdempotencyKey   string          `json:"idempotency_key"`
-	CreatedAt        time.Time       `json:"created_at"`
-	UpdatedAt        time.Time       `json:"updated_at"`
+	ID                uuid.UUID       `json:"id"`
+	ImportJobID       *uuid.UUID      `json:"import_job_id"`
+	TargetType        string          `json:"target_type"`
+	TargetID          *uuid.UUID      `json:"target_id"`
+	BaseRevisionID    *uuid.UUID      `json:"base_revision_id"`
+	BaseStateVersion  *int            `json:"base_state_version"`
+	Status            string          `json:"status"`
+	RiskLevel         string          `json:"risk_level"`
+	RiskReasons       json.RawMessage `json:"risk_reasons"`
+	PolicyDecision    json.RawMessage `json:"policy_decision"`
+	CreatedBy         uuid.UUID       `json:"created_by"`
+	IdempotencyKey    string          `json:"idempotency_key"`
+	ChangeBatchID     *uuid.UUID      `json:"change_batch_id"`
+	ChangeBatchStatus *string         `json:"change_batch_status"`
+	CreatedAt         time.Time       `json:"created_at"`
+	UpdatedAt         time.Time       `json:"updated_at"`
+}
+
+// ProposalPage 是当前 Actor 创建的提案游标分页结果。
+type ProposalPage struct {
+	Items      []Proposal `json:"items"`
+	NextCursor *string    `json:"next_cursor"`
 }
 
 // OperationRecord 是 proposal_operation 的持久化形态；v1 语义类型见 operation.go。
@@ -205,8 +215,21 @@ type ChangeBatch struct {
 	RolledBackAt *time.Time
 }
 
+// BatchAuditEvent is the immutable compensation ledger for one ChangeBatch.
+// Rollback reads it newest-first and invokes domain inverse operations; it never
+// mutates or deletes these records.
+type BatchAuditEvent struct {
+	ID            uuid.UUID
+	EventType     string
+	AggregateType string
+	AggregateID   uuid.UUID
+	Payload       json.RawMessage
+	CreatedAt     time.Time
+}
+
 type BatchRevision struct {
 	ID               uuid.UUID
 	PageID           uuid.UUID
 	ParentRevisionID *uuid.UUID
+	CreatedAt        time.Time
 }

@@ -25,8 +25,10 @@ type entityMergeRepairHandler struct {
 }
 
 type entityMergedPayload struct {
-	MergeID uuid.UUID `json:"merge_id"`
-	ActorID uuid.UUID `json:"actor_id"`
+	MergeID        uuid.UUID `json:"merge_id"`
+	ActorID        uuid.UUID `json:"actor_id"`
+	SourceEntityID uuid.UUID `json:"source_entity_id"`
+	TargetEntityID uuid.UUID `json:"target_entity_id"`
 }
 
 func newEntityMergeRepairHandler(service entityMergeRepairService) projection.Handler {

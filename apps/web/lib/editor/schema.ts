@@ -59,6 +59,10 @@ export const AST_BLOCK_TYPES = [
   "quote",
   "callout",
   "component",
+  "image",
+  "video",
+  "dataset_view",
+  "embed",
   "divider",
 ] as const satisfies readonly AstBlock["type"][];
 
@@ -78,6 +82,10 @@ export const AST_TO_BLOCKNOTE_BLOCK: Record<AstBlockType, string> = {
   quote: "quote",
   callout: "callout (自定义容器)",
   component: "component (自定义原子块)",
+  image: "imageAsset (自定义原子块)",
+  video: "videoAsset (自定义原子块)",
+  dataset_view: "datasetView (自定义原子块)",
+  embed: "embed (自定义原子块)",
   divider: "divider",
 };
 
@@ -85,8 +93,6 @@ export const AST_TO_BLOCKNOTE_BLOCK: Record<AstBlockType, string> = {
 export const UNMAPPED_BLOCKNOTE_BLOCKS = [
   "audio",
   "file",
-  "image",
-  "video",
   "checkListItem",
   "toggleListItem",
   "pageBreak",
@@ -151,6 +157,85 @@ const componentSpec = createBlockSpec(
   },
 );
 
+const imageAssetSpec = createBlockSpec(
+  {
+    type: "imageAsset",
+    propSchema: {
+      assetRevisionId: { default: "" },
+      altText: { default: "" },
+      caption: { default: "" },
+    },
+    content: "none",
+  },
+  {
+    render: (block) => {
+      const dom = window.document.createElement("div");
+      dom.className = "ast-image";
+      dom.dataset.assetRevisionId = block.props.assetRevisionId;
+      dom.textContent = block.props.caption || block.props.altText || "图片";
+      return { dom };
+    },
+  },
+);
+
+const videoAssetSpec = createBlockSpec(
+  {
+    type: "videoAsset",
+    propSchema: {
+      assetRevisionId: { default: "" },
+      posterAssetRevisionId: { default: "" },
+      title: { default: "" },
+      caption: { default: "" },
+    },
+    content: "none",
+  },
+  {
+    render: (block) => {
+      const dom = window.document.createElement("div");
+      dom.className = "ast-video";
+      dom.dataset.assetRevisionId = block.props.assetRevisionId;
+      dom.textContent = block.props.caption || block.props.title || "视频";
+      return { dom };
+    },
+  },
+);
+
+const datasetViewSpec = createBlockSpec(
+  {
+    type: "datasetView",
+    propSchema: { datasetViewId: { default: "" } },
+    content: "none",
+  },
+  {
+    render: (block) => {
+      const dom = window.document.createElement("div");
+      dom.className = "ast-dataset-view";
+      dom.dataset.datasetViewId = block.props.datasetViewId;
+      dom.textContent = "可查询数据视图";
+      return { dom };
+    },
+  },
+);
+
+const embedSpec = createBlockSpec(
+  {
+    type: "embed",
+    propSchema: {
+      url: { default: "" },
+      title: { default: "" },
+    },
+    content: "none",
+  },
+  {
+    render: (block) => {
+      const dom = window.document.createElement("div");
+      dom.className = "ast-embed";
+      dom.textContent = block.props.title || block.props.url || "外部嵌入";
+      return { dom };
+    },
+  },
+);
+
 /** 生成 content "none" 的容器块 spec（子块由 BlockNote 自动渲染在块下方）。 */
 function containerBlockSpec<T extends string>(type: T, className: string) {
   return createBlockSpec(
@@ -190,6 +275,26 @@ const pageReferenceSpec = createInlineContentSpec(
         ? "ast-page-ref ast-page-ref--unresolved"
         : "ast-page-ref";
       dom.textContent = unresolved ? props.normalizedTitle : props.displayText;
+      return { dom };
+    },
+  },
+);
+
+const pageAnchorReferenceSpec = createInlineContentSpec(
+  {
+    type: "pageAnchorReference",
+    content: "none",
+    propSchema: {
+      targetPageId: { default: "" },
+      targetHeadingBlockId: { default: "" },
+      displayText: { default: "" },
+    },
+  },
+  {
+    render: (inlineContent) => {
+      const dom = window.document.createElement("span");
+      dom.className = "ast-page-anchor-ref";
+      dom.textContent = inlineContent.props.displayText;
       return { dom };
     },
   },
@@ -256,6 +361,42 @@ const citationReferenceSpec = createInlineContentSpec(
   },
 );
 
+const mathSpec = createInlineContentSpec(
+  {
+    type: "math",
+    content: "none",
+    propSchema: { expression: { default: "" } },
+  },
+  {
+    render: (inlineContent) => {
+      const dom = window.document.createElement("code");
+      dom.className = "ast-math";
+      dom.textContent = inlineContent.props.expression;
+      return { dom };
+    },
+  },
+);
+
+const mentionSpec = createInlineContentSpec(
+  {
+    type: "mention",
+    content: "none",
+    propSchema: {
+      actorId: { default: "" },
+      displayText: { default: "" },
+    },
+  },
+  {
+    render: (inlineContent) => {
+      const dom = window.document.createElement("span");
+      dom.className = "ast-mention";
+      dom.dataset.actorId = inlineContent.props.actorId;
+      dom.textContent = `@${inlineContent.props.displayText}`;
+      return { dom };
+    },
+  },
+);
+
 // ---- 自定义样式：inlineCode（与 code mark 区分，AST inline_code 专用） ----
 
 const inlineCodeStyleSpec = createStyleSpec(
@@ -284,6 +425,10 @@ export const editorSchema = BlockNoteSchema.create({
     divider: defaultBlockSpecs.divider,
     callout: calloutSpec(),
     component: componentSpec(),
+    imageAsset: imageAssetSpec(),
+    videoAsset: videoAssetSpec(),
+    datasetView: datasetViewSpec(),
+    embed: embedSpec(),
     table: containerBlockSpec("table", "ast-table")(),
     tableRow: containerBlockSpec("tableRow", "ast-table-row")(),
     tableCell: containerBlockSpec("tableCell", "ast-table-cell")(),
@@ -291,9 +436,12 @@ export const editorSchema = BlockNoteSchema.create({
   inlineContentSpecs: {
     ...defaultInlineContentSpecs,
     pageReference: pageReferenceSpec,
+    pageAnchorReference: pageAnchorReferenceSpec,
     entityReference: entityReferenceSpec,
     claimReference: claimReferenceSpec,
     citationReference: citationReferenceSpec,
+    math: mathSpec,
+    mention: mentionSpec,
   },
   styleSpecs: {
     ...defaultStyleSpecs,

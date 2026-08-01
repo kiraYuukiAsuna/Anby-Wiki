@@ -87,9 +87,13 @@ export function CollectionMembers({
               </div>
               <div className="text-right text-xs text-muted-foreground">
                 <p>{member.sourceType === "manual" ? "人工来源" : "规则来源"}</p>
-                <p className="font-mono" title={member.sourceRevisionId}>
-                  Revision {member.sourceRevisionId.slice(0, 8)}
-                </p>
+                {member.sourceRevisionId ? (
+                  <p className="font-mono" title={member.sourceRevisionId}>
+                    Revision {member.sourceRevisionId.slice(0, 8)}
+                  </p>
+                ) : (
+                  <p>实时查询</p>
+                )}
               </div>
             </li>
           );

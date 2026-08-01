@@ -23,6 +23,11 @@ type Service struct {
 	ids  *id.Generator
 }
 
+const (
+	DefaultPageSize = 20
+	MaxPageSize     = 100
+)
+
 func NewService(repo *Repository, txm *db.TxManager, ids *id.Generator) *Service {
 	return &Service{repo: repo, txm: txm, ids: ids}
 }
@@ -72,6 +77,27 @@ func (s *Service) Create(ctx context.Context, actorID uuid.UUID, jobType, key st
 		return nil, ErrIdempotencyMismatch
 	}
 	return existing, nil
+}
+
+func (s *Service) ListOwned(
+	ctx context.Context, actorID uuid.UUID, status, cursor string, limit int,
+) (*JobPage, error) {
+	actorType, actorStatus, err := s.repo.Actor(ctx, actorID)
+	if err != nil || actorStatus != "active" || (actorType != "human" && actorType != "system") {
+		return nil, ErrInvalidJob
+	}
+	status = strings.TrimSpace(status)
+	if status != "" && status != JobQueued && status != JobRunning &&
+		status != JobSucceeded && status != JobFailed && status != JobCancelled {
+		return nil, ErrInvalidStatus
+	}
+	if limit <= 0 {
+		limit = DefaultPageSize
+	}
+	if limit > MaxPageSize {
+		limit = MaxPageSize
+	}
+	return s.repo.ListOwnedJobs(ctx, actorID, status, cursor, limit)
 }
 
 func jsonEqual(left, right []byte) bool {

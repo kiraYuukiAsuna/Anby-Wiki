@@ -22,14 +22,18 @@ Worker 通过 `FOR UPDATE SKIP LOCKED` 原子领取任务；每次运行有独�
 停止领取新任务，并给已领取任务一个有界完成窗口。相同 SourceVersion 已有成功任务时，
 后续任务跳过抽取、匹配、Compose 与 Review，并复用原 Proposal。
 
-HTTP 产品入口同时接收受控公网 URL 与 multipart 文件上传。上传先由 API 经 Evidence
-服务写入私有对象存储，Job config 只保存对象键与内容哈希、不保存正文；Worker 读取后
-再次校验。两条路径共享 MIME/magic、10 MiB、恶意签名、哈希和证据固化门禁。
+HTTP 产品入口同时接收受控公网 URL 与 multipart 文件上传。支持 HTML、纯文本、
+JSON、CSV、PDF、PNG 与 JPEG：公网 JSON 作为 API 快照，上传的 JSON/CSV 作为
+数据库记录导出，图片进入 OCR。上传先由 API 经 Evidence 服务写入私有对象存储，
+Job config 只保存对象键与内容哈希、不保存正文；Worker 读取后再次校验。两条路径共享
+MIME/magic、10 MiB、恶意签名、哈希和证据固化门禁。
 
 Worker 使用 Poppler `pdftotext` 从标准输入读取 PDF、从标准输出取得 UTF-8 文本，
 不创建临时来源文件，也不向子进程传递 Worker 环境变量。页间换页符用于保留页码定位，
-解压后的文本限制为 32 MiB。当前只支持带可提取文本层的 PDF；纯图片扫描件返回
-`pdf_ocr_required`，尚不执行 OCR。
+解压后的文本限制为 32 MiB。没有文本层的 PDF 由 Poppler 逐页、限尺寸栅格化后交给
+Tesseract；最多处理 20 页，单页临时图片随页删除，原 PDF 始终只经标准输入传递。
+PNG/JPEG 使用同一 OCR 路径，限制 4000 万像素。OCR 的行级像素区域、原图尺寸、引擎、
+语言与置信度一并固化进 SourceChunk locator，Citation 可以还原到原始图像区域。
 
 DeepSeek 的 JSON Object 模式只保证返回合法 JSON，因此 Adapter 会把与 Gateway
 本地校验完全相同的权威 JSON Schema 注入 system message，禁止额外包装层；OpenAI
@@ -51,8 +55,9 @@ compatible Adapter 继续使用供应商原生 strict JSON Schema。DeepSeek 抽
 - URL 仅允许 HTTP(S) 80/443，逐次校验 DNS 与重定向；Dial 时再次拒绝内网、回环、
   link-local、CGNAT、benchmark 等地址，防 DNS rebinding。
 - 原始资产和 Source 在解析前持久化；解析失败不丢失原始证据。
-- HTML/PDF 只产出稳定 Chunk、页码/章节/字符范围，不执行来源内脚本或指令；PDF
-  解析进程在只读、非 root、capabilities 全移除的 Worker 容器内运行。
+- HTML/PDF/图片/JSON/CSV 只产出稳定 Chunk、页码/章节/字符范围或图片区域，不执行
+  来源内脚本或指令；Poppler 与 Tesseract 在只读、非 root、capabilities 全移除的
+  Worker 容器内运行。
 - 抽取结果先经权威 JSON Schema，再逐条核对 `source_version_id`、Chunk ID、原文引用和
   字符范围；检测到 Prompt Injection 或质量低于阈值即停止，不创建 Citation/Proposal。
 - 实体歧义只进入人工 Review；不自动合并或创建重复实体。Claim 会区分新增、支持、
@@ -60,5 +65,5 @@ compatible Adapter 继续使用供应商原生 strict JSON Schema。DeepSeek 抽
 - Compose 后的 Operation 再经 Operation v1 Schema；Apply 仍需 M5 权限、审核、冲突和
   原子事务门禁。
 - `error_json` 只保存阶段与稳定错误码，不保存来源全文、Prompt、密钥或供应商响应体；
-  PDF 与抽取失败会区分组件缺失、需 OCR、文本过大、供应商失败、超时、Schema
-  不合规和证据不合规。
+  PDF/OCR 与抽取失败会区分组件缺失、页数或像素超限、未识别文本、供应商失败、超时、
+  Schema 不合规和证据不合规。

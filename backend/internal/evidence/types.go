@@ -27,6 +27,10 @@ var (
 	ErrDuplicateAssetName = errors.New("evidence: asset 名字冲突")
 	// ErrInvalidAssetInput 入参非法：name / mime_type 为空，或 content 为 nil。
 	ErrInvalidAssetInput = errors.New("evidence: 资产入参非法")
+	// ErrInvalidAssetCursor 资产目录 cursor 解析失败。
+	ErrInvalidAssetCursor = errors.New("evidence: 资产 cursor 非法")
+	// ErrAssetStorageUnavailable 当前进程未配置对象存储。
+	ErrAssetStorageUnavailable = errors.New("evidence: 资产存储不可用")
 )
 
 // asset 状态（asset.status）。
@@ -64,4 +68,16 @@ type AssetRevision struct {
 	MetadataJSON []byte
 	ActorID      uuid.UUID
 	CreatedAt    time.Time
+}
+
+// AssetWithRevision 是资产目录中的逻辑资产及其当前不可变版本。
+type AssetWithRevision struct {
+	Asset    Asset
+	Revision AssetRevision
+}
+
+// AssetPage 是站点资产目录的游标分页结果。
+type AssetPage struct {
+	Items      []AssetWithRevision
+	NextCursor *string
 }

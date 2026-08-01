@@ -133,6 +133,75 @@ func (r *Repository) UpdatePageTitle(ctx context.Context, tx pgx.Tx, id uuid.UUI
 	return nil
 }
 
+// SoftDeleteCreatedPageByBatch 仅在页面自创建批次后没有站外 Revision、
+// 生命周期审计、实体绑定或 Collection 成员关系时软删除该 Page。
+func (r *Repository) SoftDeleteCreatedPageByBatch(
+	ctx context.Context,
+	tx pgx.Tx,
+	id, batchID uuid.UUID,
+) error {
+	tag, err := r.q(tx).Exec(ctx, `
+		UPDATE page p
+		SET deleted_at=now(),updated_at=now()
+		WHERE p.id=$1 AND p.deleted_at IS NULL
+		  AND NOT EXISTS (
+			SELECT 1 FROM revision r
+			WHERE r.page_id=p.id AND r.change_batch_id IS DISTINCT FROM $2
+		  )
+		  AND NOT EXISTS (
+			SELECT 1 FROM audit_event ae
+			WHERE ae.aggregate_type='page' AND ae.aggregate_id=p.id
+			  AND ae.change_batch_id IS DISTINCT FROM $2
+			  AND ae.event_type IN (
+				'page.renamed','page.redirected','revision.published',
+				'revision.rolled_back','page.deleted'
+			  )
+		  )
+		  AND NOT EXISTS (
+			SELECT 1 FROM page_entity_binding peb WHERE peb.page_id=p.id
+		  )
+		  AND NOT EXISTS (
+			SELECT 1 FROM collection_membership cm WHERE cm.page_id=p.id
+		  )
+		  AND NOT EXISTS (
+			SELECT 1 FROM page_redirect pr
+			WHERE pr.source_page_id=p.id OR pr.target_page_id=p.id
+		  )
+		  AND NOT EXISTS (
+			SELECT 1 FROM block_redirect br
+			WHERE br.source_page_id=p.id OR br.target_page_id=p.id
+		  )
+		  AND NOT EXISTS (
+			SELECT 1 FROM page_protection pp
+			WHERE pp.page_id=p.id AND pp.revoked_at IS NULL
+			  AND (pp.expires_at IS NULL OR pp.expires_at>now())
+		  )
+		  AND NOT EXISTS (
+			SELECT 1 FROM working_document wd WHERE wd.page_id=p.id
+		  )
+		  AND NOT EXISTS (
+			SELECT 1 FROM collection c WHERE c.description_page_id=p.id
+		  )
+		  AND NOT EXISTS (
+			SELECT 1 FROM proposal pr
+			WHERE pr.target_type='page' AND pr.target_id=p.id
+			  AND pr.status NOT IN ('rolled_back','rejected','failed')
+			  AND NOT EXISTS (
+				SELECT 1 FROM change_batch cb
+				WHERE cb.proposal_id=pr.id AND cb.id=$2
+			  )
+		  )`,
+		id, batchID,
+	)
+	if err != nil {
+		return fmt.Errorf("page: 回滚新建页面失败: %w", err)
+	}
+	if tag.RowsAffected() != 1 {
+		return fmt.Errorf("%w: page=%s", ErrPageLifecycleStale, id)
+	}
+	return nil
+}
+
 // InsertAlias 写入页面别名。
 func (r *Repository) InsertAlias(ctx context.Context, tx pgx.Tx, a *Alias) error {
 	_, err := r.q(tx).Exec(ctx, `
@@ -225,36 +294,126 @@ func (r *Repository) GetActorByID(ctx context.Context, tx pgx.Tx, id uuid.UUID) 
 	return &a, nil
 }
 
-// UpsertRedirect 写入/覆盖站内重定向（source → target_page_id）。
-func (r *Repository) UpsertRedirect(ctx context.Context, tx pgx.Tx, sourcePageID, targetPageID uuid.UUID) error {
+// UpsertRedirect writes the complete discriminated target and preserves the
+// original creator/time while recording the latest editor/time.
+func (r *Repository) UpsertRedirect(
+	ctx context.Context,
+	tx pgx.Tx,
+	sourcePageID uuid.UUID,
+	target RedirectTarget,
+	actorID uuid.UUID,
+) (*PageRedirect, error) {
+	var title, interwiki *string
+	if target.Title != "" {
+		title = &target.Title
+	}
+	if target.TargetInterwiki != "" {
+		interwiki = &target.TargetInterwiki
+	}
 	_, err := r.q(tx).Exec(ctx, `
-		INSERT INTO page_redirect (source_page_id, target_page_id)
-		VALUES ($1, $2)
-		ON CONFLICT (source_page_id)
-		DO UPDATE SET target_page_id = EXCLUDED.target_page_id`,
-		sourcePageID, targetPageID,
+		INSERT INTO page_redirect (
+			source_page_id,target_kind,target_page_id,target_namespace_id,
+			target_title,target_anchor_block_id,target_interwiki,
+			created_by,updated_by)
+		VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$8)
+		ON CONFLICT (source_page_id) DO UPDATE SET
+			target_kind=EXCLUDED.target_kind,
+			target_page_id=EXCLUDED.target_page_id,
+			target_namespace_id=EXCLUDED.target_namespace_id,
+			target_title=EXCLUDED.target_title,
+			target_anchor_block_id=EXCLUDED.target_anchor_block_id,
+			target_interwiki=EXCLUDED.target_interwiki,
+			updated_by=EXCLUDED.updated_by,
+			updated_at=now()`,
+		sourcePageID, target.Kind, target.PageID, target.NamespaceID,
+		title, target.AnchorBlockID, interwiki, actorID,
 	)
 	if err != nil {
-		return fmt.Errorf("page: 写入重定向失败: %w", err)
+		return nil, fmt.Errorf("page: 写入重定向失败: %w", err)
 	}
-	return nil
+	return r.GetRedirect(ctx, tx, sourcePageID)
 }
 
-// GetRedirectTarget 查 source 的站内重定向目标。
-// 无重定向记录返回 (nil, nil)；记录存在但非站内目标（target_page_id 为 NULL）
-// 同样返回 (nil, nil)——跨命名空间/跨 wiki 目标不在本 Task 跟随范围。
-func (r *Repository) GetRedirectTarget(ctx context.Context, tx pgx.Tx, sourcePageID uuid.UUID) (*uuid.UUID, error) {
-	var target *uuid.UUID
+// GetRedirect returns the authoritative redirect row and presentation metadata.
+func (r *Repository) GetRedirect(
+	ctx context.Context,
+	tx pgx.Tx,
+	sourcePageID uuid.UUID,
+) (*PageRedirect, error) {
+	var item PageRedirect
 	err := r.q(tx).QueryRow(ctx, `
-		SELECT target_page_id FROM page_redirect WHERE source_page_id = $1`, sourcePageID,
-	).Scan(&target)
+		SELECT pr.source_page_id,pr.target_kind,pr.target_page_id,
+			pr.target_namespace_id,COALESCE(n.namespace_key,''),
+			COALESCE(pr.target_title,''),pr.target_anchor_block_id,
+			COALESCE(pr.target_interwiki,''),COALESCE(tp.display_title,''),
+			pr.created_by,pr.updated_by,pr.created_at,pr.updated_at
+		FROM page_redirect pr
+		LEFT JOIN namespace n ON n.id=pr.target_namespace_id
+		LEFT JOIN page tp ON tp.id=pr.target_page_id
+		WHERE pr.source_page_id=$1`, sourcePageID,
+	).Scan(
+		&item.SourcePageID, &item.Target.Kind, &item.Target.PageID,
+		&item.Target.NamespaceID, &item.Target.NamespaceKey,
+		&item.Target.Title, &item.Target.AnchorBlockID,
+		&item.Target.TargetInterwiki, &item.Target.TargetPageTitle,
+		&item.CreatedBy, &item.UpdatedBy, &item.CreatedAt, &item.UpdatedAt,
+	)
 	if errors.Is(err, pgx.ErrNoRows) {
-		return nil, nil
+		return nil, ErrRedirectNotFound
 	}
 	if err != nil {
 		return nil, fmt.Errorf("page: 查询重定向失败: %w", err)
 	}
-	return target, nil
+	return &item, nil
+}
+
+// GetRedirectOptional returns nil when the Page has no current redirect.
+func (r *Repository) GetRedirectOptional(
+	ctx context.Context,
+	tx pgx.Tx,
+	sourcePageID uuid.UUID,
+) (*PageRedirect, error) {
+	item, err := r.GetRedirect(ctx, tx, sourcePageID)
+	if errors.Is(err, ErrRedirectNotFound) {
+		return nil, nil
+	}
+	return item, err
+}
+
+// DeleteRedirect 删除 source 的当前重定向；未命中视为生命周期状态已变化。
+func (r *Repository) DeleteRedirect(
+	ctx context.Context,
+	tx pgx.Tx,
+	sourcePageID uuid.UUID,
+) error {
+	tag, err := r.q(tx).Exec(ctx,
+		`DELETE FROM page_redirect WHERE source_page_id=$1`, sourcePageID)
+	if err != nil {
+		return fmt.Errorf("page: 删除重定向失败: %w", err)
+	}
+	if tag.RowsAffected() != 1 {
+		return fmt.Errorf("%w: page=%s 无当前重定向", ErrPageLifecycleStale, sourcePageID)
+	}
+	return nil
+}
+
+// NamespaceBelongsToWiki verifies the stable namespace target without exposing
+// namespace storage outside the Page domain.
+func (r *Repository) NamespaceBelongsToWiki(
+	ctx context.Context,
+	tx pgx.Tx,
+	namespaceID, wikiID uuid.UUID,
+) (bool, error) {
+	var exists bool
+	err := r.q(tx).QueryRow(ctx, `
+		SELECT EXISTS(
+			SELECT 1 FROM namespace WHERE id=$1 AND wiki_id=$2
+		)`, namespaceID, wikiID,
+	).Scan(&exists)
+	if err != nil {
+		return false, fmt.Errorf("page: 校验命名空间失败: %w", err)
+	}
+	return exists, nil
 }
 
 // GetWikiIDBySiteKey 按 site_key 查站点 ID（API 启动时解析默认站点并缓存），
@@ -282,7 +441,8 @@ func (r *Repository) GetCurrentRevisionWithSnapshot(ctx context.Context, tx pgx.
 	err := r.q(tx).QueryRow(ctx, `
 		SELECT r.id, r.page_id, r.parent_revision_id, r.content_snapshot_id, r.actor_id,
 			r.change_batch_id, r.summary, r.is_minor, r.visibility, r.created_at,
-			s.id, s.schema_version, s.ast_json, s.content_hash, s.size_bytes
+			s.id, s.schema_version, s.ast_json, s.content_hash, s.size_bytes,
+			s.storage_tier,COALESCE(s.storage_key,''),s.archived_at
 		FROM page p
 		JOIN revision r ON r.id = p.current_revision_id
 		JOIN content_snapshot s ON s.id = r.content_snapshot_id
@@ -291,6 +451,7 @@ func (r *Repository) GetCurrentRevisionWithSnapshot(ctx context.Context, tx pgx.
 		&rev.ID, &rev.PageID, &rev.ParentRevisionID, &rev.ContentSnapshotID, &rev.ActorID, &rev.ChangeBatchID,
 		&rev.Summary, &rev.IsMinor, &rev.Visibility, &rev.CreatedAt,
 		&snap.ID, &snap.SchemaVersion, &snap.AST, &snap.ContentHash, &snap.SizeBytes,
+		&snap.StorageTier, &snap.StorageKey, &snap.ArchivedAt,
 	)
 	if errors.Is(err, pgx.ErrNoRows) {
 		return nil, nil, nil
@@ -300,6 +461,48 @@ func (r *Repository) GetCurrentRevisionWithSnapshot(ctx context.Context, tx pgx.
 	}
 	rev.ContentHash = snap.ContentHash
 	rev.SchemaVersion = snap.SchemaVersion
+	rev.StorageTier = snap.StorageTier
+	rev.ArchivedAt = snap.ArchivedAt
+	return &rev, &snap, nil
+}
+
+// GetCurrentRevisionWithSnapshotMetadata omits ast_json so section-delivery
+// negotiation does not deserialize the full authoritative document.
+func (r *Repository) GetCurrentRevisionWithSnapshotMetadata(
+	ctx context.Context,
+	tx pgx.Tx,
+	pageID uuid.UUID,
+) (*Revision, *ContentSnapshot, error) {
+	var rev Revision
+	var snap ContentSnapshot
+	err := r.q(tx).QueryRow(ctx, `
+		SELECT r.id,r.page_id,r.parent_revision_id,r.content_snapshot_id,r.actor_id,
+			r.change_batch_id,r.summary,r.is_minor,r.visibility,r.created_at,
+			s.id,s.schema_version,s.content_hash,s.size_bytes,
+			s.storage_tier,COALESCE(s.storage_key,''),s.archived_at
+		FROM page p
+		JOIN revision r ON r.id=p.current_revision_id
+		JOIN content_snapshot s ON s.id=r.content_snapshot_id
+		WHERE p.id=$1`, pageID,
+	).Scan(
+		&rev.ID, &rev.PageID, &rev.ParentRevisionID,
+		&rev.ContentSnapshotID, &rev.ActorID, &rev.ChangeBatchID,
+		&rev.Summary, &rev.IsMinor, &rev.Visibility, &rev.CreatedAt,
+		&snap.ID, &snap.SchemaVersion, &snap.ContentHash, &snap.SizeBytes,
+		&snap.StorageTier, &snap.StorageKey, &snap.ArchivedAt,
+	)
+	if errors.Is(err, pgx.ErrNoRows) {
+		return nil, nil, nil
+	}
+	if err != nil {
+		return nil, nil, fmt.Errorf(
+			"page: 查询当前 Revision 元数据失败: %w", err,
+		)
+	}
+	rev.ContentHash = snap.ContentHash
+	rev.SchemaVersion = snap.SchemaVersion
+	rev.StorageTier = snap.StorageTier
+	rev.ArchivedAt = snap.ArchivedAt
 	return &rev, &snap, nil
 }
 
@@ -323,7 +526,8 @@ func (r *Repository) GetRenderedHTML(ctx context.Context, tx pgx.Tx, pageID, rev
 // revisionSnapshotColumns 历史查询共用的 revision + snapshot 列（content_hash/schema_version 冗余自 snapshot）。
 const revisionSnapshotColumns = `r.id, r.page_id, r.parent_revision_id, r.content_snapshot_id, r.actor_id,
 	r.change_batch_id, r.summary, r.is_minor, r.visibility, r.created_at,
-	s.id, s.schema_version, s.ast_json, s.content_hash, s.size_bytes`
+	s.id, s.schema_version, s.ast_json, s.content_hash, s.size_bytes,
+	s.storage_tier, COALESCE(s.storage_key,''), s.archived_at`
 
 // scanRevisionSnapshot 扫描一行 revision JOIN content_snapshot。
 // snapAST 为 nil 时丢弃 AST 字节（列表场景只取元信息）。
@@ -332,6 +536,7 @@ func scanRevisionSnapshot(rev *Revision, snap *ContentSnapshot, snapAST any) []a
 		&rev.ID, &rev.PageID, &rev.ParentRevisionID, &rev.ContentSnapshotID, &rev.ActorID, &rev.ChangeBatchID,
 		&rev.Summary, &rev.IsMinor, &rev.Visibility, &rev.CreatedAt,
 		&snap.ID, &snap.SchemaVersion, snapAST, &snap.ContentHash, &snap.SizeBytes,
+		&snap.StorageTier, &snap.StorageKey, &snap.ArchivedAt,
 	}
 }
 
@@ -363,6 +568,8 @@ func (r *Repository) ListRevisions(ctx context.Context, tx pgx.Tx, pageID uuid.U
 		}
 		rev.ContentHash = snap.ContentHash
 		rev.SchemaVersion = snap.SchemaVersion
+		rev.StorageTier = snap.StorageTier
+		rev.ArchivedAt = snap.ArchivedAt
 		revs = append(revs, rev)
 	}
 	if err := rows.Err(); err != nil {
@@ -391,6 +598,8 @@ func (r *Repository) GetRevisionWithSnapshot(ctx context.Context, tx pgx.Tx, pag
 	}
 	rev.ContentHash = snap.ContentHash
 	rev.SchemaVersion = snap.SchemaVersion
+	rev.StorageTier = snap.StorageTier
+	rev.ArchivedAt = snap.ArchivedAt
 	return &rev, &snap, nil
 }
 
@@ -399,12 +608,19 @@ func (r *Repository) GetRevisionWithSnapshot(ctx context.Context, tx pgx.Tx, pag
 func (r *Repository) GetSnapshotByHash(ctx context.Context, tx pgx.Tx, contentHash string, schemaVersion int) (*ContentSnapshot, error) {
 	var snap ContentSnapshot
 	err := r.q(tx).QueryRow(ctx, `
-		SELECT id, schema_version, ast_json, content_hash, size_bytes
+		SELECT id, schema_version, ast_json, content_hash, size_bytes,
+			storage_tier,COALESCE(storage_key,''),archived_at
 		FROM content_snapshot
 		WHERE content_hash = $1 AND schema_version = $2
-		LIMIT 1`,
+		  AND storage_tier='hot'
+		LIMIT 1
+		FOR SHARE`,
 		contentHash, schemaVersion,
-	).Scan(&snap.ID, &snap.SchemaVersion, &snap.AST, &snap.ContentHash, &snap.SizeBytes)
+	).Scan(
+		&snap.ID, &snap.SchemaVersion, &snap.AST,
+		&snap.ContentHash, &snap.SizeBytes,
+		&snap.StorageTier, &snap.StorageKey, &snap.ArchivedAt,
+	)
 	if errors.Is(err, pgx.ErrNoRows) {
 		return nil, nil
 	}

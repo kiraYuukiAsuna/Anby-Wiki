@@ -32,6 +32,10 @@ var (
 	ErrRedirectTooDeep = errors.New("page: 重定向链过深")
 	// ErrRedirectTargetDeleted 重定向目标页面已软删除。
 	ErrRedirectTargetDeleted = errors.New("page: 重定向目标已删除")
+	// ErrInvalidRedirectTarget 重定向目标的判别字段、章节、命名空间或外链非法。
+	ErrInvalidRedirectTarget = errors.New("page: 重定向目标非法")
+	// ErrRedirectNotFound 页面当前没有重定向记录。
+	ErrRedirectNotFound = errors.New("page: 重定向不存在")
 	// ErrStaleRevision 发布的基线 Revision 与页面当前 Revision 不一致（含首发布断言失败）。
 	ErrStaleRevision = errors.New("page: 基线 Revision 已过期")
 	// ErrInvalidAST AST 未通过 v1 Schema 校验或 schema_version 非 1。
@@ -42,6 +46,12 @@ var (
 	ErrInvalidCursor = errors.New("page: 分页游标非法")
 	// ErrWikiNotFound 站点不存在（如默认站点 site_key='default' 未种子）。
 	ErrWikiNotFound = errors.New("page: 站点不存在")
+	// ErrPageLifecycleStale 页面创建、改名或重定向之后已有其他变更，不能静默补偿。
+	ErrPageLifecycleStale = errors.New("page: 生命周期状态已变化")
+	// ErrSnapshotStorageUnavailable 冷快照对象存储未配置或对象缺失。
+	ErrSnapshotStorageUnavailable = errors.New("page: Revision 冷存储不可用")
+	// ErrSnapshotIntegrity 冷快照大小、哈希或 AST 校验失败。
+	ErrSnapshotIntegrity = errors.New("page: Revision 冷快照完整性校验失败")
 
 	// errAliasNotFound 别名未命中（repository 内部使用，service 捕获后转领域语义）。
 	errAliasNotFound = errors.New("page: 别名不存在")
@@ -111,6 +121,51 @@ type ResolvedPage struct {
 	ViaAlias bool
 }
 
+// Redirect target kinds. A target is a discriminated union: only the fields
+// belonging to the selected kind may be populated.
+const (
+	RedirectTargetPage        = "page"
+	RedirectTargetPageSection = "page_section"
+	RedirectTargetUnresolved  = "unresolved"
+	RedirectTargetInterwiki   = "interwiki"
+)
+
+// RedirectTarget is the authoritative target stored by PageRedirect.
+// TargetTitle is normalized for unresolved local titles and a display label
+// for interwiki targets. TargetInterwiki is an absolute HTTP(S) URL.
+type RedirectTarget struct {
+	Kind                string     `json:"kind"`
+	PageID              *uuid.UUID `json:"page_id,omitempty"`
+	NamespaceID         *uuid.UUID `json:"namespace_id,omitempty"`
+	Title               string     `json:"title,omitempty"`
+	AnchorBlockID       *uuid.UUID `json:"anchor_block_id,omitempty"`
+	TargetInterwiki     string     `json:"external_url,omitempty"`
+	NamespaceKey        string     `json:"-"`
+	TargetPageTitle     string     `json:"-"`
+	TargetNamespaceName string     `json:"-"`
+}
+
+// PageRedirect represents the current redirect edge for one stable Page ID.
+type PageRedirect struct {
+	SourcePageID uuid.UUID
+	Target       RedirectTarget
+	CreatedBy    uuid.UUID
+	UpdatedBy    uuid.UUID
+	CreatedAt    time.Time
+	UpdatedAt    time.Time
+}
+
+// RedirectResolution is the read-path result after following a redirect graph.
+// TerminalTarget is nil when the source was not a redirect. Resolved=false
+// means an unresolved-title or interwiki target intentionally has no local
+// content landing page.
+type RedirectResolution struct {
+	Page           *Page
+	TerminalTarget *RedirectTarget
+	Hops           int
+	Resolved       bool
+}
+
 // 搜索结果 matched_on 取值：命中的是页面标题还是别名。
 const (
 	// MatchedOnTitle 命中页面规范化标题。
@@ -145,12 +200,20 @@ const (
 	EventTypePageCreated = "page.created"
 	// EventTypePageRenamed 审计事件：页面改名（payload 含 old_normalized_title，M3-T04）。
 	EventTypePageRenamed = "page.renamed"
+	// EventTypePageRedirected 审计事件：站内重定向创建或更新。
+	EventTypePageRedirected = "page.redirected"
+	// EventTypePageDeleted 审计事件：回滚页面创建时进行软删除。
+	EventTypePageDeleted = "page.deleted"
 	// OutboxEventRevisionPublished Outbox 事件：页面 Revision 已发布，驱动投影重建。
 	OutboxEventRevisionPublished = "page.revision_published"
 	// OutboxEventPageCreated Outbox 事件：页面已创建，驱动未解析链接 Resolver（M3-T04，设计 §5.2）。
 	OutboxEventPageCreated = "page.created"
 	// OutboxEventPageRenamed Outbox 事件：页面已改名，驱动未解析链接 Resolver（M3-T04，设计 §5.2）。
 	OutboxEventPageRenamed = "page.renamed"
+	// OutboxEventPageRedirected 站内重定向已更新，驱动链接与搜索投影刷新。
+	OutboxEventPageRedirected = "page.redirected"
+	// OutboxEventPageDeleted 页面已软删除，驱动当前投影清理。
+	OutboxEventPageDeleted = "page.deleted"
 )
 
 // Revision 一次正式发布的页面版本（对应 revision 表，发布后不可变）。
@@ -169,6 +232,8 @@ type Revision struct {
 
 	ContentHash   string
 	SchemaVersion int
+	StorageTier   string
+	ArchivedAt    *time.Time
 }
 
 // ContentSnapshot 某次 Revision 的完整 AST 快照（对应 content_snapshot 表，发布后不可变）。
@@ -179,7 +244,15 @@ type ContentSnapshot struct {
 	AST           json.RawMessage
 	ContentHash   string
 	SizeBytes     int
+	StorageTier   string
+	StorageKey    string
+	ArchivedAt    *time.Time
 }
+
+const (
+	SnapshotTierHot  = "hot"
+	SnapshotTierCold = "cold"
+)
 
 // AuditEvent 审计事件（对应 audit_event 表，只增不改）。
 type AuditEvent struct {

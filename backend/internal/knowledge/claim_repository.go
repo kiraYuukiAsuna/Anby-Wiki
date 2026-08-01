@@ -259,6 +259,29 @@ func (r *Repository) InsertClaimSource(ctx context.Context, tx pgx.Tx, s *ClaimS
 	return nil
 }
 
+// DeleteClaimSource removes one exact Claim-Citation relationship. Claims and
+// Citations themselves remain immutable/auditable.
+func (r *Repository) DeleteClaimSource(
+	ctx context.Context,
+	tx pgx.Tx,
+	claimID, citationID uuid.UUID,
+) error {
+	tag, err := r.q(tx).Exec(ctx, `
+		DELETE FROM claim_source WHERE claim_id = $1 AND citation_id = $2`,
+		claimID, citationID,
+	)
+	if err != nil {
+		return fmt.Errorf("knowledge: 删除 claim 来源失败: %w", err)
+	}
+	if tag.RowsAffected() != 1 {
+		return fmt.Errorf(
+			"%w: claim=%s citation=%s",
+			ErrClaimSourceNotFound, claimID, citationID,
+		)
+	}
+	return nil
+}
+
 // ListClaimSources 列出 claim 的全部来源（按 created_at, citation_id 排序，便于断言）。
 func (r *Repository) ListClaimSources(ctx context.Context, tx pgx.Tx, claimID uuid.UUID) ([]ClaimSource, error) {
 	rows, err := r.q(tx).Query(ctx, `

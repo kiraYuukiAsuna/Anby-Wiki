@@ -6,3 +6,11 @@ useDefault = true
 [[allowlists]]
 description = "Ignore local Next.js generated build artifacts"
 paths = ['''^apps/web/\.next/''']
+
+[[allowlists]]
+description = "Ignore explicit secret placeholders in the deployment template"
+regexTarget = "secret"
+regexes = [
+  '''^replace-with-strong-s3-secret-key$''',
+  '''^replace-with-strong-meili-master-key$''',
+]

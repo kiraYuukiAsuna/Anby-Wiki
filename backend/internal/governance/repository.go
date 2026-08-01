@@ -2,9 +2,11 @@ package governance
 
 import (
 	"context"
+	"encoding/base64"
 	"encoding/json"
 	"errors"
 	"fmt"
+	"time"
 
 	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5"
@@ -25,13 +27,16 @@ func (r *Repository) q(tx pgx.Tx) db.Querier {
 
 const proposalColumns = `id, import_job_id, target_type, target_id, base_revision_id,
 	base_state_version, status, risk_level, risk_reasons_json, policy_decision_json,
-	created_by, idempotency_key, created_at, updated_at`
+	created_by, idempotency_key,
+	(SELECT cb.id FROM change_batch cb WHERE cb.proposal_id=proposal.id LIMIT 1),
+	(SELECT cb.status FROM change_batch cb WHERE cb.proposal_id=proposal.id LIMIT 1),
+	created_at, updated_at`
 
 func scanProposal(row pgx.Row) (*Proposal, error) {
 	var p Proposal
 	if err := row.Scan(&p.ID, &p.ImportJobID, &p.TargetType, &p.TargetID, &p.BaseRevisionID,
 		&p.BaseStateVersion, &p.Status, &p.RiskLevel, &p.RiskReasons, &p.PolicyDecision,
-		&p.CreatedBy, &p.IdempotencyKey,
+		&p.CreatedBy, &p.IdempotencyKey, &p.ChangeBatchID, &p.ChangeBatchStatus,
 		&p.CreatedAt, &p.UpdatedAt); err != nil {
 		return nil, err
 	}
@@ -70,6 +75,72 @@ func (r *Repository) GetProposalByIdempotency(ctx context.Context, tx pgx.Tx, ac
 		return nil, fmt.Errorf("governance: 按幂等键查询 Proposal 失败: %w", err)
 	}
 	return p, nil
+}
+
+type proposalListCursor struct {
+	CreatedAt time.Time `json:"t"`
+	ID        uuid.UUID `json:"i"`
+}
+
+func encodeProposalCursor(value proposalListCursor) string {
+	raw, _ := json.Marshal(value)
+	return base64.RawURLEncoding.EncodeToString(raw)
+}
+
+func decodeProposalCursor(cursor string) (proposalListCursor, error) {
+	var value proposalListCursor
+	raw, err := base64.RawURLEncoding.DecodeString(cursor)
+	if err != nil {
+		return value, err
+	}
+	if err := json.Unmarshal(raw, &value); err != nil {
+		return value, err
+	}
+	return value, nil
+}
+
+func (r *Repository) ListOwnedProposals(
+	ctx context.Context, actorID uuid.UUID, status, targetType, cursor string, limit int,
+) (*ProposalPage, error) {
+	var afterTime *time.Time
+	afterID := uuid.Nil
+	if cursor != "" {
+		after, err := decodeProposalCursor(cursor)
+		if err != nil || after.CreatedAt.IsZero() || after.ID == uuid.Nil {
+			return nil, ErrInvalidProposalCursor
+		}
+		afterTime = &after.CreatedAt
+		afterID = after.ID
+	}
+	rows, err := r.pool.Query(ctx, `SELECT `+proposalColumns+` FROM proposal
+		WHERE created_by=$1
+		  AND ($2='' OR status=$2)
+		  AND ($3='' OR target_type=$3)
+		  AND ($4::timestamptz IS NULL OR (proposal.created_at,proposal.id) < ($4,$5))
+		ORDER BY proposal.created_at DESC,proposal.id DESC
+		LIMIT $6`, actorID, status, targetType, afterTime, afterID, limit+1)
+	if err != nil {
+		return nil, fmt.Errorf("governance: 列出 Proposal 失败: %w", err)
+	}
+	defer rows.Close()
+	result := &ProposalPage{Items: make([]Proposal, 0, limit)}
+	for rows.Next() {
+		proposal, err := scanProposal(rows)
+		if err != nil {
+			return nil, fmt.Errorf("governance: 扫描 Proposal 失败: %w", err)
+		}
+		result.Items = append(result.Items, *proposal)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	if len(result.Items) > limit {
+		last := result.Items[limit-1]
+		next := encodeProposalCursor(proposalListCursor{CreatedAt: last.CreatedAt, ID: last.ID})
+		result.NextCursor = &next
+		result.Items = result.Items[:limit]
+	}
+	return result, nil
 }
 
 func (r *Repository) InsertProposal(ctx context.Context, tx pgx.Tx, p *Proposal) (bool, error) {
@@ -368,7 +439,7 @@ func (r *Repository) GetChangeBatchForUpdate(ctx context.Context, tx pgx.Tx, id 
 }
 
 func (r *Repository) ListBatchRevisions(ctx context.Context, tx pgx.Tx, batchID uuid.UUID) ([]BatchRevision, error) {
-	rows, err := r.q(tx).Query(ctx, `SELECT id,page_id,parent_revision_id FROM revision
+	rows, err := r.q(tx).Query(ctx, `SELECT id,page_id,parent_revision_id,created_at FROM revision
 		WHERE change_batch_id=$1 ORDER BY created_at,id`, batchID)
 	if err != nil {
 		return nil, err
@@ -377,12 +448,31 @@ func (r *Repository) ListBatchRevisions(ctx context.Context, tx pgx.Tx, batchID 
 	var out []BatchRevision
 	for rows.Next() {
 		var rev BatchRevision
-		if err := rows.Scan(&rev.ID, &rev.PageID, &rev.ParentRevisionID); err != nil {
+		if err := rows.Scan(
+			&rev.ID, &rev.PageID, &rev.ParentRevisionID, &rev.CreatedAt,
+		); err != nil {
 			return nil, err
 		}
 		out = append(out, rev)
 	}
 	return out, rows.Err()
+}
+
+func (r *Repository) HasPageRevisionAfterBatch(
+	ctx context.Context,
+	tx pgx.Tx,
+	pageID, lastBatchRevisionID, batchID uuid.UUID,
+) (bool, error) {
+	var exists bool
+	err := r.q(tx).QueryRow(ctx, `SELECT EXISTS(
+		SELECT 1
+		FROM revision later
+		JOIN revision anchor ON anchor.id=$2
+		WHERE later.page_id=$1
+		  AND later.change_batch_id IS DISTINCT FROM $3
+		  AND (later.created_at,later.id) > (anchor.created_at,anchor.id)
+	)`, pageID, lastBatchRevisionID, batchID).Scan(&exists)
+	return exists, err
 }
 
 func (r *Repository) CurrentPageRevisionID(ctx context.Context, tx pgx.Tx, pageID uuid.UUID) (*uuid.UUID, error) {
@@ -408,6 +498,36 @@ func (r *Repository) ListBatchClaimIDs(ctx context.Context, tx pgx.Tx, batchID u
 		out = append(out, id)
 	}
 	return out, rows.Err()
+}
+
+// ListBatchAuditEvents returns the immutable batch ledger in reverse execution
+// order so callers can apply exact inverse operations.
+func (r *Repository) ListBatchAuditEvents(
+	ctx context.Context,
+	tx pgx.Tx,
+	batchID uuid.UUID,
+) ([]BatchAuditEvent, error) {
+	rows, err := r.q(tx).Query(ctx, `SELECT id,event_type,aggregate_type,
+		aggregate_id,payload_json,created_at
+		FROM audit_event
+		WHERE change_batch_id=$1
+		ORDER BY created_at DESC,id DESC`, batchID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	events := []BatchAuditEvent{}
+	for rows.Next() {
+		var event BatchAuditEvent
+		if err := rows.Scan(
+			&event.ID, &event.EventType, &event.AggregateType,
+			&event.AggregateID, &event.Payload, &event.CreatedAt,
+		); err != nil {
+			return nil, err
+		}
+		events = append(events, event)
+	}
+	return events, rows.Err()
 }
 
 func (r *Repository) HasApprovalEvidence(ctx context.Context, tx pgx.Tx, proposalID uuid.UUID) (bool, error) {

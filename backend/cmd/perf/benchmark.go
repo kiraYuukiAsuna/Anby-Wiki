@@ -57,13 +57,15 @@ func benchmark(
 			return err
 		}},
 		{"search_fts_common_term", func(int) error {
-			_, _, err := search.Search(ctx, wikisearch.Query{
+			_, err := search.Search(ctx, wikisearch.Query{
 				Text: "共同基准词", WikiID: defaultWikiID, Namespace: "main", Limit: 20,
 			})
 			return err
 		}},
 		{"backlinks", func(int) error {
-			_, err := relations.Backlinks(ctx, fixtures[0].PageID, "", 20)
+			_, err := relations.Backlinks(
+				ctx, defaultWikiID, fixtures[0].PageID, "", 20,
+			)
 			return err
 		}},
 		{"publish_revision", func(index int) error {
@@ -130,15 +132,45 @@ func benchmark(
 	return result, err
 }
 
-func performanceSearch(_ context.Context, pool *pgxpool.Pool) (wikisearch.SearchAdapter, string, time.Duration, error) {
+func performanceSearch(ctx context.Context, pool *pgxpool.Pool) (wikisearch.SearchAdapter, string, time.Duration, error) {
 	backend := os.Getenv("PERF_SEARCH_BACKEND")
 	if backend == "" {
 		backend = wikisearch.BackendPostgres
 	}
-	if backend != wikisearch.BackendPostgres {
+	if backend == wikisearch.BackendPostgres {
+		return wikisearch.NewPostgresAdapter(pool), backend, 0, nil
+	}
+	timeout := 15 * time.Second
+	if raw := os.Getenv("MEILI_TIMEOUT"); raw != "" {
+		parsed, err := time.ParseDuration(raw)
+		if err != nil {
+			return nil, backend, 0, fmt.Errorf("parse MEILI_TIMEOUT: %w", err)
+		}
+		timeout = parsed
+	}
+	adapter, err := wikisearch.NewBackend(pool, wikisearch.BackendConfig{
+		Backend: backend, MeiliURL: os.Getenv("MEILI_URL"), MeiliAPIKey: os.Getenv("MEILI_API_KEY"),
+		MeiliIndex: os.Getenv("MEILI_INDEX"), MeiliTimeout: timeout,
+	})
+	if err != nil {
+		return nil, backend, 0, err
+	}
+	meili, ok := adapter.(*wikisearch.MeilisearchAdapter)
+	if !ok {
 		return nil, backend, 0, fmt.Errorf("unsupported performance search backend %q", backend)
 	}
-	return wikisearch.NewPostgresAdapter(pool), backend, 0, nil
+	if err := meili.EnsureIndex(ctx); err != nil {
+		return nil, backend, 0, err
+	}
+	documents, err := wikisearch.NewPostgresAdapter(pool).AllStagedDocuments(ctx)
+	if err != nil {
+		return nil, backend, 0, err
+	}
+	started := time.Now()
+	if err := meili.Rebuild(ctx, documents); err != nil {
+		return nil, backend, 0, err
+	}
+	return meili, backend, time.Since(started), nil
 }
 
 func seedWorkflowFixtures(ctx context.Context, pool *pgxpool.Pool, imports *importer.Service, fixtures []fixture, count int) (*importer.Job, error) {

@@ -19,10 +19,16 @@ type ReviewService struct {
 	ids       *id.Generator
 	evaluator *RiskEvaluator
 	auth      *AuthorizationService
+	aiTrust   *AITrustService
 }
 
 func (s *ReviewService) WithAuthorization(auth *AuthorizationService) *ReviewService {
 	s.auth = auth
+	return s
+}
+
+func (s *ReviewService) WithAITrust(service *AITrustService) *ReviewService {
+	s.aiTrust = service
 	return s
 }
 
@@ -38,11 +44,34 @@ type SubmitResult struct {
 
 // Submit 原子冻结 Operations、记录可解释策略结果，并自动批准低风险安全操作或入人工队列。
 func (s *ReviewService) Submit(ctx context.Context, proposalID uuid.UUID) (*SubmitResult, error) {
+	return s.submit(ctx, proposalID, nil)
+}
+
+// SubmitAs 是用户请求使用的所有者绑定版本。后台管道使用 Submit 提交
+// 自己刚创建的 Proposal，不向 HTTP 暴露无 Actor 的可信入口。
+func (s *ReviewService) SubmitAs(
+	ctx context.Context,
+	proposalID, actorID uuid.UUID,
+) (*SubmitResult, error) {
+	if actorID == uuid.Nil {
+		return nil, ErrInvalidActor
+	}
+	return s.submit(ctx, proposalID, &actorID)
+}
+
+func (s *ReviewService) submit(
+	ctx context.Context,
+	proposalID uuid.UUID,
+	actorID *uuid.UUID,
+) (*SubmitResult, error) {
 	var result SubmitResult
 	err := s.txm.InTx(ctx, func(tx pgx.Tx) error {
 		p, err := s.repo.GetProposalForUpdate(ctx, tx, proposalID)
 		if err != nil {
 			return err
+		}
+		if actorID != nil && p.CreatedBy != *actorID {
+			return ErrPermissionDenied
 		}
 		if p.Status != ProposalDraft {
 			return fmt.Errorf("%w: status=%s", ErrInvalidTransition, p.Status)
@@ -57,6 +86,13 @@ func (s *ReviewService) Submit(ctx context.Context, proposalID uuid.UUID) (*Subm
 		decision, err := s.evaluator.Evaluate(ctx, ops)
 		if err != nil {
 			return err
+		}
+		if s.aiTrust != nil {
+			if err := s.aiTrust.ApplyPolicy(
+				ctx, tx, p, decision,
+			); err != nil {
+				return err
+			}
 		}
 		reasons, _ := json.Marshal(decision.Reasons)
 		decisionJSON, _ := json.Marshal(decision)

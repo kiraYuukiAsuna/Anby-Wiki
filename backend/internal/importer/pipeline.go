@@ -187,10 +187,7 @@ func (p *Pipeline) run(ctx context.Context, request PipelineRequest, acquire acq
 		if title == "" {
 			title = acquired.Filename
 		}
-		sourceType := evidence.SourceTypeWebpage
-		if acquired.MIMEType == "application/pdf" {
-			sourceType = evidence.SourceTypePDF
-		}
+		sourceType := inferredSourceType(acquired)
 		params := evidence.CreateSourceParams{SourceType: sourceType, AssetID: &asset.Asset.ID,
 			Title: title, ActorID: request.ActorID}
 		if acquired.URL != "" {
@@ -369,11 +366,44 @@ func parseErrorCode(err error) string {
 		return "pdf_extractor_unavailable"
 	case errors.Is(err, ErrPDFTextTooLarge):
 		return "pdf_text_too_large"
-	case errors.Is(err, ErrPDFNoExtractableText):
-		return "pdf_ocr_required"
+	case errors.Is(err, ErrPDFRasterizerUnavailable):
+		return "pdf_rasterizer_unavailable"
+	case errors.Is(err, ErrPDFPageLimitExceeded):
+		return "pdf_ocr_page_limit_exceeded"
+	case errors.Is(err, ErrOCRUnavailable):
+		return "ocr_unavailable"
+	case errors.Is(err, ErrOCRImageTooLarge):
+		return "ocr_image_too_large"
+	case errors.Is(err, ErrOCRTextTooLarge):
+		return "ocr_text_too_large"
+	case errors.Is(err, ErrOCRNoText):
+		return "ocr_no_text"
+	case errors.Is(err, ErrOCRFailed):
+		return "ocr_failed"
 	default:
 		return "parse_failed"
 	}
+}
+
+func inferredSourceType(source *AcquiredSource) string {
+	switch source.MIMEType {
+	case "application/pdf":
+		return evidence.SourceTypePDF
+	case "image/png", "image/jpeg":
+		return evidence.SourceTypeImage
+	case "application/json":
+		if source.URL != "" {
+			return evidence.SourceTypeAPI
+		}
+		return evidence.SourceTypeDatabase
+	case "text/csv":
+		return evidence.SourceTypeDatabase
+	case "text/plain":
+		if source.URL == "" {
+			return evidence.SourceTypeBook
+		}
+	}
+	return evidence.SourceTypeWebpage
 }
 
 func extractionErrorCode(err error) string {

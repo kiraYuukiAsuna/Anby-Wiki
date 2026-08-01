@@ -16,7 +16,8 @@ const (
 	EntityMergeApplied    = "applied"
 	EntityMergeRolledBack = "rolled_back"
 
-	OutboxEventEntityMerged = "entity.merged"
+	OutboxEventEntityMerged          = "entity.merged"
+	OutboxEventEntityMergeRolledBack = "entity.merge_rolled_back"
 
 	MergeLabelCopied         = "copied"
 	MergeLabelDemotedPrimary = "demoted_primary"
@@ -57,6 +58,7 @@ type MergeEntityParams struct {
 	TargetEntityID uuid.UUID
 	ActorID        uuid.UUID
 	Reason         string
+	ChangeBatchID  *uuid.UUID
 }
 
 type MergeEntityResult struct {
@@ -72,6 +74,47 @@ type RollbackEntityMergeResult struct {
 	CompensatedClaimIDs []uuid.UUID
 	RemovedTargetLabels int
 	Idempotent          bool
+}
+
+// GetEntityMergeBySource returns the latest merge record for a source Entity
+// together with its immutable label and Claim mapping ledger.
+func (s *Service) GetEntityMergeBySource(
+	ctx context.Context,
+	sourceEntityID uuid.UUID,
+) (*MergeEntityResult, error) {
+	if sourceEntityID == uuid.Nil {
+		return nil, ErrInvalidEntityMerge
+	}
+	merge, err := s.repo.getLatestMergeBySource(ctx, nil, sourceEntityID)
+	if err != nil {
+		return nil, err
+	}
+	if merge == nil {
+		return nil, ErrEntityMergeNotFound
+	}
+	labels, err := s.repo.listMergeLabels(ctx, nil, merge.ID)
+	if err != nil {
+		return nil, err
+	}
+	claims, err := s.listMergeClaimMaps(ctx, nil, merge.ID)
+	if err != nil {
+		return nil, err
+	}
+	return &MergeEntityResult{
+		Merge: merge, LabelMappings: labels, ClaimMappings: claims,
+	}, nil
+}
+
+// GetEntityMerge returns one immutable merge ledger header by stable ID.
+// Callers that expose it over HTTP must still apply their current-Wiki scope.
+func (s *Service) GetEntityMerge(
+	ctx context.Context,
+	mergeID uuid.UUID,
+) (*EntityMerge, error) {
+	if mergeID == uuid.Nil {
+		return nil, ErrInvalidEntityMerge
+	}
+	return s.repo.getEntityMergeByID(ctx, nil, mergeID)
 }
 
 // ResolveEntity follows merged_into mappings and returns the active terminal Entity.
@@ -127,82 +170,103 @@ func (s *Service) ResolveMergedClaim(ctx context.Context, claimID uuid.UUID) (*C
 // MergeEntity atomically records an auditable merge, copies labels, clones current
 // Claims to the target identity, and marks the source as merged.
 func (s *Service) MergeEntity(ctx context.Context, params MergeEntityParams) (*MergeEntityResult, error) {
+	var result *MergeEntityResult
+	err := s.txm.InTx(ctx, func(tx pgx.Tx) error {
+		var err error
+		result, err = s.MergeEntityInTx(ctx, tx, params)
+		return err
+	})
+	return result, err
+}
+
+// MergeEntityInTx lets Governance Apply compose an Entity merge with its
+// Proposal, ChangeBatch, audit trail and status transition atomically.
+func (s *Service) MergeEntityInTx(
+	ctx context.Context,
+	tx pgx.Tx,
+	params MergeEntityParams,
+) (*MergeEntityResult, error) {
 	if params.SourceEntityID == uuid.Nil || params.TargetEntityID == uuid.Nil ||
 		params.SourceEntityID == params.TargetEntityID || params.ActorID == uuid.Nil ||
 		len(strings.TrimSpace(params.Reason)) > 1000 {
 		return nil, ErrInvalidEntityMerge
 	}
 	result := &MergeEntityResult{}
-	err := s.txm.InTx(ctx, func(tx pgx.Tx) error {
-		if err := s.checkMergeActor(ctx, tx, params.ActorID); err != nil {
-			return err
-		}
-		source, target, err := s.lockMergeEntities(ctx, tx, params.SourceEntityID, params.TargetEntityID)
+	if err := s.checkMergeActor(ctx, tx, params.ActorID); err != nil {
+		return nil, err
+	}
+	source, target, err := s.lockMergeEntities(ctx, tx, params.SourceEntityID, params.TargetEntityID)
+	if err != nil {
+		return nil, err
+	}
+	if source.Status == StatusMerged {
+		existing, err := s.repo.getAppliedMergeBySource(ctx, tx, source.ID)
 		if err != nil {
-			return err
+			return nil, err
 		}
-		if source.Status == StatusMerged {
-			existing, err := s.repo.getAppliedMergeBySource(ctx, tx, source.ID)
+		if existing != nil && existing.TargetEntityID == target.ID {
+			result.Merge = existing
+			result.LabelMappings, err = s.repo.listMergeLabels(ctx, tx, existing.ID)
 			if err != nil {
-				return err
+				return nil, err
 			}
-			if existing != nil && existing.TargetEntityID == target.ID {
-				result.Merge = existing
-				result.LabelMappings, err = s.repo.listMergeLabels(ctx, tx, existing.ID)
-				if err != nil {
-					return err
-				}
-				result.ClaimMappings, err = s.listMergeClaimMaps(ctx, tx, existing.ID)
-				result.Idempotent = err == nil
-				return err
-			}
-			return ErrInvalidEntityMerge
+			result.ClaimMappings, err = s.listMergeClaimMaps(ctx, tx, existing.ID)
+			result.Idempotent = err == nil
+			return result, err
 		}
-		if source.Status != StatusActive || target.Status != StatusActive ||
-			source.WikiID != target.WikiID || source.EntityTypeID != target.EntityTypeID {
-			return ErrInvalidEntityMerge
-		}
+		return nil, ErrInvalidEntityMerge
+	}
+	if source.Status != StatusActive || target.Status != StatusActive ||
+		source.WikiID != target.WikiID || source.EntityTypeID != target.EntityTypeID {
+		return nil, ErrInvalidEntityMerge
+	}
 
-		mergeID, err := s.ids.New()
-		if err != nil {
-			return err
-		}
-		merge := &EntityMerge{
-			ID: mergeID, SourceEntityID: source.ID, TargetEntityID: target.ID,
-			ActorID: params.ActorID, Status: EntityMergeApplied,
-			Reason: strings.TrimSpace(params.Reason),
-		}
-		if err := s.repo.insertEntityMerge(ctx, tx, merge); err != nil {
-			return err
-		}
-		result.Merge = merge
-		if result.LabelMappings, err = s.migrateMergeLabels(ctx, tx, merge); err != nil {
-			return err
-		}
-		if result.ClaimMappings, err = s.migrateMergeClaims(ctx, tx, merge); err != nil {
-			return err
-		}
-		if err := s.repo.markEntityMerged(ctx, tx, source.ID, target.ID); err != nil {
-			return err
-		}
-		auditID, err := s.ids.New()
-		if err != nil {
-			return err
-		}
-		outboxID, err := s.ids.New()
-		if err != nil {
-			return err
-		}
-		payload, _ := json.Marshal(map[string]any{
-			"merge_id": merge.ID, "actor_id": params.ActorID,
-			"source_entity_id": source.ID, "target_entity_id": target.ID,
-			"label_mapping_count": len(result.LabelMappings),
-			"claim_mapping_count": len(result.ClaimMappings),
-		})
-		return s.repo.insertMergeEvent(ctx, tx, auditID, outboxID, params.ActorID,
-			OutboxEventEntityMerged, merge.ID, payload)
+	mergeID, err := s.ids.New()
+	if err != nil {
+		return nil, err
+	}
+	merge := &EntityMerge{
+		ID: mergeID, SourceEntityID: source.ID, TargetEntityID: target.ID,
+		ActorID: params.ActorID, Status: EntityMergeApplied,
+		Reason: strings.TrimSpace(params.Reason),
+	}
+	if err := s.repo.insertEntityMerge(ctx, tx, merge); err != nil {
+		return nil, err
+	}
+	result.Merge = merge
+	if result.LabelMappings, err = s.migrateMergeLabels(ctx, tx, merge); err != nil {
+		return nil, err
+	}
+	if result.ClaimMappings, err = s.migrateMergeClaims(ctx, tx, merge); err != nil {
+		return nil, err
+	}
+	if err := s.repo.markEntityMerged(ctx, tx, source.ID, target.ID); err != nil {
+		return nil, err
+	}
+	auditID, err := s.ids.New()
+	if err != nil {
+		return nil, err
+	}
+	outboxID, err := s.ids.New()
+	if err != nil {
+		return nil, err
+	}
+	payload, _ := json.Marshal(map[string]any{
+		"merge_id": merge.ID, "actor_id": params.ActorID,
+		"source_entity_id": source.ID, "target_entity_id": target.ID,
+		"source_updated_at_before": source.UpdatedAt,
+		"target_updated_at_before": target.UpdatedAt,
+		"label_mapping_count":      len(result.LabelMappings),
+		"claim_mapping_count":      len(result.ClaimMappings),
+		"change_batch_id":          params.ChangeBatchID,
 	})
-	return result, err
+	if err := s.repo.insertMergeEvent(
+		ctx, tx, auditID, outboxID, params.ActorID, OutboxEventEntityMerged,
+		merge.ID, params.ChangeBatchID, payload,
+	); err != nil {
+		return nil, err
+	}
+	return result, nil
 }
 
 func (s *Service) checkMergeActor(ctx context.Context, tx pgx.Tx, actorID uuid.UUID) error {
@@ -399,92 +463,135 @@ func (s *Service) RollbackEntityMerge(
 	ctx context.Context,
 	mergeID, actorID uuid.UUID,
 ) (*RollbackEntityMergeResult, error) {
+	var result *RollbackEntityMergeResult
+	err := s.txm.InTx(ctx, func(tx pgx.Tx) error {
+		var err error
+		result, err = s.RollbackEntityMergeInTx(
+			ctx, tx, mergeID, actorID, nil,
+		)
+		return err
+	})
+	return result, err
+}
+
+// RollbackEntityMergeInTx exposes the same append-only compensation algorithm
+// to Governance so an entire ChangeBatch can roll back atomically.
+func (s *Service) RollbackEntityMergeInTx(
+	ctx context.Context,
+	tx pgx.Tx,
+	mergeID, actorID uuid.UUID,
+	changeBatchID *uuid.UUID,
+) (*RollbackEntityMergeResult, error) {
 	result := &RollbackEntityMergeResult{
 		MergeID: mergeID, CompensatedClaimIDs: []uuid.UUID{},
 	}
-	err := s.txm.InTx(ctx, func(tx pgx.Tx) error {
-		if err := s.checkMergeActor(ctx, tx, actorID); err != nil {
-			return err
-		}
-		merge, err := s.repo.getEntityMergeForUpdate(ctx, tx, mergeID)
+	if err := s.checkMergeActor(ctx, tx, actorID); err != nil {
+		return nil, err
+	}
+	merge, err := s.repo.getEntityMergeForUpdate(ctx, tx, mergeID)
+	if err != nil {
+		return nil, err
+	}
+	result.RestoredEntityID = merge.SourceEntityID
+	if merge.Status == EntityMergeRolledBack {
+		result.Idempotent = true
+		return result, nil
+	}
+	sourceUpdatedAt, err := s.repo.getMergeSourceUpdatedAtBefore(
+		ctx, tx, merge.ID,
+	)
+	if err != nil {
+		return nil, err
+	}
+	if err := s.repo.restoreMergedEntity(
+		ctx, tx, merge.SourceEntityID, merge.TargetEntityID, sourceUpdatedAt,
+	); err != nil {
+		return nil, err
+	}
+	claimMaps, err := s.repo.listMergeClaimsForUpdate(ctx, tx, mergeID)
+	if err != nil {
+		return nil, err
+	}
+	for _, mapping := range claimMaps {
+		oldClaim, err := s.repo.GetClaimByID(ctx, tx, mapping.OldClaimID)
 		if err != nil {
-			return err
+			return nil, err
 		}
-		result.RestoredEntityID = merge.SourceEntityID
-		if merge.Status == EntityMergeRolledBack {
-			result.Idempotent = true
-			return nil
-		}
-		if err := s.repo.restoreMergedEntity(ctx, tx, merge.SourceEntityID, merge.TargetEntityID); err != nil {
-			return err
-		}
-		claimMaps, err := s.repo.listMergeClaimsForUpdate(ctx, tx, mergeID)
+		newClaim, err := s.repo.GetClaimByID(ctx, tx, mapping.NewClaimID)
 		if err != nil {
-			return err
+			return nil, err
 		}
-		for _, mapping := range claimMaps {
-			oldClaim, err := s.repo.GetClaimByID(ctx, tx, mapping.OldClaimID)
-			if err != nil {
-				return err
-			}
-			newClaim, err := s.repo.GetClaimByID(ctx, tx, mapping.NewClaimID)
-			if err != nil {
-				return err
-			}
-			if oldClaim.Status != mergeOldClaimStatus(mapping.OldStatus) ||
-				newClaim.Status != mapping.NewStatus || newClaim.SupersededBy != nil {
-				return ErrEntityMergeStale
-			}
-			if err := s.repo.updateClaimMergeStatus(ctx, tx, newClaim.ID,
-				mapping.NewStatus, mergeOldClaimStatus(mapping.NewStatus)); err != nil {
-				return err
-			}
-			if err := s.repo.updateClaimMergeStatus(ctx, tx, oldClaim.ID,
-				oldClaim.Status, mapping.OldStatus); err != nil {
-				return err
-			}
-			if err := s.emitClaimChanged(ctx, tx, newClaim.ID, newClaim.SubjectEntityID, &oldClaim.ID); err != nil {
-				return err
-			}
-			if err := s.emitClaimChanged(ctx, tx, oldClaim.ID, oldClaim.SubjectEntityID, nil); err != nil {
-				return err
-			}
-			result.CompensatedClaimIDs = append(result.CompensatedClaimIDs, newClaim.ID)
+		if oldClaim.Status != mergeOldClaimStatus(mapping.OldStatus) ||
+			newClaim.Status != mapping.NewStatus || newClaim.SupersededBy != nil {
+			return nil, ErrEntityMergeStale
 		}
-		labelMaps, err := s.repo.listMergeLabels(ctx, tx, mergeID)
-		if err != nil {
-			return err
+		if err := s.repo.updateClaimMergeStatus(ctx, tx, newClaim.ID,
+			mapping.NewStatus, mergeOldClaimStatus(mapping.NewStatus)); err != nil {
+			return nil, err
 		}
-		for _, mapping := range labelMaps {
-			if mapping.Action == MergeLabelExisting {
-				continue
-			}
-			label, err := s.repo.GetLabel(ctx, tx, merge.TargetEntityID,
-				mapping.Language, mapping.TargetLabel)
-			if err != nil || label.IsPrimary != mapping.TargetIsPrimary {
-				return ErrEntityMergeStale
-			}
-			if err := s.repo.DeleteLabel(ctx, tx, merge.TargetEntityID,
-				mapping.Language, mapping.TargetLabel); err != nil {
-				return err
-			}
-			result.RemovedTargetLabels++
+		if err := s.repo.updateClaimMergeStatus(ctx, tx, oldClaim.ID,
+			oldClaim.Status, mapping.OldStatus); err != nil {
+			return nil, err
 		}
-		if err := s.repo.markMergeRolledBack(ctx, tx, mergeID, actorID); err != nil {
-			return err
+		if err := s.emitClaimChanged(ctx, tx, newClaim.ID, newClaim.SubjectEntityID, &oldClaim.ID); err != nil {
+			return nil, err
 		}
-		auditID, err := s.ids.New()
-		if err != nil {
-			return err
+		if err := s.emitClaimChanged(ctx, tx, oldClaim.ID, oldClaim.SubjectEntityID, nil); err != nil {
+			return nil, err
 		}
-		payload, _ := json.Marshal(map[string]any{
-			"source_entity_id":           merge.SourceEntityID,
-			"target_entity_id":           merge.TargetEntityID,
-			"compensated_claim_count":    len(result.CompensatedClaimIDs),
-			"removed_target_label_count": result.RemovedTargetLabels,
-		})
-		return s.repo.insertMergeAudit(ctx, tx, auditID, actorID,
-			"entity.merge_rolled_back", mergeID, payload)
+		result.CompensatedClaimIDs = append(result.CompensatedClaimIDs, newClaim.ID)
+	}
+	labelMaps, err := s.repo.listMergeLabels(ctx, tx, mergeID)
+	if err != nil {
+		return nil, err
+	}
+	for _, mapping := range labelMaps {
+		if mapping.Action == MergeLabelExisting {
+			continue
+		}
+		label, err := s.repo.GetLabel(ctx, tx, merge.TargetEntityID,
+			mapping.Language, mapping.TargetLabel)
+		if err != nil || label.IsPrimary != mapping.TargetIsPrimary {
+			return nil, ErrEntityMergeStale
+		}
+		if err := s.repo.DeleteLabel(ctx, tx, merge.TargetEntityID,
+			mapping.Language, mapping.TargetLabel); err != nil {
+			return nil, err
+		}
+		result.RemovedTargetLabels++
+	}
+	if err := s.repo.markMergeRolledBack(ctx, tx, mergeID, actorID); err != nil {
+		return nil, err
+	}
+	auditID, err := s.ids.New()
+	if err != nil {
+		return nil, err
+	}
+	payload, _ := json.Marshal(map[string]any{
+		"merge_id":                     merge.ID,
+		"source_entity_id":             merge.SourceEntityID,
+		"target_entity_id":             merge.TargetEntityID,
+		"compensated_claim_count":      len(result.CompensatedClaimIDs),
+		"removed_target_label_count":   result.RemovedTargetLabels,
+		"compensation_change_batch_id": changeBatchID,
 	})
-	return result, err
+	if err := s.repo.insertMergeAudit(ctx, tx, auditID, actorID,
+		"entity.merge_rolled_back", mergeID, changeBatchID, payload); err != nil {
+		return nil, err
+	}
+	outboxID, err := s.ids.New()
+	if err != nil {
+		return nil, err
+	}
+	if err := s.repo.insertMergeOutbox(
+		ctx,
+		tx,
+		outboxID,
+		OutboxEventEntityMergeRolledBack,
+		mergeID,
+		payload,
+	); err != nil {
+		return nil, err
+	}
+	return result, nil
 }

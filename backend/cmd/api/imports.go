@@ -60,6 +60,26 @@ func (a *ImportAPI) createJob(w http.ResponseWriter, r *http.Request) {
 	httpx.WriteJSON(w, http.StatusCreated, job)
 }
 
+func (a *ImportAPI) listJobs(w http.ResponseWriter, r *http.Request) {
+	actorID, ok := actorIDFrom(w, r)
+	if !ok {
+		return
+	}
+	limit, ok := pageSizeFrom(w, r)
+	if !ok {
+		return
+	}
+	result, err := a.jobs.ListOwned(
+		r.Context(), actorID, r.URL.Query().Get("status"),
+		r.URL.Query().Get("cursor"), limit,
+	)
+	if err != nil {
+		importError(w, r, err)
+		return
+	}
+	httpx.WriteJSON(w, http.StatusOK, result)
+}
+
 func (a *ImportAPI) createUploadJob(w http.ResponseWriter, r *http.Request) {
 	actorID, ok := actorIDFrom(w, r)
 	if !ok {
@@ -195,6 +215,8 @@ func importError(w http.ResponseWriter, r *http.Request, err error) {
 	switch {
 	case errors.Is(err, importer.ErrJobNotFound):
 		httpx.WriteError(w, r, http.StatusNotFound, httpx.CodeNotFound, err.Error())
+	case errors.Is(err, importer.ErrInvalidCursor), errors.Is(err, importer.ErrInvalidStatus):
+		httpx.WriteError(w, r, http.StatusBadRequest, httpx.CodeBadRequest, err.Error())
 	case errors.Is(err, importer.ErrIdempotencyMismatch), errors.Is(err, importer.ErrInvalidTransition), errors.Is(err, importer.ErrCancelled):
 		httpx.WriteError(w, r, http.StatusConflict, httpx.CodeConflict, err.Error())
 	case errors.Is(err, importer.ErrInvalidJob):

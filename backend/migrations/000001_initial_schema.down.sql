@@ -2,6 +2,33 @@
 
 BEGIN;
 
+DROP TABLE fact_consistency_issue;
+
+COMMIT;
+
+BEGIN;
+
+DROP TABLE entity_edge_projection;
+
+COMMIT;
+
+BEGIN;
+
+DROP TABLE ai_trust_profile;
+
+COMMIT;
+
+BEGIN;
+
+DROP TRIGGER change_tag_assignment_immutable ON change_tag_assignment;
+DROP TRIGGER change_tag_immutable ON change_tag;
+DROP TABLE change_tag_assignment;
+DROP TABLE change_tag;
+
+COMMIT;
+
+BEGIN;
+
 DROP TRIGGER bulk_review_item_assignment_immutable ON bulk_review_batch_item;
 DROP FUNCTION protect_bulk_review_item_assignment();
 DROP TABLE bulk_review_audit_event;
@@ -30,6 +57,9 @@ ALTER TABLE external_resource
 COMMIT;
 
 BEGIN;
+DROP TABLE dataset_view;
+DROP TABLE dataset_record;
+DROP TABLE dataset;
 DROP TABLE collection_membership;
 DROP TABLE collection;
 COMMIT;
@@ -126,6 +156,8 @@ COMMIT;
 
 BEGIN;
 
+DROP TABLE rendered_section_block;
+DROP TABLE rendered_section;
 DROP TABLE rendered_page;
 
 COMMIT;
@@ -189,12 +221,18 @@ COMMIT;
 
 BEGIN;
 
+DROP TRIGGER IF EXISTS page_primary_entity_binding_check ON page;
+DROP TRIGGER IF EXISTS page_entity_binding_primary_check ON page_entity_binding;
+DROP FUNCTION IF EXISTS check_page_primary_entity_binding();
+
 ALTER TABLE page DROP CONSTRAINT IF EXISTS page_primary_entity_fk;
 
 DROP TABLE IF EXISTS page_entity_binding;
 DROP TABLE IF EXISTS claim_source;
 DROP TABLE IF EXISTS claim;
 DROP TABLE IF EXISTS property;
+DROP TABLE IF EXISTS entity_federation_link;
+DROP TABLE IF EXISTS federated_wiki;
 DROP TABLE IF EXISTS entity_alias;
 DROP TABLE IF EXISTS entity_label;
 DROP TABLE IF EXISTS entity;
@@ -230,6 +268,7 @@ DROP TABLE IF EXISTS namespace;
 DROP TABLE IF EXISTS wiki_site;
 
 DROP FUNCTION IF EXISTS check_page_current_revision();
+DROP FUNCTION IF EXISTS guard_content_snapshot_mutation();
 DROP FUNCTION IF EXISTS reject_immutable_mutation();
 
 COMMIT;

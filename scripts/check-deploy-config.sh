@@ -32,13 +32,15 @@ grep -q '^USER 10001:10001$' "$DOCKERFILE" ||
   fail "Go runtime must use numeric non-root user"
 grep -q '^USER node$' "$DOCKERFILE" ||
   fail "Web runtime must use non-root node user"
-# postgres redis minio api worker web migrate doctor = 8 (storage-init and
-# minio-init are short-lived jobs with dedicated security policies).
-[ "$(grep -c '<<: \*runtime-security' "$COMPOSE_FILE")" -eq 8 ] ||
+# postgres redis minio meilisearch api worker web migrate doctor = 9
+# (storage-init and minio-init are short-lived jobs with dedicated policies).
+[ "$(grep -c '<<: \*runtime-security' "$COMPOSE_FILE")" -eq 9 ] ||
   fail "every production service must inherit runtime security"
-if grep -qE '^  (nginx|meilisearch):' "$COMPOSE_FILE"; then
-  fail "production compose must not declare a reverse proxy or meilisearch service"
+if grep -qE '^  nginx:' "$COMPOSE_FILE"; then
+  fail "production compose must not declare a reverse proxy service"
 fi
+grep -Eq '^    image: getmeili/meilisearch:v[0-9]+\.[0-9]+\.[0-9]+$' "$COMPOSE_FILE" ||
+  fail "Meilisearch image must use a fixed semantic version"
 grep -q '^  storage-init:' "$COMPOSE_FILE" ||
   fail "production compose must initialize named-volume ownership"
 if grep -Eq '^[[:space:]]*secrets:' "$COMPOSE_FILE"; then
@@ -47,7 +49,7 @@ fi
 if grep -q '_FILE:' "$COMPOSE_FILE" || grep -q 'container-entrypoint' "$DOCKERFILE"; then
   fail "legacy file-based secret injection is still configured"
 fi
-for name in POSTGRES_DB POSTGRES_USER POSTGRES_PASSWORD S3_ACCESS_KEY S3_SECRET_KEY
+for name in POSTGRES_DB POSTGRES_USER POSTGRES_PASSWORD S3_ACCESS_KEY S3_SECRET_KEY MEILI_MASTER_KEY
 do
   grep -q "^${name}=" "$EXAMPLE_ENV" ||
     fail "deployment environment example is missing $name"
@@ -56,7 +58,9 @@ done
 for name in $(sed -n 's/^\([A-Z][A-Z0-9_]*\)=.*/\1/p' "$DEV_EXAMPLE_ENV"); do
   # Production Compose derives its internal PostgreSQL URL from the three
   # POSTGRES_* values, so operators do not fill the same password twice.
-  [ "$name" = "DATABASE_URL" ] && continue
+  case "$name" in
+    DATABASE_URL | MEILI_URL | MEILI_API_KEY) continue ;;
+  esac
   grep -q "^${name}=" "$EXAMPLE_ENV" ||
     fail "production environment example is missing common variable $name"
 done
@@ -80,10 +84,16 @@ grep -Fq 'S3_ACCESS_KEY: "${S3_ACCESS_KEY:?set S3_ACCESS_KEY}"' "$COMPOSE_FILE" 
   fail "application S3 access key environment injection is missing"
 grep -Fq 'S3_SECRET_KEY: "${S3_SECRET_KEY:?set S3_SECRET_KEY}"' "$COMPOSE_FILE" ||
   fail "application S3 secret environment injection is missing"
+grep -Fq 'SEARCH_BACKEND: ${SEARCH_BACKEND:-meilisearch}' "$COMPOSE_FILE" ||
+  fail "production search backend must default to Meilisearch"
+grep -Fq 'MEILI_API_KEY: "${MEILI_MASTER_KEY:?set MEILI_MASTER_KEY}"' "$COMPOSE_FILE" ||
+  fail "application Meilisearch key must be derived from MEILI_MASTER_KEY"
+grep -Fq 'MEILI_MASTER_KEY: "${MEILI_MASTER_KEY:?set MEILI_MASTER_KEY}"' "$COMPOSE_FILE" ||
+  fail "Meilisearch master key environment injection is missing"
 grep -Fq 'AUTH_REGISTRATION_ENABLED: ${AUTH_REGISTRATION_ENABLED:-false}' "$COMPOSE_FILE" ||
   fail "account registration configuration is missing"
-if grep -Eq '\$\{(POSTGRES|REDIS|MINIO|MINIO_CLIENT|ALPINE)_IMAGE' "$COMPOSE_FILE" ||
-  grep -Eq '^(POSTGRES|REDIS|MINIO|MINIO_CLIENT|ALPINE)_IMAGE=' "$EXAMPLE_ENV"; then
+if grep -Eq '\$\{(POSTGRES|REDIS|MINIO|MINIO_CLIENT|MEILI|ALPINE)_IMAGE' "$COMPOSE_FILE" ||
+  grep -Eq '^(POSTGRES|REDIS|MINIO|MINIO_CLIENT|MEILI|ALPINE)_IMAGE=' "$EXAMPLE_ENV"; then
   fail "third-party image versions must be fixed in Compose, not the environment file"
 fi
 grep -q 'read_only: true' "$COMPOSE_FILE" || fail "read_only runtime policy missing"

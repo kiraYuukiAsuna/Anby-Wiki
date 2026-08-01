@@ -16,12 +16,13 @@ import (
 
 // HistoryAPI 历史 API 依赖集合：Page 领域服务。
 type HistoryAPI struct {
-	pages *page.Service
+	pages  *page.Service
+	wikiID uuid.UUID
 }
 
 // NewHistoryAPI 装配历史 API。
-func NewHistoryAPI(pages *page.Service) *HistoryAPI {
-	return &HistoryAPI{pages: pages}
+func NewHistoryAPI(pages *page.Service, wikiID uuid.UUID) *HistoryAPI {
+	return &HistoryAPI{pages: pages, wikiID: wikiID}
 }
 
 // ---- 请求/响应 DTO（与 contracts/openapi/openapi.yaml 对应，契约为准）----
@@ -54,7 +55,7 @@ type rollbackResponse struct {
 // listRevisions GET /api/v1/pages/{id}/revisions?cursor=&page_size=：
 // 按 created_at DESC, id DESC 游标分页（匿名可读）。
 func (a *HistoryAPI) listRevisions(w http.ResponseWriter, r *http.Request) {
-	pageID, ok := pageIDFrom(w, r)
+	pageID, ok := a.currentPageID(w, r)
 	if !ok {
 		return
 	}
@@ -76,7 +77,7 @@ func (a *HistoryAPI) listRevisions(w http.ResponseWriter, r *http.Request) {
 
 // getRevision GET /api/v1/pages/{id}/revisions/{rid}：单版详情（含 ast_json，匿名可读）。
 func (a *HistoryAPI) getRevision(w http.ResponseWriter, r *http.Request) {
-	pageID, ok := pageIDFrom(w, r)
+	pageID, ok := a.currentPageID(w, r)
 	if !ok {
 		return
 	}
@@ -99,7 +100,7 @@ func (a *HistoryAPI) getRevision(w http.ResponseWriter, r *http.Request) {
 // diffRevisions GET /api/v1/pages/{id}/diff?from=&to=：两版结构 Diff（匿名可读）。
 // 响应直接序列化 ast.DocumentDiff（changes: added/removed/changed/moved）。
 func (a *HistoryAPI) diffRevisions(w http.ResponseWriter, r *http.Request) {
-	pageID, ok := pageIDFrom(w, r)
+	pageID, ok := a.currentPageID(w, r)
 	if !ok {
 		return
 	}
@@ -129,7 +130,7 @@ func (a *HistoryAPI) rollback(w http.ResponseWriter, r *http.Request) {
 	if !ok {
 		return
 	}
-	pageID, ok := pageIDFrom(w, r)
+	pageID, ok := a.currentPageID(w, r)
 	if !ok {
 		return
 	}
@@ -155,6 +156,23 @@ func (a *HistoryAPI) rollback(w http.ResponseWriter, r *http.Request) {
 		revisionResponse: toRevisionResponse(rev),
 		RolledBackTo:     req.TargetRevisionID,
 	})
+}
+
+func (a *HistoryAPI) currentPageID(
+	w http.ResponseWriter,
+	r *http.Request,
+) (uuid.UUID, bool) {
+	pageID, ok := pageIDFrom(w, r)
+	if !ok {
+		return uuid.Nil, false
+	}
+	if _, err := getPageInWiki(
+		r.Context(), a.pages, a.wikiID, pageID,
+	); err != nil {
+		serviceError(w, r, err)
+		return uuid.Nil, false
+	}
+	return pageID, true
 }
 
 // pageSizeFrom 解析 page_size 查询参数：缺省默认 20；非整数或越界（1..100）写 400 并返回 false。

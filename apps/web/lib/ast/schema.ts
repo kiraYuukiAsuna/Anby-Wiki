@@ -52,6 +52,14 @@ export const pageReferenceNodeSchema = z.union([
   unresolvedPageReferenceSchema,
 ]);
 
+/** 显式章节引用：Page 与 Heading Block 均为稳定 ID。 */
+export const pageAnchorReferenceNodeSchema = z.strictObject({
+  type: z.literal("page_anchor_reference"),
+  target_page_id: idSchema,
+  target_heading_block_id: idSchema,
+  display_text: z.string(),
+});
+
 /** 外部链接：v1 直接保存 URL；external_resource_id 规范化属于 M3。 */
 export const externalLinkNodeSchema = z.strictObject({
   type: z.literal("external_link"),
@@ -80,15 +88,31 @@ export const citationReferenceNodeSchema = z.strictObject({
   display_text: z.string().optional(),
 });
 
+/** 行内数学表达式保留 LaTeX 源文本；渲染层不得当作 HTML。 */
+export const mathNodeSchema = z.strictObject({
+  type: z.literal("math"),
+  expression: z.string(),
+});
+
+/** 对稳定 Actor 的行内提及。 */
+export const mentionNodeSchema = z.strictObject({
+  type: z.literal("mention"),
+  actor_id: idSchema,
+  display_text: z.string(),
+});
+
 /** 行内节点联合；v1 仅以新增判别分支的方式 additive 演进。 */
 export const inlineNodeSchema = z.union([
   textNodeSchema,
   inlineCodeNodeSchema,
   pageReferenceNodeSchema,
+  pageAnchorReferenceNodeSchema,
   externalLinkNodeSchema,
   entityReferenceNodeSchema,
   claimReferenceNodeSchema,
   citationReferenceNodeSchema,
+  mathNodeSchema,
+  mentionNodeSchema,
 ]);
 
 export type Mark = z.infer<typeof markSchema>;
@@ -99,12 +123,17 @@ export type UnresolvedPageReference = z.infer<
   typeof unresolvedPageReferenceSchema
 >;
 export type PageReferenceNode = z.infer<typeof pageReferenceNodeSchema>;
+export type PageAnchorReferenceNode = z.infer<
+  typeof pageAnchorReferenceNodeSchema
+>;
 export type ExternalLinkNode = z.infer<typeof externalLinkNodeSchema>;
 export type EntityReferenceNode = z.infer<typeof entityReferenceNodeSchema>;
 export type ClaimReferenceNode = z.infer<typeof claimReferenceNodeSchema>;
 export type CitationReferenceNode = z.infer<
   typeof citationReferenceNodeSchema
 >;
+export type MathNode = z.infer<typeof mathNodeSchema>;
+export type MentionNode = z.infer<typeof mentionNodeSchema>;
 export type InlineNode = z.infer<typeof inlineNodeSchema>;
 
 // ---- Block 成员接口（手工声明，对应 ast.schema.json 的 $defs；互递归无法推导）----
@@ -193,6 +222,40 @@ export interface ComponentBlock {
   display_config: Record<string, unknown>;
 }
 
+/** 图片固定到不可变 AssetRevision。 */
+export interface ImageBlock {
+  id: string;
+  type: "image";
+  asset_revision_id: string;
+  alt_text: string;
+  caption?: string;
+}
+
+/** 视频与可选封面均固定到不可变 AssetRevision。 */
+export interface VideoBlock {
+  id: string;
+  type: "video";
+  asset_revision_id: string;
+  poster_asset_revision_id?: string;
+  title?: string;
+  caption?: string;
+}
+
+/** 可查询数据只保存 DatasetView 稳定 ID，不复制记录。 */
+export interface DatasetViewBlock {
+  id: string;
+  type: "dataset_view";
+  dataset_view_id: string;
+}
+
+/** 外部嵌入以安全链接卡片渲染，不执行第三方脚本。 */
+export interface EmbedBlock {
+  id: string;
+  type: "embed";
+  url: string;
+  title?: string;
+}
+
 /** divider 无内容：不允许 content/children 等任何额外字段。 */
 export interface DividerBlock {
   id: string;
@@ -213,6 +276,10 @@ export type Block =
   | QuoteBlock
   | CalloutBlock
   | ComponentBlock
+  | ImageBlock
+  | VideoBlock
+  | DatasetViewBlock
+  | EmbedBlock
   | DividerBlock;
 
 // ---- Block schema（与上面的接口一一对应）----
@@ -297,6 +364,36 @@ export const componentBlockSchema = z.strictObject({
   display_config: z.record(z.string(), z.unknown()),
 });
 
+export const imageBlockSchema = z.strictObject({
+  id: idSchema,
+  type: z.literal("image"),
+  asset_revision_id: idSchema,
+  alt_text: z.string().min(1),
+  caption: z.string().optional(),
+});
+
+export const videoBlockSchema = z.strictObject({
+  id: idSchema,
+  type: z.literal("video"),
+  asset_revision_id: idSchema,
+  poster_asset_revision_id: idSchema.optional(),
+  title: z.string().optional(),
+  caption: z.string().optional(),
+});
+
+export const datasetViewBlockSchema = z.strictObject({
+  id: idSchema,
+  type: z.literal("dataset_view"),
+  dataset_view_id: idSchema,
+});
+
+export const embedBlockSchema = z.strictObject({
+  id: idSchema,
+  type: z.literal("embed"),
+  url: httpUrlSchema,
+  title: z.string().optional(),
+});
+
 export const dividerBlockSchema = z.strictObject({
   id: idSchema,
   type: z.literal("divider"),
@@ -315,6 +412,10 @@ export const blockSchema: z.ZodType<Block> = z.discriminatedUnion("type", [
   quoteBlockSchema,
   calloutBlockSchema,
   componentBlockSchema,
+  imageBlockSchema,
+  videoBlockSchema,
+  datasetViewBlockSchema,
+  embedBlockSchema,
   dividerBlockSchema,
 ]);
 

@@ -5,9 +5,9 @@
 
 ## 当前拓扑
 
-Production Compose 部署 PostgreSQL、Redis、MinIO、API、Worker 与 Web。
+Production Compose 部署 PostgreSQL、Redis、MinIO、Meilisearch、API、Worker 与 Web。
 Web 是唯一发布宿主机端口的服务，并经 Next.js rewrite 将 `/api/*` 转发到
-Docker 内网 API。清单不包含 Nginx、Meilisearch 或外部身份提供方。
+Docker 内网 API。清单不包含 Nginx、TLS 终结或外部身份提供方。
 
 Compose 本身不终结 TLS。默认 `WEB_BIND=127.0.0.1`，适合由宿主机代理、云负载
 均衡或隧道接入；如果直接改成公网监听，必须先评估明文登录凭据与 session cookie
@@ -30,12 +30,14 @@ sh scripts/deploy.sh build
 
 复制 `infra/deploy/.env.example` 到仓库外的受保护路径并设置 `chmod 0600`。
 该文件同时保存普通配置与 `POSTGRES_PASSWORD`、
-`S3_ACCESS_KEY`、`S3_SECRET_KEY` 等机密。
+`S3_ACCESS_KEY`、`S3_SECRET_KEY`、`MEILI_MASTER_KEY` 等机密。
 
 Compose 使用 `POSTGRES_DB`、`POSTGRES_USER`、`POSTGRES_PASSWORD` 自动生成内部
 `DATABASE_URL`，无需重复填写。PostgreSQL 三个值只允许字母、数字、点、下划线
 和连字符；密码建议用
 `openssl rand -hex 32` 生成。S3 两个值同时作为 MinIO root 凭据与应用凭据。
+Compose 以同一个 `MEILI_MASTER_KEY` 启动 Meilisearch 并派生应用的内部
+`MEILI_API_KEY`；生产默认 `SEARCH_BACKEND=meilisearch`，不得保留模板占位值。
 首次部署时保持 `AUTH_REGISTRATION_ENABLED=true`，从 `/register` 创建首个管理员；
 完成所需账号初始化后建议改为 `false` 并重新部署。
 启用 `AI_IMPORT_ENABLED` 时，`AI_API_KEY` 同样写入该文件，但只注入 Worker。
@@ -86,7 +88,7 @@ sh scripts/deploy.sh deploy
 1. 校验环境、`RELEASE_ID`、迁移窗口、机密变量与环境文件权限；
 2. 从当前源码本地构建四个业务镜像；
 3. 运行 `storage-init` 修正命名卷根目录属主；
-4. 启动并等待 PostgreSQL、Redis、MinIO；
+4. 启动并等待 PostgreSQL、Redis、MinIO、Meilisearch；
 5. 运行 `minio-init` 创建私有 bucket；
 6. 执行 `wiki-migrate up` 与版本兼容检查；
 7. 运行 `wiki-doctor -format json`；
@@ -112,6 +114,8 @@ Schema，禁止回滚，必须发布 forward fix。
 
 - 数据层启动失败：保留卷与容器日志，修复用户、tmpfs、环境变量或卷权限后重试。
 - `minio-init` 失败：确认 root 凭据与应用 S3 凭据一致，bucket 名合法。
+- Meilisearch 不健康：检查命名卷属主、Master Key、模型下载/缓存和内存水位；
+  不得静默把 production 切回容量不合格的 PostgreSQL fallback。
 - 迁移失败或 dirty：停止发布，在备份恢复副本上准备幂等前向修复。
 - doctor 返回 error/critical：按
   [data-consistency-doctor.md](./data-consistency-doctor.md) 处理后重跑。

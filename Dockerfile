@@ -60,7 +60,11 @@ ARG VERSION=dev
 ARG VCS_REF=unknown
 ARG BUILD_DATE=unknown
 USER root
-RUN apk add --no-cache poppler-utils
+RUN apk add --no-cache \
+    poppler-utils \
+    tesseract-ocr \
+    tesseract-ocr-data-chi_sim \
+    tesseract-ocr-data-eng
 USER 10001:10001
 LABEL org.opencontainers.image.title="Anby Wiki Worker" \
       org.opencontainers.image.version="${VERSION}" \

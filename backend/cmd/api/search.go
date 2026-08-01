@@ -37,27 +37,48 @@ func (a *SearchAPI) WithTitleAliasFallback(adapter wikisearch.SearchAdapter) *Se
 
 // searchHitResponse 单条搜索结果（PageSearchHit）。
 type searchHitResponse struct {
-	ID           uuid.UUID `json:"id"`
-	DisplayTitle string    `json:"display_title"`
-	Namespace    string    `json:"namespace"`
-	MatchedOn    string    `json:"matched_on"`
-	Highlight    string    `json:"highlight"`
-	Score        float32   `json:"score"`
+	ID           uuid.UUID  `json:"id"`
+	DisplayTitle string     `json:"display_title"`
+	Namespace    string     `json:"namespace"`
+	Language     string     `json:"language"`
+	EntityID     *uuid.UUID `json:"entity_id,omitempty"`
+	EntityType   string     `json:"entity_type,omitempty"`
+	MatchedOn    string     `json:"matched_on"`
+	Highlight    string     `json:"highlight"`
+	Score        float32    `json:"score"`
+}
+
+type searchFacetValueResponse struct {
+	Value string `json:"value"`
+	Count int    `json:"count"`
+}
+
+type searchFacetsResponse struct {
+	Namespaces  []searchFacetValueResponse `json:"namespaces"`
+	Languages   []searchFacetValueResponse `json:"languages"`
+	EntityTypes []searchFacetValueResponse `json:"entity_types"`
 }
 
 // pageSearchResponse 搜索端点响应（PageSearchResults）。
 type pageSearchResponse struct {
-	Items []searchHitResponse `json:"items"`
-	Total int                 `json:"total"`
+	Items  []searchHitResponse  `json:"items"`
+	Total  int                  `json:"total"`
+	Mode   string               `json:"mode"`
+	Facets searchFacetsResponse `json:"facets"`
+}
+
+type searchCapabilitiesResponse struct {
+	Backend         string   `json:"backend"`
+	Modes           []string `json:"modes"`
+	DefaultMode     string   `json:"default_mode"`
+	DefaultRatio    float64  `json:"default_semantic_ratio"`
+	AggregationKeys []string `json:"aggregation_keys"`
 }
 
 // searchPages GET /api/v1/pages/search?q=&namespace=main&limit=10：
-// q 空时返回空列表；namespace 缺省 main；limit 缺省 10、上限由领域服务截断。
+// q 空时返回空列表；namespace 缺省不过滤；limit 缺省 10、上限由领域服务截断。
 func (a *SearchAPI) searchPages(w http.ResponseWriter, r *http.Request) {
 	namespace := r.URL.Query().Get("namespace")
-	if namespace == "" {
-		namespace = "main"
-	}
 	limit := 0
 	if raw := r.URL.Query().Get("limit"); raw != "" {
 		n, err := strconv.Atoi(raw)
@@ -76,42 +97,103 @@ func (a *SearchAPI) searchPages(w http.ResponseWriter, r *http.Request) {
 	if !ok {
 		return
 	}
+	mode := wikisearch.Mode(r.URL.Query().Get("mode"))
+	if mode == "" {
+		mode = wikisearch.ModeKeyword
+	}
+	semanticRatio := 0.0
+	if raw := r.URL.Query().Get("semantic_ratio"); raw != "" {
+		value, err := strconv.ParseFloat(raw, 64)
+		if err != nil || value < 0 || value > 1 {
+			httpx.WriteError(w, r, http.StatusBadRequest, httpx.CodeBadRequest,
+				"semantic_ratio 必须是 0 到 1 之间的数字: "+raw)
+			return
+		}
+		semanticRatio = value
+	}
 
 	adapter := a.search
-	if a.titleAliasFallback != nil && titleAliasFieldsOnly(fields) {
+	if mode == wikisearch.ModeKeyword && a.titleAliasFallback != nil && titleAliasFieldsOnly(fields) {
 		adapter = a.titleAliasFallback
 	}
-	hits, total, err := adapter.Search(r.Context(), wikisearch.Query{
-		Text:       r.URL.Query().Get("q"),
-		WikiID:     a.wikiID,
-		Namespace:  namespace,
-		Language:   r.URL.Query().Get("language"),
-		EntityType: r.URL.Query().Get("entity_type"),
-		Fields:     fields,
-		Limit:      limit,
-		Offset:     offset,
+	result, err := adapter.Search(r.Context(), wikisearch.Query{
+		Text:          r.URL.Query().Get("q"),
+		WikiID:        a.wikiID,
+		Namespace:     namespace,
+		Language:      r.URL.Query().Get("language"),
+		EntityType:    r.URL.Query().Get("entity_type"),
+		Fields:        fields,
+		Mode:          mode,
+		SemanticRatio: semanticRatio,
+		Limit:         limit,
+		Offset:        offset,
 	})
 	if err != nil {
 		if errors.Is(err, wikisearch.ErrNamespaceNotFound) {
 			httpx.WriteError(w, r, http.StatusNotFound, httpx.CodeNotFound, "namespace 不存在")
 			return
 		}
+		if errors.Is(err, wikisearch.ErrInvalidMode) {
+			httpx.WriteError(w, r, http.StatusBadRequest, httpx.CodeBadRequest,
+				"mode 必须是 keyword、hybrid 或 semantic")
+			return
+		}
+		if errors.Is(err, wikisearch.ErrSemanticUnavailable) {
+			httpx.WriteError(w, r, http.StatusUnprocessableEntity, httpx.CodeValidationFailed,
+				"当前环境未配置语义搜索；请改用 keyword 模式")
+			return
+		}
 		serviceError(w, r, err)
 		return
 	}
 
-	resp := pageSearchResponse{Items: make([]searchHitResponse, 0, len(hits)), Total: total}
-	for _, h := range hits {
+	resp := pageSearchResponse{
+		Items: make([]searchHitResponse, 0, len(result.Hits)),
+		Total: result.Total,
+		Mode:  string(result.Mode),
+		Facets: searchFacetsResponse{
+			Namespaces:  searchFacetResponses(result.Facets.Namespaces),
+			Languages:   searchFacetResponses(result.Facets.Languages),
+			EntityTypes: searchFacetResponses(result.Facets.EntityTypes),
+		},
+	}
+	for _, h := range result.Hits {
 		resp.Items = append(resp.Items, searchHitResponse{
 			ID:           h.PageID,
 			DisplayTitle: h.DisplayTitle,
 			Namespace:    h.Namespace,
+			Language:     h.Language,
+			EntityID:     h.EntityID,
+			EntityType:   h.EntityType,
 			MatchedOn:    string(h.MatchedOn),
 			Highlight:    h.Highlight,
 			Score:        h.Score,
 		})
 	}
 	httpx.WriteJSON(w, http.StatusOK, resp)
+}
+
+func (a *SearchAPI) capabilities(w http.ResponseWriter, _ *http.Request) {
+	capabilities := a.search.Capabilities()
+	modes := make([]string, 0, len(capabilities.Modes))
+	for _, mode := range capabilities.Modes {
+		modes = append(modes, string(mode))
+	}
+	httpx.WriteJSON(w, http.StatusOK, searchCapabilitiesResponse{
+		Backend:         capabilities.Backend,
+		Modes:           modes,
+		DefaultMode:     string(capabilities.DefaultMode),
+		DefaultRatio:    capabilities.DefaultRatio,
+		AggregationKeys: capabilities.AggregationKeys,
+	})
+}
+
+func searchFacetResponses(values []wikisearch.FacetValue) []searchFacetValueResponse {
+	result := make([]searchFacetValueResponse, 0, len(values))
+	for _, value := range values {
+		result = append(result, searchFacetValueResponse{Value: value.Value, Count: value.Count})
+	}
+	return result
 }
 
 func titleAliasFieldsOnly(fields []wikisearch.Field) bool {

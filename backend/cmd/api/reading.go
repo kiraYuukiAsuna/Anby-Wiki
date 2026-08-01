@@ -12,18 +12,38 @@ import (
 	"github.com/anby/wiki/backend/internal/ast"
 	"github.com/anby/wiki/backend/internal/page"
 	"github.com/anby/wiki/backend/internal/platform/httpx"
+	"github.com/anby/wiki/backend/internal/projection"
 	"github.com/anby/wiki/backend/internal/render"
 )
 
 // ReadAPI 读 API 依赖集合：Page 领域服务与启动时解析缓存的默认站点 ID。
 type ReadAPI struct {
-	pages  *page.Service
-	wikiID uuid.UUID
+	pages    *page.Service
+	wikiID   uuid.UUID
+	sections *projection.Queries
+	dynamic  render.DynamicRenderer
 }
 
 // NewReadAPI 装配读 API。wikiID 与写 API 同为种子里 site_key='default' 的站点。
-func NewReadAPI(pages *page.Service, wikiID uuid.UUID) *ReadAPI {
-	return &ReadAPI{pages: pages, wikiID: wikiID}
+func NewReadAPI(
+	pages *page.Service,
+	wikiID uuid.UUID,
+	sectionQueries ...*projection.Queries,
+) *ReadAPI {
+	api := &ReadAPI{pages: pages, wikiID: wikiID}
+	if len(sectionQueries) > 0 {
+		api.sections = sectionQueries[0]
+	}
+	return api
+}
+
+// WithDynamicRenderer equips the authoritative snapshot fallback with the
+// same trusted Component/Claim resolver used by projection workers.
+func (a *ReadAPI) WithDynamicRenderer(
+	dynamic render.DynamicRenderer,
+) *ReadAPI {
+	a.dynamic = dynamic
+	return a
 }
 
 // ---- 响应 DTO（与 contracts/openapi/openapi.yaml 对应，契约为准）----
@@ -31,15 +51,20 @@ func NewReadAPI(pages *page.Service, wikiID uuid.UUID) *ReadAPI {
 // pageContentResponse 已发布页面的内容：当前 Revision 元信息 + canonical AST + 渲染 HTML。
 type pageContentResponse struct {
 	Revision        revisionResponse `json:"revision"`
-	AST             json.RawMessage  `json:"ast_json"`
-	HTML            string           `json:"html"`
+	DeliveryMode    string           `json:"delivery_mode"`
+	SectionCount    int              `json:"section_count"`
+	AST             *json.RawMessage `json:"ast_json"`
+	HTML            *string          `json:"html"`
 	RendererVersion string           `json:"renderer_version"`
 }
 
 // redirectResponse 重定向跟随信息：响应返回的是落地页，from_* 回显请求命中的源页面。
 type redirectResponse struct {
-	FromPageID uuid.UUID `json:"from_page_id"`
-	FromTitle  string    `json:"from_title"`
+	FromPageID uuid.UUID                  `json:"from_page_id"`
+	FromTitle  string                     `json:"from_title"`
+	Target     pageRedirectTargetResponse `json:"target"`
+	Resolved   bool                       `json:"resolved"`
+	Hops       int                        `json:"hops"`
 }
 
 // pageWithContentResponse 阅读端点响应（PageWithContent）。
@@ -82,7 +107,7 @@ func (a *ReadAPI) getPageByID(w http.ResponseWriter, r *http.Request) {
 	if !ok {
 		return
 	}
-	p, err := a.pages.GetPage(r.Context(), pageID)
+	p, err := getPageInWiki(r.Context(), a.pages, a.wikiID, pageID)
 	if err != nil {
 		serviceError(w, r, err)
 		return
@@ -98,36 +123,98 @@ func (a *ReadAPI) getPageByID(w http.ResponseWriter, r *http.Request) {
 // 未发布过的页面 Content 为 null；渲染失败按内部错误处理
 // （ContentSnapshot 入库时已通过 AST 校验，渲染失败即服务端缺陷）。
 func (a *ReadAPI) respondPage(w http.ResponseWriter, r *http.Request, from *page.Page, viaAlias bool, aliasTitle string) {
-	final, err := a.pages.ResolveRedirect(r.Context(), from.ID, 0)
+	contentMode := r.URL.Query().Get("content_mode")
+	switch contentMode {
+	case "", "auto", "full", "sections":
+	default:
+		httpx.WriteError(
+			w, r, http.StatusBadRequest, httpx.CodeValidationFailed,
+			"content_mode 必须是 auto、full 或 sections",
+		)
+		return
+	}
+	if contentMode == "" {
+		contentMode = "auto"
+	}
+	resolution, err := a.pages.ResolveRedirect(r.Context(), from.ID, 0)
 	if err != nil {
 		serviceError(w, r, err)
 		return
 	}
+	final := resolution.Page
 
 	resp := pageWithContentResponse{
 		Page:       toPageResponse(final),
 		ViaAlias:   viaAlias,
 		AliasTitle: aliasTitle,
 	}
-	if final.ID != from.ID {
-		resp.Redirect = &redirectResponse{FromPageID: from.ID, FromTitle: from.DisplayTitle}
+	if resolution.Hops > 0 {
+		target := page.RedirectTarget{
+			Kind: page.RedirectTargetPage, PageID: &final.ID,
+			TargetPageTitle: final.DisplayTitle,
+		}
+		if resolution.TerminalTarget != nil {
+			target = *resolution.TerminalTarget
+		}
+		resp.Redirect = &redirectResponse{
+			FromPageID: from.ID, FromTitle: from.DisplayTitle,
+			Target: toPageRedirectResponse(&page.PageRedirect{
+				Target: target,
+			}).Target,
+			Resolved: resolution.Resolved, Hops: resolution.Hops,
+		}
+	}
+	if !resolution.Resolved {
+		httpx.WriteJSON(w, http.StatusOK, resp)
+		return
 	}
 
-	rev, snap, err := a.pages.CurrentContent(r.Context(), final.ID)
+	rev, snap, err := a.pages.CurrentRevisionMetadata(r.Context(), final.ID)
 	if err != nil {
 		serviceError(w, r, err)
 		return
 	}
 	if rev != nil {
+		const autoSectionThreshold = 64 * 1024
+		wantsSections := contentMode == "sections" ||
+			(contentMode == "auto" && snap.SizeBytes >= autoSectionThreshold)
+		if wantsSections && a.sections != nil {
+			manifest, manifestErr := a.sections.Sections(
+				r.Context(), final.ID, render.RendererVersion,
+			)
+			if manifestErr == nil && manifest.Ready &&
+				manifest.RevisionID == rev.ID &&
+				(contentMode == "sections" || len(manifest.Items) > 1) {
+				resp.Content = &pageContentResponse{
+					Revision:     toRevisionResponse(rev),
+					DeliveryMode: "sections", SectionCount: len(manifest.Items),
+					RendererVersion: render.RendererVersion,
+				}
+				httpx.WriteJSON(w, http.StatusOK, resp)
+				return
+			}
+		}
+		rev, snap, err = a.pages.CurrentContent(r.Context(), final.ID)
+		if err != nil {
+			serviceError(w, r, err)
+			return
+		}
+		if rev == nil {
+			httpx.WriteJSON(w, http.StatusOK, resp)
+			return
+		}
 		html, err := a.renderHTML(r, final.ID, rev.ID, snap)
 		if err != nil {
 			serviceError(w, r, err)
 			return
 		}
+		astJSON := snap.AST
 		resp.Content = &pageContentResponse{
 			Revision:        toRevisionResponse(rev),
-			AST:             snap.AST,
-			HTML:            html,
+			DeliveryMode:    "full",
+			SectionCount:    1,
+			AST:             &astJSON,
+			HTML:            &html,
 			RendererVersion: render.RendererVersion,
 		}
 	}
@@ -147,6 +234,14 @@ func (a *ReadAPI) renderHTML(r *http.Request, pageID, revisionID uuid.UUID, snap
 	doc, err := ast.Parse(snap.AST)
 	if err != nil {
 		return "", err
+	}
+	if a.dynamic != nil {
+		return render.RenderHTMLWithResolvers(
+			r.Context(),
+			doc,
+			a.dynamic,
+			a.dynamic,
+		)
 	}
 	return render.RenderHTML(doc)
 }

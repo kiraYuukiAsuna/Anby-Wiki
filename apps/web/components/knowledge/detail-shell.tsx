@@ -4,11 +4,15 @@ export function DetailShell({
   eyebrow,
   title,
   status,
+  modeLabel = "只读",
+  description = "当前详情页匿名可读；所有权威写入仍须经过领域服务与授权工作流。",
   children,
 }: {
   eyebrow: string;
   title: string;
   status: string;
+  modeLabel?: string;
+  description?: string;
   children: ReactNode;
 }) {
   return (
@@ -17,12 +21,12 @@ export function DetailShell({
         <div className="mb-2 flex flex-wrap items-center gap-2 text-xs text-muted-foreground">
           <span className="uppercase tracking-[0.18em]">{eyebrow}</span>
           <span className="rounded-full border border-border px-2 py-0.5">{status}</span>
-          <span className="rounded-full border border-border px-2 py-0.5">只读</span>
+          <span className="rounded-full border border-border px-2 py-0.5">
+            {modeLabel}
+          </span>
         </div>
         <h1 className="text-3xl font-bold tracking-tight">{title}</h1>
-        <p className="mt-2 text-sm text-muted-foreground">
-          当前详情页匿名可读；所有权威写入仍须经过领域服务与授权工作流。
-        </p>
+        <p className="mt-2 text-sm text-muted-foreground">{description}</p>
       </header>
       {children}
     </main>

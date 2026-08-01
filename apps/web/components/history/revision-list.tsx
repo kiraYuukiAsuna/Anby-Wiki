@@ -6,6 +6,7 @@
 "use client";
 
 import { useState } from "react";
+import { Flame, Snowflake } from "lucide-react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { toast } from "sonner";
@@ -138,6 +139,17 @@ export function RevisionList({
                       小修改
                     </span>
                   ) : null}
+                  {revision.storageTier === "cold" ? (
+                    <span className="inline-flex items-center gap-1 rounded-full bg-sky-100 px-2 py-0.5 text-xs text-sky-800">
+                      <Snowflake className="size-3" aria-hidden />
+                      冷存储
+                    </span>
+                  ) : (
+                    <span className="inline-flex items-center gap-1 rounded-full bg-orange-100 px-2 py-0.5 text-xs text-orange-800">
+                      <Flame className="size-3" aria-hidden />
+                      热存储
+                    </span>
+                  )}
                 </div>
                 <div className="mt-1 flex flex-wrap gap-x-3 gap-y-0.5 text-xs text-muted-foreground">
                   <time dateTime={revision.createdAt.toISOString()}>

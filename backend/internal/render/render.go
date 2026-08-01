@@ -23,12 +23,13 @@ import (
 
 // RendererVersion 渲染器版本。渲染规则发生任何影响输出的变更时必须升版
 // （M3 的 RenderedPage 投影按此版本判断缓存是否需要重建）。变更规则见 README。
-const RendererVersion = "v4"
+const RendererVersion = "v6"
 
 type renderContext struct {
 	citationNumbers map[string]int
 	ctx             context.Context
 	components      ComponentRenderer
+	claims          ClaimRenderer
 }
 
 // ComponentRenderer 由装配层实现，负责校验冻结组件版本并解析 Entity/Claim。
@@ -36,11 +37,31 @@ type ComponentRenderer interface {
 	RenderComponent(context.Context, *ast.Block) (string, error)
 }
 
-func newRenderContext(ctx context.Context, components ComponentRenderer) *renderContext {
+// ClaimRenderer resolves a stable Claim reference to its current display value.
+// Implementations must return escaped, trusted HTML and may follow a supersede
+// chain. The interface lives in render so both projection builds and the
+// authoritative read fallback share the exact same rendering contract.
+type ClaimRenderer interface {
+	RenderClaim(context.Context, string) (string, error)
+}
+
+// DynamicRenderer is the complete resolver required by a production reading
+// path. A single implementation keeps Component and Claim reads consistent.
+type DynamicRenderer interface {
+	ComponentRenderer
+	ClaimRenderer
+}
+
+func newRenderContext(
+	ctx context.Context,
+	components ComponentRenderer,
+	claims ClaimRenderer,
+) *renderContext {
 	return &renderContext{
 		citationNumbers: make(map[string]int),
 		ctx:             ctx,
 		components:      components,
+		claims:          claims,
 	}
 }
 
@@ -58,7 +79,7 @@ func (c *renderContext) citationNumber(citationID string) int {
 // doc 应已通过 ast.Validate（阅读路径上来自 ContentSnapshot，入库时已校验）；
 // 本函数仍对未知 Block/Inline 类型与无法解码的 content 返回错误，不做静默降级。
 func RenderHTML(doc *ast.Document) (string, error) {
-	return RenderHTMLWithComponents(context.Background(), doc, nil)
+	return RenderHTMLWithResolvers(context.Background(), doc, nil, nil)
 }
 
 // RenderHTMLWithComponents 渲染动态 ComponentBlock；resolver 缺失时输出安全占位，
@@ -66,11 +87,27 @@ func RenderHTML(doc *ast.Document) (string, error) {
 func RenderHTMLWithComponents(
 	ctx context.Context, doc *ast.Document, components ComponentRenderer,
 ) (string, error) {
+	return RenderHTMLWithResolvers(ctx, doc, components, nil)
+}
+
+// RenderHTMLWithResolvers resolves both ComponentBlock and ClaimReference
+// nodes. Resolvers are trusted server-side implementations; every other text
+// and attribute continues to be escaped by this package.
+func RenderHTMLWithResolvers(
+	ctx context.Context,
+	doc *ast.Document,
+	components ComponentRenderer,
+	claims ClaimRenderer,
+) (string, error) {
 	if doc == nil {
 		return "", fmt.Errorf("render: doc 为 nil")
 	}
 	var b strings.Builder
-	if err := renderBlocks(&b, doc.Children, newRenderContext(ctx, components)); err != nil {
+	if err := renderBlocks(
+		&b,
+		doc.Children,
+		newRenderContext(ctx, components, claims),
+	); err != nil {
 		return "", err
 	}
 	return b.String(), nil
@@ -167,6 +204,53 @@ func renderBlock(b *strings.Builder, blk *ast.Block, ctx *renderContext) error {
 		b.WriteString(rendered)
 		return nil
 
+	case ast.BlockImage:
+		fmt.Fprintf(b,
+			`<figure class="wiki-image"><img src="/api/v1/assets/revisions/%s/content" alt="%s" loading="lazy" decoding="async">`,
+			html.EscapeString(blk.AssetRevisionID), html.EscapeString(blk.AltText))
+		if blk.Caption != "" {
+			fmt.Fprintf(b, `<figcaption>%s</figcaption>`, html.EscapeString(blk.Caption))
+		}
+		b.WriteString("</figure>")
+		return nil
+
+	case ast.BlockVideo:
+		fmt.Fprintf(b, `<figure class="wiki-video"><video controls preload="metadata" src="/api/v1/assets/revisions/%s/content"`,
+			html.EscapeString(blk.AssetRevisionID))
+		if blk.PosterAssetRevisionID != "" {
+			fmt.Fprintf(b, ` poster="/api/v1/assets/revisions/%s/content"`,
+				html.EscapeString(blk.PosterAssetRevisionID))
+		}
+		if blk.Title != "" {
+			fmt.Fprintf(b, ` title="%s"`, html.EscapeString(blk.Title))
+		}
+		b.WriteString("></video>")
+		if blk.Caption != "" {
+			fmt.Fprintf(b, `<figcaption>%s</figcaption>`, html.EscapeString(blk.Caption))
+		}
+		b.WriteString("</figure>")
+		return nil
+
+	case ast.BlockDatasetView:
+		fmt.Fprintf(b,
+			`<div class="dataset-view" data-dataset-view-id="%s"><a href="/datasets/views/%s">打开数据视图</a></div>`,
+			html.EscapeString(blk.DatasetViewID), html.EscapeString(blk.DatasetViewID))
+		return nil
+
+	case ast.BlockEmbed:
+		title := blk.Title
+		if title == "" {
+			title = blk.URL
+		}
+		if !isSafeExternalURL(blk.URL) {
+			b.WriteString(html.EscapeString(title))
+			return nil
+		}
+		fmt.Fprintf(b,
+			`<aside class="external-embed"><a href="%s" rel="noopener noreferrer nofollow" target="_blank">%s</a></aside>`,
+			html.EscapeString(blk.URL), html.EscapeString(title))
+		return nil
+
 	case ast.BlockDivider:
 		b.WriteString("<hr>")
 		return nil
@@ -238,6 +322,12 @@ func renderInline(b *strings.Builder, n *ast.InlineNode, ctx *renderContext) err
 			html.EscapeString(href), html.EscapeString(n.DisplayText))
 		return nil
 
+	case ast.InlinePageAnchorReference:
+		href := "/pages/" + n.TargetPageID + "#" + n.TargetHeadingBlockID
+		fmt.Fprintf(b, `<a href="%s" data-page-anchor-ref>%s</a>`,
+			html.EscapeString(href), html.EscapeString(n.DisplayText))
+		return nil
+
 	case ast.InlineExternalLink:
 		if !isSafeExternalURL(n.URL) {
 			// 非 http/https（javascript:/data: 等）：降级为纯文本，不产生 <a>。
@@ -254,6 +344,18 @@ func renderInline(b *strings.Builder, n *ast.InlineNode, ctx *renderContext) err
 		return nil
 
 	case ast.InlineClaimReference:
+		if ctx.claims != nil {
+			rendered, err := ctx.claims.RenderClaim(ctx.ctx, n.ClaimID)
+			if err != nil {
+				return fmt.Errorf(
+					"render: ClaimReference %s 渲染失败: %w",
+					n.ClaimID,
+					err,
+				)
+			}
+			b.WriteString(rendered)
+			return nil
+		}
 		fmt.Fprintf(b, `<a href="/claims/%s" data-claim-ref="%s">%s</a>`,
 			html.EscapeString(n.ClaimID), html.EscapeString(n.ClaimID), html.EscapeString(n.DisplayText))
 		return nil
@@ -265,6 +367,16 @@ func renderInline(b *strings.Builder, n *ast.InlineNode, ctx *renderContext) err
 		}
 		fmt.Fprintf(b, `<sup data-citation-ref="%s" title="%s"><a href="/citations/%s">[%d]</a></sup>`,
 			html.EscapeString(n.CitationID), html.EscapeString(title), html.EscapeString(n.CitationID), ctx.citationNumber(n.CitationID))
+		return nil
+
+	case ast.InlineMath:
+		fmt.Fprintf(b, `<span class="math" data-math-expression="%s">%s</span>`,
+			html.EscapeString(n.Expression), html.EscapeString(n.Expression))
+		return nil
+
+	case ast.InlineMention:
+		fmt.Fprintf(b, `<span class="mention" data-actor-id="%s">@%s</span>`,
+			html.EscapeString(n.ActorID), html.EscapeString(n.DisplayText))
 		return nil
 
 	default:

@@ -1,13 +1,15 @@
 
 # PageContent
 
-已发布页面的当前 Revision 内容
+已发布页面的当前 Revision 内容。delivery_mode=sections 时全文 AST/HTML 为 null，客户端按 PageSectionManifest 加载可重建分片。
 
 ## Properties
 
 Name | Type
 ------------ | -------------
 `revision` | [Revision](Revision.md)
+`deliveryMode` | string
+`sectionCount` | number
 `astJson` | { [key: string]: any; }
 `html` | string
 `rendererVersion` | string
@@ -20,6 +22,8 @@ import type { PageContent } from ''
 // TODO: Update the object below with actual values
 const example = {
   "revision": null,
+  "deliveryMode": null,
+  "sectionCount": null,
   "astJson": null,
   "html": null,
   "rendererVersion": v1,

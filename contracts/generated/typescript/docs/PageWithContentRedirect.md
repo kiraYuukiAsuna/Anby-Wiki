@@ -1,7 +1,7 @@
 
 # PageWithContentRedirect
 
-请求命中站内重定向源时出现；响应返回的是落地页
+请求命中重定向源时出现。resolved=true 时 page/content 是本地落地页； unresolved 或 interwiki 终点返回 resolved=false、content=null，并由 target 给出可治理的目标。
 
 ## Properties
 
@@ -9,6 +9,9 @@ Name | Type
 ------------ | -------------
 `fromPageId` | string
 `fromTitle` | string
+`target` | [PageRedirectTarget](PageRedirectTarget.md)
+`resolved` | boolean
+`hops` | number
 
 ## Example
 
@@ -19,6 +22,9 @@ import type { PageWithContentRedirect } from ''
 const example = {
   "fromPageId": null,
   "fromTitle": null,
+  "target": null,
+  "resolved": null,
+  "hops": null,
 } satisfies PageWithContentRedirect
 
 console.log(example)

@@ -1,9 +1,16 @@
-// Typed Block AST v1 → React 的原生渲染器（服务端组件，纯函数，无副作用）。
-//
-// 只消费 ast_json 并过 parseDocument 校验后的结构；**不**渲染 API 返回的
-// html 字段（该字段仅作服务端 SEO 备用，禁止 dangerouslySetInnerHTML）。
+// Typed Block AST v1 → React 的原生渲染器（编辑预览、历史与投影降级路径）。
+// 当前阅读页优先消费版本化 RenderedPage HTML，确保 Component/Claim 动态值与
+// Worker 投影保持一致；AST 渲染器仍是不可变快照的客户端安全兜底。
 import Link from "next/link";
-import { ExternalLink, Info, OctagonAlert, TriangleAlert } from "lucide-react";
+import {
+  AtSign,
+  Database,
+  ExternalLink,
+  Info,
+  OctagonAlert,
+  Puzzle,
+  TriangleAlert,
+} from "lucide-react";
 import type { ReactNode } from "react";
 
 import { cn } from "@/lib/utils";
@@ -16,6 +23,7 @@ import type {
   TextNode,
 } from "@/lib/ast/schema";
 import { safeHttpUrl } from "@/lib/http-url";
+import { AssetImage, AssetVideo } from "@/components/ast/asset-media";
 
 const HEADING_STYLES: Record<number, string> = {
   1: "mt-8 mb-4 text-3xl font-bold tracking-tight",
@@ -162,6 +170,97 @@ export function BlockView({
         </aside>
       );
     }
+    case "component":
+      return (
+        <aside className="my-5 flex items-center gap-3 rounded-2xl border border-violet-200 bg-violet-50/70 p-4 text-violet-950">
+          <Puzzle className="size-5 shrink-0 text-violet-600" aria-hidden />
+          <div>
+            <p className="text-sm font-semibold">知识组件</p>
+            <p className="mt-0.5 text-xs text-violet-700">
+              组件版本 {block.component_version} · 实体{" "}
+              {block.entity_id.slice(0, 8)}
+            </p>
+          </div>
+        </aside>
+      );
+    case "image":
+      return (
+        <figure className="my-6 overflow-hidden rounded-2xl border bg-card shadow-sm">
+          <AssetImage
+            revisionId={block.asset_revision_id}
+            alt={block.alt_text}
+          />
+          {block.caption ? (
+            <figcaption className="border-t px-4 py-3 text-center text-xs text-muted-foreground">
+              {block.caption}
+            </figcaption>
+          ) : null}
+        </figure>
+      );
+    case "video":
+      return (
+        <figure className="my-6 overflow-hidden rounded-2xl border bg-card shadow-sm">
+          <AssetVideo
+            revisionId={block.asset_revision_id}
+            posterRevisionId={block.poster_asset_revision_id}
+            title={block.title}
+          />
+          {block.caption ? (
+            <figcaption className="border-t px-4 py-3 text-center text-xs text-muted-foreground">
+              {block.caption}
+            </figcaption>
+          ) : null}
+        </figure>
+      );
+    case "dataset_view":
+      return (
+        <Link
+          href={`/datasets/views/${block.dataset_view_id}`}
+          className="group my-5 flex items-center gap-3 rounded-2xl border border-cyan-200 bg-cyan-50/60 p-4 transition hover:border-cyan-300 hover:bg-cyan-50"
+        >
+          <Database className="size-5 text-cyan-700" aria-hidden />
+          <span>
+            <span className="block text-sm font-semibold text-cyan-950">
+              可查询数据视图
+            </span>
+            <span className="mt-0.5 block text-xs text-cyan-700">
+              打开筛选、排序与聚合视图
+            </span>
+          </span>
+          <ExternalLink
+            className="ml-auto size-4 text-cyan-700 transition-transform group-hover:translate-x-0.5"
+            aria-hidden
+          />
+        </Link>
+      );
+    case "embed": {
+      const href = safeHttpUrl(block.url);
+      if (!href) {
+        return (
+          <span className="my-4 block rounded-xl border border-dashed p-4 text-sm text-muted-foreground">
+            无法打开不安全的嵌入地址
+          </span>
+        );
+      }
+      return (
+        <a
+          href={href}
+          target="_blank"
+          rel="noopener noreferrer"
+          className="group my-5 flex items-center gap-3 rounded-2xl border bg-card p-4 transition hover:border-primary/25 hover:shadow-sm"
+        >
+          <ExternalLink className="size-5 text-primary" aria-hidden />
+          <span className="min-w-0">
+            <span className="block text-sm font-semibold">
+              {block.title || "外部嵌入内容"}
+            </span>
+            <span className="mt-0.5 block truncate text-xs text-muted-foreground">
+              {block.url}
+            </span>
+          </span>
+        </a>
+      );
+    }
     case "divider":
       return <hr className="my-6 border-border" />;
   }
@@ -256,6 +355,15 @@ export function InlineNodeView({
           {node.display_text}
         </Link>
       );
+    case "page_anchor_reference":
+      return (
+        <Link
+          href={`/pages/${node.target_page_id}#${node.target_heading_block_id}`}
+          className="text-blue-600 underline-offset-4 hover:underline"
+        >
+          {node.display_text}
+        </Link>
+      );
     case "external_link": {
       const href = safeHttpUrl(node.url);
       if (!href) {
@@ -304,6 +412,26 @@ export function InlineNodeView({
             [{citationNumber}]
           </Link>
         </sup>
+      );
+    case "math":
+      return (
+        <code
+          data-math-expression={node.expression}
+          className="mx-0.5 rounded bg-sky-50 px-1.5 py-0.5 font-serif text-sky-950"
+          title="数学表达式"
+        >
+          {node.expression}
+        </code>
+      );
+    case "mention":
+      return (
+        <span
+          data-actor-id={node.actor_id}
+          className="mx-0.5 inline-flex items-center gap-0.5 rounded-full bg-violet-100 px-1.5 py-0.5 text-sm font-medium text-violet-700"
+        >
+          <AtSign className="size-3" aria-hidden />
+          {node.display_text}
+        </span>
       );
   }
 }
@@ -355,9 +483,21 @@ function collectCitationNumbers(document: Document): CitationNumbers {
   return numbers;
 }
 
+function citationNumbersFromOrder(order: readonly string[]): CitationNumbers {
+  return new Map(order.map((citationId, index) => [citationId, index + 1]));
+}
+
 /** 渲染整份 AST 文档。调用方负责先经 parseDocument 校验。 */
-export function AstDocument({ document }: { document: Document }) {
-  const citationNumbers = collectCitationNumbers(document);
+export function AstDocument({
+  document,
+  citationOrder,
+}: {
+  document: Document;
+  citationOrder?: readonly string[];
+}) {
+  const citationNumbers = citationOrder
+    ? citationNumbersFromOrder(citationOrder)
+    : collectCitationNumbers(document);
   return (
     <div data-ast-document>
       <BlockChildren

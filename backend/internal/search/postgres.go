@@ -21,6 +21,10 @@ func NewPostgresAdapter(pool *pgxpool.Pool) *PostgresAdapter {
 	return &PostgresAdapter{pool: pool}
 }
 
+func (a *PostgresAdapter) Capabilities() Capabilities {
+	return keywordCapabilities(BackendPostgres)
+}
+
 func (a *PostgresAdapter) Index(ctx context.Context, doc SearchDocument) error {
 	return a.index(ctx, a.pool, doc)
 }
@@ -167,8 +171,14 @@ func upsertDocument(ctx context.Context, q db.Querier, doc SearchDocument) error
 	return err
 }
 
-func (a *PostgresAdapter) Search(ctx context.Context, query Query) ([]Hit, int, error) {
+func (a *PostgresAdapter) Search(ctx context.Context, query Query) (Result, error) {
 	query = normalizeQuery(query)
+	if err := validateQuery(query); err != nil {
+		return Result{}, err
+	}
+	if query.Mode != ModeKeyword {
+		return Result{}, ErrSemanticUnavailable
+	}
 	if query.Namespace != "" {
 		var exists bool
 		if err := a.pool.QueryRow(ctx, `
@@ -176,14 +186,14 @@ func (a *PostgresAdapter) Search(ctx context.Context, query Query) ([]Hit, int, 
 				SELECT 1 FROM namespace
 				WHERE wiki_id = $1 AND namespace_key = $2
 			)`, query.WikiID, query.Namespace).Scan(&exists); err != nil {
-			return nil, 0, fmt.Errorf("search: validate namespace: %w", err)
+			return Result{}, fmt.Errorf("search: validate namespace: %w", err)
 		}
 		if !exists {
-			return nil, 0, ErrNamespaceNotFound
+			return Result{}, ErrNamespaceNotFound
 		}
 	}
 	if query.Text == "" {
-		return []Hit{}, 0, nil
+		return emptyResult(query.Mode), nil
 	}
 	title, alias, body, entity := selectedFields(query.Fields)
 	pattern := "%" + escapeLike(query.Text) + "%"
@@ -195,11 +205,11 @@ func (a *PostgresAdapter) Search(ctx context.Context, query Query) ([]Hit, int, 
 
 	var total int
 	if err := a.pool.QueryRow(ctx, searchCountSQL, args...).Scan(&total); err != nil {
-		return nil, 0, fmt.Errorf("search: count results: %w", err)
+		return Result{}, fmt.Errorf("search: count results: %w", err)
 	}
 	rows, err := a.pool.Query(ctx, searchHitsSQL, append(args, query.Limit, query.Offset)...)
 	if err != nil {
-		return nil, 0, fmt.Errorf("search: query: %w", err)
+		return Result{}, fmt.Errorf("search: query: %w", err)
 	}
 	defer rows.Close()
 
@@ -207,8 +217,9 @@ func (a *PostgresAdapter) Search(ctx context.Context, query Query) ([]Hit, int, 
 	for rows.Next() {
 		var hit Hit
 		if err := rows.Scan(&hit.PageID, &hit.DisplayTitle, &hit.Namespace,
+			&hit.Language, &hit.EntityID, &hit.EntityType,
 			&hit.MatchedOn, &hit.Highlight, &hit.Score); err != nil {
-			return nil, 0, fmt.Errorf("search: scan hit: %w", err)
+			return Result{}, fmt.Errorf("search: scan hit: %w", err)
 		}
 		if !strings.Contains(hit.Highlight, "[[") {
 			hit.Highlight = markLiteral(hit.Highlight, query.Text)
@@ -216,9 +227,42 @@ func (a *PostgresAdapter) Search(ctx context.Context, query Query) ([]Hit, int, 
 		hits = append(hits, hit)
 	}
 	if err := rows.Err(); err != nil {
-		return nil, 0, fmt.Errorf("search: iterate hits: %w", err)
+		return Result{}, fmt.Errorf("search: iterate hits: %w", err)
 	}
-	return hits, total, nil
+	facets, err := a.searchFacets(ctx, args)
+	if err != nil {
+		return Result{}, err
+	}
+	return Result{Hits: hits, Total: total, Facets: facets, Mode: query.Mode}, nil
+}
+
+func (a *PostgresAdapter) searchFacets(ctx context.Context, args []any) (Facets, error) {
+	facets := emptyResult(ModeKeyword).Facets
+	rows, err := a.pool.Query(ctx, searchFacetsSQL, args...)
+	if err != nil {
+		return Facets{}, fmt.Errorf("search: aggregate facets: %w", err)
+	}
+	defer rows.Close()
+	for rows.Next() {
+		var key, value string
+		var count int
+		if err := rows.Scan(&key, &value, &count); err != nil {
+			return Facets{}, fmt.Errorf("search: scan facet: %w", err)
+		}
+		bucket := FacetValue{Value: value, Count: count}
+		switch key {
+		case "namespace":
+			facets.Namespaces = append(facets.Namespaces, bucket)
+		case "language":
+			facets.Languages = append(facets.Languages, bucket)
+		case "entity_type":
+			facets.EntityTypes = append(facets.EntityTypes, bucket)
+		}
+	}
+	if err := rows.Err(); err != nil {
+		return Facets{}, fmt.Errorf("search: iterate facets: %w", err)
+	}
+	return facets, nil
 }
 
 func escapeLike(value string) string {
@@ -277,7 +321,8 @@ const searchCountSQL = searchBaseSQL + `
 	SELECT count(*) FROM matched`
 
 const searchHitsSQL = searchBaseSQL + `
-	SELECT page_id, display_title, namespace_key,
+	SELECT page_id, display_title, namespace_key, language, entity_id,
+		COALESCE(entity_type, ''),
 		CASE match_rank
 			WHEN 0 THEN 'title'
 			WHEN 1 THEN 'title'
@@ -303,5 +348,23 @@ const searchHitsSQL = searchBaseSQL + `
 	FROM matched
 	ORDER BY match_rank, score DESC, display_title, page_id
 	LIMIT $12 OFFSET $13`
+
+const searchFacetsSQL = searchBaseSQL + `
+	SELECT facet_key, facet_value, bucket_count
+	FROM (
+		SELECT 'namespace' AS facet_key, namespace_key AS facet_value, count(*)::int AS bucket_count
+		FROM matched
+		GROUP BY namespace_key
+		UNION ALL
+		SELECT 'language', language, count(*)::int
+		FROM matched
+		GROUP BY language
+		UNION ALL
+		SELECT 'entity_type', entity_type, count(*)::int
+		FROM matched
+		WHERE entity_type IS NOT NULL AND entity_type <> ''
+		GROUP BY entity_type
+	) buckets
+	ORDER BY facet_key, bucket_count DESC, facet_value`
 
 var _ SearchAdapter = (*PostgresAdapter)(nil)

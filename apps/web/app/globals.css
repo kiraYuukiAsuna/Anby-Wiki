@@ -49,38 +49,38 @@
 }
 
 :root {
-  --background: oklch(1 0 0);
-  --foreground: oklch(0.145 0 0);
+  --background: oklch(0.985 0.006 255);
+  --foreground: oklch(0.205 0.025 255);
   --card: oklch(1 0 0);
-  --card-foreground: oklch(0.145 0 0);
+  --card-foreground: oklch(0.205 0.025 255);
   --popover: oklch(1 0 0);
-  --popover-foreground: oklch(0.145 0 0);
-  --primary: oklch(0.205 0 0);
+  --popover-foreground: oklch(0.205 0.025 255);
+  --primary: oklch(0.51 0.21 264);
   --primary-foreground: oklch(0.985 0 0);
-  --secondary: oklch(0.97 0 0);
-  --secondary-foreground: oklch(0.205 0 0);
-  --muted: oklch(0.97 0 0);
-  --muted-foreground: oklch(0.556 0 0);
-  --accent: oklch(0.97 0 0);
-  --accent-foreground: oklch(0.205 0 0);
+  --secondary: oklch(0.955 0.017 260);
+  --secondary-foreground: oklch(0.255 0.04 260);
+  --muted: oklch(0.95 0.012 255);
+  --muted-foreground: oklch(0.515 0.035 255);
+  --accent: oklch(0.95 0.025 260);
+  --accent-foreground: oklch(0.34 0.105 264);
   --destructive: oklch(0.577 0.245 27.325);
-  --border: oklch(0.922 0 0);
-  --input: oklch(0.922 0 0);
-  --ring: oklch(0.708 0 0);
+  --border: oklch(0.895 0.017 255);
+  --input: oklch(0.89 0.02 255);
+  --ring: oklch(0.61 0.17 264);
   --chart-1: oklch(0.87 0 0);
   --chart-2: oklch(0.556 0 0);
   --chart-3: oklch(0.439 0 0);
   --chart-4: oklch(0.371 0 0);
   --chart-5: oklch(0.269 0 0);
-  --radius: 0.625rem;
-  --sidebar: oklch(0.985 0 0);
-  --sidebar-foreground: oklch(0.145 0 0);
-  --sidebar-primary: oklch(0.205 0 0);
+  --radius: 0.75rem;
+  --sidebar: oklch(0.974 0.009 255);
+  --sidebar-foreground: oklch(0.25 0.03 255);
+  --sidebar-primary: oklch(0.51 0.21 264);
   --sidebar-primary-foreground: oklch(0.985 0 0);
-  --sidebar-accent: oklch(0.97 0 0);
-  --sidebar-accent-foreground: oklch(0.205 0 0);
-  --sidebar-border: oklch(0.922 0 0);
-  --sidebar-ring: oklch(0.708 0 0);
+  --sidebar-accent: oklch(0.94 0.02 260);
+  --sidebar-accent-foreground: oklch(0.31 0.09 264);
+  --sidebar-border: oklch(0.9 0.016 255);
+  --sidebar-ring: oklch(0.61 0.17 264);
 }
 
 .dark {
@@ -123,11 +123,26 @@
   }
   body {
     @apply bg-background text-foreground;
+    background-image:
+      radial-gradient(circle at 15% -10%, color-mix(in oklch, var(--primary) 7%, transparent), transparent 28rem),
+      linear-gradient(to bottom, color-mix(in oklch, var(--background) 98%, white), var(--background));
   }
   html {
     @apply font-sans;
     scroll-behavior: smooth;
+    scroll-padding-top: 5rem;
   }
+  ::selection {
+    background: color-mix(in oklch, var(--primary) 20%, transparent);
+  }
+}
+
+.wiki-grid {
+  background-image:
+    linear-gradient(to right, color-mix(in oklch, var(--foreground) 5%, transparent) 1px, transparent 1px),
+    linear-gradient(to bottom, color-mix(in oklch, var(--foreground) 5%, transparent) 1px, transparent 1px);
+  background-size: 34px 34px;
+  mask-image: linear-gradient(to bottom, black, transparent 86%);
 }
 /* ---- M2-T02 Block Editor Adapter 自定义块/行内样式 ---- */
 .ast-callout {
@@ -180,4 +195,310 @@
   padding: 0 0.25rem;
   font-family: var(--font-geist-mono), monospace;
   font-size: 0.875em;
+}
+
+/* Versioned server-rendered reading projection. The backend renderer is the
+   only producer of this HTML; selectors intentionally stay inside this trust
+   boundary so editor/history AST previews keep their own visual language. */
+.wiki-rendered {
+  display: flow-root;
+  font-size: 1rem;
+  line-height: 1.75;
+}
+
+.wiki-rendered p {
+  margin-block: 0.75rem;
+}
+
+.wiki-rendered h1,
+.wiki-rendered h2,
+.wiki-rendered h3,
+.wiki-rendered h4,
+.wiki-rendered h5,
+.wiki-rendered h6 {
+  scroll-margin-top: 5rem;
+  font-weight: 650;
+  line-height: 1.25;
+  letter-spacing: -0.025em;
+}
+
+.wiki-rendered h1 {
+  margin: 2rem 0 1rem;
+  font-size: 1.875rem;
+}
+
+.wiki-rendered h2 {
+  margin: 2rem 0 0.75rem;
+  border-bottom: 1px solid var(--border);
+  padding-bottom: 0.5rem;
+  font-size: 1.5rem;
+}
+
+.wiki-rendered h3 {
+  margin: 1.5rem 0 0.75rem;
+  font-size: 1.25rem;
+}
+
+.wiki-rendered h4,
+.wiki-rendered h5,
+.wiki-rendered h6 {
+  margin: 1.25rem 0 0.5rem;
+}
+
+.wiki-rendered ul,
+.wiki-rendered ol {
+  margin-block: 0.75rem;
+  padding-left: 1.6rem;
+}
+
+.wiki-rendered ul {
+  list-style: disc;
+}
+
+.wiki-rendered ol {
+  list-style: decimal;
+}
+
+.wiki-rendered li + li {
+  margin-top: 0.2rem;
+}
+
+.wiki-rendered a {
+  color: color-mix(in oklch, var(--primary) 90%, oklch(0.52 0.18 235));
+  text-decoration-thickness: 1px;
+  text-underline-offset: 0.2em;
+}
+
+.wiki-rendered a:hover {
+  text-decoration-line: underline;
+}
+
+.wiki-rendered a.unresolved {
+  cursor: not-allowed;
+  color: var(--muted-foreground);
+  text-decoration-line: underline;
+  text-decoration-style: dashed;
+  text-decoration-color: color-mix(in oklch, var(--destructive) 60%, transparent);
+}
+
+.wiki-rendered code {
+  border-radius: 0.3rem;
+  background: var(--muted);
+  padding: 0.1rem 0.35rem;
+  font-family: var(--font-geist-mono), monospace;
+  font-size: 0.875em;
+}
+
+.wiki-rendered pre {
+  margin-block: 1rem;
+  overflow-x: auto;
+  border: 1px solid var(--border);
+  border-radius: 0.75rem;
+  background: color-mix(in oklch, var(--muted) 70%, var(--background));
+  padding: 1rem;
+  line-height: 1.55;
+}
+
+.wiki-rendered pre code {
+  background: transparent;
+  padding: 0;
+}
+
+.wiki-rendered blockquote {
+  margin-block: 1rem;
+  border-left: 3px solid color-mix(in oklch, var(--primary) 55%, var(--border));
+  padding: 0.25rem 0 0.25rem 1rem;
+  color: var(--muted-foreground);
+}
+
+.wiki-rendered table {
+  margin-block: 1rem;
+  width: 100%;
+  border-collapse: collapse;
+  overflow: hidden;
+  border-radius: 0.75rem;
+  font-size: 0.875rem;
+}
+
+.wiki-rendered td {
+  border: 1px solid var(--border);
+  padding: 0.55rem 0.75rem;
+  vertical-align: top;
+}
+
+.wiki-rendered hr {
+  margin-block: 1.5rem;
+  border-color: var(--border);
+}
+
+.wiki-rendered .callout {
+  margin-block: 1rem;
+  border: 1px solid color-mix(in oklch, var(--primary) 22%, var(--border));
+  border-radius: 0.85rem;
+  background: color-mix(in oklch, var(--primary) 6%, var(--card));
+  padding: 1rem;
+}
+
+.wiki-rendered .callout-title {
+  margin-bottom: 0.35rem;
+  font-size: 0.7rem;
+  font-weight: 700;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: var(--muted-foreground);
+}
+
+.wiki-rendered .claim-reference {
+  border-radius: 0.3rem;
+  background: color-mix(in oklch, oklch(0.72 0.15 155) 14%, transparent);
+  padding: 0.05rem 0.28rem;
+  color: oklch(0.43 0.13 155);
+  font-weight: 550;
+}
+
+.dark .wiki-rendered .claim-reference {
+  color: oklch(0.8 0.12 155);
+}
+
+.wiki-rendered .claim-reference[data-verification-status="disputed"] {
+  background: color-mix(in oklch, var(--destructive) 12%, transparent);
+  color: var(--destructive);
+  text-decoration-style: wavy;
+}
+
+.wiki-rendered .mention {
+  display: inline-flex;
+  border-radius: 999px;
+  background: color-mix(in oklch, var(--primary) 11%, transparent);
+  padding-inline: 0.4rem;
+  color: var(--primary);
+  font-size: 0.9em;
+  font-weight: 600;
+}
+
+.wiki-rendered .math {
+  border-radius: 0.3rem;
+  background: color-mix(in oklch, oklch(0.8 0.12 225) 14%, transparent);
+  padding: 0.08rem 0.35rem;
+  font-family: serif;
+}
+
+.wiki-rendered .wiki-image,
+.wiki-rendered .wiki-video {
+  margin-block: 1.5rem;
+  overflow: hidden;
+  border: 1px solid var(--border);
+  border-radius: 1rem;
+  background: var(--card);
+  box-shadow: 0 12px 30px color-mix(in oklch, var(--foreground) 7%, transparent);
+}
+
+.wiki-rendered .wiki-image img,
+.wiki-rendered .wiki-video video {
+  display: block;
+  max-height: 42rem;
+  width: 100%;
+  object-fit: contain;
+  background: color-mix(in oklch, var(--muted) 45%, transparent);
+}
+
+.wiki-rendered figcaption {
+  border-top: 1px solid var(--border);
+  padding: 0.65rem 1rem;
+  text-align: center;
+  font-size: 0.75rem;
+  color: var(--muted-foreground);
+}
+
+.wiki-rendered .dataset-view,
+.wiki-rendered .external-embed,
+.wiki-rendered .component-unavailable {
+  margin-block: 1rem;
+  border: 1px solid var(--border);
+  border-radius: 0.85rem;
+  background: color-mix(in oklch, var(--card) 90%, var(--primary));
+  padding: 1rem;
+}
+
+.wiki-rendered .component-unavailable::before {
+  content: "动态知识组件正在重建";
+  color: var(--muted-foreground);
+  font-size: 0.875rem;
+}
+
+.wiki-rendered .entity-infobox {
+  float: right;
+  margin: 0.2rem 0 1.25rem 1.5rem;
+  width: min(19rem, 44%);
+  overflow: hidden;
+  border: 1px solid color-mix(in oklch, var(--primary) 18%, var(--border));
+  border-radius: 1rem;
+  background:
+    linear-gradient(
+      145deg,
+      color-mix(in oklch, var(--primary) 8%, var(--card)),
+      var(--card) 45%
+    );
+  box-shadow: 0 18px 45px color-mix(in oklch, var(--foreground) 8%, transparent);
+}
+
+.wiki-rendered .entity-infobox h2 {
+  margin: 0;
+  border: 0;
+  background: color-mix(in oklch, var(--primary) 9%, transparent);
+  padding: 1rem 1.1rem;
+  font-size: 1rem;
+}
+
+.wiki-rendered .entity-infobox dl {
+  padding: 0.35rem 1.1rem 0.85rem;
+}
+
+.wiki-rendered .entity-infobox dl > div {
+  display: grid;
+  grid-template-columns: minmax(5.5rem, 0.8fr) minmax(0, 1.2fr);
+  gap: 0.75rem;
+  border-bottom: 1px solid var(--border);
+  padding-block: 0.55rem;
+  font-size: 0.78rem;
+  line-height: 1.45;
+}
+
+.wiki-rendered .entity-infobox dl > div:last-child {
+  border-bottom: 0;
+}
+
+.wiki-rendered .entity-infobox dt {
+  color: var(--muted-foreground);
+  font-weight: 550;
+}
+
+.wiki-rendered [data-component-renderer="key-value"] {
+  margin-block: 1rem;
+  display: grid;
+  grid-template-columns: minmax(8rem, 0.6fr) minmax(0, 1.4fr);
+  overflow: hidden;
+  border: 1px solid var(--border);
+  border-radius: 0.85rem;
+  background: var(--card);
+}
+
+.wiki-rendered [data-component-renderer="key-value"] dt,
+.wiki-rendered [data-component-renderer="key-value"] dd {
+  border-bottom: 1px solid var(--border);
+  padding: 0.65rem 0.85rem;
+  font-size: 0.82rem;
+}
+
+.wiki-rendered [data-component-renderer="key-value"] dt {
+  background: var(--muted);
+  font-weight: 600;
+}
+
+@media (max-width: 720px) {
+  .wiki-rendered .entity-infobox {
+    float: none;
+    margin: 1rem 0;
+    width: 100%;
+  }
 }

@@ -19,6 +19,10 @@ var (
 	ErrEntityNotFound = errors.New("knowledge: 实体不存在")
 	// ErrEntityTypeNotFound 实体类型未种子（type_key 未命中 entity_type）。
 	ErrEntityTypeNotFound = errors.New("knowledge: 实体类型不存在")
+	// ErrInvalidEntityCursor 实体目录分页游标无法解析。
+	ErrInvalidEntityCursor = errors.New("knowledge: 实体目录 cursor 非法")
+	// ErrInvalidEntityFilter 实体目录状态或类型筛选非法。
+	ErrInvalidEntityFilter = errors.New("knowledge: 实体目录筛选非法")
 	// ErrDuplicateEntityKey 同 wiki 内 canonical_key 已被其他实体占用。
 	ErrDuplicateEntityKey = errors.New("knowledge: canonical_key 冲突")
 	// ErrInvalidLabel 标签为空、超过 255 字符或含控制字符（规则同 page 标题）。
@@ -37,6 +41,9 @@ var (
 	ErrAliasNotFound = errors.New("knowledge: 别名不存在")
 	// ErrEntityMerged 实体已合并，拒绝写入（标签/别名/绑定）；合并见 M9-T06。
 	ErrEntityMerged = errors.New("knowledge: 实体已合并")
+	// ErrEntityLifecycleStale 实体创建后已有标签、别名、Claim、绑定、集合或合并变化，
+	// 不能把它作为未被触碰的新建实体进行补偿删除。
+	ErrEntityLifecycleStale = errors.New("knowledge: 实体生命周期状态已变化")
 	// ErrInvalidEntityMerge 合并源/目标不满足同站点、同类型、active 等约束。
 	ErrInvalidEntityMerge = errors.New("knowledge: Entity 合并非法")
 	// ErrEntityMergeNotFound 合并批次不存在。
@@ -53,6 +60,8 @@ var (
 	ErrBindingExists = errors.New("knowledge: 绑定已存在")
 	// ErrBindingNotFound 目标绑定不存在。
 	ErrBindingNotFound = errors.New("knowledge: 绑定不存在")
+	// ErrBindingWikiMismatch Page 与 Entity 不属于同一个 Wiki。
+	ErrBindingWikiMismatch = errors.New("knowledge: 页面与实体不属于同一 Wiki")
 )
 
 // 实体状态（entity.status）。
@@ -71,6 +80,25 @@ const (
 	BindingRolePrimary = "primary"
 	// BindingRoleMentioned 页面提及的实体。
 	BindingRoleMentioned = "mentioned"
+)
+
+// Knowledge 权威变更的审计/Outbox 事件。Entity 元数据与页面绑定会使
+// RenderedPage、RenderedSection 与搜索文档失效，Worker 可据稳定 ID 精准重建。
+const (
+	AggregateTypeEntity = "entity"
+	AggregateTypePage   = "page"
+
+	OutboxEventEntityMetadataChanged    = "entity.metadata_changed"
+	OutboxEventPageEntityBindingChanged = "page.entity_binding_changed"
+
+	AuditEventEntityLabelAdded               = "entity.label_added"
+	AuditEventEntityLabelRemoved             = "entity.label_removed"
+	AuditEventEntityPrimaryLabelChanged      = "entity.primary_label_changed"
+	AuditEventEntityAliasAdded               = "entity.alias_added"
+	AuditEventEntityAliasRemoved             = "entity.alias_removed"
+	AuditEventPageEntityBindingAdded         = "page.entity_binding_added"
+	AuditEventPageEntityBindingRemoved       = "page.entity_binding_removed"
+	AuditEventClaimVerificationStatusChanged = "claim.verification_status_changed"
 )
 
 // 别名类型（entity_alias.alias_type，设计 §6.2）。
@@ -114,6 +142,32 @@ type Entity struct {
 	CreatedBy          uuid.UUID
 	CreatedAt          time.Time
 	UpdatedAt          time.Time
+}
+
+// EntityCatalogItem 是实体目录的治理友好摘要。计数均由权威表实时读取，
+// 不作为可写状态，也不替代后续可重建的搜索投影。
+type EntityCatalogItem struct {
+	ID                 uuid.UUID
+	WikiID             uuid.UUID
+	CanonicalKey       string
+	Status             string
+	MergedIntoEntityID *uuid.UUID
+	EntityType         EntityType
+	DisplayLabel       string
+	DisplayLanguage    string
+	Description        string
+	LabelCount         int
+	AliasCount         int
+	ClaimCount         int
+	PageCount          int
+	CreatedAt          time.Time
+	UpdatedAt          time.Time
+}
+
+// EntityCatalogPage 是实体目录的稳定游标分页结果。
+type EntityCatalogPage struct {
+	Items      []EntityCatalogItem
+	NextCursor *string
 }
 
 // EntityLabel 实体多语言标签（对应 entity_label 表，PK = entity+language+label）。

@@ -21,7 +21,8 @@ M4-T07 使用投影，保持权威详情与可重建关系查询分离。
 
 ## 搜索语义（`SearchEntities`）
 
-M7 全文检索落地前的权威数据直连实现（不引入 pg_trgm）：
+Entity 选择器保留权威数据直连查询（不引入 pg_trgm），用于精确选择稳定身份；
+页面全文检索由可重建 `search_document` 投影及 PostgreSQL/Meilisearch 后端承担：
 
 1. 查询串先按标题同规则规范化；
 2. **exact 阶段**：`canonical_key` 相等 → 标签规范化相等（`lower(label)`，标签落库已 NFC + 折叠空白，严格可比）→ `normalized_alias` 相等；
@@ -39,15 +40,18 @@ M7 全文检索落地前的权威数据直连实现（不引入 pg_trgm）：
 - **merged 实体**：全部写操作（标签/别名/绑定）拒绝 `ErrEntityMerged`；搜索默认排除。
   合并功能本身（状态流转、引用修复、EntityMerge 映射）属 M9-T06。
 
-## Actor 准入
+## Actor、审计与页面绑定
 
-`CreateEntity` 复用 page 包的 Actor 校验（`page.Repository.CheckWriteActor`，规则单点维护）：
-human/bot/system 可写，ai 拒绝（`page.ErrActorNotAllowed`），不存在/停用报 `page.ErrInvalidActor`。
+`CreateEntity`、标签、别名与页面绑定写入都复用 page 包的 Actor 校验：
+human/bot/system 可写，ai 拒绝（`page.ErrActorNotAllowed`），不存在/停用报
+`page.ErrInvalidActor`。元数据变更在同一事务写不可变 AuditEvent 与 Outbox。
 
-## 已知边界（后续 Task）
+`BindPage`/`UnbindPage` 同时维护 `page.primary_entity_id` 与
+`page_entity_binding(role=primary)`；延迟约束触发器在提交点验证两者一致，
+且服务层拒绝跨 Wiki Page/Entity 绑定。
 
-- `page.primary_entity_id` 指针同步不在本 Task：BindPage 只写 `page_entity_binding`。
-- 标签/别名/绑定写操作暂不校验 Actor（领域服务签名按 Task Packet；API 层落地时统一鉴权）。
+已知实现差异：
+
 - PG `lower()` 与 Go `strings.ToLower` 在极少数 Unicode 大小写规则上有差异，exact 标签匹配以 PG 为准。
 
 ---
@@ -74,11 +78,11 @@ human/bot/system 可写，ai 拒绝（`page.ErrActorNotAllowed`），不存在/�
 | `date` | JSON string（RFC3339 date，`YYYY-MM-DD`） | `time.Parse("2006-01-02")` |
 | `entity` | `{"entity_id": "<uuid>"}`，冗余 `target_entity_id` 列 | 目标实体存在且 active；类型匹配 `target_type_id`/`schema_json.target_type` |
 | `coordinate` | `{"lat": <number>, "lon": <number>}` | lat∈[-90,90]，lon∈[-180,180]，拒绝 NaN/Inf |
-| `composite` | 自由 JSON object | 必须是 object；`schema_json.value` 非空时按子集 Schema 校验（`required` 必填键 + `properties.<key>.type` 基本类型） |
+| `composite` | 自由 JSON object | 必须是 object；`schema_json.value` 非空时按完整 JSON Schema 2020-12 校验 |
 
 入参用 `Value` 包装（`StringValue`/`NumberValue`/`DateValue`/`EntityValue`/`CoordinateValue`/`CompositeValue` 构造），
-按 property 的 value_type 取对应字段。`schema_json` 的更完整 Schema 校验是简版实现，
-留 TODO 由 M5 完善（见 `claim_types.go` `propertySchema` 注释）。
+按 property 的 value_type 取对应字段。`schema_json.value` 与
+`schema_json.qualifiers` 均由 JSON Schema 2020-12 引擎编译、校验并启用格式断言。
 
 ## 业务状态机（claim.status）
 
@@ -91,8 +95,8 @@ proposed ────────────► published  ◄─────�
    └── RejectClaim ──► rejected（终态）
 ```
 
-- 初始状态：`origin_type=human` → published；`ai`/`import` → proposed
-  （M5 治理落地前的人工预放行，治理后经 Proposal 审核收紧）。
+- 初始状态：`origin_type=human` → published；`ai`/`import` → proposed。
+  HTTP 写入经 Proposal 审核与 Apply 事务；AI/import Claim 由治理 Apply 在批准后发布。
 - rejected/deprecated/superseded 为终态；公开流转方法从不以 superseded 为目标。
 - 单值不变量：`is_multivalued=false` 时同 subject+property 至多一个 published——
   CreateClaim 创建侧拒绝（提示先 Supersede），PublishClaim 发布侧兜底（防御性），
@@ -127,7 +131,8 @@ proposed ────────────► published  ◄─────�
 ## Actor 准入与审核边界
 
 - `CreateClaim`/`SupersedeClaim` 复用 `page.CheckWriteActor`（human/bot/system 可写，
-  ai actor 拒绝）——ai/import 来源的 Claim 由 bot/system 管道 Actor 录入，
-  与 page 模块 M5 前立场一致；INV-05/INV-08 的 AI 直改限制在 M5-T06/T10 落地。
-- `PublishClaim`/`RejectClaim`/`DeprecateClaim` 暂不校验操作者（M5 审核治理统一加）。
-- `UpdateVerificationStatus` 校验 Actor 存在且 active（查不到保守拒绝为 `page.ErrInvalidActor`）。
+  ai actor 拒绝）；AI/import 来源由 bot/system 管道 Actor 录入并生成 Proposal。
+- HTTP 不直接暴露业务状态流转；发布、拒绝、废弃与 Supersede 由 Governance
+  Review/Apply 及 ChangeBatch 审计边界调用。
+- `UpdateVerificationStatus` 在同一事务校验 Actor 类型矩阵，写 AuditEvent，
+  并发出 `claim.changed` 使渲染、检索与事实一致性投影失效。

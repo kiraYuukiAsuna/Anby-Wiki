@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"time"
 
 	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5"
@@ -50,6 +51,55 @@ func (r *Repository) getAppliedMergeBySource(
 	return &merge, nil
 }
 
+func (r *Repository) getLatestMergeBySource(
+	ctx context.Context,
+	tx pgx.Tx,
+	sourceID uuid.UUID,
+) (*EntityMerge, error) {
+	var merge EntityMerge
+	err := r.q(tx).QueryRow(ctx, `SELECT
+		id,source_entity_id,target_entity_id,actor_id,status,
+		reason,created_at,rolled_back_at,rolled_back_by
+		FROM entity_merge WHERE source_entity_id=$1
+		ORDER BY created_at DESC,id DESC LIMIT 1`, sourceID).
+		Scan(
+			&merge.ID, &merge.SourceEntityID, &merge.TargetEntityID,
+			&merge.ActorID, &merge.Status, &merge.Reason,
+			&merge.CreatedAt, &merge.RolledBackAt, &merge.RolledBackBy,
+		)
+	if errors.Is(err, pgx.ErrNoRows) {
+		return nil, nil
+	}
+	if err != nil {
+		return nil, fmt.Errorf("knowledge: query latest Entity merge: %w", err)
+	}
+	return &merge, nil
+}
+
+func (r *Repository) getEntityMergeByID(
+	ctx context.Context,
+	tx pgx.Tx,
+	mergeID uuid.UUID,
+) (*EntityMerge, error) {
+	var merge EntityMerge
+	err := r.q(tx).QueryRow(ctx, `SELECT
+		id,source_entity_id,target_entity_id,actor_id,status,
+		reason,created_at,rolled_back_at,rolled_back_by
+		FROM entity_merge WHERE id=$1`, mergeID).
+		Scan(
+			&merge.ID, &merge.SourceEntityID, &merge.TargetEntityID,
+			&merge.ActorID, &merge.Status, &merge.Reason,
+			&merge.CreatedAt, &merge.RolledBackAt, &merge.RolledBackBy,
+		)
+	if errors.Is(err, pgx.ErrNoRows) {
+		return nil, fmt.Errorf("%w: id=%s", ErrEntityMergeNotFound, mergeID)
+	}
+	if err != nil {
+		return nil, fmt.Errorf("knowledge: query Entity merge: %w", err)
+	}
+	return &merge, nil
+}
+
 func (r *Repository) getEntityMergeForUpdate(
 	ctx context.Context,
 	tx pgx.Tx,
@@ -90,10 +140,12 @@ func (r *Repository) restoreMergedEntity(
 	ctx context.Context,
 	tx pgx.Tx,
 	sourceID, targetID uuid.UUID,
+	restoreUpdatedAt *time.Time,
 ) error {
 	tag, err := tx.Exec(ctx, `UPDATE entity SET status='active',merged_into_entity_id=NULL,
-		updated_at=now() WHERE id=$1 AND status='merged' AND merged_into_entity_id=$2`,
-		sourceID, targetID)
+		updated_at=COALESCE($3,now())
+		WHERE id=$1 AND status='merged' AND merged_into_entity_id=$2`,
+		sourceID, targetID, restoreUpdatedAt)
 	if err != nil {
 		return fmt.Errorf("knowledge: restore merged Entity: %w", err)
 	}
@@ -101,6 +153,29 @@ func (r *Repository) restoreMergedEntity(
 		return ErrEntityMergeStale
 	}
 	return nil
+}
+
+func (r *Repository) getMergeSourceUpdatedAtBefore(
+	ctx context.Context,
+	tx pgx.Tx,
+	mergeID uuid.UUID,
+) (*time.Time, error) {
+	var value *time.Time
+	err := r.q(tx).QueryRow(ctx, `SELECT
+		NULLIF(payload_json->>'source_updated_at_before','')::timestamptz
+		FROM audit_event
+		WHERE aggregate_type='entity_merge' AND aggregate_id=$1
+		  AND event_type='entity.merged'
+		ORDER BY created_at,id LIMIT 1`, mergeID).Scan(&value)
+	if errors.Is(err, pgx.ErrNoRows) {
+		return nil, nil
+	}
+	if err != nil {
+		return nil, fmt.Errorf(
+			"knowledge: query Entity merge prior timestamp: %w", err,
+		)
+	}
+	return value, nil
 }
 
 func (r *Repository) insertMergeLabelMap(
@@ -280,12 +355,13 @@ func (r *Repository) insertMergeAudit(
 	id, actorID uuid.UUID,
 	eventType string,
 	mergeID uuid.UUID,
+	changeBatchID *uuid.UUID,
 	payload []byte,
 ) error {
 	_, err := tx.Exec(ctx, `INSERT INTO audit_event
-		(id,actor_id,event_type,aggregate_type,aggregate_id,payload_json)
-		VALUES ($1,$2,$3,'entity_merge',$4,$5)`,
-		id, actorID, eventType, mergeID, payload)
+		(id,actor_id,event_type,aggregate_type,aggregate_id,change_batch_id,payload_json)
+		VALUES ($1,$2,$3,'entity_merge',$4,$5,$6)`,
+		id, actorID, eventType, mergeID, changeBatchID, payload)
 	return err
 }
 
@@ -295,15 +371,33 @@ func (r *Repository) insertMergeEvent(
 	auditID, outboxID, actorID uuid.UUID,
 	eventType string,
 	mergeID uuid.UUID,
+	changeBatchID *uuid.UUID,
 	payload []byte,
 ) error {
-	if err := r.insertMergeAudit(ctx, tx, auditID, actorID, eventType, mergeID, payload); err != nil {
+	if err := r.insertMergeAudit(
+		ctx, tx, auditID, actorID, eventType, mergeID, changeBatchID, payload,
+	); err != nil {
 		return err
 	}
 	_, err := tx.Exec(ctx, `INSERT INTO outbox_event
 		(id,aggregate_type,aggregate_id,event_type,payload_json)
 		VALUES ($1,'entity_merge',$2,$3,$4)`,
 		outboxID, mergeID, eventType, payload)
+	return err
+}
+
+func (r *Repository) insertMergeOutbox(
+	ctx context.Context,
+	tx pgx.Tx,
+	id uuid.UUID,
+	eventType string,
+	mergeID uuid.UUID,
+	payload []byte,
+) error {
+	_, err := tx.Exec(ctx, `INSERT INTO outbox_event
+		(id,aggregate_type,aggregate_id,event_type,payload_json)
+		VALUES ($1,'entity_merge',$2,$3,$4)`,
+		id, mergeID, eventType, payload)
 	return err
 }
 

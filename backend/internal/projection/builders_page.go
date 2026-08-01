@@ -58,7 +58,9 @@ func (b *PageLinksBuilder) Rebuild(ctx context.Context, tx pgx.Tx, pageID, revis
 	var rows []linkRow
 	var rowErr error
 	werr := ast.Walk(doc, func(n ast.WalkNode) bool {
-		if n.Inline == nil || n.Inline.Type != ast.InlinePageReference {
+		if n.Inline == nil ||
+			(n.Inline.Type != ast.InlinePageReference &&
+				n.Inline.Type != ast.InlinePageAnchorReference) {
 			return true
 		}
 		row, err := pageReferenceRow(n.Parent, n.Inline, n.Index)
@@ -322,9 +324,13 @@ func headingPlainText(blk *ast.Block) (string, error) {
 			} else {
 				b.WriteString(n.DisplayText)
 			}
+		case ast.InlinePageAnchorReference, ast.InlineMention:
+			b.WriteString(n.DisplayText)
 		case ast.InlineExternalLink, ast.InlineEntityReference, ast.InlineClaimReference,
 			ast.InlineCitationReference:
 			b.WriteString(n.DisplayText)
+		case ast.InlineMath:
+			b.WriteString(n.Expression)
 		}
 	}
 	return b.String(), nil

@@ -34,7 +34,22 @@ x-app-environment: &app-environment
   S3_BUCKET: ${S3_BUCKET:?set S3_BUCKET}
   S3_ACCESS_KEY: "${S3_ACCESS_KEY:?set S3_ACCESS_KEY}"
   S3_SECRET_KEY: "${S3_SECRET_KEY:?set S3_SECRET_KEY}"
-  SEARCH_BACKEND: ${SEARCH_BACKEND:-postgres}
+  REVISION_ARCHIVE_ENABLED: ${REVISION_ARCHIVE_ENABLED:-true}
+  REVISION_ARCHIVE_RETENTION: ${REVISION_ARCHIVE_RETENTION:-4320h}
+  REVISION_ARCHIVE_INTERVAL: ${REVISION_ARCHIVE_INTERVAL:-6h}
+  REVISION_ARCHIVE_BATCH_SIZE: ${REVISION_ARCHIVE_BATCH_SIZE:-50}
+  REVISION_ARCHIVE_MAX_BYTES: ${REVISION_ARCHIVE_MAX_BYTES:-67108864}
+  SEARCH_BACKEND: ${SEARCH_BACKEND:-meilisearch}
+  MEILI_URL: ${MEILI_URL:-http://meilisearch:7700}
+  MEILI_API_KEY: "${MEILI_MASTER_KEY:?set MEILI_MASTER_KEY}"
+  MEILI_INDEX: ${MEILI_INDEX:-anby_pages}
+  MEILI_TIMEOUT: ${MEILI_TIMEOUT:-15s}
+  MEILI_TASK_TIMEOUT: ${MEILI_TASK_TIMEOUT:-10m}
+  SEARCH_SEMANTIC_ENABLED: ${SEARCH_SEMANTIC_ENABLED:-true}
+  MEILI_EMBEDDER_NAME: ${MEILI_EMBEDDER_NAME:-page-content}
+  MEILI_EMBEDDER_SOURCE: ${MEILI_EMBEDDER_SOURCE:-huggingFace}
+  MEILI_EMBEDDER_MODEL: ${MEILI_EMBEDDER_MODEL:-sentence-transformers/paraphrase-multilingual-MiniLM-L12-v2}
+  MEILI_EMBEDDER_API_KEY: "${MEILI_EMBEDDER_API_KEY:-}"
   AUTH_REGISTRATION_ENABLED: ${AUTH_REGISTRATION_ENABLED:-false}
   AUTH_DEV_HEADER_ENABLED: ${AUTH_DEV_HEADER_ENABLED:-false}
   SESSION_COOKIE_NAME: ${SESSION_COOKIE_NAME:-anby_session}
@@ -74,12 +89,14 @@ services:
     volumes:
       - pgdata:/pgdata
       - miniodata:/miniodata
+      - meilidata:/meilidata
     entrypoint: ["/bin/sh", "-c"]
     command:
       - |
         set -e
         chown 70:70 /pgdata
         chown 1000:1000 /miniodata
+        chown 1000:1000 /meilidata
     restart: "no"
 
   postgres:
@@ -171,6 +188,28 @@ services:
       - app
     restart: "no"
 
+  meilisearch:
+    <<: *runtime-security
+    image: getmeili/meilisearch:v1.45.1
+    user: "1000:1000"
+    environment:
+      MEILI_ENV: production
+      MEILI_MASTER_KEY: "${MEILI_MASTER_KEY:?set MEILI_MASTER_KEY}"
+      MEILI_DB_PATH: /meili_data/data.ms
+      MEILI_NO_ANALYTICS: "true"
+      MEILI_LOG_LEVEL: WARN
+      HF_HOME: /meili_data/huggingface
+    volumes:
+      - meilidata:/meili_data
+    tmpfs:
+      - /tmp:size=128m,mode=1777
+    healthcheck:
+      test: ["CMD", "curl", "--fail", "--silent", "http://127.0.0.1:7700/health"]
+      interval: 10s
+      timeout: 5s
+      retries: 18
+      start_period: 30s
+
   # ---- 应用层 ----
 
   api:
@@ -195,6 +234,8 @@ services:
       redis:
         condition: service_healthy
       minio:
+        condition: service_healthy
+      meilisearch:
         condition: service_healthy
     tmpfs:
       - /tmp:size=64m,mode=1777
@@ -232,6 +273,8 @@ services:
         condition: service_healthy
       minio:
         condition: service_healthy
+      meilisearch:
+        condition: service_healthy
     tmpfs:
       - /tmp:size=64m,mode=1777
     healthcheck:
@@ -253,6 +296,7 @@ services:
         VERSION: ${RELEASE_ID}
         VCS_REF: ${VCS_REF:-local}
         BUILD_DATE: ${BUILD_DATE:-unknown}
+        API_BASE_URL: http://api:${API_PORT:-8080}
     user: "1000:1000"
     environment:
       API_BASE_URL: http://api:${API_PORT:-8080}
@@ -322,3 +366,4 @@ networks:
 volumes:
   pgdata:
   miniodata:
+  meilidata:

@@ -19,6 +19,11 @@ import (
 
 var componentKeyPattern = regexp.MustCompile(`^[a-z][a-z0-9._-]{0,63}$`)
 
+const (
+	DefaultPageSize = 24
+	MaxPageSize     = 100
+)
+
 type Service struct {
 	repo     *Repository
 	actors   *page.Repository
@@ -60,6 +65,28 @@ func (s *Service) Create(ctx context.Context, params CreateParams) (*Component, 
 		return s.repo.Insert(ctx, tx, value)
 	})
 	return value, err
+}
+
+func (s *Service) Get(ctx context.Context, id uuid.UUID) (*Component, error) {
+	return s.repo.Get(ctx, nil, id)
+}
+
+func (s *Service) List(
+	ctx context.Context, cursor string, limit int,
+) (*ComponentPage, error) {
+	if limit <= 0 {
+		limit = DefaultPageSize
+	}
+	if limit > MaxPageSize {
+		limit = MaxPageSize
+	}
+	return s.repo.List(ctx, cursor, limit)
+}
+
+func (s *Service) ListVersions(
+	ctx context.Context, componentID uuid.UUID,
+) (*VersionList, error) {
+	return s.repo.ListVersions(ctx, componentID)
 }
 
 func (s *Service) CreateVersion(
@@ -198,18 +225,47 @@ func (s *Service) ValidateProps(
 	if value.Status != StatusPublished && value.Status != StatusDeprecated {
 		return nil, ErrVersionFrozen
 	}
-	schema, err := compilePropsSchema(value.PropsSchema)
-	if err != nil {
+	if err := validatePropsInstance(value.PropsSchema, props); err != nil {
 		return nil, err
+	}
+	return value, nil
+}
+
+func validatePropsInstance(schemaJSON, props json.RawMessage) error {
+	schema, err := compilePropsSchema(schemaJSON)
+	if err != nil {
+		return err
 	}
 	instance, err := jsonschema.UnmarshalJSON(bytes.NewReader(props))
 	if err != nil {
-		return nil, fmt.Errorf("%w: invalid JSON", ErrInvalidProps)
+		return fmt.Errorf("%w: invalid JSON", ErrInvalidProps)
 	}
 	if err := schema.Validate(instance); err != nil {
-		return nil, fmt.Errorf("%w: %v", ErrInvalidProps, err)
+		return fmt.Errorf("%w: %v", ErrInvalidProps, err)
 	}
-	return value, nil
+	return nil
+}
+
+// Preview validates a draft or frozen version without changing its lifecycle.
+// Renderer refs still resolve only through the trusted in-process registry.
+func (s *Service) Preview(
+	ctx context.Context,
+	componentID uuid.UUID,
+	version int,
+	entityID *uuid.UUID,
+	props json.RawMessage,
+) (string, error) {
+	value, err := s.repo.GetVersion(ctx, nil, componentID, version)
+	if err != nil {
+		return "", err
+	}
+	if err := validatePropsInstance(value.PropsSchema, props); err != nil {
+		return "", err
+	}
+	if entityID != nil {
+		return s.registry.RenderEntity(ctx, value.RendererRef, *entityID, props)
+	}
+	return s.registry.Render(ctx, value.RendererRef, props)
 }
 
 func (s *Service) Render(

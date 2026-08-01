@@ -9,6 +9,8 @@ Name | Type
 ------------ | -------------
 `items` | [Array&lt;PageSearchHit&gt;](PageSearchHit.md)
 `total` | number
+`mode` | string
+`facets` | [SearchFacets](SearchFacets.md)
 
 ## Example
 
@@ -19,6 +21,8 @@ import type { PageSearchResults } from ''
 const example = {
   "items": null,
   "total": null,
+  "mode": null,
+  "facets": null,
 } satisfies PageSearchResults
 
 console.log(example)

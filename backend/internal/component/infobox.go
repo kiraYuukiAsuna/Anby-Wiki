@@ -97,14 +97,31 @@ func resolveEntityLabel(
 ) (string, error) {
 	var label string
 	err := q.QueryRow(ctx, `
+		WITH RECURSIVE entity_chain AS (
+			SELECT e.id, e.canonical_key, e.status, e.merged_into_entity_id,
+			       0 AS depth, ARRAY[e.id] AS path
+			FROM entity e
+			WHERE e.id = $1
+			UNION ALL
+			SELECT target.id, target.canonical_key, target.status,
+			       target.merged_into_entity_id, chain.depth + 1,
+			       chain.path || target.id
+			FROM entity_chain chain
+			JOIN entity target ON target.id = chain.merged_into_entity_id
+			WHERE chain.status = 'merged'
+			  AND chain.depth < 63
+			  AND NOT target.id = ANY(chain.path)
+		)
 		SELECT COALESCE(
 			(SELECT el.label FROM entity_label el
 			 WHERE el.entity_id = e.id AND el.is_primary
 			   AND ($2 = '' OR el.language = $2)
 			 ORDER BY (el.language = $2) DESC, el.language, el.label LIMIT 1),
 			e.canonical_key)
-		FROM entity e
-		WHERE e.id = $1 AND e.status <> 'deleted'`, entityID, language).Scan(&label)
+		FROM entity_chain e
+		WHERE e.status <> 'deleted'
+		ORDER BY (e.status = 'active') DESC, e.depth DESC
+		LIMIT 1`, entityID, language).Scan(&label)
 	if err != nil {
 		return "", fmt.Errorf("component: resolve entity %s label: %w", entityID, err)
 	}
@@ -115,18 +132,61 @@ func resolveInfoboxClaims(
 	ctx context.Context, q db.Querier, entityID uuid.UUID, config infoboxConfig,
 ) ([]infoboxClaim, error) {
 	rows, err := q.Query(ctx, `
+		WITH RECURSIVE entity_chain AS (
+			SELECT e.id, e.status, e.merged_into_entity_id,
+			       0 AS depth, ARRAY[e.id] AS path
+			FROM entity e
+			WHERE e.id = $1
+			UNION ALL
+			SELECT target.id, target.status, target.merged_into_entity_id,
+			       chain.depth + 1, chain.path || target.id
+			FROM entity_chain chain
+			JOIN entity target ON target.id = chain.merged_into_entity_id
+			WHERE chain.status = 'merged'
+			  AND chain.depth < 63
+			  AND NOT target.id = ANY(chain.path)
+		),
+		resolved_entity AS (
+			SELECT id
+			FROM entity_chain
+			WHERE status <> 'deleted'
+			ORDER BY (status = 'active') DESC, depth DESC
+			LIMIT 1
+		)
 		SELECT c.id, p.name, c.value_type, c.value_json, c.target_entity_id,
 		       c.verification_status,
 		       COALESCE(
 		         (SELECT el.label FROM entity_label el
-		          WHERE el.entity_id = c.target_entity_id AND el.is_primary
+		          WHERE el.entity_id = target.id AND el.is_primary
 		            AND ($3 = '' OR el.language = $3)
 		          ORDER BY (el.language = $3) DESC, el.language, el.label LIMIT 1),
 		         target.canonical_key)
 		FROM claim c
 		JOIN property p ON p.id = c.property_id
-		LEFT JOIN entity target ON target.id = c.target_entity_id
-		WHERE c.subject_entity_id = $1
+		LEFT JOIN LATERAL (
+			WITH RECURSIVE target_chain AS (
+				SELECT e.id, e.canonical_key, e.status,
+				       e.merged_into_entity_id, 0 AS depth,
+				       ARRAY[e.id] AS path
+				FROM entity e
+				WHERE e.id = c.target_entity_id
+				UNION ALL
+				SELECT next.id, next.canonical_key, next.status,
+				       next.merged_into_entity_id, chain.depth + 1,
+				       chain.path || next.id
+				FROM target_chain chain
+				JOIN entity next ON next.id = chain.merged_into_entity_id
+				WHERE chain.status = 'merged'
+				  AND chain.depth < 63
+				  AND NOT next.id = ANY(chain.path)
+			)
+			SELECT id, canonical_key
+			FROM target_chain
+			WHERE status <> 'deleted'
+			ORDER BY (status = 'active') DESC, depth DESC
+			LIMIT 1
+		) target ON true
+		WHERE c.subject_entity_id = (SELECT id FROM resolved_entity)
 		  AND c.status = 'published'
 		  AND c.rank <> 'deprecated'
 		  AND (cardinality($2::text[]) = 0 OR p.property_key = ANY($2::text[]))

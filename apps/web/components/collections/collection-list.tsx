@@ -11,17 +11,12 @@ import type {
 
 import { Button } from "@/components/ui/button";
 import { collectionsApi } from "@/lib/api";
+import { collectionSummary } from "@/lib/collections";
 
 const PAGE_SIZE = 20;
 
 export function ruleSummary(collection: Collection): string {
-  if (collection.collectionType === "manual" || !collection.query) {
-    return "人工维护";
-  }
-  if (collection.query.kind === "entity_type") {
-    return `实体类型：${collection.query.entityType ?? "未知"}`;
-  }
-  return `存在属性：${collection.query.property ?? "未知"}`;
+  return collectionSummary(collection);
 }
 
 export function CollectionList({
@@ -70,7 +65,11 @@ export function CollectionList({
               <div className="flex items-start justify-between gap-3">
                 <h2 className="font-semibold">{collection.title}</h2>
                 <span className="rounded-full bg-muted px-2 py-0.5 text-xs text-muted-foreground">
-                  {collection.collectionType === "manual" ? "Manual" : "Rule"}
+                  {collection.collectionType === "manual"
+                    ? "Manual"
+                    : collection.collectionType === "rule"
+                      ? "Rule"
+                      : "Dynamic"}
                 </span>
               </div>
               <p className="mt-2 text-sm text-muted-foreground">

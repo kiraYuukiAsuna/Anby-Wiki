@@ -1,4 +1,5 @@
 import Link from "next/link";
+import { Network } from "lucide-react";
 import { notFound } from "next/navigation";
 
 import {
@@ -6,6 +7,9 @@ import {
   DetailSection,
   DetailShell,
 } from "@/components/knowledge/detail-shell";
+import { EntityFederationPanel } from "@/components/knowledge/entity-federation-panel";
+import { EntityMergePanel } from "@/components/knowledge/entity-merge-panel";
+import { EntityMetadataManager } from "@/components/knowledge/entity-metadata-manager";
 import { UsageList } from "@/components/knowledge/usage-list";
 import { fetchEntityDetail } from "@/lib/knowledge";
 
@@ -25,7 +29,13 @@ export default async function EntityDetailPage({
     detail.labels.find((label) => label.isPrimary)?.label ?? detail.canonicalKey;
 
   return (
-    <DetailShell eyebrow="Entity" title={title} status={detail.status}>
+    <DetailShell
+      eyebrow="Entity"
+      title={title}
+      status={detail.status}
+      modeLabel={detail.status === "active" ? "可治理" : "身份映射"}
+      description="稳定身份匿名可读；合并是受权限控制、单事务提交并写入不可变审计的治理动作。"
+    >
       <DetailSection title="稳定身份">
         <DetailRows
           rows={[
@@ -52,23 +62,44 @@ export default async function EntityDetailPage({
         />
       </DetailSection>
 
+      <DetailSection title="实体治理">
+        <EntityMergePanel
+          sourceEntityId={detail.id}
+          sourceTitle={title}
+          sourceCanonicalKey={detail.canonicalKey}
+          entityTypeKey={detail.entityType.typeKey}
+          entityTypeName={detail.entityType.name}
+          status={detail.status}
+          mergedIntoEntityId={detail.mergedIntoEntityId}
+          sourceLabelCount={detail.labels.length}
+          sourceAliasCount={detail.aliases.length}
+          sourcePageCount={usages.items.length}
+        />
+      </DetailSection>
+
+      <DetailSection title="关系探索">
+        <Link
+          href={`/explore/graph?entity_id=${detail.id}`}
+          className="flex items-center justify-between rounded-xl border bg-card px-4 py-3 text-sm font-medium transition-colors hover:border-primary/30 hover:text-primary"
+        >
+          <span className="flex items-center gap-2">
+            <Network className="size-4" aria-hidden />
+            以此 Entity 为中心打开知识关系图
+          </span>
+          <span aria-hidden>→</span>
+        </Link>
+      </DetailSection>
+
+      <DetailSection title="跨 Wiki 身份">
+        <EntityFederationPanel
+          entityID={detail.id}
+          entityTitle={title}
+          status={detail.status}
+        />
+      </DetailSection>
+
       <DetailSection title="标签与别名">
-        <ul className="space-y-2 text-sm">
-          {detail.labels.map((label) => (
-            <li key={`${label.language}:${label.label}`}>
-              <span className="text-muted-foreground">{label.language}</span>{" "}
-              <span className="font-medium">{label.label}</span>
-              {label.isPrimary ? " · 主标签" : ""}
-              {label.description ? ` — ${label.description}` : ""}
-            </li>
-          ))}
-          {detail.aliases.map((alias) => (
-            <li key={alias.id}>
-              <span className="text-muted-foreground">{alias.language}</span>{" "}
-              {alias.alias} · 别名 ({alias.aliasType})
-            </li>
-          ))}
-        </ul>
+        <EntityMetadataManager initialDetail={detail} />
       </DetailSection>
 
       <DetailSection title={`页面提及 (${usages.items.length})`}>

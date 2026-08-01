@@ -24,9 +24,12 @@
         { "$ref": "#/$defs/retarget_citation_reference" },
         { "$ref": "#/$defs/retarget_external_link" },
         { "$ref": "#/$defs/create_entity" },
+        { "$ref": "#/$defs/merge_entity" },
         { "$ref": "#/$defs/create_claim" },
         { "$ref": "#/$defs/supersede_claim" },
-        { "$ref": "#/$defs/add_claim_source" }
+        { "$ref": "#/$defs/add_claim_source" },
+        { "$ref": "#/$defs/add_collection_membership" },
+        { "$ref": "#/$defs/remove_collection_membership" }
       ]
     }
   ],
@@ -54,6 +57,7 @@
         "block_id": { "type": "string", "minLength": 1 },
         "node_id": { "type": "string", "minLength": 1 },
         "entity_id": { "$ref": "#/$defs/uuid" },
+        "collection_id": { "$ref": "#/$defs/uuid" },
         "claim_id": { "$ref": "#/$defs/uuid" },
         "citation_id": { "$ref": "#/$defs/uuid" },
         "external_resource_id": { "$ref": "#/$defs/uuid" }
@@ -111,9 +115,12 @@
             "retarget_citation_reference",
             "retarget_external_link",
             "create_entity",
+            "merge_entity",
             "create_claim",
             "supersede_claim",
-            "add_claim_source"
+            "add_claim_source",
+            "add_collection_membership",
+            "remove_collection_membership"
           ]
         },
         "base": { "$ref": "#/$defs/base" },
@@ -128,9 +135,60 @@
       },
       "required": ["schema_version", "operation_type", "base", "target", "expected_hash", "evidence", "risk", "payload"]
     },
-    "create_page": { "properties": { "operation_type": { "const": "create_page" }, "target": { "required": ["wiki_id", "namespace_id"] } } },
-    "rename_page": { "properties": { "operation_type": { "const": "rename_page" }, "target": { "required": ["page_id"] } } },
-    "create_redirect": { "properties": { "operation_type": { "const": "create_redirect" }, "target": { "required": ["page_id"] } } },
+    "create_page_payload": {
+      "type": "object",
+      "properties": {
+        "title": { "type": "string", "minLength": 1, "maxLength": 255 },
+        "language": { "type": "string", "minLength": 1, "maxLength": 32 },
+        "content_model": { "type": "string", "minLength": 1, "maxLength": 64 },
+        "initial_ast": { "type": "object" },
+        "summary": { "type": "string", "maxLength": 1000 }
+      },
+      "required": ["title"],
+      "additionalProperties": false
+    },
+    "rename_page_payload": {
+      "type": "object",
+      "properties": {
+        "new_title": { "type": "string", "minLength": 1, "maxLength": 255 }
+      },
+      "required": ["new_title"],
+      "additionalProperties": false
+    },
+    "create_redirect_payload": {
+      "type": "object",
+      "properties": {
+        "target_kind": { "enum": ["page", "page_section", "unresolved", "interwiki"] },
+        "target_page_id": { "$ref": "#/$defs/uuid" },
+        "target_namespace_id": { "$ref": "#/$defs/uuid" },
+        "target_title": { "type": "string", "minLength": 1, "maxLength": 255 },
+        "target_anchor_block_id": { "$ref": "#/$defs/uuid" },
+        "target_interwiki": { "type": "string", "format": "uri", "maxLength": 2048 }
+      },
+      "required": ["target_kind"],
+      "additionalProperties": false,
+      "oneOf": [
+        {
+          "properties": { "target_kind": { "const": "page" } },
+          "required": ["target_page_id"]
+        },
+        {
+          "properties": { "target_kind": { "const": "page_section" } },
+          "required": ["target_page_id", "target_anchor_block_id"]
+        },
+        {
+          "properties": { "target_kind": { "const": "unresolved" } },
+          "required": ["target_namespace_id", "target_title"]
+        },
+        {
+          "properties": { "target_kind": { "const": "interwiki" } },
+          "required": ["target_title", "target_interwiki"]
+        }
+      ]
+    },
+    "create_page": { "properties": { "operation_type": { "const": "create_page" }, "target": { "required": ["wiki_id", "namespace_id"] }, "payload": { "$ref": "#/$defs/create_page_payload" } } },
+    "rename_page": { "properties": { "operation_type": { "const": "rename_page" }, "target": { "required": ["page_id"] }, "payload": { "$ref": "#/$defs/rename_page_payload" } } },
+    "create_redirect": { "properties": { "operation_type": { "const": "create_redirect" }, "target": { "required": ["page_id"] }, "payload": { "$ref": "#/$defs/create_redirect_payload" } } },
     "insert_block": { "properties": { "operation_type": { "const": "insert_block" }, "target": { "required": ["page_id"] } } },
     "delete_block": { "properties": { "operation_type": { "const": "delete_block" }, "target": { "required": ["page_id", "block_id"] } } },
     "move_block": { "properties": { "operation_type": { "const": "move_block" }, "target": { "required": ["page_id", "block_id"] } } },
@@ -145,8 +203,53 @@
     "retarget_citation_reference": { "properties": { "operation_type": { "const": "retarget_citation_reference" }, "target": { "required": ["page_id", "block_id", "node_id", "citation_id"] } } },
     "retarget_external_link": { "properties": { "operation_type": { "const": "retarget_external_link" }, "target": { "required": ["page_id", "block_id", "node_id", "external_resource_id"] } } },
     "create_entity": { "properties": { "operation_type": { "const": "create_entity" }, "target": { "required": ["wiki_id"] } } },
+    "merge_entity_payload": {
+      "type": "object",
+      "properties": {
+        "target_entity_id": { "$ref": "#/$defs/uuid" },
+        "reason": { "type": "string", "maxLength": 1000 }
+      },
+      "required": ["target_entity_id"],
+      "additionalProperties": false
+    },
+    "merge_entity": { "properties": { "operation_type": { "const": "merge_entity" }, "target": { "required": ["entity_id"] }, "payload": { "$ref": "#/$defs/merge_entity_payload" } } },
     "create_claim": { "properties": { "operation_type": { "const": "create_claim" }, "target": { "required": ["entity_id"] } } },
     "supersede_claim": { "properties": { "operation_type": { "const": "supersede_claim" }, "target": { "required": ["claim_id"] } } },
-    "add_claim_source": { "properties": { "operation_type": { "const": "add_claim_source" }, "target": { "required": ["claim_id", "citation_id"] } } }
+    "add_claim_source": { "properties": { "operation_type": { "const": "add_claim_source" }, "target": { "required": ["claim_id", "citation_id"] } } },
+    "add_collection_membership_payload": {
+      "type": "object",
+      "properties": {
+        "sort_key": { "type": "string", "minLength": 1, "maxLength": 500 },
+        "source_revision_id": { "$ref": "#/$defs/uuid" }
+      },
+      "required": ["sort_key", "source_revision_id"],
+      "additionalProperties": false
+    },
+    "add_collection_membership": {
+      "properties": {
+        "operation_type": { "const": "add_collection_membership" },
+        "target": {
+          "required": ["collection_id"],
+          "oneOf": [
+            { "required": ["page_id"], "not": { "required": ["entity_id"] } },
+            { "required": ["entity_id"], "not": { "required": ["page_id"] } }
+          ]
+        },
+        "payload": { "$ref": "#/$defs/add_collection_membership_payload" }
+      }
+    },
+    "remove_collection_membership": {
+      "properties": {
+        "operation_type": { "const": "remove_collection_membership" },
+        "target": {
+          "required": ["collection_id"],
+          "oneOf": [
+            { "required": ["page_id"], "not": { "required": ["entity_id"] } },
+            { "required": ["entity_id"], "not": { "required": ["page_id"] } }
+          ]
+        },
+        "payload": { "type": "object", "maxProperties": 0 }
+      }
+    }
   }
 }

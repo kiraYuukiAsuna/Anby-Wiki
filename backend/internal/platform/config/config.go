@@ -4,6 +4,7 @@ package config
 import (
 	"fmt"
 	"net"
+	"net/url"
 	"strings"
 	"time"
 
@@ -32,12 +33,32 @@ type Config struct {
 	LogLevel string `env:"LOG_LEVEL" envDefault:"info"`
 	// Env 运行环境（development/staging/production），默认 development。
 	Env string `env:"ENV" envDefault:"development"`
-	// SearchBackend selects the SearchAdapter implementation. The early stage
-	// ships only the PostgreSQL FTS adapter; a dedicated engine can be added
-	// back behind the same interface when capacity requires it (ADR-0006).
-	SearchBackend string `env:"SEARCH_BACKEND" envDefault:"postgres"`
+	// SearchBackend selects PostgreSQL staging/fallback or the independent
+	// Meilisearch query/index adapter.
+	SearchBackend         string        `env:"SEARCH_BACKEND" envDefault:"postgres"`
+	MeiliURL              string        `env:"MEILI_URL" envDefault:"http://localhost:7700"`
+	MeiliAPIKey           string        `env:"MEILI_API_KEY"`
+	MeiliIndex            string        `env:"MEILI_INDEX" envDefault:"anby_pages"`
+	MeiliTimeout          time.Duration `env:"MEILI_TIMEOUT" envDefault:"15s"`
+	MeiliTaskTimeout      time.Duration `env:"MEILI_TASK_TIMEOUT" envDefault:"10m"`
+	SearchSemanticEnabled bool          `env:"SEARCH_SEMANTIC_ENABLED" envDefault:"false"`
+	MeiliEmbedderName     string        `env:"MEILI_EMBEDDER_NAME" envDefault:"page-content"`
+	MeiliEmbedderSource   string        `env:"MEILI_EMBEDDER_SOURCE" envDefault:"huggingFace"`
+	MeiliEmbedderModel    string        `env:"MEILI_EMBEDDER_MODEL" envDefault:"sentence-transformers/paraphrase-multilingual-MiniLM-L12-v2"`
+	// MeiliEmbedderAPIKey is required only for the openAi embedder source.
+	// It is secret material and must never be logged.
+	MeiliEmbedderAPIKey string `env:"MEILI_EMBEDDER_API_KEY"`
 	// WorkerMetricsAddr 是 Worker 独立指标监听地址；空字符串可显式关闭。
 	WorkerMetricsAddr string `env:"WORKER_METRICS_ADDR" envDefault:":9091"`
+	// RevisionArchiveEnabled enables the worker's recurring hot-to-cold
+	// migration for non-current immutable ContentSnapshots.
+	RevisionArchiveEnabled   bool          `env:"REVISION_ARCHIVE_ENABLED" envDefault:"false"`
+	RevisionArchiveRetention time.Duration `env:"REVISION_ARCHIVE_RETENTION" envDefault:"4320h"`
+	RevisionArchiveInterval  time.Duration `env:"REVISION_ARCHIVE_INTERVAL" envDefault:"6h"`
+	RevisionArchiveBatchSize int           `env:"REVISION_ARCHIVE_BATCH_SIZE" envDefault:"50"`
+	// RevisionArchiveMaxBytes bounds a single cold object during both archive
+	// and transparent history hydration.
+	RevisionArchiveMaxBytes int64 `env:"REVISION_ARCHIVE_MAX_BYTES" envDefault:"67108864"`
 	// ObservabilityDBInterval 控制 Worker 从数据库刷新低侵入指标的周期。
 	ObservabilityDBInterval time.Duration `env:"OBSERVABILITY_DB_INTERVAL" envDefault:"30s"`
 	// OTelEnabled 显式启用 OTLP/gRPC trace export。
@@ -114,6 +135,39 @@ func (c Config) validate() error {
 	}
 	switch c.SearchBackend {
 	case "postgres":
+		if c.SearchSemanticEnabled {
+			return fmt.Errorf("config: SEARCH_SEMANTIC_ENABLED=true 要求 SEARCH_BACKEND=meilisearch")
+		}
+	case "meilisearch":
+		if strings.TrimSpace(c.MeiliIndex) == "" {
+			return fmt.Errorf("config: SEARCH_BACKEND=meilisearch 时 MEILI_INDEX 不能为空")
+		}
+		if c.MeiliTimeout <= 0 {
+			return fmt.Errorf("config: MEILI_TIMEOUT 必须大于 0")
+		}
+		if c.MeiliTaskTimeout <= 0 {
+			return fmt.Errorf("config: MEILI_TASK_TIMEOUT 必须大于 0")
+		}
+		if err := validateServiceURL(c.MeiliURL); err != nil {
+			return fmt.Errorf("config: MEILI_URL 非法: %w", err)
+		}
+		if c.SearchSemanticEnabled {
+			if strings.TrimSpace(c.MeiliEmbedderName) == "" {
+				return fmt.Errorf("config: 语义搜索启用时 MEILI_EMBEDDER_NAME 不能为空")
+			}
+			if strings.TrimSpace(c.MeiliEmbedderModel) == "" {
+				return fmt.Errorf("config: 语义搜索启用时 MEILI_EMBEDDER_MODEL 不能为空")
+			}
+			switch c.MeiliEmbedderSource {
+			case "huggingFace":
+			case "openAi":
+				if strings.TrimSpace(c.MeiliEmbedderAPIKey) == "" {
+					return fmt.Errorf("config: MEILI_EMBEDDER_SOURCE=openAi 时 MEILI_EMBEDDER_API_KEY 不能为空")
+				}
+			default:
+				return fmt.Errorf("config: 不支持的 MEILI_EMBEDDER_SOURCE: %s", c.MeiliEmbedderSource)
+			}
+		}
 	default:
 		return fmt.Errorf("config: 不支持的 SEARCH_BACKEND: %s", c.SearchBackend)
 	}
@@ -152,6 +206,15 @@ func (c Config) validate() error {
 		}
 	}
 	if c.Env == "production" {
+		if c.SearchBackend != "meilisearch" {
+			return fmt.Errorf("config: production 要求 SEARCH_BACKEND=meilisearch")
+		}
+		if strings.TrimSpace(c.MeiliAPIKey) == "" {
+			return fmt.Errorf("config: production 要求 MEILI_API_KEY 非空")
+		}
+		if !c.SearchSemanticEnabled {
+			return fmt.Errorf("config: production 要求 SEARCH_SEMANTIC_ENABLED=true")
+		}
 		if c.AuthDevHeaderEnabled {
 			return fmt.Errorf("config: production 严禁 AUTH_DEV_HEADER_ENABLED=true")
 		}
@@ -168,11 +231,35 @@ func (c Config) validate() error {
 	if c.ObservabilityDBInterval < 5*time.Second {
 		return fmt.Errorf("config: OBSERVABILITY_DB_INTERVAL 不得小于 5s")
 	}
+	if c.RevisionArchiveRetention <= 0 {
+		return fmt.Errorf("config: REVISION_ARCHIVE_RETENTION 必须大于 0")
+	}
+	if c.RevisionArchiveInterval < time.Minute {
+		return fmt.Errorf("config: REVISION_ARCHIVE_INTERVAL 不得小于 1m")
+	}
+	if c.RevisionArchiveBatchSize < 1 || c.RevisionArchiveBatchSize > 500 {
+		return fmt.Errorf("config: REVISION_ARCHIVE_BATCH_SIZE 必须在 1..500")
+	}
+	if c.RevisionArchiveMaxBytes <= 0 {
+		return fmt.Errorf("config: REVISION_ARCHIVE_MAX_BYTES 必须大于 0")
+	}
 	if c.OTelSampleRate < 0 || c.OTelSampleRate > 1 {
 		return fmt.Errorf("config: OTEL_TRACE_SAMPLE_RATE 必须在 0..1")
 	}
 	if c.OTelEnabled && strings.TrimSpace(c.OTLPEndpoint) == "" {
 		return fmt.Errorf("config: OTEL_ENABLED=true 时缺失环境变量: OTEL_EXPORTER_OTLP_ENDPOINT")
+	}
+	return nil
+}
+
+func validateServiceURL(raw string) error {
+	parsed, err := url.Parse(strings.TrimSpace(raw))
+	if err != nil || parsed.Host == "" ||
+		(parsed.Scheme != "http" && parsed.Scheme != "https") {
+		return fmt.Errorf("必须是绝对 HTTP(S) URL")
+	}
+	if parsed.User != nil || parsed.RawQuery != "" || parsed.Fragment != "" {
+		return fmt.Errorf("禁止 userinfo、query 或 fragment")
 	}
 	return nil
 }

@@ -11,10 +11,50 @@ import (
 	"github.com/jackc/pgx/v5/pgxpool"
 )
 
-type claimChangedPayload struct {
+// ClaimChangedPayload is the stable-ID envelope consumed by claim-dependent
+// projections. SubjectEntityID became mandatory after the first implementation;
+// DecodeClaimChangedPayload keeps already-persisted legacy events replayable.
+type ClaimChangedPayload struct {
 	ClaimID            uuid.UUID  `json:"claim_id"`
 	SubjectEntityID    uuid.UUID  `json:"subject_entity_id"`
 	ReplacementClaimID *uuid.UUID `json:"replacement_claim_id,omitempty"`
+}
+
+func DecodeClaimChangedPayload(
+	ctx context.Context,
+	pool *pgxpool.Pool,
+	event Event,
+) (*ClaimChangedPayload, error) {
+	var payload ClaimChangedPayload
+	if err := json.Unmarshal(event.Payload, &payload); err != nil {
+		return nil, fmt.Errorf("projection: decode claim.changed payload: %w", err)
+	}
+	if payload.ClaimID == uuid.Nil {
+		return nil, fmt.Errorf("projection: claim.changed payload missing claim_id")
+	}
+	if payload.SubjectEntityID == uuid.Nil {
+		if pool == nil {
+			return nil, fmt.Errorf(
+				"projection: claim.changed payload missing subject_entity_id",
+			)
+		}
+		if err := pool.QueryRow(
+			ctx,
+			`SELECT subject_entity_id FROM claim WHERE id = $1`,
+			payload.ClaimID,
+		).Scan(&payload.SubjectEntityID); err != nil {
+			return nil, fmt.Errorf(
+				"projection: resolve legacy claim.changed subject: %w", err,
+			)
+		}
+	}
+	if payload.ReplacementClaimID != nil &&
+		*payload.ReplacementClaimID == uuid.Nil {
+		return nil, fmt.Errorf(
+			"projection: claim.changed payload has empty replacement_claim_id",
+		)
+	}
+	return &payload, nil
 }
 
 // ClaimChangedHandler 只重建 claim_usage/component_dependency 命中的页面渲染。
@@ -24,6 +64,7 @@ type ClaimChangedHandler struct {
 	claimUsage   *KnowledgeUsageBuilder
 	dependencies *ComponentDependencyBuilder
 	rendered     *RenderedPageBuilder
+	sections     *RenderedSectionsBuilder
 	logger       *slog.Logger
 }
 
@@ -36,17 +77,15 @@ func NewClaimChangedHandler(pool *pgxpool.Pool, logger *slog.Logger) *ClaimChang
 		claimUsage:   NewClaimUsageBuilder(pool),
 		dependencies: NewComponentDependencyBuilder(pool),
 		rendered:     NewRenderedPageBuilder(pool),
+		sections:     NewRenderedSectionsBuilder(pool),
 		logger:       logger,
 	}
 }
 
 func (h *ClaimChangedHandler) Handle(ctx context.Context, event Event) error {
-	var payload claimChangedPayload
-	if err := json.Unmarshal(event.Payload, &payload); err != nil {
-		return fmt.Errorf("projection: decode claim.changed payload: %w", err)
-	}
-	if payload.ClaimID == uuid.Nil || payload.SubjectEntityID == uuid.Nil {
-		return fmt.Errorf("projection: claim.changed payload missing stable IDs")
+	payload, err := DecodeClaimChangedPayload(ctx, h.pool, event)
+	if err != nil {
+		return err
 	}
 	claimIDs := []uuid.UUID{payload.ClaimID}
 	if payload.ReplacementClaimID != nil {
@@ -129,7 +168,12 @@ func (h *ClaimChangedHandler) rebuildPage(ctx context.Context, pageID uuid.UUID)
 	if revisionID == nil {
 		return nil
 	}
-	for _, builder := range []Builder{h.dependencies, h.claimUsage, h.rendered} {
+	for _, builder := range []Builder{
+		h.dependencies,
+		h.claimUsage,
+		h.rendered,
+		h.sections,
+	} {
 		if err := builder.Rebuild(ctx, tx, pageID, *revisionID); err != nil {
 			return fmt.Errorf(
 				"projection: claim change rebuild %s for page %s: %w",

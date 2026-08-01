@@ -15,19 +15,35 @@ export function AccountMenu() {
 
   if (isLoading) {
     return (
-      <Button size="sm" variant="ghost" disabled>
+      <Button
+        size="sm"
+        variant="ghost"
+        className="shrink-0 px-2 sm:px-3"
+        disabled
+        aria-label="账户加载中"
+      >
         <UserRound aria-hidden />
-        账户
+        <span className="hidden sm:inline">账户</span>
       </Button>
     );
   }
 
   if (!session) {
     return (
-      <Button size="sm" variant="outline" asChild className="gap-1">
+      <Button
+        size="sm"
+        variant="outline"
+        asChild
+        className="shrink-0 gap-1 px-2 sm:px-3"
+      >
         <Link href={LOGIN_PATH}>
           <LogIn aria-hidden />
-          {error ? "重试登录" : "登录"}
+          <span className="hidden sm:inline">
+            {error ? "重试登录" : "登录"}
+          </span>
+          <span className="sr-only sm:hidden">
+            {error ? "重试登录" : "登录"}
+          </span>
         </Link>
       </Button>
     );
@@ -44,7 +60,7 @@ export function AccountMenu() {
   };
 
   return (
-    <div className="flex items-center gap-1">
+    <div className="flex shrink-0 items-center gap-1">
       <span
         className="hidden max-w-32 truncate text-sm text-muted-foreground md:inline"
         title={`${session.displayName} (${session.actorType})`}
@@ -54,11 +70,12 @@ export function AccountMenu() {
       <Button
         size="sm"
         variant="ghost"
-        className="gap-1"
+        className="gap-1 px-2 sm:px-3"
         onClick={() => void logout()}
+        aria-label="退出登录"
       >
         <LogOut aria-hidden />
-        退出
+        <span className="hidden sm:inline">退出</span>
       </Button>
     </div>
   );

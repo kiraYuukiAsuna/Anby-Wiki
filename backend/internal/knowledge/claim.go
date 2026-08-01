@@ -181,6 +181,14 @@ func (s *Service) prepareClaim(ctx context.Context, tx pgx.Tx, params CreateClai
 			return nil, fmt.Errorf("%w: qualifiers 必须是 JSON object", ErrInvalidClaimValue)
 		}
 	}
+	if err := validateJSONSchema(
+		schema.Qualifiers, qualifiers, "qualifiers",
+	); err != nil {
+		return nil, fmt.Errorf(
+			"%w: property=%q %v",
+			ErrInvalidClaimValue, prop.PropertyKey, err,
+		)
+	}
 
 	// 单值约束：同 subject+property 已有 published claim 时拒绝，
 	// 提示调用方改用 SupersedeClaim。计数在 subject 行锁内，序列化并发创建。
@@ -440,7 +448,127 @@ func (s *Service) RollbackClaimInTx(ctx context.Context, tx pgx.Tx, claimID, act
 	if err != nil {
 		return nil, err
 	}
+	if err := s.copyClaimSourcesForCompensation(
+		ctx, tx, predecessor.ID, restored.ID,
+	); err != nil {
+		return nil, err
+	}
 	return s.PublishClaimInTx(ctx, tx, restored.ID)
+}
+
+// RollbackClaimBatchInTx collapses every contiguous Claim in one ChangeBatch
+// into a single compensation. This correctly handles A→B→C where B and C were
+// both created by the batch: the current C is compensated directly back to A
+// instead of attempting to mutate historical B.
+func (s *Service) RollbackClaimBatchInTx(
+	ctx context.Context,
+	tx pgx.Tx,
+	claimID, actorID, batchID uuid.UUID,
+) (*RollbackClaimBatchResult, error) {
+	current, err := s.repo.GetClaimByIDForUpdate(ctx, tx, claimID)
+	if err != nil {
+		return nil, err
+	}
+	if current.ChangeBatchID == nil || *current.ChangeBatchID != batchID {
+		return nil, fmt.Errorf(
+			"%w: claim=%s 不属于 batch=%s",
+			ErrInvalidClaimTransition, claimID, batchID,
+		)
+	}
+	if current.Status != ClaimStatusPublished &&
+		current.Status != ClaimStatusProposed {
+		return nil, fmt.Errorf(
+			"%w: rollback claim=%s status=%s",
+			ErrInvalidClaimTransition, claimID, current.Status,
+		)
+	}
+
+	result := &RollbackClaimBatchResult{
+		Current: current, ConsumedClaimIDs: []uuid.UUID{current.ID},
+	}
+	cursor := current
+	var predecessor *Claim
+	for depth := 0; depth < 256; depth++ {
+		predecessor, err = s.repo.GetClaimPredecessor(ctx, tx, cursor.ID)
+		if err != nil {
+			return nil, err
+		}
+		if predecessor == nil ||
+			predecessor.ChangeBatchID == nil ||
+			*predecessor.ChangeBatchID != batchID {
+			break
+		}
+		result.ConsumedClaimIDs = append(
+			result.ConsumedClaimIDs, predecessor.ID,
+		)
+		cursor = predecessor
+		if depth == 255 {
+			return nil, fmt.Errorf(
+				"%w: batch claim supersede chain exceeds 256",
+				ErrInvalidClaimTransition,
+			)
+		}
+	}
+
+	if predecessor == nil {
+		switch current.Status {
+		case ClaimStatusPublished:
+			result.Current, err = s.transitionClaimInTx(
+				ctx, tx, current.ID, ClaimStatusDeprecated,
+			)
+		case ClaimStatusProposed:
+			result.Current, err = s.transitionClaimInTx(
+				ctx, tx, current.ID, ClaimStatusRejected,
+			)
+		}
+		return result, err
+	}
+
+	prop, err := s.repo.GetPropertyByID(ctx, tx, predecessor.PropertyID)
+	if err != nil {
+		return nil, err
+	}
+	value, err := storedClaimValue(predecessor)
+	if err != nil {
+		return nil, err
+	}
+	restored, err := s.SupersedeClaimInTx(ctx, tx, SupersedeClaimParams{
+		ClaimID: current.ID, SubjectEntityID: current.SubjectEntityID,
+		PropertyKey: prop.PropertyKey, Value: value,
+		Qualifiers: predecessor.QualifiersJSON,
+		Rank:       predecessor.Rank, ValidFrom: predecessor.ValidFrom,
+		ValidTo: predecessor.ValidTo, OriginType: OriginHuman,
+		ActorID: actorID, ChangeBatchID: &batchID,
+	})
+	if err != nil {
+		return nil, err
+	}
+	if err := s.copyClaimSourcesForCompensation(
+		ctx, tx, predecessor.ID, restored.ID,
+	); err != nil {
+		return nil, err
+	}
+	result.Current, err = s.PublishClaimInTx(ctx, tx, restored.ID)
+	return result, err
+}
+
+func (s *Service) copyClaimSourcesForCompensation(
+	ctx context.Context,
+	tx pgx.Tx,
+	fromClaimID, toClaimID uuid.UUID,
+) error {
+	sources, err := s.repo.listClaimSources(ctx, tx, fromClaimID)
+	if err != nil {
+		return err
+	}
+	for _, source := range sources {
+		if err := s.repo.copyClaimSource(
+			ctx, tx, toClaimID, source,
+		); err != nil {
+			return err
+		}
+	}
+	return nil
 }
 
 func storedClaimValue(c *Claim) (Value, error) {
@@ -506,28 +634,73 @@ type UpdateVerificationStatusParams struct {
 // UpdateVerificationStatus 更新验证状态（与业务状态正交，可在任意业务状态下更新）。
 // 权限矩阵（checkVerificationPermission，防御性校验）：human 可置全部四种状态；
 // ai 只能置 ai_checked；bot/system 无权修改验证状态。
-func (s *Service) UpdateVerificationStatus(ctx context.Context, params UpdateVerificationStatusParams) error {
-	actor, err := s.pages.GetActorByID(ctx, nil, params.ActorID)
-	if err != nil {
-		// 保守失败：查不到（含底层错误）一律按无效 Actor 拒绝写入。
-		return fmt.Errorf("%w: id=%s: %v", page.ErrInvalidActor, params.ActorID, err)
-	}
-	if actor.Status != page.StatusActive {
-		return fmt.Errorf("%w: id=%s 状态 %q", page.ErrInvalidActor, params.ActorID, actor.Status)
-	}
-	if err := checkVerificationPermission(actor.ActorType, params.Status); err != nil {
-		return err
-	}
-	return s.txm.InTx(ctx, func(tx pgx.Tx) error {
+func (s *Service) UpdateVerificationStatus(
+	ctx context.Context,
+	params UpdateVerificationStatusParams,
+) (*Claim, error) {
+	var result *Claim
+	err := s.txm.InTx(ctx, func(tx pgx.Tx) error {
+		actor, err := s.pages.GetActorByID(ctx, tx, params.ActorID)
+		if err != nil {
+			// 保守失败：查不到（含底层错误）一律按无效 Actor 拒绝写入。
+			return fmt.Errorf(
+				"%w: id=%s: %v", page.ErrInvalidActor, params.ActorID, err,
+			)
+		}
+		if actor.Status != page.StatusActive {
+			return fmt.Errorf(
+				"%w: id=%s 状态 %q",
+				page.ErrInvalidActor,
+				params.ActorID,
+				actor.Status,
+			)
+		}
+		if err := checkVerificationPermission(
+			actor.ActorType, params.Status,
+		); err != nil {
+			return err
+		}
 		claim, err := s.repo.GetClaimByIDForUpdate(ctx, tx, params.ClaimID)
 		if err != nil {
 			return err
 		}
+		if claim.VerificationStatus == params.Status {
+			result = claim
+			return nil
+		}
+		previousStatus := claim.VerificationStatus
 		if err := s.repo.UpdateClaimVerificationStatus(ctx, tx, params.ClaimID, params.Status); err != nil {
 			return err
 		}
-		return s.emitClaimChanged(ctx, tx, claim.ID, claim.SubjectEntityID, nil)
+		if err := s.appendKnowledgeAudit(
+			ctx,
+			tx,
+			params.ActorID,
+			AuditEventClaimVerificationStatusChanged,
+			AggregateTypeClaim,
+			claim.ID,
+			map[string]any{
+				"claim_id":            claim.ID,
+				"subject_entity_id":   claim.SubjectEntityID,
+				"previous_status":     previousStatus,
+				"verification_status": params.Status,
+			},
+		); err != nil {
+			return err
+		}
+		if err := s.emitClaimChanged(
+			ctx, tx, claim.ID, claim.SubjectEntityID, nil,
+		); err != nil {
+			return err
+		}
+		claim.VerificationStatus = params.Status
+		result = claim
+		return nil
 	})
+	if err != nil {
+		return nil, err
+	}
+	return result, nil
 }
 
 // CitationChecker citation 存在性只读接口（knowledge 侧定义，evidence 模块实现，
@@ -599,6 +772,28 @@ func (s *Service) AddClaimSourceInTx(ctx context.Context, tx pgx.Tx, params AddC
 	return src, nil
 }
 
+// RemoveClaimSourceInTx is the authoritative compensation boundary for a
+// standalone add_claim_source operation. It locks the Claim, removes exactly
+// the recorded Citation edge, and invalidates Claim-derived projections in the
+// caller's transaction.
+func (s *Service) RemoveClaimSourceInTx(
+	ctx context.Context,
+	tx pgx.Tx,
+	claimID, citationID, actorID uuid.UUID,
+) error {
+	if err := s.pages.CheckWriteActor(ctx, tx, actorID); err != nil {
+		return err
+	}
+	claim, err := s.repo.GetClaimByIDForUpdate(ctx, tx, claimID)
+	if err != nil {
+		return err
+	}
+	if err := s.repo.DeleteClaimSource(ctx, tx, claimID, citationID); err != nil {
+		return err
+	}
+	return s.emitClaimChanged(ctx, tx, claim.ID, claim.SubjectEntityID, nil)
+}
+
 // ListClaimsParams Claim 过滤查询入参。PropertyKey/Status/VerificationStatus
 // 为空不过滤；Status 非空必须是合法业务状态，VerificationStatus 同理。
 type ListClaimsParams struct {
@@ -644,6 +839,16 @@ func (s *Service) ListClaims(ctx context.Context, params ListClaimsParams) ([]Cl
 // GetClaim 按 ID 查询 Claim（含全部状态，由调用方判断 Status）。
 func (s *Service) GetClaim(ctx context.Context, claimID uuid.UUID) (*Claim, error) {
 	return s.repo.GetClaimByID(ctx, nil, claimID)
+}
+
+// GetClaimInTx exposes a transaction-scoped domain read for governance
+// composition without leaking Repository access across the module boundary.
+func (s *Service) GetClaimInTx(
+	ctx context.Context,
+	tx pgx.Tx,
+	claimID uuid.UUID,
+) (*Claim, error) {
+	return s.repo.GetClaimByID(ctx, tx, claimID)
 }
 
 // GetProperty 按稳定 ID 读取 Claim 的谓词定义（详情页只读路径）。

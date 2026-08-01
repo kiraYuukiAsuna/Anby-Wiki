@@ -6,6 +6,7 @@ import {
 } from "../../../contracts/generated/typescript";
 
 import { governanceApi } from "./api";
+import { serverApiOptions } from "./server-api";
 
 export type ProposalWorkspaceResult =
   | { kind: "ok"; proposal: Proposal; preview: ProposalPreview | null }
@@ -15,9 +16,26 @@ export async function fetchProposalWorkspace(
   id: string,
 ): Promise<ProposalWorkspaceResult> {
   try {
-    const api = governanceApi();
+    const api = governanceApi(await serverApiOptions());
     const proposal = await api.getProposal({ id });
-    const preview = proposal.targetType === "page"
+    const hasContentOperations = proposal.operations.some((record) =>
+      [
+        "insert_block",
+        "delete_block",
+        "move_block",
+        "replace_block",
+        "insert_page_reference",
+        "retarget_page_reference",
+        "insert_entity_reference",
+        "retarget_entity_reference",
+        "insert_claim_reference",
+        "retarget_claim_reference",
+        "insert_citation_reference",
+        "retarget_citation_reference",
+        "retarget_external_link",
+      ].includes(record.operation.operationType),
+    );
+    const preview = proposal.targetType === "page" && hasContentOperations
       ? await api.previewProposal({ id })
       : null;
     return { kind: "ok", proposal, preview };

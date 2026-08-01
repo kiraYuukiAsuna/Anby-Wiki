@@ -21,10 +21,13 @@ func NewKnowledgePatchEngine(service *knowledge.Service) *KnowledgePatchEngine {
 }
 
 type KnowledgePatchResult struct {
-	OperationType string
-	EntityID      *uuid.UUID
-	ClaimID       *uuid.UUID
-	CitationID    *uuid.UUID
+	OperationType   string
+	EntityID        *uuid.UUID
+	EntityUpdatedAt *time.Time
+	EntityMergeID   *uuid.UUID
+	ClaimID         *uuid.UUID
+	SubjectEntityID *uuid.UUID
+	CitationID      *uuid.UUID
 }
 
 // ApplyOne 只接受四种知识写操作。actorID 是通过审核后实际执行的 human/system/bot
@@ -49,6 +52,59 @@ func (e *KnowledgePatchEngine) RollbackClaimInTx(ctx context.Context, tx pgx.Tx,
 		return nil, err
 	}
 	return &claim.ID, nil
+}
+
+func (e *KnowledgePatchEngine) RollbackClaimBatchInTx(
+	ctx context.Context,
+	tx pgx.Tx,
+	claimID, actorID, batchID uuid.UUID,
+) (*knowledge.RollbackClaimBatchResult, error) {
+	if e == nil || e.knowledge == nil {
+		return nil, ErrUnsupportedOperation
+	}
+	return e.knowledge.RollbackClaimBatchInTx(
+		ctx, tx, claimID, actorID, batchID,
+	)
+}
+
+func (e *KnowledgePatchEngine) RollbackCreatedEntityInTx(
+	ctx context.Context,
+	tx pgx.Tx,
+	entityID, actorID, batchID uuid.UUID,
+	expectedUpdatedAt time.Time,
+) error {
+	if e == nil || e.knowledge == nil {
+		return ErrUnsupportedOperation
+	}
+	return e.knowledge.RollbackCreatedEntityInTx(
+		ctx, tx, entityID, actorID, batchID, expectedUpdatedAt,
+	)
+}
+
+func (e *KnowledgePatchEngine) RollbackEntityMergeInTx(
+	ctx context.Context,
+	tx pgx.Tx,
+	mergeID, actorID, batchID uuid.UUID,
+) (*knowledge.RollbackEntityMergeResult, error) {
+	if e == nil || e.knowledge == nil {
+		return nil, ErrUnsupportedOperation
+	}
+	return e.knowledge.RollbackEntityMergeInTx(
+		ctx, tx, mergeID, actorID, &batchID,
+	)
+}
+
+func (e *KnowledgePatchEngine) RemoveClaimSourceInTx(
+	ctx context.Context,
+	tx pgx.Tx,
+	claimID, citationID, actorID uuid.UUID,
+) error {
+	if e == nil || e.knowledge == nil {
+		return ErrUnsupportedOperation
+	}
+	return e.knowledge.RemoveClaimSourceInTx(
+		ctx, tx, claimID, citationID, actorID,
+	)
 }
 
 func (e *KnowledgePatchEngine) applyOne(ctx context.Context, tx pgx.Tx, op OperationV1, actorID uuid.UUID, changeBatchID *uuid.UUID) (*KnowledgePatchResult, error) {
@@ -92,7 +148,45 @@ func (e *KnowledgePatchEngine) applyOne(ctx context.Context, tx pgx.Tx, op Opera
 		if err != nil {
 			return nil, err
 		}
-		return &KnowledgePatchResult{OperationType: op.OperationType, EntityID: &entity.ID}, nil
+		return &KnowledgePatchResult{
+			OperationType: op.OperationType, EntityID: &entity.ID,
+			EntityUpdatedAt: &entity.UpdatedAt,
+		}, nil
+
+	case OpMergeEntity:
+		if op.Target.EntityID == nil {
+			return nil, ErrInvalidOperation
+		}
+		var p struct {
+			TargetEntityID uuid.UUID `json:"target_entity_id"`
+			Reason         string    `json:"reason"`
+		}
+		if err := decodePayload(&op, &p); err != nil ||
+			p.TargetEntityID == uuid.Nil || p.TargetEntityID == *op.Target.EntityID {
+			return nil, ErrInvalidOperation
+		}
+		params := knowledge.MergeEntityParams{
+			SourceEntityID: *op.Target.EntityID,
+			TargetEntityID: p.TargetEntityID,
+			ActorID:        actorID,
+			Reason:         p.Reason,
+			ChangeBatchID:  changeBatchID,
+		}
+		var merged *knowledge.MergeEntityResult
+		var err error
+		if tx != nil {
+			merged, err = e.knowledge.MergeEntityInTx(ctx, tx, params)
+		} else {
+			merged, err = e.knowledge.MergeEntity(ctx, params)
+		}
+		if err != nil {
+			return nil, err
+		}
+		return &KnowledgePatchResult{
+			OperationType: op.OperationType,
+			EntityID:      &merged.Merge.TargetEntityID,
+			EntityMergeID: &merged.Merge.ID,
+		}, nil
 
 	case OpCreateClaim:
 		if op.Target.EntityID == nil {
@@ -120,7 +214,11 @@ func (e *KnowledgePatchEngine) applyOne(ctx context.Context, tx pgx.Tx, op Opera
 		if err := e.attachClaimSources(ctx, tx, claim.ID, params.CitationIDs); err != nil {
 			return nil, err
 		}
-		return &KnowledgePatchResult{OperationType: op.OperationType, ClaimID: &claim.ID}, nil
+		return &KnowledgePatchResult{
+			OperationType:   op.OperationType,
+			ClaimID:         &claim.ID,
+			SubjectEntityID: &claim.SubjectEntityID,
+		}, nil
 
 	case OpSupersedeClaim:
 		if op.Target.ClaimID == nil {
@@ -155,7 +253,11 @@ func (e *KnowledgePatchEngine) applyOne(ctx context.Context, tx pgx.Tx, op Opera
 		if err := e.attachClaimSources(ctx, tx, claim.ID, params.CitationIDs); err != nil {
 			return nil, err
 		}
-		return &KnowledgePatchResult{OperationType: op.OperationType, ClaimID: &claim.ID}, nil
+		return &KnowledgePatchResult{
+			OperationType:   op.OperationType,
+			ClaimID:         &claim.ID,
+			SubjectEntityID: &claim.SubjectEntityID,
+		}, nil
 
 	case OpAddClaimSource:
 		if op.Target.ClaimID == nil || op.Target.CitationID == nil {
@@ -180,8 +282,13 @@ func (e *KnowledgePatchEngine) applyOne(ctx context.Context, tx pgx.Tx, op Opera
 		if err != nil {
 			return nil, err
 		}
+		claim, err := e.knowledge.GetClaimInTx(ctx, tx, source.ClaimID)
+		if err != nil {
+			return nil, err
+		}
 		return &KnowledgePatchResult{OperationType: op.OperationType,
-			ClaimID: &source.ClaimID, CitationID: &source.CitationID}, nil
+			ClaimID: &source.ClaimID, SubjectEntityID: &claim.SubjectEntityID,
+			CitationID: &source.CitationID}, nil
 	default:
 		return nil, fmt.Errorf("%w: %s", ErrUnsupportedOperation, op.OperationType)
 	}

@@ -11,7 +11,7 @@ Name | Type
 `collectionType` | string
 `title` | string
 `descriptionPageId` | string
-`query` | [CollectionRule](CollectionRule.md)
+`query` | [CollectionQuery](CollectionQuery.md)
 `createdAt` | Date
 `updatedAt` | Date
 

@@ -80,7 +80,16 @@ func (s *Service) GetRevision(ctx context.Context, pageID, revisionID uuid.UUID)
 	if _, err := s.repo.GetPageByID(ctx, nil, pageID); err != nil {
 		return nil, nil, err
 	}
-	return s.repo.GetRevisionWithSnapshot(ctx, nil, pageID, revisionID)
+	revision, snapshot, err := s.repo.GetRevisionWithSnapshot(
+		ctx, nil, pageID, revisionID,
+	)
+	if err != nil {
+		return nil, nil, err
+	}
+	if err := s.hydrateSnapshot(ctx, snapshot); err != nil {
+		return nil, nil, err
+	}
+	return revision, snapshot, nil
 }
 
 // DiffRevisions 计算同一页面两个 Revision 的结构 Diff（ast.Diff，from 为 base，to 为 current）。
@@ -167,6 +176,9 @@ func (s *Service) RollbackInTx(ctx context.Context, tx pgx.Tx, params RollbackPa
 	}
 	_, targetSnap, err := s.repo.GetRevisionWithSnapshot(ctx, tx, params.PageID, params.TargetRevisionID)
 	if err != nil {
+		return nil, err
+	}
+	if err := s.hydrateSnapshot(ctx, targetSnap); err != nil {
 		return nil, err
 	}
 	snap, err := buildSnapshot(targetSnap.AST)

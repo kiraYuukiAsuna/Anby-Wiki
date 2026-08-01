@@ -76,6 +76,15 @@ func (s *ConflictService) DetectAndRecord(ctx context.Context, proposalID uuid.U
 }
 
 func (s *ConflictService) detectPage(ctx context.Context, p *Proposal, records []OperationRecord) ([]MergeConflict, error) {
+	contentRecords := make([]OperationRecord, 0, len(records))
+	for i := range records {
+		if isPageContentOperation(records[i].OperationType) {
+			contentRecords = append(contentRecords, records[i])
+		}
+	}
+	if len(contentRecords) == 0 {
+		return nil, nil
+	}
 	if p.TargetID == nil || p.BaseRevisionID == nil {
 		return []MergeConflict{{ProposalID: p.ID, ConflictType: ConflictRevision}}, nil
 	}
@@ -110,8 +119,8 @@ func (s *ConflictService) detectPage(ctx context.Context, p *Proposal, records [
 		}
 	}
 	var conflicts []MergeConflict
-	for i := range records {
-		op, err := OperationFromRecord(&records[i])
+	for i := range contentRecords {
+		op, err := OperationFromRecord(&contentRecords[i])
 		if err != nil {
 			return nil, err
 		}

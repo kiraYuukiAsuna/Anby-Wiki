@@ -7,9 +7,12 @@
  * 远端数据缓存统一走 SWR。
  */
 import {
+  AssetsApi,
   AuthApi,
   CollectionsApi,
+  ComponentsApi,
   Configuration,
+  DatasetsApi,
   GovernanceApi,
   HistoryApi,
   ImportsApi,
@@ -19,6 +22,7 @@ import {
   ProjectionApi,
   ReadingApi,
   SearchApi,
+  SourcesApi,
   type ConfigurationParameters,
   type Middleware,
 } from "../../../contracts/generated/typescript";
@@ -79,6 +83,18 @@ export function authApi(overrides: ConfigurationParameters = {}): AuthApi {
   return new AuthApi(makeConfig(overrides));
 }
 
+/** 媒体资产目录、上传、不可变版本元数据与内容客户端。 */
+export function assetsApi(overrides: ConfigurationParameters = {}): AssetsApi {
+  return new AssetsApi(makeConfig(overrides));
+}
+
+/** 来源目录、不可变版本、分片与 Citation 证据客户端。 */
+export function sourcesApi(
+  overrides: ConfigurationParameters = {},
+): SourcesApi {
+  return new SourcesApi(makeConfig(overrides));
+}
+
 /** 元信息与健康检查客户端。 */
 export function metaApi(overrides: ConfigurationParameters = {}): MetaApi {
   return new MetaApi(makeConfig(overrides));
@@ -121,6 +137,20 @@ export function collectionsApi(
   overrides: ConfigurationParameters = {},
 ): CollectionsApi {
   return new CollectionsApi(makeConfig(overrides));
+}
+
+/** 信息框组件注册、版本生命周期与可信服务端预览客户端。 */
+export function componentsApi(
+  overrides: ConfigurationParameters = {},
+): ComponentsApi {
+  return new ComponentsApi(makeConfig(overrides));
+}
+
+/** Dataset 定义、Schema 校验记录与保存视图客户端。 */
+export function datasetsApi(
+  overrides: ConfigurationParameters = {},
+): DatasetsApi {
+  return new DatasetsApi(makeConfig(overrides));
 }
 
 /** Proposal、Preview、Review、Apply 与 ChangeBatch 回滚客户端。 */

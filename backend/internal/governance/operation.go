@@ -15,26 +15,29 @@ const (
 	OperationSchemaURL = "https://anby.wiki/schemas/proposal-operation/v1/operation.schema.json"
 	OperationVersion   = 1
 
-	OpCreatePage                = "create_page"
-	OpRenamePage                = "rename_page"
-	OpCreateRedirect            = "create_redirect"
-	OpInsertBlock               = "insert_block"
-	OpDeleteBlock               = "delete_block"
-	OpMoveBlock                 = "move_block"
-	OpReplaceBlock              = "replace_block"
-	OpInsertPageReference       = "insert_page_reference"
-	OpRetargetPageReference     = "retarget_page_reference"
-	OpInsertEntityReference     = "insert_entity_reference"
-	OpRetargetEntityReference   = "retarget_entity_reference"
-	OpInsertClaimReference      = "insert_claim_reference"
-	OpRetargetClaimReference    = "retarget_claim_reference"
-	OpInsertCitationReference   = "insert_citation_reference"
-	OpRetargetCitationReference = "retarget_citation_reference"
-	OpRetargetExternalLink      = "retarget_external_link"
-	OpCreateEntity              = "create_entity"
-	OpCreateClaim               = "create_claim"
-	OpSupersedeClaim            = "supersede_claim"
-	OpAddClaimSource            = "add_claim_source"
+	OpCreatePage                 = "create_page"
+	OpRenamePage                 = "rename_page"
+	OpCreateRedirect             = "create_redirect"
+	OpInsertBlock                = "insert_block"
+	OpDeleteBlock                = "delete_block"
+	OpMoveBlock                  = "move_block"
+	OpReplaceBlock               = "replace_block"
+	OpInsertPageReference        = "insert_page_reference"
+	OpRetargetPageReference      = "retarget_page_reference"
+	OpInsertEntityReference      = "insert_entity_reference"
+	OpRetargetEntityReference    = "retarget_entity_reference"
+	OpInsertClaimReference       = "insert_claim_reference"
+	OpRetargetClaimReference     = "retarget_claim_reference"
+	OpInsertCitationReference    = "insert_citation_reference"
+	OpRetargetCitationReference  = "retarget_citation_reference"
+	OpRetargetExternalLink       = "retarget_external_link"
+	OpCreateEntity               = "create_entity"
+	OpMergeEntity                = "merge_entity"
+	OpCreateClaim                = "create_claim"
+	OpSupersedeClaim             = "supersede_claim"
+	OpAddClaimSource             = "add_claim_source"
+	OpAddCollectionMembership    = "add_collection_membership"
+	OpRemoveCollectionMembership = "remove_collection_membership"
 )
 
 //go:embed schema/operation.schema.json
@@ -56,6 +59,7 @@ type OperationTarget struct {
 	BlockID            *string    `json:"block_id,omitempty"`
 	NodeID             *string    `json:"node_id,omitempty"`
 	EntityID           *uuid.UUID `json:"entity_id,omitempty"`
+	CollectionID       *uuid.UUID `json:"collection_id,omitempty"`
 	ClaimID            *uuid.UUID `json:"claim_id,omitempty"`
 	CitationID         *uuid.UUID `json:"citation_id,omitempty"`
 	ExternalResourceID *uuid.UUID `json:"external_resource_id,omitempty"`
@@ -126,6 +130,27 @@ func ParseOperationV1(raw []byte) (*OperationV1, error) {
 
 // AddOperationV1 校验权威契约后，把 envelope 各字段无损拆入 proposal_operation。
 func (s *Service) AddOperationV1(ctx context.Context, proposalID uuid.UUID, raw []byte) (*OperationRecord, error) {
+	return s.addOperationV1(ctx, proposalID, nil, raw)
+}
+
+// AddOperationV1As 是用户请求使用的所有者绑定版本。
+func (s *Service) AddOperationV1As(
+	ctx context.Context,
+	proposalID, actorID uuid.UUID,
+	raw []byte,
+) (*OperationRecord, error) {
+	if actorID == uuid.Nil {
+		return nil, ErrInvalidActor
+	}
+	return s.addOperationV1(ctx, proposalID, &actorID, raw)
+}
+
+func (s *Service) addOperationV1(
+	ctx context.Context,
+	proposalID uuid.UUID,
+	actorID *uuid.UUID,
+	raw []byte,
+) (*OperationRecord, error) {
 	op, err := ParseOperationV1(raw)
 	if err != nil {
 		return nil, err
@@ -134,11 +159,15 @@ func (s *Service) AddOperationV1(ctx context.Context, proposalID uuid.UUID, raw 
 	target, _ := json.Marshal(op.Target)
 	evidence, _ := json.Marshal(op.Evidence)
 	risk, _ := json.Marshal(op.Risk)
-	return s.AddOperation(ctx, AddOperationParams{
+	params := AddOperationParams{
 		ProposalID: proposalID, SchemaVersion: op.SchemaVersion, OperationType: op.OperationType,
 		TargetPageID: op.Target.PageID, TargetBlockID: op.Target.BlockID,
 		TargetNodeID: op.Target.NodeID, TargetEntityID: op.Target.EntityID,
 		TargetClaimID: op.Target.ClaimID, ExpectedHash: op.ExpectedHash,
 		Target: target, Base: base, Evidence: evidence, Risk: risk, Payload: op.Payload,
-	})
+	}
+	if actorID != nil {
+		return s.AddOperationAs(ctx, params, *actorID)
+	}
+	return s.AddOperation(ctx, params)
 }

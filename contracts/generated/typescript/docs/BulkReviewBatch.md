@@ -8,6 +8,7 @@
 Name | Type
 ------------ | -------------
 `id` | string
+`wikiId` | string
 `createdBy` | string
 `status` | string
 `samplingMode` | string
@@ -29,6 +30,7 @@ import type { BulkReviewBatch } from ''
 // TODO: Update the object below with actual values
 const example = {
   "id": null,
+  "wikiId": null,
   "createdBy": null,
   "status": null,
   "samplingMode": null,

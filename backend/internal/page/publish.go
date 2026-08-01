@@ -175,6 +175,7 @@ func (s *Service) publishWithinTx(ctx context.Context, tx pgx.Tx, d publishDraft
 		ContentSnapshotID: snap.ID, ActorID: d.actorID, ChangeBatchID: d.changeBatchID,
 		Summary: d.summary, IsMinor: d.isMinor, Visibility: VisibilityPublic,
 		ContentHash: snap.ContentHash, SchemaVersion: snap.SchemaVersion,
+		StorageTier: snap.StorageTier, ArchivedAt: snap.ArchivedAt,
 	}
 	if err := s.repo.InsertRevision(ctx, tx, rev); err != nil {
 		return nil, err
@@ -248,6 +249,7 @@ func buildSnapshot(raw json.RawMessage) (*ContentSnapshot, error) {
 		AST:           canonical,
 		ContentHash:   hex.EncodeToString(sum[:]),
 		SizeBytes:     len(canonical),
+		StorageTier:   SnapshotTierHot,
 	}, nil
 }
 

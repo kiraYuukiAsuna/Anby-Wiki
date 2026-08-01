@@ -4,8 +4,10 @@
 package main
 
 import (
+	"context"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"net/http"
 	"time"
 
@@ -46,6 +48,14 @@ func (a *WriteAPI) WithCollaborationPublisher(publisher *collaboration.Publisher
 }
 
 func (a *WriteAPI) authorize(w http.ResponseWriter, r *http.Request, actorID uuid.UUID, action string, pageID *uuid.UUID) bool {
+	if pageID != nil {
+		if _, err := getPageInWiki(
+			r.Context(), a.pages, a.wikiID, *pageID,
+		); err != nil {
+			serviceError(w, r, err)
+			return false
+		}
+	}
 	if a.auth == nil {
 		return true
 	}
@@ -78,6 +88,44 @@ type createPageRequest struct {
 
 type renamePageRequest struct {
 	Title string `json:"title"`
+}
+
+type pageRedirectTargetRequest struct {
+	Kind          string     `json:"kind"`
+	TargetPageID  *uuid.UUID `json:"target_page_id"`
+	Namespace     string     `json:"namespace"`
+	TargetTitle   string     `json:"target_title"`
+	AnchorBlockID *uuid.UUID `json:"anchor_block_id"`
+	ExternalURL   string     `json:"external_url"`
+}
+
+type createPageRedirectRequest struct {
+	Target pageRedirectTargetRequest `json:"target"`
+}
+
+type pageRedirectTargetResponse struct {
+	Kind            string     `json:"kind"`
+	TargetPageID    *uuid.UUID `json:"target_page_id,omitempty"`
+	TargetPageTitle string     `json:"target_page_title,omitempty"`
+	NamespaceID     *uuid.UUID `json:"namespace_id,omitempty"`
+	Namespace       string     `json:"namespace,omitempty"`
+	TargetTitle     string     `json:"target_title,omitempty"`
+	AnchorBlockID   *uuid.UUID `json:"anchor_block_id,omitempty"`
+	ExternalURL     string     `json:"external_url,omitempty"`
+}
+
+type pageRedirectResponse struct {
+	SourcePageID uuid.UUID                  `json:"source_page_id"`
+	Target       pageRedirectTargetResponse `json:"target"`
+	CreatedBy    uuid.UUID                  `json:"created_by"`
+	UpdatedBy    uuid.UUID                  `json:"updated_by"`
+	CreatedAt    time.Time                  `json:"created_at"`
+	UpdatedAt    time.Time                  `json:"updated_at"`
+}
+
+type upsertBlockRedirectRequest struct {
+	TargetPageID  uuid.UUID `json:"target_page_id"`
+	TargetBlockID uuid.UUID `json:"target_block_id"`
 }
 
 type publishRevisionRequest struct {
@@ -114,6 +162,8 @@ type revisionResponse struct {
 	Visibility        string     `json:"visibility"`
 	ContentHash       string     `json:"content_hash"`
 	SchemaVersion     int        `json:"schema_version"`
+	StorageTier       string     `json:"storage_tier"`
+	ArchivedAt        *time.Time `json:"archived_at"`
 	CreatedAt         time.Time  `json:"created_at"`
 }
 
@@ -146,7 +196,25 @@ func toRevisionResponse(r *page.Revision) revisionResponse {
 		Visibility:        r.Visibility,
 		ContentHash:       r.ContentHash,
 		SchemaVersion:     r.SchemaVersion,
+		StorageTier:       r.StorageTier,
+		ArchivedAt:        r.ArchivedAt,
 		CreatedAt:         r.CreatedAt,
+	}
+}
+
+func toPageRedirectResponse(item *page.PageRedirect) pageRedirectResponse {
+	return pageRedirectResponse{
+		SourcePageID: item.SourcePageID,
+		Target: pageRedirectTargetResponse{
+			Kind: item.Target.Kind, TargetPageID: item.Target.PageID,
+			TargetPageTitle: item.Target.TargetPageTitle,
+			NamespaceID:     item.Target.NamespaceID,
+			Namespace:       item.Target.NamespaceKey, TargetTitle: item.Target.Title,
+			AnchorBlockID: item.Target.AnchorBlockID,
+			ExternalURL:   item.Target.TargetInterwiki,
+		},
+		CreatedBy: item.CreatedBy, UpdatedBy: item.UpdatedBy,
+		CreatedAt: item.CreatedAt, UpdatedAt: item.UpdatedAt,
 	}
 }
 
@@ -223,6 +291,179 @@ func (a *WriteAPI) renamePage(w http.ResponseWriter, r *http.Request) {
 	httpx.WriteJSON(w, http.StatusOK, toPageResponse(p))
 }
 
+// getRedirect GET /api/v1/pages/{id}/redirect：读取当前权威重定向。
+func (a *WriteAPI) getRedirect(w http.ResponseWriter, r *http.Request) {
+	sourcePageID, ok := pageIDFrom(w, r)
+	if !ok {
+		return
+	}
+	if _, err := getPageInWiki(
+		r.Context(), a.pages, a.wikiID, sourcePageID,
+	); err != nil {
+		serviceError(w, r, err)
+		return
+	}
+	item, err := a.pages.GetRedirect(r.Context(), sourcePageID)
+	if err != nil {
+		serviceError(w, r, err)
+		return
+	}
+	httpx.WriteJSON(w, http.StatusOK, toPageRedirectResponse(item))
+}
+
+// createRedirect POST /api/v1/pages/{id}/redirect：创建或更新判别式重定向。
+func (a *WriteAPI) createRedirect(w http.ResponseWriter, r *http.Request) {
+	actorID, ok := actorIDFrom(w, r)
+	if !ok {
+		return
+	}
+	sourcePageID, ok := pageIDFrom(w, r)
+	if !ok {
+		return
+	}
+	var req createPageRedirectRequest
+	if !decodeJSON(w, r, &req) {
+		return
+	}
+	if !a.authorize(w, r, actorID, governance.ActionEdit, &sourcePageID) {
+		return
+	}
+	target := page.RedirectTarget{
+		Kind: req.Target.Kind, PageID: req.Target.TargetPageID,
+		Title:           req.Target.TargetTitle,
+		AnchorBlockID:   req.Target.AnchorBlockID,
+		TargetInterwiki: req.Target.ExternalURL,
+	}
+	if req.Target.Kind == page.RedirectTargetUnresolved {
+		if req.Target.Namespace == "" {
+			httpx.WriteError(
+				w, r, http.StatusBadRequest, httpx.CodeBadRequest,
+				"unresolved 目标的 namespace 为必填字段",
+			)
+			return
+		}
+		namespaceID, err := a.pages.NamespaceID(
+			r.Context(), a.wikiID, req.Target.Namespace,
+		)
+		if err != nil {
+			serviceError(w, r, err)
+			return
+		}
+		target.NamespaceID = &namespaceID
+	}
+	item, err := a.pages.CreateRedirect(
+		r.Context(), sourcePageID, target, actorID,
+	)
+	if err != nil {
+		serviceError(w, r, err)
+		return
+	}
+	httpx.WriteJSON(w, http.StatusOK, toPageRedirectResponse(item))
+}
+
+// deleteRedirect DELETE /api/v1/pages/{id}/redirect：删除当前重定向。
+func (a *WriteAPI) deleteRedirect(w http.ResponseWriter, r *http.Request) {
+	actorID, ok := actorIDFrom(w, r)
+	if !ok {
+		return
+	}
+	sourcePageID, ok := pageIDFrom(w, r)
+	if !ok {
+		return
+	}
+	if !a.authorize(w, r, actorID, governance.ActionEdit, &sourcePageID) {
+		return
+	}
+	if err := a.pages.DeleteRedirect(r.Context(), sourcePageID, actorID); err != nil {
+		serviceError(w, r, err)
+		return
+	}
+	w.WriteHeader(http.StatusNoContent)
+}
+
+func (a *WriteAPI) listBlockRedirects(w http.ResponseWriter, r *http.Request) {
+	pageID, ok := pageIDFrom(w, r)
+	if !ok {
+		return
+	}
+	if _, err := getPageInWiki(
+		r.Context(), a.pages, a.wikiID, pageID,
+	); err != nil {
+		serviceError(w, r, err)
+		return
+	}
+	items, err := a.pages.ListBlockRedirects(r.Context(), pageID)
+	if err != nil {
+		serviceError(w, r, err)
+		return
+	}
+	httpx.WriteJSON(w, http.StatusOK, map[string]any{"items": items})
+}
+
+func (a *WriteAPI) upsertBlockRedirect(w http.ResponseWriter, r *http.Request) {
+	actorID, ok := actorIDFrom(w, r)
+	if !ok {
+		return
+	}
+	pageID, ok := pageIDFrom(w, r)
+	if !ok {
+		return
+	}
+	blockID, err := uuid.Parse(chi.URLParam(r, "block_id"))
+	if err != nil {
+		httpx.WriteError(
+			w, r, http.StatusBadRequest, httpx.CodeBadRequest,
+			"block_id 不是合法 UUID",
+		)
+		return
+	}
+	if !a.authorize(w, r, actorID, governance.ActionEdit, &pageID) {
+		return
+	}
+	var req upsertBlockRedirectRequest
+	if !decodeJSON(w, r, &req) {
+		return
+	}
+	redirect, err := a.pages.UpsertBlockRedirect(
+		r.Context(), pageID, blockID,
+		req.TargetPageID, req.TargetBlockID, actorID,
+	)
+	if err != nil {
+		serviceError(w, r, err)
+		return
+	}
+	httpx.WriteJSON(w, http.StatusOK, redirect)
+}
+
+func (a *WriteAPI) deleteBlockRedirect(w http.ResponseWriter, r *http.Request) {
+	actorID, ok := actorIDFrom(w, r)
+	if !ok {
+		return
+	}
+	pageID, ok := pageIDFrom(w, r)
+	if !ok {
+		return
+	}
+	blockID, err := uuid.Parse(chi.URLParam(r, "block_id"))
+	if err != nil {
+		httpx.WriteError(
+			w, r, http.StatusBadRequest, httpx.CodeBadRequest,
+			"block_id 不是合法 UUID",
+		)
+		return
+	}
+	if !a.authorize(w, r, actorID, governance.ActionEdit, &pageID) {
+		return
+	}
+	if err := a.pages.DeleteBlockRedirect(
+		r.Context(), pageID, blockID, actorID,
+	); err != nil {
+		serviceError(w, r, err)
+		return
+	}
+	w.WriteHeader(http.StatusNoContent)
+}
+
 // publishRevision POST /api/v1/pages/{id}/revisions：原子发布 Revision（201 Revision）。
 // 基线过期返回 409 stale_revision。
 func (a *WriteAPI) publishRevision(w http.ResponseWriter, r *http.Request) {
@@ -294,6 +535,23 @@ func pageIDFrom(w http.ResponseWriter, r *http.Request) (uuid.UUID, bool) {
 	return id, true
 }
 
+// getPageInWiki scopes opaque Page IDs to the configured site. Foreign-Wiki
+// IDs intentionally have the same error semantics as missing IDs.
+func getPageInWiki(
+	ctx context.Context,
+	pages *page.Service,
+	wikiID, pageID uuid.UUID,
+) (*page.Page, error) {
+	value, err := pages.GetPage(ctx, pageID)
+	if err != nil {
+		return nil, err
+	}
+	if value.WikiID != wikiID {
+		return nil, fmt.Errorf("%w: id=%s", page.ErrPageNotFound, pageID)
+	}
+	return value, nil
+}
+
 // decodeJSON 解码请求体（拒绝未知字段）；失败时写 400 并返回 false。
 func decodeJSON(w http.ResponseWriter, r *http.Request, v any) bool {
 	dec := json.NewDecoder(r.Body)
@@ -308,11 +566,14 @@ func decodeJSON(w http.ResponseWriter, r *http.Request, v any) bool {
 // serviceError 把领域哨兵错误映射为契约 Error 响应。
 func serviceError(w http.ResponseWriter, r *http.Request, err error) {
 	switch {
-	case errors.Is(err, page.ErrInvalidTitle), errors.Is(err, page.ErrInvalidAST), errors.Is(err, page.ErrInvalidCursor):
+	case errors.Is(err, page.ErrInvalidTitle), errors.Is(err, page.ErrInvalidAST), errors.Is(err, page.ErrInvalidCursor),
+		errors.Is(err, page.ErrInvalidRedirectTarget):
 		httpx.WriteError(w, r, http.StatusBadRequest, httpx.CodeValidationFailed, err.Error())
 	case errors.Is(err, page.ErrInvalidActor), errors.Is(err, page.ErrActorNotAllowed):
 		httpx.WriteError(w, r, http.StatusForbidden, httpx.CodeForbidden, err.Error())
-	case errors.Is(err, page.ErrPageNotFound), errors.Is(err, page.ErrNamespaceNotFound), errors.Is(err, page.ErrRevisionNotFound):
+	case errors.Is(err, page.ErrPageNotFound), errors.Is(err, page.ErrNamespaceNotFound),
+		errors.Is(err, page.ErrRevisionNotFound), errors.Is(err, page.ErrAnchorNotFound),
+		errors.Is(err, page.ErrBlockRedirectNotFound), errors.Is(err, page.ErrRedirectNotFound):
 		httpx.WriteError(w, r, http.StatusNotFound, httpx.CodeNotFound, err.Error())
 	case errors.Is(err, collaboration.ErrDocumentNotFound), errors.Is(err, collaboration.ErrDocumentPageMismatch):
 		httpx.WriteError(w, r, http.StatusNotFound, httpx.CodeNotFound, err.Error())
@@ -322,10 +583,21 @@ func serviceError(w http.ResponseWriter, r *http.Request, err error) {
 		httpx.WriteError(w, r, http.StatusConflict, httpx.CodeConflict, err.Error())
 	case errors.Is(err, page.ErrTitleConflict):
 		httpx.WriteError(w, r, http.StatusConflict, httpx.CodeConflict, err.Error())
-	case errors.Is(err, page.ErrRedirectLoop), errors.Is(err, page.ErrRedirectTooDeep):
+	case errors.Is(err, page.ErrRedirectLoop), errors.Is(err, page.ErrRedirectTooDeep),
+		errors.Is(err, page.ErrBlockRedirectLoop):
 		httpx.WriteError(w, r, http.StatusUnprocessableEntity, httpx.CodeValidationFailed, err.Error())
 	case errors.Is(err, page.ErrRedirectTargetDeleted):
 		httpx.WriteError(w, r, http.StatusGone, httpx.CodeGone, err.Error())
+	case errors.Is(err, page.ErrSnapshotStorageUnavailable):
+		httpx.WriteError(
+			w, r, http.StatusServiceUnavailable, httpx.CodeInternal,
+			"历史版本暂时无法从冷存储读取，请稍后重试",
+		)
+	case errors.Is(err, page.ErrSnapshotIntegrity):
+		httpx.WriteError(
+			w, r, http.StatusInternalServerError, httpx.CodeInternal,
+			"历史版本完整性校验失败，已拒绝返回内容",
+		)
 	default:
 		httpx.WriteError(w, r, http.StatusInternalServerError, httpx.CodeInternal, "内部错误")
 	}

@@ -45,6 +45,34 @@ type entityMergeResponse struct {
 	ClaimMappings  []entityMergeClaimMappingResponse `json:"claim_mappings"`
 }
 
+type rollbackEntityMergeResponse struct {
+	MergeID             uuid.UUID   `json:"merge_id"`
+	RestoredEntityID    uuid.UUID   `json:"restored_entity_id"`
+	CompensatedClaimIDs []uuid.UUID `json:"compensated_claim_ids"`
+	RemovedTargetLabels int         `json:"removed_target_labels"`
+	Idempotent          bool        `json:"idempotent"`
+}
+
+func (a *KnowledgeReadAPI) getEntityMerge(
+	w http.ResponseWriter,
+	r *http.Request,
+) {
+	sourceID, ok := pageIDFrom(w, r)
+	if !ok {
+		return
+	}
+	if _, err := a.currentWikiEntity(r.Context(), sourceID); err != nil {
+		entityMergeError(w, r, err)
+		return
+	}
+	result, err := a.knowledge.GetEntityMergeBySource(r.Context(), sourceID)
+	if err != nil {
+		entityMergeError(w, r, err)
+		return
+	}
+	httpx.WriteJSON(w, http.StatusOK, toEntityMergeResponse(result))
+}
+
 func (a *KnowledgeReadAPI) mergeEntity(w http.ResponseWriter, r *http.Request) {
 	actorID, ok := actorIDFrom(w, r)
 	if !ok {
@@ -56,6 +84,16 @@ func (a *KnowledgeReadAPI) mergeEntity(w http.ResponseWriter, r *http.Request) {
 	}
 	var request mergeEntityRequest
 	if !decodeJSON(w, r, &request) {
+		return
+	}
+	if _, err := a.currentWikiEntity(r.Context(), sourceID); err != nil {
+		entityMergeError(w, r, err)
+		return
+	}
+	if _, err := a.currentWikiEntity(
+		r.Context(), request.TargetEntityID,
+	); err != nil {
+		entityMergeError(w, r, err)
 		return
 	}
 	if a.authorization == nil {
@@ -79,6 +117,58 @@ func (a *KnowledgeReadAPI) mergeEntity(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	httpx.WriteJSON(w, http.StatusOK, toEntityMergeResponse(result))
+}
+
+func (a *KnowledgeReadAPI) rollbackEntityMerge(
+	w http.ResponseWriter,
+	r *http.Request,
+) {
+	actorID, ok := actorIDFrom(w, r)
+	if !ok {
+		return
+	}
+	mergeID, ok := federationPathID(w, r, "id")
+	if !ok {
+		return
+	}
+	merge, err := a.knowledge.GetEntityMerge(r.Context(), mergeID)
+	if err != nil {
+		entityMergeError(w, r, err)
+		return
+	}
+	if _, err := a.currentWikiEntity(
+		r.Context(), merge.SourceEntityID,
+	); err != nil {
+		entityMergeError(w, r, knowledge.ErrEntityMergeNotFound)
+		return
+	}
+	if a.authorization == nil {
+		httpx.WriteError(
+			w, r, http.StatusForbidden, httpx.CodeForbidden,
+			"Entity 合并治理未启用",
+		)
+		return
+	}
+	if err := a.authorization.Check(
+		r.Context(), actorID, a.wikiID,
+		governance.ActionEntityMerge, nil,
+	); err != nil {
+		governanceError(w, r, err)
+		return
+	}
+	result, err := a.knowledge.RollbackEntityMerge(
+		r.Context(), mergeID, actorID,
+	)
+	if err != nil {
+		entityMergeError(w, r, err)
+		return
+	}
+	httpx.WriteJSON(w, http.StatusOK, rollbackEntityMergeResponse{
+		MergeID: result.MergeID, RestoredEntityID: result.RestoredEntityID,
+		CompensatedClaimIDs: result.CompensatedClaimIDs,
+		RemovedTargetLabels: result.RemovedTargetLabels,
+		Idempotent:          result.Idempotent,
+	})
 }
 
 func toEntityMergeResponse(result *knowledge.MergeEntityResult) entityMergeResponse {
@@ -108,12 +198,14 @@ func toEntityMergeResponse(result *knowledge.MergeEntityResult) entityMergeRespo
 
 func entityMergeError(w http.ResponseWriter, r *http.Request, err error) {
 	switch {
-	case errors.Is(err, knowledge.ErrEntityNotFound):
+	case errors.Is(err, knowledge.ErrEntityNotFound),
+		errors.Is(err, knowledge.ErrEntityMergeNotFound):
 		httpx.WriteError(w, r, http.StatusNotFound, httpx.CodeNotFound, err.Error())
 	case errors.Is(err, knowledge.ErrEntityMergeActorOnly):
 		httpx.WriteError(w, r, http.StatusForbidden, httpx.CodeForbidden, err.Error())
 	case errors.Is(err, knowledge.ErrInvalidEntityMerge),
-		errors.Is(err, knowledge.ErrEntityMergeCycle):
+		errors.Is(err, knowledge.ErrEntityMergeCycle),
+		errors.Is(err, knowledge.ErrEntityMergeStale):
 		httpx.WriteError(w, r, http.StatusConflict, httpx.CodeConflict, err.Error())
 	default:
 		httpx.WriteError(w, r, http.StatusInternalServerError, httpx.CodeInternal, "内部错误")

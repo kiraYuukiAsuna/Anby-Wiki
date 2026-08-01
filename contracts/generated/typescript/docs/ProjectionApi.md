@@ -5,10 +5,15 @@ All URIs are relative to *http://localhost:3000*
 | Method | HTTP request | Description |
 |------------- | ------------- | -------------|
 | [**getPageOutline**](ProjectionApi.md#getpageoutline) | **GET** /api/v1/pages/{id}/outline | 页面文档目录 |
+| [**getPageSection**](ProjectionApi.md#getpagesection) | **GET** /api/v1/pages/{id}/sections/{section_key} | 按需读取一个当前章节分片 |
+| [**getPageSections**](ProjectionApi.md#getpagesections) | **GET** /api/v1/pages/{id}/sections | 读取当前 Revision 的章节分片清单 |
 | [**listBacklinks**](ProjectionApi.md#listbacklinks) | **GET** /api/v1/pages/{id}/backlinks | 页面反向链接 |
 | [**listCitationUsages**](ProjectionApi.md#listcitationusages) | **GET** /api/v1/citations/{id}/usages | Citation 页面使用位置 |
 | [**listClaimUsages**](ProjectionApi.md#listclaimusages) | **GET** /api/v1/claims/{id}/usages | Claim 页面使用位置 |
+| [**listComponentUsages**](ProjectionApi.md#listcomponentusages) | **GET** /api/v1/components/{id}/usages | Component 页面依赖位置 |
 | [**listEntityMentions**](ProjectionApi.md#listentitymentions) | **GET** /api/v1/entities/{id}/mentions | Entity 页面提及位置 |
+| [**listSourceUsages**](ProjectionApi.md#listsourceusages) | **GET** /api/v1/sources/{id}/usages | Source 页面使用位置 |
+| [**locatePageSection**](ProjectionApi.md#locatepagesection) | **GET** /api/v1/pages/{id}/section-locator/{block_id} | 将稳定 Block ID 定位到其章节分片 |
 | [**resolvePageAnchor**](ProjectionApi.md#resolvepageanchor) | **GET** /api/v1/pages/{id}/anchors/{slug} | 解析当前或历史章节锚点 |
 
 
@@ -76,6 +81,149 @@ No authorization required
 | Status code | Description | Response headers |
 |-------------|-------------|------------------|
 | **200** | 文档目录（items 按文档顺序） |  * X-Request-ID -  <br>  |
+| **400** | 请求格式错误 |  -  |
+| **404** | 资源不存在 |  -  |
+| **410** | 资源曾存在但已删除（如软删除页面、重定向目标已删除） |  -  |
+| **500** | 服务端内部错误 |  -  |
+
+[[Back to top]](#) [[Back to API list]](../README.md#api-endpoints) [[Back to Model list]](../README.md#models) [[Back to README]](../README.md)
+
+
+## getPageSection
+
+> RenderedPageSection getPageSection(id, sectionKey)
+
+按需读取一个当前章节分片
+
+### Example
+
+```ts
+import {
+  Configuration,
+  ProjectionApi,
+} from '';
+import type { GetPageSectionRequest } from '';
+
+async function example() {
+  console.log("🚀 Testing  SDK...");
+  const api = new ProjectionApi();
+
+  const body = {
+    // string | 页面 ID（UUIDv7）
+    id: 38400000-8cf0-11bd-b23e-10b96e4ef00d,
+    // string
+    sectionKey: sectionKey_example,
+  } satisfies GetPageSectionRequest;
+
+  try {
+    const data = await api.getPageSection(body);
+    console.log(data);
+  } catch (error) {
+    console.error(error);
+  }
+}
+
+// Run the test
+example().catch(console.error);
+```
+
+### Parameters
+
+
+| Name | Type | Description  | Notes |
+|------------- | ------------- | ------------- | -------------|
+| **id** | `string` | 页面 ID（UUIDv7） | [Defaults to `undefined`] |
+| **sectionKey** | `string` |  | [Defaults to `undefined`] |
+
+### Return type
+
+[**RenderedPageSection**](RenderedPageSection.md)
+
+### Authorization
+
+No authorization required
+
+### HTTP request headers
+
+- **Content-Type**: Not defined
+- **Accept**: `application/json`
+
+
+### HTTP response details
+| Status code | Description | Response headers |
+|-------------|-------------|------------------|
+| **200** | AST 分片与安全 HTML 缓存 |  -  |
+| **400** | 请求格式错误 |  -  |
+| **404** | 资源不存在 |  -  |
+| **410** | 资源曾存在但已删除（如软删除页面、重定向目标已删除） |  -  |
+| **500** | 服务端内部错误 |  -  |
+
+[[Back to top]](#) [[Back to API list]](../README.md#api-endpoints) [[Back to Model list]](../README.md#models) [[Back to README]](../README.md)
+
+
+## getPageSections
+
+> PageSectionManifest getPageSections(id)
+
+读取当前 Revision 的章节分片清单
+
+匿名读取可重建的章节投影。仅当所有行匹配 Page.current_revision_id 与当前 renderer_version 时 ready&#x3D;true；否则返回 ready&#x3D;false，客户端应使用全文阅读。
+
+### Example
+
+```ts
+import {
+  Configuration,
+  ProjectionApi,
+} from '';
+import type { GetPageSectionsRequest } from '';
+
+async function example() {
+  console.log("🚀 Testing  SDK...");
+  const api = new ProjectionApi();
+
+  const body = {
+    // string | 页面 ID（UUIDv7）
+    id: 38400000-8cf0-11bd-b23e-10b96e4ef00d,
+  } satisfies GetPageSectionsRequest;
+
+  try {
+    const data = await api.getPageSections(body);
+    console.log(data);
+  } catch (error) {
+    console.error(error);
+  }
+}
+
+// Run the test
+example().catch(console.error);
+```
+
+### Parameters
+
+
+| Name | Type | Description  | Notes |
+|------------- | ------------- | ------------- | -------------|
+| **id** | `string` | 页面 ID（UUIDv7） | [Defaults to `undefined`] |
+
+### Return type
+
+[**PageSectionManifest**](PageSectionManifest.md)
+
+### Authorization
+
+No authorization required
+
+### HTTP request headers
+
+- **Content-Type**: Not defined
+- **Accept**: `application/json`
+
+
+### HTTP response details
+| Status code | Description | Response headers |
+|-------------|-------------|------------------|
+| **200** | 当前章节分片清单 |  -  |
 | **400** | 请求格式错误 |  -  |
 | **404** | 资源不存在 |  -  |
 | **410** | 资源曾存在但已删除（如软删除页面、重定向目标已删除） |  -  |
@@ -313,6 +461,85 @@ No authorization required
 [[Back to top]](#) [[Back to API list]](../README.md#api-endpoints) [[Back to Model list]](../README.md#models) [[Back to README]](../README.md)
 
 
+## listComponentUsages
+
+> ComponentUsageListPage listComponentUsages(id, version, cursor, pageSize)
+
+Component 页面依赖位置
+
+匿名反向查询当前页面引用一个 Component 的位置。只读 component_dependency，不扫描 AST JSON；可按不可变版本过滤。
+
+### Example
+
+```ts
+import {
+  Configuration,
+  ProjectionApi,
+} from '';
+import type { ListComponentUsagesRequest } from '';
+
+async function example() {
+  console.log("🚀 Testing  SDK...");
+  const api = new ProjectionApi();
+
+  const body = {
+    // string | Entity、Claim 或 Citation 稳定 ID
+    id: 38400000-8cf0-11bd-b23e-10b96e4ef00d,
+    // number (optional)
+    version: 56,
+    // string | 上一页响应返回的 next_cursor；首页不传 (optional)
+    cursor: cursor_example,
+    // number | 每页条数，默认 20，最大 100 (optional)
+    pageSize: 56,
+  } satisfies ListComponentUsagesRequest;
+
+  try {
+    const data = await api.listComponentUsages(body);
+    console.log(data);
+  } catch (error) {
+    console.error(error);
+  }
+}
+
+// Run the test
+example().catch(console.error);
+```
+
+### Parameters
+
+
+| Name | Type | Description  | Notes |
+|------------- | ------------- | ------------- | -------------|
+| **id** | `string` | Entity、Claim 或 Citation 稳定 ID | [Defaults to `undefined`] |
+| **version** | `number` |  | [Optional] [Defaults to `undefined`] |
+| **cursor** | `string` | 上一页响应返回的 next_cursor；首页不传 | [Optional] [Defaults to `undefined`] |
+| **pageSize** | `number` | 每页条数，默认 20，最大 100 | [Optional] [Defaults to `20`] |
+
+### Return type
+
+[**ComponentUsageListPage**](ComponentUsageListPage.md)
+
+### Authorization
+
+No authorization required
+
+### HTTP request headers
+
+- **Content-Type**: Not defined
+- **Accept**: `application/json`
+
+
+### HTTP response details
+| Status code | Description | Response headers |
+|-------------|-------------|------------------|
+| **200** | 一页 Component 使用位置 |  * X-Request-ID -  <br>  |
+| **400** | 请求格式错误 |  -  |
+| **404** | 资源不存在 |  -  |
+| **500** | 服务端内部错误 |  -  |
+
+[[Back to top]](#) [[Back to API list]](../README.md#api-endpoints) [[Back to Model list]](../README.md#models) [[Back to README]](../README.md)
+
+
 ## listEntityMentions
 
 > ReferenceUsageListPage listEntityMentions(id, cursor, pageSize)
@@ -384,6 +611,154 @@ No authorization required
 | **200** | 一页 Entity 提及位置 |  * X-Request-ID -  <br>  |
 | **400** | 请求格式错误 |  -  |
 | **404** | 资源不存在 |  -  |
+| **500** | 服务端内部错误 |  -  |
+
+[[Back to top]](#) [[Back to API list]](../README.md#api-endpoints) [[Back to Model list]](../README.md#models) [[Back to README]](../README.md)
+
+
+## listSourceUsages
+
+> SourceUsageListPage listSourceUsages(id, cursor, pageSize)
+
+Source 页面使用位置
+
+匿名反向查询一个 Source 经 SourceVersion、Citation 被当前页面使用的位置。 只读 citation_usage 及证据身份链，不扫描 AST JSON。
+
+### Example
+
+```ts
+import {
+  Configuration,
+  ProjectionApi,
+} from '';
+import type { ListSourceUsagesRequest } from '';
+
+async function example() {
+  console.log("🚀 Testing  SDK...");
+  const api = new ProjectionApi();
+
+  const body = {
+    // string | Entity、Claim 或 Citation 稳定 ID
+    id: 38400000-8cf0-11bd-b23e-10b96e4ef00d,
+    // string | 上一页响应返回的 next_cursor；首页不传 (optional)
+    cursor: cursor_example,
+    // number | 每页条数，默认 20，最大 100 (optional)
+    pageSize: 56,
+  } satisfies ListSourceUsagesRequest;
+
+  try {
+    const data = await api.listSourceUsages(body);
+    console.log(data);
+  } catch (error) {
+    console.error(error);
+  }
+}
+
+// Run the test
+example().catch(console.error);
+```
+
+### Parameters
+
+
+| Name | Type | Description  | Notes |
+|------------- | ------------- | ------------- | -------------|
+| **id** | `string` | Entity、Claim 或 Citation 稳定 ID | [Defaults to `undefined`] |
+| **cursor** | `string` | 上一页响应返回的 next_cursor；首页不传 | [Optional] [Defaults to `undefined`] |
+| **pageSize** | `number` | 每页条数，默认 20，最大 100 | [Optional] [Defaults to `20`] |
+
+### Return type
+
+[**SourceUsageListPage**](SourceUsageListPage.md)
+
+### Authorization
+
+No authorization required
+
+### HTTP request headers
+
+- **Content-Type**: Not defined
+- **Accept**: `application/json`
+
+
+### HTTP response details
+| Status code | Description | Response headers |
+|-------------|-------------|------------------|
+| **200** | 一页 Source 使用位置 |  * X-Request-ID -  <br>  |
+| **400** | 请求格式错误 |  -  |
+| **404** | 资源不存在 |  -  |
+| **500** | 服务端内部错误 |  -  |
+
+[[Back to top]](#) [[Back to API list]](../README.md#api-endpoints) [[Back to Model list]](../README.md#models) [[Back to README]](../README.md)
+
+
+## locatePageSection
+
+> PageSectionLocator locatePageSection(id, blockId)
+
+将稳定 Block ID 定位到其章节分片
+
+### Example
+
+```ts
+import {
+  Configuration,
+  ProjectionApi,
+} from '';
+import type { LocatePageSectionRequest } from '';
+
+async function example() {
+  console.log("🚀 Testing  SDK...");
+  const api = new ProjectionApi();
+
+  const body = {
+    // string | 页面 ID（UUIDv7）
+    id: 38400000-8cf0-11bd-b23e-10b96e4ef00d,
+    // string
+    blockId: 38400000-8cf0-11bd-b23e-10b96e4ef00d,
+  } satisfies LocatePageSectionRequest;
+
+  try {
+    const data = await api.locatePageSection(body);
+    console.log(data);
+  } catch (error) {
+    console.error(error);
+  }
+}
+
+// Run the test
+example().catch(console.error);
+```
+
+### Parameters
+
+
+| Name | Type | Description  | Notes |
+|------------- | ------------- | ------------- | -------------|
+| **id** | `string` | 页面 ID（UUIDv7） | [Defaults to `undefined`] |
+| **blockId** | `string` |  | [Defaults to `undefined`] |
+
+### Return type
+
+[**PageSectionLocator**](PageSectionLocator.md)
+
+### Authorization
+
+No authorization required
+
+### HTTP request headers
+
+- **Content-Type**: Not defined
+- **Accept**: `application/json`
+
+
+### HTTP response details
+| Status code | Description | Response headers |
+|-------------|-------------|------------------|
+| **200** | Block 所在的当前章节 key |  -  |
+| **400** | 请求格式错误 |  -  |
+| **404** | 资源不存在 |  -  |
+| **410** | 资源曾存在但已删除（如软删除页面、重定向目标已删除） |  -  |
 | **500** | 服务端内部错误 |  -  |
 
 [[Back to top]](#) [[Back to API list]](../README.md#api-endpoints) [[Back to Model list]](../README.md#models) [[Back to README]](../README.md)

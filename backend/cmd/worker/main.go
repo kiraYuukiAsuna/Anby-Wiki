@@ -12,10 +12,12 @@
 //	worker -metrics                    输出一次积压/延迟/失败指标后退出
 //	worker -check-consistency          抽检投影状态与页面 Current 是否一致后退出
 //	worker -replay-dead                将全部死信重置为 pending 后退出
+//	worker -archive-revisions          归档一批到期的非当前 Revision 后退出
 package main
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"flag"
 	"log/slog"
@@ -29,6 +31,7 @@ import (
 	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5/pgxpool"
 
+	"github.com/anby/wiki/backend/internal/collection"
 	"github.com/anby/wiki/backend/internal/governance"
 	"github.com/anby/wiki/backend/internal/knowledge"
 	"github.com/anby/wiki/backend/internal/linkhealth"
@@ -38,6 +41,7 @@ import (
 	"github.com/anby/wiki/backend/internal/platform/id"
 	"github.com/anby/wiki/backend/internal/platform/logging"
 	"github.com/anby/wiki/backend/internal/platform/observability"
+	"github.com/anby/wiki/backend/internal/platform/storage"
 	"github.com/anby/wiki/backend/internal/projection"
 	wikisearch "github.com/anby/wiki/backend/internal/search"
 )
@@ -68,11 +72,18 @@ func run(args []string) int {
 	sampleSize := fs.Int("sample-size", 100, "一致性抽检页面数（1..10000）")
 	replayDead := fs.Bool("replay-dead", false, "将全部 Outbox 死信重置为 pending 后退出")
 	checkExternalLinks := fs.Bool("check-external-links", false, "执行一批到期外链健康检查后退出")
+	archiveRevisions := fs.Bool(
+		"archive-revisions", false,
+		"归档一批到期的非当前 Revision 快照后退出",
+	)
 	if err := fs.Parse(args); err != nil {
 		return exitUsage
 	}
 	modeCount := 0
-	for _, enabled := range []bool{*rebuildAll, *rebuildPage != "", *metrics, *checkConsistency, *replayDead, *checkExternalLinks} {
+	for _, enabled := range []bool{
+		*rebuildAll, *rebuildPage != "", *metrics, *checkConsistency,
+		*replayDead, *checkExternalLinks, *archiveRevisions,
+	} {
 		if enabled {
 			modeCount++
 		}
@@ -132,6 +143,11 @@ func run(args []string) int {
 		return exitError
 	}
 	defer pool.Close()
+
+	revisionPages := configuredRevisionSnapshotService(pool, cfg)
+	if *archiveRevisions {
+		return runRevisionArchive(ctx, logger, revisionPages, cfg.RevisionArchiveBatchSize)
+	}
 
 	searchBackend, err := configuredWorkerSearchBackend(ctx, pool, cfg)
 	if err != nil {
@@ -198,14 +214,109 @@ func run(args []string) int {
 	})
 	consumer.Register(page.OutboxEventPageCreated, metadataHandler)
 	consumer.Register(page.OutboxEventPageRenamed, metadataHandler)
+	consumer.Register(page.OutboxEventPageRedirected,
+		projection.HandlerFunc(func(ctx context.Context, event projection.Event) error {
+			return searchBuilder.HandlePageMetadataEvent(ctx, event)
+		}))
+	pageDeletedHandler := projection.NewPageDeletedHandler(pool)
+	consumer.Register(page.OutboxEventPageDeleted,
+		projection.HandlerFunc(func(ctx context.Context, event projection.Event) error {
+			if err := pageDeletedHandler.Handle(ctx, event); err != nil {
+				return err
+			}
+			return searchBuilder.HandlePageMetadataEvent(ctx, event)
+		}))
 	consumer.Register(page.OutboxEventRevisionPublished,
 		resolver.WrapPublishedHandler(projection.NewRevisionPublishedHandler(pool, registry, logger)))
-	consumer.Register(knowledge.OutboxEventClaimChanged,
-		projection.NewClaimChangedHandler(pool, logger))
-	consumer.Register(knowledge.OutboxEventEntityMerged,
-		newEntityMergeRepairHandler(governance.NewService(
-			governance.NewRepository(pool), db.NewTxManager(pool), id.NewGenerator(),
-		)))
+	claimChangedHandler := projection.NewClaimChangedHandler(pool, logger)
+	entityMetadataHandler := projection.NewEntityMetadataChangedHandler(
+		pool, searchBuilder, logger,
+	)
+	factConsistency := knowledge.NewFactConsistencyService(
+		knowledge.NewRepository(pool), db.NewTxManager(pool), id.NewGenerator(),
+	)
+	entityGraph := projection.NewEntityGraphService(pool)
+	consumer.Register(
+		knowledge.OutboxEventClaimChanged,
+		projection.HandlerFunc(func(
+			ctx context.Context,
+			event projection.Event,
+		) error {
+			if err := claimChangedHandler.Handle(ctx, event); err != nil {
+				return err
+			}
+			payload, err := projection.DecodeClaimChangedPayload(
+				ctx, pool, event,
+			)
+			if err != nil {
+				return err
+			}
+			_, _, err = factConsistency.RebuildSubject(
+				ctx, payload.SubjectEntityID,
+			)
+			if err != nil {
+				return err
+			}
+			_, err = entityGraph.RebuildSubject(ctx, payload.SubjectEntityID)
+			return err
+		}),
+	)
+	consumer.Register(
+		knowledge.OutboxEventEntityMetadataChanged,
+		entityMetadataHandler,
+	)
+	consumer.Register(
+		knowledge.OutboxEventPageEntityBindingChanged,
+		projection.HandlerFunc(func(
+			ctx context.Context,
+			event projection.Event,
+		) error {
+			return searchBuilder.HandlePageMetadataEvent(ctx, event)
+		}),
+	)
+	entityMergeRepair := newEntityMergeRepairHandler(governance.NewService(
+		governance.NewRepository(pool), db.NewTxManager(pool), id.NewGenerator(),
+	))
+	consumer.Register(
+		knowledge.OutboxEventEntityMerged,
+		projection.HandlerFunc(func(
+			ctx context.Context,
+			event projection.Event,
+		) error {
+			if err := entityMergeRepair.Handle(ctx, event); err != nil {
+				return err
+			}
+			var payload entityMergedPayload
+			if err := json.Unmarshal(event.Payload, &payload); err != nil {
+				return err
+			}
+			return entityMetadataHandler.HandleEntityIDs(
+				ctx, event, payload.SourceEntityID, payload.TargetEntityID,
+			)
+		}),
+	)
+	consumer.Register(
+		knowledge.OutboxEventEntityMergeRolledBack,
+		projection.HandlerFunc(func(
+			ctx context.Context,
+			event projection.Event,
+		) error {
+			var payload entityMergedPayload
+			if err := json.Unmarshal(event.Payload, &payload); err != nil {
+				return err
+			}
+			return entityMetadataHandler.HandleEntityIDs(
+				ctx, event, payload.SourceEntityID, payload.TargetEntityID,
+			)
+		}),
+	)
+	membershipHandler := projection.HandlerFunc(func(
+		context.Context, projection.Event,
+	) error {
+		return nil
+	})
+	consumer.Register(collection.OutboxEventMembershipAdded, membershipHandler)
+	consumer.Register(collection.OutboxEventMembershipRemoved, membershipHandler)
 	go monitorMetrics(ctx, logger, pool, 30*time.Second)
 	go metricsRegistry.MonitorDatabase(ctx, logger, pool, serviceName, cfg.ObservabilityDBInterval)
 	metricsDone, err := serveMetrics(ctx, logger, cfg.WorkerMetricsAddr, metricsRegistry.Handler())
@@ -246,15 +357,115 @@ func run(args []string) int {
 		defer close(linkHealthDone)
 		_ = linkHealthRunner.Run(ctx, 20, time.Minute)
 	}()
+	revisionArchiveDone := make(chan struct{})
+	if !cfg.RevisionArchiveEnabled {
+		close(revisionArchiveDone)
+		logger.Info(
+			"Revision 自动归档未启用",
+			slog.String("setting", "REVISION_ARCHIVE_ENABLED"),
+		)
+	} else {
+		go func() {
+			defer close(revisionArchiveDone)
+			runRevisionArchiveLoop(
+				ctx, logger, revisionPages,
+				cfg.RevisionArchiveBatchSize,
+				cfg.RevisionArchiveInterval,
+			)
+		}()
+	}
 
 	<-ctx.Done()
 	logger.Info("收到退出信号，等待在途事件处理完成")
 	<-runDone
 	<-importDone
 	<-linkHealthDone
+	<-revisionArchiveDone
 	<-metricsDone
 	logger.Info("worker 已退出")
 	return exitOK
+}
+
+func configuredRevisionSnapshotService(
+	pool *pgxpool.Pool,
+	cfg config.Config,
+) *page.Service {
+	service := page.NewService(
+		page.NewRepository(pool), db.NewTxManager(pool), id.NewGenerator(),
+	)
+	var objectStore storage.Store
+	if cfg.S3Endpoint != "" && cfg.S3Bucket != "" &&
+		cfg.S3AccessKey != "" && cfg.S3SecretKey != "" {
+		objectStore = storage.NewS3Store(storage.S3Config{
+			Endpoint: cfg.S3Endpoint, Region: cfg.S3Region,
+			Bucket: cfg.S3Bucket, AccessKey: cfg.S3AccessKey,
+			SecretKey: cfg.S3SecretKey,
+		})
+	}
+	return service.WithSnapshotStorage(page.SnapshotStorageConfig{
+		Store: objectStore, Environment: cfg.Env,
+		MaxBytes:  cfg.RevisionArchiveMaxBytes,
+		Retention: cfg.RevisionArchiveRetention,
+		BatchSize: cfg.RevisionArchiveBatchSize,
+	})
+}
+
+func runRevisionArchive(
+	ctx context.Context,
+	logger *slog.Logger,
+	service *page.Service,
+	limit int,
+) int {
+	result, err := service.ArchiveRevisionSnapshots(ctx, limit)
+	if err != nil {
+		logger.Error("Revision 快照归档失败", slog.Any("error", err))
+		return exitError
+	}
+	logRevisionArchive(logger, result)
+	return exitOK
+}
+
+func runRevisionArchiveLoop(
+	ctx context.Context,
+	logger *slog.Logger,
+	service *page.Service,
+	limit int,
+	interval time.Duration,
+) {
+	run := func() {
+		result, err := service.ArchiveRevisionSnapshots(ctx, limit)
+		if err != nil {
+			if ctx.Err() == nil {
+				logger.Warn("Revision 自动归档失败", slog.Any("error", err))
+			}
+			return
+		}
+		logRevisionArchive(logger, result)
+	}
+	run()
+	ticker := time.NewTicker(interval)
+	defer ticker.Stop()
+	for {
+		select {
+		case <-ctx.Done():
+			return
+		case <-ticker.C:
+			run()
+		}
+	}
+}
+
+func logRevisionArchive(
+	logger *slog.Logger,
+	result *page.SnapshotArchiveResult,
+) {
+	logger.Info(
+		"Revision 快照归档批次完成",
+		slog.Int("examined", result.Examined),
+		slog.Int("archived", result.Archived),
+		slog.Int("skipped", result.Skipped),
+		slog.Int64("archived_bytes", result.ArchivedBytes),
+	)
 }
 
 func serveMetrics(ctx context.Context, logger *slog.Logger, addr string, handler http.Handler) (<-chan struct{}, error) {
@@ -401,6 +612,7 @@ func registerBuilders(reg *projection.Registry, pool *pgxpool.Pool, logger *slog
 	reg.Register(projection.NewClaimUsageBuilder(pool))
 	reg.Register(projection.NewCitationUsageBuilder(pool))
 	reg.Register(projection.NewRenderedPageBuilder(pool))
+	reg.Register(projection.NewRenderedSectionsBuilder(pool))
 	searchBackend := wikisearch.SearchAdapter(wikisearch.NewPostgresAdapter(pool))
 	if len(adapters) > 0 && adapters[0] != nil {
 		searchBackend = adapters[0]
@@ -410,8 +622,23 @@ func registerBuilders(reg *projection.Registry, pool *pgxpool.Pool, logger *slog
 	return searchBuilder
 }
 
-func configuredWorkerSearchBackend(_ context.Context, pool *pgxpool.Pool, cfg config.Config) (wikisearch.SearchAdapter, error) {
-	return wikisearch.NewBackend(pool, wikisearch.BackendConfig{Backend: cfg.SearchBackend})
+func configuredWorkerSearchBackend(ctx context.Context, pool *pgxpool.Pool, cfg config.Config) (wikisearch.SearchAdapter, error) {
+	adapter, err := wikisearch.NewBackend(pool, wikisearch.BackendConfig{
+		Backend: cfg.SearchBackend, MeiliURL: cfg.MeiliURL, MeiliAPIKey: cfg.MeiliAPIKey,
+		MeiliIndex: cfg.MeiliIndex, MeiliTimeout: cfg.MeiliTimeout,
+		MeiliTaskTimeout: cfg.MeiliTaskTimeout, SemanticEnabled: cfg.SearchSemanticEnabled,
+		MeiliEmbedderName: cfg.MeiliEmbedderName, MeiliEmbedderSource: cfg.MeiliEmbedderSource,
+		MeiliEmbedderModel: cfg.MeiliEmbedderModel, MeiliEmbedderAPIKey: cfg.MeiliEmbedderAPIKey,
+	})
+	if err != nil {
+		return nil, err
+	}
+	if meili, ok := adapter.(*wikisearch.MeilisearchAdapter); ok {
+		if err := meili.EnsureIndex(ctx); err != nil {
+			return nil, err
+		}
+	}
+	return adapter, nil
 }
 
 // runRebuild 执行一次性重建命令，返回退出码。

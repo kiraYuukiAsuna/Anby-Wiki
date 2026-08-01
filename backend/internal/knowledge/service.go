@@ -5,6 +5,8 @@ import (
 	"errors"
 	"fmt"
 	"strings"
+	"time"
+	"unicode/utf8"
 
 	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5"
@@ -18,6 +20,8 @@ import (
 const (
 	defaultSearchLimit = 20
 	maxSearchLimit     = 100
+	maxLanguageLength  = 64
+	maxDescriptionSize = 1000
 )
 
 // Service Entity 领域服务：Entity 身份与标签/别名/绑定的唯一权威写入入口。
@@ -158,10 +162,30 @@ func (s *Service) HasPageBinding(ctx context.Context, pageID, entityID uuid.UUID
 	return s.repo.HasPageBinding(ctx, nil, pageID, entityID)
 }
 
+// ListPageBindings lists a live Page's authoritative Entity relationships.
+func (s *Service) ListPageBindings(
+	ctx context.Context,
+	wikiID, pageID uuid.UUID,
+) ([]PageEntityBinding, error) {
+	p, err := s.pages.GetPageByID(ctx, nil, pageID)
+	if err != nil {
+		return nil, err
+	}
+	if p.WikiID != wikiID || p.DeletedAt != nil {
+		return nil, fmt.Errorf("%w: id=%s 已删除", page.ErrPageNotFound, pageID)
+	}
+	return s.repo.ListPageBindings(ctx, nil, pageID)
+}
+
 // AddLabel 追加标签。同 (language, label) 已存在返回 ErrLabelExists；
 // IsPrimary 且该语言已有主标签返回 ErrDuplicatePrimaryLabel
 // （服务层在实体行锁内前置检查，DB 部分唯一索引兜底并发）。
-func (s *Service) AddLabel(ctx context.Context, entityID uuid.UUID, input LabelInput) (*EntityLabel, error) {
+func (s *Service) AddLabel(
+	ctx context.Context,
+	entityID uuid.UUID,
+	input LabelInput,
+	actorID uuid.UUID,
+) (*EntityLabel, error) {
 	l, err := normalizeLabel(input)
 	if err != nil {
 		return nil, err
@@ -169,6 +193,9 @@ func (s *Service) AddLabel(ctx context.Context, entityID uuid.UUID, input LabelI
 	l.EntityID = entityID
 
 	err = s.txm.InTx(ctx, func(tx pgx.Tx) error {
+		if err := s.pages.CheckWriteActor(ctx, tx, actorID); err != nil {
+			return err
+		}
 		if _, err := s.lockActiveEntity(ctx, tx, entityID); err != nil {
 			return err
 		}
@@ -184,7 +211,27 @@ func (s *Service) AddLabel(ctx context.Context, entityID uuid.UUID, input LabelI
 				return err
 			}
 		}
-		return s.repo.InsertLabel(ctx, tx, l)
+		if err := s.repo.InsertLabel(ctx, tx, l); err != nil {
+			return err
+		}
+		if err := s.repo.TouchEntity(ctx, tx, entityID); err != nil {
+			return err
+		}
+		return s.appendKnowledgeMutation(
+			ctx,
+			tx,
+			actorID,
+			AuditEventEntityLabelAdded,
+			OutboxEventEntityMetadataChanged,
+			AggregateTypeEntity,
+			entityID,
+			map[string]any{
+				"entity_id":  entityID,
+				"language":   l.Language,
+				"label":      l.Label,
+				"is_primary": l.IsPrimary,
+			},
+		)
 	})
 	if err != nil {
 		return nil, err
@@ -194,12 +241,26 @@ func (s *Service) AddLabel(ctx context.Context, entityID uuid.UUID, input LabelI
 
 // RemoveLabel 删除标签。删除主标签时若它是实体仅剩的主标签，
 // 返回 ErrNoPrimaryLabel（实体必须始终保有至少一个主标签，与 CreateEntity 不变量一致）。
-func (s *Service) RemoveLabel(ctx context.Context, entityID uuid.UUID, language, label string) error {
+func (s *Service) RemoveLabel(
+	ctx context.Context,
+	entityID uuid.UUID,
+	language, label string,
+	actorID uuid.UUID,
+) error {
+	normalized, err := normalizeLabel(LabelInput{Language: language, Label: label})
+	if err != nil {
+		return err
+	}
 	return s.txm.InTx(ctx, func(tx pgx.Tx) error {
+		if err := s.pages.CheckWriteActor(ctx, tx, actorID); err != nil {
+			return err
+		}
 		if _, err := s.lockActiveEntity(ctx, tx, entityID); err != nil {
 			return err
 		}
-		l, err := s.repo.GetLabel(ctx, tx, entityID, language, label)
+		l, err := s.repo.GetLabel(
+			ctx, tx, entityID, normalized.Language, normalized.Label,
+		)
 		if err != nil {
 			return err
 		}
@@ -212,28 +273,98 @@ func (s *Service) RemoveLabel(ctx context.Context, entityID uuid.UUID, language,
 				return fmt.Errorf("%w: entity=%s 仅剩的主标签不可删除", ErrNoPrimaryLabel, entityID)
 			}
 		}
-		return s.repo.DeleteLabel(ctx, tx, entityID, language, label)
+		if err := s.repo.DeleteLabel(
+			ctx, tx, entityID, normalized.Language, normalized.Label,
+		); err != nil {
+			return err
+		}
+		if err := s.repo.TouchEntity(ctx, tx, entityID); err != nil {
+			return err
+		}
+		return s.appendKnowledgeMutation(
+			ctx,
+			tx,
+			actorID,
+			AuditEventEntityLabelRemoved,
+			OutboxEventEntityMetadataChanged,
+			AggregateTypeEntity,
+			entityID,
+			map[string]any{
+				"entity_id":   entityID,
+				"language":    normalized.Language,
+				"label":       normalized.Label,
+				"was_primary": l.IsPrimary,
+			},
+		)
 	})
 }
 
 // SetPrimaryLabel 把指定标签置为该语言的主标签（同事务内先取消旧主标签）。
 // 标签不存在返回 ErrLabelNotFound；已是主标签时为 no-op。
-func (s *Service) SetPrimaryLabel(ctx context.Context, entityID uuid.UUID, language, label string) error {
+func (s *Service) SetPrimaryLabel(
+	ctx context.Context,
+	entityID uuid.UUID,
+	language, label string,
+	actorID uuid.UUID,
+) error {
+	normalized, err := normalizeLabel(LabelInput{Language: language, Label: label})
+	if err != nil {
+		return err
+	}
 	return s.txm.InTx(ctx, func(tx pgx.Tx) error {
+		if err := s.pages.CheckWriteActor(ctx, tx, actorID); err != nil {
+			return err
+		}
 		if _, err := s.lockActiveEntity(ctx, tx, entityID); err != nil {
 			return err
 		}
-		l, err := s.repo.GetLabel(ctx, tx, entityID, language, label)
+		l, err := s.repo.GetLabel(
+			ctx, tx, entityID, normalized.Language, normalized.Label,
+		)
 		if err != nil {
 			return err
 		}
 		if l.IsPrimary {
 			return nil
 		}
-		if err := s.repo.ClearPrimaryLabel(ctx, tx, entityID, language); err != nil {
+		previous, err := s.repo.GetPrimaryLabel(
+			ctx, tx, entityID, normalized.Language,
+		)
+		if err != nil && !errors.Is(err, ErrLabelNotFound) {
 			return err
 		}
-		return s.repo.SetLabelPrimary(ctx, tx, entityID, language, label)
+		if err := s.repo.ClearPrimaryLabel(
+			ctx, tx, entityID, normalized.Language,
+		); err != nil {
+			return err
+		}
+		if err := s.repo.SetLabelPrimary(
+			ctx, tx, entityID, normalized.Language, normalized.Label,
+		); err != nil {
+			return err
+		}
+		if err := s.repo.TouchEntity(ctx, tx, entityID); err != nil {
+			return err
+		}
+		var previousLabel *string
+		if previous != nil {
+			previousLabel = &previous.Label
+		}
+		return s.appendKnowledgeMutation(
+			ctx,
+			tx,
+			actorID,
+			AuditEventEntityPrimaryLabelChanged,
+			OutboxEventEntityMetadataChanged,
+			AggregateTypeEntity,
+			entityID,
+			map[string]any{
+				"entity_id":      entityID,
+				"language":       normalized.Language,
+				"label":          normalized.Label,
+				"previous_label": previousLabel,
+			},
+		)
 	})
 }
 
@@ -248,7 +379,12 @@ type AliasInput struct {
 
 // AddAlias 追加别名。同实体内 normalized_alias 重复（含大小写/空白书写差异）
 // 返回 ErrDuplicateAlias。
-func (s *Service) AddAlias(ctx context.Context, entityID uuid.UUID, input AliasInput) (*EntityAlias, error) {
+func (s *Service) AddAlias(
+	ctx context.Context,
+	entityID uuid.UUID,
+	input AliasInput,
+	actorID uuid.UUID,
+) (*EntityAlias, error) {
 	display, err := displayLabel(input.Alias)
 	if err != nil {
 		return nil, err
@@ -264,6 +400,13 @@ func (s *Service) AddAlias(ctx context.Context, entityID uuid.UUID, input AliasI
 	if input.AliasType == "" {
 		input.AliasType = AliasTypeCommon
 	}
+	switch input.AliasType {
+	case AliasTypeCommon, AliasTypeHistorical, AliasTypeAbbreviation, AliasTypeImport:
+	default:
+		return nil, fmt.Errorf(
+			"%w: alias_type=%q", ErrInvalidLabel, input.AliasType,
+		)
+	}
 
 	a := &EntityAlias{
 		EntityID:        entityID,
@@ -273,6 +416,9 @@ func (s *Service) AddAlias(ctx context.Context, entityID uuid.UUID, input AliasI
 		AliasType:       input.AliasType,
 	}
 	err = s.txm.InTx(ctx, func(tx pgx.Tx) error {
+		if err := s.pages.CheckWriteActor(ctx, tx, actorID); err != nil {
+			return err
+		}
 		if _, err := s.lockActiveEntity(ctx, tx, entityID); err != nil {
 			return err
 		}
@@ -286,7 +432,28 @@ func (s *Service) AddAlias(ctx context.Context, entityID uuid.UUID, input AliasI
 			return err
 		}
 		a.ID = aliasID
-		return s.repo.InsertAlias(ctx, tx, a)
+		if err := s.repo.InsertAlias(ctx, tx, a); err != nil {
+			return err
+		}
+		if err := s.repo.TouchEntity(ctx, tx, entityID); err != nil {
+			return err
+		}
+		return s.appendKnowledgeMutation(
+			ctx,
+			tx,
+			actorID,
+			AuditEventEntityAliasAdded,
+			OutboxEventEntityMetadataChanged,
+			AggregateTypeEntity,
+			entityID,
+			map[string]any{
+				"entity_id":  entityID,
+				"alias_id":   a.ID,
+				"language":   a.Language,
+				"alias":      a.Alias,
+				"alias_type": a.AliasType,
+			},
+		)
 	})
 	if err != nil {
 		return nil, err
@@ -295,13 +462,77 @@ func (s *Service) AddAlias(ctx context.Context, entityID uuid.UUID, input AliasI
 }
 
 // RemoveAlias 按 ID 删除别名，未命中返回 ErrAliasNotFound。
-func (s *Service) RemoveAlias(ctx context.Context, entityID, aliasID uuid.UUID) error {
+func (s *Service) RemoveAlias(
+	ctx context.Context,
+	entityID, aliasID, actorID uuid.UUID,
+) error {
 	return s.txm.InTx(ctx, func(tx pgx.Tx) error {
+		if err := s.pages.CheckWriteActor(ctx, tx, actorID); err != nil {
+			return err
+		}
 		if _, err := s.lockActiveEntity(ctx, tx, entityID); err != nil {
 			return err
 		}
-		return s.repo.DeleteAlias(ctx, tx, entityID, aliasID)
+		aliases, err := s.repo.ListAliases(ctx, tx, entityID)
+		if err != nil {
+			return err
+		}
+		var removed *EntityAlias
+		for i := range aliases {
+			if aliases[i].ID == aliasID {
+				removed = &aliases[i]
+				break
+			}
+		}
+		if removed == nil {
+			return fmt.Errorf(
+				"%w: entity=%s alias_id=%s", ErrAliasNotFound, entityID, aliasID,
+			)
+		}
+		if err := s.repo.DeleteAlias(ctx, tx, entityID, aliasID); err != nil {
+			return err
+		}
+		if err := s.repo.TouchEntity(ctx, tx, entityID); err != nil {
+			return err
+		}
+		return s.appendKnowledgeMutation(
+			ctx,
+			tx,
+			actorID,
+			AuditEventEntityAliasRemoved,
+			OutboxEventEntityMetadataChanged,
+			AggregateTypeEntity,
+			entityID,
+			map[string]any{
+				"entity_id":  entityID,
+				"alias_id":   removed.ID,
+				"language":   removed.Language,
+				"alias":      removed.Alias,
+				"alias_type": removed.AliasType,
+			},
+		)
 	})
+}
+
+// RollbackCreatedEntityInTx soft-deletes an Entity created by the target
+// ChangeBatch only while its optimistic timestamp and all current references
+// still match the creation state. Historical labels and terminal Claims remain
+// available to audit readers.
+func (s *Service) RollbackCreatedEntityInTx(
+	ctx context.Context,
+	tx pgx.Tx,
+	entityID, actorID, changeBatchID uuid.UUID,
+	expectedUpdatedAt time.Time,
+) error {
+	if err := s.pages.CheckWriteActor(ctx, tx, actorID); err != nil {
+		return err
+	}
+	if _, err := s.lockActiveEntity(ctx, tx, entityID); err != nil {
+		return err
+	}
+	return s.repo.SoftDeleteCreatedEntityByBatch(
+		ctx, tx, entityID, changeBatchID, expectedUpdatedAt,
+	)
 }
 
 // SearchParams 规范化搜索入参。TypeKey 为空不过滤类型；
@@ -391,15 +622,18 @@ func (s *Service) SearchEntities(ctx context.Context, params SearchParams) ([]Se
 
 // BindPageParams 页面-实体绑定入参。Role 限 BindingRolePrimary/BindingRoleMentioned。
 type BindPageParams struct {
+	WikiID   uuid.UUID
 	PageID   uuid.UUID
 	EntityID uuid.UUID
 	Role     string
 	Language string
+	ActorID  uuid.UUID
 }
 
 // BindPage 绑定页面与实体。Page 必须存在且未软删除；Entity 必须存在且为
-// active（merged 返回 ErrEntityMerged）；重复绑定返回 ErrBindingExists。
-// 只写 page_entity_binding；page.primary_entity_id 指针的同步不在本 Task 范围。
+// active（merged 返回 ErrEntityMerged），且双方必须属于同一 Wiki。
+// primary 角色按“设置主实体”语义原子替换旧绑定并同步 Page 指针；
+// mentioned 重复绑定返回 ErrBindingExists。
 func (s *Service) BindPage(ctx context.Context, params BindPageParams) (*PageEntityBinding, error) {
 	if params.Role != BindingRolePrimary && params.Role != BindingRoleMentioned {
 		return nil, fmt.Errorf("%w: role=%q", ErrInvalidBindingRole, params.Role)
@@ -408,39 +642,150 @@ func (s *Service) BindPage(ctx context.Context, params BindPageParams) (*PageEnt
 	if err != nil {
 		return nil, err
 	}
-	p, err := s.pages.GetPageByID(ctx, nil, params.PageID)
-	if err != nil {
-		return nil, err
-	}
-	if p.DeletedAt != nil {
-		return nil, fmt.Errorf("%w: id=%s 已删除", page.ErrPageNotFound, params.PageID)
-	}
-	e, err := s.repo.GetEntityByID(ctx, nil, params.EntityID)
-	if err != nil {
-		return nil, err
-	}
-	if err := ensureEntityActive(e); err != nil {
-		return nil, err
-	}
-
 	b := &PageEntityBinding{
 		PageID:   params.PageID,
 		EntityID: params.EntityID,
 		Role:     params.Role,
 		Language: language,
 	}
-	if err := s.repo.InsertBinding(ctx, nil, b); err != nil {
+	var result *PageEntityBinding
+	err = s.txm.InTx(ctx, func(tx pgx.Tx) error {
+		if err := s.pages.CheckWriteActor(ctx, tx, params.ActorID); err != nil {
+			return err
+		}
+		p, err := s.pages.GetPageByIDForUpdate(ctx, tx, params.PageID)
+		if err != nil {
+			return err
+		}
+		if p.WikiID != params.WikiID || p.DeletedAt != nil {
+			return fmt.Errorf(
+				"%w: id=%s 已删除", page.ErrPageNotFound, params.PageID,
+			)
+		}
+		e, err := s.lockActiveEntity(ctx, tx, params.EntityID)
+		if err != nil {
+			return err
+		}
+		if p.WikiID != e.WikiID {
+			return fmt.Errorf(
+				"%w: page=%s entity=%s",
+				ErrBindingWikiMismatch,
+				params.PageID,
+				params.EntityID,
+			)
+		}
+
+		previousEntityID := p.PrimaryEntityID
+		if params.Role == BindingRolePrimary {
+			existing, err := s.repo.ListPageBindings(ctx, tx, params.PageID)
+			if err != nil {
+				return err
+			}
+			for i := range existing {
+				if existing[i].Role == BindingRolePrimary &&
+					existing[i].EntityID == params.EntityID &&
+					existing[i].Language == language {
+					value := existing[i]
+					result = &value
+					return nil
+				}
+			}
+			if err := s.repo.DeletePrimaryBinding(ctx, tx, params.PageID); err != nil {
+				return err
+			}
+			entityID := params.EntityID
+			if err := s.repo.UpdatePagePrimaryEntity(
+				ctx, tx, params.PageID, &entityID,
+			); err != nil {
+				return err
+			}
+		}
+		if err := s.repo.InsertBinding(ctx, tx, b); err != nil {
+			return err
+		}
+		if err := s.appendKnowledgeMutation(
+			ctx,
+			tx,
+			params.ActorID,
+			AuditEventPageEntityBindingAdded,
+			OutboxEventPageEntityBindingChanged,
+			AggregateTypePage,
+			params.PageID,
+			map[string]any{
+				"page_id":            params.PageID,
+				"entity_id":          params.EntityID,
+				"role":               params.Role,
+				"language":           language,
+				"previous_entity_id": previousEntityID,
+			},
+		); err != nil {
+			return err
+		}
+		result = b
+		return nil
+	})
+	if err != nil {
 		return nil, err
 	}
-	return b, nil
+	return result, nil
 }
 
 // UnbindPage 解除页面-实体绑定，未命中返回 ErrBindingNotFound。
-func (s *Service) UnbindPage(ctx context.Context, pageID, entityID uuid.UUID, role string) error {
+func (s *Service) UnbindPage(
+	ctx context.Context,
+	wikiID, pageID, entityID uuid.UUID,
+	role string,
+	actorID uuid.UUID,
+) error {
 	if role != BindingRolePrimary && role != BindingRoleMentioned {
 		return fmt.Errorf("%w: role=%q", ErrInvalidBindingRole, role)
 	}
-	return s.repo.DeleteBinding(ctx, nil, pageID, entityID, role)
+	return s.txm.InTx(ctx, func(tx pgx.Tx) error {
+		if err := s.pages.CheckWriteActor(ctx, tx, actorID); err != nil {
+			return err
+		}
+		p, err := s.pages.GetPageByIDForUpdate(ctx, tx, pageID)
+		if err != nil {
+			return err
+		}
+		if p.WikiID != wikiID || p.DeletedAt != nil {
+			return fmt.Errorf("%w: id=%s 已删除", page.ErrPageNotFound, pageID)
+		}
+		if role == BindingRolePrimary &&
+			(p.PrimaryEntityID == nil || *p.PrimaryEntityID != entityID) {
+			return fmt.Errorf(
+				"%w: page=%s entity=%s role=%q",
+				ErrBindingNotFound,
+				pageID,
+				entityID,
+				role,
+			)
+		}
+		if err := s.repo.DeleteBinding(ctx, tx, pageID, entityID, role); err != nil {
+			return err
+		}
+		if role == BindingRolePrimary {
+			if err := s.repo.UpdatePagePrimaryEntity(
+				ctx, tx, pageID, nil,
+			); err != nil {
+				return err
+			}
+		}
+		return s.appendKnowledgeMutation(
+			ctx,
+			tx,
+			actorID,
+			AuditEventPageEntityBindingRemoved,
+			OutboxEventPageEntityBindingChanged,
+			AggregateTypePage,
+			pageID,
+			map[string]any{
+				"page_id":   pageID,
+				"entity_id": entityID,
+				"role":      role,
+			},
+		)
+	})
 }
 
 // lockActiveEntity 在事务内锁定实体行并要求其处于 active 状态。
@@ -513,6 +858,12 @@ func normalizeLabel(input LabelInput) (*EntityLabel, error) {
 	if err != nil {
 		return nil, err
 	}
+	if utf8.RuneCountInString(input.Description) > maxDescriptionSize {
+		return nil, fmt.Errorf(
+			"%w: description 超过 %d 字符",
+			ErrInvalidLabel, maxDescriptionSize,
+		)
+	}
 	return &EntityLabel{
 		Language:    language,
 		Label:       display,
@@ -526,6 +877,12 @@ func normalizeLanguage(language string) (string, error) {
 	language = strings.TrimSpace(language)
 	if language == "" {
 		return "", fmt.Errorf("%w: 语言标记为空", ErrInvalidLabel)
+	}
+	if utf8.RuneCountInString(language) > maxLanguageLength {
+		return "", fmt.Errorf(
+			"%w: 语言标记超过 %d 字符",
+			ErrInvalidLabel, maxLanguageLength,
+		)
 	}
 	return language, nil
 }

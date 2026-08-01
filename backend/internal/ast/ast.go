@@ -41,6 +41,10 @@ const (
 	BlockQuote       BlockType = "quote"
 	BlockCallout     BlockType = "callout"
 	BlockComponent   BlockType = "component"
+	BlockImage       BlockType = "image"
+	BlockVideo       BlockType = "video"
+	BlockDatasetView BlockType = "dataset_view"
+	BlockEmbed       BlockType = "embed"
 	BlockDivider     BlockType = "divider"
 )
 
@@ -67,13 +71,16 @@ const (
 type InlineType string
 
 const (
-	InlineText              InlineType = "text"
-	InlineCode              InlineType = "inline_code"
-	InlinePageReference     InlineType = "page_reference"
-	InlineExternalLink      InlineType = "external_link"
-	InlineEntityReference   InlineType = "entity_reference"
-	InlineClaimReference    InlineType = "claim_reference"
-	InlineCitationReference InlineType = "citation_reference"
+	InlineText                InlineType = "text"
+	InlineCode                InlineType = "inline_code"
+	InlinePageReference       InlineType = "page_reference"
+	InlinePageAnchorReference InlineType = "page_anchor_reference"
+	InlineExternalLink        InlineType = "external_link"
+	InlineEntityReference     InlineType = "entity_reference"
+	InlineClaimReference      InlineType = "claim_reference"
+	InlineCitationReference   InlineType = "citation_reference"
+	InlineMath                InlineType = "math"
+	InlineMention             InlineType = "mention"
 )
 
 // ResolutionUnresolved 是未解析页面引用的 resolution_status 取值。
@@ -108,8 +115,16 @@ type Block struct {
 	ComponentVersion int             `json:"component_version,omitempty"`
 	EntityID         string          `json:"entity_id,omitempty"`
 	DisplayConfig    json.RawMessage `json:"display_config,omitempty"`
-	Content          json.RawMessage `json:"content,omitempty"`
-	Children         []*Block        `json:"children,omitempty"`
+	// 媒体、DatasetView 与安全外部嵌入。
+	AssetRevisionID       string          `json:"asset_revision_id,omitempty"`
+	PosterAssetRevisionID string          `json:"poster_asset_revision_id,omitempty"`
+	AltText               string          `json:"alt_text,omitempty"`
+	Caption               string          `json:"caption,omitempty"`
+	Title                 string          `json:"title,omitempty"`
+	DatasetViewID         string          `json:"dataset_view_id,omitempty"`
+	URL                   string          `json:"url,omitempty"`
+	Content               json.RawMessage `json:"content,omitempty"`
+	Children              []*Block        `json:"children,omitempty"`
 }
 
 // InlineContent 解码 heading/paragraph 的 content 为行内节点数组。
@@ -158,6 +173,10 @@ type InlineNode struct {
 	EntityID   string `json:"entity_id,omitempty"`
 	ClaimID    string `json:"claim_id,omitempty"`
 	CitationID string `json:"citation_id,omitempty"`
+
+	// Math 与 Mention。
+	Expression string `json:"expression,omitempty"`
+	ActorID    string `json:"actor_id,omitempty"`
 }
 
 var compiledSchema = mustCompileSchema()

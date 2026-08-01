@@ -8,6 +8,7 @@ import (
 	"io"
 	"net/http"
 	"strconv"
+	"time"
 
 	"github.com/go-chi/chi/v5"
 	"github.com/google/uuid"
@@ -29,10 +30,51 @@ type GovernanceAPI struct {
 	hub        *collaboration.Hub
 	resolution *governance.ConflictResolutionService
 	bulkReview *governance.BulkReviewService
+	audit      *governance.AuditService
+	protection *governance.ProtectionService
+	aiTrust    *governance.AITrustService
+	auth       *governance.AuthorizationService
+	revisions  *page.Service
+	wikiID     uuid.UUID
 }
 
 func (a *GovernanceAPI) WithBulkReview(service *governance.BulkReviewService) *GovernanceAPI {
 	a.bulkReview = service
+	return a
+}
+
+func (a *GovernanceAPI) WithAudit(service *governance.AuditService) *GovernanceAPI {
+	a.audit = service
+	return a
+}
+
+func (a *GovernanceAPI) WithAuthorization(
+	service *governance.AuthorizationService,
+) *GovernanceAPI {
+	a.auth = service
+	return a
+}
+
+func (a *GovernanceAPI) WithAITrust(
+	service *governance.AITrustService,
+) *GovernanceAPI {
+	a.aiTrust = service
+	return a
+}
+
+func (a *GovernanceAPI) WithRevisionStorage(
+	service *page.Service,
+) *GovernanceAPI {
+	a.revisions = service
+	return a
+}
+
+func (a *GovernanceAPI) WithProtection(
+	service *governance.ProtectionService,
+	wikiID uuid.UUID,
+) *GovernanceAPI {
+	a.protection = service
+	a.wikiID = wikiID
 	return a
 }
 
@@ -69,28 +111,70 @@ type createProposalRequest struct {
 }
 
 type proposalResponse struct {
-	ID               uuid.UUID                  `json:"id"`
-	ImportJobID      *uuid.UUID                 `json:"import_job_id"`
-	TargetType       string                     `json:"target_type"`
-	TargetID         *uuid.UUID                 `json:"target_id"`
-	BaseRevisionID   *uuid.UUID                 `json:"base_revision_id"`
-	BaseStateVersion *int                       `json:"base_state_version"`
-	Status           string                     `json:"status"`
-	RiskLevel        string                     `json:"risk_level"`
-	RiskReasons      json.RawMessage            `json:"risk_reasons"`
-	PolicyDecision   json.RawMessage            `json:"policy_decision"`
-	CreatedBy        uuid.UUID                  `json:"created_by"`
-	IdempotencyKey   string                     `json:"idempotency_key"`
-	CreatedAt        string                     `json:"created_at"`
-	UpdatedAt        string                     `json:"updated_at"`
-	Operations       []operationRecordResponse  `json:"operations"`
-	Conflicts        []governance.MergeConflict `json:"conflicts"`
+	ID                uuid.UUID                  `json:"id"`
+	ImportJobID       *uuid.UUID                 `json:"import_job_id"`
+	TargetType        string                     `json:"target_type"`
+	TargetID          *uuid.UUID                 `json:"target_id"`
+	BaseRevisionID    *uuid.UUID                 `json:"base_revision_id"`
+	BaseStateVersion  *int                       `json:"base_state_version"`
+	Status            string                     `json:"status"`
+	RiskLevel         string                     `json:"risk_level"`
+	RiskReasons       json.RawMessage            `json:"risk_reasons"`
+	PolicyDecision    json.RawMessage            `json:"policy_decision"`
+	CreatedBy         uuid.UUID                  `json:"created_by"`
+	IdempotencyKey    string                     `json:"idempotency_key"`
+	ChangeBatchID     *uuid.UUID                 `json:"change_batch_id"`
+	ChangeBatchStatus *string                    `json:"change_batch_status"`
+	CreatedAt         string                     `json:"created_at"`
+	UpdatedAt         string                     `json:"updated_at"`
+	Operations        []operationRecordResponse  `json:"operations"`
+	Conflicts         []governance.MergeConflict `json:"conflicts"`
 }
 
 type operationRecordResponse struct {
 	ID        uuid.UUID              `json:"id"`
 	Sequence  int                    `json:"sequence"`
 	Operation governance.OperationV1 `json:"operation"`
+}
+
+type proposalListPageResponse struct {
+	Items      []proposalResponse `json:"items"`
+	NextCursor *string            `json:"next_cursor"`
+}
+
+type createPageProtectionRequest struct {
+	PageID          *uuid.UUID `json:"page_id"`
+	NamespaceKey    string     `json:"namespace_key"`
+	NormalizedTitle string     `json:"normalized_title"`
+	ActionType      string     `json:"action_type"`
+	RequiredRoleKey string     `json:"required_role_key"`
+	ExpiresAt       *time.Time `json:"expires_at"`
+}
+
+func (a *GovernanceAPI) listProposals(w http.ResponseWriter, r *http.Request) {
+	actorID, ok := actorIDFrom(w, r)
+	if !ok {
+		return
+	}
+	limit, ok := pageSizeFrom(w, r)
+	if !ok {
+		return
+	}
+	page, err := a.proposals.ListOwnedProposals(
+		r.Context(), actorID, r.URL.Query().Get("status"),
+		r.URL.Query().Get("target_type"), r.URL.Query().Get("cursor"), limit,
+	)
+	if err != nil {
+		governanceError(w, r, err)
+		return
+	}
+	items := make([]proposalResponse, len(page.Items))
+	for index := range page.Items {
+		items[index] = toProposalResponse(&page.Items[index], nil, nil)
+	}
+	httpx.WriteJSON(w, http.StatusOK, proposalListPageResponse{
+		Items: items, NextCursor: page.NextCursor,
+	})
 }
 
 func (a *GovernanceAPI) createProposal(w http.ResponseWriter, r *http.Request) {
@@ -120,12 +204,20 @@ func (a *GovernanceAPI) createProposal(w http.ResponseWriter, r *http.Request) {
 }
 
 func (a *GovernanceAPI) getProposal(w http.ResponseWriter, r *http.Request) {
+	actorID, ok := actorIDFrom(w, r)
+	if !ok {
+		return
+	}
 	id, ok := governancePathID(w, r, "id")
 	if !ok {
 		return
 	}
 	p, err := a.repo.GetProposal(r.Context(), nil, id)
 	if err != nil {
+		governanceError(w, r, err)
+		return
+	}
+	if err := a.authorizeProposalRead(r.Context(), p, actorID); err != nil {
 		governanceError(w, r, err)
 		return
 	}
@@ -152,6 +244,10 @@ func (a *GovernanceAPI) getProposal(w http.ResponseWriter, r *http.Request) {
 }
 
 func (a *GovernanceAPI) addOperation(w http.ResponseWriter, r *http.Request) {
+	actorID, ok := actorIDFrom(w, r)
+	if !ok {
+		return
+	}
 	id, ok := governancePathID(w, r, "id")
 	if !ok {
 		return
@@ -161,7 +257,7 @@ func (a *GovernanceAPI) addOperation(w http.ResponseWriter, r *http.Request) {
 		httpx.WriteError(w, r, http.StatusBadRequest, httpx.CodeBadRequest, "Operation 请求体过大或不可读")
 		return
 	}
-	record, err := a.proposals.AddOperationV1(r.Context(), id, raw)
+	record, err := a.proposals.AddOperationV1As(r.Context(), id, actorID, raw)
 	if err != nil {
 		governanceError(w, r, err)
 		return
@@ -171,11 +267,15 @@ func (a *GovernanceAPI) addOperation(w http.ResponseWriter, r *http.Request) {
 }
 
 func (a *GovernanceAPI) submitProposal(w http.ResponseWriter, r *http.Request) {
+	actorID, ok := actorIDFrom(w, r)
+	if !ok {
+		return
+	}
 	id, ok := governancePathID(w, r, "id")
 	if !ok {
 		return
 	}
-	result, err := a.reviews.Submit(r.Context(), id)
+	result, err := a.reviews.SubmitAs(r.Context(), id, actorID)
 	if err != nil {
 		governanceError(w, r, err)
 		return
@@ -184,8 +284,23 @@ func (a *GovernanceAPI) submitProposal(w http.ResponseWriter, r *http.Request) {
 }
 
 func (a *GovernanceAPI) previewProposal(w http.ResponseWriter, r *http.Request) {
+	actorID, ok := actorIDFrom(w, r)
+	if !ok {
+		return
+	}
 	id, ok := governancePathID(w, r, "id")
 	if !ok {
+		return
+	}
+	proposal, err := a.repo.GetProposal(r.Context(), nil, id)
+	if err != nil {
+		governanceError(w, r, err)
+		return
+	}
+	if err := a.authorizeProposalRead(
+		r.Context(), proposal, actorID,
+	); err != nil {
+		governanceError(w, r, err)
 		return
 	}
 	result, err := a.preview.PreviewPageProposal(r.Context(), id)
@@ -197,6 +312,20 @@ func (a *GovernanceAPI) previewProposal(w http.ResponseWriter, r *http.Request) 
 }
 
 func (a *GovernanceAPI) pendingReviews(w http.ResponseWriter, r *http.Request) {
+	actorID, ok := actorIDFrom(w, r)
+	if !ok {
+		return
+	}
+	if a.auth == nil {
+		governanceError(w, r, governance.ErrPermissionDenied)
+		return
+	}
+	if err := a.auth.Check(
+		r.Context(), actorID, a.wikiID, governance.ActionReview, nil,
+	); err != nil {
+		governanceError(w, r, err)
+		return
+	}
 	limit, _ := strconv.Atoi(r.URL.Query().Get("page_size"))
 	tasks, err := a.reviews.Pending(r.Context(), limit)
 	if err != nil {
@@ -386,6 +515,26 @@ func (a *GovernanceAPI) createBulkReview(w http.ResponseWriter, r *http.Request)
 	httpx.WriteJSON(w, http.StatusCreated, batch)
 }
 
+func (a *GovernanceAPI) listBulkReviews(w http.ResponseWriter, r *http.Request) {
+	actorID, ok := actorIDFrom(w, r)
+	if !ok {
+		return
+	}
+	limit, ok := pageSizeFrom(w, r)
+	if !ok {
+		return
+	}
+	page, err := a.bulkReview.List(
+		r.Context(), actorID, r.URL.Query().Get("status"),
+		r.URL.Query().Get("cursor"), limit,
+	)
+	if err != nil {
+		governanceError(w, r, err)
+		return
+	}
+	httpx.WriteJSON(w, http.StatusOK, page)
+}
+
 func (a *GovernanceAPI) getBulkReview(w http.ResponseWriter, r *http.Request) {
 	actorID, ok := actorIDFrom(w, r)
 	if !ok {
@@ -497,6 +646,178 @@ func (a *GovernanceAPI) bulkReviewAudit(w http.ResponseWriter, r *http.Request) 
 	httpx.WriteJSON(w, http.StatusOK, map[string]any{"items": events})
 }
 
+func (a *GovernanceAPI) listPageProtections(
+	w http.ResponseWriter,
+	r *http.Request,
+) {
+	actorID, ok := actorIDFrom(w, r)
+	if !ok {
+		return
+	}
+	var pageID *uuid.UUID
+	if raw := r.URL.Query().Get("page_id"); raw != "" {
+		id, err := uuid.Parse(raw)
+		if err != nil {
+			httpx.WriteError(
+				w, r, http.StatusBadRequest, httpx.CodeBadRequest,
+				"page_id 不是合法 UUID",
+			)
+			return
+		}
+		pageID = &id
+	}
+	includeExpired := r.URL.Query().Get("include_expired") == "true"
+	items, err := a.protection.List(
+		r.Context(), a.wikiID, actorID, pageID, includeExpired,
+	)
+	if err != nil {
+		governanceError(w, r, err)
+		return
+	}
+	httpx.WriteJSON(w, http.StatusOK, map[string]any{"items": items})
+}
+
+func (a *GovernanceAPI) createPageProtection(
+	w http.ResponseWriter,
+	r *http.Request,
+) {
+	actorID, ok := actorIDFrom(w, r)
+	if !ok {
+		return
+	}
+	var req createPageProtectionRequest
+	if !decodeJSON(w, r, &req) {
+		return
+	}
+	item, err := a.protection.Create(
+		r.Context(), governance.CreatePageProtectionParams{
+			WikiID: a.wikiID, PageID: req.PageID,
+			NamespaceKey:    req.NamespaceKey,
+			NormalizedTitle: req.NormalizedTitle,
+			ActionType:      req.ActionType,
+			RequiredRoleKey: req.RequiredRoleKey,
+			ExpiresAt:       req.ExpiresAt, ActorID: actorID,
+		},
+	)
+	if err != nil {
+		governanceError(w, r, err)
+		return
+	}
+	httpx.WriteJSON(w, http.StatusCreated, item)
+}
+
+func (a *GovernanceAPI) deletePageProtection(
+	w http.ResponseWriter,
+	r *http.Request,
+) {
+	actorID, ok := actorIDFrom(w, r)
+	if !ok {
+		return
+	}
+	id, ok := governancePathID(w, r, "id")
+	if !ok {
+		return
+	}
+	if err := a.protection.Delete(
+		r.Context(), a.wikiID, id, actorID,
+	); err != nil {
+		governanceError(w, r, err)
+		return
+	}
+	w.WriteHeader(http.StatusNoContent)
+}
+
+func (a *GovernanceAPI) listRoles(w http.ResponseWriter, r *http.Request) {
+	actorID, ok := actorIDFrom(w, r)
+	if !ok {
+		return
+	}
+	items, err := a.protection.ListRoles(
+		r.Context(), a.wikiID, actorID,
+	)
+	if err != nil {
+		governanceError(w, r, err)
+		return
+	}
+	httpx.WriteJSON(w, http.StatusOK, map[string]any{"items": items})
+}
+
+type updateAITrustProfileRequest struct {
+	TrustLevel            string `json:"trust_level"`
+	RequiredSamplePercent int    `json:"required_sample_percent"`
+}
+
+func (a *GovernanceAPI) listAITrustProfiles(
+	w http.ResponseWriter,
+	r *http.Request,
+) {
+	actorID, ok := actorIDFrom(w, r)
+	if !ok {
+		return
+	}
+	items, err := a.aiTrust.List(r.Context(), a.wikiID, actorID)
+	if err != nil {
+		governanceError(w, r, err)
+		return
+	}
+	httpx.WriteJSON(w, http.StatusOK, map[string]any{"items": items})
+}
+
+func (a *GovernanceAPI) updateAITrustProfile(
+	w http.ResponseWriter,
+	r *http.Request,
+) {
+	updatedBy, ok := actorIDFrom(w, r)
+	if !ok {
+		return
+	}
+	actorID, ok := governancePathID(w, r, "actor_id")
+	if !ok {
+		return
+	}
+	var req updateAITrustProfileRequest
+	if !decodeJSON(w, r, &req) {
+		return
+	}
+	item, err := a.aiTrust.Update(
+		r.Context(), governance.UpdateAITrustProfileParams{
+			WikiID: a.wikiID, ActorID: actorID,
+			TrustLevel:            req.TrustLevel,
+			RequiredSamplePercent: req.RequiredSamplePercent,
+			UpdatedBy:             updatedBy,
+		},
+	)
+	if err != nil {
+		governanceError(w, r, err)
+		return
+	}
+	httpx.WriteJSON(w, http.StatusOK, item)
+}
+
+func (a *GovernanceAPI) authorizeProposalRead(
+	ctx context.Context,
+	proposal *governance.Proposal,
+	actorID uuid.UUID,
+) error {
+	if proposal != nil && proposal.CreatedBy == actorID {
+		return nil
+	}
+	if a.auth == nil {
+		return governance.ErrPermissionDenied
+	}
+	if err := a.auth.Check(
+		ctx, actorID, a.wikiID, governance.ActionReview, nil,
+	); err == nil {
+		return nil
+	}
+	if err := a.auth.Check(
+		ctx, actorID, a.wikiID, governance.ActionApply, nil,
+	); err == nil {
+		return nil
+	}
+	return governance.ErrPermissionDenied
+}
+
 func governancePathID(w http.ResponseWriter, r *http.Request, name string) (uuid.UUID, bool) {
 	id, err := uuid.Parse(chi.URLParam(r, name))
 	if err != nil {
@@ -518,6 +839,7 @@ func toProposalResponse(p *governance.Proposal, operations []operationRecordResp
 		BaseRevisionID: p.BaseRevisionID, BaseStateVersion: p.BaseStateVersion,
 		Status: p.Status, RiskLevel: p.RiskLevel, RiskReasons: p.RiskReasons,
 		PolicyDecision: p.PolicyDecision, CreatedBy: p.CreatedBy, IdempotencyKey: p.IdempotencyKey,
+		ChangeBatchID: p.ChangeBatchID, ChangeBatchStatus: p.ChangeBatchStatus,
 		CreatedAt:  p.CreatedAt.Format("2006-01-02T15:04:05.999999999Z07:00"),
 		UpdatedAt:  p.UpdatedAt.Format("2006-01-02T15:04:05.999999999Z07:00"),
 		Operations: operations, Conflicts: conflicts,
@@ -526,13 +848,24 @@ func toProposalResponse(p *governance.Proposal, operations []operationRecordResp
 
 func governanceError(w http.ResponseWriter, r *http.Request, err error) {
 	switch {
-	case errors.Is(err, governance.ErrProposalNotFound), errors.Is(err, governance.ErrBulkReviewNotFound):
+	case errors.Is(err, governance.ErrProposalNotFound), errors.Is(err, governance.ErrBulkReviewNotFound),
+		errors.Is(err, governance.ErrProtectionNotFound), isAuditNotFound(err):
 		httpx.WriteError(w, r, http.StatusNotFound, httpx.CodeNotFound, err.Error())
 	case errors.Is(err, governance.ErrInvalidActor), errors.Is(err, governance.ErrActorNotAllowed), errors.Is(err, governance.ErrPermissionDenied):
 		httpx.WriteError(w, r, http.StatusForbidden, httpx.CodeForbidden, err.Error())
+	case errors.Is(err, governance.ErrInvalidProposalCursor), errors.Is(err, governance.ErrInvalidProposalStatus):
+		httpx.WriteError(w, r, http.StatusBadRequest, httpx.CodeBadRequest, err.Error())
+	case errors.Is(err, governance.ErrInvalidAuditCursor), errors.Is(err, governance.ErrInvalidChangeTag),
+		errors.Is(err, governance.ErrInvalidBulkReviewCursor),
+		errors.Is(err, governance.ErrInvalidBulkReviewStatus):
+		httpx.WriteError(w, r, http.StatusBadRequest, httpx.CodeBadRequest, err.Error())
 	case errors.Is(err, governance.ErrInvalidProposal), errors.Is(err, governance.ErrInvalidOperation), errors.Is(err, governance.ErrProposalHasNoOps):
 		httpx.WriteError(w, r, http.StatusUnprocessableEntity, httpx.CodeValidationFailed, err.Error())
 	case errors.Is(err, governance.ErrInvalidResolution):
+		httpx.WriteError(w, r, http.StatusUnprocessableEntity, httpx.CodeValidationFailed, err.Error())
+	case errors.Is(err, governance.ErrInvalidProtection):
+		httpx.WriteError(w, r, http.StatusUnprocessableEntity, httpx.CodeValidationFailed, err.Error())
+	case errors.Is(err, governance.ErrInvalidAITrustProfile):
 		httpx.WriteError(w, r, http.StatusUnprocessableEntity, httpx.CodeValidationFailed, err.Error())
 	case errors.Is(err, governance.ErrInvalidTransition), errors.Is(err, governance.ErrProposalNotDraft),
 		errors.Is(err, governance.ErrPatchTargetModified), errors.Is(err, governance.ErrMergeConflict),

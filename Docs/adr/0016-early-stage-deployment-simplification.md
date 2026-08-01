@@ -1,6 +1,7 @@
 # ADR-0016：早期阶段部署简化
 
-- 状态：已接受（第 3 节被 ADR-0019、第 5 节部分被 ADR-0020、第 6 节被 ADR-0017 取代）
+- 状态：部分被取代（第 2 节被 ADR-0006 的内部 Beta 决策重新取代；第 3 节被
+  ADR-0019、第 5 节部分被 ADR-0020、第 6 节被 ADR-0017 取代）
 - 日期：2026-07-25
 
 ## 背景
@@ -23,6 +24,8 @@ PostgreSQL、Redis、对象存储视为外部依赖，连接信息经仓库根 `
 删除 `infra/local/`（compose、Prometheus、OTel Collector、初始化 SQL）。
 
 ### 2. 移除 Meilisearch
+
+> 历史决策：2026-07-31 起已被 ADR-0006 的内部 Beta Meilisearch 实现取代。
 
 搜索只保留 PostgreSQL FTS Adapter。`SearchAdapter` 接口不变，
 未来可在其后重新接入独立引擎。

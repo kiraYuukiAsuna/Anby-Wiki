@@ -20,8 +20,15 @@ export function inlineToPlainText(nodes: InlineNode[]): string {
           return "resolution_status" in node
             ? node.normalized_title
             : node.display_text;
+        case "page_anchor_reference":
         case "external_link":
+        case "entity_reference":
+        case "claim_reference":
+        case "citation_reference":
+        case "mention":
           return node.display_text;
+        case "math":
+          return node.expression;
       }
     })
     .join("");

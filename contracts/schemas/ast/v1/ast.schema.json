@@ -35,6 +35,10 @@
         { "$ref": "#/$defs/quoteBlock" },
         { "$ref": "#/$defs/calloutBlock" },
         { "$ref": "#/$defs/componentBlock" },
+        { "$ref": "#/$defs/imageBlock" },
+        { "$ref": "#/$defs/videoBlock" },
+        { "$ref": "#/$defs/datasetViewBlock" },
+        { "$ref": "#/$defs/embedBlock" },
         { "$ref": "#/$defs/dividerBlock" }
       ]
     },
@@ -202,6 +206,56 @@
         }
       }
     },
+    "imageBlock": {
+      "description": "图片引用不可变 AssetRevision；正文只保存稳定版本 ID 与无障碍/展示信息。",
+      "type": "object",
+      "required": ["id", "type", "asset_revision_id", "alt_text"],
+      "additionalProperties": false,
+      "properties": {
+        "id": { "$ref": "#/$defs/blockId" },
+        "type": { "const": "image" },
+        "asset_revision_id": { "type": "string", "format": "uuid" },
+        "alt_text": { "type": "string", "minLength": 1 },
+        "caption": { "type": "string" }
+      }
+    },
+    "videoBlock": {
+      "description": "视频引用不可变 AssetRevision；poster 同样固定到 AssetRevision。",
+      "type": "object",
+      "required": ["id", "type", "asset_revision_id"],
+      "additionalProperties": false,
+      "properties": {
+        "id": { "$ref": "#/$defs/blockId" },
+        "type": { "const": "video" },
+        "asset_revision_id": { "type": "string", "format": "uuid" },
+        "poster_asset_revision_id": { "type": "string", "format": "uuid" },
+        "title": { "type": "string" },
+        "caption": { "type": "string" }
+      }
+    },
+    "datasetViewBlock": {
+      "description": "可查询数据不复制进 AST；页面引用冻结的 DatasetView 定义。",
+      "type": "object",
+      "required": ["id", "type", "dataset_view_id"],
+      "additionalProperties": false,
+      "properties": {
+        "id": { "$ref": "#/$defs/blockId" },
+        "type": { "const": "dataset_view" },
+        "dataset_view_id": { "type": "string", "format": "uuid" }
+      }
+    },
+    "embedBlock": {
+      "description": "外部嵌入仅保存 http/https URL；渲染器以安全链接卡片降级，不执行第三方脚本。",
+      "type": "object",
+      "required": ["id", "type", "url"],
+      "additionalProperties": false,
+      "properties": {
+        "id": { "$ref": "#/$defs/blockId" },
+        "type": { "const": "embed" },
+        "url": { "type": "string", "format": "uri" },
+        "title": { "type": "string" }
+      }
+    },
     "dividerBlock": {
       "type": "object",
       "required": ["id", "type"],
@@ -218,10 +272,13 @@
         { "$ref": "#/$defs/textNode" },
         { "$ref": "#/$defs/inlineCodeNode" },
         { "$ref": "#/$defs/pageReferenceNode" },
+        { "$ref": "#/$defs/pageAnchorReferenceNode" },
         { "$ref": "#/$defs/externalLinkNode" },
         { "$ref": "#/$defs/entityReferenceNode" },
         { "$ref": "#/$defs/claimReferenceNode" },
-        { "$ref": "#/$defs/citationReferenceNode" }
+        { "$ref": "#/$defs/citationReferenceNode" },
+        { "$ref": "#/$defs/mathNode" },
+        { "$ref": "#/$defs/mentionNode" }
       ]
     },
     "mark": {
@@ -284,6 +341,18 @@
         "expected_entity_type": { "type": "string" }
       }
     },
+    "pageAnchorReferenceNode": {
+      "description": "显式章节引用：Page 与 Heading Block 均使用稳定 ID。",
+      "type": "object",
+      "required": ["type", "target_page_id", "target_heading_block_id", "display_text"],
+      "additionalProperties": false,
+      "properties": {
+        "type": { "const": "page_anchor_reference" },
+        "target_page_id": { "type": "string", "format": "uuid" },
+        "target_heading_block_id": { "type": "string", "format": "uuid" },
+        "display_text": { "type": "string" }
+      }
+    },
     "externalLinkNode": {
       "type": "object",
       "required": ["type", "url", "display_text"],
@@ -310,7 +379,7 @@
       }
     },
     "claimReferenceNode": {
-      "description": "Claim 引用（设计 §5.4）：display_text 为兜底文本，v1 渲染 display_text；实时取值（M9 信息框）属渲染层后续扩展。",
+      "description": "Claim 引用（设计 §5.4）：display_text 为安全兜底文本；动态阅读渲染会沿 superseded/Entity merge 映射解析当前 Claim 值。",
       "type": "object",
       "required": ["type", "claim_id", "display_text"],
       "additionalProperties": false,
@@ -328,6 +397,27 @@
       "properties": {
         "type": { "const": "citation_reference" },
         "citation_id": { "type": "string", "format": "uuid" },
+        "display_text": { "type": "string" }
+      }
+    },
+    "mathNode": {
+      "description": "行内数学表达式；expression 使用 LaTeX 源文本，渲染层不得当作 HTML。",
+      "type": "object",
+      "required": ["type", "expression"],
+      "additionalProperties": false,
+      "properties": {
+        "type": { "const": "math" },
+        "expression": { "type": "string" }
+      }
+    },
+    "mentionNode": {
+      "description": "对稳定 Actor 的行内提及。",
+      "type": "object",
+      "required": ["type", "actor_id", "display_text"],
+      "additionalProperties": false,
+      "properties": {
+        "type": { "const": "mention" },
+        "actor_id": { "type": "string", "format": "uuid" },
         "display_text": { "type": "string" }
       }
     }

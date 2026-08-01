@@ -1,9 +1,15 @@
+"use client";
+
 // 目录（TOC）：移动端顶部折叠面板（TableOfContents），桌面端右侧 sticky 栏（TocSidebar）。
-// 锚点跳转依赖 globals.css 的 scroll-behavior: smooth；当前章节高亮暂省略（M2 后续可加 IntersectionObserver）。
+// 锚点跳转依赖 globals.css 的 scroll-behavior: smooth；滚动状态兼容异步挂载的章节分片。
+import { useEffect, useState } from "react";
+
 import { cn } from "@/lib/utils";
 import type { TocEntry } from "@/lib/ast/toc";
 
 function TocList({ entries }: { entries: TocEntry[] }) {
+  const activeId = useActiveHeading(entries);
+
   return (
     <ul className="space-y-1 text-sm">
       {entries.map((entry) => (
@@ -11,10 +17,13 @@ function TocList({ entries }: { entries: TocEntry[] }) {
           <a
             href={`#${entry.id}`}
             className={cn(
-              "block truncate text-muted-foreground transition-colors hover:text-foreground",
+              "relative block truncate rounded-r-md py-0.5 text-muted-foreground transition-colors hover:text-foreground",
               entry.level > 1 &&
                 "pl-[calc((var(--toc-level)-1)*0.75rem)]",
+              activeId === entry.id &&
+                "font-medium text-foreground before:absolute before:inset-y-0 before:-left-[17px] before:w-0.5 before:rounded-full before:bg-primary",
             )}
+            aria-current={activeId === entry.id ? "location" : undefined}
             style={{ "--toc-level": entry.level } as React.CSSProperties}
           >
             {entry.text}
@@ -23,6 +32,52 @@ function TocList({ entries }: { entries: TocEntry[] }) {
       ))}
     </ul>
   );
+}
+
+function useActiveHeading(entries: TocEntry[]): string | undefined {
+  const [activeId, setActiveId] = useState<string>();
+  const key = entries.map((entry) => entry.id).join("\u0000");
+
+  useEffect(() => {
+    if (entries.length === 0) return;
+    let frame = 0;
+    const update = () => {
+      frame = 0;
+      const offset = 104;
+      let active: string | undefined;
+      let nearestBelow: { id: string; top: number } | undefined;
+      for (const entry of entries) {
+        const heading = document.getElementById(entry.id);
+        if (!heading) continue;
+        const top = heading.getBoundingClientRect().top;
+        if (top <= offset) {
+          active = entry.id;
+        } else if (!nearestBelow || top < nearestBelow.top) {
+          nearestBelow = { id: entry.id, top };
+        }
+      }
+      const next = active ?? nearestBelow?.id;
+      setActiveId((current) => (current === next ? current : next));
+    };
+    const schedule = () => {
+      if (frame === 0) frame = window.requestAnimationFrame(update);
+    };
+    const observer = new MutationObserver(schedule);
+    observer.observe(document.body, { childList: true, subtree: true });
+    window.addEventListener("scroll", schedule, { passive: true });
+    window.addEventListener("resize", schedule);
+    schedule();
+    return () => {
+      observer.disconnect();
+      window.removeEventListener("scroll", schedule);
+      window.removeEventListener("resize", schedule);
+      if (frame !== 0) window.cancelAnimationFrame(frame);
+    };
+    // key is a stable primitive snapshot of the ordered heading IDs.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [key]);
+
+  return activeId;
 }
 
 /** 移动端折叠面板，置于正文之前。 */

@@ -20,13 +20,13 @@ import (
 
 // RenderedPageBuilder RenderedPage 投影 Builder（rendered_page，设计 §17.1）。
 type RenderedPageBuilder struct {
-	pool       *pgxpool.Pool
-	components render.ComponentRenderer
+	pool    *pgxpool.Pool
+	dynamic render.DynamicRenderer
 }
 
 // NewRenderedPageBuilder 装配 RenderedPage 投影 Builder。
 func NewRenderedPageBuilder(pool *pgxpool.Pool) *RenderedPageBuilder {
-	return &RenderedPageBuilder{pool: pool, components: newComponentHTMLRenderer(pool)}
+	return &RenderedPageBuilder{pool: pool, dynamic: newComponentHTMLRenderer(pool)}
 }
 
 // Type 实现 Builder。
@@ -43,7 +43,12 @@ func (b *RenderedPageBuilder) Rebuild(ctx context.Context, tx pgx.Tx, pageID, re
 	if err != nil {
 		return err
 	}
-	html, err := render.RenderHTMLWithComponents(ctx, doc, b.components)
+	html, err := render.RenderHTMLWithResolvers(
+		ctx,
+		doc,
+		b.dynamic,
+		b.dynamic,
+	)
 	if err != nil {
 		return fmt.Errorf("projection: 渲染页面 %s（revision %s）失败: %w", pageID, revisionID, err)
 	}

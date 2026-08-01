@@ -11,7 +11,7 @@ All URIs are relative to *http://localhost:3000*
 
 ## getPageByID
 
-> PageWithContent getPageByID(id)
+> PageWithContent getPageByID(id, contentMode)
 
 按 ID 读取页面当前版本
 
@@ -33,6 +33,8 @@ async function example() {
   const body = {
     // string | 页面 ID（UUIDv7）
     id: 38400000-8cf0-11bd-b23e-10b96e4ef00d,
+    // 'auto' | 'full' | 'sections' | auto 对大于 64 KiB 且分片投影就绪的页面返回 sections；full 强制全文； sections 在投影就绪时强制分片，否则安全降级为 full。 (optional)
+    contentMode: contentMode_example,
   } satisfies GetPageByIDRequest;
 
   try {
@@ -53,6 +55,7 @@ example().catch(console.error);
 | Name | Type | Description  | Notes |
 |------------- | ------------- | ------------- | -------------|
 | **id** | `string` | 页面 ID（UUIDv7） | [Defaults to `undefined`] |
+| **contentMode** | `auto`, `full`, `sections` | auto 对大于 64 KiB 且分片投影就绪的页面返回 sections；full 强制全文； sections 在投影就绪时强制分片，否则安全降级为 full。 | [Optional] [Defaults to `&#39;auto&#39;`] [Enum: auto, full, sections] |
 
 ### Return type
 
@@ -83,7 +86,7 @@ No authorization required
 
 ## getPageByTitle
 
-> PageWithContent getPageByTitle(namespace, title)
+> PageWithContent getPageByTitle(namespace, title, contentMode)
 
 按标题/别名读取页面当前版本
 
@@ -107,6 +110,8 @@ async function example() {
     namespace: main,
     // string | 页面标题（服务端规范化后匹配活页面或别名）
     title: Anby Demara,
+    // 'auto' | 'full' | 'sections' | auto 对大于 64 KiB 且分片投影就绪的页面返回 sections；full 强制全文； sections 在投影就绪时强制分片，否则安全降级为 full。 (optional)
+    contentMode: contentMode_example,
   } satisfies GetPageByTitleRequest;
 
   try {
@@ -128,6 +133,7 @@ example().catch(console.error);
 |------------- | ------------- | ------------- | -------------|
 | **namespace** | `string` | 命名空间 key（如 main） | [Defaults to `undefined`] |
 | **title** | `string` | 页面标题（服务端规范化后匹配活页面或别名） | [Defaults to `undefined`] |
+| **contentMode** | `auto`, `full`, `sections` | auto 对大于 64 KiB 且分片投影就绪的页面返回 sections；full 强制全文； sections 在投影就绪时强制分片，否则安全降级为 full。 | [Optional] [Defaults to `&#39;auto&#39;`] [Enum: auto, full, sections] |
 
 ### Return type
 

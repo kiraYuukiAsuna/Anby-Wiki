@@ -36,3 +36,38 @@ func ParseRule(raw json.RawMessage) (Rule, error) {
 	}
 	return rule, nil
 }
+
+func ParseDynamicQuery(raw json.RawMessage) (DynamicQuery, error) {
+	decoder := json.NewDecoder(bytes.NewReader(raw))
+	decoder.DisallowUnknownFields()
+	var query DynamicQuery
+	if err := decoder.Decode(&query); err != nil {
+		return query, fmt.Errorf("%w: %v", ErrInvalidRule, err)
+	}
+	var trailing any
+	if err := decoder.Decode(&trailing); err != io.EOF ||
+		query.Version != DynamicQueryVersion {
+		return query, ErrInvalidRule
+	}
+	query.MemberType = strings.TrimSpace(query.MemberType)
+	query.Text = strings.TrimSpace(query.Text)
+	query.Namespace = strings.TrimSpace(query.Namespace)
+	query.EntityType = strings.TrimSpace(query.EntityType)
+	query.Property = strings.TrimSpace(query.Property)
+	if len([]rune(query.Text)) > 200 {
+		return query, ErrInvalidRule
+	}
+	switch query.MemberType {
+	case MemberPage:
+		if query.EntityType != "" || query.Property != "" {
+			return query, ErrInvalidRule
+		}
+	case MemberEntity:
+		if query.Namespace != "" {
+			return query, ErrInvalidRule
+		}
+	default:
+		return query, ErrInvalidRule
+	}
+	return query, nil
+}

@@ -10,10 +10,13 @@ import (
 )
 
 type RiskDecision struct {
-	Level       string   `json:"level"`
-	Reasons     []string `json:"reasons"`
-	AutoApprove bool     `json:"auto_approve"`
-	Policy      string   `json:"policy"`
+	Level                 string   `json:"level"`
+	Reasons               []string `json:"reasons"`
+	AutoApprove           bool     `json:"auto_approve"`
+	Policy                string   `json:"policy"`
+	AITrustLevel          string   `json:"ai_trust_level,omitempty"`
+	RequiredSamplePercent int      `json:"required_sample_percent,omitempty"`
+	SampledForReview      bool     `json:"sampled_for_review,omitempty"`
 }
 
 type RiskEvaluator struct{ knowledge *knowledge.Service }
@@ -80,6 +83,14 @@ func (e *RiskEvaluator) Evaluate(ctx context.Context, records []OperationRecord)
 			renameCount++
 			autoSafe = false
 			level = maxRisk(level, RiskMedium)
+		case OpMergeEntity:
+			autoSafe = false
+			level = maxRisk(level, RiskHigh)
+			reasons = appendUnique(reasons, "实体合并会迁移标签与正式 Claim")
+		case OpRemoveCollectionMembership:
+			autoSafe = false
+			level = maxRisk(level, RiskMedium)
+			reasons = appendUnique(reasons, "移除人工 Collection 成员")
 		default:
 			autoSafe = false
 			level = maxRisk(level, RiskMedium)

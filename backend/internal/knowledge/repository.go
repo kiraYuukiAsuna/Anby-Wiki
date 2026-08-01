@@ -5,11 +5,13 @@ import (
 	"errors"
 	"fmt"
 	"strings"
+	"time"
 
 	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgconn"
 
+	"github.com/anby/wiki/backend/internal/page"
 	"github.com/anby/wiki/backend/internal/platform/db"
 )
 
@@ -100,6 +102,79 @@ func (r *Repository) GetEntityByIDForUpdate(ctx context.Context, tx pgx.Tx, id u
 		return nil, fmt.Errorf("knowledge: 锁定实体失败: %w", err)
 	}
 	return e, nil
+}
+
+// TouchEntity records identity-metadata changes on the stable Entity row. Entity
+// labels and aliases live in child tables, so this timestamp is the optimistic
+// lifecycle guard used by ChangeBatch compensation.
+func (r *Repository) TouchEntity(ctx context.Context, tx pgx.Tx, id uuid.UUID) error {
+	tag, err := r.q(tx).Exec(ctx, `
+		UPDATE entity SET updated_at = now() WHERE id = $1 AND status = 'active'`, id)
+	if err != nil {
+		return fmt.Errorf("knowledge: 刷新实体时间失败: %w", err)
+	}
+	if tag.RowsAffected() != 1 {
+		return fmt.Errorf("%w: entity=%s", ErrEntityLifecycleStale, id)
+	}
+	return nil
+}
+
+// SoftDeleteCreatedEntityByBatch compensates a freshly created Entity without
+// deleting its immutable/history-bearing child rows. Active Claims and current
+// references prove the identity has become observable state and make the
+// compensation stale. Terminal Claims may remain as audit history.
+func (r *Repository) SoftDeleteCreatedEntityByBatch(
+	ctx context.Context,
+	tx pgx.Tx,
+	id, batchID uuid.UUID,
+	expectedUpdatedAt time.Time,
+) error {
+	tag, err := r.q(tx).Exec(ctx, `
+		UPDATE entity e
+		SET status = 'deleted', merged_into_entity_id = NULL, updated_at = now()
+		WHERE e.id = $1
+		  AND e.status = 'active'
+		  AND e.updated_at = $3
+		  AND NOT EXISTS (
+			SELECT 1 FROM entity_alias ea WHERE ea.entity_id = e.id
+		  )
+		  AND NOT EXISTS (
+			SELECT 1 FROM claim c
+			WHERE (c.subject_entity_id = e.id OR c.target_entity_id = e.id)
+			  AND c.status IN ('proposed', 'published')
+		  )
+		  AND NOT EXISTS (
+			SELECT 1 FROM page_entity_binding peb WHERE peb.entity_id = e.id
+		  )
+		  AND NOT EXISTS (
+			SELECT 1 FROM page p WHERE p.primary_entity_id = e.id
+		  )
+		  AND NOT EXISTS (
+			SELECT 1 FROM collection_membership cm WHERE cm.entity_id = e.id
+		  )
+		  AND NOT EXISTS (
+			SELECT 1 FROM entity_merge em
+			WHERE em.status = 'applied'
+			  AND (em.source_entity_id = e.id OR em.target_entity_id = e.id)
+		  )
+		  AND NOT EXISTS (
+			SELECT 1 FROM proposal p
+			WHERE p.target_type = 'entity' AND p.target_id = e.id
+			  AND p.status NOT IN ('rolled_back', 'rejected', 'failed')
+			  AND NOT EXISTS (
+				SELECT 1 FROM change_batch cb
+				WHERE cb.proposal_id = p.id AND cb.id = $2
+			  )
+		  )`,
+		id, batchID, expectedUpdatedAt,
+	)
+	if err != nil {
+		return fmt.Errorf("knowledge: 回滚新建实体失败: %w", err)
+	}
+	if tag.RowsAffected() != 1 {
+		return fmt.Errorf("%w: entity=%s", ErrEntityLifecycleStale, id)
+	}
+	return nil
 }
 
 // GetEntityByCanonicalKey 按 (wiki_id, canonical_key) 查实体，未命中返回 ErrEntityNotFound。
@@ -481,6 +556,88 @@ func (r *Repository) InsertBinding(ctx context.Context, tx pgx.Tx, b *PageEntity
 			return fmt.Errorf("%w: page=%s entity=%s role=%q", ErrBindingExists, b.PageID, b.EntityID, b.Role)
 		}
 		return fmt.Errorf("knowledge: 写入绑定失败: %w", err)
+	}
+	return nil
+}
+
+// ListPageBindings returns every authoritative Entity binding for a page.
+// Primary is ordered first so callers can present the canonical relationship
+// without deriving it from insertion time.
+func (r *Repository) ListPageBindings(
+	ctx context.Context,
+	tx pgx.Tx,
+	pageID uuid.UUID,
+) ([]PageEntityBinding, error) {
+	rows, err := r.q(tx).Query(ctx, `
+		SELECT page_id, entity_id, binding_role, language, created_at
+		FROM page_entity_binding
+		WHERE page_id = $1
+		ORDER BY CASE binding_role WHEN 'primary' THEN 0 ELSE 1 END,
+		         created_at, entity_id`,
+		pageID,
+	)
+	if err != nil {
+		return nil, fmt.Errorf("knowledge: 查询页面实体绑定失败: %w", err)
+	}
+	defer rows.Close()
+	result := []PageEntityBinding{}
+	for rows.Next() {
+		var binding PageEntityBinding
+		if err := rows.Scan(
+			&binding.PageID,
+			&binding.EntityID,
+			&binding.Role,
+			&binding.Language,
+			&binding.CreatedAt,
+		); err != nil {
+			return nil, fmt.Errorf("knowledge: 扫描页面实体绑定失败: %w", err)
+		}
+		result = append(result, binding)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, fmt.Errorf("knowledge: 遍历页面实体绑定失败: %w", err)
+	}
+	return result, nil
+}
+
+// DeletePrimaryBinding removes the page's current primary binding. The
+// deferred schema invariant permits the service to replace it and the Page
+// pointer in either order within one transaction.
+func (r *Repository) DeletePrimaryBinding(
+	ctx context.Context,
+	tx pgx.Tx,
+	pageID uuid.UUID,
+) error {
+	if _, err := r.q(tx).Exec(ctx, `
+		DELETE FROM page_entity_binding
+		WHERE page_id = $1 AND binding_role = 'primary'`,
+		pageID,
+	); err != nil {
+		return fmt.Errorf("knowledge: 删除页面主实体绑定失败: %w", err)
+	}
+	return nil
+}
+
+// UpdatePagePrimaryEntity synchronizes page.primary_entity_id with the
+// authoritative primary binding. Callers must hold the Page row lock.
+func (r *Repository) UpdatePagePrimaryEntity(
+	ctx context.Context,
+	tx pgx.Tx,
+	pageID uuid.UUID,
+	entityID *uuid.UUID,
+) error {
+	tag, err := r.q(tx).Exec(ctx, `
+		UPDATE page
+		SET primary_entity_id = $2, updated_at = now()
+		WHERE id = $1`,
+		pageID,
+		entityID,
+	)
+	if err != nil {
+		return fmt.Errorf("knowledge: 更新页面主实体指针失败: %w", err)
+	}
+	if tag.RowsAffected() != 1 {
+		return fmt.Errorf("%w: id=%s", page.ErrPageNotFound, pageID)
 	}
 	return nil
 }

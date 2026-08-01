@@ -21,6 +21,7 @@ const (
 	ActionApply         = "apply"
 	ActionBatchRollback = "batch_rollback"
 	ActionEntityMerge   = "entity_merge"
+	ActionManage        = "manage"
 )
 
 var actionRoles = map[string]map[string]bool{
@@ -31,6 +32,7 @@ var actionRoles = map[string]map[string]bool{
 	ActionApply:         {"applier": true, "admin": true},
 	ActionBatchRollback: {"applier": true, "admin": true},
 	ActionEntityMerge:   {"admin": true},
+	ActionManage:        {"admin": true},
 }
 
 type AuthorizationService struct{ pool db.Querier }
@@ -53,6 +55,18 @@ func (s *AuthorizationService) Check(ctx context.Context, actorID, wikiID uuid.U
 // CheckCreate 对尚不存在的页面按 Namespace + normalized title 叠加保护规则。
 func (s *AuthorizationService) CheckCreate(ctx context.Context, actorID, wikiID, namespaceID uuid.UUID, normalizedTitle string) error {
 	return s.checkTx(ctx, nil, actorID, wikiID, ActionCreate, nil, &namespaceID, normalizedTitle)
+}
+
+// CheckCreateTx is the transaction-aware form used by Proposal Apply.
+func (s *AuthorizationService) CheckCreateTx(
+	ctx context.Context,
+	tx pgx.Tx,
+	actorID, wikiID, namespaceID uuid.UUID,
+	normalizedTitle string,
+) error {
+	return s.checkTx(
+		ctx, tx, actorID, wikiID, ActionCreate, nil, &namespaceID, normalizedTitle,
+	)
 }
 
 // CheckTx 执行基础 Role 与 PageProtection 叠加授权。system 为运维恢复通道；
@@ -104,29 +118,44 @@ func (s *AuthorizationService) checkTx(ctx context.Context, tx pgx.Tx, actorID, 
 	if pageID == nil && (action != ActionCreate || namespaceID == nil || normalizedTitle == "") {
 		return nil
 	}
-	var requiredRole string
+	if roles["admin"] {
+		return nil
+	}
+	var protectionRows pgx.Rows
 	if pageID != nil {
-		err = s.q(tx).QueryRow(ctx, `SELECT r.role_key FROM page_protection pp
+		protectionRows, err = s.q(tx).Query(ctx, `SELECT DISTINCT r.role_key
+			FROM page_protection pp
 			JOIN role r ON r.id=pp.required_role_id
-			WHERE pp.page_id=$1 AND pp.action_type=$2 AND (pp.expires_at IS NULL OR pp.expires_at>now())
-			ORDER BY pp.created_at DESC LIMIT 1`, *pageID, action).Scan(&requiredRole)
+			WHERE pp.page_id=$1 AND pp.action_type=$2
+			  AND pp.revoked_at IS NULL
+			  AND (pp.expires_at IS NULL OR pp.expires_at>now())
+			ORDER BY r.role_key`, *pageID, action)
 	} else {
-		err = s.q(tx).QueryRow(ctx, `SELECT r.role_key FROM page_protection pp
+		protectionRows, err = s.q(tx).Query(ctx, `SELECT DISTINCT r.role_key
+			FROM page_protection pp
 			JOIN role r ON r.id=pp.required_role_id
 			WHERE pp.page_id IS NULL AND pp.namespace_id=$1 AND pp.normalized_title=$2
-				AND pp.action_type='create' AND (pp.expires_at IS NULL OR pp.expires_at>now())
-			ORDER BY pp.created_at DESC LIMIT 1`, *namespaceID, normalizedTitle).Scan(&requiredRole)
-	}
-	if errors.Is(err, pgx.ErrNoRows) {
-		return nil
+				AND pp.action_type='create' AND pp.revoked_at IS NULL
+				AND (pp.expires_at IS NULL OR pp.expires_at>now())
+			ORDER BY r.role_key`, *namespaceID, normalizedTitle)
 	}
 	if err != nil {
 		return err
 	}
-	if roles[requiredRole] || roles["admin"] {
-		return nil
+	defer protectionRows.Close()
+	for protectionRows.Next() {
+		var requiredRole string
+		if err := protectionRows.Scan(&requiredRole); err != nil {
+			return err
+		}
+		if !roles[requiredRole] {
+			return fmt.Errorf(
+				"%w: page protection requires=%s",
+				ErrPermissionDenied, requiredRole,
+			)
+		}
 	}
-	return fmt.Errorf("%w: page protection requires=%s", ErrPermissionDenied, requiredRole)
+	return protectionRows.Err()
 }
 
 func wikiIDForProposal(ctx context.Context, tx pgx.Tx, repo *Repository, p *Proposal) uuid.UUID {
@@ -134,16 +163,14 @@ func wikiIDForProposal(ctx context.Context, tx pgx.Tx, repo *Repository, p *Prop
 		return uuid.Nil
 	}
 	if p.TargetID == nil {
-		// create_entity has no stable entity ID before Apply. Resolve its wiki from
-		// the frozen operation target so ordinary wiki-scoped review roles still work.
-		if p.TargetType == TargetEntity {
-			operations, err := repo.ListOperations(ctx, tx, p.ID)
-			if err == nil {
-				for i := range operations {
-					op, parseErr := OperationFromRecord(&operations[i])
-					if parseErr == nil && op.OperationType == OpCreateEntity && op.Target.WikiID != nil {
-						return *op.Target.WikiID
-					}
+		// Create operations have no stable aggregate ID before Apply. Resolve
+		// their Wiki from the frozen operation target.
+		operations, err := repo.ListOperations(ctx, tx, p.ID)
+		if err == nil {
+			for i := range operations {
+				op, parseErr := OperationFromRecord(&operations[i])
+				if parseErr == nil && op.Target.WikiID != nil {
+					return *op.Target.WikiID
 				}
 			}
 		}
@@ -158,6 +185,20 @@ func wikiIDForProposal(ctx context.Context, tx pgx.Tx, repo *Repository, p *Prop
 		err = repo.q(tx).QueryRow(ctx, `SELECT wiki_id FROM entity WHERE id=$1`, *p.TargetID).Scan(&wikiID)
 	case TargetClaim:
 		err = repo.q(tx).QueryRow(ctx, `SELECT e.wiki_id FROM claim c JOIN entity e ON e.id=c.subject_entity_id WHERE c.id=$1`, *p.TargetID).Scan(&wikiID)
+	case TargetCollection:
+		err = repo.q(tx).QueryRow(ctx, `SELECT wiki_id FROM collection WHERE id=$1`, *p.TargetID).Scan(&wikiID)
+	case TargetExternalResource:
+		operations, opErr := repo.ListOperations(ctx, tx, p.ID)
+		if opErr != nil {
+			return uuid.Nil
+		}
+		for i := range operations {
+			op, parseErr := OperationFromRecord(&operations[i])
+			if parseErr == nil && op.Target.WikiID != nil {
+				return *op.Target.WikiID
+			}
+		}
+		return uuid.Nil
 	default:
 		return uuid.Nil
 	}

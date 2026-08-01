@@ -5,6 +5,7 @@ import (
 	"context"
 	"crypto/sha256"
 	"encoding/hex"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"io"
@@ -15,6 +16,7 @@ import (
 	"path/filepath"
 	"strings"
 	"time"
+	"unicode/utf8"
 )
 
 var (
@@ -40,7 +42,13 @@ func DefaultURLPolicy() URLPolicy {
 	return URLPolicy{
 		MaxBytes: 10 << 20, MaxRedirects: 3,
 		AllowedMIMEs: map[string]bool{
-			"text/html": true, "text/plain": true, "application/pdf": true,
+			"text/html":        true,
+			"text/plain":       true,
+			"text/csv":         true,
+			"application/pdf":  true,
+			"application/json": true,
+			"image/png":        true,
+			"image/jpeg":       true,
 		},
 		AllowedPorts: map[string]bool{"": true, "80": true, "443": true},
 	}
@@ -159,7 +167,10 @@ func (f *Fetcher) Fetch(ctx context.Context, rawURL string) (*AcquiredSource, er
 		return nil, ErrUnsafeURL
 	}
 	request.Header.Set("User-Agent", "AnbyWiki-Importer/1.0")
-	request.Header.Set("Accept", "text/html,application/pdf,text/plain")
+	request.Header.Set(
+		"Accept",
+		"text/html,application/pdf,text/plain,text/csv,application/json,image/png,image/jpeg",
+	)
 	response, err := f.client.Do(request)
 	if err != nil {
 		return nil, fmt.Errorf("%w: %v", ErrFetchFailed, err)
@@ -178,15 +189,20 @@ func (f *Fetcher) Fetch(ctx context.Context, rawURL string) (*AcquiredSource, er
 	if int64(len(content)) > f.policy.MaxBytes {
 		return nil, ErrSourceTooLarge
 	}
+	filename := filepath.Base(response.Request.URL.Path)
 	mimeType := normalizedMIME(response.Header.Get("Content-Type"))
 	if mimeType == "" {
 		mimeType = normalizedMIME(http.DetectContentType(content))
 	}
+	mimeType = refineMIME(filename, mimeType, content)
 	if !f.policy.AllowedMIMEs[mimeType] || !magicMatches(mimeType, content) {
 		return nil, ErrUnsupportedMIME
 	}
+	if filename == "" || filename == "." || filename == string(filepath.Separator) {
+		filename = "source" + extensionForMIME(mimeType)
+	}
 	sum := sha256.Sum256(content)
-	return &AcquiredSource{URL: response.Request.URL.String(), Filename: filepath.Base(response.Request.URL.Path),
+	return &AcquiredSource{URL: response.Request.URL.String(), Filename: filename,
 		MIMEType: mimeType, Content: content, ContentHash: hex.EncodeToString(sum[:])}, nil
 }
 
@@ -195,7 +211,53 @@ func normalizedMIME(value string) string {
 	if err != nil {
 		return ""
 	}
-	return strings.ToLower(parsed)
+	switch strings.ToLower(parsed) {
+	case "image/jpg", "image/pjpeg":
+		return "image/jpeg"
+	case "application/csv":
+		return "text/csv"
+	case "text/json":
+		return "application/json"
+	default:
+		return strings.ToLower(parsed)
+	}
+}
+
+func refineMIME(filename, mimeType string, content []byte) string {
+	extension := strings.ToLower(filepath.Ext(strings.TrimSpace(filename)))
+	if (mimeType == "" || mimeType == "application/octet-stream" || mimeType == "text/plain") &&
+		json.Valid(bytes.TrimSpace(content)) {
+		return "application/json"
+	}
+	if (mimeType == "" || mimeType == "application/octet-stream" || mimeType == "text/plain") &&
+		extension == ".csv" {
+		return "text/csv"
+	}
+	if mimeType == "" || mimeType == "application/octet-stream" {
+		return normalizedMIME(http.DetectContentType(content))
+	}
+	return mimeType
+}
+
+func extensionForMIME(mimeType string) string {
+	switch mimeType {
+	case "text/html":
+		return ".html"
+	case "text/plain":
+		return ".txt"
+	case "text/csv":
+		return ".csv"
+	case "application/pdf":
+		return ".pdf"
+	case "application/json":
+		return ".json"
+	case "image/png":
+		return ".png"
+	case "image/jpeg":
+		return ".jpg"
+	default:
+		return ""
+	}
 }
 
 func magicMatches(mimeType string, content []byte) bool {
@@ -209,6 +271,16 @@ func magicMatches(mimeType string, content []byte) bool {
 			bytes.Contains(lower[:min(len(lower), 512)], []byte("<!doctype html"))
 	case "text/plain":
 		return !bytes.Contains(content, []byte{0})
+	case "text/csv":
+		return utf8.Valid(content) && !bytes.Contains(content, []byte{0})
+	case "application/json":
+		return json.Valid(trimmed)
+	case "image/png":
+		return len(content) >= 8 &&
+			bytes.Equal(content[:8], []byte{0x89, 'P', 'N', 'G', '\r', '\n', 0x1a, '\n'})
+	case "image/jpeg":
+		return len(content) >= 3 &&
+			content[0] == 0xff && content[1] == 0xd8 && content[2] == 0xff
 	default:
 		return false
 	}
@@ -236,7 +308,7 @@ func ValidateUpload(ctx context.Context, policy URLPolicy, scanner MalwareScanne
 	if int64(len(content)) > policy.MaxBytes {
 		return nil, ErrSourceTooLarge
 	}
-	mimeType = normalizedMIME(mimeType)
+	mimeType = refineMIME(filename, normalizedMIME(mimeType), content)
 	if !policy.AllowedMIMEs[mimeType] || !magicMatches(mimeType, content) {
 		return nil, ErrUnsupportedMIME
 	}

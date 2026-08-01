@@ -9,13 +9,18 @@ import (
 )
 
 const (
-	TypeManual = "manual"
-	TypeRule   = "rule"
+	TypeManual  = "manual"
+	TypeRule    = "rule"
+	TypeDynamic = "dynamic"
 
 	MemberPage   = "page"
 	MemberEntity = "entity"
 
-	RuleVersion = 1
+	RuleVersion         = 1
+	DynamicQueryVersion = 1
+
+	OutboxEventMembershipAdded   = "collection.membership_added"
+	OutboxEventMembershipRemoved = "collection.membership_removed"
 )
 
 var (
@@ -45,6 +50,17 @@ type Rule struct {
 	Property   string `json:"property,omitempty"`
 }
 
+// DynamicQuery is a bounded, versioned query language. It never accepts raw
+// SQL and resolves either live pages or live entities at read time.
+type DynamicQuery struct {
+	Version    int    `json:"version"`
+	MemberType string `json:"member_type"`
+	Text       string `json:"text,omitempty"`
+	Namespace  string `json:"namespace,omitempty"`
+	EntityType string `json:"entity_type,omitempty"`
+	Property   string `json:"property,omitempty"`
+}
+
 type CreateParams struct {
 	WikiID            uuid.UUID
 	CollectionType    string
@@ -69,7 +85,7 @@ type Membership struct {
 	MemberType       string
 	SourceType       string
 	SortKey          string
-	SourceRevisionID uuid.UUID
+	SourceRevisionID *uuid.UUID
 	DisplayTitle     string
 	CreatedAt        time.Time
 }

@@ -43,6 +43,10 @@ func NewRouter(logger *slog.Logger, deps Deps, writeAPI *WriteAPI, readAPI *Read
 	var authAPI *AuthAPI
 	var collaborationAPI *CollaborationAPI
 	var collectionAPI *CollectionAPI
+	var assetAPI *AssetAPI
+	var datasetAPI *DatasetAPI
+	var componentAPI *ComponentAPI
+	var sourceAPI *SourceAPI
 	for _, optional := range optionalAPIs {
 		switch api := optional.(type) {
 		case *KnowledgeReadAPI:
@@ -57,6 +61,14 @@ func NewRouter(logger *slog.Logger, deps Deps, writeAPI *WriteAPI, readAPI *Read
 			collaborationAPI = api
 		case *CollectionAPI:
 			collectionAPI = api
+		case *AssetAPI:
+			assetAPI = api
+		case *DatasetAPI:
+			datasetAPI = api
+		case *ComponentAPI:
+			componentAPI = api
+		case *SourceAPI:
+			sourceAPI = api
 		}
 	}
 	r := chi.NewRouter()
@@ -80,7 +92,7 @@ func NewRouter(logger *slog.Logger, deps Deps, writeAPI *WriteAPI, readAPI *Read
 		r.Handle("/metrics", deps.Metrics.Handler())
 	}
 
-	if writeAPI != nil || readAPI != nil || historyAPI != nil || projectionAPI != nil || searchAPI != nil || knowledgeReadAPI != nil || governanceAPI != nil || importAPI != nil || authAPI != nil || collaborationAPI != nil || collectionAPI != nil {
+	if writeAPI != nil || readAPI != nil || historyAPI != nil || projectionAPI != nil || searchAPI != nil || knowledgeReadAPI != nil || governanceAPI != nil || importAPI != nil || authAPI != nil || collaborationAPI != nil || collectionAPI != nil || assetAPI != nil || datasetAPI != nil || componentAPI != nil || sourceAPI != nil {
 		r.Route("/api/v1", func(r chi.Router) {
 			if authAPI != nil {
 				r.Post("/auth/register", authAPI.register)
@@ -91,6 +103,12 @@ func NewRouter(logger *slog.Logger, deps Deps, writeAPI *WriteAPI, readAPI *Read
 			if writeAPI != nil {
 				r.Post("/pages", writeAPI.createPage)
 				r.Post("/pages/{id}/rename", writeAPI.renamePage)
+				r.Get("/pages/{id}/redirect", writeAPI.getRedirect)
+				r.Post("/pages/{id}/redirect", writeAPI.createRedirect)
+				r.Delete("/pages/{id}/redirect", writeAPI.deleteRedirect)
+				r.Get("/pages/{id}/block-redirects", writeAPI.listBlockRedirects)
+				r.Put("/pages/{id}/block-redirects/{block_id}", writeAPI.upsertBlockRedirect)
+				r.Delete("/pages/{id}/block-redirects/{block_id}", writeAPI.deleteBlockRedirect)
 				r.Post("/pages/{id}/revisions", writeAPI.publishRevision)
 			}
 			if collaborationAPI != nil {
@@ -102,6 +120,7 @@ func NewRouter(logger *slog.Logger, deps Deps, writeAPI *WriteAPI, readAPI *Read
 			}
 			if searchAPI != nil {
 				r.Get("/pages/search", searchAPI.searchPages)
+				r.Get("/search/capabilities", searchAPI.capabilities)
 			}
 			if historyAPI != nil {
 				r.Get("/pages/{id}/revisions", historyAPI.listRevisions)
@@ -112,23 +131,97 @@ func NewRouter(logger *slog.Logger, deps Deps, writeAPI *WriteAPI, readAPI *Read
 			if projectionAPI != nil {
 				r.Get("/pages/{id}/backlinks", projectionAPI.listBacklinks)
 				r.Get("/pages/{id}/outline", projectionAPI.getOutline)
+				r.Get("/pages/{id}/sections", projectionAPI.getSections)
+				r.Get("/pages/{id}/sections/{section_key}", projectionAPI.getSection)
+				r.Get("/pages/{id}/section-locator/{block_id}", projectionAPI.locateSection)
 				r.Get("/pages/{id}/anchors/{slug}", projectionAPI.resolveAnchor)
 				r.Get("/entities/{id}/mentions", projectionAPI.listEntityMentions)
 				r.Get("/claims/{id}/usages", projectionAPI.listClaimUsages)
 				r.Get("/citations/{id}/usages", projectionAPI.listCitationUsages)
+				r.Get("/sources/{id}/usages", projectionAPI.listSourceUsages)
+				r.Get("/components/{id}/usages", projectionAPI.listComponentUsages)
 			}
 			if knowledgeReadAPI != nil {
+				r.Get("/entities", knowledgeReadAPI.listEntities)
 				r.Get("/entities/{id}", knowledgeReadAPI.getEntity)
+				r.Post("/entities/{id}/labels", knowledgeReadAPI.addEntityLabel)
+				r.Delete("/entities/{id}/labels", knowledgeReadAPI.removeEntityLabel)
+				r.Put("/entities/{id}/labels/primary", knowledgeReadAPI.setPrimaryEntityLabel)
+				r.Post("/entities/{id}/aliases", knowledgeReadAPI.addEntityAlias)
+				r.Delete("/entities/{id}/aliases/{alias_id}", knowledgeReadAPI.removeEntityAlias)
+				r.Get("/entities/{id}/graph", knowledgeReadAPI.getEntityGraph)
+				r.Get("/entities/{id}/merge", knowledgeReadAPI.getEntityMerge)
 				r.Post("/entities/{id}/merge", knowledgeReadAPI.mergeEntity)
+				r.Post("/entity-merges/{id}/rollback", knowledgeReadAPI.rollbackEntityMerge)
+				r.Get("/entities/{id}/federation-links", knowledgeReadAPI.listEntityFederationLinks)
+				r.Post("/entities/{id}/federation-links", knowledgeReadAPI.createFederationLink)
+				r.Post("/entity-graph/rebuild", knowledgeReadAPI.rebuildEntityGraph)
+				r.Get("/federated-wikis", knowledgeReadAPI.listFederatedWikis)
+				r.Post("/federated-wikis", knowledgeReadAPI.registerFederatedWiki)
+				r.Put("/federated-wikis/{id}", knowledgeReadAPI.updateFederatedWiki)
+				r.Get("/federation-links", knowledgeReadAPI.listFederationLinks)
+				r.Put("/federation-links/{id}", knowledgeReadAPI.updateFederationLink)
 				r.Get("/claims/{id}", knowledgeReadAPI.getClaim)
+				r.Put("/claims/{id}/verification", knowledgeReadAPI.updateClaimVerification)
 				r.Get("/citations/{id}", knowledgeReadAPI.getCitation)
+				r.Get("/pages/{id}/entity-bindings", knowledgeReadAPI.listPageEntityBindings)
+				r.Put("/pages/{id}/entity-bindings", knowledgeReadAPI.writePageEntityBinding)
+				r.Delete(
+					"/pages/{id}/entity-bindings/{entity_id}",
+					knowledgeReadAPI.removePageEntityBinding,
+				)
+				if knowledgeReadAPI.consistency != nil {
+					r.Get("/fact-consistency-issues", knowledgeReadAPI.listFactConsistencyIssues)
+					r.Post("/fact-consistency-scans", knowledgeReadAPI.scanFactConsistency)
+				}
 			}
 			if collectionAPI != nil {
 				r.Get("/collections", collectionAPI.list)
+				r.Post("/collections", collectionAPI.create)
 				r.Get("/collections/{id}", collectionAPI.get)
 				r.Get("/collections/{id}/members", collectionAPI.members)
+				r.Put("/collections/{id}/members", collectionAPI.replaceMembers)
+				r.Post("/collections/{id}/rebuild", collectionAPI.rebuild)
+			}
+			if assetAPI != nil {
+				r.Get("/assets", assetAPI.list)
+				r.Post("/assets", assetAPI.upload)
+				r.Get("/assets/revisions/{revision_id}", assetAPI.getRevision)
+				r.Get("/assets/revisions/{revision_id}/content", assetAPI.content)
+			}
+			if datasetAPI != nil {
+				r.Get("/datasets", datasetAPI.list)
+				r.Post("/datasets", datasetAPI.create)
+				r.Get("/datasets/{id}", datasetAPI.get)
+				r.Get("/datasets/{id}/records", datasetAPI.listRecords)
+				r.Post("/datasets/{id}/records", datasetAPI.createRecord)
+				r.Get("/datasets/{id}/views", datasetAPI.listViews)
+				r.Post("/datasets/{id}/views", datasetAPI.createView)
+				r.Put("/dataset-records/{id}", datasetAPI.updateRecord)
+				r.Get("/dataset-views/{id}", datasetAPI.getView)
+				r.Get("/dataset-views/{id}/records", datasetAPI.queryView)
+			}
+			if componentAPI != nil {
+				r.Get("/components", componentAPI.list)
+				r.Post("/components", componentAPI.create)
+				r.Get("/components/{id}", componentAPI.get)
+				r.Get("/components/{id}/versions", componentAPI.listVersions)
+				r.Post("/components/{id}/versions", componentAPI.createVersion)
+				r.Put("/components/{id}/versions/{version}", componentAPI.updateVersion)
+				r.Post("/components/{id}/versions/{version}/publish", componentAPI.publishVersion)
+				r.Post("/components/{id}/versions/{version}/deprecate", componentAPI.deprecateVersion)
+				r.Post("/components/{id}/versions/{version}/preview", componentAPI.preview)
+			}
+			if sourceAPI != nil {
+				r.Get("/sources", sourceAPI.list)
+				r.Post("/sources", sourceAPI.create)
+				r.Get("/sources/{id}", sourceAPI.get)
+				r.Get("/sources/{id}/versions", sourceAPI.versions)
+				r.Get("/source-versions/{id}/chunks", sourceAPI.chunks)
+				r.Post("/citations", sourceAPI.createCitation)
 			}
 			if governanceAPI != nil {
+				r.Get("/proposals", governanceAPI.listProposals)
 				r.Post("/proposals", governanceAPI.createProposal)
 				r.Get("/proposals/{id}", governanceAPI.getProposal)
 				r.Post("/proposals/{id}/operations", governanceAPI.addOperation)
@@ -140,6 +233,7 @@ func NewRouter(logger *slog.Logger, deps Deps, writeAPI *WriteAPI, readAPI *Read
 				r.Get("/review-tasks", governanceAPI.pendingReviews)
 				r.Post("/review-tasks/{id}/decision", governanceAPI.decideReview)
 				r.Post("/change-batches/{id}/rollback", governanceAPI.rollbackBatch)
+				r.Get("/bulk-review-batches", governanceAPI.listBulkReviews)
 				r.Post("/bulk-review-batches", governanceAPI.createBulkReview)
 				r.Get("/bulk-review-batches/{id}", governanceAPI.getBulkReview)
 				r.Post("/bulk-review-batches/{id}/proposals/{proposal_id}/decision", governanceAPI.decideBulkReview)
@@ -148,8 +242,32 @@ func NewRouter(logger *slog.Logger, deps Deps, writeAPI *WriteAPI, readAPI *Read
 				r.Post("/bulk-review-batches/{id}/resume", governanceAPI.resumeBulkReview)
 				r.Post("/bulk-review-batches/{id}/apply-next-wave", governanceAPI.applyBulkReviewWave)
 				r.Get("/bulk-review-batches/{id}/audit-events", governanceAPI.bulkReviewAudit)
+				if governanceAPI.audit != nil {
+					r.Get("/change-tags", governanceAPI.listChangeTags)
+					r.Post("/change-tags", governanceAPI.createChangeTag)
+					r.Post("/change-tags/{id}/assignments", governanceAPI.assignChangeTag)
+					r.Get("/audit-events", governanceAPI.listAuditEvents)
+				}
+				if governanceAPI.protection != nil {
+					r.Get("/roles", governanceAPI.listRoles)
+					r.Get("/page-protections", governanceAPI.listPageProtections)
+					r.Post("/page-protections", governanceAPI.createPageProtection)
+					r.Delete("/page-protections/{id}", governanceAPI.deletePageProtection)
+				}
+				if governanceAPI.aiTrust != nil {
+					r.Get("/ai-trust-profiles", governanceAPI.listAITrustProfiles)
+					r.Put("/ai-trust-profiles/{actor_id}", governanceAPI.updateAITrustProfile)
+				}
+				if governanceAPI.revisions != nil {
+					r.Get("/revision-storage", governanceAPI.revisionStorageStats)
+					r.Post(
+						"/revision-storage/archive",
+						governanceAPI.archiveRevisionSnapshots,
+					)
+				}
 			}
 			if importAPI != nil {
+				r.Get("/import-jobs", importAPI.listJobs)
 				r.Post("/import-jobs", importAPI.createJob)
 				r.Post("/import-jobs/uploads", importAPI.createUploadJob)
 				r.Get("/import-jobs/{id}", importAPI.getJob)

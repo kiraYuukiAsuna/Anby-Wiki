@@ -201,6 +201,29 @@ func loadSearchDocument(ctx context.Context, tx pgx.Tx, pageID, revisionID uuid.
 	var doc wikisearch.SearchDocument
 	var entityType *string
 	err := tx.QueryRow(ctx, `
+		WITH RECURSIVE primary_entity_chain AS (
+			SELECT e.id, e.entity_type_id, e.merged_into_entity_id, e.status,
+			       0 AS depth, ARRAY[e.id] AS path
+			FROM page seed
+			JOIN entity e ON e.id = seed.primary_entity_id
+			WHERE seed.id = $1
+			UNION ALL
+			SELECT target.id, target.entity_type_id,
+			       target.merged_into_entity_id, target.status,
+			       chain.depth + 1, chain.path || target.id
+			FROM primary_entity_chain chain
+			JOIN entity target ON target.id = chain.merged_into_entity_id
+			WHERE chain.status = 'merged'
+			  AND chain.depth < 63
+			  AND NOT target.id = ANY(chain.path)
+		),
+		resolved_primary AS (
+			SELECT id, entity_type_id
+			FROM primary_entity_chain
+			WHERE status <> 'deleted'
+			ORDER BY (status = 'active') DESC, depth DESC
+			LIMIT 1
+		)
 		SELECT p.id, p.wiki_id, n.namespace_key, p.language, p.display_title,
 			p.normalized_title,
 			ARRAY(
@@ -209,29 +232,29 @@ func loadSearchDocument(ctx context.Context, tx pgx.Tx, pageID, revisionID uuid.
 				WHERE pa.page_id = p.id
 				ORDER BY pa.normalized_title
 			),
-			p.primary_entity_id,
+			resolved.id,
 			et.type_key,
 			ARRAY(
 				SELECT term
 				FROM (
 					SELECT el.label AS term
 					FROM entity_label el
-					WHERE el.entity_id = p.primary_entity_id
+					WHERE el.entity_id = resolved.id
 					UNION
 					SELECT el.description
 					FROM entity_label el
-					WHERE el.entity_id = p.primary_entity_id AND el.description <> ''
+					WHERE el.entity_id = resolved.id AND el.description <> ''
 					UNION
 					SELECT ea.alias
 					FROM entity_alias ea
-					WHERE ea.entity_id = p.primary_entity_id
+					WHERE ea.entity_id = resolved.id
 				) terms
 				ORDER BY term
 			)
 		FROM page p
 		JOIN namespace n ON n.id = p.namespace_id
-		LEFT JOIN entity e ON e.id = p.primary_entity_id AND e.status = 'active'
-		LEFT JOIN entity_type et ON et.id = e.entity_type_id
+		LEFT JOIN resolved_primary resolved ON true
+		LEFT JOIN entity_type et ON et.id = resolved.entity_type_id
 		WHERE p.id = $1 AND p.deleted_at IS NULL AND p.current_revision_id = $2`,
 		pageID, revisionID).Scan(
 		&doc.PageID, &doc.WikiID, &doc.Namespace, &doc.Language, &doc.DisplayTitle,
@@ -250,13 +273,24 @@ func searchBodyText(doc *ast.Document) (string, error) {
 	var parts []string
 	var collectErr error
 	err := ast.Walk(doc, func(node ast.WalkNode) bool {
-		if node.Block != nil && node.Block.Type == ast.BlockCode {
-			text, err := node.Block.TextContent()
-			if err != nil {
-				collectErr = err
-				return false
+		if node.Block != nil {
+			switch node.Block.Type {
+			case ast.BlockCode:
+				text, err := node.Block.TextContent()
+				if err != nil {
+					collectErr = err
+					return false
+				}
+				appendSearchText(&parts, text)
+			case ast.BlockImage:
+				appendSearchText(&parts, node.Block.AltText)
+				appendSearchText(&parts, node.Block.Caption)
+			case ast.BlockVideo:
+				appendSearchText(&parts, node.Block.Title)
+				appendSearchText(&parts, node.Block.Caption)
+			case ast.BlockEmbed:
+				appendSearchText(&parts, node.Block.Title)
 			}
-			appendSearchText(&parts, text)
 			return true
 		}
 		if node.Inline == nil {
@@ -271,9 +305,13 @@ func searchBodyText(doc *ast.Document) (string, error) {
 			} else {
 				appendSearchText(&parts, node.Inline.DisplayText)
 			}
+		case ast.InlinePageAnchorReference, ast.InlineMention:
+			appendSearchText(&parts, node.Inline.DisplayText)
 		case ast.InlineExternalLink, ast.InlineEntityReference, ast.InlineClaimReference,
 			ast.InlineCitationReference:
 			appendSearchText(&parts, node.Inline.DisplayText)
+		case ast.InlineMath:
+			appendSearchText(&parts, node.Inline.Expression)
 		}
 		return true
 	})

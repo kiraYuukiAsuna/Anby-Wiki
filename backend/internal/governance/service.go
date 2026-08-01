@@ -22,8 +22,51 @@ type Service struct {
 	ids  *id.Generator
 }
 
+const (
+	DefaultProposalPageSize = 20
+	MaxProposalPageSize     = 100
+)
+
 func NewService(repo *Repository, txm *db.TxManager, ids *id.Generator) *Service {
 	return &Service{repo: repo, txm: txm, ids: ids}
+}
+
+// ListOwnedProposals 返回当前 Actor 创建的全部提案，供工作台恢复历史任务。
+func (s *Service) ListOwnedProposals(
+	ctx context.Context, actorID uuid.UUID, status, targetType, cursor string, limit int,
+) (*ProposalPage, error) {
+	if actorID == uuid.Nil {
+		return nil, ErrInvalidActor
+	}
+	if err := s.checkProposalActor(ctx, nil, actorID); err != nil {
+		return nil, err
+	}
+	status = strings.TrimSpace(status)
+	if status != "" && !validProposalStatus(status) {
+		return nil, ErrInvalidProposalStatus
+	}
+	targetType = strings.TrimSpace(targetType)
+	if targetType != "" && !validTargets[targetType] {
+		return nil, ErrInvalidProposal
+	}
+	if limit <= 0 {
+		limit = DefaultProposalPageSize
+	}
+	if limit > MaxProposalPageSize {
+		limit = MaxProposalPageSize
+	}
+	return s.repo.ListOwnedProposals(ctx, actorID, status, targetType, cursor, limit)
+}
+
+func validProposalStatus(status string) bool {
+	switch status {
+	case ProposalDraft, ProposalSubmitted, ProposalInReview, ProposalApproved,
+		ProposalRejected, ProposalConflicted, ProposalApplying, ProposalApplied,
+		ProposalFailed, ProposalRolledBack:
+		return true
+	default:
+		return false
+	}
 }
 
 // CreateProposal 允许 active human/bot/ai/import/system 创建提案；anonymous 不允许。
@@ -97,6 +140,27 @@ func equalUUID(a, b *uuid.UUID) bool {
 
 // AddOperation 在 Proposal 行锁内分配严格连续的 1-based sequence。
 func (s *Service) AddOperation(ctx context.Context, in AddOperationParams) (*OperationRecord, error) {
+	return s.addOperation(ctx, in, nil)
+}
+
+// AddOperationAs 是面向 HTTP 的 Actor 绑定入口。后台管道在创建自己的
+// Proposal 后使用 AddOperation；用户请求必须证明自己是 Proposal 创建者。
+func (s *Service) AddOperationAs(
+	ctx context.Context,
+	in AddOperationParams,
+	actorID uuid.UUID,
+) (*OperationRecord, error) {
+	if actorID == uuid.Nil {
+		return nil, ErrInvalidActor
+	}
+	return s.addOperation(ctx, in, &actorID)
+}
+
+func (s *Service) addOperation(
+	ctx context.Context,
+	in AddOperationParams,
+	actorID *uuid.UUID,
+) (*OperationRecord, error) {
 	if in.ProposalID == uuid.Nil || strings.TrimSpace(in.OperationType) == "" {
 		return nil, ErrInvalidOperation
 	}
@@ -127,6 +191,9 @@ func (s *Service) AddOperation(ctx context.Context, in AddOperationParams) (*Ope
 		p, err := s.repo.GetProposalForUpdate(ctx, tx, in.ProposalID)
 		if err != nil {
 			return err
+		}
+		if actorID != nil && p.CreatedBy != *actorID {
+			return ErrPermissionDenied
 		}
 		if p.Status != ProposalDraft {
 			return fmt.Errorf("%w: status=%s", ErrProposalNotDraft, p.Status)

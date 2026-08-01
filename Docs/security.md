@@ -7,7 +7,8 @@ production 启动前必须满足：
 - 注册默认关闭。首次受控部署时显式设置 `AUTH_REGISTRATION_ENABLED=true`，
   首个注册账号自动获得管理员角色；完成初始化后立即改回 `false`。
 - `AUTH_DEV_HEADER_ENABLED=false`。外层实际提供 HTTPS 时必须设置 `SESSION_COOKIE_SECURE=true`；明文本地/封闭部署才允许 `false`。
-- `S3_ACCESS_KEY`/`S3_SECRET_KEY` 不使用 `minioadmin`、`minioadmin_dev`、`wiki_dev_password`、`ci-placeholder`、`changeme` 等开发/占位值，长度至少 12 字符。
+- `S3_ACCESS_KEY`/`S3_SECRET_KEY` 与 `MEILI_MASTER_KEY` 不使用开发值或模板中的
+  `replace-with-*` 占位值；机密长度至少 12 字符。
 
 ## 浏览器写请求
 
@@ -36,7 +37,9 @@ Fetch Metadata 或等价来源校验，并且不得在缺少等价防护时使�
 
 - 编辑器外链、导入 URL、AST `external_link` 共用 `apps/web/lib/http-url.ts`，只接受绝对 `http:`/`https:`。
 - AST 和 Citation 渲染再次调用 `safeHttpUrl`；异常或危险协议降级为不可点击文本。
-- 禁止直接把未校验 URL 写入 `href`，禁止 `dangerouslySetInnerHTML` 渲染 AST/API HTML。
+- 禁止直接把未校验 URL 写入 `href`。只有专用 `ServerRenderedDocument` 可挂载
+  后端从已校验 AST 生成并逐值转义的 `rendered_html` 投影；不得把用户原始 HTML、
+  Prompt、Source 全文或任意 API 字符串交给 `dangerouslySetInnerHTML`。
 
 ## 应用边界控制
 
@@ -58,23 +61,23 @@ Fetch Metadata 或等价来源校验，并且不得在缺少等价防护时使�
 2026-07-23 实跑发现并修复 Go `GO-2026-5970`（`x/text`）、`GO-2026-4945`
 （`go-jose`）和 `GO-2026-4394`（`go.opentelemetry.io/otel/sdk`）。
 
-2026-07-26 门禁又发现并修复 `GO-2026-5506`、`GO-2026-5158`
-（OpenTelemetry baggage header 解析资源消耗）与 `GO-2026-4559`
-（`x/net` HTTP/2 frame 可触发 panic）；OpenTelemetry Go v1 模块已统一升级到
-`v1.42.0`，`x/net` 已升级到 `v0.51.0`。
-最终门禁结果：
+2026-07-31 门禁发现并修复 gRPC `GO-2026-6061` 与 OpenTelemetry
+`GO-2026-5158` 的可达调用链：
 
-- `govulncheck v1.1.4 ./...` 报告 0 个可达漏洞，Go vet 与构建通过；
-- 当前 Next `16.2.11` 的 production 依赖 `sharp 0.34.5`
-  命中 `GHSA-f88m-g3jw-g9cj`（high），修复要求 `sharp >=0.35.0`；
-- Next 内嵌 `postcss <=8.5.17` 命中 `GHSA-qx2v-qp2m-jg93`、
-  `GHSA-6g55-p6wh-862q` 与 `GHSA-r28c-9q8g-f849`（high）；
-- 非破坏性 `npm audit fix` 已升级可独立修复的 `brace-expansion`，production
-  审计仍报告 3 个 high 和 3 个 moderate；
-- npm 提供的 `audit fix --force` 会破坏性降级到 Next 9，不能采用，也不通过
-  unsupported override 绕过框架锁定依赖。
+- gRPC 升级到 `v1.82.1`，OpenTelemetry Go v1 家族统一到 `v1.44.0`；
+- `x/crypto`、`x/net`、`x/sys` 与 genproto 随兼容依赖链升级；
+- `govulncheck@latest` 和 CI 固定的 `govulncheck v1.1.4` 均报告 0 个可达漏洞。
 
-因此 npm security gate 保持失败，production 发布继续阻塞，直到 Next 发布兼容安全
-sharp/postcss 的版本，并重新通过 typecheck、Lint、build 与 audit 门禁。
+Web 安全依赖同步完成：
 
-`.gitleaks.toml` 仅精确豁免 Next `.next` 生成目录，其他规则与源码继续扫描。
+- Next 升级到 `16.2.12`，实际安装树通过受控 npm override 使用
+  PostCSS `8.5.25` 与 Sharp `0.35.3`；
+- shadcn 移到 devDependencies；MCP/Hono、`shell-quote` 与
+  `brace-expansion` 均固定到已修复版本；
+- `brace-expansion` 5 改变了 CommonJS 导出形态，安装期幂等脚本只适配仍由
+  ESLint 9 使用的 `minimatch@3` 导入语句；未知源码会失败并要求人工复核；
+- `npm audit --audit-level=high` 与 `npm audit --omit=dev --audit-level=high`
+  均为 0，`npm ci`、typecheck、Lint、OpenAPI 生成和 production build 通过。
+
+`.gitleaks.toml` 只精确豁免 Next `.next` 生成目录与部署模板中的两个完整字面
+占位值；不会豁免整个 `.env.example`，其他规则与源码继续扫描。

@@ -16,18 +16,27 @@ import (
 )
 
 var (
-	ErrParseFailed             = errors.New("importer: 来源解析失败")
-	ErrPDFExtractorUnavailable = fmt.Errorf("%w: PDF 文本提取器不可用", ErrParseFailed)
-	ErrPDFTextTooLarge         = fmt.Errorf("%w: PDF 解压后的文本过大", ErrParseFailed)
-	ErrPDFNoExtractableText    = fmt.Errorf("%w: PDF 没有可提取的文本层，可能需要 OCR", ErrParseFailed)
+	ErrParseFailed              = errors.New("importer: 来源解析失败")
+	ErrPDFExtractorUnavailable  = fmt.Errorf("%w: PDF 文本提取器不可用", ErrParseFailed)
+	ErrPDFTextTooLarge          = fmt.Errorf("%w: PDF 解压后的文本过大", ErrParseFailed)
+	ErrPDFNoExtractableText     = fmt.Errorf("%w: PDF 没有可提取的文本层，可能需要 OCR", ErrParseFailed)
+	ErrPDFRasterizerUnavailable = fmt.Errorf("%w: PDF OCR 栅格化组件不可用", ErrParseFailed)
+	ErrPDFPageLimitExceeded     = fmt.Errorf("%w: PDF OCR 页数超过上限", ErrParseFailed)
+	ErrOCRUnavailable           = fmt.Errorf("%w: OCR 组件不可用", ErrParseFailed)
+	ErrOCRImageTooLarge         = fmt.Errorf("%w: OCR 图片像素超过上限", ErrParseFailed)
+	ErrOCRTextTooLarge          = fmt.Errorf("%w: OCR 输出超过上限", ErrParseFailed)
+	ErrOCRNoText                = fmt.Errorf("%w: OCR 未识别到文本", ErrParseFailed)
+	ErrOCRFailed                = fmt.Errorf("%w: OCR 执行失败", ErrParseFailed)
 )
 
 const maxPDFTextBytes = 32 << 20
 
 type TextBlock struct {
-	Text    string
-	Page    *int32
-	Section *string
+	Text        string
+	Page        *int32
+	Section     *string
+	ImageRegion *evidence.ImageRegion
+	OCR         *evidence.OCRInfo
 }
 
 type Parser struct{ MaxChunkRunes int }
@@ -59,6 +68,12 @@ func (p *Parser) Parse(ctx context.Context, mimeType string, content []byte) ([]
 		blocks, err = parsePDF(ctx, content)
 	case "text/plain":
 		blocks = []TextBlock{{Text: string(content)}}
+	case "application/json":
+		blocks, err = parseJSON(content)
+	case "text/csv":
+		blocks, err = parseCSV(content)
+	case "image/png", "image/jpeg":
+		blocks, err = parseImageOCR(ctx, content, nil)
 	default:
 		return nil, ErrUnsupportedMIME
 	}
@@ -160,7 +175,7 @@ func parsePDF(ctx context.Context, content []byte) ([]TextBlock, error) {
 		blocks = append(blocks, TextBlock{Text: text, Page: &pageNumber})
 	}
 	if len(blocks) == 0 {
-		return nil, ErrPDFNoExtractableText
+		return parsePDFOCR(ctx, content)
 	}
 	return blocks, nil
 }
@@ -173,7 +188,8 @@ func (p *Parser) chunk(blocks []TextBlock) []evidence.ChunkInput {
 			end := min(start+p.MaxChunkRunes, len(runes))
 			charStart, charEnd := int32(start), int32(end)
 			locator := evidence.Locator{Page: block.Page, Section: block.Section,
-				CharStart: &charStart, CharEnd: &charEnd}
+				CharStart: &charStart, CharEnd: &charEnd,
+				ImageRegion: block.ImageRegion, OCR: block.OCR}
 			result = append(result, evidence.ChunkInput{Ordinal: len(result), Locator: locator,
 				TextContent: string(runes[start:end])})
 		}

@@ -1,6 +1,7 @@
 // 单版详情视图（M2-T05）：/pages/[id]/history/[rid] 的展示主体。
 // Revision 元信息 + 该版 AST 只读渲染（复用 components/ast）+「基于此版本回滚」。
 import type { RevisionDetail } from "../../../../contracts/generated/typescript";
+import { Flame, Snowflake } from "lucide-react";
 
 import { AstDocument } from "@/components/ast";
 import { parseDocument } from "@/lib/ast/schema";
@@ -62,6 +63,23 @@ export function RevisionDetailView({
                 <dd title={revision.parentRevisionId}>
                   {shortId(revision.parentRevisionId)}
                 </dd>
+              </div>
+            ) : null}
+            <div className="flex items-center gap-1">
+              <dt>物理存储</dt>
+              <dd className="inline-flex items-center gap-1 font-medium">
+                {revision.storageTier === "cold" ? (
+                  <Snowflake className="size-3 text-sky-700" aria-hidden />
+                ) : (
+                  <Flame className="size-3 text-orange-700" aria-hidden />
+                )}
+                {revision.storageTier === "cold" ? "Cold" : "Hot"}
+              </dd>
+            </div>
+            {revision.archivedAt ? (
+              <div className="flex gap-1">
+                <dt>归档时间</dt>
+                <dd>{formatDateTime(revision.archivedAt)}</dd>
               </div>
             ) : null}
           </dl>

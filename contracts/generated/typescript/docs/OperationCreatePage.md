@@ -13,7 +13,7 @@ Name | Type
 `expectedHash` | string
 `evidence` | [Array&lt;OperationEvidence&gt;](OperationEvidence.md)
 `risk` | [OperationRisk](OperationRisk.md)
-`payload` | { [key: string]: any; }
+`payload` | [OperationCreatePageAllOfPayload](OperationCreatePageAllOfPayload.md)
 
 ## Example
 

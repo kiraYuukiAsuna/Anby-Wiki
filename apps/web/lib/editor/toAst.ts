@@ -179,6 +179,33 @@ function knowledgeReferenceToInlineNode(item: any): InlineNode {
   }
 }
 
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+function extendedReferenceToInlineNode(item: any): InlineNode {
+  const props = (item.props ?? {}) as Record<string, unknown>;
+  const str = (key: string) => String(props[key] ?? "");
+  switch (item.type) {
+    case "pageAnchorReference":
+      return {
+        type: "page_anchor_reference",
+        target_page_id: str("targetPageId"),
+        target_heading_block_id: str("targetHeadingBlockId"),
+        display_text: str("displayText"),
+      };
+    case "math":
+      return { type: "math", expression: str("expression") };
+    case "mention":
+      return {
+        type: "mention",
+        actor_id: str("actorId"),
+        display_text: str("displayText"),
+      };
+    default:
+      throw new UnsupportedBlockNoteFeatureError(
+        `无法识别的扩展行内类型 "${String(item.type)}"`,
+      );
+  }
+}
+
 function inlineContentToAst(content: unknown, where: string): InlineNode[] {
   if (content == null) return [];
   if (typeof content === "string") {
@@ -205,6 +232,11 @@ function inlineContentToAst(content: unknown, where: string): InlineNode[] {
       case "claimReference":
       case "citationReference":
         out.push(knowledgeReferenceToInlineNode(item));
+        break;
+      case "pageAnchorReference":
+      case "math":
+      case "mention":
+        out.push(extendedReferenceToInlineNode(item));
         break;
       default:
         throw new UnsupportedBlockNoteFeatureError(
@@ -402,6 +434,64 @@ function singleBlockToAst(
         display_config: displayConfig as Record<string, unknown>,
       };
     }
+    case "imageAsset": {
+      assertSupportedProps(
+        block,
+        ["assetRevisionId", "altText", "caption"],
+        where,
+      );
+      const node: AstBlock = {
+        id,
+        type: "image",
+        asset_revision_id: String(block.props?.assetRevisionId ?? ""),
+        alt_text: String(block.props?.altText ?? ""),
+      };
+      const caption = String(block.props?.caption ?? "");
+      if (caption) {
+        (node as { caption?: string }).caption = caption;
+      }
+      return node;
+    }
+    case "videoAsset": {
+      assertSupportedProps(
+        block,
+        ["assetRevisionId", "posterAssetRevisionId", "title", "caption"],
+        where,
+      );
+      const node: AstBlock = {
+        id,
+        type: "video",
+        asset_revision_id: String(block.props?.assetRevisionId ?? ""),
+      };
+      const poster = String(block.props?.posterAssetRevisionId ?? "");
+      const title = String(block.props?.title ?? "");
+      const caption = String(block.props?.caption ?? "");
+      if (poster) {
+        (node as { poster_asset_revision_id?: string }).poster_asset_revision_id =
+          poster;
+      }
+      if (title) (node as { title?: string }).title = title;
+      if (caption) (node as { caption?: string }).caption = caption;
+      return node;
+    }
+    case "datasetView":
+      assertSupportedProps(block, ["datasetViewId"], where);
+      return {
+        id,
+        type: "dataset_view",
+        dataset_view_id: String(block.props?.datasetViewId ?? ""),
+      };
+    case "embed": {
+      assertSupportedProps(block, ["url", "title"], where);
+      const node: AstBlock = {
+        id,
+        type: "embed",
+        url: String(block.props?.url ?? ""),
+      };
+      const title = String(block.props?.title ?? "");
+      if (title) (node as { title?: string }).title = title;
+      return node;
+    }
     case "table":
       assertSupportedProps(block, [], where);
       return {
@@ -434,7 +524,7 @@ function singleBlockToAst(
     default:
       throw new UnsupportedBlockNoteFeatureError(
         `${where}: block 类型 "${block.type}" 不在 AST v1 映射表中 ` +
-          `（audio/file/image/video/checkListItem/toggleListItem/pageBreak/原生 table 等特性不支持）`,
+          `（audio/file/checkListItem/toggleListItem/pageBreak/原生 table 等特性不支持）`,
       );
   }
 }

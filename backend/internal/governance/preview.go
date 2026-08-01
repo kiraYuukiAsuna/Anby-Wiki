@@ -82,15 +82,20 @@ func (s *PreviewService) PreviewPageProposal(ctx context.Context, proposalID uui
 	if err != nil {
 		return nil, err
 	}
-	ops := make([]OperationV1, len(records))
+	ops := make([]OperationV1, 0, len(records))
 	var evidence []OperationEvidence
 	for i := range records {
 		op, err := OperationFromRecord(&records[i])
 		if err != nil {
 			return nil, err
 		}
-		ops[i] = *op
+		if isPageContentOperation(op.OperationType) {
+			ops = append(ops, *op)
+		}
 		evidence = append(evidence, op.Evidence...)
+	}
+	if len(ops) == 0 {
+		return nil, fmt.Errorf("%w: 页面身份操作不生成 AST 预览", ErrUnsupportedOperation)
 	}
 	proposedDoc, err := s.pagePatch.Apply(baseDoc, *p.TargetID, ops)
 	if err != nil {

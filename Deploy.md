@@ -110,7 +110,8 @@ make ci                 # check + 生成物漂移 + 安全扫描
                     │                         ├──► postgres:5432       │
                     │             worker ─────┤                        │
                     │                         ├──► redis:6379          │
-                    │                         └──► minio:9000          │
+                    │                         ├──► minio:9000          │
+                    │                         └──► meilisearch:7700    │
                     └──────────────────────────────────────────────────┘
 ```
 
@@ -118,7 +119,7 @@ make ci                 # check + 生成物漂移 + 安全扫描
 
 - **不含反向代理。** `web` 是唯一发布端口的服务，通过 Next.js rewrites 转发 `/api/*`。
 - **本清单不终结 TLS。** 需要 HTTPS 请在外层（云 LB、Cloudflare、宿主机独立代理）终结。
-- 数据层（postgres/redis/minio）由 Compose 自己拉起，使用命名卷持久化。
+- 数据与搜索层（postgres/redis/minio/meilisearch）由 Compose 自己拉起，使用命名卷持久化。
 - 限流、安全响应头、身份头清洗全部在 Go API 内实现，不依赖代理。
 
 ### 2.2 准备环境文件
@@ -140,6 +141,8 @@ Compose 会把机密注入容器环境，因此具有 Docker 管理权限的人�
 | `POSTGRES_DB` `POSTGRES_USER` | PostgreSQL 数据库名和用户 |
 | `POSTGRES_PASSWORD` | PostgreSQL 密码；只允许字母、数字、点、下划线和连字符，建议使用 `openssl rand -hex 32` 生成 |
 | `S3_ACCESS_KEY` `S3_SECRET_KEY` | 同时作为 MinIO root 凭据与应用 S3 凭据 |
+| `MEILI_MASTER_KEY` | 同时作为 Meilisearch Master Key 与应用内部 API Key，必须替换模板占位值 |
+| `SEARCH_BACKEND` | 生产保持 `meilisearch`；PostgreSQL 只作为开发 fallback |
 | `AUTH_REGISTRATION_ENABLED` | 是否允许公开注册；首个管理员建立后建议设为 `false` |
 | `AI_PROVIDER` `AI_BASE_URL` `AI_MODEL` | 模型 Adapter、API 根地址和模型 ID；DeepSeek 分别使用 `deepseek`、`https://api.deepseek.com` 和当前有效模型 ID |
 | `AI_API_KEY` | 仅在 `AI_IMPORT_ENABLED=true` 时填写；只注入 Worker |
@@ -170,7 +173,7 @@ sh scripts/deploy.sh build
 - `anby-wiki-migrate:$RELEASE_ID`
 
 `deploy` 会自动再次执行本地增量构建，因此单独运行 `build` 只用于提前确认构建过程。
-PostgreSQL、Redis、MinIO、Alpine 等第三方基础镜像仍会在本机缺失时从其上游拉取。
+PostgreSQL、Redis、MinIO、Meilisearch、Alpine 等第三方基础镜像仍会在本机缺失时从其上游拉取。
 部署目录必须保留完整且受保护的商业源码与 Docker 构建上下文。
 
 ### 2.4 部署
@@ -230,10 +233,10 @@ sh scripts/deploy.sh rollback   # 切回 RELEASE_ID 对应的已有本地镜像
    Compose 不终结 HTTPS。明文暴露时会话 cookie 和登录凭据会在网络上可见，
    请务必在外层提供 HTTPS，并同步设置 `SESSION_COOKIE_SECURE=true`。
 
-3. **搜索只有 PostgreSQL FTS。**
-   ADR-0012 的 10 万页面实测显示该实现吞吐仅约 1.1 req/s。
-   数据量或并发上升后需要重新引入独立搜索引擎；
-   `SearchAdapter` 接口已为此保留。
+3. **搜索容量与语义质量仍需目标环境验收。**
+   生产已接入 Meilisearch，PostgreSQL 只保留开发 fallback 与可重建 staging。
+   正式发布前仍需按 ADR-0012 的 10 万页面口径复测吞吐、尾延迟、重建时间、
+   模型下载和中文语义召回。
 
 4. **限流为应用层 + Redis 固定窗口。**
    Redis 不可达时**放行**并记日志（可用性优先于严格限流），

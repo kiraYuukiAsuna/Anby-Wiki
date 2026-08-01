@@ -9,6 +9,10 @@ Name | Type
 `proposalId` | string
 `changeBatchId` | string
 `revisionId` | string
+`pageIds` | Array&lt;string&gt;
+`entityIds` | Array&lt;string&gt;
+`entityMergeIds` | Array&lt;string&gt;
+`collectionIds` | Array&lt;string&gt;
 `claimIds` | Array&lt;string&gt;
 `idempotent` | boolean
 
@@ -22,6 +26,10 @@ const example = {
   "proposalId": null,
   "changeBatchId": null,
   "revisionId": null,
+  "pageIds": null,
+  "entityIds": null,
+  "entityMergeIds": null,
+  "collectionIds": null,
   "claimIds": null,
   "idempotent": null,
 } satisfies ApplyProposalResult
