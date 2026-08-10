@@ -29,6 +29,7 @@ ENV API_BASE_URL=${API_BASE_URL}
 ENV NEXT_TELEMETRY_DISABLED=1
 WORKDIR /src/apps/web
 COPY apps/web/package.json apps/web/package-lock.json ./
+COPY apps/web/scripts/patch-minimatch-brace-expansion.mjs ./scripts/
 RUN npm ci
 COPY apps/web/ ./
 COPY contracts/ /src/contracts/
