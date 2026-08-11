@@ -281,7 +281,7 @@ func (r *Repository) ListPendingReviewTasks(ctx context.Context, limit int) ([]R
 		return nil, fmt.Errorf("governance: 查询审核队列失败: %w", err)
 	}
 	defer rows.Close()
-	var out []ReviewTask
+	out := make([]ReviewTask, 0)
 	for rows.Next() {
 		task, err := scanReviewTask(rows)
 		if err != nil {

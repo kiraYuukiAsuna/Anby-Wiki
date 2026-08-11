@@ -3,14 +3,15 @@
 import { useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
+import { LoaderCircle, LockKeyhole, ShieldAlert } from "lucide-react";
 import { toast } from "sonner";
 import useSWR from "swr";
 import useSWRMutation from "swr/mutation";
-import type { ReviewTaskList } from "../../../../contracts/generated/typescript";
+import { ResponseError } from "../../../../contracts/generated/typescript";
 
 import { Button } from "@/components/ui/button";
 import { governanceApi } from "@/lib/api";
-import { isUnauthorized, LOGIN_PATH } from "@/lib/auth";
+import { isUnauthorized, LOGIN_PATH, useSession } from "@/lib/auth";
 
 function ProposalMeta({ id }: { id: string }) {
   const { data } = useSWR(["governance:proposal-meta", id], () => governanceApi().getProposal({ id }));
@@ -24,12 +25,12 @@ function ProposalMeta({ id }: { id: string }) {
   );
 }
 
-export function ReviewQueue({ initialData }: { initialData: ReviewTaskList }) {
+export function ReviewQueue() {
   const router = useRouter();
+  const session = useSession();
   const { data, error, mutate, isLoading } = useSWR(
-    "governance:pending-reviews",
+    session.isAuthenticated ? "governance:pending-reviews" : null,
     () => governanceApi().listReviewTasks({ pageSize: 100 }),
-    { fallbackData: initialData },
   );
   const [reasons, setReasons] = useState<Record<string, string>>({});
   const { trigger, isMutating } = useSWRMutation(
@@ -68,6 +69,41 @@ export function ReviewQueue({ initialData }: { initialData: ReviewTaskList }) {
     }
   };
 
+  if (session.isLoading) {
+    return (
+      <div className="flex min-h-56 items-center justify-center gap-2 text-sm text-muted-foreground">
+        <LoaderCircle className="size-4 animate-spin" aria-hidden />
+        正在确认审核权限…
+      </div>
+    );
+  }
+  if (!session.isAuthenticated) {
+    return (
+      <div className="rounded-2xl border border-dashed bg-muted/25 px-6 py-12 text-center">
+        <LockKeyhole className="mx-auto size-8 text-muted-foreground" aria-hidden />
+        <h2 className="mt-4 text-lg font-semibold">登录后查看审核队列</h2>
+        <p className="mx-auto mt-2 max-w-md text-sm leading-6 text-muted-foreground">
+          审核任务只向具备治理权限的共建者开放。
+        </p>
+        <Button asChild className="mt-5">
+          <Link href={LOGIN_PATH}>前往登录</Link>
+        </Button>
+      </div>
+    );
+  }
+  if (error instanceof ResponseError && error.response.status === 403) {
+    return (
+      <div className="rounded-2xl border border-amber-200 bg-amber-50/65 p-8">
+        <ShieldAlert className="size-7 text-amber-700" aria-hidden />
+        <h2 className="mt-4 text-lg font-semibold text-amber-950">
+          需要审核权限
+        </h2>
+        <p className="mt-2 text-sm leading-6 text-amber-900/70">
+          当前账号可以继续使用站点，但不能查看或处理人工审核任务。
+        </p>
+      </div>
+    );
+  }
   if (error) {
     return (
       <p className="rounded-lg border border-destructive/30 p-4 text-sm text-destructive">

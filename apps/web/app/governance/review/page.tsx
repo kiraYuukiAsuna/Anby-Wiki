@@ -2,15 +2,8 @@ import Link from "next/link";
 
 import { ReviewQueue } from "@/components/governance/review-queue";
 import { Button } from "@/components/ui/button";
-import { governanceApi } from "@/lib/api";
-import { serverApiOptions } from "@/lib/server-api";
 
-export const dynamic = "force-dynamic";
-
-export default async function ReviewQueuePage() {
-  const initialData = await governanceApi(
-    await serverApiOptions(),
-  ).listReviewTasks({ pageSize: 100 });
+export default function ReviewQueuePage() {
   return (
     <div className="mx-auto flex w-full max-w-4xl flex-col gap-6 px-5 py-10 lg:px-8 lg:py-12">
       <header className="flex flex-wrap items-end justify-between gap-4 border-b border-border/75 pb-7">
@@ -30,7 +23,7 @@ export default async function ReviewQueuePage() {
           <Link href="/governance">返回治理中心</Link>
         </Button>
       </header>
-      <ReviewQueue initialData={initialData} />
+      <ReviewQueue />
     </div>
   );
 }
