@@ -323,3 +323,28 @@ func TestMergeCandidateBatchesDeduplicatesAndRemapsClaimSubject(t *testing.T) {
 		t.Fatal("claim subject was not remapped to the server-generated entity candidate ID")
 	}
 }
+
+func TestPassesExtractionQualityGateAcceptsOnlyStrongVerifiedSalvage(t *testing.T) {
+	evidenceItem := []CandidateEvidence{{ChunkID: uuid.New(), Quotation: "verified", CharStart: 0, CharEnd: 8}}
+	candidates := &Candidates{QualityScore: 0.52, Entities: []EntityCandidate{
+		{Confidence: 0.9, Evidence: evidenceItem},
+		{Confidence: 0.8, Evidence: evidenceItem},
+	}}
+	if !passesExtractionQualityGate(candidates, 0.7) {
+		t.Fatal("strong evidence-verified salvage should pass")
+	}
+	candidates.QualityScore = 0.34
+	if passesExtractionQualityGate(candidates, 0.7) {
+		t.Fatal("aggregate quality below half the threshold must fail")
+	}
+	candidates.QualityScore = 0.52
+	candidates.Entities[1].Confidence = 0.4
+	if passesExtractionQualityGate(candidates, 0.7) {
+		t.Fatal("low retained average confidence must fail")
+	}
+	candidates.Entities[1].Confidence = 0.8
+	candidates.PromptInjectionDetected = true
+	if passesExtractionQualityGate(candidates, 0.7) {
+		t.Fatal("prompt injection must always fail")
+	}
+}

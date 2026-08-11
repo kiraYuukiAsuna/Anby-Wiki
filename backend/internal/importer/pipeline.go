@@ -222,7 +222,7 @@ func (p *Pipeline) run(ctx context.Context, request PipelineRequest, acquire acq
 	if threshold <= 0 {
 		threshold = DefaultQualityThreshold
 	}
-	if extracted.Candidates.QualityScore < threshold || extracted.Candidates.PromptInjectionDetected {
+	if !passesExtractionQualityGate(extracted.Candidates, threshold) {
 		return fail(current, "quality_gate", ErrQualityGate)
 	}
 	extractOutput := extracted.Extraction.ID.String()
@@ -294,6 +294,36 @@ func (p *Pipeline) run(ctx context.Context, request PipelineRequest, acquire acq
 	}
 	result.Job, _ = p.jobs.DetailJob(ctx, request.JobID)
 	return result, nil
+}
+
+func passesExtractionQualityGate(candidates *Candidates, threshold float64) bool {
+	if candidates == nil || candidates.PromptInjectionDetected {
+		return false
+	}
+	if candidates.QualityScore >= threshold {
+		return true
+	}
+	// Evidence validation has already removed every unverifiable candidate.
+	// A large source can therefore have a lower aggregate score solely because
+	// bad siblings were discarded. Permit that salvage path only when the
+	// retained set still has at least half the requested aggregate quality and
+	// its average candidate confidence independently meets the full threshold.
+	count, confidence := 0, 0.0
+	for index := range candidates.Entities {
+		if len(candidates.Entities[index].Evidence) == 0 {
+			return false
+		}
+		count++
+		confidence += candidates.Entities[index].Confidence
+	}
+	for index := range candidates.Claims {
+		if len(candidates.Claims[index].Evidence) == 0 {
+			return false
+		}
+		count++
+		confidence += candidates.Claims[index].Confidence
+	}
+	return count > 0 && candidates.QualityScore >= threshold/2 && confidence/float64(count) >= threshold
 }
 
 func (p *Pipeline) prepareParsedSource(
