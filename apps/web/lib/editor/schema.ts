@@ -6,9 +6,9 @@
 //   bullet_list   → 连续 bulletListItem 序列（容器 ID 经 AdapterState.listIds 保留）
 //   ordered_list  → 连续 numberedListItem 序列（同上）
 //   list_item     → bulletListItem / numberedListItem（首个 paragraph 子块提升为行内 content）
-//   table         → table（自定义容器块，children = tableRow）
-//   table_row     → tableRow（自定义容器块，children = tableCell）
-//   table_cell    → tableCell（自定义容器块，children = 任意块）
+//   table         → astTable（自定义容器块，children = astTableRow）
+//   table_row     → astTableRow（自定义容器块，children = astTableCell）
+//   table_cell    → astTableCell（自定义容器块，children = 任意块）
 //   code          → codeBlock（plain content ↔ content 字符串，language prop ↔ language）
 //   quote         → quote（首个 paragraph 子块提升为行内 content，其余子块保持嵌套）
 //   callout       → callout（自定义容器块，kind prop）
@@ -75,9 +75,9 @@ export const AST_TO_BLOCKNOTE_BLOCK: Record<AstBlockType, string> = {
   bullet_list: "bulletListItem (连续分组)",
   ordered_list: "numberedListItem (连续分组)",
   list_item: "bulletListItem | numberedListItem",
-  table: "table (自定义容器)",
-  table_row: "tableRow (自定义容器)",
-  table_cell: "tableCell (自定义容器)",
+  table: "astTable (自定义容器)",
+  table_row: "astTableRow (自定义容器)",
+  table_cell: "astTableCell (自定义容器)",
   code: "codeBlock",
   quote: "quote",
   callout: "callout (自定义容器)",
@@ -93,6 +93,7 @@ export const AST_TO_BLOCKNOTE_BLOCK: Record<AstBlockType, string> = {
 export const UNMAPPED_BLOCKNOTE_BLOCKS = [
   "audio",
   "file",
+  "table",
   "checkListItem",
   "toggleListItem",
   "pageBreak",
@@ -105,7 +106,7 @@ export const UNMAPPED_BLOCKNOTE_STYLES = [
   "backgroundColor",
 ] as const;
 
-// ---- 自定义块：callout / table / tableRow / tableCell（content "none" 容器） ----
+// ---- 自定义块：callout / astTable*（content "none" 容器） ----
 
 const CALLOUT_LABELS: Record<string, string> = {
   info: "信息",
@@ -429,9 +430,11 @@ export const editorSchema = BlockNoteSchema.create({
     videoAsset: videoAssetSpec(),
     datasetView: datasetViewSpec(),
     embed: embedSpec(),
-    table: containerBlockSpec("table", "ast-table")(),
-    tableRow: containerBlockSpec("tableRow", "ast-table-row")(),
-    tableCell: containerBlockSpec("tableCell", "ast-table-cell")(),
+    // Do not use BlockNote's reserved `table` type here. Its React extensions
+    // would treat this AST container as a native table and crash on selection.
+    astTable: containerBlockSpec("astTable", "ast-table")(),
+    astTableRow: containerBlockSpec("astTableRow", "ast-table-row")(),
+    astTableCell: containerBlockSpec("astTableCell", "ast-table-cell")(),
   },
   inlineContentSpecs: {
     ...defaultInlineContentSpecs,

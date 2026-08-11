@@ -239,11 +239,11 @@ function blockToBN(block: Block, state: AdapterState): BNPartialBlock {
         props: { url: block.url, title: block.title ?? "" },
       };
     case "table":
-      return { id: block.id, type: "table", children: blocksToBN(block.children, state) };
+      return { id: block.id, type: "astTable", children: blocksToBN(block.children, state) };
     case "table_row":
-      return { id: block.id, type: "tableRow", children: blocksToBN(block.children, state) };
+      return { id: block.id, type: "astTableRow", children: blocksToBN(block.children, state) };
     case "table_cell":
-      return { id: block.id, type: "tableCell", children: blocksToBN(block.children, state) };
+      return { id: block.id, type: "astTableCell", children: blocksToBN(block.children, state) };
     case "divider":
       return { id: block.id, type: "divider" };
     case "bullet_list":

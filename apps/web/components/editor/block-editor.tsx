@@ -178,17 +178,17 @@ export function BlockEditor({
             size="sm"
             onClick={() =>
               insertTemplate({
-                type: "table",
+                type: "astTable",
                 children: [
                   {
-                    type: "tableRow",
+                    type: "astTableRow",
                     children: [
                       {
-                        type: "tableCell",
+                        type: "astTableCell",
                         children: [{ type: "paragraph", content: "单元格 1" }],
                       },
                       {
-                        type: "tableCell",
+                        type: "astTableCell",
                         children: [{ type: "paragraph", content: "单元格 2" }],
                       },
                     ],

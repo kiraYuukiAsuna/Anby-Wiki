@@ -492,7 +492,7 @@ function singleBlockToAst(
       if (title) (node as { title?: string }).title = title;
       return node;
     }
-    case "table":
+    case "astTable":
       assertSupportedProps(block, [], where);
       return {
         id,
@@ -503,7 +503,7 @@ function singleBlockToAst(
           `${where}.children`,
         ) as Extract<AstBlock, { type: "table_row" }>[],
       };
-    case "tableRow":
+    case "astTableRow":
       assertSupportedProps(block, [], where);
       return {
         id,
@@ -514,7 +514,7 @@ function singleBlockToAst(
           `${where}.children`,
         ) as Extract<AstBlock, { type: "table_cell" }>[],
       };
-    case "tableCell":
+    case "astTableCell":
       assertSupportedProps(block, [], where);
       return {
         id,
