@@ -24,6 +24,10 @@ const (
 
 	ResponseFormatJSONObject = "json_object"
 	ResponseFormatJSONSchema = "json_schema"
+
+	DefaultMaxInputTokens = 65536
+	MinMaxInputTokens     = 4096
+	MaxMaxInputTokens     = 2000000
 )
 
 // StoredConfig is the versioned JSON persisted inside wiki_site.settings_json.
@@ -36,6 +40,7 @@ type StoredConfig struct {
 	BaseURL               string    `json:"base_url"`
 	Model                 string    `json:"model"`
 	ResponseFormat        string    `json:"response_format"`
+	MaxInputTokens        int       `json:"max_input_tokens"`
 	RequestTimeoutSeconds int       `json:"request_timeout_seconds"`
 	MaxAttempts           int       `json:"max_attempts"`
 	APIKeyCiphertext      string    `json:"api_key_ciphertext"`
@@ -51,6 +56,7 @@ type Config struct {
 	BaseURL               string     `json:"base_url"`
 	Model                 string     `json:"model"`
 	ResponseFormat        string     `json:"response_format"`
+	MaxInputTokens        int        `json:"max_input_tokens"`
 	RequestTimeoutSeconds int        `json:"request_timeout_seconds"`
 	MaxAttempts           int        `json:"max_attempts"`
 	APIKeyConfigured      bool       `json:"api_key_configured"`
@@ -68,6 +74,7 @@ type UpdateParams struct {
 	BaseURL               string
 	Model                 string
 	ResponseFormat        string
+	MaxInputTokens        int
 	RequestTimeoutSeconds int
 	MaxAttempts           int
 	APIKey                string
@@ -81,6 +88,7 @@ type RuntimeConfig struct {
 	BaseURL               string
 	Model                 string
 	ResponseFormat        string
+	MaxInputTokens        int
 	RequestTimeoutSeconds int
 	MaxAttempts           int
 	APIKey                string

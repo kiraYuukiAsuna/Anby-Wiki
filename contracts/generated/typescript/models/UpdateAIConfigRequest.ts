@@ -54,6 +54,12 @@ export interface UpdateAIConfigRequest {
      * @type {number}
      * @memberof UpdateAIConfigRequest
      */
+    maxInputTokens: number;
+    /**
+     *
+     * @type {number}
+     * @memberof UpdateAIConfigRequest
+     */
     requestTimeoutSeconds: number;
     /**
      *
@@ -98,6 +104,7 @@ export function instanceOfUpdateAIConfigRequest(value: object): value is UpdateA
     if ((!('baseUrl' in (value as Record<string, any>)) && !('base_url' in (value as Record<string, any>))) || ((value as Record<string, any>)['baseUrl'] === undefined && (value as Record<string, any>)['base_url'] === undefined)) return false;
     if (!('model' in value) || value['model'] === undefined) return false;
     if ((!('responseFormat' in (value as Record<string, any>)) && !('response_format' in (value as Record<string, any>))) || ((value as Record<string, any>)['responseFormat'] === undefined && (value as Record<string, any>)['response_format'] === undefined)) return false;
+    if ((!('maxInputTokens' in (value as Record<string, any>)) && !('max_input_tokens' in (value as Record<string, any>))) || ((value as Record<string, any>)['maxInputTokens'] === undefined && (value as Record<string, any>)['max_input_tokens'] === undefined)) return false;
     if ((!('requestTimeoutSeconds' in (value as Record<string, any>)) && !('request_timeout_seconds' in (value as Record<string, any>))) || ((value as Record<string, any>)['requestTimeoutSeconds'] === undefined && (value as Record<string, any>)['request_timeout_seconds'] === undefined)) return false;
     if ((!('maxAttempts' in (value as Record<string, any>)) && !('max_attempts' in (value as Record<string, any>))) || ((value as Record<string, any>)['maxAttempts'] === undefined && (value as Record<string, any>)['max_attempts'] === undefined)) return false;
     return true;
@@ -118,6 +125,7 @@ export function UpdateAIConfigRequestFromJSONTyped(json: any, ignoreDiscriminato
         'baseUrl': json['base_url'],
         'model': json['model'],
         'responseFormat': json['response_format'],
+        'maxInputTokens': json['max_input_tokens'],
         'requestTimeoutSeconds': json['request_timeout_seconds'],
         'maxAttempts': json['max_attempts'],
         'apiKey': json['api_key'] == null ? undefined : json['api_key'],
@@ -140,6 +148,7 @@ export function UpdateAIConfigRequestToJSONTyped(value?: UpdateAIConfigRequest |
         'base_url': value['baseUrl'],
         'model': value['model'],
         'response_format': value['responseFormat'],
+        'max_input_tokens': value['maxInputTokens'],
         'request_timeout_seconds': value['requestTimeoutSeconds'],
         'max_attempts': value['maxAttempts'],
         'api_key': value['apiKey'],

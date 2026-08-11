@@ -1,15 +1,56 @@
 package importer
 
 import (
+	"context"
 	"encoding/json"
 	"errors"
 	"math"
+	"strings"
 	"testing"
 
 	"github.com/google/uuid"
 
+	"github.com/anby/wiki/backend/internal/ai"
 	"github.com/anby/wiki/backend/internal/evidence"
+	"github.com/anby/wiki/backend/internal/platform/id"
 )
+
+type splittingExtractionGenerator struct {
+	calls int
+}
+
+func (g *splittingExtractionGenerator) Generate(_ context.Context, request ai.Request) (*ai.Result, error) {
+	g.calls++
+	var chunks []struct {
+		ChunkID uuid.UUID `json:"chunk_id"`
+		Text    string    `json:"text"`
+	}
+	if err := json.Unmarshal([]byte(request.Variables["chunks_json"].(string)), &chunks); err != nil {
+		return nil, err
+	}
+	if len(chunks) > 1 {
+		return nil, &ai.ProviderError{Code: "output_truncated", Err: ai.ErrInvalidOutput}
+	}
+	sourceVersionID := uuid.MustParse(request.Variables["source_version_id"].(string))
+	candidates := Candidates{
+		SchemaVersion: 1, SourceVersionID: sourceVersionID, QualityScore: 0.9,
+		Entities: []EntityCandidate{{
+			CandidateID: uuid.New(), TypeKey: "concept", Label: chunks[0].Text,
+			Aliases: []string{}, Confidence: 0.9, Evidence: []CandidateEvidence{{
+				ChunkID: chunks[0].ChunkID, Quotation: chunks[0].Text,
+				CharStart: 0, CharEnd: len([]rune(chunks[0].Text)),
+			}},
+		}},
+		Claims: []ClaimCandidate{},
+	}
+	raw, err := json.Marshal(candidates)
+	if err != nil {
+		return nil, err
+	}
+	return &ai.Result{
+		JSON: raw, PromptKey: ExtractionPromptKey, PromptVersion: 1, Model: "test-model",
+	}, nil
+}
 
 func TestValidateCandidatesFromChunksRepairsUniqueWrongChunkAndDropsBadCandidate(t *testing.T) {
 	sourceVersionID := uuid.MustParse("019ff0e9-0c3a-79cf-be14-d3e76bc8d197")
@@ -107,5 +148,116 @@ func TestValidateCandidatesFromChunksRejectsWhenNoEvidenceSurvives(t *testing.T)
 	}})
 	if !errors.Is(err, ErrEvidenceRequired) {
 		t.Fatalf("error=%v, want ErrEvidenceRequired", err)
+	}
+}
+
+func TestBatchSourceChunksBoundsOutputAndPreservesOrder(t *testing.T) {
+	sourceVersionID := uuid.New()
+	chunks := make([]evidence.SourceChunk, 78)
+	for index := range chunks {
+		chunks[index] = evidence.SourceChunk{
+			ID: uuid.New(), SourceVersionID: sourceVersionID, Ordinal: index,
+			TextContent: "small chunk", LocatorJSON: []byte(`{}`),
+		}
+	}
+	batches := batchSourceChunks(chunks, DefaultModelMaxInputTokens)
+	if len(batches) != 5 {
+		t.Fatalf("batch count=%d, want 5", len(batches))
+	}
+	ordinal := 0
+	for _, batch := range batches {
+		if len(batch) > extractionBatchMaxChunks {
+			t.Fatalf("batch has %d chunks, max=%d", len(batch), extractionBatchMaxChunks)
+		}
+		for _, chunk := range batch {
+			if chunk.Ordinal != ordinal {
+				t.Fatalf("ordinal=%d, want %d", chunk.Ordinal, ordinal)
+			}
+			ordinal++
+		}
+	}
+}
+
+func TestBatchSourceChunksUsesConfiguredInputBudget(t *testing.T) {
+	sourceVersionID := uuid.New()
+	chunks := make([]evidence.SourceChunk, 6)
+	for index := range chunks {
+		chunks[index] = evidence.SourceChunk{
+			ID: uuid.New(), SourceVersionID: sourceVersionID, Ordinal: index,
+			TextContent: strings.Repeat("a", 1200), LocatorJSON: []byte(`{}`),
+		}
+	}
+	batches := batchSourceChunks(chunks, 4096)
+	if len(batches) < 2 {
+		t.Fatalf("batch count=%d, configured input budget was not applied", len(batches))
+	}
+}
+
+func TestGenerateCandidatesSplitsTruncatedBatchAndMergesResults(t *testing.T) {
+	sourceVersionID := uuid.New()
+	chunks := []evidence.SourceChunk{
+		{ID: uuid.New(), SourceVersionID: sourceVersionID, Ordinal: 0, TextContent: "Alpha", LocatorJSON: []byte(`{}`)},
+		{ID: uuid.New(), SourceVersionID: sourceVersionID, Ordinal: 1, TextContent: "Beta", LocatorJSON: []byte(`{}`)},
+	}
+	gateway := &splittingExtractionGenerator{}
+	service := NewExtractionService(nil, nil, gateway, id.NewGenerator())
+
+	result, err := service.generateCandidates(context.Background(), ExtractParams{
+		SourceVersionID: sourceVersionID, SourceLabel: "test", Chunks: chunks,
+		Provider: "test", Model: "test", MaxInputTokens: DefaultModelMaxInputTokens,
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if gateway.calls != 3 {
+		t.Fatalf("calls=%d, want initial plus two halves", gateway.calls)
+	}
+	if len(result.Candidates.Entities) != 2 || result.Candidates.Entities[0].Label != "Alpha" ||
+		result.Candidates.Entities[1].Label != "Beta" {
+		t.Fatalf("unexpected merged entities: %#v", result.Candidates.Entities)
+	}
+	if result.Candidates.Entities[0].CandidateID == result.Candidates.Entities[1].CandidateID {
+		t.Fatal("merged candidates must receive unique server IDs")
+	}
+}
+
+func TestMergeCandidateBatchesDeduplicatesAndRemapsClaimSubject(t *testing.T) {
+	sourceVersionID := uuid.New()
+	firstEntityID, secondEntityID := uuid.New(), uuid.New()
+	firstChunkID, secondChunkID := uuid.New(), uuid.New()
+	part := func(entityID, chunkID uuid.UUID) extractionBatchResult {
+		return extractionBatchResult{Candidates: &Candidates{
+			SchemaVersion: 1, SourceVersionID: sourceVersionID, QualityScore: 0.8,
+			Entities: []EntityCandidate{{
+				CandidateID: entityID, TypeKey: "concept", Label: "Alpha", Aliases: []string{},
+				Confidence: 0.8, Evidence: []CandidateEvidence{{
+					ChunkID: chunkID, Quotation: "Alpha", CharStart: 0, CharEnd: 5,
+				}},
+			}},
+			Claims: []ClaimCandidate{{
+				CandidateID: uuid.New(), Subject: CandidateSubject{CandidateID: &entityID},
+				PropertyKey: "release_date", Value: json.RawMessage(`{"date":"2026-08-11"}`),
+				Confidence: 0.8, Evidence: []CandidateEvidence{{
+					ChunkID: chunkID, Quotation: "Alpha", CharStart: 0, CharEnd: 5,
+				}},
+			}},
+		}}
+	}
+	service := NewExtractionService(nil, nil, nil, id.NewGenerator())
+	merged, err := service.mergeCandidateBatches(sourceVersionID, []extractionBatchResult{
+		part(firstEntityID, firstChunkID), part(secondEntityID, secondChunkID),
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(merged.Entities) != 1 || len(merged.Claims) != 1 {
+		t.Fatalf("entities=%d claims=%d, want one deduplicated candidate each", len(merged.Entities), len(merged.Claims))
+	}
+	if len(merged.Entities[0].Evidence) != 2 || len(merged.Claims[0].Evidence) != 2 {
+		t.Fatal("deduplicated candidates must retain evidence from both batches")
+	}
+	if merged.Claims[0].Subject.CandidateID == nil ||
+		*merged.Claims[0].Subject.CandidateID != merged.Entities[0].CandidateID {
+		t.Fatal("claim subject was not remapped to the server-generated entity candidate ID")
 	}
 }

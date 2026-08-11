@@ -2,6 +2,7 @@ package main
 
 import (
 	"context"
+	"errors"
 	"log/slog"
 	"time"
 
@@ -118,8 +119,15 @@ func assembleImportRunner(ctx context.Context, pool *pgxpool.Pool, cfg config.Co
 	return importer.NewRunner(jobs, pipeline, importer.RunnerConfig{WikiID: wikiID,
 		Provider: "semantic-kernel", Model: "managed", Logger: logger,
 		UploadStore: objectStore, JobTimeout: 12 * time.Minute,
-		Availability: func(ctx context.Context) (bool, error) {
-			return aiConfig.Available(ctx, wikiID)
+		Runtime: func(ctx context.Context) (importer.RunnerRuntime, error) {
+			runtime, err := aiConfig.Runtime(ctx, wikiID)
+			if errors.Is(err, aiconfig.ErrNotConfigured) || errors.Is(err, aiconfig.ErrDisabled) {
+				return importer.RunnerRuntime{Available: false}, nil
+			}
+			if err != nil {
+				return importer.RunnerRuntime{}, err
+			}
+			return importer.RunnerRuntime{Available: true, MaxInputTokens: runtime.MaxInputTokens}, nil
 		},
 	}), nil
 }

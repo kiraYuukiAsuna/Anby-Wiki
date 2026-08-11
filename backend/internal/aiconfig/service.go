@@ -71,6 +71,7 @@ func (s *Service) Runtime(ctx context.Context, wikiID uuid.UUID) (*RuntimeConfig
 	return &RuntimeConfig{
 		Enabled: true, Provider: stored.Provider, BaseURL: stored.BaseURL,
 		Model: stored.Model, ResponseFormat: stored.ResponseFormat,
+		MaxInputTokens:        effectiveMaxInputTokens(stored.MaxInputTokens),
 		RequestTimeoutSeconds: stored.RequestTimeoutSeconds,
 		MaxAttempts:           stored.MaxAttempts, APIKey: key,
 	}, nil
@@ -104,7 +105,7 @@ func (s *Service) Update(ctx context.Context, params UpdateParams) (*Config, err
 	params.APIKey = strings.TrimSpace(params.APIKey)
 	if params.WikiID == uuid.Nil || params.ActorID == uuid.Nil || validateValues(
 		params.Provider, params.BaseURL, params.Model, params.ResponseFormat,
-		params.RequestTimeoutSeconds, params.MaxAttempts,
+		params.MaxInputTokens, params.RequestTimeoutSeconds, params.MaxAttempts,
 	) != nil {
 		return nil, ErrInvalidConfig
 	}
@@ -139,6 +140,7 @@ func (s *Service) Update(ctx context.Context, params UpdateParams) (*Config, err
 			Version: 1, Enabled: params.Enabled, Provider: params.Provider,
 			BaseURL: params.BaseURL, Model: params.Model,
 			ResponseFormat:        params.ResponseFormat,
+			MaxInputTokens:        params.MaxInputTokens,
 			RequestTimeoutSeconds: params.RequestTimeoutSeconds,
 			MaxAttempts:           params.MaxAttempts, APIKeyCiphertext: ciphertext,
 			UpdatedBy: params.ActorID, UpdatedAt: now,
@@ -154,6 +156,7 @@ func (s *Service) Update(ctx context.Context, params UpdateParams) (*Config, err
 			"version": result.Version, "enabled": result.Enabled,
 			"provider": result.Provider, "model": result.Model,
 			"response_format":         result.ResponseFormat,
+			"max_input_tokens":        result.MaxInputTokens,
 			"request_timeout_seconds": result.RequestTimeoutSeconds,
 			"max_attempts":            result.MaxAttempts,
 			"credential_changed":      credentialChanged,
@@ -173,6 +176,7 @@ func defaultConfig() *Config {
 	return &Config{
 		Version: 1, Provider: ProviderDeepSeek,
 		BaseURL: "https://api.deepseek.com", ResponseFormat: ResponseFormatJSONObject,
+		MaxInputTokens:        DefaultMaxInputTokens,
 		RequestTimeoutSeconds: 180, MaxAttempts: 2,
 	}
 }
@@ -183,6 +187,7 @@ func redact(value *StoredConfig) *Config {
 		Version: value.Version, Enabled: value.Enabled, Provider: value.Provider,
 		BaseURL: value.BaseURL, Model: value.Model,
 		ResponseFormat:        value.ResponseFormat,
+		MaxInputTokens:        effectiveMaxInputTokens(value.MaxInputTokens),
 		RequestTimeoutSeconds: value.RequestTimeoutSeconds,
 		MaxAttempts:           value.MaxAttempts,
 		APIKeyConfigured:      value.APIKeyCiphertext != "",
@@ -195,14 +200,22 @@ func validateStored(value *StoredConfig) error {
 		return ErrInvalidConfig
 	}
 	return validateValues(value.Provider, value.BaseURL, value.Model, value.ResponseFormat,
-		value.RequestTimeoutSeconds, value.MaxAttempts)
+		effectiveMaxInputTokens(value.MaxInputTokens), value.RequestTimeoutSeconds, value.MaxAttempts)
 }
 
-func validateValues(provider, baseURL, model, responseFormat string, timeout, attempts int) error {
+func effectiveMaxInputTokens(value int) int {
+	if value == 0 {
+		return DefaultMaxInputTokens
+	}
+	return value
+}
+
+func validateValues(provider, baseURL, model, responseFormat string, maxInputTokens, timeout, attempts int) error {
 	if provider != ProviderOpenAICompatible && provider != ProviderDeepSeek {
 		return ErrInvalidConfig
 	}
-	if model == "" || timeout < 5 || timeout > 300 || attempts < 1 || attempts > 5 {
+	if model == "" || maxInputTokens < MinMaxInputTokens || maxInputTokens > MaxMaxInputTokens ||
+		timeout < 5 || timeout > 300 || attempts < 1 || attempts > 5 {
 		return ErrInvalidConfig
 	}
 	if responseFormat != ResponseFormatJSONObject && responseFormat != ResponseFormatJSONSchema {

@@ -4682,6 +4682,7 @@ components:
         - base_url
         - model
         - response_format
+        - max_input_tokens
         - request_timeout_seconds
         - max_attempts
         - api_key_configured
@@ -4696,6 +4697,11 @@ components:
         response_format:
           type: string
           enum: [json_object, json_schema]
+        max_input_tokens:
+          type: integer
+          minimum: 4096
+          maximum: 2000000
+          description: 模型上下文允许的最大输入 Token；Worker 据此预留 Prompt/输出空间并分批抽取。
         request_timeout_seconds:
           type: integer
           minimum: 5
@@ -4716,6 +4722,7 @@ components:
         - base_url
         - model
         - response_format
+        - max_input_tokens
         - request_timeout_seconds
         - max_attempts
       properties:
@@ -4728,6 +4735,10 @@ components:
         response_format:
           type: string
           enum: [json_object, json_schema]
+        max_input_tokens:
+          type: integer
+          minimum: 4096
+          maximum: 2000000
         request_timeout_seconds:
           type: integer
           minimum: 5

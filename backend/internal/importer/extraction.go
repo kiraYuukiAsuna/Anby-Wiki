@@ -115,6 +115,7 @@ type ExtractParams struct {
 	Chunks          []evidence.SourceChunk
 	Provider        string
 	Model           string
+	MaxInputTokens  int
 	ImportJobID     *uuid.UUID
 	ImportRunID     *uuid.UUID
 }
@@ -135,43 +136,26 @@ func (s *ExtractionService) Extract(ctx context.Context, params ExtractParams) (
 	} else if !errors.Is(err, ErrExtractionNotFound) {
 		return nil, err
 	}
-	chunkViews := make([]map[string]any, len(params.Chunks))
 	texts := make([]string, len(params.Chunks))
 	for i := range params.Chunks {
-		chunkViews[i] = map[string]any{"chunk_id": params.Chunks[i].ID, "ordinal": params.Chunks[i].Ordinal,
-			"text": params.Chunks[i].TextContent, "locator": json.RawMessage(params.Chunks[i].LocatorJSON)}
 		texts[i] = params.Chunks[i].TextContent
 	}
-	chunksJSON, _ := json.Marshal(chunkViews)
-	result, err := s.ai.Generate(ctx, ai.Request{Provider: params.Provider, Model: params.Model,
-		PromptKey: ExtractionPromptKey, Variables: map[string]any{
-			"source_version_id": params.SourceVersionID.String(), "source_label": strings.TrimSpace(params.SourceLabel),
-			"chunks_json": string(chunksJSON),
-		}, ImportJobID: params.ImportJobID, ImportRunID: params.ImportRunID})
+	generated, err := s.generateCandidates(ctx, params)
 	if err != nil {
 		return nil, err
 	}
-	var candidates *Candidates
-	var canonical json.RawMessage
-	if len(params.Chunks) > 0 {
-		candidates, canonical, err = ValidateCandidatesFromChunks(result.JSON, params.SourceVersionID, params.Chunks)
-	} else {
-		candidates, canonical, err = ValidateCandidates(ctx, result.JSON, params.SourceVersionID, s.chunks)
-	}
-	if err != nil {
-		return nil, err
-	}
+	candidates := generated.Candidates
 	if DetectPromptInjection(texts) {
 		candidates.PromptInjectionDetected = true
-		canonical, _ = json.Marshal(candidates)
 	}
+	canonical, _ := json.Marshal(candidates)
 	extractionID, err := s.ids.New()
 	if err != nil {
 		return nil, err
 	}
 	extraction := &Extraction{ID: extractionID, SourceVersionID: params.SourceVersionID,
-		SchemaVersion: 1, PromptKey: result.PromptKey, PromptVersion: result.PromptVersion,
-		Model: result.Model, CandidatesJSON: canonical, QualityScore: candidates.QualityScore}
+		SchemaVersion: 1, PromptKey: generated.PromptKey, PromptVersion: generated.PromptVersion,
+		Model: generated.Model, CandidatesJSON: canonical, QualityScore: candidates.QualityScore}
 	inserted, err := s.repo.InsertExtractionIfAbsent(ctx, extraction)
 	if err != nil {
 		return nil, err

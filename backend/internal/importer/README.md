@@ -7,13 +7,19 @@ Page、Knowledge、Evidence 或 Governance 的权威表。所有正式写入均�
 ## 运行时
 
 API 的 `POST /api/v1/import-jobs` 只创建队列项。Provider、API 根地址、模型、输出模式、
-超时、尝试次数和密钥由管理员在 `/admin/ai` 配置；API Key 使用部署主密钥加密写入
+模型最大输入 Token、超时、尝试次数和密钥由管理员在 `/admin/ai` 配置；API Key 使用部署主密钥加密写入
 `wiki_site.settings_json`，不再通过 Worker 环境变量注入。配置缺失、禁用或不可解密时，
 Worker 不领取 `source_import`，已有任务保持 queued。
 
 模型调用经私网 Semantic Kernel Sidecar：OpenAI-compatible 可使用原生 strict JSON
 Schema，DeepSeek 使用 JSON Object；Sidecar 对 JSON 和权威 Schema 失败执行有限纠正重试，
 Go Gateway 再执行最终独立校验。Sidecar 不访问数据库、对象存储或用户会话。
+
+Worker 会从管理员提供的最大输入 Token 中预留 Prompt/Schema 空间，再按估算 Token 和
+单批最多 16 个 Chunk 分批调用；较大上下文仍受独立的输出安全批量上限约束。每批候选
+分别完成 Schema 与逐字证据核验后，以服务端生成的候选 ID 去重合并。若供应商明确返回
+`output_truncated`，只二分重试被截断的批次；已完成批次以及获取、安全扫描、解析恢复点
+均不会重跑。
 
 部署环境只保留 `AI_CONFIG_MASTER_KEY`、`AI_KERNEL_URL`、
 `AI_KERNEL_INTERNAL_TOKEN` 以及对象存储配置：

@@ -72,6 +72,7 @@ type PipelineRequest struct {
 	Title            string
 	Provider         string
 	Model            string
+	MaxInputTokens   int
 	QualityThreshold float64
 	// ExpectedContentHash binds an upload retry to the immutable content that
 	// was accepted by the API. URL jobs leave it empty because their config is
@@ -209,7 +210,8 @@ func (p *Pipeline) run(ctx context.Context, request PipelineRequest, acquire acq
 	}
 	extracted, err := p.extraction.Extract(ctx, ExtractParams{SourceVersionID: version.Version.ID,
 		SourceLabel: sourceLabel, Chunks: version.Chunks, Provider: request.Provider, Model: request.Model,
-		ImportJobID: &request.JobID, ImportRunID: &run.ID})
+		MaxInputTokens: request.MaxInputTokens,
+		ImportJobID:    &request.JobID, ImportRunID: &run.ID})
 	if err != nil {
 		return fail(current, extractionErrorCode(err), err)
 	}

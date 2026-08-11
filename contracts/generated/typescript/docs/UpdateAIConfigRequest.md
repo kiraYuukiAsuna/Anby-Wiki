@@ -11,6 +11,7 @@ Name | Type
 `baseUrl` | string
 `model` | string
 `responseFormat` | string
+`maxInputTokens` | number
 `requestTimeoutSeconds` | number
 `maxAttempts` | number
 `apiKey` | string
@@ -27,6 +28,7 @@ const example = {
   "baseUrl": null,
   "model": null,
   "responseFormat": null,
+  "maxInputTokens": null,
   "requestTimeoutSeconds": null,
   "maxAttempts": null,
   "apiKey": null,
