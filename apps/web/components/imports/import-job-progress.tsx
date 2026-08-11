@@ -1,5 +1,13 @@
 "use client";
 
+import {
+  Ban,
+  CheckCircle2,
+  CircleDashed,
+  CircleX,
+  LoaderCircle,
+  SkipForward,
+} from "lucide-react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { toast } from "sonner";
@@ -9,12 +17,70 @@ import useSWRMutation from "swr/mutation";
 import { Button } from "@/components/ui/button";
 import { importsApi } from "@/lib/api";
 import { isUnauthorized, LOGIN_PATH } from "@/lib/auth";
+import { cn } from "@/lib/utils";
 
 const STAGES = ["fetch", "parse", "extract", "match", "compose", "review"] as const;
 const LABELS: Record<string, string> = {
   fetch: "获取与安全扫描", parse: "解析与分块", extract: "结构化抽取",
   match: "实体与 Claim 匹配", compose: "Proposal 合成", review: "进入审核",
 };
+
+const STAGE_STATUS_META = {
+  pending: {
+    label: "等待处理",
+    icon: CircleDashed,
+    className: "bg-muted text-muted-foreground ring-border",
+  },
+  running: {
+    label: "处理中",
+    icon: LoaderCircle,
+    className: "bg-sky-50 text-sky-700 ring-sky-200 dark:bg-sky-950/50 dark:text-sky-300 dark:ring-sky-800",
+  },
+  succeeded: {
+    label: "已完成",
+    icon: CheckCircle2,
+    className: "bg-emerald-50 text-emerald-700 ring-emerald-200 dark:bg-emerald-950/50 dark:text-emerald-300 dark:ring-emerald-800",
+  },
+  failed: {
+    label: "失败",
+    icon: CircleX,
+    className: "bg-rose-50 text-rose-700 ring-rose-200 dark:bg-rose-950/50 dark:text-rose-300 dark:ring-rose-800",
+  },
+  skipped: {
+    label: "已跳过",
+    icon: SkipForward,
+    className: "bg-slate-100 text-slate-600 ring-slate-200 dark:bg-slate-800 dark:text-slate-300 dark:ring-slate-700",
+  },
+  cancelled: {
+    label: "已取消",
+    icon: Ban,
+    className: "bg-amber-50 text-amber-700 ring-amber-200 dark:bg-amber-950/50 dark:text-amber-300 dark:ring-amber-800",
+  },
+} as const;
+
+function StageStatusIcon({ status }: { status: keyof typeof STAGE_STATUS_META }) {
+  const meta = STAGE_STATUS_META[status];
+  const Icon = meta.icon;
+
+  return (
+    <span
+      className={cn(
+        "inline-flex size-7 shrink-0 items-center justify-center rounded-full ring-1 ring-inset",
+        meta.className,
+      )}
+      title={meta.label}
+    >
+      <Icon
+        className={cn(
+          "size-3.5",
+          status === "running" && "motion-safe:animate-spin",
+        )}
+        aria-hidden
+      />
+      <span className="sr-only">{meta.label}</span>
+    </span>
+  );
+}
 const ERROR_MESSAGES: Record<string, string> = {
   parse_failed: "来源内容无法解析。",
   pdf_extractor_unavailable: "服务器缺少 PDF 文本提取组件，请联系管理员。",
@@ -108,10 +174,11 @@ export function ImportJobProgress({ id }: { id: string }) {
       <ol className="grid gap-3 sm:grid-cols-2">
         {STAGES.map((name) => {
           const stage = latestByStage.get(name);
+          const status = stage?.status ?? "pending";
           return <li key={name} className="rounded-lg border border-border p-4">
             <div className="flex items-center justify-between gap-2">
               <span className="text-sm font-medium">{LABELS[name]}</span>
-              <span className="rounded-full bg-muted px-2 py-0.5 text-xs">{stage?.status ?? "pending"}</span>
+              <StageStatusIcon status={status} />
             </div>
             {stage?.finishedAt ? <p className="mt-2 text-xs text-muted-foreground">完成于 {stage.finishedAt.toLocaleString()}</p> : null}
           </li>;
