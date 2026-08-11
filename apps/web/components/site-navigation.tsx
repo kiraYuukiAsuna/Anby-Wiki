@@ -20,6 +20,7 @@ import {
   ShieldCheck,
   ScrollText,
   ShieldAlert,
+  Settings2,
   SquarePen,
   Waypoints,
 } from "lucide-react";
@@ -92,6 +93,16 @@ const GROUPS = [
         href: "/governance/revision-storage",
         label: "历史版本存储",
         icon: Archive,
+      },
+    ],
+  },
+  {
+    label: "管理",
+    items: [
+      {
+        href: "/admin/ai",
+        label: "AI 模型配置",
+        icon: Settings2,
       },
     ],
   },

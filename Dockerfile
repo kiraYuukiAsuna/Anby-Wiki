@@ -3,6 +3,7 @@
 ARG GO_IMAGE=golang:1.26.5-alpine
 ARG NODE_IMAGE=node:22-alpine3.22
 ARG RUNTIME_IMAGE=alpine:3.22
+ARG PYTHON_IMAGE=python:3.12.11-slim-bookworm
 
 FROM ${GO_IMAGE} AS go-builder
 ARG TARGETOS
@@ -20,6 +21,8 @@ RUN CGO_ENABLED=0 GOOS=${TARGETOS:-linux} GOARCH=${TARGETARCH:-amd64} \
     go build -trimpath -ldflags="-s -w" -o /out/wiki-migrate ./cmd/migrate && \
     CGO_ENABLED=0 GOOS=${TARGETOS:-linux} GOARCH=${TARGETARCH:-amd64} \
     go build -trimpath -ldflags="-s -w" -o /out/wiki-doctor ./cmd/doctor && \
+    CGO_ENABLED=0 GOOS=${TARGETOS:-linux} GOARCH=${TARGETARCH:-amd64} \
+    go build -trimpath -ldflags="-s -w" -o /out/wiki-ai-config-import-env ./cmd/ai-config-import-env && \
     CGO_ENABLED=0 GOOS=${TARGETOS:-linux} GOARCH=${TARGETARCH:-amd64} \
     go build -trimpath -ldflags="-s -w" -o /out/wiki-perf ./cmd/perf
 
@@ -87,9 +90,34 @@ LABEL org.opencontainers.image.title="Anby Wiki Migration Tools" \
       org.opencontainers.image.created="${BUILD_DATE}"
 COPY --from=go-builder /out/wiki-migrate /usr/local/bin/wiki-migrate
 COPY --from=go-builder /out/wiki-doctor /usr/local/bin/wiki-doctor
+COPY --from=go-builder /out/wiki-ai-config-import-env /usr/local/bin/wiki-ai-config-import-env
 COPY --from=go-builder /out/wiki-perf /usr/local/bin/wiki-perf
 COPY backend/migrations/ /app/migrations/
 CMD ["wiki-migrate"]
+
+FROM ${PYTHON_IMAGE} AS ai-kernel
+ARG VERSION=dev
+ARG VCS_REF=unknown
+ARG BUILD_DATE=unknown
+LABEL org.opencontainers.image.title="Anby Wiki AI Kernel" \
+      org.opencontainers.image.version="${VERSION}" \
+      org.opencontainers.image.revision="${VCS_REF}" \
+      org.opencontainers.image.created="${BUILD_DATE}"
+ENV PYTHONDONTWRITEBYTECODE=1 \
+    PYTHONUNBUFFERED=1 \
+    PORT=8090
+RUN groupadd --gid 10002 kernel && \
+    useradd --uid 10002 --gid kernel --no-create-home --shell /usr/sbin/nologin kernel
+WORKDIR /app
+COPY services/ai-kernel/requirements.txt ./requirements.txt
+RUN pip install --no-cache-dir --requirement requirements.txt && \
+    pip install --no-cache-dir --no-deps semantic-kernel==1.44.1
+COPY services/ai-kernel/app.py ./app.py
+USER 10002:10002
+EXPOSE 8090
+HEALTHCHECK --interval=10s --timeout=3s --start-period=15s --retries=6 \
+  CMD python -c "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8090/healthz', timeout=2)" || exit 1
+CMD ["uvicorn", "app:app", "--host", "0.0.0.0", "--port", "8090", "--no-access-log"]
 
 FROM ${NODE_IMAGE} AS web
 ARG VERSION=dev

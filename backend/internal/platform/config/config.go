@@ -66,17 +66,13 @@ type Config struct {
 	OTLPEndpoint   string  `env:"OTEL_EXPORTER_OTLP_ENDPOINT"`
 	OTLPInsecure   bool    `env:"OTEL_EXPORTER_OTLP_INSECURE" envDefault:"false"`
 	OTelSampleRate float64 `env:"OTEL_TRACE_SAMPLE_RATE" envDefault:"1"`
-	// AIImportEnabled 显式启用常驻 Worker 的来源导入消费；默认关闭，避免
-	// 未配置模型凭据时误消费任务。
-	AIImportEnabled bool `env:"AI_IMPORT_ENABLED" envDefault:"false"`
-	// AIProvider 是 Gateway 内的供应商键。内置 openai-compatible 与 deepseek Adapter。
-	AIProvider string `env:"AI_PROVIDER" envDefault:"openai-compatible"`
-	// AIBaseURL 是模型供应商 API 根地址（例如 https://host/v1）。
-	AIBaseURL string `env:"AI_BASE_URL"`
-	// AIAPIKey 只从进程环境注入；生产可由受保护的部署环境文件提供，禁止写入日志。
-	AIAPIKey string `env:"AI_API_KEY"`
-	// AIModel 是导入抽取使用的模型 ID。
-	AIModel string `env:"AI_MODEL"`
+	// AIConfigMasterKey is the infrastructure-only AES-256 key used to encrypt
+	// administrator-managed provider credentials in wiki_site.settings_json.
+	AIConfigMasterKey string `env:"AI_CONFIG_MASTER_KEY"`
+	// AIKernelURL points to the private Semantic Kernel sidecar. Provider URL,
+	// model and credentials are deliberately not process environment settings.
+	AIKernelURL           string `env:"AI_KERNEL_URL" envDefault:"http://ai-kernel:8090"`
+	AIKernelInternalToken string `env:"AI_KERNEL_INTERNAL_TOKEN"`
 	// AuthRegistrationEnabled controls public local-account registration.
 	// Operators may disable it after provisioning the required accounts.
 	AuthRegistrationEnabled bool `env:"AUTH_REGISTRATION_ENABLED" envDefault:"false"`
@@ -93,6 +89,9 @@ type Config struct {
 	// TrustedProxyIPs lists proxy addresses whose X-Forwarded-For may be
 	// trusted for limiter client identity. Empty means use the socket peer.
 	TrustedProxyIPs []string `env:"TRUSTED_PROXY_IPS" envSeparator:","`
+	// CollaborationOriginPatterns lists the exact public origins authorized to
+	// open collaboration WebSockets when an upstream rewrite changes Host.
+	CollaborationOriginPatterns []string `env:"COLLABORATION_ORIGIN_PATTERNS" envSeparator:","`
 	// AuthDevHeaderEnabled permits X-Actor-ID only in development/test.
 	AuthDevHeaderEnabled bool          `env:"AUTH_DEV_HEADER_ENABLED" envDefault:"false"`
 	SessionCookieName    string        `env:"SESSION_COOKIE_NAME" envDefault:"anby_session"`
@@ -187,23 +186,8 @@ func (c Config) validate() error {
 			return fmt.Errorf("config: TRUSTED_PROXY_IPS 包含非法 IP %q", raw)
 		}
 	}
-	if c.AIImportEnabled {
-		var aiMissing []string
-		for name, value := range map[string]string{
-			"AI_BASE_URL": c.AIBaseURL,
-			"AI_API_KEY":  c.AIAPIKey,
-			"AI_MODEL":    c.AIModel,
-		} {
-			if strings.TrimSpace(value) == "" {
-				aiMissing = append(aiMissing, name)
-			}
-		}
-		if len(aiMissing) > 0 {
-			return fmt.Errorf("config: AI_IMPORT_ENABLED=true 时缺失环境变量: %s", strings.Join(aiMissing, ", "))
-		}
-		if c.AIProvider != "openai-compatible" && c.AIProvider != "deepseek" {
-			return fmt.Errorf("config: 不支持的 AI_PROVIDER: %s", c.AIProvider)
-		}
+	if err := validateServiceURL(c.AIKernelURL); err != nil {
+		return fmt.Errorf("config: AI_KERNEL_URL 非法: %w", err)
 	}
 	if c.Env == "production" {
 		if c.SearchBackend != "meilisearch" {

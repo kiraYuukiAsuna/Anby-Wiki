@@ -26,10 +26,11 @@ const (
 )
 
 type CollaborationAPI struct {
-	service       *collaboration.Service
-	authorization *governance.AuthorizationService
-	hub           *collaboration.Hub
-	wikiID        uuid.UUID
+	service        *collaboration.Service
+	authorization  *governance.AuthorizationService
+	hub            *collaboration.Hub
+	wikiID         uuid.UUID
+	originPatterns []string
 }
 
 func NewCollaborationAPI(
@@ -37,9 +38,11 @@ func NewCollaborationAPI(
 	authorization *governance.AuthorizationService,
 	hub *collaboration.Hub,
 	wikiID uuid.UUID,
+	originPatterns []string,
 ) *CollaborationAPI {
 	return &CollaborationAPI{
 		service: service, authorization: authorization, hub: hub, wikiID: wikiID,
+		originPatterns: append([]string(nil), originPatterns...),
 	}
 }
 
@@ -75,7 +78,9 @@ func (a *CollaborationAPI) connect(w http.ResponseWriter, r *http.Request) {
 		serviceError(w, r, err)
 		return
 	}
-	conn, err := websocket.Accept(w, r, nil)
+	conn, err := websocket.Accept(w, r, &websocket.AcceptOptions{
+		OriginPatterns: a.originPatterns,
+	})
 	if err != nil {
 		return
 	}

@@ -85,12 +85,18 @@ confirm_production() {
 }
 
 build_local_images() {
-  compose build api worker web migrate
+  # Build sequentially: the production VPS does not have enough memory for
+  # concurrent Go, Node and Python dependency resolution.
+  for service in ai-kernel api worker web migrate
+  do
+    compose build "$service"
+  done
 }
 
 require_local_images() {
   for image in \
     "anby-wiki-api:$RELEASE_ID" \
+    "anby-wiki-ai-kernel:$RELEASE_ID" \
     "anby-wiki-worker:$RELEASE_ID" \
     "anby-wiki-web:$RELEASE_ID" \
     "anby-wiki-migrate:$RELEASE_ID"
@@ -135,25 +141,27 @@ check_sensitive_env() {
         ;;
     esac
   done
-  if [ "${AI_IMPORT_ENABLED:-false}" = "true" ]; then
-    for name in AI_BASE_URL AI_API_KEY AI_MODEL; do
-      eval "value=\${$name:-}"
-      [ -n "$value" ] || fail "$name must be set when AI_IMPORT_ENABLED=true"
-    done
-  fi
+  for name in AI_CONFIG_MASTER_KEY AI_KERNEL_INTERNAL_TOKEN; do
+    eval "value=\${$name:-}"
+    [ -n "$value" ] || fail "$name must be set in DEPLOY_ENV_FILE"
+  done
 }
 
-# start_data_tier brings up PostgreSQL/Redis/MinIO and ensures the bucket
+# start_data_tier brings up PostgreSQL/Redis/MinIO/Meilisearch and ensures the bucket
 # exists. These are stateful, so they are started before the application and
 # are never recreated as part of an application roll.
 start_data_tier() {
+  # Create service containers first: images that declare VOLUME may populate a
+  # brand-new named volume and reset its root ownership during container create.
+  compose create postgres redis minio meilisearch
   compose --profile tools run --rm storage-init
-  compose up -d --wait postgres redis minio
+  compose up -d --no-recreate --wait postgres redis minio meilisearch
   compose --profile tools run --rm minio-init
 }
 
 roll_services() {
   # Keep this order stable: readers/writers before async consumers, then edge.
+  compose up -d --no-deps --wait ai-kernel
   compose up -d --no-deps --wait api
   compose up -d --no-deps --wait worker
   compose up -d --no-deps --wait web

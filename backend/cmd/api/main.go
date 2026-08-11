@@ -15,6 +15,8 @@ import (
 	"syscall"
 	"time"
 
+	"github.com/anby/wiki/backend/internal/ai"
+	"github.com/anby/wiki/backend/internal/aiconfig"
 	authdomain "github.com/anby/wiki/backend/internal/auth"
 	"github.com/anby/wiki/backend/internal/collaboration"
 	"github.com/anby/wiki/backend/internal/collection"
@@ -129,6 +131,7 @@ func main() {
 	var datasetAPI *DatasetAPI
 	var componentAPI *ComponentAPI
 	var sourceAPI *SourceAPI
+	var aiConfigAPI *AIConfigAPI
 	var pool *pgxpool.Pool
 	if cfg.DatabaseURL != "" {
 		var err error
@@ -184,6 +187,7 @@ func main() {
 			governance.NewAuthorizationService(pool),
 			collaborationHub,
 			writeAPI.wikiID,
+			cfg.CollaborationOriginPatterns,
 		)
 		collectionAPI = NewCollectionAPI(
 			collection.NewService(
@@ -210,6 +214,36 @@ func main() {
 			evidence.NewRepository(pool), page.NewRepository(pool), nil, cfg.Env,
 			db.NewTxManager(pool), id.NewGenerator(),
 		))
+		if strings.TrimSpace(cfg.AIConfigMasterKey) != "" && strings.TrimSpace(cfg.AIKernelInternalToken) != "" {
+			aiConfigService, aiConfigErr := aiconfig.NewService(
+				aiconfig.NewRepository(pool), db.NewTxManager(pool), id.NewGenerator(),
+				governance.NewAuthorizationService(pool), cfg.AIConfigMasterKey,
+			)
+			if aiConfigErr != nil {
+				logger.Error("装配 AI 配置服务失败", slog.Any("error", aiConfigErr))
+				os.Exit(1)
+			}
+			kernelProvider, kernelErr := ai.NewSemanticKernelProvider(
+				cfg.AIKernelURL, cfg.AIKernelInternalToken,
+				ai.SemanticKernelConfigResolverFunc(func(ctx context.Context) (*ai.SemanticKernelConfig, error) {
+					runtime, err := aiConfigService.Runtime(ctx, writeAPI.wikiID)
+					if err != nil {
+						return nil, err
+					}
+					return &ai.SemanticKernelConfig{
+						Provider: runtime.Provider, BaseURL: runtime.BaseURL, APIKey: runtime.APIKey,
+						Model: runtime.Model, ResponseFormat: runtime.ResponseFormat,
+						RequestTimeoutSeconds: runtime.RequestTimeoutSeconds,
+						MaxAttempts:           runtime.MaxAttempts,
+					}, nil
+				}), nil,
+			)
+			if kernelErr != nil {
+				logger.Error("装配 Semantic Kernel 客户端失败", slog.Any("error", kernelErr))
+				os.Exit(1)
+			}
+			aiConfigAPI = NewAIConfigAPI(aiConfigService, kernelProvider, writeAPI.wikiID)
+		}
 		governanceAPI.WithWorkingDocumentMerge(
 			governance.NewMergeWorkingDocumentService(
 				governanceAPI.repo,
@@ -242,7 +276,7 @@ func main() {
 
 	srv := &http.Server{
 		Addr:              fmt.Sprintf(":%d", cfg.APIPort),
-		Handler:           NewRouter(logger, deps, writeAPI, readAPI, historyAPI, projectionAPI, searchAPI, knowledgeReadAPI, governanceAPI, importAPI, authAPI, collaborationAPI, collectionAPI, assetAPI, datasetAPI, componentAPI, sourceAPI),
+		Handler:           NewRouter(logger, deps, writeAPI, readAPI, historyAPI, projectionAPI, searchAPI, knowledgeReadAPI, governanceAPI, importAPI, authAPI, collaborationAPI, collectionAPI, assetAPI, datasetAPI, componentAPI, sourceAPI, aiConfigAPI),
 		ReadHeaderTimeout: 5 * time.Second,
 	}
 

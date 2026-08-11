@@ -11,14 +11,14 @@
   与 Web，并完成最新 Schema `up → down → up`、Doctor、真实数据联调、投影重建、
   dead 回放、Revision 冷归档回源和桌面/移动端浏览器回归。
 - Docker daemon 不可用；生产部署静态检查与 YAML 解析通过，但 Compose 展开、
-  healthcheck 和四个 OCI target 未在本机实跑。
+  healthcheck 和五个 OCI target 未在本机实跑。
 - Chrome headless 已覆盖 34 个真实数据路由、导入持久队列、治理流程、斜杠标题和
   390×844 移动端退化；完整键盘顺序、读屏器语义、对比度和正式网络失败态仍需要
   人工验收。
 
 ### 关闭条件
 
-1. 在具备 Docker daemon 的 CI/发布机通过 Compose config、四个 target 构建、
+1. 在具备 Docker daemon 的 CI/发布机通过 Compose config、五个 target 构建、
    非 root 用户及 healthcheck 元数据校验。
 2. 用发布清单启动一次完整容器拓扑并运行迁移 gate、Doctor、备份恢复和服务
    healthcheck。

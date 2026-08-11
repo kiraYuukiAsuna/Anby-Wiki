@@ -47,6 +47,7 @@ func NewRouter(logger *slog.Logger, deps Deps, writeAPI *WriteAPI, readAPI *Read
 	var datasetAPI *DatasetAPI
 	var componentAPI *ComponentAPI
 	var sourceAPI *SourceAPI
+	var aiConfigAPI *AIConfigAPI
 	for _, optional := range optionalAPIs {
 		switch api := optional.(type) {
 		case *KnowledgeReadAPI:
@@ -69,6 +70,8 @@ func NewRouter(logger *slog.Logger, deps Deps, writeAPI *WriteAPI, readAPI *Read
 			componentAPI = api
 		case *SourceAPI:
 			sourceAPI = api
+		case *AIConfigAPI:
+			aiConfigAPI = api
 		}
 	}
 	r := chi.NewRouter()
@@ -92,7 +95,7 @@ func NewRouter(logger *slog.Logger, deps Deps, writeAPI *WriteAPI, readAPI *Read
 		r.Handle("/metrics", deps.Metrics.Handler())
 	}
 
-	if writeAPI != nil || readAPI != nil || historyAPI != nil || projectionAPI != nil || searchAPI != nil || knowledgeReadAPI != nil || governanceAPI != nil || importAPI != nil || authAPI != nil || collaborationAPI != nil || collectionAPI != nil || assetAPI != nil || datasetAPI != nil || componentAPI != nil || sourceAPI != nil {
+	if writeAPI != nil || readAPI != nil || historyAPI != nil || projectionAPI != nil || searchAPI != nil || knowledgeReadAPI != nil || governanceAPI != nil || importAPI != nil || authAPI != nil || collaborationAPI != nil || collectionAPI != nil || assetAPI != nil || datasetAPI != nil || componentAPI != nil || sourceAPI != nil || aiConfigAPI != nil {
 		r.Route("/api/v1", func(r chi.Router) {
 			if authAPI != nil {
 				r.Post("/auth/register", authAPI.register)
@@ -273,6 +276,11 @@ func NewRouter(logger *slog.Logger, deps Deps, writeAPI *WriteAPI, readAPI *Read
 				r.Get("/import-jobs/{id}", importAPI.getJob)
 				r.Post("/import-jobs/{id}/cancel", importAPI.cancelJob)
 				r.Post("/import-jobs/{id}/retry", importAPI.retryJob)
+			}
+			if aiConfigAPI != nil {
+				r.Get("/admin/ai-config", aiConfigAPI.get)
+				r.Put("/admin/ai-config", aiConfigAPI.update)
+				r.Post("/admin/ai-config/test", aiConfigAPI.test)
 			}
 		})
 	}

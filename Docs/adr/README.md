@@ -18,10 +18,11 @@
 | [ADR-0014](./0014-yjs-working-document-crdt.md) | WorkingDocument CRDT 采用 Yjs | 已接受 |
 | [ADR-0015](./0015-client-assisted-yjs-ai-merge.md) | AI 合并采用客户端辅助 Yjs CAS | 已接受 |
 | [ADR-0016](./0016-early-stage-deployment-simplification.md) | 早期阶段部署简化：去 Docker 开发、去 Nginx/Meili/OIDC | 已接受（认证被 ADR-0019、Secrets 注入被 ADR-0017 取代） |
-| [ADR-0017](./0017-production-secrets-in-env-file.md) | 生产机密统一写入部署环境文件 | 已接受 |
+| [ADR-0017](./0017-production-secrets-in-env-file.md) | 生产机密统一写入部署环境文件 | 已接受（AI Provider 密钥部分被 ADR-0021 取代） |
 | [ADR-0018](./0018-local-only-commercial-images.md) | 商业业务镜像仅在部署机本地构建和使用 | 已接受 |
 | [ADR-0019](./0019-local-account-authentication.md) | 正式本地账号、密码哈希与首账号管理员初始化 | 已接受 |
 | [ADR-0020](./0020-remove-origin-csrf-and-cross-origin-headers.md) | 移除 Origin CSRF 门禁与 COOP/CORP | 已接受 |
+| [ADR-0021](./0021-semantic-kernel-and-admin-ai-config.md) | Semantic Kernel Sidecar 与管理员 AI 配置 | 已接受 |
 
 新增 ADR 规则：编号只增不复用；状态为「提议 / 已接受 / 已废弃 / 被 ADR-XXXX 取代」；
 涉及实施方案 §8.2 高冲突资源的决策变更必须先更新 ADR 再改代码。

@@ -1,5 +1,7 @@
 /* tslint:disable */
 /* eslint-disable */
+export * from './AIConfig';
+export * from './AIConfigTestResult';
 export * from './AITrustProfile';
 export * from './AITrustProfileList';
 export * from './AddEntityAliasRequest';
@@ -213,6 +215,7 @@ export * from './SourceUsage';
 export * from './SourceUsageListPage';
 export * from './SourceVersionSummary';
 export * from './SubmitProposalResult';
+export * from './UpdateAIConfigRequest';
 export * from './UpdateAITrustProfileRequest';
 export * from './UpdateClaimVerificationRequest';
 export * from './UpdateEntityFederationLinkRequest';

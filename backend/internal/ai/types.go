@@ -85,6 +85,8 @@ type ProviderRequest struct {
 
 type ProviderResponse struct {
 	JSON         json.RawMessage
+	Provider     string
+	Model        string
 	InputTokens  int
 	OutputTokens int
 }

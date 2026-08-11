@@ -143,6 +143,12 @@ func (g *Gateway) Generate(ctx context.Context, request Request) (*Result, error
 		PromptVersion: prompt.Version, AttemptCount: attempts, Latency: time.Since(started),
 		Status: status, ErrorCode: errorCode}
 	if response != nil {
+		if response.Provider != "" {
+			u.Provider = response.Provider
+		}
+		if response.Model != "" {
+			u.Model = response.Model
+		}
 		u.InputTokens, u.OutputTokens = response.InputTokens, response.OutputTokens
 	}
 	if err := g.usage.InsertUsage(ctx, u); err != nil {
@@ -159,8 +165,15 @@ func (g *Gateway) Generate(ctx context.Context, request Request) (*Result, error
 		span.SetStatus(codes.Error, errorCode)
 		return nil, callErr
 	}
+	effectiveProvider, effectiveModel := request.Provider, request.Model
+	if response.Provider != "" {
+		effectiveProvider = response.Provider
+	}
+	if response.Model != "" {
+		effectiveModel = response.Model
+	}
 	return &Result{JSON: response.JSON, PromptKey: prompt.Key, PromptVersion: prompt.Version,
-		Provider: request.Provider, Model: request.Model, InputTokens: response.InputTokens,
+		Provider: effectiveProvider, Model: effectiveModel, InputTokens: response.InputTokens,
 		OutputTokens: response.OutputTokens}, nil
 }
 

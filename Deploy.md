@@ -144,10 +144,11 @@ Compose 会把机密注入容器环境，因此具有 Docker 管理权限的人�
 | `MEILI_MASTER_KEY` | 同时作为 Meilisearch Master Key 与应用内部 API Key，必须替换模板占位值 |
 | `SEARCH_BACKEND` | 生产保持 `meilisearch`；PostgreSQL 只作为开发 fallback |
 | `AUTH_REGISTRATION_ENABLED` | 是否允许公开注册；首个管理员建立后建议设为 `false` |
-| `AI_PROVIDER` `AI_BASE_URL` `AI_MODEL` | 模型 Adapter、API 根地址和模型 ID；DeepSeek 分别使用 `deepseek`、`https://api.deepseek.com` 和当前有效模型 ID |
-| `AI_API_KEY` | 仅在 `AI_IMPORT_ENABLED=true` 时填写；只注入 Worker |
+| `AI_CONFIG_MASTER_KEY` | 32 字节随机密钥的 base64，用于 AES-256-GCM 加密管理员保存的 Provider 密钥；建议 `openssl rand -base64 32` |
+| `AI_KERNEL_INTERNAL_TOKEN` | API/Worker 与私网 Semantic Kernel Sidecar 的共享随机令牌 |
 | `S3_BUCKET` | 对象存储桶名 |
 | `SESSION_COOKIE_SECURE` | 外层提供 HTTPS 时设 `true`，否则 `false` |
+| `COLLABORATION_ORIGIN_PATTERNS` | Next.js rewrite 或反向代理改写上游 `Host` 时，填写允许建立协作 WebSocket 的公开 Origin；多个值用逗号分隔，生产建议包含 `https://` 以固定协议 |
 | `WEB_BIND` `WEB_PORT` | 对外端口；默认 `127.0.0.1:3000` 只绑本机 |
 | `TRUSTED_PROXY_IPS` | 仅在 API 直连对端可信且其传来的 `X-Forwarded-For` 已被清洗时填写；默认留空最安全 |
 
@@ -165,10 +166,11 @@ export DEPLOY_ENV_FILE=/etc/anby-wiki/.env
 sh scripts/deploy.sh build
 ```
 
-生成四个带版本的本地镜像：
+生成五个带版本的本地镜像：
 
 - `anby-wiki-api:$RELEASE_ID`
 - `anby-wiki-worker:$RELEASE_ID`
+- `anby-wiki-ai-kernel:$RELEASE_ID`
 - `anby-wiki-web:$RELEASE_ID`
 - `anby-wiki-migrate:$RELEASE_ID`
 
@@ -189,26 +191,26 @@ sh scripts/deploy.sh deploy     # 本地构建并正式发布
 `deploy` 的执行顺序：
 
 1. 校验 `ENV=production`、`RELEASE_ID`、机密变量和环境文件权限；
-2. 从当前源码本地构建四个带 `RELEASE_ID` 标签的业务镜像；
+2. 从当前源码本地构建五个带 `RELEASE_ID` 标签的业务镜像；
 3. 运行 `storage-init` 修正命名卷根目录属主；
 4. 启动数据层 postgres / redis / minio 并等待健康；
 5. 运行 `minio-init` 创建 bucket 并关闭匿名访问；
 6. 执行迁移，再校验迁移版本落在镜像兼容窗口内；
 7. 运行 `doctor` 自检；
-8. 按 `api` → `worker` → `web` 顺序滚动替换。
+8. 按 `ai-kernel` → `api` → `worker` → `web` 顺序滚动替换。
 
 任一步失败即中止，不会继续替换应用容器。
 
 ### 2.5 其他命令
 
 ```sh
-sh scripts/deploy.sh build      # 只在本机构建四个业务镜像
+sh scripts/deploy.sh build      # 只在本机构建五个业务镜像
 sh scripts/deploy.sh migrate    # 只跑迁移与闸门
 sh scripts/deploy.sh doctor     # 只跑自检
 sh scripts/deploy.sh rollback   # 切回 RELEASE_ID 对应的已有本地镜像
 ```
 
-回滚前把环境文件中的 `RELEASE_ID` 改为旧版本，并确认部署机仍保留对应的四个
+回滚前把环境文件中的 `RELEASE_ID` 改为旧版本，并确认部署机仍保留对应的五个
 本地镜像。回滚不会重新构建、不会 pull，也**从不**执行 down 迁移；旧镜像必须
 显式兼容线上数据库版本。需要缩表时，先发布一个兼容新旧两版的中间版本。
 

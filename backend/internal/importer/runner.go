@@ -36,6 +36,7 @@ type RunnerConfig struct {
 	WikiID       uuid.UUID
 	Provider     string
 	Model        string
+	Availability func(context.Context) (bool, error)
 	PollInterval time.Duration
 	JobTimeout   time.Duration
 	Logger       *slog.Logger
@@ -91,6 +92,18 @@ func (r *Runner) Run(ctx context.Context) error {
 func (r *Runner) ProcessOne(ctx context.Context) (bool, error) {
 	ctx, span := otel.Tracer("github.com/anby/wiki/backend/importer").Start(ctx, "import.process")
 	defer span.End()
+	if r.config.Availability != nil {
+		available, err := r.config.Availability(ctx)
+		if err != nil {
+			span.RecordError(err)
+			span.SetStatus(codes.Error, "ai_configuration_unavailable")
+			return false, err
+		}
+		if !available {
+			span.SetAttributes(attribute.Bool("import.ai_available", false))
+			return false, nil
+		}
+	}
 	job, run, err := r.jobs.ClaimNext(ctx)
 	if errors.Is(err, ErrNoQueuedJob) {
 		span.SetAttributes(attribute.Bool("import.job_claimed", false))

@@ -7,6 +7,7 @@
  * 远端数据缓存统一走 SWR。
  */
 import {
+  AdminApi,
   AssetsApi,
   AuthApi,
   CollectionsApi,
@@ -81,6 +82,11 @@ function makeConfig(overrides: ConfigurationParameters = {}): Configuration {
 /** 本地账号注册、密码登录与服务端 session 客户端。 */
 export function authApi(overrides: ConfigurationParameters = {}): AuthApi {
   return new AuthApi(makeConfig(overrides));
+}
+
+/** 管理员站点运行时配置客户端。 */
+export function adminApi(overrides: ConfigurationParameters = {}): AdminApi {
+  return new AdminApi(makeConfig(overrides));
 }
 
 /** 媒体资产目录、上传、不可变版本元数据与内容客户端。 */

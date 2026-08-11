@@ -46,6 +46,8 @@ tags:
     description: Proposal、风险审核、预览、原子 Apply 与 ChangeBatch 回滚
   - name: imports
     description: AI 来源导入任务、阶段进度、取消与重试
+  - name: admin
+    description: 仅管理员可用的站点运行时配置
 paths:
   /api/v1/auth/register:
     post:
@@ -1431,6 +1433,66 @@ paths:
         "401": { $ref: "#/components/responses/Unauthorized" }
         "403": { $ref: "#/components/responses/Forbidden" }
         "422": { $ref: "#/components/responses/UnprocessableEntity" }
+  /api/v1/admin/ai-config:
+    get:
+      operationId: getAIConfig
+      tags: [admin]
+      summary: 读取站点 AI 运行时配置
+      description: 仅管理员可见；API Key 永不返回，只暴露是否已配置。
+      security:
+        - sessionCookie: []
+      responses:
+        "200":
+          description: 脱敏后的当前配置；未保存时返回安全默认值
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/AIConfig" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "500": { $ref: "#/components/responses/Internal" }
+    put:
+      operationId: updateAIConfig
+      tags: [admin]
+      summary: 保存站点 AI 运行时配置
+      description: >-
+        配置与审计事件原子写入。首次保存必须提供 api_key；后续省略或传空字符串
+        表示保留现有密钥。密钥使用部署主密钥加密后持久化。
+      security:
+        - sessionCookie: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/UpdateAIConfigRequest" }
+      responses:
+        "200":
+          description: 脱敏后的已保存配置
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/AIConfig" }
+        "400": { $ref: "#/components/responses/BadRequest" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "500": { $ref: "#/components/responses/Internal" }
+  /api/v1/admin/ai-config/test:
+    post:
+      operationId: testAIConfig
+      tags: [admin]
+      summary: 使用已保存配置执行最小结构化模型请求
+      description: 不接受临时密钥或 Prompt；仅返回供应商、模型与端到端耗时。
+      security:
+        - sessionCookie: []
+      responses:
+        "200":
+          description: Semantic Kernel 与模型供应商连通且结构化输出有效
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/AIConfigTestResult" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "409": { $ref: "#/components/responses/Conflict" }
+        "502": { $ref: "#/components/responses/Internal" }
+        "504": { $ref: "#/components/responses/Internal" }
   /api/v1/revision-storage:
     get:
       operationId: getRevisionStorageStats
@@ -4610,6 +4672,83 @@ components:
           type: integer
           minimum: 0
           maximum: 100
+    AIConfig:
+      type: object
+      additionalProperties: false
+      required:
+        - version
+        - enabled
+        - provider
+        - base_url
+        - model
+        - response_format
+        - request_timeout_seconds
+        - max_attempts
+        - api_key_configured
+      properties:
+        version: { type: integer, const: 1 }
+        enabled: { type: boolean }
+        provider:
+          type: string
+          enum: [openai-compatible, deepseek]
+        base_url: { type: string, format: uri }
+        model: { type: string }
+        response_format:
+          type: string
+          enum: [json_object, json_schema]
+        request_timeout_seconds:
+          type: integer
+          minimum: 5
+          maximum: 300
+        max_attempts:
+          type: integer
+          minimum: 1
+          maximum: 5
+        api_key_configured: { type: boolean }
+        updated_by: { type: string, format: uuid }
+        updated_at: { type: string, format: date-time }
+    UpdateAIConfigRequest:
+      type: object
+      additionalProperties: false
+      required:
+        - enabled
+        - provider
+        - base_url
+        - model
+        - response_format
+        - request_timeout_seconds
+        - max_attempts
+      properties:
+        enabled: { type: boolean }
+        provider:
+          type: string
+          enum: [openai-compatible, deepseek]
+        base_url: { type: string, format: uri, minLength: 1 }
+        model: { type: string, minLength: 1, maxLength: 256 }
+        response_format:
+          type: string
+          enum: [json_object, json_schema]
+        request_timeout_seconds:
+          type: integer
+          minimum: 5
+          maximum: 300
+        max_attempts:
+          type: integer
+          minimum: 1
+          maximum: 5
+        api_key:
+          type: string
+          writeOnly: true
+          description: 首次保存必填；后续省略或空字符串表示保留已有密钥。
+    AIConfigTestResult:
+      type: object
+      additionalProperties: false
+      required: [ok, provider, model, latency_ms]
+      properties:
+        ok: { type: boolean, const: true }
+        provider: { type: string }
+        model: { type: string }
+        latency_ms: { type: integer, format: int64, minimum: 0 }
     RevisionStorageStats:
       type: object
       additionalProperties: false

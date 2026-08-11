@@ -1,5 +1,6 @@
 /* tslint:disable */
 /* eslint-disable */
+export * from './AdminApi';
 export * from './AssetsApi';
 export * from './AuthApi';
 export * from './CollectionsApi';

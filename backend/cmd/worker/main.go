@@ -25,6 +25,7 @@ import (
 	"net/http"
 	"os"
 	"os/signal"
+	"strings"
 	"syscall"
 	"time"
 
@@ -326,16 +327,16 @@ func run(args []string) int {
 	}
 
 	var importRunner interface{ Run(context.Context) error }
-	if cfg.AIImportEnabled {
+	if strings.TrimSpace(cfg.AIConfigMasterKey) != "" && strings.TrimSpace(cfg.AIKernelInternalToken) != "" {
 		assembled, err := assembleImportRunner(ctx, pool, cfg, logger)
 		if err != nil {
 			logger.Error("装配 AI 导入 Worker 失败", slog.Any("error", err))
 			return exitError
 		}
 		importRunner = assembled
-		logger.Info("AI 导入消费已启用", slog.String("provider", cfg.AIProvider), slog.String("model", cfg.AIModel))
+		logger.Info("AI 导入消费者已装配，等待管理员配置", slog.String("provider", "semantic-kernel"))
 	} else {
-		logger.Info("AI 导入消费未启用", slog.String("setting", "AI_IMPORT_ENABLED"))
+		logger.Info("AI 导入消费者未装配", slog.String("reason", "AI 基础设施密钥未配置"))
 	}
 
 	runDone := make(chan struct{})

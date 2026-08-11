@@ -56,6 +56,7 @@ x-app-environment: &app-environment
   # 无 TLS 终结时必须为 false，否则浏览器不会回传 cookie。
   SESSION_COOKIE_SECURE: ${SESSION_COOKIE_SECURE:-false}
   SESSION_TTL: ${SESSION_TTL:-24h}
+  COLLABORATION_ORIGIN_PATTERNS: ${COLLABORATION_ORIGIN_PATTERNS:-}
   RATE_LIMIT_ENABLED: ${RATE_LIMIT_ENABLED:-true}
   RATE_LIMIT_GENERAL_PER_MINUTE: ${RATE_LIMIT_GENERAL_PER_MINUTE:-1200}
   RATE_LIMIT_AUTH_PER_MINUTE: ${RATE_LIMIT_AUTH_PER_MINUTE:-10}
@@ -212,6 +213,24 @@ services:
 
   # ---- 应用层 ----
 
+  ai-kernel:
+    <<: *runtime-security
+    image: anby-wiki-ai-kernel:${RELEASE_ID:?set RELEASE_ID}
+    pull_policy: never
+    build:
+      context: ../..
+      dockerfile: Dockerfile
+      target: ai-kernel
+      args:
+        VERSION: ${RELEASE_ID}
+        VCS_REF: ${VCS_REF:-local}
+        BUILD_DATE: ${BUILD_DATE:-unknown}
+    user: "10002:10002"
+    environment:
+      AI_KERNEL_INTERNAL_TOKEN: "${AI_KERNEL_INTERNAL_TOKEN:?set AI_KERNEL_INTERNAL_TOKEN}"
+    tmpfs:
+      - /tmp:size=64m,mode=1777
+
   api:
     <<: *runtime-security
     image: anby-wiki-api:${RELEASE_ID:?set RELEASE_ID}
@@ -228,6 +247,9 @@ services:
     environment:
       <<: *app-environment
       API_PORT: ${API_PORT:-8080}
+      AI_CONFIG_MASTER_KEY: "${AI_CONFIG_MASTER_KEY:?set AI_CONFIG_MASTER_KEY}"
+      AI_KERNEL_URL: http://ai-kernel:8090
+      AI_KERNEL_INTERNAL_TOKEN: "${AI_KERNEL_INTERNAL_TOKEN:?set AI_KERNEL_INTERNAL_TOKEN}"
     depends_on:
       postgres:
         condition: service_healthy
@@ -236,6 +258,8 @@ services:
       minio:
         condition: service_healthy
       meilisearch:
+        condition: service_healthy
+      ai-kernel:
         condition: service_healthy
     tmpfs:
       - /tmp:size=64m,mode=1777
@@ -261,11 +285,9 @@ services:
     user: "10001:10001"
     environment:
       <<: *app-environment
-      AI_IMPORT_ENABLED: ${AI_IMPORT_ENABLED:-false}
-      AI_PROVIDER: ${AI_PROVIDER:-openai-compatible}
-      AI_BASE_URL: "${AI_BASE_URL:-}"
-      AI_API_KEY: "${AI_API_KEY:-}"
-      AI_MODEL: "${AI_MODEL:-}"
+      AI_CONFIG_MASTER_KEY: "${AI_CONFIG_MASTER_KEY:?set AI_CONFIG_MASTER_KEY}"
+      AI_KERNEL_URL: http://ai-kernel:8090
+      AI_KERNEL_INTERNAL_TOKEN: "${AI_KERNEL_INTERNAL_TOKEN:?set AI_KERNEL_INTERNAL_TOKEN}"
     depends_on:
       postgres:
         condition: service_healthy
@@ -274,6 +296,8 @@ services:
       minio:
         condition: service_healthy
       meilisearch:
+        condition: service_healthy
+      ai-kernel:
         condition: service_healthy
     tmpfs:
       - /tmp:size=64m,mode=1777

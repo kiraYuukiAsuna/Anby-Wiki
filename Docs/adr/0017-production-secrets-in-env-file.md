@@ -11,8 +11,8 @@ ADR-0016 使用 Compose file secrets 与 `*_FILE` 环境变量注入生产机密
 
 ## 决策
 
-- `POSTGRES_DB`、`POSTGRES_USER`、`POSTGRES_PASSWORD`、`S3_ACCESS_KEY`、`S3_SECRET_KEY`，
-  以及启用 AI 导入时的 `AI_API_KEY`，直接写入仓库外的
+- `POSTGRES_DB`、`POSTGRES_USER`、`POSTGRES_PASSWORD`、`S3_ACCESS_KEY`、`S3_SECRET_KEY`
+  直接写入仓库外的
   `DEPLOY_ENV_FILE`。
 - `docker compose --env-file` 将这些值注入对应容器环境。
 - 删除 Compose `secrets`、`*_FILE` 转换和 `container-entrypoint`。
@@ -29,3 +29,5 @@ ADR-0016 使用 Compose file secrets 与 `*_FILE` 环境变量注入生产机密
 - 环境文件泄露等同于数据库和对象存储凭据同时泄露，必须使用 `0600`
   权限、最小化宿主机访问，并在泄露后整体轮换。
 - 本决策只取代 ADR-0016 第 6 节；账号体系由 ADR-0019 定义。
+- AI Provider 密钥的环境变量注入已被 ADR-0021 取代；部署文件只保留 AI 配置加密
+  主密钥和 Sidecar 内网令牌。

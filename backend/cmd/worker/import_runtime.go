@@ -2,12 +2,13 @@ package main
 
 import (
 	"context"
-	"fmt"
 	"log/slog"
+	"time"
 
 	"github.com/jackc/pgx/v5/pgxpool"
 
 	"github.com/anby/wiki/backend/internal/ai"
+	"github.com/anby/wiki/backend/internal/aiconfig"
 	"github.com/anby/wiki/backend/internal/evidence"
 	"github.com/anby/wiki/backend/internal/governance"
 	"github.com/anby/wiki/backend/internal/importer"
@@ -70,7 +71,28 @@ func assembleImportRunner(ctx context.Context, pool *pgxpool.Pool, cfg config.Co
 	governanceService := governance.NewService(governanceRepo, txm, ids)
 	reviews := governance.NewReviewService(governanceRepo, txm, ids, governance.NewRiskEvaluator(knowledgeService))
 
-	provider, err := newImportProvider(cfg)
+	aiConfig, err := aiconfig.NewService(
+		aiconfig.NewRepository(pool), txm, ids,
+		governance.NewAuthorizationService(pool), cfg.AIConfigMasterKey,
+	)
+	if err != nil {
+		return nil, err
+	}
+	provider, err := ai.NewSemanticKernelProvider(
+		cfg.AIKernelURL, cfg.AIKernelInternalToken,
+		ai.SemanticKernelConfigResolverFunc(func(ctx context.Context) (*ai.SemanticKernelConfig, error) {
+			runtime, err := aiConfig.Runtime(ctx, wikiID)
+			if err != nil {
+				return nil, err
+			}
+			return &ai.SemanticKernelConfig{
+				Provider: runtime.Provider, BaseURL: runtime.BaseURL, APIKey: runtime.APIKey,
+				Model: runtime.Model, ResponseFormat: runtime.ResponseFormat,
+				RequestTimeoutSeconds: runtime.RequestTimeoutSeconds,
+				MaxAttempts:           runtime.MaxAttempts,
+			}, nil
+		}), nil,
+	)
 	if err != nil {
 		return nil, err
 	}
@@ -80,7 +102,9 @@ func assembleImportRunner(ctx context.Context, pool *pgxpool.Pool, cfg config.Co
 		extractionPromptUser, importer.ExtractionSchemaJSON()); err != nil {
 		return nil, err
 	}
-	gateway := ai.NewGateway(aiRepo, aiRepo, ids, map[string]ai.Provider{cfg.AIProvider: provider}, ai.GatewayConfig{})
+	gateway := ai.NewGateway(aiRepo, aiRepo, ids, map[string]ai.Provider{
+		"semantic-kernel": provider,
+	}, ai.GatewayConfig{Timeout: 10 * time.Minute, MaxAttempts: 1})
 	importRepo := importer.NewRepository(pool)
 	jobs := importer.NewService(importRepo, txm, ids)
 	pipeline := importer.NewPipeline(importer.PipelineServices{
@@ -91,16 +115,10 @@ func assembleImportRunner(ctx context.Context, pool *pgxpool.Pool, cfg config.Co
 		Reviews:  reviews, Fetcher: importer.NewFetcher(importer.DefaultURLPolicy(), nil, nil),
 	})
 	return importer.NewRunner(jobs, pipeline, importer.RunnerConfig{WikiID: wikiID,
-		Provider: cfg.AIProvider, Model: cfg.AIModel, Logger: logger, UploadStore: objectStore}), nil
-}
-
-func newImportProvider(cfg config.Config) (ai.Provider, error) {
-	switch cfg.AIProvider {
-	case "openai-compatible":
-		return ai.NewOpenAICompatibleProvider(cfg.AIBaseURL, cfg.AIAPIKey, nil)
-	case "deepseek":
-		return ai.NewDeepSeekProvider(cfg.AIBaseURL, cfg.AIAPIKey, nil)
-	default:
-		return nil, fmt.Errorf("worker: 不支持的 AI_PROVIDER: %s", cfg.AIProvider)
-	}
+		Provider: "semantic-kernel", Model: "managed", Logger: logger,
+		UploadStore: objectStore, JobTimeout: 12 * time.Minute,
+		Availability: func(ctx context.Context) (bool, error) {
+			return aiConfig.Available(ctx, wikiID)
+		},
+	}), nil
 }

@@ -18,6 +18,7 @@ import {
   LockKeyhole,
   Network,
   Search,
+  Settings2,
   ShieldAlert,
   Waypoints,
 } from "lucide-react";
@@ -56,6 +57,7 @@ const QUICK_LINKS = [
   { href: "/governance/fact-check", label: "事实一致性", detail: "冲突、证据与 Entity 引用检查", icon: ShieldAlert },
   { href: "/governance/ai-trust", label: "AI 信任策略", detail: "Actor 信任等级与人工抽样", icon: BrainCircuit },
   { href: "/governance/revision-storage", label: "历史版本存储", detail: "Revision 冷热分层与归档", icon: Archive },
+  { href: "/admin/ai", label: "AI 模型配置", detail: "供应商、密钥、超时与结构化输出", icon: Settings2 },
   { href: "/assets", label: "媒体与附件", detail: "不可变资产版本", icon: Images },
   { href: "/datasets", label: "可查询数据", detail: "数据记录与保存视图", icon: DatabaseZap },
   { href: "/components", label: "组件中心", detail: "版本化信息框与渲染", icon: Boxes },

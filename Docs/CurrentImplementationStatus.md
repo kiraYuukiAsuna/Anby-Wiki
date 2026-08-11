@@ -1,6 +1,6 @@
 # 当前实现状态
 
-> 更新时间：2026-07-31
+> 更新时间：2026-08-11
 > 产品与能力审计依据：[整体设计方案](WikiDesignOnePage.md)
 
 ## 总体结论
@@ -25,7 +25,7 @@ PostgreSQL、Redis、MinIO、Meilisearch、API、Linux Worker 与 Next.js Web �
 | 证据与媒体 | Source/Version/Chunk/Citation、Asset/AssetRevision、引用校验、反向使用、可审计来源与媒体目录 |
 | 结构化内容 | Dataset/View/Record、Component/Version/信息框、静态与动态 Collection、成员维护与投影 |
 | 治理 | ProposalOperation v1 全部 23 种 Operation、预览、风险、ReviewTask、冲突解决、批量审核、ChangeBatch、补偿回滚、审计事件、ChangeTag、AI Trust、事实一致性 |
-| 导入与 AI | URL/HTML/文本/PDF/PNG/JPEG/JSON/CSV 获取，图片及扫描 PDF 的中英 OCR、结构化数据规范化、分阶段进度、幂等 Job、带页码/坐标/置信度的证据约束抽取、Proposal 生成、失败重试与可持久查询的导入队列 |
+| 导入与 AI | URL/HTML/文本/PDF/PNG/JPEG/JSON/CSV 获取，图片及扫描 PDF 的中英 OCR、结构化数据规范化、分阶段进度、幂等 Job、Semantic Kernel 结构化调用与纠正重试、带页码/坐标/置信度的证据约束抽取、Proposal 生成、失败重试与可持久查询的导入队列 |
 | 投影与搜索 | Outbox 租约/重试/死信、链接/目录/锚点/章节/渲染/知识使用/组件依赖/图谱投影、PostgreSQL fallback、Meilisearch 关键词/混合/语义检索 |
 | 规模与归档 | 章节懒加载、服务端可信 HTML 渲染、Revision 热冷分层与 S3 回源、Projection/Search 重建、容量基准命令 |
 | 协作 | Yjs WorkingDocument、增量同步、Presence、发布换基、AI 三方合并、人工冲突决议 |
@@ -61,6 +61,7 @@ Sonner、Geist 和响应式卡片提升工具型页面的可读性。
 - `/imports` 及每个 Job 的阶段、运行记录和进度详情；
 - `/governance` 下的 Proposal 创建/详情、审核队列、批量审核、审计活动、页面保护、
   AI Trust、事实一致性与 Revision 存储；
+- `/admin/ai` 的加密 Provider 密钥、模型、输出模式、超时、重试和连通性测试；
 - `/explore` 的搜索工作台、反向链接和 `/explore/graph` 图谱工作台。
 
 服务端数据统一通过 `apps/web/lib/api.ts` 创建的生成客户端访问，SWR 是唯一服务端
@@ -97,7 +98,7 @@ Sonner、Geist 和响应式卡片提升工具型页面的可读性。
 - 预发布阶段只维护 `000001_initial_schema.up/down.sql`。
 - 开发环境不使用 Docker；`scripts/dev.sh` 连接自行提供的 PostgreSQL、Redis、
   MinIO，并可按配置连接外部 Meilisearch。
-- 生产 Compose 包含 PostgreSQL、Redis、MinIO、Meilisearch、API、Worker、Web、
+- 生产 Compose 包含 PostgreSQL、Redis、MinIO、Meilisearch、Semantic Kernel、API、Worker、Web、
   migrate 和 doctor；不包含 Nginx、OIDC 或 TLS 终结。
 - 数据与应用服务继承只读根文件系统、非 root、capability drop 和
   `no-new-privileges` 策略。应用镜像在部署机本地按 `RELEASE_ID` 构建。

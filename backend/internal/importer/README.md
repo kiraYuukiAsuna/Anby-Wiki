@@ -6,16 +6,18 @@ Page、Knowledge、Evidence 或 Governance 的权威表。所有正式写入均�
 
 ## 运行时
 
-API 的 `POST /api/v1/import-jobs` 只创建队列项。`cmd/worker` 在显式设置
-`AI_IMPORT_ENABLED=true` 后领取 `source_import`：
+API 的 `POST /api/v1/import-jobs` 只创建队列项。Provider、API 根地址、模型、输出模式、
+超时、尝试次数和密钥由管理员在 `/admin/ai` 配置；API Key 使用部署主密钥加密写入
+`wiki_site.settings_json`，不再通过 Worker 环境变量注入。配置缺失、禁用或不可解密时，
+Worker 不领取 `source_import`，已有任务保持 queued。
 
-- `AI_PROVIDER=openai-compatible`：供应商必须支持 `/chat/completions` 的严格
-  `response_format=json_schema`
-- `AI_PROVIDER=deepseek`：使用 DeepSeek `response_format=json_object`，并在本地执行同一份
-  权威 JSON Schema 校验
-- `AI_BASE_URL`：供应商 API 根地址；DeepSeek 使用 `https://api.deepseek.com`
-- `AI_API_KEY`：只允许经环境变量注入
-- `AI_MODEL`：抽取模型 ID
+模型调用经私网 Semantic Kernel Sidecar：OpenAI-compatible 可使用原生 strict JSON
+Schema，DeepSeek 使用 JSON Object；Sidecar 对 JSON 和权威 Schema 失败执行有限纠正重试，
+Go Gateway 再执行最终独立校验。Sidecar 不访问数据库、对象存储或用户会话。
+
+部署环境只保留 `AI_CONFIG_MASTER_KEY`、`AI_KERNEL_URL`、
+`AI_KERNEL_INTERNAL_TOKEN` 以及对象存储配置：
+
 - `S3_ENDPOINT` / `S3_REGION` / `S3_BUCKET` / `S3_ACCESS_KEY` / `S3_SECRET_KEY`
 
 Worker 通过 `FOR UPDATE SKIP LOCKED` 原子领取任务；每次运行有独立幂等键。优雅退出时
@@ -35,10 +37,10 @@ Tesseract；最多处理 20 页，单页临时图片随页删除，原 PDF 始�
 PNG/JPEG 使用同一 OCR 路径，限制 4000 万像素。OCR 的行级像素区域、原图尺寸、引擎、
 语言与置信度一并固化进 SourceChunk locator，Citation 可以还原到原始图像区域。
 
-DeepSeek 的 JSON Object 模式只保证返回合法 JSON，因此 Adapter 会把与 Gateway
-本地校验完全相同的权威 JSON Schema 注入 system message，禁止额外包装层；OpenAI
-compatible Adapter 继续使用供应商原生 strict JSON Schema。DeepSeek 抽取使用
-`temperature=0`，避免同一来源在重试之间产生随机空结果。
+DeepSeek 的 JSON Object 模式只保证返回合法 JSON，因此 Semantic Kernel 会使用与
+Gateway 相同的权威 JSON Schema 预校验并纠正失败输出；OpenAI compatible 可使用供应商
+原生 strict JSON Schema。抽取固定 `temperature=0`，DeepSeek 同时关闭 thinking，避免
+推理正文污染 JSON 结果。
 
 `source-extraction-v2` Prompt 同时提供当前固定 Entity type / Claim property 词表，
 明确要求模型生成临时 `candidate_id`、禁止猜测持久化 Entity ID，并在来源包含明确主体

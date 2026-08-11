@@ -1,3 +1,4 @@
+apis/AdminApi.ts
 apis/AssetsApi.ts
 apis/AuthApi.ts
 apis/CollectionsApi.ts
@@ -14,10 +15,13 @@ apis/ReadingApi.ts
 apis/SearchApi.ts
 apis/SourcesApi.ts
 apis/index.ts
+docs/AIConfig.md
+docs/AIConfigTestResult.md
 docs/AITrustProfile.md
 docs/AITrustProfileList.md
 docs/AddEntityAliasRequest.md
 docs/AddEntityLabelRequest.md
+docs/AdminApi.md
 docs/AnchorTarget.md
 docs/ApplyProposalResult.md
 docs/ArchiveRevisionSnapshotsRequest.md
@@ -242,6 +246,7 @@ docs/SourceUsageListPage.md
 docs/SourceVersionSummary.md
 docs/SourcesApi.md
 docs/SubmitProposalResult.md
+docs/UpdateAIConfigRequest.md
 docs/UpdateAITrustProfileRequest.md
 docs/UpdateClaimVerificationRequest.md
 docs/UpdateEntityFederationLinkRequest.md
@@ -255,6 +260,8 @@ docs/WriteCollectionMember.md
 docs/WriteDatasetRecordRequest.md
 docs/WriteWikiComponentVersionRequest.md
 index.ts
+models/AIConfig.ts
+models/AIConfigTestResult.ts
 models/AITrustProfile.ts
 models/AITrustProfileList.ts
 models/AddEntityAliasRequest.ts
@@ -468,6 +475,7 @@ models/SourceUsage.ts
 models/SourceUsageListPage.ts
 models/SourceVersionSummary.ts
 models/SubmitProposalResult.ts
+models/UpdateAIConfigRequest.ts
 models/UpdateAITrustProfileRequest.ts
 models/UpdateClaimVerificationRequest.ts
 models/UpdateEntityFederationLinkRequest.ts

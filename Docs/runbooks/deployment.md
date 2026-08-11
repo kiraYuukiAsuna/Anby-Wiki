@@ -5,7 +5,8 @@
 
 ## 当前拓扑
 
-Production Compose 部署 PostgreSQL、Redis、MinIO、Meilisearch、API、Worker 与 Web。
+Production Compose 部署 PostgreSQL、Redis、MinIO、Meilisearch、Semantic Kernel
+Sidecar、API、Worker 与 Web。
 Web 是唯一发布宿主机端口的服务，并经 Next.js rewrite 将 `/api/*` 转发到
 Docker 内网 API。清单不包含 Nginx、TLS 终结或外部身份提供方。
 
@@ -16,8 +17,9 @@ Compose 本身不终结 TLS。默认 `WEB_BIND=127.0.0.1`，适合由宿主机�
 ## 本地构建策略
 
 商业业务镜像不发布到 registry。部署机使用当前受保护源码与 Dockerfile 本地构建
-`api`、`worker`、`web`、`migrate` 四个 target，并按 `RELEASE_ID` 标记为
-`anby-wiki-<target>:<release>`。Compose 对这些服务设置 `pull_policy: never`。
+`ai-kernel`、`api`、`worker`、`web`、`migrate` 五个 target，并按 `RELEASE_ID` 标记为
+`anby-wiki-<target>:<release>`。Compose 对这些服务设置 `pull_policy: never`。发布脚本
+按上述顺序逐个构建，避免同时运行 Python、Go 与 Node 构建耗尽小规格部署机内存。
 
 ```sh
 export DEPLOY_ENV_FILE=/etc/anby-wiki/.env
@@ -40,7 +42,9 @@ Compose 以同一个 `MEILI_MASTER_KEY` 启动 Meilisearch 并派生应用的内
 `MEILI_API_KEY`；生产默认 `SEARCH_BACKEND=meilisearch`，不得保留模板占位值。
 首次部署时保持 `AUTH_REGISTRATION_ENABLED=true`，从 `/register` 创建首个管理员；
 完成所需账号初始化后建议改为 `false` 并重新部署。
-启用 `AI_IMPORT_ENABLED` 时，`AI_API_KEY` 同样写入该文件，但只注入 Worker。
+AI Provider、地址、模型和密钥在 `/admin/ai` 管理。部署文件只保存 32 字节 base64
+`AI_CONFIG_MASTER_KEY` 和 `AI_KERNEL_INTERNAL_TOKEN`；前者加密数据库中的 Provider
+密钥，后者只验证私网 Sidecar 请求。
 
 Compose 会把这些值注入容器环境，Docker 管理员可通过 `docker inspect` 查看。
 不要提交环境文件，也不要把 Compose 展开结果、容器环境、CI 日志、指标或 trace
@@ -86,20 +90,20 @@ sh scripts/deploy.sh deploy
 固定顺序：
 
 1. 校验环境、`RELEASE_ID`、迁移窗口、机密变量与环境文件权限；
-2. 从当前源码本地构建四个业务镜像；
+2. 从当前源码本地构建五个业务镜像；
 3. 运行 `storage-init` 修正命名卷根目录属主；
 4. 启动并等待 PostgreSQL、Redis、MinIO、Meilisearch；
 5. 运行 `minio-init` 创建私有 bucket；
 6. 执行 `wiki-migrate up` 与版本兼容检查；
 7. 运行 `wiki-doctor -format json`；
-8. 依次替换 API、Worker、Web，并等待各自 healthcheck。
+8. 依次替换 Semantic Kernel、API、Worker、Web，并等待各自 healthcheck。
 
 任何步骤失败都会阻止后续替换。应用启动本身不自动迁移；禁止在生产执行
 `migrate down`。
 
 ## 回滚
 
-把环境文件中的 `RELEASE_ID` 改为上一个版本，确认该版本的四个本地镜像仍保留，
+把环境文件中的 `RELEASE_ID` 改为上一个版本，确认该版本的五个本地镜像仍保留，
 并保持线上数据库实际版本与兼容窗口正确，然后执行：
 
 ```sh
@@ -107,7 +111,7 @@ sh scripts/deploy.sh rollback
 ```
 
 回滚不会构建、pull 或 push，只检查旧版本本地镜像、运行版本检查和 doctor，
-再按 API → Worker → Web 替换；不会执行 up/down 迁移。如果旧镜像不兼容当前
+再按 Semantic Kernel → API → Worker → Web 替换；不会执行 up/down 迁移。如果旧镜像不兼容当前
 Schema，禁止回滚，必须发布 forward fix。
 
 ## 故障处置
