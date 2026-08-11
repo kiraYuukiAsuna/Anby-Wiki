@@ -54,11 +54,13 @@ export class CollaborationClient {
   private receiveQueue = Promise.resolve();
   private pendingAst: Document | null = null;
   private documentId: string | null = null;
+  private renderedAstJSON: string;
 
   constructor(options: CollaborationClientOptions) {
     this.options = options;
     this.clientId = browserClientId();
     this.latestSequence = readSequence(options.pageId);
+    this.renderedAstJSON = JSON.stringify(options.initialAst);
     this.ydoc.on("update", this.onDocumentUpdate);
   }
 
@@ -97,6 +99,9 @@ export class CollaborationClient {
   }
 
   syncAst(ast: Document): void {
+    // The editor already renders this AST. Remember it before the server echoes
+    // the Yjs update so that an acknowledgement cannot remount the editor.
+    this.renderedAstJSON = JSON.stringify(ast);
     if (!this.ready) {
       this.pendingAst = ast;
       return;
@@ -227,7 +232,7 @@ export class CollaborationClient {
       syncYjsAst(this.ydoc, pendingAst, "editor");
     }
     if (hasRecoveredState || pendingAst) {
-      this.options.onAst(materializeYjsAst(this.ydoc));
+      this.emitAstIfChanged();
     }
     this.options.onStatus?.("online");
   }
@@ -246,8 +251,16 @@ export class CollaborationClient {
     this.latestSequence = Math.max(this.latestSequence, sequence);
     writeSequence(this.options.pageId, this.latestSequence);
     if (this.ready) {
-      this.options.onAst(materializeYjsAst(this.ydoc));
+      this.emitAstIfChanged();
     }
+  }
+
+  private emitAstIfChanged(): void {
+    const ast = materializeYjsAst(this.ydoc);
+    const astJSON = JSON.stringify(ast);
+    if (astJSON === this.renderedAstJSON) return;
+    this.renderedAstJSON = astJSON;
+    this.options.onAst(ast);
   }
 
   private scheduleReconnect(): void {
