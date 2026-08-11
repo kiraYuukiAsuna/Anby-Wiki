@@ -16,10 +16,10 @@ Schema，DeepSeek 使用 JSON Object；Sidecar 对 JSON 和权威 Schema 失败�
 Go Gateway 再执行最终独立校验。Sidecar 不访问数据库、对象存储或用户会话。
 
 Worker 会从管理员提供的最大输入 Token 中预留 Prompt/Schema 空间，再按估算 Token 和
-单批最多 16 个 Chunk 分批调用；较大上下文仍受独立的输出安全批量上限约束。每批候选
-分别完成 Schema 与逐字证据核验后，以服务端生成的候选 ID 去重合并。若供应商明确返回
-`output_truncated`，只二分重试被截断的批次；已完成批次以及获取、安全扫描、解析恢复点
-均不会重跑。
+单批最多 6 个 Chunk 分批调用，最多并行处理 3 批；较大上下文仍受独立的输出安全批量
+上限约束。每批候选分别完成 Schema 与逐字证据核验后，以服务端生成的候选 ID 去重合并。
+若供应商返回 `output_truncated` 或 `invalid_structured_output`，只二分重试对应批次；
+已完成批次以及获取、安全扫描、解析恢复点均不会重跑。模型结构化调用默认最多尝试 3 次。
 
 部署环境只保留 `AI_CONFIG_MASTER_KEY`、`AI_KERNEL_URL`、
 `AI_KERNEL_INTERNAL_TOKEN` 以及对象存储配置：
@@ -29,6 +29,8 @@ Worker 会从管理员提供的最大输入 Token 中预留 Prompt/Schema 空间
 Worker 通过 `FOR UPDATE SKIP LOCKED` 原子领取任务；每次运行有独立幂等键。优雅退出时
 停止领取新任务，并给已领取任务一个有界完成窗口。相同 SourceVersion 已有成功任务时，
 后续任务跳过抽取、匹配、Compose 与 Review，并复用原 Proposal。
+Worker 被强制终止或部署替换后，超过完整任务超时仍处于 running 的遗留 Run 会标记为
+`worker_interrupted` 并自动重新排队，防止任务永久卡死。
 同一任务在解析成功后会把不可变 SourceVersion 作为恢复点；后续失败重试复用已通过
 安全扫描的资产、SourceVersion 与 Chunk，把获取和解析阶段记为 skipped，直接从抽取继续，
 不会重复创建来源或再次执行安全扫描。上传恢复点还必须与 Job 中固定的内容哈希一致。
@@ -61,6 +63,8 @@ Gateway 相同的权威 JSON Schema 预校验并纠正失败输出；OpenAI comp
 当模型复制了正确的逐字引文但错指 Chunk UUID 时，导入领域层只会在该引文能唯一定位到同一
 SourceVersion 的某个 Chunk 时纠正引用；仍无法核验的证据与候选会被丢弃并按保留比例降低
 质量分，而不再让单条坏证据否决整批有效候选。没有任何可核验证据时仍严格失败。
+模型回显错误 SourceVersion 时会使用请求中的权威 ID 纠正；重复的临时候选 ID、悬空或
+歧义 Claim 引用以及非法有效期只淘汰受影响的 Claim，不再否决同批其他可核验候选。
 来源标题或上传文件名会作为主体发现上下文，但不能单独构成证据；需求、规格和技术报告
 中的候选仍必须由 Chunk 内逐字引文支持。
 

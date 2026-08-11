@@ -9,6 +9,7 @@ import (
 	"errors"
 	"fmt"
 	"strings"
+	"time"
 
 	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5"
@@ -182,6 +183,46 @@ func (s *Service) ClaimNext(ctx context.Context) (*Job, *Run, error) {
 		return nil
 	})
 	return job, run, err
+}
+
+// RecoverStale requeues one run abandoned by a killed or restarted Worker.
+// The cutoff must be at least the Runner's full job timeout, so a live Worker
+// always loses its context before another process can reclaim the job.
+func (s *Service) RecoverStale(ctx context.Context, staleBefore time.Time) (bool, error) {
+	if staleBefore.IsZero() {
+		return false, ErrInvalidJob
+	}
+	recovered := false
+	err := s.txm.InTx(ctx, func(tx pgx.Tx) error {
+		job, err := s.repo.NextStaleRunningJobForUpdate(ctx, tx, staleBefore)
+		if errors.Is(err, ErrNoQueuedJob) {
+			return nil
+		}
+		if err != nil {
+			return err
+		}
+		run, err := s.repo.RunningRun(ctx, tx, job.ID)
+		if err != nil {
+			return err
+		}
+		errorJSON := safeError(job.CurrentStage, "worker_interrupted")
+		if err := s.repo.CancelRunningStages(ctx, tx, run.ID, errorJSON); err != nil {
+			return err
+		}
+		if err := s.repo.FinishRun(ctx, tx, run.ID, JobFailed, errorJSON); err != nil {
+			return err
+		}
+		if err := s.repo.FinishJob(ctx, tx, job.ID, JobFailed, job.CurrentStage,
+			job.Progress, nil, nil, errorJSON); err != nil {
+			return err
+		}
+		if err := s.repo.RequeueJob(ctx, tx, job.ID); err != nil {
+			return err
+		}
+		recovered = true
+		return nil
+	})
+	return recovered, err
 }
 
 func (s *Service) StartStage(ctx context.Context, runID uuid.UUID, stage string, inputHash *string) (*StageRun, error) {

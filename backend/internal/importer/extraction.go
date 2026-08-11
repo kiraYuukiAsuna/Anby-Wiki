@@ -177,32 +177,19 @@ func (s *ExtractionService) Extract(ctx context.Context, params ExtractParams) (
 // safely repairs the reference. Unsupported evidence and candidates are
 // discarded instead of poisoning an otherwise reviewable extraction.
 func ValidateCandidatesFromChunks(raw []byte, sourceVersionID uuid.UUID, chunks []evidence.SourceChunk) (*Candidates, json.RawMessage, error) {
-	candidates, err := decodeCandidates(raw, sourceVersionID)
+	candidates, sourceIDRepaired, err := decodeCandidates(raw, sourceVersionID)
 	if err != nil {
 		return nil, nil, err
 	}
 
-	ids := map[uuid.UUID]bool{}
-	entityIDs := map[uuid.UUID]bool{}
+	// Candidate IDs are temporary model-local references. Duplicate claim IDs
+	// do not affect authoritative writes because mergeCandidateBatches replaces
+	// every retained ID. Duplicate entity IDs are ambiguous only for claims
+	// that try to reference them, so retain the independently evidenced
+	// entities and discard just those ambiguous claims.
+	entityIDCounts := map[uuid.UUID]int{}
 	for i := range candidates.Entities {
-		candidate := &candidates.Entities[i]
-		if ids[candidate.CandidateID] {
-			return nil, nil, fmt.Errorf("%w: duplicate candidate", ai.ErrInvalidOutput)
-		}
-		ids[candidate.CandidateID], entityIDs[candidate.CandidateID] = true, true
-	}
-	for i := range candidates.Claims {
-		candidate := &candidates.Claims[i]
-		if ids[candidate.CandidateID] {
-			return nil, nil, fmt.Errorf("%w: duplicate candidate", ai.ErrInvalidOutput)
-		}
-		ids[candidate.CandidateID] = true
-		if candidate.Subject.CandidateID != nil && !entityIDs[*candidate.Subject.CandidateID] {
-			return nil, nil, fmt.Errorf("%w: subject candidate", ai.ErrInvalidOutput)
-		}
-		if candidate.ValidFrom != nil && candidate.ValidTo != nil && !candidate.ValidTo.After(*candidate.ValidFrom) {
-			return nil, nil, fmt.Errorf("%w: valid time", ai.ErrInvalidOutput)
-		}
+		entityIDCounts[candidates.Entities[i].CandidateID]++
 	}
 
 	catalog := newEvidenceCatalog(sourceVersionID, chunks)
@@ -226,6 +213,12 @@ func ValidateCandidatesFromChunks(raw []byte, sourceVersionID uuid.UUID, chunks 
 	for i := range candidates.Claims {
 		candidate := candidates.Claims[i]
 		originalEvidence += len(candidate.Evidence)
+		if candidate.Subject.CandidateID != nil && entityIDCounts[*candidate.Subject.CandidateID] != 1 {
+			continue
+		}
+		if candidate.ValidFrom != nil && candidate.ValidTo != nil && !candidate.ValidTo.After(*candidate.ValidFrom) {
+			continue
+		}
 		candidate.Evidence = catalog.normalize(candidate.Evidence)
 		if len(candidate.Evidence) == 0 ||
 			(candidate.Subject.CandidateID != nil && !retainedEntityIDs[*candidate.Subject.CandidateID]) {
@@ -245,20 +238,28 @@ func ValidateCandidatesFromChunks(raw []byte, sourceVersionID uuid.UUID, chunks 
 		evidenceRatio := float64(retainedEvidence) / float64(originalEvidence)
 		candidates.QualityScore *= min(candidateRatio, evidenceRatio)
 	}
+	if sourceIDRepaired {
+		candidates.QualityScore *= 0.9
+	}
 	canonical, _ := json.Marshal(candidates)
 	return candidates, canonical, nil
 }
 
-func decodeCandidates(raw []byte, sourceVersionID uuid.UUID) (*Candidates, error) {
+func decodeCandidates(raw []byte, sourceVersionID uuid.UUID) (*Candidates, bool, error) {
 	instance, err := jsonschema.UnmarshalJSON(bytes.NewReader(raw))
 	if err != nil || compiledExtractionSchema.Validate(instance) != nil {
-		return nil, fmt.Errorf("%w: extraction schema", ai.ErrInvalidOutput)
+		return nil, false, fmt.Errorf("%w: extraction schema", ai.ErrInvalidOutput)
 	}
 	var candidates Candidates
-	if err := json.Unmarshal(raw, &candidates); err != nil || candidates.SourceVersionID != sourceVersionID {
-		return nil, fmt.Errorf("%w: source_version_id", ai.ErrInvalidOutput)
+	if err := json.Unmarshal(raw, &candidates); err != nil {
+		return nil, false, fmt.Errorf("%w: extraction document", ai.ErrInvalidOutput)
 	}
-	return &candidates, nil
+	repaired := candidates.SourceVersionID != sourceVersionID
+	// The requested immutable source version is authoritative. The model is not
+	// allowed to select or redirect it, so an otherwise valid echoed UUID can be
+	// canonicalized without trusting model output.
+	candidates.SourceVersionID = sourceVersionID
+	return &candidates, repaired, nil
 }
 
 type evidenceCatalog struct {
@@ -412,7 +413,7 @@ func mustCompileExtractionSchema() *jsonschema.Schema {
 }
 
 func ValidateCandidates(ctx context.Context, raw []byte, sourceVersionID uuid.UUID, chunks ChunkLookup) (*Candidates, json.RawMessage, error) {
-	candidates, err := decodeCandidates(raw, sourceVersionID)
+	candidates, _, err := decodeCandidates(raw, sourceVersionID)
 	if err != nil {
 		return nil, nil, err
 	}

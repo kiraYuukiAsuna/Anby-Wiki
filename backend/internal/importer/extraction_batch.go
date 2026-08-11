@@ -6,6 +6,7 @@ import (
 	"errors"
 	"fmt"
 	"strings"
+	"sync"
 	"time"
 	"unicode/utf8"
 
@@ -23,11 +24,12 @@ const (
 	// A model may accept a large input while still having a much smaller output
 	// allowance. Keeping extraction batches bounded prevents a valid but large
 	// structured response from exhausting that independent output limit.
-	extractionBatchMaxChunks  = 16
-	extractionBatchTarget     = 12000
-	extractionInputMinReserve = 2048
-	extractionMaxEntities     = 200
-	extractionMaxClaims       = 500
+	extractionBatchMaxChunks   = 6
+	extractionBatchConcurrency = 3
+	extractionBatchTarget      = 12000
+	extractionInputMinReserve  = 2048
+	extractionMaxEntities      = 200
+	extractionMaxClaims        = 500
 )
 
 type generatedCandidates struct {
@@ -44,15 +46,52 @@ type extractionBatchResult struct {
 
 func (s *ExtractionService) generateCandidates(ctx context.Context, params ExtractParams) (*generatedCandidates, error) {
 	batches := batchSourceChunks(params.Chunks, params.MaxInputTokens)
+	type batchOutcome struct {
+		parts    []extractionBatchResult
+		rejected int
+		err      error
+	}
+	outcomes := make([]batchOutcome, len(batches))
+	batchCtx, cancel := context.WithCancel(ctx)
+	defer cancel()
+	limit := make(chan struct{}, extractionBatchConcurrency)
+	var wait sync.WaitGroup
+	for index := range batches {
+		wait.Add(1)
+		go func() {
+			defer wait.Done()
+			select {
+			case limit <- struct{}{}:
+				defer func() { <-limit }()
+			case <-batchCtx.Done():
+				outcomes[index].err = batchCtx.Err()
+				return
+			}
+			outcomes[index].parts, outcomes[index].rejected, outcomes[index].err =
+				s.generateBatch(batchCtx, params, batches[index])
+			if outcomes[index].err != nil {
+				cancel()
+			}
+		}()
+	}
+	wait.Wait()
+
 	parts := make([]extractionBatchResult, 0, len(batches))
 	rejectedBatches := 0
-	for _, batch := range batches {
-		batchParts, rejected, err := s.generateBatch(ctx, params, batch)
-		if err != nil {
-			return nil, err
+	var cancelled error
+	for index := range outcomes {
+		outcome := outcomes[index]
+		if outcome.err != nil {
+			if !errors.Is(outcome.err, context.Canceled) {
+				return nil, outcome.err
+			}
+			cancelled = outcome.err
 		}
-		rejectedBatches += rejected
-		parts = append(parts, batchParts...)
+		rejectedBatches += outcome.rejected
+		parts = append(parts, outcome.parts...)
+	}
+	if cancelled != nil {
+		return nil, cancelled
 	}
 	if len(parts) == 0 {
 		if rejectedBatches > 0 {
@@ -84,24 +123,15 @@ func (s *ExtractionService) generateCandidates(ctx context.Context, params Extra
 	}, nil
 }
 
-// generateBatch recursively halves a batch only when the provider confirms
-// that its output was truncated. Input errors, timeouts, and other provider
-// failures retain their original error semantics.
+// generateBatch recursively halves a batch when structured generation is too
+// large or too complex for the model. Transport, authentication, quota and
+// timeout errors retain their original semantics.
 func (s *ExtractionService) generateBatch(ctx context.Context, params ExtractParams,
 	chunks []evidence.SourceChunk) ([]extractionBatchResult, int, error) {
 	result, err := s.generateBatchOnce(ctx, params, chunks)
 	if err != nil {
-		if isOutputTruncated(err) && len(chunks) > 1 {
-			middle := len(chunks) / 2
-			left, leftRejected, leftErr := s.generateBatch(ctx, params, chunks[:middle])
-			if leftErr != nil {
-				return nil, 0, leftErr
-			}
-			right, rightRejected, rightErr := s.generateBatch(ctx, params, chunks[middle:])
-			if rightErr != nil {
-				return nil, 0, rightErr
-			}
-			return append(left, right...), leftRejected + rightRejected, nil
+		if isAdaptiveBatchError(err) && len(chunks) > 1 {
+			return s.splitBatch(ctx, params, chunks)
 		}
 		return nil, 0, err
 	}
@@ -116,9 +146,26 @@ func (s *ExtractionService) generateBatch(ctx context.Context, params ExtractPar
 		return nil, 1, nil
 	}
 	if err != nil {
+		if errors.Is(err, ai.ErrInvalidOutput) && len(chunks) > 1 {
+			return s.splitBatch(ctx, params, chunks)
+		}
 		return nil, 0, err
 	}
 	return []extractionBatchResult{{Candidates: candidates, Result: result}}, 0, nil
+}
+
+func (s *ExtractionService) splitBatch(ctx context.Context, params ExtractParams,
+	chunks []evidence.SourceChunk) ([]extractionBatchResult, int, error) {
+	middle := len(chunks) / 2
+	left, leftRejected, err := s.generateBatch(ctx, params, chunks[:middle])
+	if err != nil {
+		return nil, 0, err
+	}
+	right, rightRejected, err := s.generateBatch(ctx, params, chunks[middle:])
+	if err != nil {
+		return nil, 0, err
+	}
+	return append(left, right...), leftRejected + rightRejected, nil
 }
 
 func (s *ExtractionService) generateBatchOnce(ctx context.Context, params ExtractParams,
@@ -147,9 +194,10 @@ func (s *ExtractionService) generateBatchOnce(ctx context.Context, params Extrac
 	})
 }
 
-func isOutputTruncated(err error) bool {
+func isAdaptiveBatchError(err error) bool {
 	var providerErr *ai.ProviderError
-	return errors.As(err, &providerErr) && providerErr.Code == "output_truncated"
+	return errors.As(err, &providerErr) &&
+		(providerErr.Code == "output_truncated" || providerErr.Code == "invalid_structured_output")
 }
 
 func batchSourceChunks(chunks []evidence.SourceChunk, maxInputTokens int) [][]evidence.SourceChunk {

@@ -118,7 +118,7 @@ func assembleImportRunner(ctx context.Context, pool *pgxpool.Pool, cfg config.Co
 	})
 	return importer.NewRunner(jobs, pipeline, importer.RunnerConfig{WikiID: wikiID,
 		Provider: "semantic-kernel", Model: "managed", Logger: logger,
-		UploadStore: objectStore, JobTimeout: 12 * time.Minute,
+		UploadStore: objectStore, JobTimeout: 20 * time.Minute,
 		Runtime: func(ctx context.Context) (importer.RunnerRuntime, error) {
 			runtime, err := aiConfig.Runtime(ctx, wikiID)
 			if errors.Is(err, aiconfig.ErrNotConfigured) || errors.Is(err, aiconfig.ErrDisabled) {

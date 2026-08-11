@@ -70,8 +70,8 @@ func run(ctx context.Context) error {
 	value, err := service.Update(ctx, aiconfig.UpdateParams{
 		WikiID: wikiID, ActorID: systemActorID, Enabled: enabled,
 		Provider: provider, BaseURL: baseURL, Model: model,
-		ResponseFormat: responseFormat, RequestTimeoutSeconds: 180,
-		MaxAttempts: 2, APIKey: apiKey,
+		ResponseFormat: responseFormat, MaxInputTokens: aiconfig.DefaultMaxInputTokens,
+		RequestTimeoutSeconds: 180, MaxAttempts: 3, APIKey: apiKey,
 	})
 	if err != nil {
 		return err

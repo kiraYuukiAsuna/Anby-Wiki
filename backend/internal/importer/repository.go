@@ -66,6 +66,18 @@ func (r *Repository) NextQueuedJobForUpdate(ctx context.Context, tx pgx.Tx) (*Jo
 	return job, err
 }
 
+func (r *Repository) NextStaleRunningJobForUpdate(
+	ctx context.Context, tx pgx.Tx, staleBefore time.Time,
+) (*Job, error) {
+	job, err := scanJob(r.q(tx).QueryRow(ctx, `SELECT `+jobColumns+` FROM import_job
+		WHERE status='running' AND job_type='source_import' AND updated_at < $1
+		ORDER BY updated_at,id FOR UPDATE SKIP LOCKED LIMIT 1`, staleBefore))
+	if errors.Is(err, pgx.ErrNoRows) {
+		return nil, ErrNoQueuedJob
+	}
+	return job, err
+}
+
 func (r *Repository) GetJobByKey(ctx context.Context, actorID uuid.UUID, key string) (*Job, error) {
 	job, err := scanJob(r.pool.QueryRow(ctx, `SELECT `+jobColumns+` FROM import_job
 		WHERE initiated_by=$1 AND idempotency_key=$2`, actorID, key))

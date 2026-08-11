@@ -7,6 +7,7 @@ import (
 	"math"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/google/uuid"
 
@@ -16,7 +17,8 @@ import (
 )
 
 type splittingExtractionGenerator struct {
-	calls int
+	calls       int
+	failureCode string
 }
 
 func (g *splittingExtractionGenerator) Generate(_ context.Context, request ai.Request) (*ai.Result, error) {
@@ -29,7 +31,11 @@ func (g *splittingExtractionGenerator) Generate(_ context.Context, request ai.Re
 		return nil, err
 	}
 	if len(chunks) > 1 {
-		return nil, &ai.ProviderError{Code: "output_truncated", Err: ai.ErrInvalidOutput}
+		code := g.failureCode
+		if code == "" {
+			code = "output_truncated"
+		}
+		return nil, &ai.ProviderError{Code: code, Err: ai.ErrInvalidOutput}
 	}
 	sourceVersionID := uuid.MustParse(request.Variables["source_version_id"].(string))
 	candidates := Candidates{
@@ -151,6 +157,57 @@ func TestValidateCandidatesFromChunksRejectsWhenNoEvidenceSurvives(t *testing.T)
 	}
 }
 
+func TestValidateCandidatesFromChunksRepairsSourceAndDropsOnlyAmbiguousClaims(t *testing.T) {
+	sourceVersionID := uuid.New()
+	wrongSourceVersionID := uuid.New()
+	chunkID := uuid.New()
+	duplicateID := uuid.New()
+	uniqueID := uuid.New()
+	from := time.Date(2026, 8, 12, 0, 0, 0, 0, time.UTC)
+	to := from.Add(-time.Hour)
+	candidates := Candidates{
+		SchemaVersion: 1, SourceVersionID: wrongSourceVersionID, QualityScore: 0.9,
+		Entities: []EntityCandidate{
+			{CandidateID: duplicateID, TypeKey: "concept", Label: "Alpha", Aliases: []string{}, Confidence: 0.9,
+				Evidence: []CandidateEvidence{{ChunkID: chunkID, Quotation: "Alpha", CharStart: 0, CharEnd: 5}}},
+			{CandidateID: duplicateID, TypeKey: "concept", Label: "Beta", Aliases: []string{}, Confidence: 0.9,
+				Evidence: []CandidateEvidence{{ChunkID: chunkID, Quotation: "Beta", CharStart: 6, CharEnd: 10}}},
+			{CandidateID: uniqueID, TypeKey: "concept", Label: "Gamma", Aliases: []string{}, Confidence: 0.9,
+				Evidence: []CandidateEvidence{{ChunkID: chunkID, Quotation: "Gamma", CharStart: 11, CharEnd: 16}}},
+		},
+		Claims: []ClaimCandidate{
+			{CandidateID: duplicateID, Subject: CandidateSubject{CandidateID: &duplicateID},
+				PropertyKey: "release_date", Value: json.RawMessage(`{"date":"2026-08-12"}`), Confidence: 0.8,
+				Evidence: []CandidateEvidence{{ChunkID: chunkID, Quotation: "Alpha", CharStart: 0, CharEnd: 5}}},
+			{CandidateID: uuid.New(), Subject: CandidateSubject{CandidateID: &uniqueID},
+				PropertyKey: "release_date", Value: json.RawMessage(`{"date":"2026-08-12"}`),
+				ValidFrom: &from, ValidTo: &to, Confidence: 0.8,
+				Evidence: []CandidateEvidence{{ChunkID: chunkID, Quotation: "Gamma", CharStart: 11, CharEnd: 16}}},
+		},
+	}
+	raw, err := json.Marshal(candidates)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	validated, _, err := ValidateCandidatesFromChunks(raw, sourceVersionID, []evidence.SourceChunk{{
+		ID: chunkID, SourceVersionID: sourceVersionID, TextContent: "Alpha Beta Gamma", LocatorJSON: []byte(`{}`),
+	}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if validated.SourceVersionID != sourceVersionID {
+		t.Fatalf("source version=%s, want authoritative %s", validated.SourceVersionID, sourceVersionID)
+	}
+	if len(validated.Entities) != 3 || len(validated.Claims) != 0 {
+		t.Fatalf("entities=%d claims=%d, want all evidenced entities and no invalid claims",
+			len(validated.Entities), len(validated.Claims))
+	}
+	if validated.QualityScore >= candidates.QualityScore {
+		t.Fatalf("quality=%f, repaired output must be penalized", validated.QualityScore)
+	}
+}
+
 func TestBatchSourceChunksBoundsOutputAndPreservesOrder(t *testing.T) {
 	sourceVersionID := uuid.New()
 	chunks := make([]evidence.SourceChunk, 78)
@@ -161,8 +218,9 @@ func TestBatchSourceChunksBoundsOutputAndPreservesOrder(t *testing.T) {
 		}
 	}
 	batches := batchSourceChunks(chunks, DefaultModelMaxInputTokens)
-	if len(batches) != 5 {
-		t.Fatalf("batch count=%d, want 5", len(batches))
+	wantBatches := (len(chunks) + extractionBatchMaxChunks - 1) / extractionBatchMaxChunks
+	if len(batches) != wantBatches {
+		t.Fatalf("batch count=%d, want %d", len(batches), wantBatches)
 	}
 	ordinal := 0
 	for _, batch := range batches {
@@ -193,31 +251,35 @@ func TestBatchSourceChunksUsesConfiguredInputBudget(t *testing.T) {
 	}
 }
 
-func TestGenerateCandidatesSplitsTruncatedBatchAndMergesResults(t *testing.T) {
-	sourceVersionID := uuid.New()
-	chunks := []evidence.SourceChunk{
-		{ID: uuid.New(), SourceVersionID: sourceVersionID, Ordinal: 0, TextContent: "Alpha", LocatorJSON: []byte(`{}`)},
-		{ID: uuid.New(), SourceVersionID: sourceVersionID, Ordinal: 1, TextContent: "Beta", LocatorJSON: []byte(`{}`)},
-	}
-	gateway := &splittingExtractionGenerator{}
-	service := NewExtractionService(nil, nil, gateway, id.NewGenerator())
+func TestGenerateCandidatesSplitsInvalidStructuredBatchesAndMergesResults(t *testing.T) {
+	for _, failureCode := range []string{"output_truncated", "invalid_structured_output"} {
+		t.Run(failureCode, func(t *testing.T) {
+			sourceVersionID := uuid.New()
+			chunks := []evidence.SourceChunk{
+				{ID: uuid.New(), SourceVersionID: sourceVersionID, Ordinal: 0, TextContent: "Alpha", LocatorJSON: []byte(`{}`)},
+				{ID: uuid.New(), SourceVersionID: sourceVersionID, Ordinal: 1, TextContent: "Beta", LocatorJSON: []byte(`{}`)},
+			}
+			gateway := &splittingExtractionGenerator{failureCode: failureCode}
+			service := NewExtractionService(nil, nil, gateway, id.NewGenerator())
 
-	result, err := service.generateCandidates(context.Background(), ExtractParams{
-		SourceVersionID: sourceVersionID, SourceLabel: "test", Chunks: chunks,
-		Provider: "test", Model: "test", MaxInputTokens: DefaultModelMaxInputTokens,
-	})
-	if err != nil {
-		t.Fatal(err)
-	}
-	if gateway.calls != 3 {
-		t.Fatalf("calls=%d, want initial plus two halves", gateway.calls)
-	}
-	if len(result.Candidates.Entities) != 2 || result.Candidates.Entities[0].Label != "Alpha" ||
-		result.Candidates.Entities[1].Label != "Beta" {
-		t.Fatalf("unexpected merged entities: %#v", result.Candidates.Entities)
-	}
-	if result.Candidates.Entities[0].CandidateID == result.Candidates.Entities[1].CandidateID {
-		t.Fatal("merged candidates must receive unique server IDs")
+			result, err := service.generateCandidates(context.Background(), ExtractParams{
+				SourceVersionID: sourceVersionID, SourceLabel: "test", Chunks: chunks,
+				Provider: "test", Model: "test", MaxInputTokens: DefaultModelMaxInputTokens,
+			})
+			if err != nil {
+				t.Fatal(err)
+			}
+			if gateway.calls != 3 {
+				t.Fatalf("calls=%d, want initial plus two halves", gateway.calls)
+			}
+			if len(result.Candidates.Entities) != 2 || result.Candidates.Entities[0].Label != "Alpha" ||
+				result.Candidates.Entities[1].Label != "Beta" {
+				t.Fatalf("unexpected merged entities: %#v", result.Candidates.Entities)
+			}
+			if result.Candidates.Entities[0].CandidateID == result.Candidates.Entities[1].CandidateID {
+				t.Fatal("merged candidates must receive unique server IDs")
+			}
+		})
 	}
 }
 

@@ -125,6 +125,13 @@ func (r *Runner) ProcessOne(ctx context.Context) (bool, error) {
 			return false, nil
 		}
 	}
+	recovered, err := r.jobs.RecoverStale(ctx, time.Now().Add(-r.config.JobTimeout))
+	if err != nil {
+		span.RecordError(err)
+		span.SetStatus(codes.Error, "stale_recovery_failed")
+		return false, err
+	}
+	span.SetAttributes(attribute.Bool("import.stale_job_recovered", recovered))
 	job, run, err := r.jobs.ClaimNext(ctx)
 	if errors.Is(err, ErrNoQueuedJob) {
 		span.SetAttributes(attribute.Bool("import.job_claimed", false))

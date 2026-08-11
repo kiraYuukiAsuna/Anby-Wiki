@@ -73,7 +73,7 @@ func (s *Service) Runtime(ctx context.Context, wikiID uuid.UUID) (*RuntimeConfig
 		Model: stored.Model, ResponseFormat: stored.ResponseFormat,
 		MaxInputTokens:        effectiveMaxInputTokens(stored.MaxInputTokens),
 		RequestTimeoutSeconds: stored.RequestTimeoutSeconds,
-		MaxAttempts:           stored.MaxAttempts, APIKey: key,
+		MaxAttempts:           effectiveMaxAttempts(stored.MaxInputTokens, stored.MaxAttempts), APIKey: key,
 	}, nil
 }
 
@@ -177,7 +177,7 @@ func defaultConfig() *Config {
 		Version: 1, Provider: ProviderDeepSeek,
 		BaseURL: "https://api.deepseek.com", ResponseFormat: ResponseFormatJSONObject,
 		MaxInputTokens:        DefaultMaxInputTokens,
-		RequestTimeoutSeconds: 180, MaxAttempts: 2,
+		RequestTimeoutSeconds: 180, MaxAttempts: 3,
 	}
 }
 
@@ -189,7 +189,7 @@ func redact(value *StoredConfig) *Config {
 		ResponseFormat:        value.ResponseFormat,
 		MaxInputTokens:        effectiveMaxInputTokens(value.MaxInputTokens),
 		RequestTimeoutSeconds: value.RequestTimeoutSeconds,
-		MaxAttempts:           value.MaxAttempts,
+		MaxAttempts:           effectiveMaxAttempts(value.MaxInputTokens, value.MaxAttempts),
 		APIKeyConfigured:      value.APIKeyCiphertext != "",
 		UpdatedBy:             &updatedBy, UpdatedAt: &updatedAt,
 	}
@@ -200,12 +200,23 @@ func validateStored(value *StoredConfig) error {
 		return ErrInvalidConfig
 	}
 	return validateValues(value.Provider, value.BaseURL, value.Model, value.ResponseFormat,
-		effectiveMaxInputTokens(value.MaxInputTokens), value.RequestTimeoutSeconds, value.MaxAttempts)
+		effectiveMaxInputTokens(value.MaxInputTokens), value.RequestTimeoutSeconds,
+		effectiveMaxAttempts(value.MaxInputTokens, value.MaxAttempts))
 }
 
 func effectiveMaxInputTokens(value int) int {
 	if value == 0 {
 		return DefaultMaxInputTokens
+	}
+	return value
+}
+
+func effectiveMaxAttempts(storedMaxInputTokens, value int) int {
+	// Configurations created before max_input_tokens existed used the old
+	// hard-coded retry default of 2. Upgrade only that recognizable legacy
+	// shape; current administrator choices, including 1 or 2, remain exact.
+	if storedMaxInputTokens == 0 && value == 2 {
+		return 3
 	}
 	return value
 }
