@@ -18,3 +18,7 @@ Worker 首次启用来源导入时，幂等登记当前 `source-extraction-v2` P
 词表。输出 Schema 继续直接复用 `importer` 内嵌的权威 Extraction v1 副本。Prompt key
 升级使用新 key，避免覆盖或静默改写运维已激活的旧 Prompt。
 
+Semantic Kernel 边界在 `json_object` 模式下会把权威 JSON Schema 一并放入系统消息，
+并在纠错重试中提供具体的校验路径；DeepSeek 请求显式设置输出 token 上限并检查
+`finish_reason=length`，避免截断内容被误判成普通供应商失败。管理员连接测试使用完整的
+Extraction v1 Schema，而不是仅验证一个最小 JSON 对象。

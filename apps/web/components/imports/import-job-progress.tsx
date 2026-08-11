@@ -28,6 +28,7 @@ const ERROR_MESSAGES: Record<string, string> = {
   ocr_failed: "OCR 执行失败，请确认图片清晰度或联系管理员。",
   extraction_failed: "结构化抽取失败，请稍后重试。",
   extraction_invalid_output: "模型返回的结构不符合抽取 Schema，请重试或更换模型。",
+  extraction_output_truncated: "模型输出达到长度上限，请减少单次来源内容或使用支持更长输出的模型。",
   extraction_provider_failed: "模型供应商调用失败，请检查模型、额度和 API Key。",
   extraction_timeout: "模型调用超时，请稍后重试。",
   extraction_evidence_invalid: "模型返回的引用无法与来源文本核对。",

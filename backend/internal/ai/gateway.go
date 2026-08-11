@@ -129,6 +129,9 @@ func (g *Gateway) Generate(ctx context.Context, request Request) (*Result, error
 			status, errorCode = UsageSucceeded, ""
 		}
 	} else {
+		if errors.Is(callErr, ErrInvalidOutput) {
+			status, errorCode = UsageInvalidOutput, "schema_validation"
+		}
 		var providerErr *ProviderError
 		if errors.As(callErr, &providerErr) && providerErr.Code != "" {
 			errorCode = providerErr.Code

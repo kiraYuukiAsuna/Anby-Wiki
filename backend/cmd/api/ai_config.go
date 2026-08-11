@@ -10,6 +10,7 @@ import (
 	"github.com/anby/wiki/backend/internal/ai"
 	"github.com/anby/wiki/backend/internal/aiconfig"
 	"github.com/anby/wiki/backend/internal/governance"
+	"github.com/anby/wiki/backend/internal/importer"
 	"github.com/anby/wiki/backend/internal/platform/httpx"
 	"github.com/google/uuid"
 )
@@ -113,19 +114,21 @@ func (a *AIConfigAPI) test(w http.ResponseWriter, r *http.Request) {
 	ctx, cancel := context.WithTimeout(r.Context(), timeout)
 	defer cancel()
 	started := time.Now()
+	sourceVersionID := uuid.MustParse("00000000-0000-4000-8000-000000000001")
 	result, err := a.provider.Generate(ctx, ai.ProviderRequest{
-		SystemPrompt: "You are a connectivity check. Return only JSON conforming exactly to the supplied schema.",
-		UserPrompt:   `Return {"ok":true}.`,
-		JSONSchema:   json.RawMessage(`{"type":"object","additionalProperties":false,"required":["ok"],"properties":{"ok":{"const":true}}}`),
+		SystemPrompt: "You are an extraction compatibility check. Return only JSON conforming exactly to the supplied schema.",
+		UserPrompt: `Return exactly one empty extraction envelope with schema_version 1, source_version_id "` +
+			sourceVersionID.String() + `", empty entities and claims arrays, quality_score 0, and prompt_injection_detected false.`,
+		JSONSchema: importer.ExtractionSchemaJSON(),
 	})
 	if err != nil {
 		aiConfigError(w, r, err)
 		return
 	}
-	var body struct {
-		OK bool `json:"ok"`
-	}
-	if json.Unmarshal(result.JSON, &body) != nil || !body.OK {
+	var candidates importer.Candidates
+	if json.Unmarshal(result.JSON, &candidates) != nil || candidates.SchemaVersion != 1 ||
+		candidates.SourceVersionID != sourceVersionID ||
+		len(candidates.Entities) != 0 || len(candidates.Claims) != 0 {
 		aiConfigError(w, r, ai.ErrInvalidOutput)
 		return
 	}

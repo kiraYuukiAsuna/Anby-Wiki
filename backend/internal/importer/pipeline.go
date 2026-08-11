@@ -407,7 +407,10 @@ func inferredSourceType(source *AcquiredSource) string {
 }
 
 func extractionErrorCode(err error) string {
+	var providerErr *ai.ProviderError
 	switch {
+	case errors.As(err, &providerErr) && providerErr.Code == "output_truncated":
+		return "extraction_output_truncated"
 	case errors.Is(err, ai.ErrInvalidOutput):
 		return "extraction_invalid_output"
 	case errors.Is(err, ai.ErrProvider):

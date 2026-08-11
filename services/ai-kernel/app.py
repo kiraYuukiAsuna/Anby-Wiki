@@ -32,6 +32,7 @@ from semantic_kernel.contents.utils.author_role import AuthorRole
 
 PROTOCOL_VERSION = 1
 INTERNAL_TOKEN = os.environ.get("AI_KERNEL_INTERNAL_TOKEN", "")
+DEEPSEEK_MAX_OUTPUT_TOKENS = 8192
 
 app = FastAPI(
     title="Anby Wiki AI Kernel",
@@ -70,6 +71,11 @@ class OpenAICompatibleExecutionSettings(PromptExecutionSettings):
     temperature: float = 0
     response_format: dict[str, Any] = Field(default_factory=dict)
     extra_body: dict[str, Any] | None = None
+    max_tokens: int | None = Field(default=None, ge=1)
+
+
+class ModelOutputTruncatedError(ValueError):
+    pass
 
 
 class OpenAICompatibleChatCompletion(ChatCompletionClientBase):
@@ -109,17 +115,20 @@ class OpenAICompatibleChatCompletion(ChatCompletionClientBase):
         }
         if settings.extra_body:
             request["extra_body"] = settings.extra_body
+        if settings.max_tokens is not None:
+            request["max_tokens"] = settings.max_tokens
 
         response = await self.client.chat.completions.create(**request)
         choice = response.choices[0] if response.choices else None
         content = choice.message.content if choice is not None else None
+        finish_reason = getattr(choice, "finish_reason", None)
         return [
             ChatMessageContent(
                 role=AuthorRole.ASSISTANT,
                 content=content or "",
                 inner_content=response,
                 ai_model_id=self.ai_model_id,
-                metadata={"usage": response.usage},
+                metadata={"usage": response.usage, "finish_reason": finish_reason},
             )
         ]
 
@@ -133,6 +142,27 @@ def error_response(status: int, code: str, message: str, temporary: bool) -> JSO
 
 def authorized(token: str | None) -> bool:
     return bool(INTERNAL_TOKEN) and bool(token) and secrets.compare_digest(token, INTERNAL_TOKEN)
+
+
+def system_prompt_with_schema(system_prompt: str, schema: dict[str, Any]) -> str:
+    encoded = json.dumps(schema, ensure_ascii=False, separators=(",", ":"))
+    return (
+        system_prompt
+        + "\n\nRequired output JSON Schema (use exactly these property names and nesting):\n"
+        + encoded
+    )
+
+
+def schema_validation_feedback(error: jsonschema.ValidationError) -> str:
+    path = "$"
+    for item in error.absolute_path:
+        path += f"[{item}]" if isinstance(item, int) else f".{item}"
+    detail = error.message[:500]
+    return (
+        "The previous JSON violated the required schema at "
+        f"{path} ({error.validator}): {detail}. "
+        "Return a complete replacement JSON object; do not explain the correction."
+    )
 
 
 @app.get("/healthz")
@@ -163,7 +193,10 @@ async def generate(payload: GenerateRequest) -> JSONResponse:
         service_id="anby-extraction",
         client=client,
     )
-    history = ChatHistory(system_message=payload.system_prompt)
+    system_prompt = payload.system_prompt
+    if config.response_format == "json_object":
+        system_prompt = system_prompt_with_schema(system_prompt, payload.json_schema)
+    history = ChatHistory(system_message=system_prompt)
     history.add_user_message(payload.user_prompt)
 
     response_format: dict[str, Any]
@@ -186,10 +219,14 @@ async def generate(payload: GenerateRequest) -> JSONResponse:
         extra_body={"thinking": {"type": "disabled"}}
         if config.provider == "deepseek"
         else None,
+        max_tokens=DEEPSEEK_MAX_OUTPUT_TOKENS
+        if config.provider == "deepseek"
+        else None,
     )
 
     try:
         for attempt in range(config.max_attempts):
+            message: ChatMessageContent | None = None
             try:
                 message = await asyncio.wait_for(
                     service.get_chat_message_content(chat_history=history, settings=settings),
@@ -197,6 +234,8 @@ async def generate(payload: GenerateRequest) -> JSONResponse:
                 )
                 if message is None or not message.content:
                     raise ValueError("empty response")
+                if (message.metadata or {}).get("finish_reason") == "length":
+                    raise ModelOutputTruncatedError("output reached token limit")
                 document = json.loads(message.content)
                 if not isinstance(document, dict):
                     raise ValueError("JSON root is not an object")
@@ -217,13 +256,23 @@ async def generate(payload: GenerateRequest) -> JSONResponse:
                 )
             except jsonschema.SchemaError:
                 return error_response(500, "invalid_schema", "structured output schema is invalid", False)
-            except (json.JSONDecodeError, jsonschema.ValidationError, TypeError, ValueError):
+            except ModelOutputTruncatedError:
+                if attempt + 1 >= config.max_attempts:
+                    return error_response(502, "output_truncated", "model output reached token limit", False)
+                history.add_user_message(
+                    "The previous JSON was truncated. Return a complete but concise replacement JSON object. "
+                    "Avoid duplicate candidates and use the shortest exact evidence quotations."
+                )
+            except jsonschema.ValidationError as exc:
                 if attempt + 1 >= config.max_attempts:
                     return error_response(502, "invalid_structured_output", "model output failed schema validation", False)
-                if message is not None and message.content:
-                    history.add_assistant_message(message.content)
+                history.add_user_message(schema_validation_feedback(exc))
+            except (json.JSONDecodeError, TypeError, ValueError):
+                if attempt + 1 >= config.max_attempts:
+                    return error_response(502, "invalid_structured_output", "model output failed schema validation", False)
                 history.add_user_message(
-                    "The previous response was invalid. Return a corrected JSON object that conforms exactly to the supplied schema."
+                    "The previous response was not a complete JSON object. Return a complete replacement JSON object "
+                    "that conforms exactly to the supplied schema; do not include Markdown or explanations."
                 )
             except (asyncio.TimeoutError, openai.APITimeoutError):
                 if attempt + 1 >= config.max_attempts:
