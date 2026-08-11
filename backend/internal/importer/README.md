@@ -45,13 +45,16 @@ Gateway 相同的权威 JSON Schema 预校验并纠正失败输出；OpenAI comp
 原生 strict JSON Schema。抽取固定 `temperature=0`，DeepSeek 同时关闭 thinking，避免
 推理正文污染 JSON 结果。
 
-`source-extraction-v2` Prompt 同时提供当前固定 Entity type / Claim property 词表，
+`source-extraction-v3` Prompt 同时提供当前固定 Entity type / Claim property 词表，
 明确要求模型生成临时 `candidate_id`、禁止猜测持久化 Entity ID，并在来源包含明确主体
 但没有受支持 Claim 时仍生成 Entity 候选。合法但空的候选集合会在 Extract 阶段以
 `no_candidates_extracted` 停止，不再到 Compose 阶段才显示无 Proposal。模型提供的
 引文必须逐字存在；服务端会重新推导 rune 范围以纠正模型常见的 Unicode/字节计数偏差。
 引文重复出现时选择离模型提示位置最近的精确匹配，最近距离并列才拒绝；模糊匹配、翻译
 或改写文本始终不能成为证据。
+当模型复制了正确的逐字引文但错指 Chunk UUID 时，导入领域层只会在该引文能唯一定位到同一
+SourceVersion 的某个 Chunk 时纠正引用；仍无法核验的证据与候选会被丢弃并按保留比例降低
+质量分，而不再让单条坏证据否决整批有效候选。没有任何可核验证据时仍严格失败。
 来源标题或上传文件名会作为主体发现上下文，但不能单独构成证据；需求、规格和技术报告
 中的候选仍必须由 Chunk 内逐字引文支持。
 

@@ -21,7 +21,7 @@ import (
 
 const (
 	ExtractionSchemaURL = "https://anby.wiki/schemas/extraction/v1/candidates.schema.json"
-	ExtractionPromptKey = "source-extraction-v2"
+	ExtractionPromptKey = "source-extraction-v3"
 )
 
 //go:embed schema/candidates.schema.json
@@ -151,7 +151,13 @@ func (s *ExtractionService) Extract(ctx context.Context, params ExtractParams) (
 	if err != nil {
 		return nil, err
 	}
-	candidates, canonical, err := ValidateCandidates(ctx, result.JSON, params.SourceVersionID, s.chunks)
+	var candidates *Candidates
+	var canonical json.RawMessage
+	if len(params.Chunks) > 0 {
+		candidates, canonical, err = ValidateCandidatesFromChunks(result.JSON, params.SourceVersionID, params.Chunks)
+	} else {
+		candidates, canonical, err = ValidateCandidates(ctx, result.JSON, params.SourceVersionID, s.chunks)
+	}
 	if err != nil {
 		return nil, err
 	}
@@ -180,6 +186,230 @@ func (s *ExtractionService) Extract(ctx context.Context, params ExtractParams) (
 	return &ExtractResult{Extraction: extraction, Candidates: candidates, Reused: !inserted}, nil
 }
 
+// ValidateCandidatesFromChunks validates structural output, then keeps only
+// evidence that can be proven against the immutable chunks supplied to the
+// model. A model occasionally copies the right exact quotation but the wrong
+// chunk UUID; when that quotation occurs in exactly one chunk, this function
+// safely repairs the reference. Unsupported evidence and candidates are
+// discarded instead of poisoning an otherwise reviewable extraction.
+func ValidateCandidatesFromChunks(raw []byte, sourceVersionID uuid.UUID, chunks []evidence.SourceChunk) (*Candidates, json.RawMessage, error) {
+	candidates, err := decodeCandidates(raw, sourceVersionID)
+	if err != nil {
+		return nil, nil, err
+	}
+
+	ids := map[uuid.UUID]bool{}
+	entityIDs := map[uuid.UUID]bool{}
+	for i := range candidates.Entities {
+		candidate := &candidates.Entities[i]
+		if ids[candidate.CandidateID] {
+			return nil, nil, fmt.Errorf("%w: duplicate candidate", ai.ErrInvalidOutput)
+		}
+		ids[candidate.CandidateID], entityIDs[candidate.CandidateID] = true, true
+	}
+	for i := range candidates.Claims {
+		candidate := &candidates.Claims[i]
+		if ids[candidate.CandidateID] {
+			return nil, nil, fmt.Errorf("%w: duplicate candidate", ai.ErrInvalidOutput)
+		}
+		ids[candidate.CandidateID] = true
+		if candidate.Subject.CandidateID != nil && !entityIDs[*candidate.Subject.CandidateID] {
+			return nil, nil, fmt.Errorf("%w: subject candidate", ai.ErrInvalidOutput)
+		}
+		if candidate.ValidFrom != nil && candidate.ValidTo != nil && !candidate.ValidTo.After(*candidate.ValidFrom) {
+			return nil, nil, fmt.Errorf("%w: valid time", ai.ErrInvalidOutput)
+		}
+	}
+
+	catalog := newEvidenceCatalog(sourceVersionID, chunks)
+	originalCandidates := len(candidates.Entities) + len(candidates.Claims)
+	originalEvidence := 0
+	retainedEvidence := 0
+	retainedEntityIDs := map[uuid.UUID]bool{}
+	entities := make([]EntityCandidate, 0, len(candidates.Entities))
+	for i := range candidates.Entities {
+		candidate := candidates.Entities[i]
+		originalEvidence += len(candidate.Evidence)
+		candidate.Evidence = catalog.normalize(candidate.Evidence)
+		retainedEvidence += len(candidate.Evidence)
+		if len(candidate.Evidence) == 0 {
+			continue
+		}
+		retainedEntityIDs[candidate.CandidateID] = true
+		entities = append(entities, candidate)
+	}
+	claims := make([]ClaimCandidate, 0, len(candidates.Claims))
+	for i := range candidates.Claims {
+		candidate := candidates.Claims[i]
+		originalEvidence += len(candidate.Evidence)
+		candidate.Evidence = catalog.normalize(candidate.Evidence)
+		if len(candidate.Evidence) == 0 ||
+			(candidate.Subject.CandidateID != nil && !retainedEntityIDs[*candidate.Subject.CandidateID]) {
+			continue
+		}
+		retainedEvidence += len(candidate.Evidence)
+		claims = append(claims, candidate)
+	}
+	candidates.Entities = entities
+	candidates.Claims = claims
+	retainedCandidates := len(entities) + len(claims)
+	if originalCandidates > 0 && retainedCandidates == 0 {
+		return nil, nil, ErrEvidenceRequired
+	}
+	if originalCandidates > 0 && originalEvidence > 0 {
+		candidateRatio := float64(retainedCandidates) / float64(originalCandidates)
+		evidenceRatio := float64(retainedEvidence) / float64(originalEvidence)
+		candidates.QualityScore *= min(candidateRatio, evidenceRatio)
+	}
+	canonical, _ := json.Marshal(candidates)
+	return candidates, canonical, nil
+}
+
+func decodeCandidates(raw []byte, sourceVersionID uuid.UUID) (*Candidates, error) {
+	instance, err := jsonschema.UnmarshalJSON(bytes.NewReader(raw))
+	if err != nil || compiledExtractionSchema.Validate(instance) != nil {
+		return nil, fmt.Errorf("%w: extraction schema", ai.ErrInvalidOutput)
+	}
+	var candidates Candidates
+	if err := json.Unmarshal(raw, &candidates); err != nil || candidates.SourceVersionID != sourceVersionID {
+		return nil, fmt.Errorf("%w: source_version_id", ai.ErrInvalidOutput)
+	}
+	return &candidates, nil
+}
+
+type evidenceCatalog struct {
+	byID   map[uuid.UUID]*evidence.SourceChunk
+	chunks []*evidence.SourceChunk
+}
+
+func newEvidenceCatalog(sourceVersionID uuid.UUID, chunks []evidence.SourceChunk) evidenceCatalog {
+	catalog := evidenceCatalog{byID: make(map[uuid.UUID]*evidence.SourceChunk, len(chunks))}
+	for index := range chunks {
+		chunk := &chunks[index]
+		if chunk.SourceVersionID != sourceVersionID {
+			continue
+		}
+		catalog.byID[chunk.ID] = chunk
+		catalog.chunks = append(catalog.chunks, chunk)
+	}
+	return catalog
+}
+
+func (c evidenceCatalog) normalize(items []CandidateEvidence) []CandidateEvidence {
+	result := make([]CandidateEvidence, 0, len(items))
+	seen := map[string]bool{}
+	for index := range items {
+		item := items[index]
+		if chunk := c.byID[item.ChunkID]; chunk != nil {
+			if start, ok := exactQuotationStart(chunk.TextContent, item.Quotation, item.CharStart); ok {
+				canonicalizeEvidence(&item, chunk, start)
+				key := evidenceKey(item)
+				if !seen[key] {
+					seen[key] = true
+					result = append(result, item)
+				}
+				continue
+			}
+		}
+
+		// Wrong chunk UUIDs are repairable only when the exact quotation has a
+		// unique destination. Page metadata narrows otherwise repeated text.
+		matches := make([]struct {
+			chunk *evidence.SourceChunk
+			start int
+		}, 0, 2)
+		for _, chunk := range c.chunks {
+			start, ok := exactQuotationStart(chunk.TextContent, item.Quotation, item.CharStart)
+			if ok {
+				matches = append(matches, struct {
+					chunk *evidence.SourceChunk
+					start int
+				}{chunk: chunk, start: start})
+			}
+		}
+		if item.Page != nil && len(matches) > 1 {
+			pageMatches := matches[:0]
+			for _, match := range matches {
+				if page := chunkPage(match.chunk); page != nil && *page == *item.Page {
+					pageMatches = append(pageMatches, match)
+				}
+			}
+			if len(pageMatches) > 0 {
+				matches = pageMatches
+			}
+		}
+		if len(matches) != 1 {
+			continue
+		}
+		canonicalizeEvidence(&item, matches[0].chunk, matches[0].start)
+		key := evidenceKey(item)
+		if !seen[key] {
+			seen[key] = true
+			result = append(result, item)
+		}
+	}
+	return result
+}
+
+func exactQuotationStart(text, quotation string, hintedStart int) (int, bool) {
+	runes, quoted := []rune(text), []rune(quotation)
+	if len(quoted) == 0 || len(quoted) > len(runes) {
+		return 0, false
+	}
+	if hintedStart >= 0 && hintedStart+len(quoted) <= len(runes) &&
+		equalRunesAt(runes, quoted, hintedStart) {
+		return hintedStart, true
+	}
+	matchStart := -1
+	matchDistance := len(runes) + len(quoted) + 1
+	tied := false
+	for start := 0; start+len(quoted) <= len(runes); start++ {
+		if !equalRunesAt(runes, quoted, start) {
+			continue
+		}
+		distance := start - hintedStart
+		if distance < 0 {
+			distance = -distance
+		}
+		if distance < matchDistance {
+			matchStart, matchDistance, tied = start, distance, false
+		} else if distance == matchDistance {
+			tied = true
+		}
+	}
+	return matchStart, matchStart >= 0 && !tied
+}
+
+func equalRunesAt(text, quotation []rune, start int) bool {
+	for index := range quotation {
+		if text[start+index] != quotation[index] {
+			return false
+		}
+	}
+	return true
+}
+
+func canonicalizeEvidence(item *CandidateEvidence, chunk *evidence.SourceChunk, start int) {
+	item.ChunkID = chunk.ID
+	item.CharStart = start
+	item.CharEnd = start + len([]rune(item.Quotation))
+	item.Page = chunkPage(chunk)
+}
+
+func chunkPage(chunk *evidence.SourceChunk) *int {
+	var locator struct {
+		Page *int `json:"page"`
+	}
+	if json.Unmarshal(chunk.LocatorJSON, &locator) != nil {
+		return nil
+	}
+	return locator.Page
+}
+
+func evidenceKey(item CandidateEvidence) string {
+	return fmt.Sprintf("%s\x00%d\x00%d\x00%s", item.ChunkID, item.CharStart, item.CharEnd, item.Quotation)
+}
+
 func mustCompileExtractionSchema() *jsonschema.Schema {
 	doc, err := jsonschema.UnmarshalJSON(bytes.NewReader(extractionSchemaJSON))
 	if err != nil {
@@ -198,13 +428,9 @@ func mustCompileExtractionSchema() *jsonschema.Schema {
 }
 
 func ValidateCandidates(ctx context.Context, raw []byte, sourceVersionID uuid.UUID, chunks ChunkLookup) (*Candidates, json.RawMessage, error) {
-	instance, err := jsonschema.UnmarshalJSON(bytes.NewReader(raw))
-	if err != nil || compiledExtractionSchema.Validate(instance) != nil {
-		return nil, nil, fmt.Errorf("%w: extraction schema", ai.ErrInvalidOutput)
-	}
-	var candidates Candidates
-	if err := json.Unmarshal(raw, &candidates); err != nil || candidates.SourceVersionID != sourceVersionID {
-		return nil, nil, fmt.Errorf("%w: source_version_id", ai.ErrInvalidOutput)
+	candidates, err := decodeCandidates(raw, sourceVersionID)
+	if err != nil {
+		return nil, nil, err
 	}
 	ids := map[uuid.UUID]bool{}
 	entityIDs := map[uuid.UUID]bool{}
@@ -235,7 +461,7 @@ func ValidateCandidates(ctx context.Context, raw []byte, sourceVersionID uuid.UU
 		}
 	}
 	canonical, _ := json.Marshal(candidates)
-	return &candidates, canonical, nil
+	return candidates, canonical, nil
 }
 
 // normalizeEvidence verifies the immutable quotation and derives rune offsets

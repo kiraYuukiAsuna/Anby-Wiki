@@ -41,6 +41,7 @@ Extraction rules:
 - Extract an Entity candidate for every clearly named main subject that fits an allowed type, even when no supported Claim property applies.
 - Emit a Claim only when its property is in the allowed list and all required IDs or values are supported by the source/input. Do not fabricate a persistent Entity ID merely to create a Claim.
 - Every Entity and Claim candidate must cite an exact non-empty quotation from one supplied Chunk. Copy quotation text verbatim: do not translate, normalize punctuation, insert ellipses, or combine non-contiguous text. Prefer the shortest quotation that still supports the candidate.
+- For every evidence item, copy chunk_id exactly from the same Chunk object that contains the quotation. Never use source_version_id as chunk_id and never invent a chunk UUID. char_start and char_end are Unicode character offsets within that one Chunk.
 - Do not return both entities and claims empty when the source contains a clearly named subject or supported factual statement.
 - Return both arrays empty only when the source truly has no reviewable encyclopedia subject or supported fact; in that case quality_score must be at most 0.3.
 - quality_score measures confidence that the extracted candidates and their evidence are correct. It does not measure prose style, document genre, or the number of candidates. A clear candidate with exact evidence should normally score at least 0.7.
