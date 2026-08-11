@@ -142,6 +142,15 @@ type AddSourceVersionResult struct {
 	Reused bool
 }
 
+// SourceVersionContent is an immutable parsed source version together with the
+// logical source metadata and all of its chunks. Import retries use this view
+// to resume after acquisition and parsing without rewriting evidence records.
+type SourceVersionContent struct {
+	Source  *Source
+	Version *SourceVersion
+	Chunks  []SourceChunk
+}
+
 // AddSourceVersion 登记来源版本与其分片（source_version + source_chunk 同事务写入）。
 // 校验链：version_hash 非空 → fetched_at 非零 → source 存在 → raw_asset 存在 →
 // chunks ordinal 从 0 连续 / 文本非空 / locator 形态。
@@ -245,6 +254,24 @@ func (s *Service) AddSourceVersion(ctx context.Context, params AddSourceVersionP
 		return nil, err
 	}
 	return result, nil
+}
+
+// LoadSourceVersionContent loads an already persisted parse artifact. It is a
+// read-only domain entry point so callers do not reach into Evidence tables.
+func (s *Service) LoadSourceVersionContent(ctx context.Context, sourceVersionID uuid.UUID) (*SourceVersionContent, error) {
+	version, err := s.repo.GetSourceVersionByID(ctx, nil, sourceVersionID)
+	if err != nil {
+		return nil, err
+	}
+	source, err := s.repo.GetSourceByID(ctx, nil, version.SourceID)
+	if err != nil {
+		return nil, err
+	}
+	chunks, err := s.repo.ListSourceChunks(ctx, nil, version.ID)
+	if err != nil {
+		return nil, err
+	}
+	return &SourceVersionContent{Source: source, Version: version, Chunks: chunks}, nil
 }
 
 // CreateCitationParams 创建证据引用的入参。

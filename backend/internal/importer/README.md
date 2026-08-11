@@ -23,6 +23,9 @@ Go Gateway 再执行最终独立校验。Sidecar 不访问数据库、对象存�
 Worker 通过 `FOR UPDATE SKIP LOCKED` 原子领取任务；每次运行有独立幂等键。优雅退出时
 停止领取新任务，并给已领取任务一个有界完成窗口。相同 SourceVersion 已有成功任务时，
 后续任务跳过抽取、匹配、Compose 与 Review，并复用原 Proposal。
+同一任务在解析成功后会把不可变 SourceVersion 作为恢复点；后续失败重试复用已通过
+安全扫描的资产、SourceVersion 与 Chunk，把获取和解析阶段记为 skipped，直接从抽取继续，
+不会重复创建来源或再次执行安全扫描。上传恢复点还必须与 Job 中固定的内容哈希一致。
 
 HTTP 产品入口同时接收受控公网 URL 与 multipart 文件上传。支持 HTML、纯文本、
 JSON、CSV、PDF、PNG 与 JPEG：公网 JSON 作为 API 快照，上传的 JSON/CSV 作为

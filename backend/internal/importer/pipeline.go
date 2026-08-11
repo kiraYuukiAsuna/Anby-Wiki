@@ -73,6 +73,10 @@ type PipelineRequest struct {
 	Provider         string
 	Model            string
 	QualityThreshold float64
+	// ExpectedContentHash binds an upload retry to the immutable content that
+	// was accepted by the API. URL jobs leave it empty because their config is
+	// already immutable within a job.
+	ExpectedContentHash string
 }
 
 type UploadRequest struct {
@@ -91,6 +95,7 @@ type PipelineResult struct {
 }
 
 func (p *Pipeline) RunUpload(ctx context.Context, request UploadRequest) (*PipelineResult, error) {
+	request.PipelineRequest.ExpectedContentHash = HashBytes(request.Content)
 	return p.run(ctx, request.PipelineRequest, func(ctx context.Context) (*AcquiredSource, error) {
 		return ValidateUpload(ctx, DefaultURLPolicy(), p.scanner, request.Filename, request.MIMEType, request.Content)
 	})
@@ -101,6 +106,7 @@ func (p *Pipeline) RunUpload(ctx context.Context, request UploadRequest) (*Pipel
 // checks before the model can observe it.
 func (p *Pipeline) RunStoredUpload(ctx context.Context, request PipelineRequest, store storage.Store,
 	storageKey, filename, mimeType, expectedHash string) (*PipelineResult, error) {
+	request.ExpectedContentHash = expectedHash
 	return p.run(ctx, request, func(ctx context.Context) (*AcquiredSource, error) {
 		if store == nil || strings.TrimSpace(storageKey) == "" || strings.TrimSpace(expectedHash) == "" {
 			return nil, ErrFetchFailed
@@ -167,65 +173,12 @@ func (p *Pipeline) run(ctx context.Context, request PipelineRequest, acquire acq
 		return nil, cause
 	}
 
-	current, err = p.jobs.StartStage(ctx, run.ID, StageFetch, nil)
+	version, sourceLabel, err := p.prepareParsedSource(ctx, request, run.ID, acquire, fail)
 	if err != nil {
 		return nil, err
-	}
-	acquired, err := acquire(ctx)
-	if err != nil {
-		return fail(current, acquisitionErrorCode(err), err)
-	}
-	inputHash := acquired.ContentHash
-	asset, err := p.evidence.StoreAsset(ctx, evidence.StoreAssetParams{WikiID: request.WikiID,
-		Name: acquired.Filename, Content: bytes.NewReader(acquired.Content), MimeType: acquired.MIMEType, ActorID: request.ActorID})
-	if err != nil {
-		return fail(current, "asset_store_failed", err)
-	}
-	sourceID := request.SourceID
-	if sourceID == nil {
-		title := strings.TrimSpace(request.Title)
-		if title == "" {
-			title = acquired.Filename
-		}
-		sourceType := inferredSourceType(acquired)
-		params := evidence.CreateSourceParams{SourceType: sourceType, AssetID: &asset.Asset.ID,
-			Title: title, ActorID: request.ActorID}
-		if acquired.URL != "" {
-			params.URL = acquired.URL
-		}
-		source, err := p.evidence.CreateSource(ctx, params)
-		if err != nil {
-			return fail(current, "source_create_failed", err)
-		}
-		sourceID = &source.ID
-	}
-	fetchOutput := asset.Revision.ContentHash
-	if err := p.jobs.CompleteStage(ctx, request.JobID, current, &fetchOutput); err != nil {
-		return nil, err
-	}
-
-	current, err = p.jobs.StartStage(ctx, run.ID, StageParse, &inputHash)
-	if err != nil {
-		return nil, err
-	}
-	chunks, err := p.parser.Parse(ctx, acquired.MIMEType, acquired.Content)
-	if err != nil {
-		// Asset and Source were deliberately persisted before parsing so a failed
-		// parser never destroys the original evidence.
-		return fail(current, parseErrorCode(err), err)
-	}
-	version, err := p.evidence.AddSourceVersion(ctx, evidence.AddSourceVersionParams{
-		SourceID: *sourceID, VersionHash: acquired.ContentHash, RawAssetID: &asset.Revision.ID,
-		FetchedAt: time.Now().UTC(), Chunks: chunks,
-	})
-	if err != nil {
-		return fail(current, "source_version_failed", err)
 	}
 	result.SourceVersionID = version.Version.ID
 	parseOutput := version.Version.ID.String()
-	if err := p.jobs.CompleteStage(ctx, request.JobID, current, &parseOutput); err != nil {
-		return nil, err
-	}
 
 	if prior, err := p.repository.FindSucceededByVersion(ctx, "source_import", version.Version.ID); err == nil {
 		for _, stageName := range []string{StageExtract, StageMatch, StageCompose, StageReview} {
@@ -253,10 +206,6 @@ func (p *Pipeline) run(ctx context.Context, request PipelineRequest, acquire acq
 	current, err = p.jobs.StartStage(ctx, run.ID, StageExtract, &parseOutput)
 	if err != nil {
 		return nil, err
-	}
-	sourceLabel := strings.TrimSpace(request.Title)
-	if sourceLabel == "" {
-		sourceLabel = acquired.Filename
 	}
 	extracted, err := p.extraction.Extract(ctx, ExtractParams{SourceVersionID: version.Version.ID,
 		SourceLabel: sourceLabel, Chunks: version.Chunks, Provider: request.Provider, Model: request.Model,
@@ -343,6 +292,131 @@ func (p *Pipeline) run(ctx context.Context, request PipelineRequest, acquire acq
 	}
 	result.Job, _ = p.jobs.DetailJob(ctx, request.JobID)
 	return result, nil
+}
+
+func (p *Pipeline) prepareParsedSource(
+	ctx context.Context,
+	request PipelineRequest,
+	runID uuid.UUID,
+	acquire acquireSource,
+	fail func(*StageRun, string, error) (*PipelineResult, error),
+) (*evidence.AddSourceVersionResult, string, error) {
+	checkpoint, err := p.loadParseCheckpoint(ctx, request)
+	if err != nil {
+		return nil, "", err
+	}
+	if checkpoint != nil {
+		fetchOutput := checkpoint.Version.VersionHash
+		fetchStage, err := p.jobs.StartStage(ctx, runID, StageFetch, nil)
+		if err != nil {
+			return nil, "", err
+		}
+		if err := p.jobs.SkipStage(ctx, request.JobID, fetchStage, &fetchOutput); err != nil {
+			return nil, "", err
+		}
+		parseStage, err := p.jobs.StartStage(ctx, runID, StageParse, &fetchOutput)
+		if err != nil {
+			return nil, "", err
+		}
+		parseOutput := checkpoint.Version.ID.String()
+		if err := p.jobs.SkipStage(ctx, request.JobID, parseStage, &parseOutput); err != nil {
+			return nil, "", err
+		}
+		return &evidence.AddSourceVersionResult{
+			Version: checkpoint.Version,
+			Chunks:  checkpoint.Chunks,
+			Reused:  true,
+		}, checkpoint.Source.Title, nil
+	}
+
+	fetchStage, err := p.jobs.StartStage(ctx, runID, StageFetch, nil)
+	if err != nil {
+		return nil, "", err
+	}
+	acquired, err := acquire(ctx)
+	if err != nil {
+		_, failed := fail(fetchStage, acquisitionErrorCode(err), err)
+		return nil, "", failed
+	}
+	inputHash := acquired.ContentHash
+	asset, err := p.evidence.StoreAsset(ctx, evidence.StoreAssetParams{WikiID: request.WikiID,
+		Name: acquired.Filename, Content: bytes.NewReader(acquired.Content), MimeType: acquired.MIMEType, ActorID: request.ActorID})
+	if err != nil {
+		_, failed := fail(fetchStage, "asset_store_failed", err)
+		return nil, "", failed
+	}
+	sourceID := request.SourceID
+	sourceLabel := strings.TrimSpace(request.Title)
+	if sourceLabel == "" {
+		sourceLabel = acquired.Filename
+	}
+	if sourceID == nil {
+		params := evidence.CreateSourceParams{SourceType: inferredSourceType(acquired), AssetID: &asset.Asset.ID,
+			Title: sourceLabel, ActorID: request.ActorID}
+		if acquired.URL != "" {
+			params.URL = acquired.URL
+		}
+		source, err := p.evidence.CreateSource(ctx, params)
+		if err != nil {
+			_, failed := fail(fetchStage, "source_create_failed", err)
+			return nil, "", failed
+		}
+		sourceID = &source.ID
+	}
+	fetchOutput := asset.Revision.ContentHash
+	if err := p.jobs.CompleteStage(ctx, request.JobID, fetchStage, &fetchOutput); err != nil {
+		return nil, "", err
+	}
+
+	parseStage, err := p.jobs.StartStage(ctx, runID, StageParse, &inputHash)
+	if err != nil {
+		return nil, "", err
+	}
+	chunks, err := p.parser.Parse(ctx, acquired.MIMEType, acquired.Content)
+	if err != nil {
+		// Asset and Source were deliberately persisted before parsing so a failed
+		// parser never destroys the original evidence.
+		_, failed := fail(parseStage, parseErrorCode(err), err)
+		return nil, "", failed
+	}
+	version, err := p.evidence.AddSourceVersion(ctx, evidence.AddSourceVersionParams{
+		SourceID: *sourceID, VersionHash: acquired.ContentHash, RawAssetID: &asset.Revision.ID,
+		FetchedAt: time.Now().UTC(), Chunks: chunks,
+	})
+	if err != nil {
+		_, failed := fail(parseStage, "source_version_failed", err)
+		return nil, "", failed
+	}
+	parseOutput := version.Version.ID.String()
+	if err := p.jobs.CompleteStage(ctx, request.JobID, parseStage, &parseOutput); err != nil {
+		return nil, "", err
+	}
+	return version, sourceLabel, nil
+}
+
+func (p *Pipeline) loadParseCheckpoint(ctx context.Context, request PipelineRequest) (*evidence.SourceVersionContent, error) {
+	resume, err := p.repository.FindLatestParseCheckpoint(ctx, request.JobID)
+	if err != nil || resume == nil {
+		return nil, err
+	}
+	checkpoint, err := p.evidence.LoadSourceVersionContent(ctx, resume.SourceVersionID)
+	if errors.Is(err, evidence.ErrSourceVersionNotFound) || errors.Is(err, evidence.ErrSourceNotFound) {
+		// A missing immutable artifact cannot be resumed safely; reacquire it.
+		return nil, nil
+	}
+	if err != nil {
+		return nil, err
+	}
+	if checkpoint.Version.VersionHash != resume.ContentHash {
+		return nil, nil
+	}
+	if expected := strings.TrimSpace(request.ExpectedContentHash); expected != "" && resume.ContentHash != expected {
+		return nil, nil
+	}
+	if request.SourceID != nil && checkpoint.Version.SourceID != *request.SourceID {
+		return nil, nil
+	}
+	return checkpoint, nil
 }
 
 func acquisitionErrorCode(err error) string {

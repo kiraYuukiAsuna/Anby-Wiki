@@ -162,6 +162,36 @@ func (r *Repository) FindSucceededByVersion(ctx context.Context, jobType string,
 	return job, err
 }
 
+type ParseCheckpoint struct {
+	SourceVersionID uuid.UUID
+	ContentHash     string
+}
+
+// FindLatestParseCheckpoint returns the newest immutable parse artifact
+// produced by this job. Successful and intentionally skipped parse stages are
+// both valid checkpoints; nil means the job has never completed parsing.
+func (r *Repository) FindLatestParseCheckpoint(ctx context.Context, jobID uuid.UUID) (*ParseCheckpoint, error) {
+	var rawVersionID string
+	var contentHash string
+	err := r.pool.QueryRow(ctx, `SELECT s.output_hash,s.input_hash FROM import_stage_run s
+		JOIN import_run r ON r.id=s.import_run_id
+		WHERE r.import_job_id=$1 AND s.stage=$2
+		  AND s.status IN ($3,$4) AND s.output_hash IS NOT NULL AND s.input_hash IS NOT NULL
+		ORDER BY r.attempt DESC,s.finished_at DESC,s.id DESC LIMIT 1`,
+		jobID, StageParse, StageSucceeded, StageSkipped).Scan(&rawVersionID, &contentHash)
+	if errors.Is(err, pgx.ErrNoRows) {
+		return nil, nil
+	}
+	if err != nil {
+		return nil, err
+	}
+	parsed, err := uuid.Parse(rawVersionID)
+	if err != nil || parsed == uuid.Nil || !validSHA256(contentHash) {
+		return nil, fmt.Errorf("%w: parse checkpoint", ErrInvalidJob)
+	}
+	return &ParseCheckpoint{SourceVersionID: parsed, ContentHash: contentHash}, nil
+}
+
 func scanRun(row pgx.Row) (*Run, error) {
 	var run Run
 	err := row.Scan(&run.ID, &run.ImportJobID, &run.Attempt, &run.IdempotencyKey,
