@@ -336,7 +336,7 @@ func (s *ExtractionService) mergeCandidateBatches(sourceVersionID uuid.UUID,
 			merged.QualityScore *= float64(qualityWeight-dropped) / float64(qualityWeight)
 		}
 	}
-	return merged, nil
+	return normalizeCandidatesForUse(merged), nil
 }
 
 func normalizedEntityKey(candidate EntityCandidate) string {

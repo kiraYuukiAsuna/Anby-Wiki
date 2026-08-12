@@ -54,11 +54,13 @@ Gateway 相同的权威 JSON Schema 预校验并纠正失败输出；OpenAI comp
 原生 strict JSON Schema。抽取固定 `temperature=0`，DeepSeek 同时关闭 thinking，避免
 推理正文污染 JSON 结果。
 
-`source-extraction-v4` Prompt 同时提供当前固定 Entity type / Claim property 词表，
+`source-extraction-v5` Prompt 同时提供当前固定 Entity type / Claim property 词表，
 明确要求模型生成临时 `candidate_id`、用 `entity_candidate_id` 表达同批 Entity 值、
-禁止猜测持久化 Entity ID，并在来源包含明确主体
-但没有受支持 Claim 时仍生成 Entity 候选。事实候选允许为空：来源随后仍会进入
-`source-import-plan-v1`，由不受固定 Entity/Claim 词表限制的页面规划判断百科价值。模型提供的
+禁止猜测持久化 Entity ID，并为 Entity 关系规定严格的 subject/value 类型和方向；
+参考文献、致谢、样板与联系信息中的孤立名称不会仅因出现而成为候选。跨批合并还会归并
+缩写/全名与 label/alias 命中的同一 Entity，并确定性拒绝方向或类型不成立的 Claim。
+事实候选允许为空：来源随后仍会进入 `source-import-plan-v2`，由不受固定 Entity/Claim
+词表限制的页面规划判断百科价值。模型提供的
 引文必须逐字存在；服务端会重新推导 rune 范围以纠正模型常见的 Unicode/字节计数偏差。
 引文重复出现时选择离模型提示位置最近的精确匹配，最近距离并列才拒绝；模糊匹配、翻译
 或改写文本始终不能成为证据。
@@ -72,7 +74,10 @@ SourceVersion 的某个 Chunk 时纠正引用；仍无法核验的证据与候�
 来源标题或上传文件名会作为主体发现上下文，但不能单独构成证据；需求、规格和技术报告
 中的候选仍必须由 Chunk 内逐字引文支持。
 
-匹配后，服务端生成并固化在 Extraction 中的 Entity `candidate_id` 直接作为新 Entity
+页面计划完成后，只有与 create/update 路由标题或来源主题直接匹配的 Entity 才进入匹配；
+有效 Claim 可以从已选主体引入其 Entity 值依赖。参考文献里的其余候选留在不可变抽取证据中，
+但不会无差别变成 Proposal 写操作。匹配后，服务端生成并固化在 Extraction 中的 Entity
+`candidate_id` 直接作为新 Entity
 的最终预分配 UUID。一次 ImportJob 只合成一个复合 Proposal：所有 `create_entity`
 Operation 排在 Claim Operation 之前，Claim 的主体和 Entity 值在 Compose 时解析为
 已存在或预分配的稳定 Entity UUID。整组 Operation 在一个治理事务中冻结，审核后再由
@@ -82,15 +87,19 @@ Operation 排在 Claim Operation 之前，Claim 的主体和 Entity 值在 Compo
 可核验 Entity/Claim 继续进入治理。新实体 canonical key 使用 `type_key:label`，避免
 不同类型的同名实体在整批应用时互相冲突。
 
-`source-import-plan-v1` 在事实抽取之后执行来源理解与页面路由。它先按标题、来源名、
+`source-import-plan-v2` 在事实抽取之后执行来源理解与页面路由。它先按标题、来源名、
 Entity/alias 召回已有 Page 及可替换 Block，再允许一份来源同时生成多个 `create`、
 `update`、`link` 与 `ignore` 路由。`link.related_to` 显式选择同批 create/update
 页面并携带原文证据，随后编译为稳定 `page_reference`，由投影生成反链；每个新写或改写
 Block 都必须绑定可逐字核验的 SourceChunk evidence；update/replace 只能引用服务端给出的
-Page/Block ID。模型输出过长、
-结构错误或局部证据失败时按 Chunk 自适应二分，已经成功的批次不重跑。
+Page/Block ID。模型输出过长、结构错误或局部证据失败时按 Chunk 自适应二分，已经成功的
+批次不重跑；独立窗口并行规划后，再由 `source-import-plan-consolidate-v1` 在同一证据集合上
+做全局收敛，消除重复导语、空标题和参考文献堆叠。收敛调用失败时回退到已验证窗口，并经过
+确定性的段落去重、无内容标题与非正文区段清理，不会因可选优化丢失整次导入。
 
-Composer 把页面路由与 Entity/Claim 决策合成为一个以 Wiki 为目标的复合 Proposal：
+Composer 把页面路由与 Entity/Claim 决策合成为一个以 Wiki 为目标的复合 Proposal；正文中
+实际采用的 Entity 会编译为稳定 `entity_reference`，标题证据继续保留在 Operation 上但不
+渲染多余的行内 Citation。创建页预分配 Page ID，
 创建页预分配 Page ID，更新页带 Revision 与 Block hash 基线，审核时可按页面查看全部
 Operation。Apply 先做跨页面 Revision/Block 与 Claim 冲突检测，再在单一事务中创建/更新
 多个页面和知识对象；任一步失败整批回滚。成功响应返回全部 `revision_ids`，ChangeBatch

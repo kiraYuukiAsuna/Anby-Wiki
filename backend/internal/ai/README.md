@@ -13,9 +13,11 @@ Gateway 使用同一份权威 JSON Schema 严格校验；JSON Object 抽取固�
 408 和 5xx 标记为可重试，其他 4xx 不重试。新增供应商时实现窄 `Provider` 接口，
 供应商 DTO 必须留在本包。
 
-Worker 首次启用来源导入时，幂等登记当前 `source-extraction-v4` Prompt；该版本明确区分
+Worker 首次启用来源导入时，幂等登记当前 `source-extraction-v5` Prompt；该版本明确区分
 临时候选 UUID 与持久化 Entity ID，并提供运行时支持的 Entity type / Claim property
-词表。输出 Schema 继续直接复用 `importer` 内嵌的权威 Extraction v1 副本。Prompt key
+词表与关系方向约束。页面规划使用 `source-import-plan-v2`，多窗口结果另经
+`source-import-plan-consolidate-v1` 收敛；两者输出都复用 ImportPlan v1 权威 Schema。
+Extraction 输出 Schema 继续直接复用 `importer` 内嵌的权威副本。Prompt key
 升级使用新 key，避免覆盖或静默改写运维已激活的旧 Prompt。
 
 Semantic Kernel 边界在 `json_object` 模式下会把权威 JSON Schema 一并放入系统消息，

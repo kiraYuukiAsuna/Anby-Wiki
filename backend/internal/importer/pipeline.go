@@ -237,16 +237,17 @@ func (p *Pipeline) run(ctx context.Context, request PipelineRequest, acquire acq
 	if err := p.jobs.CompleteStage(ctx, request.JobID, current, &planOutput); err != nil {
 		return nil, err
 	}
+	selectedCandidates := selectCandidatesForPlan(extracted.Candidates, planned.Plan)
 
 	current, err = p.jobs.StartStage(ctx, run.ID, StageMatch, &planOutput)
 	if err != nil {
 		return nil, err
 	}
-	resolutions, err := p.matcher.Match(ctx, request.WikiID, request.PageID, extracted.Candidates.Entities)
+	resolutions, err := p.matcher.Match(ctx, request.WikiID, request.PageID, selectedCandidates.Entities)
 	if err != nil {
 		return fail(current, "entity_match_failed", err)
 	}
-	decisions, err := p.classifier.Classify(ctx, extracted.Candidates.Claims, resolutions)
+	decisions, err := p.classifier.Classify(ctx, selectedCandidates.Claims, resolutions)
 	if err != nil {
 		return fail(current, "claim_classification_failed", err)
 	}
@@ -264,7 +265,7 @@ func (p *Pipeline) run(ctx context.Context, request PipelineRequest, acquire acq
 		return nil, err
 	}
 	composed, err := p.composer.Compose(ctx, ComposeParams{ImportJobID: request.JobID, WikiID: request.WikiID,
-		SourceVersionID: version.Version.ID, ActorID: request.ActorID, Candidates: extracted.Candidates,
+		SourceVersionID: version.Version.ID, ActorID: request.ActorID, Candidates: selectedCandidates,
 		Plan: planned.Plan, Resolutions: resolutions, Decisions: decisions})
 	if err != nil {
 		return fail(current, "proposal_compose_failed", err)

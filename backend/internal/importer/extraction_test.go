@@ -323,7 +323,7 @@ func TestMergeCandidateBatchesDeduplicatesAndRemapsClaimSubject(t *testing.T) {
 		return extractionBatchResult{Candidates: &Candidates{
 			SchemaVersion: 1, SourceVersionID: sourceVersionID, QualityScore: 0.8,
 			Entities: []EntityCandidate{{
-				CandidateID: entityID, TypeKey: "concept", Label: "Alpha", Aliases: []string{},
+				CandidateID: entityID, TypeKey: "work", Label: "Alpha", Aliases: []string{},
 				Confidence: 0.8, Evidence: []CandidateEvidence{{
 					ChunkID: chunkID, Quotation: "Alpha", CharStart: 0, CharEnd: 5,
 				}},
@@ -507,6 +507,49 @@ func TestNewEntityOperationBoundsLongCanonicalKey(t *testing.T) {
 	}
 	if len([]rune(payload.CanonicalKey)) > 255 || !strings.HasPrefix(payload.CanonicalKey, "concept:") {
 		t.Fatalf("unexpected bounded canonical key %q", payload.CanonicalKey)
+	}
+}
+
+func TestNormalizeCandidatesDeduplicatesNamesAndRejectsWrongRelationDirection(t *testing.T) {
+	shortPersonID, fullPersonID := uuid.New(), uuid.New()
+	workID, organizationID := uuid.New(), uuid.New()
+	correctClaimID, reversedClaimID, affiliationClaimID := uuid.New(), uuid.New(), uuid.New()
+	value := func(id uuid.UUID) json.RawMessage {
+		raw, _ := json.Marshal(map[string]uuid.UUID{"entity_candidate_id": id})
+		return raw
+	}
+	candidates := &Candidates{SchemaVersion: 1, SourceVersionID: uuid.New(), QualityScore: 0.9,
+		Entities: []EntityCandidate{
+			{CandidateID: shortPersonID, TypeKey: "person", Label: "M. Jones", Aliases: []string{}},
+			{CandidateID: fullPersonID, TypeKey: "person", Label: "Michael B. Jones", Aliases: []string{}},
+			{CandidateID: workID, TypeKey: "work", Label: "RFC 7523", Aliases: []string{}},
+			{CandidateID: organizationID, TypeKey: "organization", Label: "Microsoft", Aliases: []string{}},
+		},
+		Claims: []ClaimCandidate{
+			{CandidateID: correctClaimID, Subject: CandidateSubject{CandidateID: &workID}, PropertyKey: "author", Value: value(fullPersonID)},
+			{CandidateID: reversedClaimID, Subject: CandidateSubject{CandidateID: &fullPersonID}, PropertyKey: "author", Value: value(workID)},
+			{CandidateID: affiliationClaimID, Subject: CandidateSubject{CandidateID: &fullPersonID}, PropertyKey: "located_in", Value: value(organizationID)},
+		}}
+
+	normalized := normalizeCandidatesForUse(candidates)
+	if len(normalized.Entities) != 3 || len(normalized.Claims) != 1 {
+		t.Fatalf("unexpected normalized candidates: entities=%#v claims=%#v", normalized.Entities, normalized.Claims)
+	}
+	person := normalized.Entities[0]
+	if person.CandidateID != shortPersonID || person.Label != "Michael B. Jones" || len(person.Aliases) != 1 || person.Aliases[0] != "M. Jones" {
+		t.Fatalf("person identity was not consolidated: %#v", person)
+	}
+	claim := normalized.Claims[0]
+	valueID, referenced, valid := claimValueCandidateReference(claim.Value)
+	if claim.Subject.CandidateID == nil || *claim.Subject.CandidateID != workID || !referenced || !valid || valueID != shortPersonID {
+		t.Fatalf("claim dependency was not remapped: %#v value=%s", claim, valueID)
+	}
+
+	plan := &ImportPlan{Profile: SourceProfile{Subjects: []SourceSubject{{Title: "RFC 7523", Kind: "work"}}},
+		Routes: []PageRoute{{Action: RouteCreate, Title: "RFC 7523"}}}
+	selected := selectCandidatesForPlan(normalized, plan)
+	if len(selected.Entities) != 2 || len(selected.Claims) != 1 {
+		t.Fatalf("plan relevance filter retained unrelated graph data: %#v", selected)
 	}
 }
 

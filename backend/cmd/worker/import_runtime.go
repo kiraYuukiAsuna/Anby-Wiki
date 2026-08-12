@@ -38,11 +38,14 @@ Allowed Claim property_key values and required value member:
 
 Extraction rules:
 - Requirements, specifications, technical notes, and reports are valid sources. Their prose style is not a reason to suppress clearly named people, organizations, products, software, places, works, or concepts.
+- The supplied Chunks may be only one window of a larger source. Bibliography/reference-list entries, acknowledgements, boilerplate, legal notices, and author contact blocks are not Entity candidates merely because they contain names. Extract a referenced work or person only when this window discusses it as a subject or it is required as the value of a valid Claim about a main subject.
 - Use the source label only as discovery context. A candidate still requires an exact quotation from a supplied Chunk; never create a candidate supported only by the source label.
 - Before returning empty arrays, scan every Chunk for clearly named subjects that fit the allowed Entity types.
 - Extract an Entity candidate for every clearly named main subject that fits an allowed type, even when no supported Claim property applies.
 - Whenever a supported Claim has an Entity value (for example an author, developer, containing place, work, or class), extract that value as an Entity candidate in the same response and reference its candidate_id. Do not emit an Entity-valued Claim without a resolvable value candidate.
 - Emit a Claim only when its property is in the allowed list and all required IDs or values are supported by the source/input. Do not fabricate a persistent Entity ID merely to create a Claim.
+- Relation direction is strict: author uses a work as subject and a person/organization as value; developer uses software/product as subject; manufacturer uses product as subject and organization as value; voice_actor uses character as subject and person as value; located_in requires a place value and never means employer or affiliation; part_of never means that a person works for an organization; instance_of points from the described subject to a class/concept. Do not reverse a relation to fit the available property list.
+- Nearby names are not enough evidence for a Claim. The exact quotation must express the property relation in the stated direction.
 - Every Entity and Claim candidate must cite an exact non-empty quotation from one supplied Chunk. Copy quotation text verbatim: do not translate, normalize punctuation, insert ellipses, or combine non-contiguous text. Prefer the shortest quotation that still supports the candidate.
 - For every evidence item, copy chunk_id exactly from the same Chunk object that contains the quotation. Never use source_version_id as chunk_id and never invent a chunk UUID. char_start and char_end are Unicode character offsets within that one Chunk.
 - Do not return both entities and claims empty when the source contains a clearly named subject or supported factual statement.
@@ -113,6 +116,11 @@ func assembleImportRunner(ctx context.Context, pool *pgxpool.Pool, cfg config.Co
 	}
 	if _, err := registry.EnsureActive(ctx, importer.ImportPlanPromptKey, 1, importPlanPromptSystem,
 		importPlanPromptUser, importer.ImportPlanSchemaJSON()); err != nil {
+		return nil, err
+	}
+	if _, err := registry.EnsureActive(ctx, importer.ImportPlanConsolidatePromptKey, 1,
+		importPlanConsolidatePromptSystem, importPlanConsolidatePromptUser,
+		importer.ImportPlanSchemaJSON()); err != nil {
 		return nil, err
 	}
 	gateway := ai.NewGateway(aiRepo, aiRepo, ids, map[string]ai.Provider{

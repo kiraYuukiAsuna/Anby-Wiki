@@ -21,7 +21,7 @@ import (
 
 const (
 	ExtractionSchemaURL = "https://anby.wiki/schemas/extraction/v1/candidates.schema.json"
-	ExtractionPromptKey = "source-extraction-v4"
+	ExtractionPromptKey = "source-extraction-v5"
 )
 
 //go:embed schema/candidates.schema.json
@@ -132,7 +132,11 @@ func (s *ExtractionService) Extract(ctx context.Context, params ExtractParams) (
 		if err := json.Unmarshal(existing.CandidatesJSON, &candidates); err != nil {
 			return nil, err
 		}
-		return &ExtractResult{Extraction: existing, Candidates: &candidates, Reused: true}, nil
+		// Prompt improvements cannot rewrite an immutable historical extraction.
+		// Re-run deterministic identity and relation guards on every read so a
+		// new ImportJob does not inherit duplicate or directionally invalid graph
+		// candidates from an older prompt version.
+		return &ExtractResult{Extraction: existing, Candidates: normalizeCandidatesForUse(&candidates), Reused: true}, nil
 	} else if !errors.Is(err, ErrExtractionNotFound) {
 		return nil, err
 	}
@@ -144,7 +148,7 @@ func (s *ExtractionService) Extract(ctx context.Context, params ExtractParams) (
 	if err != nil {
 		return nil, err
 	}
-	candidates := generated.Candidates
+	candidates := normalizeCandidatesForUse(generated.Candidates)
 	if DetectPromptInjection(texts) {
 		candidates.PromptInjectionDetected = true
 	}

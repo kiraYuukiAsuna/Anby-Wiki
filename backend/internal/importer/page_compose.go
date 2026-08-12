@@ -23,12 +23,13 @@ func (c *ProposalComposer) buildPageOperations(
 	if err != nil {
 		return nil, err
 	}
+	entityReferences := entityReferencesForCompose(params)
 	operations := make([]governance.OperationV1, 0)
 	for _, route := range params.Plan.Routes {
 		switch route.Action {
 		case RouteCreate:
 			op, err := c.buildCreatePageOperation(
-				ctx, params, namespaceID, route, relatedPageTargets(params.Plan, route.Title),
+				ctx, params, namespaceID, route, relatedPageTargets(params.Plan, route.Title), entityReferences,
 			)
 			if err != nil {
 				return nil, err
@@ -36,7 +37,7 @@ func (c *ProposalComposer) buildPageOperations(
 			operations = append(operations, op)
 		case RouteUpdate:
 			pageOps, err := c.buildUpdatePageOperations(
-				ctx, params, route, relatedPageTargets(params.Plan, route.Title),
+				ctx, params, route, relatedPageTargets(params.Plan, route.Title), entityReferences,
 			)
 			if err != nil {
 				return nil, err
@@ -58,6 +59,7 @@ func (c *ProposalComposer) buildCreatePageOperation(
 	namespaceID uuid.UUID,
 	route PageRoute,
 	linkTargets []relatedPageTarget,
+	entityReferences []entityReferenceTarget,
 ) (governance.OperationV1, error) {
 	pageID, err := c.ids.New()
 	if err != nil {
@@ -71,7 +73,7 @@ func (c *ProposalComposer) buildCreatePageOperation(
 		if err != nil {
 			return governance.OperationV1{}, err
 		}
-		block, err := c.compilePlannedBlock(planned, citationIDs)
+		block, err := c.compilePlannedBlockWithReferences(planned, citationIDs, entityReferences)
 		if err != nil {
 			return governance.OperationV1{}, err
 		}
@@ -133,6 +135,7 @@ func (c *ProposalComposer) buildUpdatePageOperations(
 	params ComposeParams,
 	route PageRoute,
 	linkTargets []relatedPageTarget,
+	entityReferences []entityReferenceTarget,
 ) ([]governance.OperationV1, error) {
 	if route.PageID == nil || *route.PageID == uuid.Nil {
 		return nil, ErrInvalidJob
@@ -162,7 +165,7 @@ func (c *ProposalComposer) buildUpdatePageOperations(
 		if err != nil {
 			return nil, err
 		}
-		block, err := c.compilePlannedBlock(planned, citationIDs)
+		block, err := c.compilePlannedBlockWithReferences(planned, citationIDs, entityReferences)
 		if err != nil {
 			return nil, err
 		}
@@ -390,13 +393,21 @@ func (c *ProposalComposer) compileRelatedPagesBlock(
 }
 
 func (c *ProposalComposer) compilePlannedBlock(planned PlannedBlock, citationIDs []uuid.UUID) (*ast.Block, error) {
+	return c.compilePlannedBlockWithReferences(planned, citationIDs, nil)
+}
+
+func (c *ProposalComposer) compilePlannedBlockWithReferences(planned PlannedBlock, citationIDs []uuid.UUID,
+	entityReferences []entityReferenceTarget) (*ast.Block, error) {
 	blockID, err := c.ids.NewString()
 	if err != nil {
 		return nil, err
 	}
 	switch planned.Type {
 	case string(ast.BlockHeading):
-		block, err := c.textBlock(blockID, ast.BlockHeading, strings.TrimSpace(planned.Text), citationIDs)
+		// Heading evidence remains on the enclosing Proposal operation, but only
+		// factual prose renders inline citation markers. This avoids citation
+		// noise such as a superscript after every section title.
+		block, err := c.textBlock(blockID, ast.BlockHeading, strings.TrimSpace(planned.Text), nil, nil)
 		if err != nil {
 			return nil, err
 		}
@@ -407,14 +418,14 @@ func (c *ProposalComposer) compilePlannedBlock(planned PlannedBlock, citationIDs
 		return block, nil
 
 	case string(ast.BlockParagraph):
-		return c.textBlock(blockID, ast.BlockParagraph, strings.TrimSpace(planned.Text), citationIDs)
+		return c.textBlock(blockID, ast.BlockParagraph, strings.TrimSpace(planned.Text), citationIDs, entityReferences)
 
 	case string(ast.BlockQuote):
 		paragraphID, err := c.ids.NewString()
 		if err != nil {
 			return nil, err
 		}
-		paragraph, err := c.textBlock(paragraphID, ast.BlockParagraph, strings.TrimSpace(planned.Text), citationIDs)
+		paragraph, err := c.textBlock(paragraphID, ast.BlockParagraph, strings.TrimSpace(planned.Text), citationIDs, entityReferences)
 		if err != nil {
 			return nil, err
 		}
@@ -439,7 +450,7 @@ func (c *ProposalComposer) compilePlannedBlock(planned PlannedBlock, citationIDs
 			if index == len(planned.Items)-1 {
 				itemCitations = citationIDs
 			}
-			paragraph, err := c.textBlock(paragraphID, ast.BlockParagraph, strings.TrimSpace(rawItem), itemCitations)
+			paragraph, err := c.textBlock(paragraphID, ast.BlockParagraph, strings.TrimSpace(rawItem), itemCitations, entityReferences)
 			if err != nil {
 				return nil, err
 			}
@@ -461,8 +472,12 @@ func (c *ProposalComposer) textBlock(
 	blockType ast.BlockType,
 	text string,
 	citationIDs []uuid.UUID,
+	entityReferences []entityReferenceTarget,
 ) (*ast.Block, error) {
-	nodes := []*ast.InlineNode{{Type: ast.InlineText, Text: text}}
+	nodes, err := inlineNodesWithEntityReferences(text, entityReferences)
+	if err != nil {
+		return nil, err
+	}
 	for _, citationID := range citationIDs {
 		node, err := ast.NewCitationRefNode(citationID.String(), "")
 		if err != nil {

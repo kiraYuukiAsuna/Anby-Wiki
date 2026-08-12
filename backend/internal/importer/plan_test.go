@@ -1,16 +1,70 @@
 package importer
 
 import (
+	"context"
 	"encoding/json"
 	"errors"
+	"strings"
+	"sync"
 	"testing"
 
 	"github.com/google/uuid"
 
+	"github.com/anby/wiki/backend/internal/ai"
 	"github.com/anby/wiki/backend/internal/ast"
 	"github.com/anby/wiki/backend/internal/evidence"
 	"github.com/anby/wiki/backend/internal/platform/id"
 )
+
+type consolidatingPlanGenerator struct {
+	mu               sync.Mutex
+	mapCalls         int
+	consolidateCalls int
+}
+
+func (g *consolidatingPlanGenerator) Generate(_ context.Context, request ai.Request) (*ai.Result, error) {
+	sourceVersionID, _ := uuid.Parse(request.Variables["source_version_id"].(string))
+	plan := &ImportPlan{SchemaVersion: 1, SourceVersionID: sourceVersionID,
+		Profile:      SourceProfile{Title: "Source", Summary: "Summary", Language: "en", Useful: true, Subjects: []SourceSubject{}},
+		QualityScore: 0.9, PromptInjectionDetected: false}
+	if request.PromptKey == ImportPlanConsolidatePromptKey {
+		g.mu.Lock()
+		g.consolidateCalls++
+		g.mu.Unlock()
+		var draft ImportPlan
+		if err := json.Unmarshal([]byte(request.Variables["draft_plan_json"].(string)), &draft); err != nil {
+			return nil, err
+		}
+		evidenceItem := draft.Routes[0].Blocks[0].Evidence
+		plan.Routes = []PageRoute{{Action: RouteCreate, Title: "Alpha", Reason: "consolidated", Confidence: 0.9,
+			RelatedTo: []string{}, Evidence: []CandidateEvidence{}, Blocks: []PlannedBlock{{
+				Type: string(ast.BlockParagraph), Mode: BlockAppend, Text: "A coherent article.", Evidence: evidenceItem,
+			}}}}
+	} else {
+		g.mu.Lock()
+		g.mapCalls++
+		g.mu.Unlock()
+		var chunks []struct {
+			ChunkID uuid.UUID `json:"chunk_id"`
+			Text    string    `json:"text"`
+		}
+		if err := json.Unmarshal([]byte(request.Variables["chunks_json"].(string)), &chunks); err != nil {
+			return nil, err
+		}
+		item := CandidateEvidence{ChunkID: chunks[0].ChunkID, Quotation: chunks[0].Text,
+			CharStart: 0, CharEnd: len([]rune(chunks[0].Text))}
+		plan.Routes = []PageRoute{{Action: RouteCreate, Title: "Alpha", Reason: "window", Confidence: 0.8,
+			RelatedTo: []string{}, Evidence: []CandidateEvidence{}, Blocks: []PlannedBlock{{
+				Type: string(ast.BlockParagraph), Mode: BlockAppend, Text: chunks[0].Text, Evidence: []CandidateEvidence{item},
+			}}}}
+	}
+	normalizeImportPlanCollections(plan)
+	raw, err := json.Marshal(plan)
+	if err != nil {
+		return nil, err
+	}
+	return &ai.Result{JSON: raw, PromptKey: request.PromptKey, PromptVersion: 1, Model: "test"}, nil
+}
 
 func TestValidateImportPlanRepairsEvidenceAndRejectsInventedTargets(t *testing.T) {
 	sourceVersionID, chunkID := uuid.New(), uuid.New()
@@ -67,6 +121,37 @@ func TestValidateImportPlanRepairsEvidenceAndRejectsInventedTargets(t *testing.T
 	}
 }
 
+func TestGeneratePlanConsolidatesParallelSourceWindows(t *testing.T) {
+	sourceVersionID := uuid.New()
+	chunks := make([]evidence.SourceChunk, 7)
+	for index := range chunks {
+		text := "Evidence window " + string(rune('A'+index)) + "."
+		chunks[index] = evidence.SourceChunk{ID: uuid.New(), SourceVersionID: sourceVersionID,
+			Ordinal: index, TextContent: text, LocatorJSON: json.RawMessage(`{}`)}
+	}
+	generator := &consolidatingPlanGenerator{}
+	planner := &PagePlanner{ai: generator}
+	jobID, runID := uuid.New(), uuid.New()
+	generated, err := planner.generatePlan(context.Background(), PlanParams{
+		SourceVersionID: sourceVersionID, RouteMode: RouteModeAuto, Chunks: chunks,
+		Provider: "test", Model: "test", MaxInputTokens: DefaultModelMaxInputTokens,
+		ImportJobID: &jobID, ImportRunID: &runID,
+	}, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	generator.mu.Lock()
+	mapCalls, consolidateCalls := generator.mapCalls, generator.consolidateCalls
+	generator.mu.Unlock()
+	if mapCalls != 2 || consolidateCalls != 1 {
+		t.Fatalf("map calls=%d consolidate calls=%d, want 2/1", mapCalls, consolidateCalls)
+	}
+	if generated.PromptKey != ImportPlanConsolidatePromptKey || len(generated.Plan.Routes) != 1 ||
+		len(generated.Plan.Routes[0].Blocks) != 1 || generated.Plan.Routes[0].Blocks[0].Text != "A coherent article." {
+		t.Fatalf("unexpected consolidated plan: %#v", generated)
+	}
+}
+
 func TestValidateImportPlanForceCreateRequiresExactTitle(t *testing.T) {
 	sourceVersionID, chunkID := uuid.New(), uuid.New()
 	chunks := []evidence.SourceChunk{{ID: chunkID, SourceVersionID: sourceVersionID, TextContent: "Evidence text", LocatorJSON: json.RawMessage(`{}`)}}
@@ -96,7 +181,7 @@ func TestMergePlannedBlocksKeepsOnlyOneReplacementPerTarget(t *testing.T) {
 	}
 }
 
-func TestCompilePlannedHeadingCarriesCitation(t *testing.T) {
+func TestCompilePlannedHeadingKeepsEvidenceOutOfVisibleTitle(t *testing.T) {
 	composer := &ProposalComposer{ids: id.NewGenerator()}
 	citationID := uuid.New()
 	block, err := composer.compilePlannedBlock(PlannedBlock{
@@ -109,8 +194,79 @@ func TestCompilePlannedHeadingCarriesCitation(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if block.Level != 2 || len(nodes) != 2 || nodes[1].Type != ast.InlineCitationReference || nodes[1].CitationID != citationID.String() {
+	if block.Level != 2 || len(nodes) != 1 || nodes[0].Type != ast.InlineText || nodes[0].Text != "Verified heading" {
 		t.Fatalf("unexpected heading block: %#v nodes=%#v", block, nodes)
+	}
+}
+
+func TestRefineImportPlanRemovesBatchStitchingArtifacts(t *testing.T) {
+	if canonicalHeadingTopic("Authorization Grant Processing") == "authors" {
+		t.Fatal("authorization heading must not be classified as an author section")
+	}
+	evidenceItem := []CandidateEvidence{{ChunkID: uuid.New(), Quotation: "evidence", CharStart: 0, CharEnd: 8}}
+	plan := &ImportPlan{Profile: SourceProfile{Subjects: []SourceSubject{
+		{Title: "M. Jones", Kind: "person"},
+		{Title: "Michael B. Jones", Kind: "person"},
+	}}, Routes: []PageRoute{{Action: RouteCreate, Title: "RFC 7523", Blocks: []PlannedBlock{
+		{Type: string(ast.BlockHeading), Mode: BlockAppend, Text: "Overview", Level: 1, Evidence: evidenceItem},
+		{Type: string(ast.BlockParagraph), Mode: BlockAppend, Text: "RFC 7523 defines JWT use. It is an OAuth profile.", Evidence: evidenceItem},
+		{Type: string(ast.BlockHeading), Mode: BlockAppend, Text: "Empty section", Level: 2, Evidence: evidenceItem},
+		{Type: string(ast.BlockHeading), Mode: BlockAppend, Text: "Details", Level: 2, Evidence: evidenceItem},
+		{Type: string(ast.BlockParagraph), Mode: BlockAppend, Text: "RFC 7523 defines JWT use. It specifies token processing.", Evidence: evidenceItem},
+		{Type: string(ast.BlockHeading), Mode: BlockAppend, Text: "References", Level: 2, Evidence: evidenceItem},
+		{Type: string(ast.BlockParagraph), Mode: BlockAppend, Text: "A bibliography dump.", Evidence: evidenceItem},
+		{Type: string(ast.BlockHeading), Mode: BlockAppend, Text: "Authors and Publication", Level: 2, Evidence: evidenceItem},
+		{Type: string(ast.BlockParagraph), Mode: BlockAppend, Text: "Michael B. Jones authored the work.", Evidence: evidenceItem},
+		{Type: string(ast.BlockHeading), Mode: BlockAppend, Text: "Authors", Level: 2, Evidence: evidenceItem},
+		{Type: string(ast.BlockParagraph), Mode: BlockAppend, Text: "Michael B. Jones authored the work.", Evidence: evidenceItem},
+	}}}}
+
+	refineImportPlan(plan)
+	if len(plan.Profile.Subjects) != 1 || plan.Profile.Subjects[0].Title != "Michael B. Jones" {
+		t.Fatalf("subjects were not consolidated: %#v", plan.Profile.Subjects)
+	}
+	blocks := plan.Routes[0].Blocks
+	if len(blocks) != 5 {
+		t.Fatalf("blocks=%d, want 5: %#v", len(blocks), blocks)
+	}
+	if blocks[0].Type != string(ast.BlockParagraph) || strings.Contains(blocks[0].Text, "Overview") {
+		t.Fatalf("new page did not retain a lead paragraph: %#v", blocks[0])
+	}
+	combined := ""
+	for _, block := range blocks {
+		combined += "\n" + block.Text
+	}
+	for _, unwanted := range []string{"Empty section", "References", "bibliography dump", "\nAuthors\n"} {
+		if strings.Contains(combined, unwanted) {
+			t.Fatalf("refinement retained %q in %q", unwanted, combined)
+		}
+	}
+	if strings.Count(combined, "RFC 7523 defines JWT use.") != 1 ||
+		strings.Count(combined, "Michael B. Jones authored the work.") != 1 {
+		t.Fatalf("duplicate sentences survived: %q", combined)
+	}
+}
+
+func TestCompilePlannedBlockLinksSelectedEntities(t *testing.T) {
+	composer := &ProposalComposer{ids: id.NewGenerator()}
+	workID, personID := uuid.New(), uuid.New()
+	block, err := composer.compilePlannedBlockWithReferences(PlannedBlock{
+		Type: string(ast.BlockParagraph), Mode: BlockAppend,
+		Text: "RFC 7523 was authored by Michael B. Jones.",
+	}, nil, []entityReferenceTarget{
+		{EntityID: workID, Label: "RFC 7523"},
+		{EntityID: personID, Label: "Michael B. Jones"},
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	nodes, err := block.InlineContent()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(nodes) != 4 || nodes[0].Type != ast.InlineEntityReference || nodes[0].EntityID != workID.String() ||
+		nodes[2].Type != ast.InlineEntityReference || nodes[2].EntityID != personID.String() {
+		t.Fatalf("unexpected linked prose: %#v", nodes)
 	}
 }
 

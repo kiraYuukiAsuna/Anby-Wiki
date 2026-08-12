@@ -9,6 +9,7 @@ import (
 	"fmt"
 	"sort"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/google/uuid"
@@ -23,7 +24,12 @@ import (
 
 const (
 	ImportPlanSchemaURL = "https://anby.wiki/schemas/import-plan/v1/plan.schema.json"
-	ImportPlanPromptKey = "source-import-plan-v1"
+	ImportPlanPromptKey = "source-import-plan-v2"
+	// ImportPlanConsolidatePromptKey reduces independently grounded source
+	// windows into one coherent article plan. It uses the same output contract
+	// but receives only validated draft material, never raw source instructions.
+	ImportPlanConsolidatePromptKey = "source-import-plan-consolidate-v1"
+	planBatchConcurrency           = 3
 
 	RouteCreate = "create"
 	RouteUpdate = "update"
@@ -217,6 +223,7 @@ func (p *PagePlanner) Plan(ctx context.Context, params PlanParams) (*PlanResult,
 	p.removeNoOpUpdates(plan, candidatePages)
 	plan.Routes = mergePageRoutes(plan.Routes)
 	plan.Routes = normalizePlanLinks(plan.Routes)
+	refineImportPlan(plan)
 	if plan.Profile.Useful && actionablePageRouteCount(plan.Routes) == 0 {
 		return nil, ErrNoPagePlan
 	}
@@ -260,26 +267,133 @@ type generatedImportPlan struct {
 
 func (p *PagePlanner) generatePlan(ctx context.Context, params PlanParams, candidates []PageCandidate) (*generatedImportPlan, error) {
 	batches := batchSourceChunks(params.Chunks, params.MaxInputTokens)
+	type planBatchOutcome struct {
+		plans  []*ImportPlan
+		result *ai.Result
+		err    error
+	}
+	outcomes := make([]planBatchOutcome, len(batches))
+	batchCtx, cancel := context.WithCancel(ctx)
+	defer cancel()
+	limit := make(chan struct{}, planBatchConcurrency)
+	var wait sync.WaitGroup
+	for index := range batches {
+		wait.Add(1)
+		go func(index int) {
+			defer wait.Done()
+			select {
+			case limit <- struct{}{}:
+				defer func() { <-limit }()
+			case <-batchCtx.Done():
+				outcomes[index].err = batchCtx.Err()
+				return
+			}
+			outcomes[index].plans, outcomes[index].result, outcomes[index].err =
+				p.generatePlanBatch(batchCtx, params, candidates, batches[index])
+			if outcomes[index].err != nil {
+				cancel()
+			}
+		}(index)
+	}
+	wait.Wait()
+
 	parts := make([]*ImportPlan, 0, len(batches))
 	var first *ai.Result
-	for _, batch := range batches {
-		batchPlans, result, err := p.generatePlanBatch(ctx, params, candidates, batch)
-		if err != nil {
-			return nil, err
+	var firstError error
+	for index := range outcomes {
+		outcome := outcomes[index]
+		if outcome.err != nil {
+			if firstError == nil && !errors.Is(outcome.err, context.Canceled) {
+				firstError = outcome.err
+			}
+			continue
+		}
+		if outcome.result == nil {
+			if firstError == nil {
+				firstError = fmt.Errorf("%w: empty import plan batch", ai.ErrInvalidOutput)
+			}
+			continue
 		}
 		if first == nil {
-			first = result
-		} else if result.PromptKey != first.PromptKey || result.PromptVersion != first.PromptVersion || result.Model != first.Model {
+			first = outcome.result
+		} else if outcome.result.PromptKey != first.PromptKey || outcome.result.PromptVersion != first.PromptVersion ||
+			outcome.result.Model != first.Model {
 			return nil, fmt.Errorf("%w: inconsistent import plan batch metadata", ai.ErrInvalidOutput)
 		}
-		parts = append(parts, batchPlans...)
+		parts = append(parts, outcome.plans...)
+	}
+	if firstError != nil {
+		return nil, firstError
+	}
+	if err := ctx.Err(); err != nil {
+		return nil, err
 	}
 	if first == nil || len(parts) == 0 {
 		return nil, fmt.Errorf("%w: no import plan result", ai.ErrInvalidOutput)
 	}
 	merged := mergeImportPlanParts(params.SourceVersionID, parts)
+	refineImportPlan(merged)
+	if len(parts) > 1 {
+		consolidated, result, err := p.consolidatePlan(ctx, params, candidates, merged)
+		if err == nil && consolidated != nil && result != nil {
+			merged = consolidated
+			first = result
+		} else if ctx.Err() != nil {
+			return nil, ctx.Err()
+		}
+		// A reducer timeout or invalid structure must not throw away already
+		// validated map results. The deterministic refinement above remains a
+		// safe, evidence-grounded fallback.
+	}
+	refineImportPlan(merged)
 	return &generatedImportPlan{Plan: merged, PromptKey: first.PromptKey,
 		PromptVersion: first.PromptVersion, Model: first.Model}, nil
+}
+
+func (p *PagePlanner) consolidatePlan(ctx context.Context, params PlanParams, candidates []PageCandidate,
+	draft *ImportPlan) (*ImportPlan, *ai.Result, error) {
+	draftJSON, err := json.Marshal(draft)
+	if err != nil {
+		return nil, nil, err
+	}
+	maxInputTokens := params.MaxInputTokens
+	if maxInputTokens <= 0 {
+		maxInputTokens = DefaultModelMaxInputTokens
+	}
+	// The reducer has prompt/schema overhead and must still leave room for a
+	// complete rewritten plan. A conservative byte/token estimate makes the
+	// optional pass self-disabling for unusually large plans.
+	budget := maxInputTokens - max(extractionInputMinReserve, maxInputTokens/5)
+	if (len(draftJSON)+2)/3+4096 > budget {
+		return nil, nil, nil
+	}
+	candidatesJSON, err := json.Marshal(candidates)
+	if err != nil {
+		return nil, nil, err
+	}
+	result, err := p.ai.Generate(ctx, ai.Request{
+		Provider: params.Provider, Model: params.Model, PromptKey: ImportPlanConsolidatePromptKey,
+		Variables: map[string]any{
+			"source_version_id": params.SourceVersionID.String(),
+			"source_label":      strings.TrimSpace(params.SourceLabel),
+			"preferred_title":   strings.TrimSpace(params.PreferredTitle),
+			"instructions":      strings.TrimSpace(params.Instructions),
+			"route_mode":        params.RouteMode,
+			"candidate_pages":   string(candidatesJSON),
+			"draft_plan_json":   string(draftJSON),
+		},
+		ImportJobID: params.ImportJobID, ImportRunID: params.ImportRunID,
+	})
+	if err != nil {
+		return nil, nil, err
+	}
+	plan, _, err := ValidateImportPlan(result.JSON, params.SourceVersionID, params.Chunks,
+		candidates, params.RouteMode, params.PreferredTitle)
+	if err != nil {
+		return nil, nil, err
+	}
+	plan.PromptInjectionDetected = plan.PromptInjectionDetected || draft.PromptInjectionDetected
+	return plan, result, nil
 }
 
 func (p *PagePlanner) generatePlanBatch(ctx context.Context, params PlanParams, candidates []PageCandidate,
@@ -340,12 +454,10 @@ func (p *PagePlanner) generatePlanOnce(ctx context.Context, params PlanParams, c
 		return nil, err
 	}
 	entities := []map[string]any{}
-	if params.Candidates != nil {
-		for _, candidate := range params.Candidates.Entities {
-			entities = append(entities, map[string]any{
-				"type": candidate.TypeKey, "label": candidate.Label, "aliases": candidate.Aliases,
-			})
-		}
+	for _, candidate := range rankedEntityCandidates(params.Candidates, 24) {
+		entities = append(entities, map[string]any{
+			"type": candidate.TypeKey, "label": candidate.Label, "aliases": candidate.Aliases,
+		})
 	}
 	entitiesJSON, err := json.Marshal(entities)
 	if err != nil {
@@ -541,11 +653,9 @@ func normalizeImportPlanCollections(plan *ImportPlan) {
 
 func (p *PagePlanner) recallPages(ctx context.Context, params PlanParams) ([]PageCandidate, error) {
 	terms := []string{params.PreferredTitle, params.SourceLabel}
-	if params.Candidates != nil {
-		for _, candidate := range params.Candidates.Entities {
-			terms = append(terms, candidate.Label)
-			terms = append(terms, candidate.Aliases...)
-		}
+	for _, candidate := range rankedEntityCandidates(params.Candidates, 12) {
+		terms = append(terms, candidate.Label)
+		terms = append(terms, candidate.Aliases...)
 	}
 	seenTerm := map[string]bool{}
 	hits := map[uuid.UUID]page.PageSearchHit{}
