@@ -15,6 +15,8 @@ import (
 	"github.com/anby/wiki/backend/internal/platform/id"
 )
 
+const usageRecordTimeout = 5 * time.Second
+
 type PromptResolver interface {
 	ActivePrompt(ctx context.Context, key string) (*Prompt, error)
 }
@@ -154,10 +156,25 @@ func (g *Gateway) Generate(ctx context.Context, request Request) (*Result, error
 		}
 		u.InputTokens, u.OutputTokens = response.InputTokens, response.OutputTokens
 	}
-	if err := g.usage.InsertUsage(ctx, u); err != nil {
-		span.RecordError(err)
-		span.SetStatus(codes.Error, "usage_record_failed")
-		return nil, fmt.Errorf("ai: 记录用量失败: %w", err)
+	// Usage is an audit record for the provider call that has already
+	// completed. A sibling request may cancel ctx while this record is being
+	// written, so retain context values but give the insert its own short
+	// lifetime. Otherwise context.Canceled can both lose the audit row and mask
+	// the causal model/validation error.
+	usageCtx, cancelUsage := context.WithTimeout(context.WithoutCancel(ctx), usageRecordTimeout)
+	usageErr := g.usage.InsertUsage(usageCtx, u)
+	cancelUsage()
+	if usageErr != nil {
+		wrappedUsageErr := fmt.Errorf("ai: 记录用量失败: %w", usageErr)
+		span.RecordError(wrappedUsageErr)
+		span.SetAttributes(attribute.Bool("ai.usage_record_failed", true))
+		if callErr == nil {
+			span.SetStatus(codes.Error, "usage_record_failed")
+			return nil, wrappedUsageErr
+		}
+		// The provider/validation failure remains the returned cause. The
+		// secondary audit-write failure is already attached to the trace and
+		// must not change business error classification.
 	}
 	span.SetAttributes(
 		attribute.String("ai.result", status),

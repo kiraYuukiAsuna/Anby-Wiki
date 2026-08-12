@@ -5,6 +5,7 @@ import (
 	"context"
 	_ "embed"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"math"
 	"strings"
@@ -22,7 +23,9 @@ import (
 
 const (
 	ImportPlanFidelitySchemaURL = "https://anby.wiki/schemas/import-plan-fidelity/v1/audit.schema.json"
-	ImportPlanFidelityPromptKey = "source-import-plan-fidelity-v1"
+	ImportPlanFidelityPromptKey = "source-import-plan-fidelity-v2"
+
+	planFidelityValidationAttempts = 3
 )
 
 //go:embed schema/import-plan-fidelity.schema.json
@@ -118,14 +121,14 @@ func (p *PagePlanner) ensurePlanFidelity(ctx context.Context, params PlanParams,
 		}(index)
 	}
 	wait.Wait()
+	if err := planFidelityOutcomeError(ctx, outcomes); err != nil {
+		return 0, err
+	}
 
 	audits := make([]*PlanFidelityAudit, 0, len(outcomes))
 	weightedCoverage, totalWeight := 0.0, 0
 	for index := range outcomes {
 		outcome := outcomes[index]
-		if outcome.err != nil {
-			return 0, outcome.err
-		}
 		if outcome.audit == nil {
 			return 0, fmt.Errorf("%w: empty fidelity audit", ai.ErrInvalidOutput)
 		}
@@ -146,29 +149,86 @@ func (p *PagePlanner) ensurePlanFidelity(ctx context.Context, params PlanParams,
 	return coverage, nil
 }
 
+// planFidelityOutcomeError prefers the batch error that triggered sibling
+// cancellation. Batch order is deterministic, but completion order is not;
+// returning the first array entry used to turn a useful validation error into
+// a generic context.Canceled failure whenever an earlier sibling stopped first.
+func planFidelityOutcomeError(ctx context.Context, outcomes []planFidelityOutcome) error {
+	var cancelled error
+	for index := range outcomes {
+		err := outcomes[index].err
+		if err == nil {
+			continue
+		}
+		if errors.Is(err, context.Canceled) {
+			if cancelled == nil {
+				cancelled = err
+			}
+			continue
+		}
+		return err
+	}
+	if err := ctx.Err(); err != nil {
+		return err
+	}
+	return cancelled
+}
+
 func (p *PagePlanner) auditPlanFidelityBatch(ctx context.Context, params PlanParams, draftJSON []byte,
 	plan *ImportPlan, chunks []evidence.SourceChunk) (*PlanFidelityAudit, error) {
 	chunksJSON, err := json.Marshal(planChunkViews(chunks))
 	if err != nil {
 		return nil, err
 	}
-	result, err := p.ai.Generate(ctx, ai.Request{
-		Provider: params.Provider, Model: params.Model, PromptKey: ImportPlanFidelityPromptKey,
-		Variables: map[string]any{
-			"source_version_id": params.SourceVersionID.String(),
-			"source_label":      strings.TrimSpace(params.SourceLabel),
-			"preferred_title":   strings.TrimSpace(params.PreferredTitle),
-			"instructions":      strings.TrimSpace(params.Instructions),
-			"route_mode":        params.RouteMode,
-			"draft_plan_json":   string(draftJSON),
-			"chunks_json":       string(chunksJSON),
-		},
-		ImportJobID: params.ImportJobID, ImportRunID: params.ImportRunID,
-	})
-	if err != nil {
-		return nil, err
+	validationFeedback := "No prior validation failure."
+	var lastValidationErr error
+	for attempt := 0; attempt < planFidelityValidationAttempts; attempt++ {
+		if err := ctx.Err(); err != nil {
+			return nil, err
+		}
+		result, err := p.ai.Generate(ctx, ai.Request{
+			Provider: params.Provider, Model: params.Model, PromptKey: ImportPlanFidelityPromptKey,
+			Variables: map[string]any{
+				"source_version_id":   params.SourceVersionID.String(),
+				"source_label":        strings.TrimSpace(params.SourceLabel),
+				"preferred_title":     strings.TrimSpace(params.PreferredTitle),
+				"instructions":        strings.TrimSpace(params.Instructions),
+				"route_mode":          params.RouteMode,
+				"draft_plan_json":     string(draftJSON),
+				"chunks_json":         string(chunksJSON),
+				"validation_feedback": validationFeedback,
+			},
+			ImportJobID: params.ImportJobID, ImportRunID: params.ImportRunID,
+		})
+		if err == nil {
+			var audit *PlanFidelityAudit
+			audit, err = ValidatePlanFidelityAudit(result.JSON, params.SourceVersionID, chunks, plan)
+			if err == nil {
+				return audit, nil
+			}
+		}
+		if !isPlanFidelityValidationError(err) {
+			return nil, err
+		}
+		lastValidationErr = err
+		validationFeedback = planFidelityValidationFeedback(err)
 	}
-	return ValidatePlanFidelityAudit(result.JSON, params.SourceVersionID, chunks, plan)
+	return nil, lastValidationErr
+}
+
+func isPlanFidelityValidationError(err error) bool {
+	var providerErr *ai.ProviderError
+	if errors.As(err, &providerErr) && (providerErr.Code == "invalid_schema" || providerErr.Code == "output_truncated") {
+		return false
+	}
+	return errors.Is(err, ai.ErrInvalidOutput) || errors.Is(err, ErrEvidenceRequired)
+}
+
+func planFidelityValidationFeedback(err error) string {
+	if errors.Is(err, ErrEvidenceRequired) {
+		return "The previous response cited unverifiable evidence. Copy an exact contiguous quotation, its chunk_id, and Unicode character offsets from the supplied source window."
+	}
+	return "The previous response failed server validation. Echo source_version_id exactly, use only authoritative create/update route_index values, keep coverage_after greater than or equal to coverage_before, and satisfy the JSON schema exactly."
 }
 
 func ValidatePlanFidelityAudit(raw []byte, sourceVersionID uuid.UUID, chunks []evidence.SourceChunk,

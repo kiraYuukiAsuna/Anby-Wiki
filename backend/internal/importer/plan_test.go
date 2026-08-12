@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"strings"
 	"sync"
 	"testing"
@@ -21,6 +22,33 @@ type consolidatingPlanGenerator struct {
 	mapCalls         int
 	consolidateCalls int
 	fidelityCalls    int
+}
+
+type retryingFidelityGenerator struct {
+	mu         sync.Mutex
+	calls      int
+	validAfter int
+	feedback   []string
+}
+
+func (g *retryingFidelityGenerator) Generate(_ context.Context, request ai.Request) (*ai.Result, error) {
+	g.mu.Lock()
+	defer g.mu.Unlock()
+	g.calls++
+	g.feedback = append(g.feedback, request.Variables["validation_feedback"].(string))
+	sourceVersionID, _ := uuid.Parse(request.Variables["source_version_id"].(string))
+	audit := PlanFidelityAudit{
+		SchemaVersion: 1, SourceVersionID: sourceVersionID, Complete: true,
+		CoverageBefore: 0.9, CoverageAfter: 0.8, MissingBlocks: []PlanFidelityMissingBlock{},
+	}
+	if g.validAfter > 0 && g.calls >= g.validAfter {
+		audit.CoverageAfter = audit.CoverageBefore
+	}
+	raw, err := json.Marshal(audit)
+	if err != nil {
+		return nil, err
+	}
+	return &ai.Result{JSON: raw, PromptKey: request.PromptKey, PromptVersion: 1, Model: "test"}, nil
 }
 
 func (g *consolidatingPlanGenerator) Generate(_ context.Context, request ai.Request) (*ai.Result, error) {
@@ -191,6 +219,77 @@ func TestValidatePlanFidelityAuditRepairsExactEvidenceAndRejectsInventedRoute(t 
 	raw, _ = json.Marshal(audit)
 	if _, err := ValidatePlanFidelityAudit(raw, sourceVersionID, chunks, plan); !errors.Is(err, ai.ErrInvalidOutput) {
 		t.Fatalf("error=%v, want ai.ErrInvalidOutput", err)
+	}
+}
+
+func TestAuditPlanFidelityBatchRetriesSemanticValidationWithFeedback(t *testing.T) {
+	sourceVersionID := uuid.New()
+	chunks := []evidence.SourceChunk{{
+		ID: uuid.New(), SourceVersionID: sourceVersionID, Ordinal: 0,
+		TextContent: "A material fact.", LocatorJSON: json.RawMessage(`{}`),
+	}}
+	plan := &ImportPlan{Routes: []PageRoute{{
+		Action: RouteCreate, Title: "Subject",
+		Blocks: []PlannedBlock{{Type: string(ast.BlockParagraph), Text: "A material fact."}},
+	}}}
+	generator := &retryingFidelityGenerator{validAfter: 3}
+	planner := &PagePlanner{ai: generator}
+
+	audit, err := planner.auditPlanFidelityBatch(context.Background(), PlanParams{
+		SourceVersionID: sourceVersionID, Chunks: chunks, Provider: "test", Model: "test",
+	}, json.RawMessage(`[]`), plan, chunks)
+	if err != nil {
+		t.Fatal(err)
+	}
+	generator.mu.Lock()
+	calls := generator.calls
+	feedback := append([]string(nil), generator.feedback...)
+	generator.mu.Unlock()
+	if audit == nil || calls != planFidelityValidationAttempts {
+		t.Fatalf("audit=%#v calls=%d, want success on attempt %d", audit, calls, planFidelityValidationAttempts)
+	}
+	if len(feedback) != planFidelityValidationAttempts || feedback[0] != "No prior validation failure." ||
+		!strings.Contains(feedback[1], "coverage_after") {
+		t.Fatalf("unexpected validation feedback: %#v", feedback)
+	}
+}
+
+func TestAuditPlanFidelityBatchStopsAfterValidationAttemptLimit(t *testing.T) {
+	sourceVersionID := uuid.New()
+	chunks := []evidence.SourceChunk{{
+		ID: uuid.New(), SourceVersionID: sourceVersionID,
+		TextContent: "A material fact.", LocatorJSON: json.RawMessage(`{}`),
+	}}
+	generator := &retryingFidelityGenerator{}
+	planner := &PagePlanner{ai: generator}
+	plan := &ImportPlan{Routes: []PageRoute{{Action: RouteCreate, Title: "Subject"}}}
+
+	_, err := planner.auditPlanFidelityBatch(context.Background(), PlanParams{
+		SourceVersionID: sourceVersionID, Provider: "test", Model: "test",
+	}, json.RawMessage(`[]`), plan, chunks)
+	if !errors.Is(err, ai.ErrInvalidOutput) {
+		t.Fatalf("error=%v, want ai.ErrInvalidOutput", err)
+	}
+	generator.mu.Lock()
+	calls := generator.calls
+	generator.mu.Unlock()
+	if calls != planFidelityValidationAttempts {
+		t.Fatalf("calls=%d, want %d", calls, planFidelityValidationAttempts)
+	}
+}
+
+func TestPlanFidelityOutcomeErrorPrefersCausalValidationFailure(t *testing.T) {
+	causalErr := fmt.Errorf("%w: fidelity route", ai.ErrInvalidOutput)
+	err := planFidelityOutcomeError(context.Background(), []planFidelityOutcome{
+		{err: context.Canceled},
+		{err: causalErr},
+		{err: context.Canceled},
+	})
+	if !errors.Is(err, ai.ErrInvalidOutput) {
+		t.Fatalf("error=%v, want causal validation failure", err)
+	}
+	if code := planErrorCode(err); code != "page_plan_invalid_output" {
+		t.Fatalf("code=%q, want page_plan_invalid_output", code)
 	}
 }
 
