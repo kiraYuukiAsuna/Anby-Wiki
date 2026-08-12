@@ -9,6 +9,7 @@ import (
 	"errors"
 	"net/http"
 	"strconv"
+	"time"
 
 	"github.com/go-chi/chi/v5"
 	"github.com/google/uuid"
@@ -65,6 +66,57 @@ type outlineItemResponse struct {
 // outlineResponse 文档目录（items 按文档顺序；未发布过为空数组）。
 type outlineResponse struct {
 	Items []outlineItemResponse `json:"items"`
+}
+
+type pageReferenceResponse struct {
+	Number          int                               `json:"number"`
+	CitationID      uuid.UUID                         `json:"citation_id"`
+	OccurrenceCount int                               `json:"occurrence_count"`
+	FirstBlockID    uuid.UUID                         `json:"first_block_id"`
+	FirstNodeID     string                            `json:"first_node_id"`
+	Occurrences     []pageReferenceOccurrenceResponse `json:"occurrences"`
+	SourceVersionID uuid.UUID                         `json:"source_version_id"`
+	SourceID        uuid.UUID                         `json:"source_id"`
+	SourceType      string                            `json:"source_type"`
+	SourceTitle     string                            `json:"source_title"`
+	Author          *string                           `json:"author"`
+	Publisher       *string                           `json:"publisher"`
+	PublishedAt     *time.Time                        `json:"published_at"`
+	SourceMetadata  json.RawMessage                   `json:"source_metadata"`
+	VersionHash     string                            `json:"version_hash"`
+	FetchedAt       time.Time                         `json:"fetched_at"`
+	Locator         json.RawMessage                   `json:"locator"`
+	Quotation       *string                           `json:"quotation"`
+	ExternalURL     *string                           `json:"external_url"`
+}
+
+type pageReferenceOccurrenceResponse struct {
+	BlockID uuid.UUID `json:"block_id"`
+	NodeID  string    `json:"node_id"`
+}
+
+type pageReferenceListResponse struct {
+	Ready      bool                    `json:"ready"`
+	RevisionID *uuid.UUID              `json:"revision_id"`
+	Items      []pageReferenceResponse `json:"items"`
+}
+
+type relatedReasonResponse struct {
+	Type  string `json:"type"`
+	Label string `json:"label,omitempty"`
+}
+
+type relatedPageResponse struct {
+	PageID       uuid.UUID               `json:"page_id"`
+	DisplayTitle string                  `json:"display_title"`
+	Score        int                     `json:"score"`
+	Reasons      []relatedReasonResponse `json:"reasons"`
+}
+
+type relatedPageListResponse struct {
+	Ready      bool                  `json:"ready"`
+	RevisionID *uuid.UUID            `json:"revision_id"`
+	Items      []relatedPageResponse `json:"items"`
 }
 
 type sectionSummaryResponse struct {
@@ -210,6 +262,73 @@ func (a *ProjectionAPI) getOutline(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 	httpx.WriteJSON(w, http.StatusOK, resp)
+}
+
+func (a *ProjectionAPI) getReferences(w http.ResponseWriter, r *http.Request) {
+	pageID, ok := a.livePageIDFrom(w, r)
+	if !ok {
+		return
+	}
+	result, err := a.queries.References(r.Context(), pageID)
+	if err != nil {
+		serviceError(w, r, err)
+		return
+	}
+	response := pageReferenceListResponse{
+		Ready: result.Ready, RevisionID: result.RevisionID,
+		Items: make([]pageReferenceResponse, len(result.Items)),
+	}
+	for index, item := range result.Items {
+		occurrences := make([]pageReferenceOccurrenceResponse, len(item.Occurrences))
+		for occurrenceIndex, occurrence := range item.Occurrences {
+			occurrences[occurrenceIndex] = pageReferenceOccurrenceResponse{
+				BlockID: occurrence.BlockID, NodeID: occurrence.NodeID,
+			}
+		}
+		response.Items[index] = pageReferenceResponse{
+			Number: item.Number, CitationID: item.CitationID,
+			OccurrenceCount: item.OccurrenceCount,
+			FirstBlockID:    item.FirstBlockID, FirstNodeID: item.FirstNodeID,
+			Occurrences:     occurrences,
+			SourceVersionID: item.SourceVersionID, SourceID: item.SourceID,
+			SourceType: item.SourceType, SourceTitle: item.SourceTitle,
+			Author: item.Author, Publisher: item.Publisher,
+			PublishedAt: item.PublishedAt, SourceMetadata: item.SourceMetadata,
+			VersionHash: item.VersionHash, FetchedAt: item.FetchedAt,
+			Locator: item.Locator, Quotation: item.Quotation,
+			ExternalURL: item.ExternalURL,
+		}
+	}
+	httpx.WriteJSON(w, http.StatusOK, response)
+}
+
+func (a *ProjectionAPI) getRelatedPages(w http.ResponseWriter, r *http.Request) {
+	pageID, ok := a.livePageIDFrom(w, r)
+	if !ok {
+		return
+	}
+	result, err := a.queries.RelatedPages(r.Context(), pageID)
+	if err != nil {
+		serviceError(w, r, err)
+		return
+	}
+	response := relatedPageListResponse{
+		Ready: result.Ready, RevisionID: result.RevisionID,
+		Items: make([]relatedPageResponse, len(result.Items)),
+	}
+	for index, item := range result.Items {
+		reasons := make([]relatedReasonResponse, len(item.Reasons))
+		for reasonIndex, reason := range item.Reasons {
+			reasons[reasonIndex] = relatedReasonResponse{
+				Type: reason.Type, Label: reason.Label,
+			}
+		}
+		response.Items[index] = relatedPageResponse{
+			PageID: item.PageID, DisplayTitle: item.DisplayTitle,
+			Score: item.Score, Reasons: reasons,
+		}
+	}
+	httpx.WriteJSON(w, http.StatusOK, response)
 }
 
 func (a *ProjectionAPI) getSections(w http.ResponseWriter, r *http.Request) {

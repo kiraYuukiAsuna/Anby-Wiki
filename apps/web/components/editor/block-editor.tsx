@@ -14,12 +14,26 @@ import { useEffect, useMemo, useState } from "react";
 
 import { BlockNoteView } from "@blocknote/mantine";
 import { useCreateBlockNote } from "@blocknote/react";
-import { FileText, Heading2, Link2, List, Table2 } from "lucide-react";
+import {
+  BookMarked,
+  BookOpenCheck,
+  FileText,
+  Globe2,
+  Heading2,
+  Link2,
+  List,
+  Table2,
+} from "lucide-react";
+import { toast } from "sonner";
 
 import "@blocknote/core/style.css";
 import "@blocknote/mantine/style.css";
 
 import { ExternalLinkEditor } from "@/components/editor/external-link-editor";
+import {
+  InfoboxInsertButton,
+  type InfoboxSelection,
+} from "@/components/editor/infobox-insert-button";
 import { PageReferencePicker } from "@/components/editor/page-reference-picker";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -44,12 +58,15 @@ export interface BlockEditorProps {
   onChange?: (ast: Document) => void;
   /** 传给 BlockNoteView 的 editable。 */
   editable?: boolean;
+  /** 既有页面 ID；用于发现主 Entity 并插入可信信息框。 */
+  pageId?: string;
 }
 
 export function BlockEditor({
   initialAst,
   onChange,
   editable = true,
+  pageId,
 }: BlockEditorProps) {
   // AdapterState 随组件实例存活（lazy useState），保证会话内 Block ID 稳定。
   const [state] = useState<AdapterState>(() => createAdapterState());
@@ -104,6 +121,56 @@ export function BlockEditor({
     editor.insertBlocks([block] as never, cursor.block, "after");
   };
 
+  const insertEndSection = (title: string, placeholder: string) => {
+    const lastBlock = editor.document.at(-1);
+    if (!lastBlock) return;
+    editor.insertBlocks(
+      [
+        { type: "heading", props: { level: 2 }, content: title },
+        { type: "bulletListItem", content: placeholder },
+      ] as never,
+      lastBlock,
+      "after",
+    );
+  };
+
+  const insertInfobox = (selection: InfoboxSelection) => {
+    const blocks = editor.document as unknown as BNBlock[];
+    const includesComponent = (items: BNBlock[]): boolean =>
+      items.some(
+        (block) =>
+          (block.type === "component" &&
+            block.props.componentId === selection.componentId) ||
+          includesComponent(block.children),
+      );
+    if (includesComponent(blocks)) {
+      toast.info("页面中已经包含文章信息框");
+      return;
+    }
+    const firstBlock = editor.document[0];
+    if (!firstBlock) return;
+    editor.insertBlocks(
+      [
+        {
+          type: "component",
+          props: {
+            componentId: selection.componentId,
+            componentVersion: selection.componentVersion,
+            entityId: selection.entityId,
+            displayConfig: JSON.stringify({
+              title: "",
+              language: selection.language,
+              property_keys: [],
+            }),
+          },
+        },
+      ] as never,
+      firstBlock,
+      "before",
+    );
+    toast.success("已在文首插入主实体信息框");
+  };
+
   // 快捷键：⌘/Ctrl+K 页面引用，⌘/Ctrl+Shift+K 外链。
   useEffect(() => {
     if (!editable) return;
@@ -125,7 +192,7 @@ export function BlockEditor({
   return (
     <div data-block-editor>
       {editable ? (
-        <div className="mb-2 flex items-center gap-2" data-editor-toolbar>
+        <div className="mb-2 flex flex-wrap items-center gap-2" data-editor-toolbar>
           <Button
             type="button"
             variant="outline"
@@ -199,6 +266,36 @@ export function BlockEditor({
           >
             <Table2 className="size-4" />
             插入表格
+          </Button>
+          {pageId ? (
+            <InfoboxInsertButton pageId={pageId} onInsert={insertInfobox} />
+          ) : null}
+          <Button
+            type="button"
+            variant="outline"
+            size="sm"
+            onClick={() => insertEndSection("参见", "插入相关页面引用")}
+          >
+            <BookOpenCheck className="size-4" />
+            参见
+          </Button>
+          <Button
+            type="button"
+            variant="outline"
+            size="sm"
+            onClick={() => insertEndSection("拓展阅读", "补充书目或来源")}
+          >
+            <BookMarked className="size-4" />
+            拓展阅读
+          </Button>
+          <Button
+            type="button"
+            variant="outline"
+            size="sm"
+            onClick={() => insertEndSection("外部链接", "补充外部资源")}
+          >
+            <Globe2 className="size-4" />
+            外部链接
           </Button>
         </div>
       ) : null}

@@ -4,3 +4,4 @@ Makefile text eol=lf
 .env.example text eol=lf
 infra/deploy/.env.example text eol=lf
 infra/deploy/*.yml text eol=lf
+contracts/generated/typescript/** whitespace=-blank-at-eof

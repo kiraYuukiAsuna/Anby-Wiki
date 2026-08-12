@@ -32,7 +32,7 @@ M3 引入 RenderedPage 投影与缓存时复用本包，并按 `RendererVersion`
 | `external_link` | `<a href="{url}" rel="noopener noreferrer nofollow" target="_blank">{display_text}</a>` |
 | `entity_reference` | `<a href="/entities/{entity_id}" data-entity-ref>{display_text}</a>` |
 | `claim_reference` | `<a href="/claims/{claim_id}" data-claim-ref="{claim_id}">{display_text}</a>` |
-| `citation_reference` | `<sup data-citation-ref="{citation_id}" title="{display_text 或 citation_id}"><a href="/citations/{citation_id}">[n]</a></sup>`；按 Citation 首次出现顺序编号，同一 ID 复用序号 |
+| `citation_reference` | `<sup id="cite-ref-{block_id}-{node_index}" data-citation-ref="{citation_id}" …><a href="#cite-note-{n}">[n]</a></sup>`；按全文 Citation 首次出现顺序编号，同一 ID 复用序号，并与文末 References 双向导航 |
 
 未知 Block/Inline 类型、越界 heading level、无法解码的 content 返回 error，不做静默降级
 （正常路径上文档入库前已经 `ast.ValidateJSON`，不会触发）。
@@ -50,7 +50,8 @@ M3 引入 RenderedPage 投影与缓存时复用本包，并按 `RendererVersion`
 
 ## 版本策略
 
-`RendererVersion` 当前为 `"v3"`。v3 让 Claim/Citation 引用可导航到只读详情页。规则：
+`RendererVersion` 当前为 `"v7"`。v7 把 Citation marker 与当前页面的 References
+统一编号并建立正文锚点。规则：
 
 - 任何影响输出字节流的变更（标签结构、属性、转义行为、URL 策略）都必须升版
   （`v2`、`v3`…），并在本节追加变更说明；
@@ -61,6 +62,11 @@ M3 引入 RenderedPage 投影与缓存时复用本包，并按 `RendererVersion`
 
 版本记录：
 
+- `v7`：Citation 使用全文稳定编号，正文 marker 链接文末 References，并为每次出现
+  输出独立回链锚点；章节懒加载显式携带全文 Citation 顺序。
+- `v6`：补齐媒体、数据视图、Embed、页内锚点、数学/mention，并由动态 resolver
+  渲染 Claim 当前值。
+- `v4`：ComponentBlock 通过受信任 Registry 渲染，缺少 resolver 时安全降级。
 - `v3`（M4-T08）：ClaimReference、CitationReference 增加到只读详情页的站内链接。
 - `v2`（M4-T06）：增加 EntityReference、ClaimReference、CitationReference HTML 与 Citation 文档内编号。
 - `v1`：AST v1 基础 Block、页面引用与外链渲染。

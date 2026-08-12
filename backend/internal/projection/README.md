@@ -218,8 +218,29 @@ Block content 内的序号路径字符串——v1 行内层是扁平数组，即
   按 `(source_page_id, source_block_id, source_node_id)` 升序游标分页；
 - `GET /api/v1/pages/{id}/outline`：document_outline JOIN page_anchor，
   含 slug 与 position_key，按 position_key 数值序返回，供阅读页 TOC。
+- `GET /api/v1/pages/{id}/references`：只在 `citation_usage` 已追平 Current Revision
+  时返回 `ready=true`；按全文首次出现顺序合并同一 Citation，返回 Source/Version
+  元数据、Locator、核对引文及全部正文位置，供统一编号和 a/b/c 多回链。
+- `GET /api/v1/pages/{id}/related`：只读 `page_related_projection`，最多返回 12 个
+  可解释候选及原因；结果绑定 Current Revision，陈旧投影不会冒充当前结果。
 
 页面不存在 404、软删除 410、非法游标 400（与阅读端点语义一致）。
+
+## RelatedPagesBuilder（type `related_pages`）
+
+`builder_related.go` 从可重建的当前页面链接、权威 Collection 成员、Page 主 Entity
+与 Entity edge 组合确定性得分：正文链接、反链/双向链接、共同 Collection、同一
+主 Entity 和一跳图谱关系分别成为可展示原因。每个 Collection 最多取 24 个稳定
+候选，最终只落分数最高的 12 个，防止大 Collection 让单页构建无界增长。
+
+发布/链接解析、Collection 成员替换、Page–Entity 绑定、Claim 图谱变化、Entity
+合并/回滚与页面删除都会使受影响页面重建；旧关联邻居也会先快照再刷新，因此关系
+移除不会留下陈旧推荐。该表与 `projection_state` 都是可删除、可全量重建的数据，
+不会反向修改 Page、Collection、Entity 或 Claim。
+
+页面的 Collection 反向归属由 Collection 领域的
+`GET /api/v1/pages/{id}/collections` 提供，覆盖直接 Page 成员、主 Entity 成员与
+动态查询命中，并标明 `membership_source`；它不是 Related 投影的派生权威状态。
 
 ---
 

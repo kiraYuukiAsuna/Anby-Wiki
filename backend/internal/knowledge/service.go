@@ -648,6 +648,36 @@ type BindPageParams struct {
 // primary 角色按“设置主实体”语义原子替换旧绑定并同步 Page 指针；
 // mentioned 重复绑定返回 ErrBindingExists。
 func (s *Service) BindPage(ctx context.Context, params BindPageParams) (*PageEntityBinding, error) {
+	var result *PageEntityBinding
+	err := s.txm.InTx(ctx, func(tx pgx.Tx) error {
+		var err error
+		result, err = s.bindPageInTx(ctx, tx, params, nil)
+		return err
+	})
+	return result, err
+}
+
+// BindPageInTx is the authoritative boundary used by Proposal Apply so the
+// binding, Page pointer, audit event and Outbox invalidation share the atomic
+// ChangeBatch transaction.
+func (s *Service) BindPageInTx(
+	ctx context.Context,
+	tx pgx.Tx,
+	params BindPageParams,
+	changeBatchID *uuid.UUID,
+) (*PageEntityBinding, error) {
+	if tx == nil {
+		return nil, fmt.Errorf("%w: binding transaction is required", ErrInvalidBindingRole)
+	}
+	return s.bindPageInTx(ctx, tx, params, changeBatchID)
+}
+
+func (s *Service) bindPageInTx(
+	ctx context.Context,
+	tx pgx.Tx,
+	params BindPageParams,
+	changeBatchID *uuid.UUID,
+) (*PageEntityBinding, error) {
 	if params.Role != BindingRolePrimary && params.Role != BindingRoleMentioned {
 		return nil, fmt.Errorf("%w: role=%q", ErrInvalidBindingRole, params.Role)
 	}
@@ -661,86 +691,82 @@ func (s *Service) BindPage(ctx context.Context, params BindPageParams) (*PageEnt
 		Role:     params.Role,
 		Language: language,
 	}
-	var result *PageEntityBinding
-	err = s.txm.InTx(ctx, func(tx pgx.Tx) error {
-		if err := s.pages.CheckWriteActor(ctx, tx, params.ActorID); err != nil {
-			return err
-		}
-		p, err := s.pages.GetPageByIDForUpdate(ctx, tx, params.PageID)
-		if err != nil {
-			return err
-		}
-		if p.WikiID != params.WikiID || p.DeletedAt != nil {
-			return fmt.Errorf(
-				"%w: id=%s 已删除", page.ErrPageNotFound, params.PageID,
-			)
-		}
-		e, err := s.lockActiveEntity(ctx, tx, params.EntityID)
-		if err != nil {
-			return err
-		}
-		if p.WikiID != e.WikiID {
-			return fmt.Errorf(
-				"%w: page=%s entity=%s",
-				ErrBindingWikiMismatch,
-				params.PageID,
-				params.EntityID,
-			)
-		}
-
-		previousEntityID := p.PrimaryEntityID
-		if params.Role == BindingRolePrimary {
-			existing, err := s.repo.ListPageBindings(ctx, tx, params.PageID)
-			if err != nil {
-				return err
-			}
-			for i := range existing {
-				if existing[i].Role == BindingRolePrimary &&
-					existing[i].EntityID == params.EntityID &&
-					existing[i].Language == language {
-					value := existing[i]
-					result = &value
-					return nil
-				}
-			}
-			if err := s.repo.DeletePrimaryBinding(ctx, tx, params.PageID); err != nil {
-				return err
-			}
-			entityID := params.EntityID
-			if err := s.repo.UpdatePagePrimaryEntity(
-				ctx, tx, params.PageID, &entityID,
-			); err != nil {
-				return err
-			}
-		}
-		if err := s.repo.InsertBinding(ctx, tx, b); err != nil {
-			return err
-		}
-		if err := s.appendKnowledgeMutation(
-			ctx,
-			tx,
-			params.ActorID,
-			AuditEventPageEntityBindingAdded,
-			OutboxEventPageEntityBindingChanged,
-			AggregateTypePage,
-			params.PageID,
-			map[string]any{
-				"page_id":            params.PageID,
-				"entity_id":          params.EntityID,
-				"role":               params.Role,
-				"language":           language,
-				"previous_entity_id": previousEntityID,
-			},
-		); err != nil {
-			return err
-		}
-		result = b
-		return nil
-	})
+	if err := s.pages.CheckWriteActor(ctx, tx, params.ActorID); err != nil {
+		return nil, err
+	}
+	p, err := s.pages.GetPageByIDForUpdate(ctx, tx, params.PageID)
 	if err != nil {
 		return nil, err
 	}
-	return result, nil
+	if p.WikiID != params.WikiID || p.DeletedAt != nil {
+		return nil, fmt.Errorf(
+			"%w: id=%s 已删除", page.ErrPageNotFound, params.PageID,
+		)
+	}
+	e, err := s.lockActiveEntity(ctx, tx, params.EntityID)
+	if err != nil {
+		return nil, err
+	}
+	if p.WikiID != e.WikiID {
+		return nil, fmt.Errorf(
+			"%w: page=%s entity=%s",
+			ErrBindingWikiMismatch,
+			params.PageID,
+			params.EntityID,
+		)
+	}
+
+	var previous *PageEntityBinding
+	if params.Role == BindingRolePrimary {
+		existing, err := s.repo.ListPageBindings(ctx, tx, params.PageID)
+		if err != nil {
+			return nil, err
+		}
+		for i := range existing {
+			if existing[i].Role != BindingRolePrimary {
+				continue
+			}
+			value := existing[i]
+			previous = &value
+			if value.EntityID == params.EntityID && value.Language == language {
+				return &value, nil
+			}
+		}
+		if err := s.repo.DeletePrimaryBinding(ctx, tx, params.PageID); err != nil {
+			return nil, err
+		}
+		entityID := params.EntityID
+		if err := s.repo.UpdatePagePrimaryEntity(
+			ctx, tx, params.PageID, &entityID,
+		); err != nil {
+			return nil, err
+		}
+	}
+	if err := s.repo.InsertBinding(ctx, tx, b); err != nil {
+		return nil, err
+	}
+	var previousValue any
+	if previous != nil {
+		previousValue = map[string]any{
+			"entity_id": previous.EntityID,
+			"role":      previous.Role,
+			"language":  previous.Language,
+		}
+	}
+	if err := s.appendKnowledgeMutationInBatch(
+		ctx, tx, params.ActorID,
+		AuditEventPageEntityBindingAdded,
+		OutboxEventPageEntityBindingChanged,
+		AggregateTypePage, params.PageID, changeBatchID,
+		map[string]any{
+			"page_id": params.PageID, "entity_id": params.EntityID,
+			"role": params.Role, "language": language,
+			"previous_binding": previousValue,
+		},
+	); err != nil {
+		return nil, err
+	}
+	return b, nil
 }
 
 // UnbindPage 解除页面-实体绑定，未命中返回 ErrBindingNotFound。
@@ -799,6 +825,87 @@ func (s *Service) UnbindPage(
 			},
 		)
 	})
+}
+
+// RestorePrimaryPageBindingInTx compensates a reviewed primary-binding
+// operation. It refuses to overwrite a later binding and restores the exact
+// previous Entity/language captured in the immutable ChangeBatch ledger.
+func (s *Service) RestorePrimaryPageBindingInTx(
+	ctx context.Context,
+	tx pgx.Tx,
+	wikiID, pageID, expectedEntityID, actorID uuid.UUID,
+	previous *PageEntityBinding,
+	changeBatchID *uuid.UUID,
+) error {
+	if tx == nil || expectedEntityID == uuid.Nil {
+		return ErrBindingNotFound
+	}
+	if err := s.pages.CheckWriteActor(ctx, tx, actorID); err != nil {
+		return err
+	}
+	p, err := s.pages.GetPageByIDForUpdate(ctx, tx, pageID)
+	if err != nil {
+		return err
+	}
+	if p.WikiID != wikiID || p.DeletedAt != nil {
+		return page.ErrPageNotFound
+	}
+	if p.PrimaryEntityID == nil || *p.PrimaryEntityID != expectedEntityID {
+		return fmt.Errorf(
+			"%w: page=%s expected_entity=%s",
+			ErrBindingNotFound, pageID, expectedEntityID,
+		)
+	}
+	if err := s.repo.DeleteBinding(
+		ctx, tx, pageID, expectedEntityID, BindingRolePrimary,
+	); err != nil {
+		return err
+	}
+	if err := s.repo.UpdatePagePrimaryEntity(ctx, tx, pageID, nil); err != nil {
+		return err
+	}
+	var restoredEntityID *uuid.UUID
+	if previous != nil {
+		if previous.Role != BindingRolePrimary || previous.EntityID == uuid.Nil {
+			return ErrBindingNotFound
+		}
+		entity, err := s.lockActiveEntity(ctx, tx, previous.EntityID)
+		if err != nil {
+			return err
+		}
+		if entity.WikiID != wikiID {
+			return ErrBindingWikiMismatch
+		}
+		language, err := normalizeLanguage(previous.Language)
+		if err != nil {
+			return err
+		}
+		restored := &PageEntityBinding{
+			PageID: pageID, EntityID: previous.EntityID,
+			Role: BindingRolePrimary, Language: language,
+		}
+		if err := s.repo.InsertBinding(ctx, tx, restored); err != nil {
+			return err
+		}
+		restoredEntityID = &restored.EntityID
+		if err := s.repo.UpdatePagePrimaryEntity(
+			ctx, tx, pageID, restoredEntityID,
+		); err != nil {
+			return err
+		}
+	}
+	return s.appendKnowledgeMutationInBatch(
+		ctx, tx, actorID,
+		AuditEventPageEntityBindingRemoved,
+		OutboxEventPageEntityBindingChanged,
+		AggregateTypePage, pageID, changeBatchID,
+		map[string]any{
+			"page_id": pageID, "entity_id": expectedEntityID,
+			"role":               BindingRolePrimary,
+			"restored_entity_id": restoredEntityID,
+			"compensation":       true,
+		},
+	)
 }
 
 // lockActiveEntity 在事务内锁定实体行并要求其处于 active 状态。

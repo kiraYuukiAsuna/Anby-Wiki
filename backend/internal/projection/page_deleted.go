@@ -60,7 +60,18 @@ func (h *PageDeletedHandler) Handle(
 		{"claim_usage", "page_id"},
 		{"citation_usage", "page_id"},
 		{"component_dependency", "page_id"},
+		{"page_related_projection", "source_page_id"},
 		{"search_document", "page_id"},
+	}
+	if _, err := tx.Exec(
+		ctx,
+		`DELETE FROM page_related_projection WHERE target_page_id=$1`,
+		event.AggregateID,
+	); err != nil {
+		return fmt.Errorf(
+			"projection: clear related-page targets for deleted page %s: %w",
+			event.AggregateID, err,
+		)
 	}
 	for _, deletion := range deletions {
 		if _, err := tx.Exec(

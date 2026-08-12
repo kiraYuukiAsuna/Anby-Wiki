@@ -8,6 +8,7 @@ All URIs are relative to *http://localhost:3000*
 | [**getCollection**](CollectionsApi.md#getcollection) | **GET** /api/v1/collections/{id} | Collection 详情 |
 | [**listCollectionMembers**](CollectionsApi.md#listcollectionmembers) | **GET** /api/v1/collections/{id}/members | Collection 物化成员 |
 | [**listCollections**](CollectionsApi.md#listcollections) | **GET** /api/v1/collections | Collection 列表 |
+| [**listPageCollections**](CollectionsApi.md#listpagecollections) | **GET** /api/v1/pages/{id}/collections | 页面所属 Collection |
 | [**rebuildRuleCollection**](CollectionsApi.md#rebuildrulecollection) | **POST** /api/v1/collections/{id}/rebuild | 从 Entity/Claim 权威数据重建 Rule Collection 成员 |
 | [**replaceManualCollectionMembers**](CollectionsApi.md#replacemanualcollectionmembers) | **PUT** /api/v1/collections/{id}/members | 原子替换 Manual Collection 的全部成员 |
 
@@ -298,6 +299,76 @@ No authorization required
 |-------------|-------------|------------------|
 | **200** | 一页 Collection |  * X-Request-ID -  <br>  |
 | **400** | 请求格式错误 |  -  |
+| **500** | 服务端内部错误 |  -  |
+
+[[Back to top]](#) [[Back to API list]](../README.md#api-endpoints) [[Back to Model list]](../README.md#models) [[Back to README]](../README.md)
+
+
+## listPageCollections
+
+> PageCollectionList listPageCollections(id)
+
+页面所属 Collection
+
+匿名反向读取页面直接所属、其主 Entity 所属以及 Dynamic 查询命中的 Collection。 membership_source 解释命中来源，不复制服务端 Collection 状态到客户端缓存。
+
+### Example
+
+```ts
+import {
+  Configuration,
+  CollectionsApi,
+} from '';
+import type { ListPageCollectionsRequest } from '';
+
+async function example() {
+  console.log("🚀 Testing  SDK...");
+  const api = new CollectionsApi();
+
+  const body = {
+    // string | 页面 ID（UUIDv7）
+    id: 38400000-8cf0-11bd-b23e-10b96e4ef00d,
+  } satisfies ListPageCollectionsRequest;
+
+  try {
+    const data = await api.listPageCollections(body);
+    console.log(data);
+  } catch (error) {
+    console.error(error);
+  }
+}
+
+// Run the test
+example().catch(console.error);
+```
+
+### Parameters
+
+
+| Name | Type | Description  | Notes |
+|------------- | ------------- | ------------- | -------------|
+| **id** | `string` | 页面 ID（UUIDv7） | [Defaults to `undefined`] |
+
+### Return type
+
+[**PageCollectionList**](PageCollectionList.md)
+
+### Authorization
+
+No authorization required
+
+### HTTP request headers
+
+- **Content-Type**: Not defined
+- **Accept**: `application/json`
+
+
+### HTTP response details
+| Status code | Description | Response headers |
+|-------------|-------------|------------------|
+| **200** | 页面所属 Collection |  * X-Request-ID -  <br>  |
+| **400** | 请求格式错误 |  -  |
+| **404** | 资源不存在 |  -  |
 | **500** | 服务端内部错误 |  -  |
 
 [[Back to top]](#) [[Back to API list]](../README.md#api-endpoints) [[Back to Model list]](../README.md#models) [[Back to README]](../README.md)

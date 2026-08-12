@@ -166,6 +166,13 @@ import {
     OperationRetargetPageReferenceFromJSONTyped,
     OperationRetargetPageReferenceToJSON,
 } from './OperationRetargetPageReference';
+import type { OperationSetPageEntityBinding } from './OperationSetPageEntityBinding';
+import {
+    instanceOfOperationSetPageEntityBinding,
+    OperationSetPageEntityBindingFromJSON,
+    OperationSetPageEntityBindingFromJSONTyped,
+    OperationSetPageEntityBindingToJSON,
+} from './OperationSetPageEntityBinding';
 import type { OperationSupersedeClaim } from './OperationSupersedeClaim';
 import {
     instanceOfOperationSupersedeClaim,
@@ -179,7 +186,7 @@ import {
  *
  * @export
  */
-export type ProposalOperationV1 = { operationType: 'add_claim_source' } & OperationAddClaimSource | { operationType: 'add_collection_membership' } & OperationAddCollectionMembership | { operationType: 'create_claim' } & OperationCreateClaim | { operationType: 'create_entity' } & OperationCreateEntity | { operationType: 'create_page' } & OperationCreatePage | { operationType: 'create_redirect' } & OperationCreateRedirect | { operationType: 'delete_block' } & OperationDeleteBlock | { operationType: 'insert_block' } & OperationInsertBlock | { operationType: 'insert_citation_reference' } & OperationInsertCitationReference | { operationType: 'insert_claim_reference' } & OperationInsertClaimReference | { operationType: 'insert_entity_reference' } & OperationInsertEntityReference | { operationType: 'insert_page_reference' } & OperationInsertPageReference | { operationType: 'merge_entity' } & OperationMergeEntity | { operationType: 'move_block' } & OperationMoveBlock | { operationType: 'remove_collection_membership' } & OperationRemoveCollectionMembership | { operationType: 'rename_page' } & OperationRenamePage | { operationType: 'replace_block' } & OperationReplaceBlock | { operationType: 'retarget_citation_reference' } & OperationRetargetCitationReference | { operationType: 'retarget_claim_reference' } & OperationRetargetClaimReference | { operationType: 'retarget_entity_reference' } & OperationRetargetEntityReference | { operationType: 'retarget_external_link' } & OperationRetargetExternalLink | { operationType: 'retarget_page_reference' } & OperationRetargetPageReference | { operationType: 'supersede_claim' } & OperationSupersedeClaim;
+export type ProposalOperationV1 = { operationType: 'add_claim_source' } & OperationAddClaimSource | { operationType: 'add_collection_membership' } & OperationAddCollectionMembership | { operationType: 'create_claim' } & OperationCreateClaim | { operationType: 'create_entity' } & OperationCreateEntity | { operationType: 'create_page' } & OperationCreatePage | { operationType: 'create_redirect' } & OperationCreateRedirect | { operationType: 'delete_block' } & OperationDeleteBlock | { operationType: 'insert_block' } & OperationInsertBlock | { operationType: 'insert_citation_reference' } & OperationInsertCitationReference | { operationType: 'insert_claim_reference' } & OperationInsertClaimReference | { operationType: 'insert_entity_reference' } & OperationInsertEntityReference | { operationType: 'insert_page_reference' } & OperationInsertPageReference | { operationType: 'merge_entity' } & OperationMergeEntity | { operationType: 'move_block' } & OperationMoveBlock | { operationType: 'remove_collection_membership' } & OperationRemoveCollectionMembership | { operationType: 'rename_page' } & OperationRenamePage | { operationType: 'replace_block' } & OperationReplaceBlock | { operationType: 'retarget_citation_reference' } & OperationRetargetCitationReference | { operationType: 'retarget_claim_reference' } & OperationRetargetClaimReference | { operationType: 'retarget_entity_reference' } & OperationRetargetEntityReference | { operationType: 'retarget_external_link' } & OperationRetargetExternalLink | { operationType: 'retarget_page_reference' } & OperationRetargetPageReference | { operationType: 'set_page_entity_binding' } & OperationSetPageEntityBinding | { operationType: 'supersede_claim' } & OperationSupersedeClaim;
 
 export function ProposalOperationV1FromJSON(json: any): ProposalOperationV1 {
     return ProposalOperationV1FromJSONTyped(json, false);
@@ -234,6 +241,8 @@ export function ProposalOperationV1FromJSONTyped(json: any, ignoreDiscriminator:
             return Object.assign({}, OperationRetargetExternalLinkFromJSONTyped(json, true), { operationType: 'retarget_external_link' } as const);
         case 'retarget_page_reference':
             return Object.assign({}, OperationRetargetPageReferenceFromJSONTyped(json, true), { operationType: 'retarget_page_reference' } as const);
+        case 'set_page_entity_binding':
+            return Object.assign({}, OperationSetPageEntityBindingFromJSONTyped(json, true), { operationType: 'set_page_entity_binding' } as const);
         case 'supersede_claim':
             return Object.assign({}, OperationSupersedeClaimFromJSONTyped(json, true), { operationType: 'supersede_claim' } as const);
         default:
@@ -294,6 +303,8 @@ export function ProposalOperationV1ToJSONTyped(value?: ProposalOperationV1 | nul
             return Object.assign({}, OperationRetargetExternalLinkToJSON(value), { 'operation_type': 'retarget_external_link' } as const);
         case 'retarget_page_reference':
             return Object.assign({}, OperationRetargetPageReferenceToJSON(value), { 'operation_type': 'retarget_page_reference' } as const);
+        case 'set_page_entity_binding':
+            return Object.assign({}, OperationSetPageEntityBindingToJSON(value), { 'operation_type': 'set_page_entity_binding' } as const);
         case 'supersede_claim':
             return Object.assign({}, OperationSupersedeClaimToJSON(value), { 'operation_type': 'supersede_claim' } as const);
         default:

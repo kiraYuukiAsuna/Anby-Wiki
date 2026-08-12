@@ -15,6 +15,8 @@
 - Chrome headless 已覆盖 34 个真实数据路由、导入持久队列、治理流程、斜杠标题和
   390×844 移动端退化；完整键盘顺序、读屏器语义、对比度和正式网络失败态仍需要
   人工验收。
+- 新增的 References/Related topics/Related outlines/信息框阅读结构已通过本地构建与
+  隔离迁移验证，但尚未在生产现有数据上完成投影全量重建、真实导入和浏览器验收。
 
 ### 关闭条件
 
@@ -24,6 +26,8 @@
    healthcheck。
 3. 在浏览器人工覆盖正文、编辑、历史、搜索、治理和所有 Hub 的键盘、焦点、读屏、
    对比度，以及断网、超时和 5xx 状态。
+4. 部署后全量重建 Projection，确认 References 编号/多回链、Related topics 原因、
+   Collection 归属形成的 Related outlines 和信息框在新旧页面及章节懒加载路径上一致。
 
 ## 2. 账号恢复与二次验证未完成
 
@@ -95,6 +99,9 @@
 
 ## 本轮已关闭
 
+- 2026-08 JavaScript 新披露漏洞：生产链 `nanoid` 与开发工具链 `fast-uri`、Hono、
+  `ip-address`、`js-yaml`、Undici 均锁定已修复版本；完整和 production-only
+  `npm audit` 恢复为 0。
 - Web production high 漏洞：Next `16.2.12` 的实际 PostCSS/Sharp 依赖已固定到
   安全版本，完整及 production-only `npm audit` 均为 0，类型、Lint 与构建通过。
 - Go 可达漏洞：gRPC `1.82.1`、OpenTelemetry `1.44.0` 等升级后，

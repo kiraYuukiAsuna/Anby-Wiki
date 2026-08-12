@@ -6,6 +6,7 @@ export interface TocEntry {
   id: string;
   level: number;
   text: string;
+  positionKey?: string;
 }
 
 /** 把 inline 节点序列拍平为纯文本（未解析引用显示其规范化标题）。 */
@@ -54,5 +55,16 @@ function collectHeadings(blocks: Block[], out: TocEntry[]): void {
 export function extractToc(doc: Document): TocEntry[] {
   const out: TocEntry[] = [];
   collectHeadings(doc.children, out);
+  const counters = Array.from({ length: 7 }, () => 0);
+  for (const entry of out) {
+    counters[entry.level] += 1;
+    for (let level = entry.level + 1; level <= 6; level += 1) {
+      counters[level] = 0;
+    }
+    entry.positionKey = counters
+      .slice(1, entry.level + 1)
+      .filter((value) => value > 0)
+      .join(".");
+  }
   return out;
 }

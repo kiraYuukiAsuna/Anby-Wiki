@@ -14,6 +14,7 @@ import {
 } from "lucide-react";
 
 import { AstDocument } from "@/components/ast";
+import { ArticleEndMatter } from "@/components/article-end-matter";
 import { LazySectionDocument } from "@/components/lazy-section-document";
 import { RenamePageButton } from "@/components/rename-page-button";
 import { RedirectPageButton } from "@/components/redirect-page-button";
@@ -23,11 +24,22 @@ import { ServerRenderedDocument } from "@/components/server-rendered-document";
 import { StableAnchorResolver } from "@/components/stable-anchor-resolver";
 import { TableOfContents, TocSidebar } from "@/components/toc";
 import { Button } from "@/components/ui/button";
+import { collectionsApi, projectionApi } from "@/lib/api";
 import { parseDocument } from "@/lib/ast/schema";
 import { extractToc } from "@/lib/ast/toc";
-import type { PageWithContent } from "../../../contracts/generated/typescript";
+import type {
+  DocumentOutline,
+  PageCollectionList,
+  PageReferenceList,
+  PageWithContent,
+  RelatedPageList,
+} from "../../../contracts/generated/typescript";
 
-export function PageView({ data }: { data: PageWithContent }) {
+function fulfilled<T>(result: PromiseSettledResult<T>): T | undefined {
+  return result.status === "fulfilled" ? result.value : undefined;
+}
+
+export async function PageView({ data }: { data: PageWithContent }) {
   const { page } = data;
   // 生成客户端把 nullable content 标为非空类型，运行时仍可能为 null（未发布）。
   const content = data.content ?? null;
@@ -36,7 +48,6 @@ export function PageView({ data }: { data: PageWithContent }) {
     content && !sectioned && content.astJson
       ? parseDocument(content.astJson)
       : null;
-  const toc = document ? extractToc(document) : [];
   const redirect = data.redirect ?? null;
   const redirectSourceId = redirect?.fromPageId ?? page.id;
   const redirectSourceTitle = redirect?.fromTitle ?? page.displayTitle;
@@ -45,6 +56,75 @@ export function PageView({ data }: { data: PageWithContent }) {
     redirect?.target.kind === "page_section"
       ? redirect.target.anchorBlockId
       : undefined;
+
+  const [outlineResult, referencesResult, relatedResult, collectionsResult] =
+    await Promise.allSettled([
+      projectionApi().getPageOutline({ id: page.id }),
+      projectionApi().getPageReferences({ id: page.id }),
+      projectionApi().getRelatedPages({ id: page.id }),
+      collectionsApi().listPageCollections({ id: page.id }),
+    ]);
+  const outline = fulfilled<DocumentOutline>(outlineResult);
+  const projectedToc = (outline?.items ?? []).map((item) => ({
+    id: item.headingBlockId,
+    level: item.level,
+    text: item.title,
+    positionKey: item.positionKey,
+  }));
+  const toc = projectedToc.length > 0
+    ? projectedToc
+    : document
+      ? extractToc(document)
+      : [];
+  const contentRevisionId = content?.revision.id;
+  const rawReferences = fulfilled<PageReferenceList>(referencesResult);
+  const references =
+    contentRevisionId &&
+    rawReferences &&
+    rawReferences.revisionId === contentRevisionId
+      ? rawReferences
+      : undefined;
+  const rawRelated = fulfilled<RelatedPageList>(relatedResult);
+  const related =
+    contentRevisionId && rawRelated && rawRelated.revisionId === contentRevisionId
+      ? rawRelated
+      : undefined;
+  const collections =
+    fulfilled<PageCollectionList>(collectionsResult)?.items ?? [];
+  let nextTopLevelNumber =
+    toc.reduce((largest, entry) => {
+      const first = Number.parseInt(entry.positionKey?.split(".")[0] ?? "", 10);
+      return Number.isFinite(first) ? Math.max(largest, first) : largest;
+    }, 0) + 1;
+  const showReferences = Boolean(
+    references && (!references.ready || references.items.length > 0),
+  );
+  if (showReferences) {
+    toc.push({
+      id: "references",
+      level: 2,
+      text: "References",
+      positionKey: String(nextTopLevelNumber),
+    });
+    nextTopLevelNumber++;
+  }
+  if (related?.ready && related.items.length > 0) {
+    toc.push({
+      id: "related-topics",
+      level: 2,
+      text: "Related topics",
+      positionKey: String(nextTopLevelNumber),
+    });
+    nextTopLevelNumber++;
+  }
+  if (collections.length > 0) {
+    toc.push({
+      id: "related-outlines",
+      level: 2,
+      text: "Related outlines",
+      positionKey: String(nextTopLevelNumber),
+    });
+  }
 
   return (
     <div className="mx-auto flex w-full max-w-5xl gap-8 px-4 py-8">
@@ -181,11 +261,19 @@ export function PageView({ data }: { data: PageWithContent }) {
           </p>
         ) : null}
 
+        {!terminalRedirect ? (
+          <ArticleEndMatter
+            references={references}
+            related={related}
+            collections={collections}
+          />
+        ) : null}
+
         {content && !terminalRedirect ? (
           <RevisionInfo revision={content.revision} pageId={page.id} />
         ) : null}
       </article>
-      <TocSidebar entries={toc} />
+      <TocSidebar entries={terminalRedirect ? [] : toc} />
     </div>
   );
 }

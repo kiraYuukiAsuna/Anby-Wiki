@@ -62,10 +62,11 @@ func (b *KnowledgeUsageBuilder) Type() string {
 }
 
 type knowledgeUsageRow struct {
-	blockID     uuid.UUID
-	nodeID      string
-	targetID    uuid.UUID
-	displayText string
+	blockID       uuid.UUID
+	nodeID        string
+	targetID      uuid.UUID
+	displayText   string
+	documentOrder int
 }
 
 func (b *KnowledgeUsageBuilder) Rebuild(ctx context.Context, tx pgx.Tx, pageID, revisionID uuid.UUID) error {
@@ -102,9 +103,11 @@ func (b *KnowledgeUsageBuilder) Rebuild(ctx context.Context, tx pgx.Tx, pageID, 
 		case usageCitation:
 			_, err = tx.Exec(ctx, `
 				INSERT INTO citation_usage
-					(citation_id, page_id, revision_id, block_id, node_id, claim_id)
-				VALUES ($1, $2, $3, $4, $5, NULL)`,
-				row.targetID, pageID, revisionID, row.blockID, row.nodeID)
+					(citation_id, page_id, revision_id, block_id, node_id,
+					 document_order, claim_id)
+				VALUES ($1, $2, $3, $4, $5, $6, NULL)`,
+				row.targetID, pageID, revisionID, row.blockID, row.nodeID,
+				row.documentOrder)
 		}
 		if err != nil {
 			return fmt.Errorf("projection: 写入页面 %s 的 %s 失败: %w", pageID, b.Type(), err)
@@ -177,6 +180,7 @@ func (b *KnowledgeUsageBuilder) collect(
 		rows = append(rows, knowledgeUsageRow{
 			blockID: blockID, nodeID: strconv.Itoa(node.Index),
 			targetID: targetID, displayText: displayText,
+			documentOrder: len(rows),
 		})
 		return true
 	})

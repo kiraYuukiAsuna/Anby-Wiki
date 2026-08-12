@@ -403,13 +403,21 @@ func (p *Pipeline) prepareParsedSource(
 		return nil, "", failed
 	}
 	sourceID := request.SourceID
+	bibliography := inferSourceMetadata(acquired)
 	sourceLabel := strings.TrimSpace(request.Title)
+	if sourceLabel == "" {
+		sourceLabel = strings.TrimSpace(bibliography.Title)
+	}
 	if sourceLabel == "" {
 		sourceLabel = acquired.Filename
 	}
 	if sourceID == nil {
-		params := evidence.CreateSourceParams{SourceType: inferredSourceType(acquired), AssetID: &asset.Asset.ID,
-			Title: sourceLabel, ActorID: request.ActorID}
+		params := evidence.CreateSourceParams{
+			SourceType: inferredSourceType(acquired), AssetID: &asset.Asset.ID,
+			Title: sourceLabel, Author: bibliography.Author,
+			Publisher: bibliography.Publisher, PublishedAt: bibliography.PublishedAt,
+			Metadata: bibliography.Metadata, ActorID: request.ActorID,
+		}
 		if acquired.URL != "" {
 			params.URL = acquired.URL
 		}

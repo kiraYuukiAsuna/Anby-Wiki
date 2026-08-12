@@ -28,6 +28,7 @@
         { "$ref": "#/$defs/create_claim" },
         { "$ref": "#/$defs/supersede_claim" },
         { "$ref": "#/$defs/add_claim_source" },
+        { "$ref": "#/$defs/set_page_entity_binding" },
         { "$ref": "#/$defs/add_collection_membership" },
         { "$ref": "#/$defs/remove_collection_membership" }
       ]
@@ -119,6 +120,7 @@
             "create_claim",
             "supersede_claim",
             "add_claim_source",
+            "set_page_entity_binding",
             "add_collection_membership",
             "remove_collection_membership"
           ]
@@ -246,6 +248,22 @@
     "create_claim": { "properties": { "operation_type": { "const": "create_claim" }, "target": { "required": ["entity_id"] } } },
     "supersede_claim": { "properties": { "operation_type": { "const": "supersede_claim" }, "target": { "required": ["claim_id"] } } },
     "add_claim_source": { "properties": { "operation_type": { "const": "add_claim_source" }, "target": { "required": ["claim_id", "citation_id"] } } },
+    "set_page_entity_binding_payload": {
+      "type": "object",
+      "properties": {
+        "role": { "const": "primary" },
+        "language": { "type": "string", "minLength": 1, "maxLength": 64 }
+      },
+      "required": ["role", "language"],
+      "additionalProperties": false
+    },
+    "set_page_entity_binding": {
+      "properties": {
+        "operation_type": { "const": "set_page_entity_binding" },
+        "target": { "required": ["wiki_id", "page_id", "entity_id"] },
+        "payload": { "$ref": "#/$defs/set_page_entity_binding_payload" }
+      }
+    },
     "add_collection_membership_payload": {
       "type": "object",
       "properties": {

@@ -79,3 +79,33 @@ func TestCreatePageOperationRequiresPreallocatedPageID(t *testing.T) {
 		t.Fatal("planned create_page ID must not populate the existing-page FK index")
 	}
 }
+
+func TestSetPageEntityBindingOperationRequiresPrimaryRoleAndLanguage(t *testing.T) {
+	baseVersion := 0
+	wikiID, pageID, entityID := uuid.New(), uuid.New(), uuid.New()
+	op := OperationV1{
+		SchemaVersion: 1, OperationType: OpSetPageEntityBinding,
+		Base: OperationBase{StateVersion: &baseVersion},
+		Target: OperationTarget{
+			WikiID: &wikiID, PageID: &pageID, EntityID: &entityID,
+		},
+		Evidence: []OperationEvidence{},
+		Risk:     OperationRisk{Level: RiskMedium, Reasons: []string{"reviewed primary subject"}},
+		Payload:  json.RawMessage(`{"role":"primary","language":"zh-Hans"}`),
+	}
+	raw, _ := json.Marshal(op)
+	if err := ValidateOperationJSON(raw); err != nil {
+		t.Fatalf("valid page binding was rejected: %v", err)
+	}
+
+	op.Payload = json.RawMessage(`{"role":"mentioned","language":"zh-Hans"}`)
+	raw, _ = json.Marshal(op)
+	if err := ValidateOperationJSON(raw); err == nil {
+		t.Fatal("non-primary binding must be rejected by the frozen operation schema")
+	}
+	op.Payload = json.RawMessage(`{"role":"primary"}`)
+	raw, _ = json.Marshal(op)
+	if err := ValidateOperationJSON(raw); err == nil {
+		t.Fatal("binding without language must be rejected")
+	}
+}

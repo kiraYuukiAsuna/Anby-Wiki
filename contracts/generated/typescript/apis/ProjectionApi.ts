@@ -34,6 +34,11 @@ import {
     DocumentOutlineToJSON,
 } from '../models/DocumentOutline';
 import {
+    type PageReferenceList,
+    PageReferenceListFromJSON,
+    PageReferenceListToJSON,
+} from '../models/PageReferenceList';
+import {
     type PageSectionLocator,
     PageSectionLocatorFromJSON,
     PageSectionLocatorToJSON,
@@ -49,6 +54,11 @@ import {
     ReferenceUsageListPageToJSON,
 } from '../models/ReferenceUsageListPage';
 import {
+    type RelatedPageList,
+    RelatedPageListFromJSON,
+    RelatedPageListToJSON,
+} from '../models/RelatedPageList';
+import {
     type RenderedPageSection,
     RenderedPageSectionFromJSON,
     RenderedPageSectionToJSON,
@@ -63,12 +73,20 @@ export interface GetPageOutlineRequest {
     id: string;
 }
 
+export interface GetPageReferencesRequest {
+    id: string;
+}
+
 export interface GetPageSectionRequest {
     id: string;
     sectionKey: string;
 }
 
 export interface GetPageSectionsRequest {
+    id: string;
+}
+
+export interface GetRelatedPagesRequest {
     id: string;
 }
 
@@ -172,6 +190,53 @@ export class ProjectionApi extends runtime.BaseAPI {
     }
 
     /**
+     * Creates request options for getPageReferences without sending the request
+     */
+    async getPageReferencesRequestOpts(requestParameters: GetPageReferencesRequest): Promise<runtime.RequestOpts> {
+        if (requestParameters['id'] == null) {
+            throw new runtime.RequiredError(
+                'id',
+                'Required parameter "id" was null or undefined when calling getPageReferences().'
+            );
+        }
+
+        const queryParameters: any = {};
+
+        const headerParameters: runtime.HTTPHeaders = {};
+
+
+        let urlPath = `/api/v1/pages/{id}/references`;
+        urlPath = urlPath.replace('{id}', encodeURIComponent(String(requestParameters['id'])));
+
+        return {
+            path: urlPath,
+            method: 'GET',
+            headers: headerParameters,
+            query: queryParameters,
+        };
+    }
+
+    /**
+     * 匿名读取由 CitationUsage 投影生成的参考文献列表。编号按 Citation 在当前 Revision 中首次出现的文档顺序生成，相同 Citation 的多次引用共享编号。 ready=false 表示 Worker 尚未完成当前 Revision 的投影，客户端不得将其解释为空引用。
+     * 当前 Revision 的参考文献
+     */
+    async getPageReferencesRaw(requestParameters: GetPageReferencesRequest, initOverrides?: RequestInit | runtime.InitOverrideFunction): Promise<runtime.ApiResponse<PageReferenceList>> {
+        const requestOptions = await this.getPageReferencesRequestOpts(requestParameters);
+        const response = await this.request(requestOptions, initOverrides);
+
+        return new runtime.JSONApiResponse(response, (jsonValue) => PageReferenceListFromJSON(jsonValue));
+    }
+
+    /**
+     * 匿名读取由 CitationUsage 投影生成的参考文献列表。编号按 Citation 在当前 Revision 中首次出现的文档顺序生成，相同 Citation 的多次引用共享编号。 ready=false 表示 Worker 尚未完成当前 Revision 的投影，客户端不得将其解释为空引用。
+     * 当前 Revision 的参考文献
+     */
+    async getPageReferences(requestParameters: GetPageReferencesRequest, initOverrides?: RequestInit | runtime.InitOverrideFunction): Promise<PageReferenceList> {
+        const response = await this.getPageReferencesRaw(requestParameters, initOverrides);
+        return await response.value();
+    }
+
+    /**
      * Creates request options for getPageSection without sending the request
      */
     async getPageSectionRequestOpts(requestParameters: GetPageSectionRequest): Promise<runtime.RequestOpts> {
@@ -268,6 +333,53 @@ export class ProjectionApi extends runtime.BaseAPI {
      */
     async getPageSections(requestParameters: GetPageSectionsRequest, initOverrides?: RequestInit | runtime.InitOverrideFunction): Promise<PageSectionManifest> {
         const response = await this.getPageSectionsRaw(requestParameters, initOverrides);
+        return await response.value();
+    }
+
+    /**
+     * Creates request options for getRelatedPages without sending the request
+     */
+    async getRelatedPagesRequestOpts(requestParameters: GetRelatedPagesRequest): Promise<runtime.RequestOpts> {
+        if (requestParameters['id'] == null) {
+            throw new runtime.RequiredError(
+                'id',
+                'Required parameter "id" was null or undefined when calling getRelatedPages().'
+            );
+        }
+
+        const queryParameters: any = {};
+
+        const headerParameters: runtime.HTTPHeaders = {};
+
+
+        let urlPath = `/api/v1/pages/{id}/related`;
+        urlPath = urlPath.replace('{id}', encodeURIComponent(String(requestParameters['id'])));
+
+        return {
+            path: urlPath,
+            method: 'GET',
+            headers: headerParameters,
+            query: queryParameters,
+        };
+    }
+
+    /**
+     * 匿名读取可重建的相关文章投影。排序综合正文链接、反向链接、双向链接、 Collection、主 Entity 与 Entity 图谱关系，并返回可解释的匹配原因。
+     * 当前页面的相关文章
+     */
+    async getRelatedPagesRaw(requestParameters: GetRelatedPagesRequest, initOverrides?: RequestInit | runtime.InitOverrideFunction): Promise<runtime.ApiResponse<RelatedPageList>> {
+        const requestOptions = await this.getRelatedPagesRequestOpts(requestParameters);
+        const response = await this.request(requestOptions, initOverrides);
+
+        return new runtime.JSONApiResponse(response, (jsonValue) => RelatedPageListFromJSON(jsonValue));
+    }
+
+    /**
+     * 匿名读取可重建的相关文章投影。排序综合正文链接、反向链接、双向链接、 Collection、主 Entity 与 Entity 图谱关系，并返回可解释的匹配原因。
+     * 当前页面的相关文章
+     */
+    async getRelatedPages(requestParameters: GetRelatedPagesRequest, initOverrides?: RequestInit | runtime.InitOverrideFunction): Promise<RelatedPageList> {
+        const response = await this.getRelatedPagesRaw(requestParameters, initOverrides);
         return await response.value();
     }
 

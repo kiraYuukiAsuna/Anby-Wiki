@@ -2,6 +2,12 @@
 
 BEGIN;
 
+DROP TABLE page_related_projection;
+
+COMMIT;
+
+BEGIN;
+
 DROP TABLE fact_consistency_issue;
 
 COMMIT;

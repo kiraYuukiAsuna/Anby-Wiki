@@ -22,6 +22,7 @@ func NewKnowledgePatchEngine(service *knowledge.Service) *KnowledgePatchEngine {
 
 type KnowledgePatchResult struct {
 	OperationType   string
+	PageID          *uuid.UUID
 	EntityID        *uuid.UUID
 	EntityUpdatedAt *time.Time
 	EntityMergeID   *uuid.UUID
@@ -162,6 +163,22 @@ func (e *KnowledgePatchEngine) ValidateWikiOperationInTx(
 		}
 		_, err := requireClaim(*op.Target.ClaimID)
 		return err
+	case OpSetPageEntityBinding:
+		if op.Target.PageID == nil || op.Target.EntityID == nil {
+			return ErrInvalidOperation
+		}
+		if err := requireEntity(*op.Target.EntityID); err != nil {
+			return err
+		}
+		var payload struct {
+			Role     string `json:"role"`
+			Language string `json:"language"`
+		}
+		if err := decodePayload(&op, &payload); err != nil ||
+			payload.Role != knowledge.BindingRolePrimary {
+			return ErrInvalidOperation
+		}
+		return nil
 	default:
 		return fmt.Errorf("%w: %s", ErrUnsupportedOperation, op.OperationType)
 	}
@@ -411,9 +428,52 @@ func (e *KnowledgePatchEngine) applyOne(ctx context.Context, tx pgx.Tx, op Opera
 		return &KnowledgePatchResult{OperationType: op.OperationType,
 			ClaimID: &source.ClaimID, SubjectEntityID: &claim.SubjectEntityID,
 			CitationID: &source.CitationID}, nil
+
+	case OpSetPageEntityBinding:
+		if tx == nil || op.Target.WikiID == nil || op.Target.PageID == nil ||
+			op.Target.EntityID == nil {
+			return nil, ErrInvalidOperation
+		}
+		var payload struct {
+			Role     string `json:"role"`
+			Language string `json:"language"`
+		}
+		if err := decodePayload(&op, &payload); err != nil ||
+			payload.Role != knowledge.BindingRolePrimary {
+			return nil, ErrInvalidOperation
+		}
+		binding, err := e.knowledge.BindPageInTx(
+			ctx, tx, knowledge.BindPageParams{
+				WikiID: *op.Target.WikiID, PageID: *op.Target.PageID,
+				EntityID: *op.Target.EntityID, Role: payload.Role,
+				Language: payload.Language, ActorID: actorID,
+			}, changeBatchID,
+		)
+		if err != nil {
+			return nil, err
+		}
+		return &KnowledgePatchResult{
+			OperationType: op.OperationType,
+			PageID:        &binding.PageID, EntityID: &binding.EntityID,
+		}, nil
 	default:
 		return nil, fmt.Errorf("%w: %s", ErrUnsupportedOperation, op.OperationType)
 	}
+}
+
+func (e *KnowledgePatchEngine) RestorePrimaryPageBindingInTx(
+	ctx context.Context,
+	tx pgx.Tx,
+	wikiID, pageID, expectedEntityID, actorID, changeBatchID uuid.UUID,
+	previous *knowledge.PageEntityBinding,
+) error {
+	if e == nil || e.knowledge == nil {
+		return ErrUnsupportedOperation
+	}
+	return e.knowledge.RestorePrimaryPageBindingInTx(
+		ctx, tx, wikiID, pageID, expectedEntityID, actorID,
+		previous, &changeBatchID,
+	)
 }
 
 type decodedClaimPayload struct {

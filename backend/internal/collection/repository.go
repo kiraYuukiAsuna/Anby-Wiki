@@ -127,6 +127,126 @@ func (r *Repository) List(
 	return result, nil
 }
 
+func (r *Repository) ListForPage(
+	ctx context.Context,
+	wikiID, pageID uuid.UUID,
+) ([]PageCollection, error) {
+	rows, err := r.pool.Query(ctx, `
+		WITH target_page AS (
+		  SELECT page.id,page.primary_entity_id,page.display_title,
+		         page.normalized_title,page.namespace_id,page.current_revision_id
+		  FROM page
+		  WHERE page.id=$2 AND page.wiki_id=$1 AND page.deleted_at IS NULL
+		), matched AS (
+		  SELECT membership.collection_id,
+		         CASE membership.member_type
+		           WHEN 'page' THEN 'page'
+		           ELSE 'primary_entity'
+		         END AS membership_source
+		  FROM collection_membership membership
+		  JOIN target_page target ON
+		    (membership.member_type='page' AND membership.page_id=target.id)
+		    OR
+		    (membership.member_type='entity' AND
+		     membership.entity_id=target.primary_entity_id)
+		  UNION ALL
+		  SELECT collection.id,
+		         CASE collection.query_json->>'member_type'
+		           WHEN 'page' THEN 'dynamic_page'
+		           ELSE 'dynamic_entity'
+		         END
+		  FROM collection
+		  CROSS JOIN target_page target
+		  LEFT JOIN namespace ON namespace.id=target.namespace_id
+		  LEFT JOIN entity ON entity.id=target.primary_entity_id
+		  LEFT JOIN entity_type ON entity_type.id=entity.entity_type_id
+		  WHERE collection.wiki_id=$1
+		    AND collection.collection_type='dynamic'
+		    AND (
+		      (collection.query_json->>'member_type'='page'
+		       AND target.current_revision_id IS NOT NULL
+		       AND COALESCE(collection.query_json->>'namespace','') IN ('',namespace.namespace_key)
+		       AND (
+		         COALESCE(collection.query_json->>'text','')=''
+		         OR position(lower(collection.query_json->>'text') IN lower(target.display_title))>0
+		         OR position(lower(collection.query_json->>'text') IN lower(target.normalized_title))>0
+		         OR EXISTS (
+		           SELECT 1 FROM page_alias alias
+		           WHERE alias.page_id=target.id
+		             AND position(lower(collection.query_json->>'text') IN lower(alias.normalized_title))>0
+		         )
+		       ))
+		      OR
+		      (collection.query_json->>'member_type'='entity'
+		       AND entity.id IS NOT NULL AND entity.status='active'
+		       AND COALESCE(collection.query_json->>'entity_type','') IN ('',entity_type.type_key)
+		       AND (
+		         COALESCE(collection.query_json->>'property','')=''
+		         OR EXISTS (
+		           SELECT 1 FROM claim
+		           JOIN property ON property.id=claim.property_id
+		           WHERE claim.subject_entity_id=entity.id
+		             AND claim.status='published'
+		             AND property.property_key=collection.query_json->>'property'
+		         )
+		       )
+		       AND (
+		         COALESCE(collection.query_json->>'text','')=''
+		         OR position(lower(collection.query_json->>'text') IN lower(entity.canonical_key))>0
+		         OR EXISTS (
+		           SELECT 1 FROM entity_label label
+		           WHERE label.entity_id=entity.id
+		             AND position(lower(collection.query_json->>'text') IN lower(label.label))>0
+		         )
+		         OR EXISTS (
+		           SELECT 1 FROM entity_alias alias
+		           WHERE alias.entity_id=entity.id
+		             AND position(lower(collection.query_json->>'text') IN lower(alias.alias))>0
+		         )
+		       ))
+		    )
+		), deduplicated AS (
+		  SELECT collection_id,
+		         (array_agg(membership_source ORDER BY CASE membership_source
+		           WHEN 'page' THEN 0
+		           WHEN 'primary_entity' THEN 1
+		           WHEN 'dynamic_page' THEN 2
+		           ELSE 3
+		         END))[1] AS membership_source
+		  FROM matched
+		  GROUP BY collection_id
+		)
+		SELECT collection.id,collection.wiki_id,collection.collection_type,
+		       collection.title,collection.description_page_id,
+		       collection.query_json,collection.created_by,
+		       collection.created_at,collection.updated_at,
+		       deduplicated.membership_source
+		FROM deduplicated
+		JOIN collection ON collection.id=deduplicated.collection_id
+		WHERE collection.wiki_id=$1
+		ORDER BY lower(collection.title),collection.id`, wikiID, pageID)
+	if err != nil {
+		return nil, fmt.Errorf("collection: list page collections: %w", err)
+	}
+	defer rows.Close()
+	result := []PageCollection{}
+	for rows.Next() {
+		var value PageCollection
+		if err := rows.Scan(
+			&value.ID, &value.WikiID, &value.CollectionType, &value.Title,
+			&value.DescriptionPageID, &value.QueryJSON, &value.CreatedBy,
+			&value.CreatedAt, &value.UpdatedAt, &value.MembershipSource,
+		); err != nil {
+			return nil, fmt.Errorf("collection: scan page collection: %w", err)
+		}
+		result = append(result, value)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, fmt.Errorf("collection: iterate page collections: %w", err)
+	}
+	return result, nil
+}
+
 func (r *Repository) ValidateRevision(
 	ctx context.Context, tx pgx.Tx, wikiID, revisionID uuid.UUID,
 ) error {
@@ -193,6 +313,39 @@ func (r *Repository) ReplaceMembers(
 		}
 	}
 	return nil
+}
+
+// MemberTargetIDs snapshots both sides of a set replacement so projection
+// invalidation can refresh pages removed from the Collection as well as pages
+// newly added to it.
+func (r *Repository) MemberTargetIDs(
+	ctx context.Context,
+	tx pgx.Tx,
+	collectionID uuid.UUID,
+) ([]uuid.UUID, []uuid.UUID, error) {
+	rows, err := tx.Query(ctx, `SELECT page_id,entity_id
+		FROM collection_membership
+		WHERE collection_id=$1
+		ORDER BY member_type,page_id,entity_id`, collectionID)
+	if err != nil {
+		return nil, nil, err
+	}
+	defer rows.Close()
+	pageIDs := []uuid.UUID{}
+	entityIDs := []uuid.UUID{}
+	for rows.Next() {
+		var pageID, entityID *uuid.UUID
+		if err := rows.Scan(&pageID, &entityID); err != nil {
+			return nil, nil, err
+		}
+		if pageID != nil {
+			pageIDs = append(pageIDs, *pageID)
+		}
+		if entityID != nil {
+			entityIDs = append(entityIDs, *entityID)
+		}
+	}
+	return pageIDs, entityIDs, rows.Err()
 }
 
 func (r *Repository) AddMember(

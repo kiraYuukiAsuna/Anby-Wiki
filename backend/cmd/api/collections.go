@@ -37,6 +37,15 @@ type collectionListResponse struct {
 	NextCursor *string              `json:"next_cursor"`
 }
 
+type pageCollectionResponse struct {
+	collectionResponse
+	MembershipSource string `json:"membership_source"`
+}
+
+type pageCollectionListResponse struct {
+	Items []pageCollectionResponse `json:"items"`
+}
+
 type membershipResponse struct {
 	MemberType       string     `json:"member_type"`
 	PageID           *uuid.UUID `json:"page_id"`
@@ -80,6 +89,28 @@ func (a *CollectionAPI) list(w http.ResponseWriter, r *http.Request) {
 	}
 	for index, item := range result.Items {
 		response.Items[index] = toCollectionResponse(item)
+	}
+	httpx.WriteJSON(w, http.StatusOK, response)
+}
+
+func (a *CollectionAPI) listForPage(w http.ResponseWriter, r *http.Request) {
+	pageID, ok := pageIDFrom(w, r)
+	if !ok {
+		return
+	}
+	items, err := a.service.ListForPage(r.Context(), a.wikiID, pageID)
+	if err != nil {
+		a.writeError(w, r, err)
+		return
+	}
+	response := pageCollectionListResponse{
+		Items: make([]pageCollectionResponse, len(items)),
+	}
+	for index, item := range items {
+		response.Items[index] = pageCollectionResponse{
+			collectionResponse: toCollectionResponse(item.Collection),
+			MembershipSource:   item.MembershipSource,
+		}
 	}
 	httpx.WriteJSON(w, http.StatusOK, response)
 }

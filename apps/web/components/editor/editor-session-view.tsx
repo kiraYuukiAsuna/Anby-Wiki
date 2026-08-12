@@ -264,6 +264,7 @@ export function EditorSessionView({
         {session.ast ? (
           <BlockEditor
             key={editorEpoch}
+            pageId={pageId}
             initialAst={session.ast}
             onChange={(ast) => {
               session.setAst(ast);

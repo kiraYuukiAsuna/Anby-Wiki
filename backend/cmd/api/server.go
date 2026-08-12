@@ -134,6 +134,8 @@ func NewRouter(logger *slog.Logger, deps Deps, writeAPI *WriteAPI, readAPI *Read
 			if projectionAPI != nil {
 				r.Get("/pages/{id}/backlinks", projectionAPI.listBacklinks)
 				r.Get("/pages/{id}/outline", projectionAPI.getOutline)
+				r.Get("/pages/{id}/references", projectionAPI.getReferences)
+				r.Get("/pages/{id}/related", projectionAPI.getRelatedPages)
 				r.Get("/pages/{id}/sections", projectionAPI.getSections)
 				r.Get("/pages/{id}/sections/{section_key}", projectionAPI.getSection)
 				r.Get("/pages/{id}/section-locator/{block_id}", projectionAPI.locateSection)
@@ -179,6 +181,7 @@ func NewRouter(logger *slog.Logger, deps Deps, writeAPI *WriteAPI, readAPI *Read
 				}
 			}
 			if collectionAPI != nil {
+				r.Get("/pages/{id}/collections", collectionAPI.listForPage)
 				r.Get("/collections", collectionAPI.list)
 				r.Post("/collections", collectionAPI.create)
 				r.Get("/collections/{id}", collectionAPI.get)

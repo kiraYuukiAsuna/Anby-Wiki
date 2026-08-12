@@ -366,6 +366,10 @@ func (s *RollbackService) applyAuditInverse(
 		return s.rollbackClaimEvent(
 			ctx, tx, event, batchID, actorID, handledClaims, result,
 		)
+	case knowledge.AuditEventPageEntityBindingAdded:
+		return s.rollbackPageEntityBindingEvent(
+			ctx, tx, event, batchID, actorID, wikiID, result,
+		)
 	case collection.OutboxEventMembershipAdded,
 		collection.OutboxEventMembershipRemoved:
 		return s.rollbackCollectionEvent(
@@ -377,6 +381,60 @@ func (s *RollbackService) applyAuditInverse(
 			ErrUnsupportedOperation, event.EventType,
 		)
 	}
+}
+
+type pageEntityBindingLedger struct {
+	PageID          uuid.UUID `json:"page_id"`
+	EntityID        uuid.UUID `json:"entity_id"`
+	Role            string    `json:"role"`
+	Language        string    `json:"language"`
+	PreviousBinding *struct {
+		EntityID uuid.UUID `json:"entity_id"`
+		Role     string    `json:"role"`
+		Language string    `json:"language"`
+	} `json:"previous_binding"`
+}
+
+func (s *RollbackService) rollbackPageEntityBindingEvent(
+	ctx context.Context,
+	tx pgx.Tx,
+	event BatchAuditEvent,
+	batchID, actorID, wikiID uuid.UUID,
+	result *RollbackResult,
+) error {
+	if event.AggregateType != page.AggregateTypePage || s.knowledge == nil {
+		return invalidLedger(event)
+	}
+	var payload pageEntityBindingLedger
+	if err := decodeLedger(event, &payload); err != nil {
+		return err
+	}
+	if payload.PageID == uuid.Nil {
+		payload.PageID = event.AggregateID
+	}
+	if payload.PageID != event.AggregateID || payload.EntityID == uuid.Nil ||
+		payload.Role != knowledge.BindingRolePrimary {
+		return invalidLedger(event)
+	}
+	var previous *knowledge.PageEntityBinding
+	if payload.PreviousBinding != nil {
+		previous = &knowledge.PageEntityBinding{
+			PageID:   payload.PageID,
+			EntityID: payload.PreviousBinding.EntityID,
+			Role:     payload.PreviousBinding.Role,
+			Language: payload.PreviousBinding.Language,
+		}
+	}
+	if err := s.knowledge.RestorePrimaryPageBindingInTx(
+		ctx, tx, wikiID, payload.PageID, payload.EntityID,
+		actorID, batchID, previous,
+	); err != nil {
+		return err
+	}
+	result.CompensatedPageIDs = appendUniqueUUID(
+		result.CompensatedPageIDs, payload.PageID,
+	)
+	return nil
 }
 
 type pageRenameLedger struct {

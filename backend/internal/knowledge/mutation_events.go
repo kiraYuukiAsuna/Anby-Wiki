@@ -50,6 +50,21 @@ func (s *Service) appendKnowledgeMutation(
 	aggregateID uuid.UUID,
 	payloadValue any,
 ) error {
+	return s.appendKnowledgeMutationInBatch(
+		ctx, tx, actorID, auditEventType, outboxEventType,
+		aggregateType, aggregateID, nil, payloadValue,
+	)
+}
+
+func (s *Service) appendKnowledgeMutationInBatch(
+	ctx context.Context,
+	tx pgx.Tx,
+	actorID uuid.UUID,
+	auditEventType, outboxEventType, aggregateType string,
+	aggregateID uuid.UUID,
+	changeBatchID *uuid.UUID,
+	payloadValue any,
+) error {
 	payload, err := json.Marshal(payloadValue)
 	if err != nil {
 		return fmt.Errorf("knowledge: encode %s event payload: %w", auditEventType, err)
@@ -68,6 +83,7 @@ func (s *Service) appendKnowledgeMutation(
 		EventType:     auditEventType,
 		AggregateType: aggregateType,
 		AggregateID:   aggregateID,
+		ChangeBatchID: changeBatchID,
 		Payload:       payload,
 	}); err != nil {
 		return err

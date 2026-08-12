@@ -207,11 +207,15 @@ func run(args []string) int {
 	// page.revision_published 在 Builder 分发成功后追加 ResolvePageLinks hook，
 	// 兜底 created/renamed 与 published 事件的乱序到达（最终一致）。
 	resolver := projection.NewLinkResolver(pool, logger)
+	relatedInvalidator := projection.NewRelatedPagesInvalidator(pool)
 	metadataHandler := projection.HandlerFunc(func(ctx context.Context, event projection.Event) error {
 		if err := resolver.Handle(ctx, event); err != nil {
 			return err
 		}
-		return searchBuilder.HandlePageMetadataEvent(ctx, event)
+		if err := searchBuilder.HandlePageMetadataEvent(ctx, event); err != nil {
+			return err
+		}
+		return relatedInvalidator.HandlePublishedPage(ctx, event.AggregateID)
 	})
 	consumer.Register(page.OutboxEventPageCreated, metadataHandler)
 	consumer.Register(page.OutboxEventPageRenamed, metadataHandler)
@@ -222,13 +226,30 @@ func run(args []string) int {
 	pageDeletedHandler := projection.NewPageDeletedHandler(pool)
 	consumer.Register(page.OutboxEventPageDeleted,
 		projection.HandlerFunc(func(ctx context.Context, event projection.Event) error {
+			peers, err := relatedInvalidator.SnapshotPagePeers(
+				ctx, event.AggregateID,
+			)
+			if err != nil {
+				return err
+			}
 			if err := pageDeletedHandler.Handle(ctx, event); err != nil {
+				return err
+			}
+			if err := relatedInvalidator.RebuildPageIDs(ctx, peers...); err != nil {
 				return err
 			}
 			return searchBuilder.HandlePageMetadataEvent(ctx, event)
 		}))
+	publishedHandler := resolver.WrapPublishedHandler(
+		projection.NewRevisionPublishedHandler(pool, registry, logger),
+	)
 	consumer.Register(page.OutboxEventRevisionPublished,
-		resolver.WrapPublishedHandler(projection.NewRevisionPublishedHandler(pool, registry, logger)))
+		projection.HandlerFunc(func(ctx context.Context, event projection.Event) error {
+			if err := publishedHandler.Handle(ctx, event); err != nil {
+				return err
+			}
+			return relatedInvalidator.HandlePublishedPage(ctx, event.AggregateID)
+		}))
 	claimChangedHandler := projection.NewClaimChangedHandler(pool, logger)
 	entityMetadataHandler := projection.NewEntityMetadataChangedHandler(
 		pool, searchBuilder, logger,
@@ -259,7 +280,10 @@ func run(args []string) int {
 				return err
 			}
 			_, err = entityGraph.RebuildSubject(ctx, payload.SubjectEntityID)
-			return err
+			if err != nil {
+				return err
+			}
+			return relatedInvalidator.HandleEntityIDs(ctx, payload.SubjectEntityID)
 		}),
 	)
 	consumer.Register(
@@ -272,7 +296,10 @@ func run(args []string) int {
 			ctx context.Context,
 			event projection.Event,
 		) error {
-			return searchBuilder.HandlePageMetadataEvent(ctx, event)
+			if err := searchBuilder.HandlePageMetadataEvent(ctx, event); err != nil {
+				return err
+			}
+			return relatedInvalidator.HandleBindingEvent(ctx, event)
 		}),
 	)
 	entityMergeRepair := newEntityMergeRepairHandler(governance.NewService(
@@ -291,8 +318,13 @@ func run(args []string) int {
 			if err := json.Unmarshal(event.Payload, &payload); err != nil {
 				return err
 			}
-			return entityMetadataHandler.HandleEntityIDs(
+			if err := entityMetadataHandler.HandleEntityIDs(
 				ctx, event, payload.SourceEntityID, payload.TargetEntityID,
+			); err != nil {
+				return err
+			}
+			return relatedInvalidator.HandleEntityIDs(
+				ctx, payload.SourceEntityID, payload.TargetEntityID,
 			)
 		}),
 	)
@@ -306,18 +338,24 @@ func run(args []string) int {
 			if err := json.Unmarshal(event.Payload, &payload); err != nil {
 				return err
 			}
-			return entityMetadataHandler.HandleEntityIDs(
+			if err := entityMetadataHandler.HandleEntityIDs(
 				ctx, event, payload.SourceEntityID, payload.TargetEntityID,
+			); err != nil {
+				return err
+			}
+			return relatedInvalidator.HandleEntityIDs(
+				ctx, payload.SourceEntityID, payload.TargetEntityID,
 			)
 		}),
 	)
 	membershipHandler := projection.HandlerFunc(func(
-		context.Context, projection.Event,
+		ctx context.Context, event projection.Event,
 	) error {
-		return nil
+		return relatedInvalidator.HandleCollectionEvent(ctx, event)
 	})
 	consumer.Register(collection.OutboxEventMembershipAdded, membershipHandler)
 	consumer.Register(collection.OutboxEventMembershipRemoved, membershipHandler)
+	consumer.Register(collection.OutboxEventMembershipReplaced, membershipHandler)
 	go monitorMetrics(ctx, logger, pool, 30*time.Second)
 	go metricsRegistry.MonitorDatabase(ctx, logger, pool, serviceName, cfg.ObservabilityDBInterval)
 	metricsDone, err := serveMetrics(ctx, logger, cfg.WorkerMetricsAddr, metricsRegistry.Handler())
@@ -612,6 +650,7 @@ func registerBuilders(reg *projection.Registry, pool *pgxpool.Pool, logger *slog
 	reg.Register(projection.NewComponentDependencyBuilder(pool))
 	reg.Register(projection.NewClaimUsageBuilder(pool))
 	reg.Register(projection.NewCitationUsageBuilder(pool))
+	reg.Register(projection.NewRelatedPagesBuilder(pool))
 	reg.Register(projection.NewRenderedPageBuilder(pool))
 	reg.Register(projection.NewRenderedSectionsBuilder(pool))
 	searchBackend := wikisearch.SearchAdapter(wikisearch.NewPostgresAdapter(pool))

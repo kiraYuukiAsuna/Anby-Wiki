@@ -249,6 +249,12 @@ func (s *ApplyService) Apply(ctx context.Context, proposalID, actorID uuid.UUID)
 				return fmt.Errorf("%w: knowledge patch 未装配", ErrUnsupportedOperation)
 			}
 			for i := range ops {
+				if ops[i].OperationType == OpSetPageEntityBinding {
+					return fmt.Errorf(
+						"%w: page binding requires a wiki-target Proposal",
+						ErrUnsupportedOperation,
+					)
+				}
 				if ops[i].OperationType == OpMergeEntity && s.auth != nil {
 					if err := s.auth.CheckTx(
 						ctx, tx, actorID,
@@ -539,21 +545,33 @@ func (s *ApplyService) validateWikiOperationTargets(
 	}
 	wikiID := *proposal.TargetID
 	plannedEntityIDs := make(map[uuid.UUID]struct{})
+	plannedPageIDs := make(map[uuid.UUID]struct{})
 	for i := range ops {
-		if ops[i].OperationType != OpCreateEntity {
-			continue
+		switch ops[i].OperationType {
+		case OpCreateEntity:
+			if ops[i].Target.EntityID == nil || *ops[i].Target.EntityID == uuid.Nil ||
+				ops[i].Target.WikiID == nil || *ops[i].Target.WikiID != wikiID {
+				return ErrInvalidOperation
+			}
+			if _, duplicate := plannedEntityIDs[*ops[i].Target.EntityID]; duplicate {
+				return fmt.Errorf(
+					"%w: duplicate create_entity=%s",
+					ErrInvalidOperation, *ops[i].Target.EntityID,
+				)
+			}
+			plannedEntityIDs[*ops[i].Target.EntityID] = struct{}{}
+		case OpCreatePage:
+			if ops[i].Target.PageID == nil || *ops[i].Target.PageID == uuid.Nil {
+				return ErrInvalidOperation
+			}
+			if _, duplicate := plannedPageIDs[*ops[i].Target.PageID]; duplicate {
+				return fmt.Errorf(
+					"%w: duplicate create_page=%s",
+					ErrInvalidOperation, *ops[i].Target.PageID,
+				)
+			}
+			plannedPageIDs[*ops[i].Target.PageID] = struct{}{}
 		}
-		if ops[i].Target.EntityID == nil || *ops[i].Target.EntityID == uuid.Nil ||
-			ops[i].Target.WikiID == nil || *ops[i].Target.WikiID != wikiID {
-			return ErrInvalidOperation
-		}
-		if _, duplicate := plannedEntityIDs[*ops[i].Target.EntityID]; duplicate {
-			return fmt.Errorf(
-				"%w: duplicate create_entity=%s",
-				ErrInvalidOperation, *ops[i].Target.EntityID,
-			)
-		}
-		plannedEntityIDs[*ops[i].Target.EntityID] = struct{}{}
 	}
 	for i := range ops {
 		op := ops[i]
@@ -578,6 +596,21 @@ func (s *ApplyService) validateWikiOperationTargets(
 				)
 			}
 		case isKnowledgeOperation(op.OperationType):
+			if op.OperationType == OpSetPageEntityBinding {
+				if op.Target.WikiID == nil || *op.Target.WikiID != wikiID ||
+					op.Target.PageID == nil || op.Target.EntityID == nil {
+					return ErrInvalidOperation
+				}
+				if _, planned := plannedPageIDs[*op.Target.PageID]; !planned {
+					targetPage, err := s.pages.GetPageInTx(ctx, tx, *op.Target.PageID)
+					if err != nil {
+						return err
+					}
+					if targetPage.WikiID != wikiID || targetPage.DeletedAt != nil {
+						return ErrInvalidOperation
+					}
+				}
+			}
 			if err := s.knowledge.ValidateWikiOperationInTx(
 				ctx, tx, wikiID, op, plannedEntityIDs,
 			); err != nil {
@@ -593,7 +626,7 @@ func (s *ApplyService) validateWikiOperationTargets(
 func isKnowledgeOperation(operationType string) bool {
 	switch operationType {
 	case OpCreateEntity, OpMergeEntity, OpCreateClaim,
-		OpSupersedeClaim, OpAddClaimSource:
+		OpSupersedeClaim, OpAddClaimSource, OpSetPageEntityBinding:
 		return true
 	default:
 		return false
@@ -614,6 +647,9 @@ func (s *ApplyService) applyKnowledgeOperationInTx(
 	}
 	if applied.EntityID != nil {
 		result.EntityIDs = appendUniqueUUID(result.EntityIDs, *applied.EntityID)
+	}
+	if applied.PageID != nil {
+		result.PageIDs = appendUniqueUUID(result.PageIDs, *applied.PageID)
 	}
 	if applied.OperationType == OpCreateEntity {
 		if applied.EntityID == nil || applied.EntityUpdatedAt == nil {

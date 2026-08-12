@@ -15,6 +15,11 @@ type entityReferenceTarget struct {
 	Label    string
 }
 
+type primaryEntityTarget struct {
+	entityReferenceTarget
+	Evidence []CandidateEvidence
+}
+
 func entityReferencesForCompose(params ComposeParams) []entityReferenceTarget {
 	resolved := make(map[uuid.UUID]uuid.UUID, len(params.Resolutions))
 	for _, resolution := range params.Resolutions {
@@ -67,6 +72,86 @@ func entityReferencesForCompose(params ComposeParams) []entityReferenceTarget {
 		return result[i].Label < result[j].Label
 	})
 	return result
+}
+
+func primaryEntityForRoute(
+	params ComposeParams,
+	route PageRoute,
+) *primaryEntityTarget {
+	if params.Candidates == nil {
+		return nil
+	}
+	resolved := make(map[uuid.UUID]uuid.UUID, len(params.Resolutions))
+	for _, resolution := range params.Resolutions {
+		switch resolution.Outcome {
+		case EntityMatched:
+			if resolution.EntityID != nil {
+				resolved[resolution.CandidateID] = *resolution.EntityID
+			}
+		case EntityNewReview:
+			if resolution.PlannedEntityID != nil {
+				resolved[resolution.CandidateID] = *resolution.PlannedEntityID
+			}
+		}
+	}
+	wanted := normalizedIdentityText(route.Title)
+	bestScore := 0
+	var best *primaryEntityTarget
+	ambiguous := false
+	for _, candidate := range params.Candidates.Entities {
+		entityID := resolved[candidate.CandidateID]
+		if entityID == uuid.Nil {
+			continue
+		}
+		score := primaryEntityLabelScore(wanted, candidate.Label)
+		for _, alias := range candidate.Aliases {
+			aliasScore := primaryEntityLabelScore(wanted, alias) - 5
+			if aliasScore > score {
+				score = aliasScore
+			}
+		}
+		if score <= 0 {
+			continue
+		}
+		target := &primaryEntityTarget{
+			entityReferenceTarget: entityReferenceTarget{
+				EntityID: entityID, Label: strings.TrimSpace(candidate.Label),
+			},
+			Evidence: candidate.Evidence,
+		}
+		switch {
+		case score > bestScore:
+			best, bestScore, ambiguous = target, score, false
+		case score == bestScore && best != nil && best.EntityID != entityID:
+			ambiguous = true
+		}
+	}
+	if bestScore < 70 || ambiguous {
+		return nil
+	}
+	return best
+}
+
+func primaryEntityLabelScore(wanted, rawLabel string) int {
+	label := normalizedIdentityText(rawLabel)
+	if wanted == "" || label == "" {
+		return 0
+	}
+	if label == wanted {
+		return 100
+	}
+	shorter, longer := len([]rune(label)), len([]rune(wanted))
+	if shorter > longer {
+		shorter, longer = longer, shorter
+	}
+	// A contained name is useful for titles such as "Microsoft Semantic
+	// Kernel", but short/generic fragments ("AI", "Wiki") must never become
+	// an authoritative primary binding merely because they occur in the title.
+	if shorter >= 3 && shorter*100 >= longer*55 &&
+		(strings.Contains(wanted, label) || strings.Contains(label, wanted)) {
+		return 75
+	}
+	return 0
 }
 
 func inlineNodesWithEntityReferences(text string, targets []entityReferenceTarget) ([]*ast.InlineNode, error) {

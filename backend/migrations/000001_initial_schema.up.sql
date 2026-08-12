@@ -898,12 +898,14 @@ CREATE TABLE citation_usage (
     revision_id uuid NOT NULL REFERENCES revision (id),
     block_id    uuid NOT NULL,
     node_id     text NOT NULL,
+    document_order integer NOT NULL CHECK (document_order >= 0),
     claim_id    uuid REFERENCES claim (id),
     PRIMARY KEY (page_id, block_id, node_id)
 );
 
 CREATE INDEX citation_usage_citation_page_idx ON citation_usage (citation_id, page_id);
 CREATE INDEX citation_usage_page_revision_idx ON citation_usage (page_id, revision_id);
+CREATE INDEX citation_usage_page_order_idx ON citation_usage (page_id, revision_id, document_order);
 CREATE INDEX citation_usage_claim_idx ON citation_usage (claim_id) WHERE claim_id IS NOT NULL;
 
 COMMIT;
@@ -1540,6 +1542,30 @@ CREATE TRIGGER component_version_freeze
 BEFORE UPDATE OR DELETE ON component_version
 FOR EACH ROW EXECUTE FUNCTION enforce_component_version_freeze();
 
+-- The article importer and editor share one frozen, trusted information-box
+-- component. Display configuration selects labels/properties; Claim values are
+-- always resolved at render time and are never copied into the page AST.
+INSERT INTO component (id, component_key, name, created_by)
+VALUES (
+    '00000000-0000-7000-8000-000000000901',
+    'article-infobox',
+    'Article information box',
+    '00000000-0000-7000-8000-000000000201'
+);
+
+INSERT INTO component_version (
+    component_id, version, props_schema_json, renderer_ref, status,
+    created_by, published_at
+) VALUES (
+    '00000000-0000-7000-8000-000000000901',
+    1,
+    '{"type":"object","properties":{"title":{"type":"string"},"language":{"type":"string"},"property_keys":{"type":"array","items":{"type":"string"},"uniqueItems":true}},"additionalProperties":false}'::jsonb,
+    'builtin.entity_claim_infobox',
+    'published',
+    '00000000-0000-7000-8000-000000000201',
+    now()
+);
+
 COMMIT;
 
 BEGIN;
@@ -1919,6 +1945,24 @@ CREATE INDEX entity_edge_projection_outbound_idx
 CREATE INDEX entity_edge_projection_inbound_idx
     ON entity_edge_projection
        (wiki_id, target_entity_id, property_key, subject_entity_id, claim_id);
+
+-- Disposable recommendations for the article footer. Every row is derived
+-- from current page-link, Collection membership and Entity graph projections.
+CREATE TABLE page_related_projection (
+    source_page_id     uuid        NOT NULL REFERENCES page (id),
+    source_revision_id uuid        NOT NULL REFERENCES revision (id),
+    target_page_id     uuid        NOT NULL REFERENCES page (id),
+    score              integer     NOT NULL CHECK (score > 0),
+    reasons_json       jsonb       NOT NULL CHECK (jsonb_typeof(reasons_json) = 'array'),
+    projected_at       timestamptz NOT NULL DEFAULT now(),
+    PRIMARY KEY (source_page_id, target_page_id),
+    CHECK (source_page_id <> target_page_id)
+);
+
+CREATE INDEX page_related_projection_rank_idx
+    ON page_related_projection (source_page_id, score DESC, target_page_id);
+CREATE INDEX page_related_projection_target_idx
+    ON page_related_projection (target_page_id, source_page_id);
 
 COMMIT;
 

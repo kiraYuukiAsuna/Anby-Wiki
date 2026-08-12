@@ -76,11 +76,12 @@ func (b *RenderedSectionsBuilder) Rebuild(
 				pageID, section.key, err,
 			)
 		}
-		html, err := render.RenderHTMLWithResolvers(
+		html, err := render.RenderHTMLWithResolversAndCitationOrder(
 			ctx,
 			fragment,
 			b.dynamic,
 			b.dynamic,
+			citationOrder,
 		)
 		if err != nil {
 			return fmt.Errorf(

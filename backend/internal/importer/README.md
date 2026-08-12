@@ -42,6 +42,11 @@ JSON、CSV、PDF、PNG 与 JPEG：公网 JSON 作为 API 快照，上传的 JSON
 Job config 只保存对象键与内容哈希、不保存正文；Worker 读取后再次校验。两条路径共享
 MIME/magic、10 MiB、恶意签名、哈希和证据固化门禁。
 
+来源固化前会在最多 256 KiB 的有界窗口中推导结构化元数据：HTML `title`/meta、
+JSON 常用字段、Markdown front matter 与 RFC 头可提供标题、作者、发布者、日期、
+DOI/标识符和语言；URL host、文件名与 MIME 作为补充。只把这些短字段写入 Source
+metadata，不记录正文、Prompt 或密钥；请求显式标题优先于自动推导结果。
+
 Worker 使用 Poppler `pdftotext` 从标准输入读取 PDF、从标准输出取得 UTF-8 文本，
 不创建临时来源文件，也不向子进程传递 Worker 环境变量。页间换页符用于保留页码定位，
 解压后的文本限制为 32 MiB。没有文本层的 PDF 由 Poppler 逐页、限尺寸栅格化后交给
@@ -113,6 +118,14 @@ Composer 把页面路由与 Entity/Claim 决策合成为一个以 Wiki 为目标
 Operation。Apply 先做跨页面 Revision/Block 与 Claim 冲突检测，再在单一事务中创建/更新
 多个页面和知识对象；任一步失败整批回滚。成功响应返回全部 `revision_ids`，ChangeBatch
 回滚仍按审计账本对整批追加补偿。
+
+文章结构不交给模型自由发挥：服务端把正文 heading 归一为从 H2 开始且不跳级，删除
+模型生成的 References/See also/Further reading/External links 等尾部样板；有关联时
+确定性生成标准 H2 `参见`/`See also` 与 PageReference 列表。路由能唯一匹配主 Entity
+时，Composer 同批写入 `set_page_entity_binding` 并在文首插入内置
+`article-infobox` Component；更新页会复用现有标准章节与 Block ID，避免重复尾部和
+信息框。References 本身由已核验 Citation 的 Current Revision 投影生成，不复制模型
+书目文本，也不把页面关联伪装成 Citation。
 
 ## 安全边界
 

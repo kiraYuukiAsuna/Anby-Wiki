@@ -5,8 +5,10 @@ All URIs are relative to *http://localhost:3000*
 | Method | HTTP request | Description |
 |------------- | ------------- | -------------|
 | [**getPageOutline**](ProjectionApi.md#getpageoutline) | **GET** /api/v1/pages/{id}/outline | 页面文档目录 |
+| [**getPageReferences**](ProjectionApi.md#getpagereferences) | **GET** /api/v1/pages/{id}/references | 当前 Revision 的参考文献 |
 | [**getPageSection**](ProjectionApi.md#getpagesection) | **GET** /api/v1/pages/{id}/sections/{section_key} | 按需读取一个当前章节分片 |
 | [**getPageSections**](ProjectionApi.md#getpagesections) | **GET** /api/v1/pages/{id}/sections | 读取当前 Revision 的章节分片清单 |
+| [**getRelatedPages**](ProjectionApi.md#getrelatedpages) | **GET** /api/v1/pages/{id}/related | 当前页面的相关文章 |
 | [**listBacklinks**](ProjectionApi.md#listbacklinks) | **GET** /api/v1/pages/{id}/backlinks | 页面反向链接 |
 | [**listCitationUsages**](ProjectionApi.md#listcitationusages) | **GET** /api/v1/citations/{id}/usages | Citation 页面使用位置 |
 | [**listClaimUsages**](ProjectionApi.md#listclaimusages) | **GET** /api/v1/claims/{id}/usages | Claim 页面使用位置 |
@@ -81,6 +83,77 @@ No authorization required
 | Status code | Description | Response headers |
 |-------------|-------------|------------------|
 | **200** | 文档目录（items 按文档顺序） |  * X-Request-ID -  <br>  |
+| **400** | 请求格式错误 |  -  |
+| **404** | 资源不存在 |  -  |
+| **410** | 资源曾存在但已删除（如软删除页面、重定向目标已删除） |  -  |
+| **500** | 服务端内部错误 |  -  |
+
+[[Back to top]](#) [[Back to API list]](../README.md#api-endpoints) [[Back to Model list]](../README.md#models) [[Back to README]](../README.md)
+
+
+## getPageReferences
+
+> PageReferenceList getPageReferences(id)
+
+当前 Revision 的参考文献
+
+匿名读取由 CitationUsage 投影生成的参考文献列表。编号按 Citation 在当前 Revision 中首次出现的文档顺序生成，相同 Citation 的多次引用共享编号。 ready&#x3D;false 表示 Worker 尚未完成当前 Revision 的投影，客户端不得将其解释为空引用。
+
+### Example
+
+```ts
+import {
+  Configuration,
+  ProjectionApi,
+} from '';
+import type { GetPageReferencesRequest } from '';
+
+async function example() {
+  console.log("🚀 Testing  SDK...");
+  const api = new ProjectionApi();
+
+  const body = {
+    // string | 页面 ID（UUIDv7）
+    id: 38400000-8cf0-11bd-b23e-10b96e4ef00d,
+  } satisfies GetPageReferencesRequest;
+
+  try {
+    const data = await api.getPageReferences(body);
+    console.log(data);
+  } catch (error) {
+    console.error(error);
+  }
+}
+
+// Run the test
+example().catch(console.error);
+```
+
+### Parameters
+
+
+| Name | Type | Description  | Notes |
+|------------- | ------------- | ------------- | -------------|
+| **id** | `string` | 页面 ID（UUIDv7） | [Defaults to `undefined`] |
+
+### Return type
+
+[**PageReferenceList**](PageReferenceList.md)
+
+### Authorization
+
+No authorization required
+
+### HTTP request headers
+
+- **Content-Type**: Not defined
+- **Accept**: `application/json`
+
+
+### HTTP response details
+| Status code | Description | Response headers |
+|-------------|-------------|------------------|
+| **200** | 当前 Revision 的参考文献列表 |  * X-Request-ID -  <br>  |
 | **400** | 请求格式错误 |  -  |
 | **404** | 资源不存在 |  -  |
 | **410** | 资源曾存在但已删除（如软删除页面、重定向目标已删除） |  -  |
@@ -224,6 +297,77 @@ No authorization required
 | Status code | Description | Response headers |
 |-------------|-------------|------------------|
 | **200** | 当前章节分片清单 |  -  |
+| **400** | 请求格式错误 |  -  |
+| **404** | 资源不存在 |  -  |
+| **410** | 资源曾存在但已删除（如软删除页面、重定向目标已删除） |  -  |
+| **500** | 服务端内部错误 |  -  |
+
+[[Back to top]](#) [[Back to API list]](../README.md#api-endpoints) [[Back to Model list]](../README.md#models) [[Back to README]](../README.md)
+
+
+## getRelatedPages
+
+> RelatedPageList getRelatedPages(id)
+
+当前页面的相关文章
+
+匿名读取可重建的相关文章投影。排序综合正文链接、反向链接、双向链接、 Collection、主 Entity 与 Entity 图谱关系，并返回可解释的匹配原因。
+
+### Example
+
+```ts
+import {
+  Configuration,
+  ProjectionApi,
+} from '';
+import type { GetRelatedPagesRequest } from '';
+
+async function example() {
+  console.log("🚀 Testing  SDK...");
+  const api = new ProjectionApi();
+
+  const body = {
+    // string | 页面 ID（UUIDv7）
+    id: 38400000-8cf0-11bd-b23e-10b96e4ef00d,
+  } satisfies GetRelatedPagesRequest;
+
+  try {
+    const data = await api.getRelatedPages(body);
+    console.log(data);
+  } catch (error) {
+    console.error(error);
+  }
+}
+
+// Run the test
+example().catch(console.error);
+```
+
+### Parameters
+
+
+| Name | Type | Description  | Notes |
+|------------- | ------------- | ------------- | -------------|
+| **id** | `string` | 页面 ID（UUIDv7） | [Defaults to `undefined`] |
+
+### Return type
+
+[**RelatedPageList**](RelatedPageList.md)
+
+### Authorization
+
+No authorization required
+
+### HTTP request headers
+
+- **Content-Type**: Not defined
+- **Accept**: `application/json`
+
+
+### HTTP response details
+| Status code | Description | Response headers |
+|-------------|-------------|------------------|
+| **200** | 相关文章（按相关度降序，最多 12 条） |  * X-Request-ID -  <br>  |
 | **400** | 请求格式错误 |  -  |
 | **404** | 资源不存在 |  -  |
 | **410** | 资源曾存在但已删除（如软删除页面、重定向目标已删除） |  -  |

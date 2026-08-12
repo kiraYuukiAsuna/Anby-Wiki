@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"sort"
 	"strings"
 
 	"github.com/google/uuid"
@@ -126,6 +127,12 @@ func (s *Service) ReplaceManualMembers(
 		if value.CollectionType != TypeManual {
 			return ErrInvalidDefinition
 		}
+		oldPageIDs, oldEntityIDs, err := s.repo.MemberTargetIDs(
+			ctx, tx, collectionID,
+		)
+		if err != nil {
+			return err
+		}
 		members := make([]Membership, 0, len(inputs))
 		seen := make(map[string]struct{}, len(inputs))
 		for _, input := range inputs {
@@ -141,8 +148,82 @@ func (s *Service) ReplaceManualMembers(
 			seen[key] = struct{}{}
 			members = append(members, member)
 		}
-		return s.repo.ReplaceMembers(ctx, tx, collectionID, members)
+		if err := s.repo.ReplaceMembers(ctx, tx, collectionID, members); err != nil {
+			return err
+		}
+		if err := s.repo.Touch(ctx, tx, collectionID); err != nil {
+			return err
+		}
+		newPageIDs, newEntityIDs := membershipTargetIDs(members)
+		return s.appendMembershipReplacement(
+			ctx, tx, collectionID, actorID,
+			append(oldPageIDs, newPageIDs...),
+			append(oldEntityIDs, newEntityIDs...),
+		)
 	})
+}
+
+func membershipTargetIDs(members []Membership) ([]uuid.UUID, []uuid.UUID) {
+	pageIDs := make([]uuid.UUID, 0, len(members))
+	entityIDs := make([]uuid.UUID, 0, len(members))
+	for _, member := range members {
+		if member.PageID != nil {
+			pageIDs = append(pageIDs, *member.PageID)
+		}
+		if member.EntityID != nil {
+			entityIDs = append(entityIDs, *member.EntityID)
+		}
+	}
+	return pageIDs, entityIDs
+}
+
+func (s *Service) appendMembershipReplacement(
+	ctx context.Context,
+	tx pgx.Tx,
+	collectionID, actorID uuid.UUID,
+	pageIDs, entityIDs []uuid.UUID,
+) error {
+	pageIDs = uniqueSortedIDs(pageIDs)
+	entityIDs = uniqueSortedIDs(entityIDs)
+	auditID, err := s.ids.New()
+	if err != nil {
+		return err
+	}
+	outboxID, err := s.ids.New()
+	if err != nil {
+		return err
+	}
+	payload, err := json.Marshal(map[string]any{
+		"collection_id": collectionID,
+		"page_ids":      pageIDs,
+		"entity_ids":    entityIDs,
+	})
+	if err != nil {
+		return err
+	}
+	return s.repo.InsertMembershipEvent(
+		ctx, tx, auditID, outboxID, collectionID, actorID, nil,
+		OutboxEventMembershipReplaced, payload,
+	)
+}
+
+func uniqueSortedIDs(values []uuid.UUID) []uuid.UUID {
+	seen := make(map[uuid.UUID]struct{}, len(values))
+	result := make([]uuid.UUID, 0, len(values))
+	for _, value := range values {
+		if value == uuid.Nil {
+			continue
+		}
+		if _, exists := seen[value]; exists {
+			continue
+		}
+		seen[value] = struct{}{}
+		result = append(result, value)
+	}
+	sort.Slice(result, func(i, j int) bool {
+		return result[i].String() < result[j].String()
+	})
+	return result
 }
 
 // ApplyManualMemberInTx is the authoritative single-member boundary used by
@@ -296,6 +377,12 @@ func (s *Service) RebuildRule(
 		if value.CollectionType != TypeRule {
 			return ErrInvalidDefinition
 		}
+		oldPageIDs, oldEntityIDs, err := s.repo.MemberTargetIDs(
+			ctx, tx, collectionID,
+		)
+		if err != nil {
+			return err
+		}
 		if err := s.repo.ValidateRevision(ctx, tx, value.WikiID, sourceRevisionID); err != nil {
 			return err
 		}
@@ -319,7 +406,18 @@ func (s *Service) RebuildRule(
 			})
 		}
 		count = len(members)
-		return s.repo.ReplaceMembers(ctx, tx, collectionID, members)
+		if err := s.repo.ReplaceMembers(ctx, tx, collectionID, members); err != nil {
+			return err
+		}
+		if err := s.repo.Touch(ctx, tx, collectionID); err != nil {
+			return err
+		}
+		newPageIDs, newEntityIDs := membershipTargetIDs(members)
+		return s.appendMembershipReplacement(
+			ctx, tx, collectionID, actorID,
+			append(oldPageIDs, newPageIDs...),
+			append(oldEntityIDs, newEntityIDs...),
+		)
 	})
 	return count, err
 }
@@ -348,6 +446,20 @@ func (s *Service) List(
 	ctx context.Context, wikiID uuid.UUID, cursor string, limit int,
 ) (*CollectionPage, error) {
 	return s.repo.List(ctx, wikiID, cursor, normalizeLimit(limit))
+}
+
+func (s *Service) ListForPage(
+	ctx context.Context,
+	wikiID, pageID uuid.UUID,
+) ([]PageCollection, error) {
+	value, err := s.actors.GetPageByID(ctx, nil, pageID)
+	if err != nil {
+		return nil, err
+	}
+	if value.WikiID != wikiID || value.DeletedAt != nil {
+		return nil, page.ErrPageNotFound
+	}
+	return s.repo.ListForPage(ctx, wikiID, pageID)
 }
 
 func (s *Service) ListMembers(

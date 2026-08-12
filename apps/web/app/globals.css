@@ -273,6 +273,18 @@
   text-decoration-line: underline;
 }
 
+.wiki-rendered sup[data-citation-ref] {
+  margin-inline-start: 0.125rem;
+  scroll-margin-top: 5rem;
+  color: var(--primary);
+  font-size: 0.72em;
+  font-weight: 650;
+}
+
+.wiki-rendered sup[data-citation-ref] > a {
+  text-decoration: none;
+}
+
 .wiki-rendered a.unresolved {
   cursor: not-allowed;
   color: var(--muted-foreground);

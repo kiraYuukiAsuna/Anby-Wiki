@@ -134,7 +134,33 @@ func refinePlannedBlocks(blocks []PlannedBlock) []PlannedBlock {
 		}
 		result = append(result, block)
 	}
-	return removeOrphanHeadings(result)
+	return normalizeArticleHeadingLevels(removeOrphanHeadings(result))
+}
+
+func normalizeArticleHeadingLevels(blocks []PlannedBlock) []PlannedBlock {
+	firstLevel := 0
+	previousLevel := 2
+	for index := range blocks {
+		if blocks[index].Type != string(ast.BlockHeading) {
+			continue
+		}
+		if firstLevel == 0 {
+			firstLevel = blocks[index].Level
+		}
+		level := blocks[index].Level - firstLevel + 2
+		if level < 2 {
+			level = 2
+		}
+		if level > 6 {
+			level = 6
+		}
+		if level > previousLevel+1 {
+			level = previousLevel + 1
+		}
+		blocks[index].Level = level
+		previousLevel = level
+	}
+	return blocks
 }
 
 func refineListItems(items []string) []string {
@@ -261,7 +287,9 @@ func isGenericLeadHeading(value string) bool {
 func isDiscardedImportSection(value string) bool {
 	switch normalizedSentenceKey(value) {
 	case "references", "reference", "bibliography", "normative references", "informative references",
-		"author addresses", "authors addresses", "参考文献", "参考资料", "引用文献", "作者地址":
+		"author addresses", "authors addresses", "see also", "related topics", "related articles",
+		"further reading", "external links", "参考文献", "参考资料", "引用文献", "作者地址",
+		"参见", "相关条目", "相关主题", "拓展阅读", "扩展阅读", "外部链接":
 		return true
 	default:
 		return false

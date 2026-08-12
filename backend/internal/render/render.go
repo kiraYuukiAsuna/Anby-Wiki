@@ -23,7 +23,7 @@ import (
 
 // RendererVersion 渲染器版本。渲染规则发生任何影响输出的变更时必须升版
 // （M3 的 RenderedPage 投影按此版本判断缓存是否需要重建）。变更规则见 README。
-const RendererVersion = "v6"
+const RendererVersion = "v7"
 
 type renderContext struct {
 	citationNumbers map[string]int
@@ -56,13 +56,24 @@ func newRenderContext(
 	ctx context.Context,
 	components ComponentRenderer,
 	claims ClaimRenderer,
+	citationOrder []string,
 ) *renderContext {
-	return &renderContext{
+	result := &renderContext{
 		citationNumbers: make(map[string]int),
 		ctx:             ctx,
 		components:      components,
 		claims:          claims,
 	}
+	for _, citationID := range citationOrder {
+		if citationID == "" {
+			continue
+		}
+		if _, exists := result.citationNumbers[citationID]; exists {
+			continue
+		}
+		result.citationNumbers[citationID] = len(result.citationNumbers) + 1
+	}
+	return result
 }
 
 // citationNumber 按 citation_id 首次出现顺序编号；同一 Citation 重复引用复用序号。
@@ -99,6 +110,21 @@ func RenderHTMLWithResolvers(
 	components ComponentRenderer,
 	claims ClaimRenderer,
 ) (string, error) {
+	return RenderHTMLWithResolversAndCitationOrder(
+		ctx, doc, components, claims, nil,
+	)
+}
+
+// RenderHTMLWithResolversAndCitationOrder keeps Citation numbers stable when
+// only an AST fragment is rendered. citationOrder must be the first-appearance
+// order collected from the complete immutable Revision.
+func RenderHTMLWithResolversAndCitationOrder(
+	ctx context.Context,
+	doc *ast.Document,
+	components ComponentRenderer,
+	claims ClaimRenderer,
+	citationOrder []string,
+) (string, error) {
 	if doc == nil {
 		return "", fmt.Errorf("render: doc 为 nil")
 	}
@@ -106,7 +132,7 @@ func RenderHTMLWithResolvers(
 	if err := renderBlocks(
 		&b,
 		doc.Children,
-		newRenderContext(ctx, components, claims),
+		newRenderContext(ctx, components, claims, citationOrder),
 	); err != nil {
 		return "", err
 	}
@@ -275,15 +301,21 @@ func renderInlines(b *strings.Builder, blk *ast.Block, ctx *renderContext) error
 	if err != nil {
 		return err
 	}
-	for _, n := range nodes {
-		if err := renderInline(b, n, ctx); err != nil {
+	for index, n := range nodes {
+		if err := renderInline(b, n, ctx, blk.ID, index); err != nil {
 			return err
 		}
 	}
 	return nil
 }
 
-func renderInline(b *strings.Builder, n *ast.InlineNode, ctx *renderContext) error {
+func renderInline(
+	b *strings.Builder,
+	n *ast.InlineNode,
+	ctx *renderContext,
+	blockID string,
+	nodeIndex int,
+) error {
 	switch n.Type {
 	case ast.InlineText:
 		text := html.EscapeString(n.Text)
@@ -365,8 +397,10 @@ func renderInline(b *strings.Builder, n *ast.InlineNode, ctx *renderContext) err
 		if title == "" {
 			title = n.CitationID
 		}
-		fmt.Fprintf(b, `<sup data-citation-ref="%s" title="%s"><a href="/citations/%s">[%d]</a></sup>`,
-			html.EscapeString(n.CitationID), html.EscapeString(title), html.EscapeString(n.CitationID), ctx.citationNumber(n.CitationID))
+		number := ctx.citationNumber(n.CitationID)
+		fmt.Fprintf(b, `<sup id="cite-ref-%s-%d" data-citation-ref="%s" title="%s"><a href="#cite-note-%d">[%d]</a></sup>`,
+			html.EscapeString(blockID), nodeIndex,
+			html.EscapeString(n.CitationID), html.EscapeString(title), number, number)
 		return nil
 
 	case ast.InlineMath:

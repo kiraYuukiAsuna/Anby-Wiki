@@ -36,6 +36,7 @@ const (
 	OpCreateClaim                = "create_claim"
 	OpSupersedeClaim             = "supersede_claim"
 	OpAddClaimSource             = "add_claim_source"
+	OpSetPageEntityBinding       = "set_page_entity_binding"
 	OpAddCollectionMembership    = "add_collection_membership"
 	OpRemoveCollectionMembership = "remove_collection_membership"
 )
@@ -193,11 +194,12 @@ func operationParams(proposalID uuid.UUID, op *OperationV1) AddOperationParams {
 	// exist until Apply commits the ChangeBatch, so their stable IDs are frozen
 	// only in target_json.
 	indexedEntityID := op.Target.EntityID
-	if op.OperationType == OpCreateEntity || op.OperationType == OpCreateClaim {
+	if op.OperationType == OpCreateEntity || op.OperationType == OpCreateClaim ||
+		op.OperationType == OpSetPageEntityBinding {
 		indexedEntityID = nil
 	}
 	indexedPageID := op.Target.PageID
-	if op.OperationType == OpCreatePage {
+	if op.OperationType == OpCreatePage || op.OperationType == OpSetPageEntityBinding {
 		// The preallocated Page does not exist until Apply commits.
 		indexedPageID = nil
 	}

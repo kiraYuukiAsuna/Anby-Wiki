@@ -9,27 +9,39 @@ import type { TocEntry } from "@/lib/ast/toc";
 
 function TocList({ entries }: { entries: TocEntry[] }) {
   const activeId = useActiveHeading(entries);
+  const baseLevel = entries.reduce(
+    (lowest, entry) => Math.min(lowest, entry.level),
+    entries[0]?.level ?? 1,
+  );
 
   return (
     <ul className="space-y-1 text-sm">
-      {entries.map((entry) => (
-        <li key={entry.id}>
-          <a
-            href={`#${entry.id}`}
-            className={cn(
-              "relative block truncate rounded-r-md py-0.5 text-muted-foreground transition-colors hover:text-foreground",
-              entry.level > 1 &&
-                "pl-[calc((var(--toc-level)-1)*0.75rem)]",
-              activeId === entry.id &&
-                "font-medium text-foreground before:absolute before:inset-y-0 before:-left-[17px] before:w-0.5 before:rounded-full before:bg-primary",
-            )}
-            aria-current={activeId === entry.id ? "location" : undefined}
-            style={{ "--toc-level": entry.level } as React.CSSProperties}
-          >
-            {entry.text}
-          </a>
-        </li>
-      ))}
+      {entries.map((entry) => {
+        const relativeLevel = Math.max(1, entry.level - baseLevel + 1);
+        return (
+          <li key={entry.id}>
+            <a
+              href={`#${entry.id}`}
+              className={cn(
+                "relative block truncate rounded-r-md py-0.5 text-muted-foreground transition-colors hover:text-foreground",
+                relativeLevel > 1 &&
+                  "pl-[calc((var(--toc-level)-1)*0.75rem)]",
+                activeId === entry.id &&
+                  "font-medium text-foreground before:absolute before:inset-y-0 before:-left-[17px] before:w-0.5 before:rounded-full before:bg-primary",
+              )}
+              aria-current={activeId === entry.id ? "location" : undefined}
+              style={{ "--toc-level": relativeLevel } as React.CSSProperties}
+            >
+              {entry.positionKey ? (
+                <span className="mr-1.5 tabular-nums text-muted-foreground/70">
+                  {entry.positionKey}
+                </span>
+              ) : null}
+              {entry.text}
+            </a>
+          </li>
+        );
+      })}
     </ul>
   );
 }
@@ -86,9 +98,9 @@ export function TableOfContents({ entries }: { entries: TocEntry[] }) {
   return (
     <details className="mb-6 rounded-lg border border-border bg-muted/40 px-4 py-2 lg:hidden">
       <summary className="cursor-pointer py-1 text-sm font-medium">
-        本页目录
+        Contents
       </summary>
-      <nav aria-label="本页目录" className="pb-2">
+      <nav aria-label="Contents" className="pb-2">
         <TocList entries={entries} />
       </nav>
     </details>
@@ -101,10 +113,10 @@ export function TocSidebar({ entries }: { entries: TocEntry[] }) {
   return (
     <aside className="hidden w-56 shrink-0 lg:block">
       <nav
-        aria-label="本页目录"
+        aria-label="Contents"
         className="sticky top-20 border-l border-border pl-4"
       >
-        <p className="mb-2 text-sm font-medium">本页目录</p>
+        <p className="mb-2 text-sm font-medium">Contents</p>
         <TocList entries={entries} />
       </nav>
     </aside>

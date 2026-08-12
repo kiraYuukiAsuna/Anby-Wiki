@@ -19,8 +19,9 @@ const (
 	RuleVersion         = 1
 	DynamicQueryVersion = 1
 
-	OutboxEventMembershipAdded   = "collection.membership_added"
-	OutboxEventMembershipRemoved = "collection.membership_removed"
+	OutboxEventMembershipAdded    = "collection.membership_added"
+	OutboxEventMembershipRemoved  = "collection.membership_removed"
+	OutboxEventMembershipReplaced = "collection.membership_replaced"
 )
 
 var (
@@ -98,4 +99,12 @@ type MembershipPage struct {
 type CollectionPage struct {
 	Items      []Collection
 	NextCursor *string
+}
+
+// PageCollection explains why a Collection contains a Page. Materialized
+// entity membership applies through the Page's primary Entity; dynamic
+// collections are evaluated through their bounded versioned query language.
+type PageCollection struct {
+	Collection
+	MembershipSource string
 }

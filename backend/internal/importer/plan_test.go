@@ -360,30 +360,85 @@ func TestCompilePlannedBlockLinksSelectedEntities(t *testing.T) {
 	}
 }
 
-func TestCompileRelatedPagesBlockUsesStableReferencesAndDeduplicates(t *testing.T) {
+func TestCompileRelatedPagesBlocksUseStandardSeeAlsoAndDeduplicate(t *testing.T) {
 	composer := &ProposalComposer{ids: id.NewGenerator()}
 	sourceID, existingID, targetID := uuid.New(), uuid.New(), uuid.New()
-	citationID := uuid.New()
-	block, err := composer.compileRelatedPagesBlock("zh-Hans", sourceID, []relatedPageTarget{
+	blocks, err := composer.compileRelatedPagesBlocks("zh-Hans", sourceID, []relatedPageTarget{
 		{PageID: sourceID, Title: "自己"},
 		{PageID: existingID, Title: "已有"},
 		{PageID: targetID, Title: "目标"},
 		{PageID: targetID, Title: "重复目标"},
-	}, map[uuid.UUID]bool{existingID: true}, []uuid.UUID{citationID})
+	}, map[uuid.UUID]bool{existingID: true})
 	if err != nil {
 		t.Fatal(err)
 	}
-	if block == nil {
-		t.Fatal("expected a related-pages block")
+	if len(blocks) != 2 || blocks[0].Type != ast.BlockHeading || blocks[0].Level != 2 || blocks[1].Type != ast.BlockBulletList {
+		t.Fatalf("unexpected See also blocks: %#v", blocks)
 	}
-	nodes, err := block.InlineContent()
+	heading, err := blocks[0].InlineContent()
 	if err != nil {
 		t.Fatal(err)
 	}
-	if len(nodes) != 3 || nodes[0].Text != "相关页面：" ||
-		nodes[1].Type != ast.InlinePageReference || nodes[1].TargetPageID != targetID.String() ||
-		nodes[2].Type != ast.InlineCitationReference || nodes[2].CitationID != citationID.String() {
+	if len(heading) != 1 || heading[0].Text != "参见" {
+		t.Fatalf("unexpected See also heading: %#v", heading)
+	}
+	if len(blocks[1].Children) != 1 || len(blocks[1].Children[0].Children) != 1 {
+		t.Fatalf("unexpected See also list: %#v", blocks[1])
+	}
+	nodes, err := blocks[1].Children[0].Children[0].InlineContent()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(nodes) != 1 || nodes[0].Type != ast.InlinePageReference || nodes[0].TargetPageID != targetID.String() {
 		t.Fatalf("unexpected related-page nodes: %#v", nodes)
+	}
+}
+
+func TestPrimaryEntityLabelScoreRejectsGenericTitleFragments(t *testing.T) {
+	tests := []struct {
+		name, title, label string
+		want               int
+	}{
+		{name: "exact", title: "Semantic Kernel", label: "Semantic Kernel", want: 100},
+		{name: "specific phrase", title: "Microsoft Semantic Kernel", label: "Semantic Kernel", want: 75},
+		{name: "short acronym", title: "OpenAI API", label: "AI", want: 0},
+		{name: "generic fragment", title: "Anby Wiki architecture", label: "Wiki", want: 0},
+		{name: "CJK subject", title: "中华人民共和国历史", label: "中华人民共和国", want: 75},
+	}
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			if got := primaryEntityLabelScore(
+				normalizedIdentityText(test.title), test.label,
+			); got != test.want {
+				t.Fatalf("score=%d, want %d", got, test.want)
+			}
+		})
+	}
+}
+
+func TestInspectArticleEndMatterKeepsSeeAlsoAsSingleTerminalSection(t *testing.T) {
+	heading := func(title string) *ast.Block {
+		content, err := json.Marshal([]*ast.InlineNode{{Type: ast.InlineText, Text: title}})
+		if err != nil {
+			t.Fatal(err)
+		}
+		return &ast.Block{
+			ID: uuid.NewString(), Type: ast.BlockHeading, Level: 2, Content: content,
+		}
+	}
+	seeAlsoList := &ast.Block{
+		ID: uuid.NewString(), Type: ast.BlockBulletList, Children: []*ast.Block{},
+	}
+	document := &ast.Document{
+		Type: "document", SchemaVersion: ast.SchemaVersion,
+		Children: []*ast.Block{
+			{ID: uuid.NewString(), Type: ast.BlockParagraph, Content: json.RawMessage(`[{"type":"text","text":"body"}]`)},
+			heading("参见"), seeAlsoList, heading("拓展阅读"),
+		},
+	}
+	endMatter := inspectArticleEndMatter(document)
+	if endMatter.FirstIndex != 1 || endMatter.SeeAlsoIndex != 1 || endMatter.SeeAlsoList != seeAlsoList {
+		t.Fatalf("unexpected end-matter inspection: %#v", endMatter)
 	}
 }
 

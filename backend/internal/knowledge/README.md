@@ -50,6 +50,12 @@ human/bot/system 可写，ai 拒绝（`page.ErrActorNotAllowed`），不存在/�
 `page_entity_binding(role=primary)`；延迟约束触发器在提交点验证两者一致，
 且服务层拒绝跨 Wiki Page/Entity 绑定。
 
+治理 `set_page_entity_binding` 通过 `BindPageInTx` 进入同一权威边界，使主绑定、
+Page 指针、Audit、Outbox 与 ChangeBatch 原子提交。审计账本保存被替换的完整绑定，
+整批回滚会在确认当前绑定仍等于预期值后恢复旧 Entity/语言；不会覆盖批次之后的
+人工修改。绑定变化会使搜索与 Related pages 等依赖投影失效重建；信息框绑定属于
+权威页面 AST，导入会在同一 Proposal 中同步插入或替换，手工流程则由编辑器显式操作。
+
 已知实现差异：
 
 - PG `lower()` 与 Go `strings.ToLower` 在极少数 Unicode 大小写规则上有差异，exact 标签匹配以 PG 为准。

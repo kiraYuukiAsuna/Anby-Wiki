@@ -22,11 +22,11 @@ PostgreSQL、Redis、MinIO、Meilisearch、API、Linux Worker 与 Next.js Web �
 |---|---|
 | 页面核心 | Wiki/Namespace、Page、不可变 Revision/ContentSnapshot、稳定 Block ID、历史、Diff、回滚、改名、PageRedirect、BlockRedirect、页面保护 |
 | 知识图谱 | Entity/Property/Claim、标签/别名/主标签、Page 主 Entity 绑定、Claim 验证、Entity 合并与回滚、联邦 Wiki/Entity 映射、图谱查询 |
-| 证据与媒体 | Source/Version/Chunk/Citation、Asset/AssetRevision、引用校验、反向使用、可审计来源与媒体目录 |
-| 结构化内容 | Dataset/View/Record、Component/Version/信息框、静态与动态 Collection、成员维护与投影 |
-| 治理 | ProposalOperation v1 全部 23 种 Operation、预分配 Page/Entity ID 的同批依赖、Operation 集合事务冻结、Wiki 级多目标 Proposal、跨页面 Revision/Block 与 Claim 冲突检测、预览、风险、ReviewTask、批量审核、ChangeBatch、整批补偿回滚、审计事件、ChangeTag、AI Trust、事实一致性 |
-| 导入与 AI | URL/HTML/文本/PDF/PNG/JPEG/JSON/CSV 获取，图片及扫描 PDF 的中英 OCR、结构化数据规范化、七阶段进度、幂等 Job、解析成功后的不可变恢复点与无重复来源的失败重试、Worker 中断任务自动恢复、管理员可配置模型最大输入 Token、按输入预算与输出安全上限并行分批抽取/规划、截断或结构不合法批次二分重试及跨批去重、全局 ImportPlan 收敛与确定性结构清理、对照原始 Chunk 的生成后保真审计与证据化章节修复、服务端五维质量评分及默认 0.70 硬门槛、Semantic Kernel 默认三次结构化调用与纠正重试、精确引文的跨 Chunk 安全纠偏及坏候选/坏 Claim 隔离、Entity 缩写/别名归并、Claim 方向/类型门禁、仅由页面路由授权图谱写入、来源概况与智能多页面 create/update/link/ignore 路由、强制单页模式与用户导入要求、证据约束 Typed Block 生成/补丁及正文 Entity 引用、显式且有证据的页面关联与反链投影、规划结果可视化、单 ImportJob 页面+Entity+Claim 复合 Proposal 与同一 ChangeBatch 原子应用、可持久查询的导入队列 |
-| 投影与搜索 | Outbox 租约/重试/死信、链接/目录/锚点/章节/渲染/知识使用/组件依赖/图谱投影、PostgreSQL fallback、Meilisearch 关键词/混合/语义检索 |
+| 证据与媒体 | Source/Version/Chunk/Citation、Asset/AssetRevision、引用校验、反向使用、按全文首次出现统一编号的 References 投影、逐处正文回链、可审计来源与媒体目录 |
+| 结构化内容 | Dataset/View/Record、Component/Version、内置 Entity/Claim 信息框、静态与动态 Collection、成员维护、页面反向归属查询与投影 |
+| 治理 | ProposalOperation v1 全部 24 种 Operation（含可原子应用和补偿回滚的 Page 主 Entity 绑定）、预分配 Page/Entity ID 的同批依赖、Operation 集合事务冻结、Wiki 级多目标 Proposal、跨页面 Revision/Block 与 Claim 冲突检测、预览、风险、ReviewTask、批量审核、ChangeBatch、整批补偿回滚、审计事件、ChangeTag、AI Trust、事实一致性 |
+| 导入与 AI | URL/HTML/文本/PDF/PNG/JPEG/JSON/CSV 获取，图片及扫描 PDF 的中英 OCR、来源标题/作者/发布者/日期/DOI 等安全元数据推导、结构化数据规范化、七阶段进度、幂等 Job、解析成功后的不可变恢复点与无重复来源的失败重试、Worker 中断任务自动恢复、管理员可配置模型最大输入 Token、按输入预算与输出安全上限并行分批抽取/规划、截断或结构不合法批次二分重试及跨批去重、全局 ImportPlan 收敛与确定性结构清理、对照原始 Chunk 的生成后保真审计与证据化章节修复、服务端五维质量评分及默认 0.70 硬门槛、Semantic Kernel 默认三次结构化调用与纠正重试、精确引文的跨 Chunk 安全纠偏及坏候选/坏 Claim 隔离、Entity 缩写/别名归并、Claim 方向/类型门禁、仅由页面路由授权图谱写入、来源概况与智能多页面 create/update/link/ignore 路由、强制单页模式与用户导入要求、证据约束 Typed Block 生成/补丁及正文 Entity 引用、确定性 H2 层级与标准 See also、主 Entity 绑定及信息框、显式且有证据的页面关联与反链投影、规划结果可视化、单 ImportJob 页面+Entity+Claim 复合 Proposal 与同一 ChangeBatch 原子应用、可持久查询的导入队列 |
+| 投影与搜索 | Outbox 租约/重试/死信、链接/目录/锚点/章节/渲染/知识使用/References/相关推荐/组件依赖/图谱投影、可解释的链接+Collection+Entity 相关度、PostgreSQL fallback、Meilisearch 关键词/混合/语义检索 |
 | 规模与归档 | 章节懒加载、服务端可信 HTML 渲染、Revision 热冷分层与 S3 回源、Projection/Search 重建、容量基准命令 |
 | 协作 | Yjs WorkingDocument、增量同步、Presence、发布换基、AI 三方合并、人工冲突决议 |
 | 平台 | 本地账号/Session/RBAC、Redis 限流、安全头、OTel/Prometheus、备份恢复、Doctor、多 Wiki 读取隔离、生产部署清单 |
@@ -38,7 +38,7 @@ PostgreSQL、Redis、MinIO、Meilisearch、API、Linux Worker 与 Next.js Web �
 - Revision 与 ContentSnapshot 发布后不可变；链接、渲染、搜索、图谱和反向使用
   投影可删除并由 Outbox 重建。
 - Proposal 的客户端合并只提供交互预览；服务端会按权威 AST 重新计算并拒绝不一致
-  结果。23 种 Operation 的 Apply/rollback 都有领域语义。
+  结果。24 种 Operation 的 Apply/rollback 都有领域语义。
 - Page、History、Knowledge 和 Projection 的 UUID 读取路径校验当前 Wiki，避免跨
   Wiki ID 枚举泄漏；Source/Citation/Component 等共享目录的 Page 使用结果也按
   当前 Wiki 过滤。
@@ -50,6 +50,12 @@ PostgreSQL、Redis、MinIO、Meilisearch、API、Linux Worker 与 Next.js Web �
 Web 使用桌面优先的现代百科 Shell：固定全局导航、命令面板、搜索、上下文侧栏、
 目录与站点页脚。正文保留维基式可扫描排版，同时使用 shadcn/Radix、Lucide、
 Sonner、Geist 和响应式卡片提升工具型页面的可读性。
+
+阅读页由文档目录投影生成带层级编号的 `Contents`，并把 References、Related
+topics 与 Related outlines 纳入同一目录；正文后按标准顺序展示可逐处回链的
+References、可解释的 Related topics 与由页面所属 Collections 映射的 Related
+outlines。References/Related 是 Current Revision
+的可重建投影，Collection 归属和 Page 主 Entity 绑定仍来自权威领域数据。
 
 持久入口包括：
 
@@ -76,7 +82,8 @@ Sonner、Geist 和响应式卡片提升工具型页面的可读性。
 - Meilisearch 支持关键词、facet/filter、高亮、混合与语义查询；本地
   HuggingFace embedder 默认不向第三方发送正文。
 - 后端从已校验 AST 生成转义后的可信 HTML 和章节投影；阅读页可按章节懒加载，
-  目录通过 MutationObserver 感知新章节并跟踪当前滚动位置。
+  目录通过 MutationObserver 感知新章节并跟踪当前滚动位置。分章节渲染仍使用
+  全文首次出现的 Citation 顺序，避免懒加载导致同一引用编号漂移。
 - Revision snapshot 可由 Worker 归档到 S3，读取 API 对热/冷存储透明回源；
   归档状态、容量统计和手动归档在治理页面可见。
 
@@ -87,6 +94,9 @@ Sonner、Geist 和响应式卡片提升工具型页面的可读性。
 - 新披露的 `brace-expansion` 漏洞通过 `5.0.9` 修复；安装期幂等适配器只让
   遗留 `minimatch@3` 读取新版函数导出，未知版本会直接失败，避免“审计通过但
   ESLint 损坏”。
+- 2026-08 新披露的 Nano ID 零长度生成器拒绝服务通过 `nanoid@3.3.17` override
+  固定；开发工具链同时锁定已修复的 `fast-uri@3.1.5`、`hono@4.13.1`、
+  `ip-address@10.5.0`、`js-yaml@4.3.1` 与 `undici@7.29.0`。
 - 完整 `npm audit --audit-level=high` 与 production-only audit 均为 0。
 - gRPC 已升级到 `1.82.1`，OpenTelemetry 家族统一到 `1.44.0`；
   `govulncheck` 报告 0 个可达漏洞。
@@ -104,6 +114,18 @@ Sonner、Geist 和响应式卡片提升工具型页面的可读性。
   `no-new-privileges` 策略。应用镜像在部署机本地按 `RELEASE_ID` 构建。
 - `.gitattributes` 固定 Shell 与部署门禁文件为 LF，使 Windows+WSL 与 Linux CI
   执行同一套脚本。
+
+## 2026-08-12 百科文章结构增量验证
+
+- OpenAPI、领域服务、Worker 投影、导入 Composer 与 Web 阅读/编辑入口已完成
+  References、Related topics、Related outlines、主 Entity 信息框和标准 See also 的
+  跨层闭环；生成客户端由契约重新生成，未手改生成物。
+- Go 全量测试、Web TypeScript 与 ESLint 已通过；渲染回归覆盖 Citation 全文统一
+  编号、正文到 References 跳转以及多处引用回链。
+- PostgreSQL 17 隔离空库执行初始化 Schema `up → down → up`，三次公共表数量为
+  `83 → 1 → 83`；down 后仅保留 `schema_migrations`。
+- 以上是本地实现与静态/隔离数据库验证；生产现有页面仍需部署后执行 Projection
+  全量重建，并以真实导入页面完成浏览器和内容质量验收。
 
 ## 2026-07-31 验证快照
 
@@ -157,6 +179,6 @@ Sonner、Geist 和响应式卡片提升工具型页面的可读性。
 - 唯一迁移版本：`000001_initial_schema`。
 - 初始化文件包含当前全部表、函数、触发器、约束、索引和固定种子；up/down 配对、
   命名与静态检查通过。
-- 本次新增表和约束已在 PostgreSQL 16 隔离空库重新执行 `up → down → up`；
-  up 后 81 张表、down 后仅 `schema_migrations`，再次 up 结果一致。
+- 当前表和约束已在 PostgreSQL 17 隔离空库重新执行 `up → down → up`；
+  up 后 83 张表、down 后仅 `schema_migrations`，再次 up 结果一致。
 - 首次生产上线后必须冻结版本 1，并恢复只增不改的增量迁移策略。

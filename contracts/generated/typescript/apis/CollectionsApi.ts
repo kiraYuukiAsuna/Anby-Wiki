@@ -34,6 +34,11 @@ import {
     CreateCollectionRequestToJSON,
 } from '../models/CreateCollectionRequest';
 import {
+    type PageCollectionList,
+    PageCollectionListFromJSON,
+    PageCollectionListToJSON,
+} from '../models/PageCollectionList';
+import {
     type RebuildCollectionRequest,
     RebuildCollectionRequestFromJSON,
     RebuildCollectionRequestToJSON,
@@ -66,6 +71,10 @@ export interface ListCollectionMembersRequest {
 export interface ListCollectionsRequest {
     cursor?: string;
     pageSize?: number;
+}
+
+export interface ListPageCollectionsRequest {
+    id: string;
 }
 
 export interface RebuildRuleCollectionRequest {
@@ -276,6 +285,53 @@ export class CollectionsApi extends runtime.BaseAPI {
      */
     async listCollections(requestParameters: ListCollectionsRequest = {}, initOverrides?: RequestInit | runtime.InitOverrideFunction): Promise<CollectionListPage> {
         const response = await this.listCollectionsRaw(requestParameters, initOverrides);
+        return await response.value();
+    }
+
+    /**
+     * Creates request options for listPageCollections without sending the request
+     */
+    async listPageCollectionsRequestOpts(requestParameters: ListPageCollectionsRequest): Promise<runtime.RequestOpts> {
+        if (requestParameters['id'] == null) {
+            throw new runtime.RequiredError(
+                'id',
+                'Required parameter "id" was null or undefined when calling listPageCollections().'
+            );
+        }
+
+        const queryParameters: any = {};
+
+        const headerParameters: runtime.HTTPHeaders = {};
+
+
+        let urlPath = `/api/v1/pages/{id}/collections`;
+        urlPath = urlPath.replace('{id}', encodeURIComponent(String(requestParameters['id'])));
+
+        return {
+            path: urlPath,
+            method: 'GET',
+            headers: headerParameters,
+            query: queryParameters,
+        };
+    }
+
+    /**
+     * 匿名反向读取页面直接所属、其主 Entity 所属以及 Dynamic 查询命中的 Collection。 membership_source 解释命中来源，不复制服务端 Collection 状态到客户端缓存。
+     * 页面所属 Collection
+     */
+    async listPageCollectionsRaw(requestParameters: ListPageCollectionsRequest, initOverrides?: RequestInit | runtime.InitOverrideFunction): Promise<runtime.ApiResponse<PageCollectionList>> {
+        const requestOptions = await this.listPageCollectionsRequestOpts(requestParameters);
+        const response = await this.request(requestOptions, initOverrides);
+
+        return new runtime.JSONApiResponse(response, (jsonValue) => PageCollectionListFromJSON(jsonValue));
+    }
+
+    /**
+     * 匿名反向读取页面直接所属、其主 Entity 所属以及 Dynamic 查询命中的 Collection。 membership_source 解释命中来源，不复制服务端 Collection 状态到客户端缓存。
+     * 页面所属 Collection
+     */
+    async listPageCollections(requestParameters: ListPageCollectionsRequest, initOverrides?: RequestInit | runtime.InitOverrideFunction): Promise<PageCollectionList> {
+        const response = await this.listPageCollectionsRaw(requestParameters, initOverrides);
         return await response.value();
     }
 

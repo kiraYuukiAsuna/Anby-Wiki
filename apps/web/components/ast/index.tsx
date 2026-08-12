@@ -53,7 +53,11 @@ function HeadingView({
         HEADING_STYLES[level],
       )}
     >
-      <InlineNodes nodes={block.content} citationNumbers={citationNumbers} />
+      <InlineNodes
+        nodes={block.content}
+        citationNumbers={citationNumbers}
+        blockId={block.id}
+      />
     </Tag>
   );
 }
@@ -93,7 +97,11 @@ export function BlockView({
     case "paragraph":
       return (
         <p className="my-3 leading-7">
-          <InlineNodes nodes={block.content} citationNumbers={citationNumbers} />
+          <InlineNodes
+            nodes={block.content}
+            citationNumbers={citationNumbers}
+            blockId={block.id}
+          />
         </p>
       );
     case "bullet_list":
@@ -317,9 +325,11 @@ function applyMarks(node: TextNode): ReactNode {
 export function InlineNodeView({
   node,
   citationNumber = 1,
+  citationAnchorId,
 }: {
   node: InlineNode;
   citationNumber?: number;
+  citationAnchorId?: string;
 }): ReactNode {
   switch (node.type) {
     case "text":
@@ -404,13 +414,18 @@ export function InlineNodeView({
     case "citation_reference":
       return (
         <sup
+          id={citationAnchorId}
           data-citation-ref={node.citation_id}
           title={node.display_text ?? node.citation_id}
-          className="ml-0.5 text-blue-600"
+          className="ml-0.5 scroll-mt-20 text-blue-600"
         >
-          <Link href={`/citations/${node.citation_id}`} className="hover:underline">
+          <a
+            href={`#cite-note-${citationNumber}`}
+            aria-label={`参考文献 ${citationNumber}`}
+            className="hover:underline"
+          >
             [{citationNumber}]
-          </Link>
+          </a>
         </sup>
       );
     case "math":
@@ -439,9 +454,11 @@ export function InlineNodeView({
 function InlineNodes({
   nodes,
   citationNumbers,
+  blockId,
 }: {
   nodes: InlineNode[];
   citationNumbers: CitationNumbers;
+  blockId: string;
 }) {
   return (
     <>
@@ -452,6 +469,11 @@ function InlineNodes({
           citationNumber={
             node.type === "citation_reference"
               ? citationNumbers.get(node.citation_id)
+              : undefined
+          }
+          citationAnchorId={
+            node.type === "citation_reference"
+              ? `cite-ref-${blockId}-${i}`
               : undefined
           }
         />
