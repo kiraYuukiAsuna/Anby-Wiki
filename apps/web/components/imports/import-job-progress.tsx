@@ -18,6 +18,8 @@ import { toast } from "sonner";
 import useSWR from "swr";
 import useSWRMutation from "swr/mutation";
 
+import { ResponseError } from "../../../../contracts/generated/typescript";
+
 import { Button } from "@/components/ui/button";
 import { importsApi } from "@/lib/api";
 import { isUnauthorized, LOGIN_PATH } from "@/lib/auth";
@@ -163,7 +165,10 @@ export function ImportJobProgress({ id }: { id: string }) {
       </p>
     );
   }
-  if (error) return <p className="rounded-lg border border-destructive/30 p-5 text-sm text-destructive">导入任务加载失败，或当前 Actor 无权读取它。</p>;
+  if (error instanceof ResponseError && error.response.status === 403) {
+    return <p className="rounded-lg border border-destructive/30 p-5 text-sm text-destructive">当前账号无权读取这个导入任务。</p>;
+  }
+  if (error) return <p className="rounded-lg border border-destructive/30 p-5 text-sm text-destructive">导入任务响应解析失败，请刷新页面；如果问题持续出现，请联系管理员。</p>;
   if (!data) return <p className="text-sm text-muted-foreground">正在加载导入进度…</p>;
   const latestByStage = new Map(data.stages.map((stage) => [stage.stage, stage]));
   const errorMessage = importErrorMessage(data.job.error);

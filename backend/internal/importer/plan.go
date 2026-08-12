@@ -190,6 +190,7 @@ func (p *PagePlanner) Plan(ctx context.Context, params PlanParams) (*PlanResult,
 		if err := json.Unmarshal(existing.PlanJSON, &plan); err != nil {
 			return nil, err
 		}
+		normalizeImportPlanCollections(&plan)
 		return &PlanResult{Record: existing, Plan: &plan, Reused: true}, nil
 	} else if !errors.Is(err, ErrImportPlanNotFound) {
 		return nil, err
@@ -219,6 +220,7 @@ func (p *PagePlanner) Plan(ctx context.Context, params PlanParams) (*PlanResult,
 	if plan.Profile.Useful && actionablePageRouteCount(plan.Routes) == 0 {
 		return nil, ErrNoPagePlan
 	}
+	normalizeImportPlanCollections(plan)
 	canonical, err := json.Marshal(plan)
 	if err != nil {
 		return nil, err
@@ -244,6 +246,7 @@ func (p *PagePlanner) Plan(ctx context.Context, params PlanParams) (*PlanResult,
 		if err := json.Unmarshal(record.PlanJSON, plan); err != nil {
 			return nil, err
 		}
+		normalizeImportPlanCollections(plan)
 	}
 	return &PlanResult{Record: record, Plan: plan, Reused: !inserted}, nil
 }
@@ -497,6 +500,42 @@ func validPlannedBlockContent(block PlannedBlock) bool {
 		return true
 	default:
 		return false
+	}
+}
+
+// normalizeImportPlanCollections keeps the Go representation aligned with the
+// JSON Schema/OpenAPI contract. A nil slice is semantically empty in Go, but
+// encoding/json emits it as null; generated clients expect required collection
+// fields to always be arrays and deserialize them with Array.map.
+//
+// Keep this normalization on both persistence and read paths so plans written
+// by an older worker remain readable without mutating the immutable plan row.
+func normalizeImportPlanCollections(plan *ImportPlan) {
+	if plan == nil {
+		return
+	}
+	if plan.Profile.Subjects == nil {
+		plan.Profile.Subjects = []SourceSubject{}
+	}
+	if plan.Routes == nil {
+		plan.Routes = []PageRoute{}
+	}
+	for routeIndex := range plan.Routes {
+		route := &plan.Routes[routeIndex]
+		if route.RelatedTo == nil {
+			route.RelatedTo = []string{}
+		}
+		if route.Evidence == nil {
+			route.Evidence = []CandidateEvidence{}
+		}
+		if route.Blocks == nil {
+			route.Blocks = []PlannedBlock{}
+		}
+		for blockIndex := range route.Blocks {
+			if route.Blocks[blockIndex].Evidence == nil {
+				route.Blocks[blockIndex].Evidence = []CandidateEvidence{}
+			}
+		}
 	}
 }
 

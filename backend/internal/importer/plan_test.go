@@ -192,3 +192,46 @@ func TestValidateImportPlanAcceptsGroundedExplicitLink(t *testing.T) {
 		t.Fatalf("unexpected grounded link: %#v", validated.Routes)
 	}
 }
+
+func TestNormalizeImportPlanCollectionsProducesContractArrays(t *testing.T) {
+	plan := &ImportPlan{
+		SchemaVersion:   1,
+		SourceVersionID: uuid.New(),
+		Profile: SourceProfile{
+			Title: "Source", Summary: "Summary", Language: "en", Useful: true,
+		},
+		Routes: []PageRoute{{
+			Action: RouteCreate, Title: "Page", Reason: "new", Confidence: 0.9,
+			Blocks: []PlannedBlock{{
+				Type: string(ast.BlockParagraph), Mode: BlockAppend, Text: "Text",
+			}},
+		}},
+		QualityScore: 0.9,
+	}
+
+	normalizeImportPlanCollections(plan)
+	encoded, err := json.Marshal(plan)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var document map[string]any
+	if err := json.Unmarshal(encoded, &document); err != nil {
+		t.Fatal(err)
+	}
+	profile := document["profile"].(map[string]any)
+	routes := document["routes"].([]any)
+	route := routes[0].(map[string]any)
+	blocks := route["blocks"].([]any)
+	block := blocks[0].(map[string]any)
+	for name, value := range map[string]any{
+		"profile.subjects": profile["subjects"],
+		"route.related_to": route["related_to"],
+		"route.evidence":   route["evidence"],
+		"route.blocks":     route["blocks"],
+		"block.evidence":   block["evidence"],
+	} {
+		if _, ok := value.([]any); !ok {
+			t.Fatalf("%s encoded as %T (%v), want JSON array", name, value, value)
+		}
+	}
+}

@@ -385,6 +385,7 @@ func (s *Service) Detail(ctx context.Context, jobID uuid.UUID) (*JobDetail, erro
 		if err := json.Unmarshal(record.PlanJSON, plan); err != nil {
 			return nil, err
 		}
+		normalizeImportPlanCollections(plan)
 	} else if !errors.Is(planErr, ErrImportPlanNotFound) {
 		return nil, planErr
 	}
