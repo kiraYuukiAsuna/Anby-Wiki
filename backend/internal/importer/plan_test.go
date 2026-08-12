@@ -31,6 +31,52 @@ type retryingFidelityGenerator struct {
 	feedback   []string
 }
 
+type retryingPlanGenerator struct {
+	mu         sync.Mutex
+	calls      int
+	validAfter int
+	feedback   []string
+}
+
+func (g *retryingPlanGenerator) Generate(_ context.Context, request ai.Request) (*ai.Result, error) {
+	g.mu.Lock()
+	defer g.mu.Unlock()
+	g.calls++
+	g.feedback = append(g.feedback, request.Variables["validation_feedback"].(string))
+	var chunks []struct {
+		ChunkID uuid.UUID `json:"chunk_id"`
+		Text    string    `json:"text"`
+	}
+	if err := json.Unmarshal([]byte(request.Variables["chunks_json"].(string)), &chunks); err != nil {
+		return nil, err
+	}
+	quotation := "invented quotation"
+	if g.validAfter > 0 && g.calls >= g.validAfter {
+		quotation = chunks[0].Text
+	}
+	sourceVersionID := uuid.MustParse(request.Variables["source_version_id"].(string))
+	plan := &ImportPlan{
+		SchemaVersion: 1, SourceVersionID: sourceVersionID,
+		Profile: SourceProfile{Title: "Subject", Summary: "Summary", Language: "en", Useful: true, Subjects: []SourceSubject{}},
+		Routes: []PageRoute{{
+			Action: RouteCreate, Title: "Subject", Reason: "documented", Confidence: 0.9,
+			RelatedTo: []string{}, Evidence: []CandidateEvidence{}, Blocks: []PlannedBlock{{
+				Type: string(ast.BlockParagraph), Mode: BlockAppend, Text: "Verified prose.",
+				Evidence: []CandidateEvidence{{
+					ChunkID: chunks[0].ChunkID, Quotation: quotation,
+					CharStart: 0, CharEnd: len([]rune(quotation)),
+				}},
+			}},
+		}},
+		QualityScore: 0.9,
+	}
+	raw, err := json.Marshal(plan)
+	if err != nil {
+		return nil, err
+	}
+	return &ai.Result{JSON: raw, PromptKey: request.PromptKey, PromptVersion: 1, Model: "test"}, nil
+}
+
 func (g *retryingFidelityGenerator) Generate(_ context.Context, request ai.Request) (*ai.Result, error) {
 	g.mu.Lock()
 	defer g.mu.Unlock()
@@ -190,6 +236,67 @@ func TestGeneratePlanConsolidatesParallelSourceWindows(t *testing.T) {
 	if generated.PromptKey != ImportPlanConsolidatePromptKey || len(generated.Plan.Routes) != 1 ||
 		len(generated.Plan.Routes[0].Blocks) != 1 || generated.Plan.Routes[0].Blocks[0].Text != "A coherent article." {
 		t.Fatalf("unexpected consolidated plan: %#v", generated)
+	}
+}
+
+func TestGenerateValidatedPlanBatchRetriesSingleChunkEvidenceFailure(t *testing.T) {
+	sourceVersionID := uuid.New()
+	chunks := []evidence.SourceChunk{{
+		ID: uuid.New(), SourceVersionID: sourceVersionID, Ordinal: 0,
+		TextContent: "Clients MUST validate the assertion.", LocatorJSON: json.RawMessage(`{}`),
+	}}
+	generator := &retryingPlanGenerator{validAfter: planLeafValidationAttempts}
+	planner := &PagePlanner{ai: generator}
+
+	plan, _, err := planner.generateValidatedPlanBatch(context.Background(), PlanParams{
+		SourceVersionID: sourceVersionID, Chunks: chunks, Provider: "test", Model: "test",
+	}, nil, chunks)
+	if err != nil {
+		t.Fatal(err)
+	}
+	generator.mu.Lock()
+	calls := generator.calls
+	feedback := append([]string(nil), generator.feedback...)
+	generator.mu.Unlock()
+	if plan == nil || calls != planLeafValidationAttempts {
+		t.Fatalf("plan=%#v calls=%d, want success on attempt %d", plan, calls, planLeafValidationAttempts)
+	}
+	if len(feedback) != planLeafValidationAttempts || feedback[0] != "No prior validation failure." ||
+		!strings.Contains(feedback[1], "verifiable evidence") {
+		t.Fatalf("unexpected validation feedback: %#v", feedback)
+	}
+}
+
+func TestValidateImportPlanRestoresLineWrappedEvidenceVerbatim(t *testing.T) {
+	sourceVersionID, chunkID := uuid.New(), uuid.New()
+	sourceText := "Clients MUST validate\n      the assertion before use."
+	modelQuotation := "Clients MUST validate the assertion before use."
+	plan := ImportPlan{
+		SchemaVersion: 1, SourceVersionID: sourceVersionID,
+		Profile: SourceProfile{Title: "Subject", Summary: "Summary", Language: "en", Useful: true, Subjects: []SourceSubject{}},
+		Routes: []PageRoute{{
+			Action: RouteCreate, Title: "Subject", Reason: "documented", Confidence: 0.9,
+			RelatedTo: []string{}, Evidence: []CandidateEvidence{}, Blocks: []PlannedBlock{{
+				Type: string(ast.BlockParagraph), Mode: BlockAppend, Text: "客户端必须在使用前验证断言。",
+				Evidence: []CandidateEvidence{{ChunkID: chunkID, Quotation: modelQuotation, CharStart: 0, CharEnd: len([]rune(modelQuotation))}},
+			}},
+		}},
+		QualityScore: 0.9,
+	}
+	raw, err := json.Marshal(plan)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	validated, _, err := ValidateImportPlan(raw, sourceVersionID, []evidence.SourceChunk{{
+		ID: chunkID, SourceVersionID: sourceVersionID, TextContent: sourceText, LocatorJSON: json.RawMessage(`{}`),
+	}}, nil, RouteModeAuto, "")
+	if err != nil {
+		t.Fatal(err)
+	}
+	item := validated.Routes[0].Blocks[0].Evidence[0]
+	if item.Quotation != sourceText || item.CharStart != 0 || item.CharEnd != len([]rune(sourceText)) {
+		t.Fatalf("planning evidence was not restored verbatim: %#v", item)
 	}
 }
 

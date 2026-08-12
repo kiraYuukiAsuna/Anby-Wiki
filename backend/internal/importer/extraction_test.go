@@ -189,6 +189,64 @@ func TestValidateCandidatesFromChunksRejectsWhenNoEvidenceSurvives(t *testing.T)
 	}
 }
 
+func TestValidateCandidatesFromChunksCanonicalizesWhitespaceOnlyQuotationDifference(t *testing.T) {
+	sourceVersionID, chunkID := uuid.New(), uuid.New()
+	canonicalQuotation := "Clients MUST validate\n      the assertion before use."
+	sourceText := "prefix " + canonicalQuotation + " suffix"
+	modelQuotation := "Clients MUST validate the assertion before use."
+	candidates := Candidates{
+		SchemaVersion: 1, SourceVersionID: sourceVersionID, QualityScore: 0.9,
+		Entities: []EntityCandidate{{
+			CandidateID: uuid.New(), TypeKey: "concept", Label: "assertion validation",
+			Aliases: []string{}, Confidence: 0.9, Evidence: []CandidateEvidence{{
+				ChunkID: chunkID, Quotation: modelQuotation, CharStart: 0, CharEnd: len([]rune(modelQuotation)),
+			}},
+		}}, Claims: []ClaimCandidate{},
+	}
+	raw, err := json.Marshal(candidates)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	validated, _, err := ValidateCandidatesFromChunks(raw, sourceVersionID, []evidence.SourceChunk{{
+		ID: chunkID, SourceVersionID: sourceVersionID, TextContent: sourceText, LocatorJSON: []byte(`{}`),
+	}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	item := validated.Entities[0].Evidence[0]
+	wantStart := len([]rune("prefix "))
+	if item.Quotation != canonicalQuotation || item.CharStart != wantStart ||
+		item.CharEnd != wantStart+len([]rune(canonicalQuotation)) {
+		t.Fatalf("evidence was not restored to exact source text: %#v", item)
+	}
+}
+
+func TestValidateCandidatesFromChunksDoesNotCanonicalizeContentDifference(t *testing.T) {
+	sourceVersionID, chunkID := uuid.New(), uuid.New()
+	candidates := Candidates{
+		SchemaVersion: 1, SourceVersionID: sourceVersionID, QualityScore: 0.9,
+		Entities: []EntityCandidate{{
+			CandidateID: uuid.New(), TypeKey: "concept", Label: "assertion validation",
+			Aliases: []string{}, Confidence: 0.9, Evidence: []CandidateEvidence{{
+				ChunkID: chunkID, Quotation: "Clients MAY validate the assertion.", CharStart: 0, CharEnd: 35,
+			}},
+		}}, Claims: []ClaimCandidate{},
+	}
+	raw, err := json.Marshal(candidates)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	_, _, err = ValidateCandidatesFromChunks(raw, sourceVersionID, []evidence.SourceChunk{{
+		ID: chunkID, SourceVersionID: sourceVersionID,
+		TextContent: "Clients MUST validate\n  the assertion.", LocatorJSON: []byte(`{}`),
+	}})
+	if !errors.Is(err, ErrEvidenceRequired) {
+		t.Fatalf("error=%v, want ErrEvidenceRequired for changed normative wording", err)
+	}
+}
+
 func TestValidateCandidatesFromChunksRepairsSourceAndDropsOnlyAmbiguousClaims(t *testing.T) {
 	sourceVersionID := uuid.New()
 	wrongSourceVersionID := uuid.New()

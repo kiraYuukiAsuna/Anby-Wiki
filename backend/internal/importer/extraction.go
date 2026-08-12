@@ -9,6 +9,7 @@ import (
 	"fmt"
 	"strings"
 	"time"
+	"unicode"
 
 	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5"
@@ -311,8 +312,8 @@ func (c evidenceCatalog) normalize(items []CandidateEvidence) []CandidateEvidenc
 	for index := range items {
 		item := items[index]
 		if chunk := c.byID[item.ChunkID]; chunk != nil {
-			if start, ok := exactQuotationStart(chunk.TextContent, item.Quotation, item.CharStart); ok {
-				canonicalizeEvidence(&item, chunk, start)
+			if start, end, ok := canonicalQuotationSpan(chunk.TextContent, item.Quotation, item.CharStart); ok {
+				canonicalizeEvidence(&item, chunk, start, end)
 				key := evidenceKey(item)
 				if !seen[key] {
 					seen[key] = true
@@ -327,14 +328,16 @@ func (c evidenceCatalog) normalize(items []CandidateEvidence) []CandidateEvidenc
 		matches := make([]struct {
 			chunk *evidence.SourceChunk
 			start int
+			end   int
 		}, 0, 2)
 		for _, chunk := range c.chunks {
-			start, ok := exactQuotationStart(chunk.TextContent, item.Quotation, item.CharStart)
+			start, end, ok := canonicalQuotationSpan(chunk.TextContent, item.Quotation, item.CharStart)
 			if ok {
 				matches = append(matches, struct {
 					chunk *evidence.SourceChunk
 					start int
-				}{chunk: chunk, start: start})
+					end   int
+				}{chunk: chunk, start: start, end: end})
 			}
 		}
 		if item.Page != nil && len(matches) > 1 {
@@ -351,7 +354,7 @@ func (c evidenceCatalog) normalize(items []CandidateEvidence) []CandidateEvidenc
 		if len(matches) != 1 {
 			continue
 		}
-		canonicalizeEvidence(&item, matches[0].chunk, matches[0].start)
+		canonicalizeEvidence(&item, matches[0].chunk, matches[0].start, matches[0].end)
 		key := evidenceKey(item)
 		if !seen[key] {
 			seen[key] = true
@@ -393,6 +396,72 @@ func exactQuotationStart(text, quotation string, hintedStart int) (int, bool) {
 	return matchStart, matchStart >= 0 && !tied
 }
 
+// canonicalQuotationSpan accepts an exact quotation first, then a
+// whitespace-equivalent quotation. Plain-text specifications commonly contain
+// hard line wraps and indentation that models collapse to spaces. The fallback
+// changes no letters, punctuation, or case, and its result is replaced with
+// the exact immutable source substring before it can become Citation data.
+func canonicalQuotationSpan(text, quotation string, hintedStart int) (int, int, bool) {
+	if start, ok := exactQuotationStart(text, quotation, hintedStart); ok {
+		return start, start + len([]rune(quotation)), true
+	}
+	return whitespaceEquivalentQuotationSpan(text, quotation, hintedStart)
+}
+
+type normalizedRuneSpan struct {
+	start int
+	end   int
+}
+
+func whitespaceEquivalentQuotationSpan(text, quotation string, hintedStart int) (int, int, bool) {
+	normalizedText, spans := collapseWhitespaceWithSpans([]rune(text))
+	normalizedQuotation, _ := collapseWhitespaceWithSpans([]rune(strings.TrimSpace(quotation)))
+	if len(normalizedQuotation) == 0 || len(normalizedQuotation) > len(normalizedText) {
+		return 0, 0, false
+	}
+	matchStart, matchEnd := -1, -1
+	matchDistance := int(^uint(0) >> 1)
+	tied := false
+	for start := 0; start+len(normalizedQuotation) <= len(normalizedText); start++ {
+		if !equalRunesAt(normalizedText, normalizedQuotation, start) {
+			continue
+		}
+		rawStart := spans[start].start
+		rawEnd := spans[start+len(normalizedQuotation)-1].end
+		distance := rawStart - hintedStart
+		if distance < 0 {
+			distance = -distance
+		}
+		if distance < matchDistance {
+			matchStart, matchEnd, matchDistance, tied = rawStart, rawEnd, distance, false
+		} else if distance == matchDistance {
+			tied = true
+		}
+	}
+	return matchStart, matchEnd, matchStart >= 0 && !tied
+}
+
+func collapseWhitespaceWithSpans(value []rune) ([]rune, []normalizedRuneSpan) {
+	normalized := make([]rune, 0, len(value))
+	spans := make([]normalizedRuneSpan, 0, len(value))
+	for index := 0; index < len(value); {
+		if !unicode.IsSpace(value[index]) {
+			normalized = append(normalized, value[index])
+			spans = append(spans, normalizedRuneSpan{start: index, end: index + 1})
+			index++
+			continue
+		}
+		end := index + 1
+		for end < len(value) && unicode.IsSpace(value[end]) {
+			end++
+		}
+		normalized = append(normalized, ' ')
+		spans = append(spans, normalizedRuneSpan{start: index, end: end})
+		index = end
+	}
+	return normalized, spans
+}
+
 func equalRunesAt(text, quotation []rune, start int) bool {
 	for index := range quotation {
 		if text[start+index] != quotation[index] {
@@ -402,10 +471,12 @@ func equalRunesAt(text, quotation []rune, start int) bool {
 	return true
 }
 
-func canonicalizeEvidence(item *CandidateEvidence, chunk *evidence.SourceChunk, start int) {
+func canonicalizeEvidence(item *CandidateEvidence, chunk *evidence.SourceChunk, start, end int) {
+	runes := []rune(chunk.TextContent)
 	item.ChunkID = chunk.ID
 	item.CharStart = start
-	item.CharEnd = start + len([]rune(item.Quotation))
+	item.CharEnd = end
+	item.Quotation = string(runes[start:end])
 	item.Page = chunkPage(chunk)
 }
 
@@ -491,37 +562,11 @@ func normalizeEvidence(ctx context.Context, sourceVersionID uuid.UUID, items []C
 		if err != nil || chunk.SourceVersionID != sourceVersionID {
 			return fmt.Errorf("%w: chunk", ErrEvidenceRequired)
 		}
-		runes := []rune(chunk.TextContent)
-		if item.CharStart >= 0 && item.CharEnd > item.CharStart && item.CharEnd <= len(runes) &&
-			string(runes[item.CharStart:item.CharEnd]) == item.Quotation {
-			continue
-		}
-		quotation := []rune(item.Quotation)
-		matchStart := -1
-		matchDistance := len(runes) + len(quotation) + 1
-		tied := false
-		for start := 0; start+len(quotation) <= len(runes); start++ {
-			if string(runes[start:start+len(quotation)]) != item.Quotation {
-				continue
-			}
-			distance := start - item.CharStart
-			if distance < 0 {
-				distance = -distance
-			}
-			if distance < matchDistance {
-				matchStart, matchDistance, tied = start, distance, false
-			} else if distance == matchDistance {
-				tied = true
-			}
-		}
-		if matchStart < 0 {
+		matchStart, matchEnd, ok := canonicalQuotationSpan(chunk.TextContent, item.Quotation, item.CharStart)
+		if !ok {
 			return fmt.Errorf("%w: quotation/range", ErrEvidenceRequired)
 		}
-		if tied {
-			return fmt.Errorf("%w: ambiguous quotation", ErrEvidenceRequired)
-		}
-		item.CharStart = matchStart
-		item.CharEnd = matchStart + len(quotation)
+		canonicalizeEvidence(item, chunk, matchStart, matchEnd)
 	}
 	return nil
 }

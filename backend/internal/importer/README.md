@@ -64,7 +64,7 @@ Gateway 相同的权威 JSON Schema 预校验并纠正失败输出；OpenAI comp
 禁止猜测持久化 Entity ID，并为 Entity 关系规定严格的 subject/value 类型和方向；
 参考文献、致谢、样板与联系信息中的孤立名称不会仅因出现而成为候选。跨批合并还会归并
 缩写/全名与 label/alias 命中的同一 Entity，并确定性拒绝方向或类型不成立的 Claim。
-事实候选允许为空：来源随后仍会进入 `source-import-plan-v3`，由不受固定 Entity/Claim
+事实候选允许为空：来源随后仍会进入 `source-import-plan-v4`，由不受固定 Entity/Claim
 词表限制的页面规划判断百科价值。模型提供的
 引文必须逐字存在；服务端会重新推导 rune 范围以纠正模型常见的 Unicode/字节计数偏差。
 引文重复出现时选择离模型提示位置最近的精确匹配，最近距离并列才拒绝；模糊匹配、翻译
@@ -93,13 +93,15 @@ Operation 排在 Claim Operation 之前，Claim 的主体和 Entity 值在 Compo
 可核验 Entity/Claim 继续进入治理。新实体 canonical key 使用 `type_key:label`，避免
 不同类型的同名实体在整批应用时互相冲突。
 
-`source-import-plan-v3` 在事实抽取之后执行来源理解与页面路由。它先按标题、来源名、
+`source-import-plan-v4` 在事实抽取之后执行来源理解与页面路由。它先按标题、来源名、
 Entity/alias 召回已有 Page 及可替换 Block，再允许一份来源同时生成多个 `create`、
 `update`、`link` 与 `ignore` 路由。`link.related_to` 显式选择同批 create/update
 页面并携带原文证据，随后编译为稳定 `page_reference`，由投影生成反链；每个新写或改写
 Block 都必须绑定可逐字核验的 SourceChunk evidence；update/replace 只能引用服务端给出的
 Page/Block ID。模型输出过长、结构错误或局部证据失败时按 Chunk 自适应二分，已经成功的
-批次不重跑；独立窗口并行规划后，再由 `source-import-plan-consolidate-v2` 在同一证据集合上
+批次不重跑；拆到单 Chunk 后仍有语义错误时，服务端携带校验反馈最多尝试三次。对 RFC 等硬换行文本，
+只允许将字母、标点和大小写全部一致的纯空白差异回填为不可变 Chunk 中的原始逐字引文；
+独立窗口并行规划后，再由 `source-import-plan-consolidate-v2` 在同一证据集合上
 做全局收敛，消除重复导语、空标题和参考文献堆叠。收敛调用失败时回退到已验证窗口，并经过
 确定性的段落去重、无内容标题与非正文区段清理，不会因可选优化丢失整次导入。
 

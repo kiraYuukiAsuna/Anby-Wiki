@@ -15,7 +15,7 @@ Gateway 使用同一份权威 JSON Schema 严格校验；JSON Object 抽取固�
 
 Worker 首次启用来源导入时，幂等登记当前 `source-extraction-v5` Prompt；该版本明确区分
 临时候选 UUID 与持久化 Entity ID，并提供运行时支持的 Entity type / Claim property
-词表与关系方向约束。页面规划使用 `source-import-plan-v3`，多窗口结果另经
+词表与关系方向约束。页面规划使用 `source-import-plan-v4`，多窗口结果另经
 `source-import-plan-consolidate-v2` 收敛，并由 `source-import-plan-fidelity-v2` 对照原始
 Chunk 做证据化遗漏审计和章节级修复。规划与收敛输出复用 ImportPlan v1 权威 Schema，
 保真审计使用独立的只允许既有 route_index 和精确 evidence 的内部 Schema；最终质量分由

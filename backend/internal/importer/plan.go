@@ -24,12 +24,13 @@ import (
 
 const (
 	ImportPlanSchemaURL = "https://anby.wiki/schemas/import-plan/v1/plan.schema.json"
-	ImportPlanPromptKey = "source-import-plan-v3"
+	ImportPlanPromptKey = "source-import-plan-v4"
 	// ImportPlanConsolidatePromptKey reduces independently grounded source
 	// windows into one coherent article plan. It uses the same output contract
 	// but receives only validated draft material, never raw source instructions.
 	ImportPlanConsolidatePromptKey = "source-import-plan-consolidate-v2"
 	planBatchConcurrency           = 3
+	planLeafValidationAttempts     = 3
 
 	RouteCreate = "create"
 	RouteUpdate = "update"
@@ -406,9 +407,9 @@ func (p *PagePlanner) consolidatePlan(ctx context.Context, params PlanParams, ca
 
 func (p *PagePlanner) generatePlanBatch(ctx context.Context, params PlanParams, candidates []PageCandidate,
 	chunks []evidence.SourceChunk) ([]*ImportPlan, *ai.Result, error) {
-	result, err := p.generatePlanOnce(ctx, params, candidates, chunks)
+	plan, result, err := p.generateValidatedPlanBatch(ctx, params, candidates, chunks)
 	if err != nil {
-		if isAdaptiveBatchError(err) && len(chunks) > 1 {
+		if (isAdaptiveBatchError(err) || isPlanSemanticValidationError(err)) && len(chunks) > 1 {
 			middle := len(chunks) / 2
 			left, leftResult, leftErr := p.generatePlanBatch(ctx, params, candidates, chunks[:middle])
 			if leftErr != nil {
@@ -425,27 +426,57 @@ func (p *PagePlanner) generatePlanBatch(ctx context.Context, params PlanParams, 
 		}
 		return nil, nil, err
 	}
-	plan, _, err := ValidateImportPlan(result.JSON, params.SourceVersionID, chunks, candidates, params.RouteMode, params.PreferredTitle)
-	if err != nil {
-		if (errors.Is(err, ai.ErrInvalidOutput) || errors.Is(err, ErrEvidenceRequired)) && len(chunks) > 1 {
-			middle := len(chunks) / 2
-			left, leftResult, leftErr := p.generatePlanBatch(ctx, params, candidates, chunks[:middle])
-			if leftErr != nil {
-				return nil, nil, leftErr
-			}
-			right, _, rightErr := p.generatePlanBatch(ctx, params, candidates, chunks[middle:])
-			if rightErr != nil {
-				return nil, nil, rightErr
-			}
-			return append(left, right...), leftResult, nil
-		}
-		return nil, nil, err
-	}
 	return []*ImportPlan{plan}, result, nil
 }
 
+// generateValidatedPlanBatch lets adaptive splitting handle complex
+// multi-chunk failures, but gives an irreducible single-chunk window three
+// semantic attempts. Without this leaf correction a provider-valid response
+// with one bad quotation could make the whole import fail after splitting had
+// already exhausted every smaller input shape.
+func (p *PagePlanner) generateValidatedPlanBatch(ctx context.Context, params PlanParams,
+	candidates []PageCandidate, chunks []evidence.SourceChunk) (*ImportPlan, *ai.Result, error) {
+	maxAttempts := 1
+	if len(chunks) == 1 {
+		maxAttempts = planLeafValidationAttempts
+	}
+	validationFeedback := "No prior validation failure."
+	var lastErr error
+	for attempt := 0; attempt < maxAttempts; attempt++ {
+		if err := ctx.Err(); err != nil {
+			return nil, nil, err
+		}
+		result, err := p.generatePlanOnce(ctx, params, candidates, chunks, validationFeedback)
+		if err != nil {
+			return nil, nil, err
+		}
+		plan, _, err := ValidateImportPlan(result.JSON, params.SourceVersionID, chunks,
+			candidates, params.RouteMode, params.PreferredTitle)
+		if err == nil {
+			return plan, result, nil
+		}
+		if !isPlanSemanticValidationError(err) {
+			return nil, nil, err
+		}
+		lastErr = err
+		validationFeedback = planValidationFeedback(err)
+	}
+	return nil, nil, lastErr
+}
+
+func isPlanSemanticValidationError(err error) bool {
+	return errors.Is(err, ai.ErrInvalidOutput) || errors.Is(err, ErrEvidenceRequired)
+}
+
+func planValidationFeedback(err error) string {
+	if errors.Is(err, ErrEvidenceRequired) {
+		return "The previous response lost all verifiable evidence in this source window. Copy each quotation from exactly one supplied chunk_id; preserve every letter, punctuation mark, line break, and indentation, and use Unicode character offsets within that chunk."
+	}
+	return "The previous response passed provider JSON generation but failed application validation. Use only supplied page_id and block_id values, obey the route/block invariants, and satisfy the ImportPlan schema exactly."
+}
+
 func (p *PagePlanner) generatePlanOnce(ctx context.Context, params PlanParams, candidates []PageCandidate,
-	chunks []evidence.SourceChunk) (*ai.Result, error) {
+	chunks []evidence.SourceChunk, validationFeedback string) (*ai.Result, error) {
 	chunksJSON, err := json.Marshal(planChunkViews(chunks))
 	if err != nil {
 		return nil, err
@@ -467,14 +498,15 @@ func (p *PagePlanner) generatePlanOnce(ctx context.Context, params PlanParams, c
 	return p.ai.Generate(ctx, ai.Request{
 		Provider: params.Provider, Model: params.Model, PromptKey: ImportPlanPromptKey,
 		Variables: map[string]any{
-			"source_version_id": params.SourceVersionID.String(),
-			"source_label":      strings.TrimSpace(params.SourceLabel),
-			"preferred_title":   strings.TrimSpace(params.PreferredTitle),
-			"instructions":      strings.TrimSpace(params.Instructions),
-			"route_mode":        params.RouteMode,
-			"entities_json":     string(entitiesJSON),
-			"candidate_pages":   string(candidatesJSON),
-			"chunks_json":       string(chunksJSON),
+			"source_version_id":   params.SourceVersionID.String(),
+			"source_label":        strings.TrimSpace(params.SourceLabel),
+			"preferred_title":     strings.TrimSpace(params.PreferredTitle),
+			"instructions":        strings.TrimSpace(params.Instructions),
+			"route_mode":          params.RouteMode,
+			"entities_json":       string(entitiesJSON),
+			"candidate_pages":     string(candidatesJSON),
+			"chunks_json":         string(chunksJSON),
+			"validation_feedback": validationFeedback,
 		},
 		ImportJobID: params.ImportJobID, ImportRunID: params.ImportRunID,
 	})
