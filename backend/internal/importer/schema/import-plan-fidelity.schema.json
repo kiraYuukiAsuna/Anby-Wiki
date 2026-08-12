@@ -1,0 +1,75 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://anby.wiki/schemas/import-plan-fidelity/v1/audit.schema.json",
+  "title": "Anby Wiki ImportPlan Fidelity Audit v1",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_version",
+    "source_version_id",
+    "complete",
+    "coverage_before",
+    "coverage_after",
+    "missing_blocks"
+  ],
+  "properties": {
+    "schema_version": { "const": 1 },
+    "source_version_id": { "$ref": "#/$defs/uuid" },
+    "complete": { "type": "boolean" },
+    "coverage_before": { "type": "number", "minimum": 0, "maximum": 1 },
+    "coverage_after": { "type": "number", "minimum": 0, "maximum": 1 },
+    "missing_blocks": {
+      "type": "array",
+      "maxItems": 24,
+      "items": { "$ref": "#/$defs/missing_block" }
+    }
+  },
+  "oneOf": [
+    {
+      "properties": {
+        "complete": { "const": true },
+        "missing_blocks": { "maxItems": 0 }
+      }
+    },
+    {
+      "properties": {
+        "complete": { "const": false },
+        "missing_blocks": { "minItems": 1 }
+      }
+    }
+  ],
+  "$defs": {
+    "uuid": {
+      "type": "string",
+      "format": "uuid"
+    },
+    "evidence": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["chunk_id", "quotation", "char_start", "char_end"],
+      "properties": {
+        "chunk_id": { "$ref": "#/$defs/uuid" },
+        "quotation": { "type": "string", "minLength": 1, "maxLength": 4000 },
+        "char_start": { "type": "integer", "minimum": 0 },
+        "char_end": { "type": "integer", "minimum": 1 },
+        "page": { "type": ["integer", "null"], "minimum": 1 }
+      }
+    },
+    "missing_block": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["route_index", "after_heading", "text", "evidence"],
+      "properties": {
+        "route_index": { "type": "integer", "minimum": 0, "maximum": 19 },
+        "after_heading": { "type": "string", "maxLength": 500 },
+        "text": { "type": "string", "minLength": 1, "maxLength": 4000 },
+        "evidence": {
+          "type": "array",
+          "minItems": 1,
+          "maxItems": 8,
+          "items": { "$ref": "#/$defs/evidence" }
+        }
+      }
+    }
+  }
+}

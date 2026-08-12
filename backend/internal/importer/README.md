@@ -59,7 +59,7 @@ Gateway 相同的权威 JSON Schema 预校验并纠正失败输出；OpenAI comp
 禁止猜测持久化 Entity ID，并为 Entity 关系规定严格的 subject/value 类型和方向；
 参考文献、致谢、样板与联系信息中的孤立名称不会仅因出现而成为候选。跨批合并还会归并
 缩写/全名与 label/alias 命中的同一 Entity，并确定性拒绝方向或类型不成立的 Claim。
-事实候选允许为空：来源随后仍会进入 `source-import-plan-v2`，由不受固定 Entity/Claim
+事实候选允许为空：来源随后仍会进入 `source-import-plan-v3`，由不受固定 Entity/Claim
 词表限制的页面规划判断百科价值。模型提供的
 引文必须逐字存在；服务端会重新推导 rune 范围以纠正模型常见的 Unicode/字节计数偏差。
 引文重复出现时选择离模型提示位置最近的精确匹配，最近距离并列才拒绝；模糊匹配、翻译
@@ -74,8 +74,9 @@ SourceVersion 的某个 Chunk 时纠正引用；仍无法核验的证据与候�
 来源标题或上传文件名会作为主体发现上下文，但不能单独构成证据；需求、规格和技术报告
 中的候选仍必须由 Chunk 内逐字引文支持。
 
-页面计划完成后，只有与 create/update 路由标题或来源主题直接匹配的 Entity 才进入匹配；
-有效 Claim 可以从已选主体引入其 Entity 值依赖。参考文献里的其余候选留在不可变抽取证据中，
+页面计划完成后，只有与 create/update 路由标题直接匹配的 Entity 才进入匹配；来源主题概况
+只用于发现和写作，不授权图谱写入。有效 Claim 可以从已选主体引入其 Entity 值依赖。
+参考文献里的其余候选留在不可变抽取证据中，
 但不会无差别变成 Proposal 写操作。匹配后，服务端生成并固化在 Extraction 中的 Entity
 `candidate_id` 直接作为新 Entity
 的最终预分配 UUID。一次 ImportJob 只合成一个复合 Proposal：所有 `create_entity`
@@ -87,20 +88,28 @@ Operation 排在 Claim Operation 之前，Claim 的主体和 Entity 值在 Compo
 可核验 Entity/Claim 继续进入治理。新实体 canonical key 使用 `type_key:label`，避免
 不同类型的同名实体在整批应用时互相冲突。
 
-`source-import-plan-v2` 在事实抽取之后执行来源理解与页面路由。它先按标题、来源名、
+`source-import-plan-v3` 在事实抽取之后执行来源理解与页面路由。它先按标题、来源名、
 Entity/alias 召回已有 Page 及可替换 Block，再允许一份来源同时生成多个 `create`、
 `update`、`link` 与 `ignore` 路由。`link.related_to` 显式选择同批 create/update
 页面并携带原文证据，随后编译为稳定 `page_reference`，由投影生成反链；每个新写或改写
 Block 都必须绑定可逐字核验的 SourceChunk evidence；update/replace 只能引用服务端给出的
 Page/Block ID。模型输出过长、结构错误或局部证据失败时按 Chunk 自适应二分，已经成功的
-批次不重跑；独立窗口并行规划后，再由 `source-import-plan-consolidate-v1` 在同一证据集合上
+批次不重跑；独立窗口并行规划后，再由 `source-import-plan-consolidate-v2` 在同一证据集合上
 做全局收敛，消除重复导语、空标题和参考文献堆叠。收敛调用失败时回退到已验证窗口，并经过
 确定性的段落去重、无内容标题与非正文区段清理，不会因可选优化丢失整次导入。
 
+收敛后由 `source-import-plan-fidelity-v1` 按原始 Chunk 分窗比较完整页面计划，逐项检查定义、
+约束、禁止事项、条件、例外、先后顺序、数量、互操作和安全要求。模型只能返回带精确 Chunk
+引文的遗漏段落，服务端重新核验引文并把修复插入已有路由和章节；不能借审计新建页面或猜测
+章节。最终 `quality_score` 不再采用模型自评分，而由服务端按原文保真度 35%、证据支撑 25%、
+文章结构 20%、去重精炼 10% 和路由置信度 10% 计算。保真度低于 0.70、证据或结构存在硬伤，
+或综合分低于管理员阈值（默认 0.70）时，计划停在 Plan 阶段，不生成 Proposal；达到门槛才进入
+匹配和审核。这借鉴了 VeronicaWIKI 的生成后保真审计，但修复仍遵守 Anby 的不可变证据模型，
+不会把无法定位的“遗漏原句”作为兜底正文堆入页面。
+
 Composer 把页面路由与 Entity/Claim 决策合成为一个以 Wiki 为目标的复合 Proposal；正文中
 实际采用的 Entity 会编译为稳定 `entity_reference`，标题证据继续保留在 Operation 上但不
-渲染多余的行内 Citation。创建页预分配 Page ID，
-创建页预分配 Page ID，更新页带 Revision 与 Block hash 基线，审核时可按页面查看全部
+渲染多余的行内 Citation。创建页预分配 Page ID，更新页带 Revision 与 Block hash 基线，审核时可按页面查看全部
 Operation。Apply 先做跨页面 Revision/Block 与 Claim 冲突检测，再在单一事务中创建/更新
 多个页面和知识对象；任一步失败整批回滚。成功响应返回全部 `revision_ids`，ChangeBatch
 回滚仍按审计账本对整批追加补偿。

@@ -123,6 +123,11 @@ func assembleImportRunner(ctx context.Context, pool *pgxpool.Pool, cfg config.Co
 		importer.ImportPlanSchemaJSON()); err != nil {
 		return nil, err
 	}
+	if _, err := registry.EnsureActive(ctx, importer.ImportPlanFidelityPromptKey, 1,
+		importPlanFidelityPromptSystem, importPlanFidelityPromptUser,
+		importer.ImportPlanFidelitySchemaJSON()); err != nil {
+		return nil, err
+	}
 	gateway := ai.NewGateway(aiRepo, aiRepo, ids, map[string]ai.Provider{
 		"semantic-kernel": provider,
 	}, ai.GatewayConfig{Timeout: 10 * time.Minute, MaxAttempts: 1})

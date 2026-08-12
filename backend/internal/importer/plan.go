@@ -24,11 +24,11 @@ import (
 
 const (
 	ImportPlanSchemaURL = "https://anby.wiki/schemas/import-plan/v1/plan.schema.json"
-	ImportPlanPromptKey = "source-import-plan-v2"
+	ImportPlanPromptKey = "source-import-plan-v3"
 	// ImportPlanConsolidatePromptKey reduces independently grounded source
 	// windows into one coherent article plan. It uses the same output contract
 	// but receives only validated draft material, never raw source instructions.
-	ImportPlanConsolidatePromptKey = "source-import-plan-consolidate-v1"
+	ImportPlanConsolidatePromptKey = "source-import-plan-consolidate-v2"
 	planBatchConcurrency           = 3
 
 	RouteCreate = "create"
@@ -226,6 +226,14 @@ func (p *PagePlanner) Plan(ctx context.Context, params PlanParams) (*PlanResult,
 	refineImportPlan(plan)
 	if plan.Profile.Useful && actionablePageRouteCount(plan.Routes) == 0 {
 		return nil, ErrNoPagePlan
+	}
+	fidelity, err := p.ensurePlanFidelity(ctx, params, plan)
+	if err != nil {
+		return nil, err
+	}
+	plan.QualityScore = assessImportPlanQuality(plan, params.Chunks, fidelity)
+	if plan.QualityScore < DefaultQualityThreshold {
+		return nil, ErrQualityGate
 	}
 	normalizeImportPlanCollections(plan)
 	canonical, err := json.Marshal(plan)
@@ -438,14 +446,7 @@ func (p *PagePlanner) generatePlanBatch(ctx context.Context, params PlanParams, 
 
 func (p *PagePlanner) generatePlanOnce(ctx context.Context, params PlanParams, candidates []PageCandidate,
 	chunks []evidence.SourceChunk) (*ai.Result, error) {
-	chunkViews := make([]map[string]any, len(chunks))
-	for index := range chunks {
-		chunkViews[index] = map[string]any{
-			"chunk_id": chunks[index].ID, "ordinal": chunks[index].Ordinal,
-			"text": chunks[index].TextContent, "locator": json.RawMessage(chunks[index].LocatorJSON),
-		}
-	}
-	chunksJSON, err := json.Marshal(chunkViews)
+	chunksJSON, err := json.Marshal(planChunkViews(chunks))
 	if err != nil {
 		return nil, err
 	}

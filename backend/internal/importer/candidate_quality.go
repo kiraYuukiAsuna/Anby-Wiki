@@ -317,9 +317,11 @@ func oneOf(value string, candidates ...string) bool {
 }
 
 // selectCandidatesForPlan prevents an extraction batch from turning every
-// bibliographic mention into an authoritative graph write. Page routes and the
-// whole-source subject profile choose the graph seeds; only Claims whose
-// subject is selected may pull in an additional value Entity dependency.
+// bibliographic mention into an authoritative graph write. Actionable page
+// routes choose the graph seeds; only a valid Claim whose subject is selected
+// may pull in an additional value Entity dependency. The source profile is a
+// discovery aid, not write authority: otherwise incidental authors and cited
+// works become disconnected Entities even when they never received a route.
 func selectCandidatesForPlan(candidates *Candidates, plan *ImportPlan) *Candidates {
 	if candidates == nil {
 		return nil
@@ -333,9 +335,6 @@ func selectCandidatesForPlan(candidates *Candidates, plan *ImportPlan) *Candidat
 		return result
 	}
 	wanted := map[string]bool{}
-	for _, subject := range plan.Profile.Subjects {
-		addPlanIdentityKeys(wanted, subject.Title)
-	}
 	for _, route := range plan.Routes {
 		if route.Action == RouteCreate || route.Action == RouteUpdate {
 			addPlanIdentityKeys(wanted, route.Title)

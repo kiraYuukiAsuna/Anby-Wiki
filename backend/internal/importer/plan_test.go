@@ -20,10 +20,23 @@ type consolidatingPlanGenerator struct {
 	mu               sync.Mutex
 	mapCalls         int
 	consolidateCalls int
+	fidelityCalls    int
 }
 
 func (g *consolidatingPlanGenerator) Generate(_ context.Context, request ai.Request) (*ai.Result, error) {
 	sourceVersionID, _ := uuid.Parse(request.Variables["source_version_id"].(string))
+	if request.PromptKey == ImportPlanFidelityPromptKey {
+		g.mu.Lock()
+		g.fidelityCalls++
+		g.mu.Unlock()
+		audit := PlanFidelityAudit{SchemaVersion: 1, SourceVersionID: sourceVersionID,
+			Complete: true, CoverageBefore: 0.95, CoverageAfter: 0.95, MissingBlocks: []PlanFidelityMissingBlock{}}
+		raw, err := json.Marshal(audit)
+		if err != nil {
+			return nil, err
+		}
+		return &ai.Result{JSON: raw, PromptKey: request.PromptKey, PromptVersion: 1, Model: "test"}, nil
+	}
 	plan := &ImportPlan{SchemaVersion: 1, SourceVersionID: sourceVersionID,
 		Profile:      SourceProfile{Title: "Source", Summary: "Summary", Language: "en", Useful: true, Subjects: []SourceSubject{}},
 		QualityScore: 0.9, PromptInjectionDetected: false}
@@ -141,14 +154,91 @@ func TestGeneratePlanConsolidatesParallelSourceWindows(t *testing.T) {
 		t.Fatal(err)
 	}
 	generator.mu.Lock()
-	mapCalls, consolidateCalls := generator.mapCalls, generator.consolidateCalls
+	mapCalls, consolidateCalls, fidelityCalls := generator.mapCalls, generator.consolidateCalls, generator.fidelityCalls
 	generator.mu.Unlock()
-	if mapCalls != 2 || consolidateCalls != 1 {
-		t.Fatalf("map calls=%d consolidate calls=%d, want 2/1", mapCalls, consolidateCalls)
+	if mapCalls != 2 || consolidateCalls != 1 || fidelityCalls != 0 {
+		t.Fatalf("map calls=%d consolidate calls=%d fidelity calls=%d, want 2/1/0", mapCalls, consolidateCalls, fidelityCalls)
 	}
 	if generated.PromptKey != ImportPlanConsolidatePromptKey || len(generated.Plan.Routes) != 1 ||
 		len(generated.Plan.Routes[0].Blocks) != 1 || generated.Plan.Routes[0].Blocks[0].Text != "A coherent article." {
 		t.Fatalf("unexpected consolidated plan: %#v", generated)
+	}
+}
+
+func TestValidatePlanFidelityAuditRepairsExactEvidenceAndRejectsInventedRoute(t *testing.T) {
+	sourceVersionID, chunkID := uuid.New(), uuid.New()
+	text := "Clients MUST reject an invalid JWT assertion."
+	chunks := []evidence.SourceChunk{{ID: chunkID, SourceVersionID: sourceVersionID,
+		TextContent: text, LocatorJSON: json.RawMessage(`{"page":7}`)}}
+	plan := &ImportPlan{Routes: []PageRoute{{Action: RouteCreate, Title: "JWT profile",
+		Blocks: []PlannedBlock{{Type: string(ast.BlockParagraph), Text: "The profile defines JWT assertions."}}}}}
+	audit := PlanFidelityAudit{SchemaVersion: 1, SourceVersionID: sourceVersionID,
+		Complete: false, CoverageBefore: 0.6, CoverageAfter: 0.9,
+		MissingBlocks: []PlanFidelityMissingBlock{{RouteIndex: 0, AfterHeading: "Invented section",
+			Text: text, Evidence: []CandidateEvidence{{ChunkID: uuid.New(), Quotation: text, CharStart: 99, CharEnd: 100}}}}}
+	raw, _ := json.Marshal(audit)
+	validated, err := ValidatePlanFidelityAudit(raw, sourceVersionID, chunks, plan)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if validated.MissingBlocks[0].AfterHeading != "" ||
+		validated.MissingBlocks[0].Evidence[0].ChunkID != chunkID ||
+		validated.MissingBlocks[0].Evidence[0].CharStart != 0 ||
+		validated.MissingBlocks[0].Evidence[0].Page == nil || *validated.MissingBlocks[0].Evidence[0].Page != 7 {
+		t.Fatalf("audit evidence was not canonicalized: %#v", validated.MissingBlocks[0])
+	}
+	audit.MissingBlocks[0].RouteIndex = 1
+	raw, _ = json.Marshal(audit)
+	if _, err := ValidatePlanFidelityAudit(raw, sourceVersionID, chunks, plan); !errors.Is(err, ai.ErrInvalidOutput) {
+		t.Fatalf("error=%v, want ai.ErrInvalidOutput", err)
+	}
+}
+
+func TestApplyPlanFidelityAuditsRepairsSectionWithoutDuplicating(t *testing.T) {
+	evidenceItem := []CandidateEvidence{{ChunkID: uuid.New(), Quotation: "MUST reject", CharStart: 0, CharEnd: 11}}
+	plan := &ImportPlan{Routes: []PageRoute{{Action: RouteCreate, Title: "JWT profile", Blocks: []PlannedBlock{
+		{Type: string(ast.BlockParagraph), Mode: BlockAppend, Text: "The profile defines JWT assertions.", Evidence: evidenceItem},
+		{Type: string(ast.BlockHeading), Mode: BlockAppend, Text: "Processing", Level: 2, Evidence: evidenceItem},
+		{Type: string(ast.BlockParagraph), Mode: BlockAppend, Text: "Servers validate the assertion.", Evidence: evidenceItem},
+	}}}}
+	audits := []*PlanFidelityAudit{{MissingBlocks: []PlanFidelityMissingBlock{
+		{RouteIndex: 0, AfterHeading: "Processing", Text: "Clients MUST reject invalid assertions.", Evidence: evidenceItem},
+		{RouteIndex: 0, AfterHeading: "Processing", Text: "Clients MUST reject invalid assertions.", Evidence: evidenceItem},
+	}}}
+	if applied := applyPlanFidelityAudits(plan, audits); applied != 1 {
+		t.Fatalf("applied=%d, want 1", applied)
+	}
+	if len(plan.Routes[0].Blocks) != 4 || plan.Routes[0].Blocks[3].Text != "Clients MUST reject invalid assertions." {
+		t.Fatalf("unexpected repaired blocks: %#v", plan.Routes[0].Blocks)
+	}
+}
+
+func TestAssessImportPlanQualityUsesServerMetrics(t *testing.T) {
+	evidenceItem := []CandidateEvidence{{ChunkID: uuid.New(), Quotation: "The profile defines JWT assertions and validation requirements.", CharStart: 0, CharEnd: 63}}
+	plan := &ImportPlan{Profile: SourceProfile{Useful: true}, QualityScore: 0.99,
+		Routes: []PageRoute{{Action: RouteCreate, Title: "JWT profile", Confidence: 0.9, Blocks: []PlannedBlock{
+			{Type: string(ast.BlockParagraph), Mode: BlockAppend, Text: "The profile defines JWT assertions and validation requirements.", Evidence: evidenceItem},
+			{Type: string(ast.BlockHeading), Mode: BlockAppend, Text: "Processing", Level: 2, Evidence: evidenceItem},
+			{Type: string(ast.BlockParagraph), Mode: BlockAppend, Text: "Clients validate JWT assertions before accepting them.", Evidence: evidenceItem},
+		}}}}
+	chunks := []evidence.SourceChunk{{TextContent: strings.Repeat("source material ", 20)}}
+	good := assessImportPlanQuality(plan, chunks, 0.9)
+	if good < DefaultQualityThreshold {
+		t.Fatalf("good score=%f, want >= threshold", good)
+	}
+	if bad := assessImportPlanQuality(plan, chunks, 0.5); bad >= DefaultQualityThreshold {
+		t.Fatalf("bad score=%f, want below threshold", bad)
+	}
+	headingHeavy := *plan
+	headingHeavy.Routes = append([]PageRoute(nil), plan.Routes...)
+	headingHeavy.Routes[0].Blocks = append([]PlannedBlock(nil), plan.Routes[0].Blocks...)
+	for index := 0; index < 8; index++ {
+		headingHeavy.Routes[0].Blocks = append(headingHeavy.Routes[0].Blocks,
+			PlannedBlock{Type: string(ast.BlockHeading), Text: "Thin section " + string(rune('A'+index)), Level: 2, Evidence: evidenceItem},
+			PlannedBlock{Type: string(ast.BlockParagraph), Text: "One short sentence.", Evidence: evidenceItem})
+	}
+	if score := assessImportPlanQuality(&headingHeavy, chunks, 0.9); score >= DefaultQualityThreshold {
+		t.Fatalf("heading-heavy score=%f, want below threshold", score)
 	}
 }
 

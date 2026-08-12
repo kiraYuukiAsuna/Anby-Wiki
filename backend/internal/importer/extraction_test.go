@@ -551,6 +551,11 @@ func TestNormalizeCandidatesDeduplicatesNamesAndRejectsWrongRelationDirection(t 
 	if len(selected.Entities) != 2 || len(selected.Claims) != 1 {
 		t.Fatalf("plan relevance filter retained unrelated graph data: %#v", selected)
 	}
+	plan.Profile.Subjects = append(plan.Profile.Subjects, SourceSubject{Title: "Microsoft", Kind: "organization"})
+	selected = selectCandidatesForPlan(normalized, plan)
+	if len(selected.Entities) != 2 || len(selected.Claims) != 1 {
+		t.Fatalf("profile-only subject became an authoritative graph write: %#v", selected)
+	}
 }
 
 func TestPassesExtractionQualityGateAcceptsOnlyStrongVerifiedSalvage(t *testing.T) {

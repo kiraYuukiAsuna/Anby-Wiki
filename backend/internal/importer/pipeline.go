@@ -230,7 +230,7 @@ func (p *Pipeline) run(ctx context.Context, request PipelineRequest, acquire acq
 	if err != nil {
 		return fail(current, planErrorCode(err), err)
 	}
-	if planned.Plan.QualityScore < threshold/2 {
+	if planned.Plan.QualityScore < threshold {
 		return fail(current, "page_plan_quality_gate", ErrQualityGate)
 	}
 	planOutput := planned.Record.ID.String()
@@ -587,6 +587,8 @@ func planErrorCode(err error) string {
 		return "page_plan_target_conflict"
 	case errors.Is(err, ErrNoPagePlan):
 		return "no_page_plan"
+	case errors.Is(err, ErrQualityGate):
+		return "page_plan_quality_gate"
 	default:
 		return "page_plan_failed"
 	}
