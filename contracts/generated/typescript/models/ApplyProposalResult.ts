@@ -42,6 +42,12 @@ export interface ApplyProposalResult {
      * @type {Array<string>}
      * @memberof ApplyProposalResult
      */
+    revisionIds: Array<string>;
+    /**
+     *
+     * @type {Array<string>}
+     * @memberof ApplyProposalResult
+     */
     pageIds: Array<string>;
     /**
      *
@@ -81,6 +87,7 @@ export interface ApplyProposalResult {
 export function instanceOfApplyProposalResult(value: object): value is ApplyProposalResult {
     if ((!('proposalId' in (value as Record<string, any>)) && !('proposal_id' in (value as Record<string, any>))) || ((value as Record<string, any>)['proposalId'] === undefined && (value as Record<string, any>)['proposal_id'] === undefined)) return false;
     if ((!('changeBatchId' in (value as Record<string, any>)) && !('change_batch_id' in (value as Record<string, any>))) || ((value as Record<string, any>)['changeBatchId'] === undefined && (value as Record<string, any>)['change_batch_id'] === undefined)) return false;
+    if ((!('revisionIds' in (value as Record<string, any>)) && !('revision_ids' in (value as Record<string, any>))) || ((value as Record<string, any>)['revisionIds'] === undefined && (value as Record<string, any>)['revision_ids'] === undefined)) return false;
     if ((!('pageIds' in (value as Record<string, any>)) && !('page_ids' in (value as Record<string, any>))) || ((value as Record<string, any>)['pageIds'] === undefined && (value as Record<string, any>)['page_ids'] === undefined)) return false;
     if ((!('entityIds' in (value as Record<string, any>)) && !('entity_ids' in (value as Record<string, any>))) || ((value as Record<string, any>)['entityIds'] === undefined && (value as Record<string, any>)['entity_ids'] === undefined)) return false;
     if ((!('entityMergeIds' in (value as Record<string, any>)) && !('entity_merge_ids' in (value as Record<string, any>))) || ((value as Record<string, any>)['entityMergeIds'] === undefined && (value as Record<string, any>)['entity_merge_ids'] === undefined)) return false;
@@ -103,6 +110,7 @@ export function ApplyProposalResultFromJSONTyped(json: any, ignoreDiscriminator:
         'proposalId': json['proposal_id'],
         'changeBatchId': json['change_batch_id'],
         'revisionId': json['revision_id'] == null ? undefined : json['revision_id'],
+        'revisionIds': json['revision_ids'],
         'pageIds': json['page_ids'],
         'entityIds': json['entity_ids'],
         'entityMergeIds': json['entity_merge_ids'],
@@ -126,6 +134,7 @@ export function ApplyProposalResultToJSONTyped(value?: ApplyProposalResult | nul
         'proposal_id': value['proposalId'],
         'change_batch_id': value['changeBatchId'],
         'revision_id': value['revisionId'],
+        'revision_ids': value['revisionIds'],
         'page_ids': value['pageIds'],
         'entity_ids': value['entityIds'],
         'entity_merge_ids': value['entityMergeIds'],

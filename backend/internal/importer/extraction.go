@@ -21,7 +21,7 @@ import (
 
 const (
 	ExtractionSchemaURL = "https://anby.wiki/schemas/extraction/v1/candidates.schema.json"
-	ExtractionPromptKey = "source-extraction-v3"
+	ExtractionPromptKey = "source-extraction-v4"
 )
 
 //go:embed schema/candidates.schema.json
@@ -216,12 +216,17 @@ func ValidateCandidatesFromChunks(raw []byte, sourceVersionID uuid.UUID, chunks 
 		if candidate.Subject.CandidateID != nil && entityIDCounts[*candidate.Subject.CandidateID] != 1 {
 			continue
 		}
+		valueCandidateID, hasValueCandidate, validValue := claimValueCandidateReference(candidate.Value)
+		if !validValue || (hasValueCandidate && entityIDCounts[valueCandidateID] != 1) {
+			continue
+		}
 		if candidate.ValidFrom != nil && candidate.ValidTo != nil && !candidate.ValidTo.After(*candidate.ValidFrom) {
 			continue
 		}
 		candidate.Evidence = catalog.normalize(candidate.Evidence)
 		if len(candidate.Evidence) == 0 ||
-			(candidate.Subject.CandidateID != nil && !retainedEntityIDs[*candidate.Subject.CandidateID]) {
+			(candidate.Subject.CandidateID != nil && !retainedEntityIDs[*candidate.Subject.CandidateID]) ||
+			(hasValueCandidate && !retainedEntityIDs[valueCandidateID]) {
 			continue
 		}
 		retainedEvidence += len(candidate.Evidence)
@@ -243,6 +248,22 @@ func ValidateCandidatesFromChunks(raw []byte, sourceVersionID uuid.UUID, chunks 
 	}
 	canonical, _ := json.Marshal(candidates)
 	return candidates, canonical, nil
+}
+
+func claimValueCandidateReference(raw json.RawMessage) (uuid.UUID, bool, bool) {
+	var value map[string]json.RawMessage
+	if err := json.Unmarshal(raw, &value); err != nil || len(value) != 1 {
+		return uuid.Nil, false, false
+	}
+	rawID, ok := value["entity_candidate_id"]
+	if !ok {
+		return uuid.Nil, false, true
+	}
+	var candidateID uuid.UUID
+	if err := json.Unmarshal(rawID, &candidateID); err != nil || candidateID == uuid.Nil {
+		return uuid.Nil, true, false
+	}
+	return candidateID, true, true
 }
 
 func decodeCandidates(raw []byte, sourceVersionID uuid.UUID) (*Candidates, bool, error) {
@@ -346,7 +367,10 @@ func exactQuotationStart(text, quotation string, hintedStart int) (int, bool) {
 		return hintedStart, true
 	}
 	matchStart := -1
-	matchDistance := len(runes) + len(quoted) + 1
+	// hintedStart is model-controlled and may be far outside the chunk. Use the
+	// largest int as the initial distance so an otherwise unique exact quotation
+	// remains repairable instead of being discarded because its hint was huge.
+	matchDistance := int(^uint(0) >> 1)
 	tied := false
 	for start := 0; start+len(quoted) <= len(runes); start++ {
 		if !equalRunesAt(runes, quoted, start) {

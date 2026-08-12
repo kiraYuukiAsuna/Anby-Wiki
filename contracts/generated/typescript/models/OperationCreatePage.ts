@@ -13,13 +13,13 @@
  */
 
 import { mapValues } from '../runtime';
-import type { OperationTarget } from './OperationTarget';
+import type { OperationCreatePageAllOfTarget } from './OperationCreatePageAllOfTarget';
 import {
-    OperationTargetFromJSON,
-    OperationTargetFromJSONTyped,
-    OperationTargetToJSON,
-    OperationTargetToJSONTyped,
-} from './OperationTarget';
+    OperationCreatePageAllOfTargetFromJSON,
+    OperationCreatePageAllOfTargetFromJSONTyped,
+    OperationCreatePageAllOfTargetToJSON,
+    OperationCreatePageAllOfTargetToJSONTyped,
+} from './OperationCreatePageAllOfTarget';
 import type { OperationCreatePageAllOfPayload } from './OperationCreatePageAllOfPayload';
 import {
     OperationCreatePageAllOfPayloadFromJSON,
@@ -75,10 +75,10 @@ export interface OperationCreatePage {
     base: OperationBase;
     /**
      *
-     * @type {OperationTarget}
+     * @type {OperationCreatePageAllOfTarget}
      * @memberof OperationCreatePage
      */
-    target: OperationTarget;
+    target: OperationCreatePageAllOfTarget;
     /**
      *
      * @type {string}
@@ -155,7 +155,7 @@ export function OperationCreatePageFromJSONTyped(json: any, ignoreDiscriminator:
         'schemaVersion': json['schema_version'],
         'operationType': json['operation_type'],
         'base': OperationBaseFromJSON(json['base']),
-        'target': OperationTargetFromJSON(json['target']),
+        'target': OperationCreatePageAllOfTargetFromJSON(json['target']),
         'expectedHash': json['expected_hash'],
         'evidence': ((json['evidence'] as Array<any>).map(OperationEvidenceFromJSON)),
         'risk': OperationRiskFromJSON(json['risk']),
@@ -177,7 +177,7 @@ export function OperationCreatePageToJSONTyped(value?: OperationCreatePage | nul
         'schema_version': value['schemaVersion'],
         'operation_type': value['operationType'],
         'base': OperationBaseToJSON(value['base']),
-        'target': OperationTargetToJSON(value['target']),
+        'target': OperationCreatePageAllOfTargetToJSON(value['target']),
         'expected_hash': value['expectedHash'],
         'evidence': ((value['evidence'] as Array<any>).map(OperationEvidenceToJSON)),
         'risk': OperationRiskToJSON(value['risk']),

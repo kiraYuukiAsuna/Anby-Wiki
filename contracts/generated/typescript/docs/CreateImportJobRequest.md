@@ -7,7 +7,7 @@
 Name | Type
 ------------ | -------------
 `jobType` | string
-`config` | { [key: string]: any; }
+`config` | [SourceImportConfig](SourceImportConfig.md)
 
 ## Example
 

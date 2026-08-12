@@ -26,13 +26,14 @@ const extractionPromptSystem = `You extract factual encyclopedia candidates from
 Candidate identity rules:
 - Generate a fresh RFC 4122 UUID for every candidate_id. A candidate_id is temporary extraction identity, not a persistent wiki Entity ID.
 - For a Claim about an Entity extracted in this response, use subject.candidate_id referencing that Entity candidate.
+- For an entity-valued Claim, also extract the value Entity as an Entity candidate and use value.entity_candidate_id referencing it.
 - Never guess a persistent subject.entity_id or value.entity_id. Use one only when the input explicitly supplies that existing wiki Entity UUID.
 
 Allowed Entity type_key values:
 - person, organization, place, work, character, event, product, concept, species, software
 
 Allowed Claim property_key values and required value member:
-- instance_of, developer, author, manufacturer, voice_actor, located_in, part_of: value.entity_id
+- instance_of, developer, author, manufacturer, voice_actor, located_in, part_of: value.entity_candidate_id (or value.entity_id only when explicitly supplied by the input)
 - release_date: value.date in YYYY-MM-DD form
 
 Extraction rules:
@@ -40,6 +41,7 @@ Extraction rules:
 - Use the source label only as discovery context. A candidate still requires an exact quotation from a supplied Chunk; never create a candidate supported only by the source label.
 - Before returning empty arrays, scan every Chunk for clearly named subjects that fit the allowed Entity types.
 - Extract an Entity candidate for every clearly named main subject that fits an allowed type, even when no supported Claim property applies.
+- Whenever a supported Claim has an Entity value (for example an author, developer, containing place, work, or class), extract that value as an Entity candidate in the same response and reference its candidate_id. Do not emit an Entity-valued Claim without a resolvable value candidate.
 - Emit a Claim only when its property is in the allowed list and all required IDs or values are supported by the source/input. Do not fabricate a persistent Entity ID merely to create a Claim.
 - Every Entity and Claim candidate must cite an exact non-empty quotation from one supplied Chunk. Copy quotation text verbatim: do not translate, normalize punctuation, insert ellipses, or combine non-contiguous text. Prefer the shortest quotation that still supports the candidate.
 - For every evidence item, copy chunk_id exactly from the same Chunk object that contains the quotation. Never use source_version_id as chunk_id and never invent a chunk UUID. char_start and char_end are Unicode character offsets within that one Chunk.
@@ -65,6 +67,11 @@ func assembleImportRunner(ctx context.Context, pool *pgxpool.Pool, cfg config.Co
 	}
 	objectStore := storage.NewS3Store(storage.S3Config{Endpoint: cfg.S3Endpoint, Region: cfg.S3Region,
 		Bucket: cfg.S3Bucket, AccessKey: cfg.S3AccessKey, SecretKey: cfg.S3SecretKey})
+	pageService := page.NewService(pageRepo, txm, ids).WithSnapshotStorage(page.SnapshotStorageConfig{
+		Store: objectStore, Environment: cfg.Env,
+		MaxBytes: cfg.RevisionArchiveMaxBytes, Retention: cfg.RevisionArchiveRetention,
+		BatchSize: cfg.RevisionArchiveBatchSize,
+	})
 	evidenceRepo := evidence.NewRepository(pool)
 	evidenceService := evidence.NewService(evidenceRepo, pageRepo, objectStore, cfg.Env, txm, ids)
 	knowledgeService := knowledge.NewService(knowledge.NewRepository(pool), pageRepo, txm, ids).
@@ -104,6 +111,10 @@ func assembleImportRunner(ctx context.Context, pool *pgxpool.Pool, cfg config.Co
 		extractionPromptUser, importer.ExtractionSchemaJSON()); err != nil {
 		return nil, err
 	}
+	if _, err := registry.EnsureActive(ctx, importer.ImportPlanPromptKey, 1, importPlanPromptSystem,
+		importPlanPromptUser, importer.ImportPlanSchemaJSON()); err != nil {
+		return nil, err
+	}
 	gateway := ai.NewGateway(aiRepo, aiRepo, ids, map[string]ai.Provider{
 		"semantic-kernel": provider,
 	}, ai.GatewayConfig{Timeout: 10 * time.Minute, MaxAttempts: 1})
@@ -112,8 +123,9 @@ func assembleImportRunner(ctx context.Context, pool *pgxpool.Pool, cfg config.Co
 	pipeline := importer.NewPipeline(importer.PipelineServices{
 		Jobs: jobs, Repository: importRepo, Evidence: evidenceService, Parser: importer.NewParser(0),
 		Extraction: importer.NewExtractionService(importRepo, evidenceRepo, gateway, ids),
+		Planner:    importer.NewPagePlanner(importRepo, pageService, gateway, ids),
 		Matcher:    importer.NewEntityMatcher(knowledgeService), Classifier: importer.NewClaimClassifier(knowledgeService),
-		Composer: importer.NewProposalComposer(evidenceService, governanceService, knowledgeService),
+		Composer: importer.NewProposalComposer(evidenceService, governanceService, knowledgeService, pageService, ids),
 		Reviews:  reviews, Fetcher: importer.NewFetcher(importer.DefaultURLPolicy(), nil, nil),
 	})
 	return importer.NewRunner(jobs, pipeline, importer.RunnerConfig{WikiID: wikiID,

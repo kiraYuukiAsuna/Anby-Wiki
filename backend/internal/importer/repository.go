@@ -165,15 +165,6 @@ func (r *Repository) InsertJobIfAbsent(ctx context.Context, job *Job) (bool, err
 	return err == nil, err
 }
 
-func (r *Repository) FindSucceededByVersion(ctx context.Context, jobType string, sourceVersionID uuid.UUID) (*Job, error) {
-	job, err := scanJob(r.pool.QueryRow(ctx, `SELECT `+jobColumns+` FROM import_job
-		WHERE job_type=$1 AND source_version_id=$2 AND status='succeeded' LIMIT 1`, jobType, sourceVersionID))
-	if errors.Is(err, pgx.ErrNoRows) {
-		return nil, ErrJobNotFound
-	}
-	return job, err
-}
-
 type ParseCheckpoint struct {
 	SourceVersionID uuid.UUID
 	ContentHash     string
@@ -381,6 +372,62 @@ func (r *Repository) InsertExtractionIfAbsent(ctx context.Context, extraction *E
 		extraction.ID, extraction.SourceVersionID, extraction.SchemaVersion, extraction.PromptKey,
 		extraction.PromptVersion, extraction.Model, extraction.CandidatesJSON,
 		extraction.QualityScore).Scan(&extraction.CreatedAt)
+	if errors.Is(err, pgx.ErrNoRows) {
+		return false, nil
+	}
+	return err == nil, err
+}
+
+func (r *Repository) GetImportPlan(
+	ctx context.Context,
+	importJobID uuid.UUID,
+	inputHash string,
+) (*ImportPlanRecord, error) {
+	var plan ImportPlanRecord
+	err := r.pool.QueryRow(ctx, `SELECT id,import_job_id,source_version_id,input_hash,schema_version,
+		prompt_key,prompt_version,model,plan_json,quality_score,created_at
+		FROM import_plan WHERE import_job_id=$1 AND input_hash=$2 AND schema_version=1`,
+		importJobID, inputHash,
+	).Scan(
+		&plan.ID, &plan.ImportJobID, &plan.SourceVersionID, &plan.InputHash, &plan.SchemaVersion,
+		&plan.PromptKey, &plan.PromptVersion, &plan.Model, &plan.PlanJSON,
+		&plan.QualityScore, &plan.CreatedAt,
+	)
+	if errors.Is(err, pgx.ErrNoRows) {
+		return nil, ErrImportPlanNotFound
+	}
+	return &plan, err
+}
+
+func (r *Repository) GetLatestImportPlan(ctx context.Context, importJobID uuid.UUID) (*ImportPlanRecord, error) {
+	var plan ImportPlanRecord
+	err := r.pool.QueryRow(ctx, `SELECT id,import_job_id,source_version_id,input_hash,schema_version,
+		prompt_key,prompt_version,model,plan_json,quality_score,created_at
+		FROM import_plan WHERE import_job_id=$1 AND schema_version=1
+		ORDER BY created_at DESC,id DESC LIMIT 1`, importJobID).Scan(
+		&plan.ID, &plan.ImportJobID, &plan.SourceVersionID, &plan.InputHash, &plan.SchemaVersion,
+		&plan.PromptKey, &plan.PromptVersion, &plan.Model, &plan.PlanJSON,
+		&plan.QualityScore, &plan.CreatedAt,
+	)
+	if errors.Is(err, pgx.ErrNoRows) {
+		return nil, ErrImportPlanNotFound
+	}
+	return &plan, err
+}
+
+func (r *Repository) InsertImportPlanIfAbsent(ctx context.Context, plan *ImportPlanRecord) (bool, error) {
+	if plan == nil {
+		return false, ErrInvalidJob
+	}
+	err := r.pool.QueryRow(ctx, `INSERT INTO import_plan
+		(id,import_job_id,source_version_id,input_hash,schema_version,prompt_key,prompt_version,model,plan_json,quality_score)
+		VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9::jsonb,$10)
+		ON CONFLICT (import_job_id,input_hash,schema_version) DO NOTHING
+		RETURNING created_at`,
+		plan.ID, plan.ImportJobID, plan.SourceVersionID, plan.InputHash, plan.SchemaVersion,
+		plan.PromptKey, plan.PromptVersion, plan.Model, plan.PlanJSON,
+		plan.QualityScore,
+	).Scan(&plan.CreatedAt)
 	if errors.Is(err, pgx.ErrNoRows) {
 		return false, nil
 	}

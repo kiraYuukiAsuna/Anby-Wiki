@@ -1958,6 +1958,7 @@ export type ListProposalsStatusEnum = typeof ListProposalsStatusEnum[keyof typeo
  * @export
  */
 export const ListProposalsTargetTypeEnum = {
+    Wiki: 'wiki',
     Page: 'page',
     Entity: 'entity',
     Claim: 'claim',

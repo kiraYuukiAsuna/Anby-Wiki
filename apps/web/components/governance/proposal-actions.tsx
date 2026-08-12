@@ -66,7 +66,7 @@ export function ProposalActions({ proposal }: { proposal: Proposal }) {
     try {
       const result = await governanceApi().applyProposal({ id: proposal.id });
       toast.success(result.idempotent ? "该提案已经生效" : "提案已原子生效", {
-        description: `ChangeBatch ${result.changeBatchId.slice(0, 8)} 已写入审计账本。`,
+        description: `ChangeBatch ${result.changeBatchId.slice(0, 8)} 已写入审计账本${result.revisionIds.length ? `，发布 ${result.revisionIds.length} 个页面 Revision` : ""}。`,
       });
       router.refresh();
     } catch (error) {
@@ -250,7 +250,7 @@ function actionDescription(proposal: Proposal): string {
     case "in_review":
       return "提案正在审核队列中，权威状态尚未发生改变。";
     case "approved":
-      return "审核证据已满足；应用会创建独立 ChangeBatch 并原子写入。";
+      return "审核证据已满足；全部有序 Operation 将写入同一个 ChangeBatch，要么全部生效，要么全部回滚。";
     case "applied":
       return "权威变更已生效，可从这里持久访问其 ChangeBatch 与补偿入口。";
     case "rolled_back":

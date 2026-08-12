@@ -65,6 +65,10 @@ type LabelInput struct {
 // CreateEntityParams 创建实体的入参。
 // CanonicalKey 为空时取首个主标签的规范化键。
 type CreateEntityParams struct {
+	// EntityID may be preallocated by a frozen ProposalOperation so later
+	// operations in the same ChangeBatch can reference the identity before the
+	// transaction is applied. Direct domain callers may leave it empty.
+	EntityID     uuid.UUID
 	WikiID       uuid.UUID
 	TypeKey      string
 	CanonicalKey string
@@ -120,9 +124,12 @@ func (s *Service) CreateEntityInTx(ctx context.Context, tx pgx.Tx, params Create
 	} else if !errors.Is(err, ErrEntityNotFound) {
 		return nil, err
 	}
-	entityID, err := s.ids.New()
-	if err != nil {
-		return nil, err
+	entityID := params.EntityID
+	if entityID == uuid.Nil {
+		entityID, err = s.ids.New()
+		if err != nil {
+			return nil, err
+		}
 	}
 	e.ID = entityID
 	if err := s.repo.InsertEntity(ctx, tx, e); err != nil {
@@ -140,6 +147,12 @@ func (s *Service) CreateEntityInTx(ctx context.Context, tx pgx.Tx, params Create
 // GetEntity 按 ID 查询实体（含 merged/deleted，由调用方判断 Status）。
 func (s *Service) GetEntity(ctx context.Context, id uuid.UUID) (*Entity, error) {
 	return s.repo.GetEntityByID(ctx, nil, id)
+}
+
+// GetEntityInTx exposes a transaction-scoped domain read to governance without
+// allowing the governance module to bypass the knowledge service boundary.
+func (s *Service) GetEntityInTx(ctx context.Context, tx pgx.Tx, id uuid.UUID) (*Entity, error) {
+	return s.repo.GetEntityByID(ctx, tx, id)
 }
 
 // GetEntityType 按 ID 查询实体类型。

@@ -62,6 +62,7 @@ export interface CreateProposalRequest {
  * @export
  */
 export const CreateProposalRequestTargetTypeEnum = {
+    Wiki: 'wiki',
     Page: 'page',
     Entity: 'entity',
     Claim: 'claim',

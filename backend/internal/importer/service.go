@@ -379,7 +379,16 @@ func (s *Service) Detail(ctx context.Context, jobID uuid.UUID) (*JobDetail, erro
 	if err != nil {
 		return nil, err
 	}
-	return &JobDetail{Job: job, Runs: runs, Stages: stages}, nil
+	var plan *ImportPlan
+	if record, planErr := s.repo.GetLatestImportPlan(ctx, jobID); planErr == nil {
+		plan = &ImportPlan{}
+		if err := json.Unmarshal(record.PlanJSON, plan); err != nil {
+			return nil, err
+		}
+	} else if !errors.Is(planErr, ErrImportPlanNotFound) {
+		return nil, planErr
+	}
+	return &JobDetail{Job: job, Runs: runs, Stages: stages, Plan: plan}, nil
 }
 
 func HashBytes(value []byte) string {

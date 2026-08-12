@@ -9,7 +9,7 @@ Name | Type
 `schemaVersion` | number
 `operationType` | string
 `base` | [OperationBase](OperationBase.md)
-`target` | [OperationTarget](OperationTarget.md)
+`target` | [OperationCreatePageAllOfTarget](OperationCreatePageAllOfTarget.md)
 `expectedHash` | string
 `evidence` | [Array&lt;OperationEvidence&gt;](OperationEvidence.md)
 `risk` | [OperationRisk](OperationRisk.md)

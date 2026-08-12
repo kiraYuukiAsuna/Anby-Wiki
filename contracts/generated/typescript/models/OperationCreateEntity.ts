@@ -13,13 +13,13 @@
  */
 
 import { mapValues } from '../runtime';
-import type { OperationTarget } from './OperationTarget';
+import type { OperationCreateEntityAllOfTarget } from './OperationCreateEntityAllOfTarget';
 import {
-    OperationTargetFromJSON,
-    OperationTargetFromJSONTyped,
-    OperationTargetToJSON,
-    OperationTargetToJSONTyped,
-} from './OperationTarget';
+    OperationCreateEntityAllOfTargetFromJSON,
+    OperationCreateEntityAllOfTargetFromJSONTyped,
+    OperationCreateEntityAllOfTargetToJSON,
+    OperationCreateEntityAllOfTargetToJSONTyped,
+} from './OperationCreateEntityAllOfTarget';
 import type { OperationBase } from './OperationBase';
 import {
     OperationBaseFromJSON,
@@ -27,6 +27,13 @@ import {
     OperationBaseToJSON,
     OperationBaseToJSONTyped,
 } from './OperationBase';
+import type { OperationCreateEntityAllOfPayload } from './OperationCreateEntityAllOfPayload';
+import {
+    OperationCreateEntityAllOfPayloadFromJSON,
+    OperationCreateEntityAllOfPayloadFromJSONTyped,
+    OperationCreateEntityAllOfPayloadToJSON,
+    OperationCreateEntityAllOfPayloadToJSONTyped,
+} from './OperationCreateEntityAllOfPayload';
 import type { OperationEvidence } from './OperationEvidence';
 import {
     OperationEvidenceFromJSON,
@@ -68,10 +75,10 @@ export interface OperationCreateEntity {
     base: OperationBase;
     /**
      *
-     * @type {OperationTarget}
+     * @type {OperationCreateEntityAllOfTarget}
      * @memberof OperationCreateEntity
      */
-    target: OperationTarget;
+    target: OperationCreateEntityAllOfTarget;
     /**
      *
      * @type {string}
@@ -92,10 +99,10 @@ export interface OperationCreateEntity {
     risk: OperationRisk;
     /**
      *
-     * @type {{ [key: string]: any; }}
+     * @type {OperationCreateEntityAllOfPayload}
      * @memberof OperationCreateEntity
      */
-    payload: { [key: string]: any; };
+    payload: OperationCreateEntityAllOfPayload;
 }
 
 
@@ -148,11 +155,11 @@ export function OperationCreateEntityFromJSONTyped(json: any, ignoreDiscriminato
         'schemaVersion': json['schema_version'],
         'operationType': json['operation_type'],
         'base': OperationBaseFromJSON(json['base']),
-        'target': OperationTargetFromJSON(json['target']),
+        'target': OperationCreateEntityAllOfTargetFromJSON(json['target']),
         'expectedHash': json['expected_hash'],
         'evidence': ((json['evidence'] as Array<any>).map(OperationEvidenceFromJSON)),
         'risk': OperationRiskFromJSON(json['risk']),
-        'payload': json['payload'],
+        'payload': OperationCreateEntityAllOfPayloadFromJSON(json['payload']),
     };
 }
 
@@ -170,11 +177,11 @@ export function OperationCreateEntityToJSONTyped(value?: OperationCreateEntity |
         'schema_version': value['schemaVersion'],
         'operation_type': value['operationType'],
         'base': OperationBaseToJSON(value['base']),
-        'target': OperationTargetToJSON(value['target']),
+        'target': OperationCreateEntityAllOfTargetToJSON(value['target']),
         'expected_hash': value['expectedHash'],
         'evidence': ((value['evidence'] as Array<any>).map(OperationEvidenceToJSON)),
         'risk': OperationRiskToJSON(value['risk']),
-        'payload': value['payload'],
+        'payload': OperationCreateEntityAllOfPayloadToJSON(value['payload']),
     };
 }
 

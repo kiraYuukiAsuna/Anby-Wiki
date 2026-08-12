@@ -13,6 +13,13 @@
  */
 
 import { mapValues } from '../runtime';
+import type { ImportPlan } from './ImportPlan';
+import {
+    ImportPlanFromJSON,
+    ImportPlanFromJSONTyped,
+    ImportPlanToJSON,
+    ImportPlanToJSONTyped,
+} from './ImportPlan';
 import type { ImportRun } from './ImportRun';
 import {
     ImportRunFromJSON,
@@ -59,6 +66,12 @@ export interface ImportJobDetail {
      * @memberof ImportJobDetail
      */
     stages: Array<ImportStageRun>;
+    /**
+     *
+     * @type {ImportPlan}
+     * @memberof ImportJobDetail
+     */
+    plan: ImportPlan;
 }
 
 /**
@@ -68,6 +81,7 @@ export function instanceOfImportJobDetail(value: object): value is ImportJobDeta
     if (!('job' in value) || value['job'] === undefined) return false;
     if (!('runs' in value) || value['runs'] === undefined) return false;
     if (!('stages' in value) || value['stages'] === undefined) return false;
+    if (!('plan' in value) || value['plan'] === undefined) return false;
     return true;
 }
 
@@ -84,6 +98,7 @@ export function ImportJobDetailFromJSONTyped(json: any, ignoreDiscriminator: boo
         'job': ImportJobFromJSON(json['job']),
         'runs': ((json['runs'] as Array<any>).map(ImportRunFromJSON)),
         'stages': ((json['stages'] as Array<any>).map(ImportStageRunFromJSON)),
+        'plan': ImportPlanFromJSON(json['plan']),
     };
 }
 
@@ -101,6 +116,7 @@ export function ImportJobDetailToJSONTyped(value?: ImportJobDetail | null, ignor
         'job': ImportJobToJSON(value['job']),
         'runs': ((value['runs'] as Array<any>).map(ImportRunToJSON)),
         'stages': ((value['stages'] as Array<any>).map(ImportStageRunToJSON)),
+        'plan': ImportPlanToJSON(value['plan']),
     };
 }
 

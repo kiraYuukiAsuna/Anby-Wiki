@@ -186,7 +186,7 @@
         }
       ]
     },
-    "create_page": { "properties": { "operation_type": { "const": "create_page" }, "target": { "required": ["wiki_id", "namespace_id"] }, "payload": { "$ref": "#/$defs/create_page_payload" } } },
+    "create_page": { "properties": { "operation_type": { "const": "create_page" }, "target": { "required": ["wiki_id", "namespace_id", "page_id"] }, "payload": { "$ref": "#/$defs/create_page_payload" } } },
     "rename_page": { "properties": { "operation_type": { "const": "rename_page" }, "target": { "required": ["page_id"] }, "payload": { "$ref": "#/$defs/rename_page_payload" } } },
     "create_redirect": { "properties": { "operation_type": { "const": "create_redirect" }, "target": { "required": ["page_id"] }, "payload": { "$ref": "#/$defs/create_redirect_payload" } } },
     "insert_block": { "properties": { "operation_type": { "const": "insert_block" }, "target": { "required": ["page_id"] } } },
@@ -202,7 +202,37 @@
     "insert_citation_reference": { "properties": { "operation_type": { "const": "insert_citation_reference" }, "target": { "required": ["page_id", "block_id", "citation_id"] } } },
     "retarget_citation_reference": { "properties": { "operation_type": { "const": "retarget_citation_reference" }, "target": { "required": ["page_id", "block_id", "node_id", "citation_id"] } } },
     "retarget_external_link": { "properties": { "operation_type": { "const": "retarget_external_link" }, "target": { "required": ["page_id", "block_id", "node_id", "external_resource_id"] } } },
-    "create_entity": { "properties": { "operation_type": { "const": "create_entity" }, "target": { "required": ["wiki_id"] } } },
+    "create_entity_payload": {
+      "type": "object",
+      "properties": {
+        "type_key": { "type": "string", "minLength": 1, "maxLength": 100 },
+        "canonical_key": { "type": "string", "minLength": 1, "maxLength": 255 },
+        "labels": {
+          "type": "array",
+          "minItems": 1,
+          "items": {
+            "type": "object",
+            "properties": {
+              "language": { "type": "string", "minLength": 1, "maxLength": 64 },
+              "label": { "type": "string", "minLength": 1, "maxLength": 255 },
+              "description": { "type": "string", "maxLength": 1000 },
+              "is_primary": { "type": "boolean" }
+            },
+            "required": ["language", "label", "is_primary"],
+            "additionalProperties": false
+          }
+        }
+      },
+      "required": ["type_key", "canonical_key", "labels"],
+      "additionalProperties": false
+    },
+    "create_entity": {
+      "properties": {
+        "operation_type": { "const": "create_entity" },
+        "target": { "required": ["wiki_id", "entity_id"] },
+        "payload": { "$ref": "#/$defs/create_entity_payload" }
+      }
+    },
     "merge_entity_payload": {
       "type": "object",
       "properties": {

@@ -1,6 +1,6 @@
 # AI 来源导入（M6）
 
-本包编排 `获取 → 解析 → 抽取 → 匹配/冲突分类 → Proposal → Review`，但不直接写
+本包编排 `获取 → 解析 → 抽取 → 来源规划 → 匹配/冲突分类 → Proposal → Review`，但不直接写
 Page、Knowledge、Evidence 或 Governance 的权威表。所有正式写入均调用相应领域服务；
 模型只能产生候选，不能发布 Revision/Claim，也不能伪造 Citation。
 
@@ -27,8 +27,9 @@ Worker 会从管理员提供的最大输入 Token 中预留 Prompt/Schema 空间
 - `S3_ENDPOINT` / `S3_REGION` / `S3_BUCKET` / `S3_ACCESS_KEY` / `S3_SECRET_KEY`
 
 Worker 通过 `FOR UPDATE SKIP LOCKED` 原子领取任务；每次运行有独立幂等键。优雅退出时
-停止领取新任务，并给已领取任务一个有界完成窗口。相同 SourceVersion 已有成功任务时，
-后续任务跳过抽取、匹配、Compose 与 Review，并复用原 Proposal。
+停止领取新任务，并给已领取任务一个有界完成窗口。相同 SourceVersion 的事实抽取可复用
+不可变 Extraction；页面规划按 ImportJob 与导入要求独立生成，不能因为
+来源相同而复用另一任务的 Proposal。
 Worker 被强制终止或部署替换后，超过完整任务超时仍处于 running 的遗留 Run 会标记为
 `worker_interrupted` 并自动重新排队，防止任务永久卡死。
 同一任务在解析成功后会把不可变 SourceVersion 作为恢复点；后续失败重试复用已通过
@@ -53,10 +54,11 @@ Gateway 相同的权威 JSON Schema 预校验并纠正失败输出；OpenAI comp
 原生 strict JSON Schema。抽取固定 `temperature=0`，DeepSeek 同时关闭 thinking，避免
 推理正文污染 JSON 结果。
 
-`source-extraction-v3` Prompt 同时提供当前固定 Entity type / Claim property 词表，
-明确要求模型生成临时 `candidate_id`、禁止猜测持久化 Entity ID，并在来源包含明确主体
-但没有受支持 Claim 时仍生成 Entity 候选。合法但空的候选集合会在 Extract 阶段以
-`no_candidates_extracted` 停止，不再到 Compose 阶段才显示无 Proposal。模型提供的
+`source-extraction-v4` Prompt 同时提供当前固定 Entity type / Claim property 词表，
+明确要求模型生成临时 `candidate_id`、用 `entity_candidate_id` 表达同批 Entity 值、
+禁止猜测持久化 Entity ID，并在来源包含明确主体
+但没有受支持 Claim 时仍生成 Entity 候选。事实候选允许为空：来源随后仍会进入
+`source-import-plan-v1`，由不受固定 Entity/Claim 词表限制的页面规划判断百科价值。模型提供的
 引文必须逐字存在；服务端会重新推导 rune 范围以纠正模型常见的 Unicode/字节计数偏差。
 引文重复出现时选择离模型提示位置最近的精确匹配，最近距离并列才拒绝；模糊匹配、翻译
 或改写文本始终不能成为证据。
@@ -69,6 +71,30 @@ SourceVersion 的某个 Chunk 时纠正引用；仍无法核验的证据与候�
 完整门槛且每个候选都有已核验证据时继续；Prompt Injection 始终直接拒绝。
 来源标题或上传文件名会作为主体发现上下文，但不能单独构成证据；需求、规格和技术报告
 中的候选仍必须由 Chunk 内逐字引文支持。
+
+匹配后，服务端生成并固化在 Extraction 中的 Entity `candidate_id` 直接作为新 Entity
+的最终预分配 UUID。一次 ImportJob 只合成一个复合 Proposal：所有 `create_entity`
+Operation 排在 Claim Operation 之前，Claim 的主体和 Entity 值在 Compose 时解析为
+已存在或预分配的稳定 Entity UUID。整组 Operation 在一个治理事务中冻结，审核后再由
+一个 ChangeBatch 原子应用；任一 Entity、Claim、Citation 绑定、Audit 或 Outbox 写入
+失败都会回滚整批，不会产生只创建部分 Entity 的中间状态。
+单个 Claim 若使用未登记属性、或值结构与属性类型不匹配，只淘汰该 Claim；同批其余
+可核验 Entity/Claim 继续进入治理。新实体 canonical key 使用 `type_key:label`，避免
+不同类型的同名实体在整批应用时互相冲突。
+
+`source-import-plan-v1` 在事实抽取之后执行来源理解与页面路由。它先按标题、来源名、
+Entity/alias 召回已有 Page 及可替换 Block，再允许一份来源同时生成多个 `create`、
+`update`、`link` 与 `ignore` 路由。`link.related_to` 显式选择同批 create/update
+页面并携带原文证据，随后编译为稳定 `page_reference`，由投影生成反链；每个新写或改写
+Block 都必须绑定可逐字核验的 SourceChunk evidence；update/replace 只能引用服务端给出的
+Page/Block ID。模型输出过长、
+结构错误或局部证据失败时按 Chunk 自适应二分，已经成功的批次不重跑。
+
+Composer 把页面路由与 Entity/Claim 决策合成为一个以 Wiki 为目标的复合 Proposal：
+创建页预分配 Page ID，更新页带 Revision 与 Block hash 基线，审核时可按页面查看全部
+Operation。Apply 先做跨页面 Revision/Block 与 Claim 冲突检测，再在单一事务中创建/更新
+多个页面和知识对象；任一步失败整批回滚。成功响应返回全部 `revision_ids`，ChangeBatch
+回滚仍按审计账本对整批追加补偿。
 
 ## 安全边界
 

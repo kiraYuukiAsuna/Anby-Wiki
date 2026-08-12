@@ -6,6 +6,7 @@ import (
 	"encoding/hex"
 	"encoding/json"
 	"fmt"
+	"sort"
 
 	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5"
@@ -46,6 +47,8 @@ func (s *ConflictService) DetectAndRecord(ctx context.Context, proposalID uuid.U
 	var conflicts []MergeConflict
 	if p.TargetType == TargetPage {
 		conflicts, err = s.detectPage(ctx, p, records)
+	} else if p.TargetType == TargetWiki {
+		conflicts, err = s.detectWiki(ctx, p, records)
 	} else {
 		conflicts, err = s.detectClaims(ctx, p, records)
 	}
@@ -73,6 +76,94 @@ func (s *ConflictService) DetectAndRecord(ctx context.Context, proposalID uuid.U
 		return s.repo.UpdateProposalStatus(ctx, tx, proposalID, ProposalApproved, ProposalConflicted)
 	})
 	return conflicts, err
+}
+
+func (s *ConflictService) detectWiki(
+	ctx context.Context,
+	p *Proposal,
+	records []OperationRecord,
+) ([]MergeConflict, error) {
+	if p == nil || p.TargetID == nil || *p.TargetID == uuid.Nil {
+		return nil, ErrInvalidProposal
+	}
+	byPage := map[uuid.UUID][]OperationRecord{}
+	for i := range records {
+		if !isPageContentOperation(records[i].OperationType) {
+			continue
+		}
+		op, err := OperationFromRecord(&records[i])
+		if err != nil {
+			return nil, err
+		}
+		if op.Target.PageID == nil || *op.Target.PageID == uuid.Nil {
+			return nil, ErrInvalidOperation
+		}
+		byPage[*op.Target.PageID] = append(byPage[*op.Target.PageID], records[i])
+	}
+	pageIDs := make([]uuid.UUID, 0, len(byPage))
+	for pageID := range byPage {
+		pageIDs = append(pageIDs, pageID)
+	}
+	sort.Slice(pageIDs, func(i, j int) bool {
+		return pageIDs[i].String() < pageIDs[j].String()
+	})
+
+	conflicts := make([]MergeConflict, 0)
+	for _, pageID := range pageIDs {
+		targetPage, err := s.pages.GetPage(ctx, pageID)
+		if err != nil {
+			return nil, err
+		}
+		if targetPage.WikiID != *p.TargetID || targetPage.DeletedAt != nil {
+			return nil, fmt.Errorf(
+				"%w: page=%s 不属于 Proposal wiki=%s",
+				ErrInvalidOperation, pageID, *p.TargetID,
+			)
+		}
+		pageRecords := byPage[pageID]
+		var baseRevisionID *uuid.UUID
+		for i := range pageRecords {
+			op, err := OperationFromRecord(&pageRecords[i])
+			if err != nil {
+				return nil, err
+			}
+			if op.Base.RevisionID == nil {
+				continue
+			}
+			if baseRevisionID != nil && *baseRevisionID != *op.Base.RevisionID {
+				return nil, ErrInvalidOperation
+			}
+			value := *op.Base.RevisionID
+			baseRevisionID = &value
+		}
+		if baseRevisionID == nil {
+			current, _, err := s.pages.CurrentContent(ctx, pageID)
+			if err != nil {
+				return nil, err
+			}
+			if current != nil {
+				conflicts = append(conflicts, MergeConflict{
+					ProposalID: p.ID, PageID: &pageID, ConflictType: ConflictRevision,
+					CurrentRevisionID: &current.ID, Status: ConflictOpen,
+				})
+			}
+			continue
+		}
+		pageProposal := *p
+		pageProposal.TargetType = TargetPage
+		pageProposal.TargetID = &pageID
+		pageProposal.BaseRevisionID = baseRevisionID
+		pageConflicts, err := s.detectPage(ctx, &pageProposal, pageRecords)
+		if err != nil {
+			return nil, err
+		}
+		conflicts = append(conflicts, pageConflicts...)
+	}
+	claimConflicts, err := s.detectClaims(ctx, p, records)
+	if err != nil {
+		return nil, err
+	}
+	return append(conflicts, claimConflicts...), nil
 }
 
 func (s *ConflictService) detectPage(ctx context.Context, p *Proposal, records []OperationRecord) ([]MergeConflict, error) {

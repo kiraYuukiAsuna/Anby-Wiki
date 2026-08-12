@@ -26,6 +26,7 @@ type Pipeline struct {
 	evidence   *evidence.Service
 	parser     *Parser
 	extraction *ExtractionService
+	planner    *PagePlanner
 	matcher    *EntityMatcher
 	classifier *ClaimClassifier
 	composer   *ProposalComposer
@@ -40,6 +41,7 @@ type PipelineServices struct {
 	Evidence   *evidence.Service
 	Parser     *Parser
 	Extraction *ExtractionService
+	Planner    *PagePlanner
 	Matcher    *EntityMatcher
 	Classifier *ClaimClassifier
 	Composer   *ProposalComposer
@@ -50,7 +52,7 @@ type PipelineServices struct {
 
 func NewPipeline(services PipelineServices) *Pipeline {
 	p := &Pipeline{jobs: services.Jobs, repository: services.Repository, evidence: services.Evidence,
-		parser: services.Parser, extraction: services.Extraction, matcher: services.Matcher,
+		parser: services.Parser, extraction: services.Extraction, planner: services.Planner, matcher: services.Matcher,
 		classifier: services.Classifier, composer: services.Composer, reviews: services.Reviews,
 		fetcher: services.Fetcher, scanner: services.Scanner}
 	if p.parser == nil {
@@ -70,6 +72,8 @@ type PipelineRequest struct {
 	PageID           *uuid.UUID
 	SourceID         *uuid.UUID
 	Title            string
+	Instructions     string
+	RouteMode        string
 	Provider         string
 	Model            string
 	MaxInputTokens   int
@@ -181,29 +185,6 @@ func (p *Pipeline) run(ctx context.Context, request PipelineRequest, acquire acq
 	result.SourceVersionID = version.Version.ID
 	parseOutput := version.Version.ID.String()
 
-	if prior, err := p.repository.FindSucceededByVersion(ctx, "source_import", version.Version.ID); err == nil {
-		for _, stageName := range []string{StageExtract, StageMatch, StageCompose, StageReview} {
-			stage, startErr := p.jobs.StartStage(ctx, run.ID, stageName, &parseOutput)
-			if startErr != nil {
-				return nil, startErr
-			}
-			if skipErr := p.jobs.SkipStage(ctx, request.JobID, stage, &parseOutput); skipErr != nil {
-				return nil, skipErr
-			}
-		}
-		if err := p.jobs.SucceedReused(ctx, request.JobID, run.ID, prior.ProposalID); err != nil {
-			return nil, err
-		}
-		result.Reused = true
-		if prior.ProposalID != nil {
-			result.ProposalIDs = append(result.ProposalIDs, *prior.ProposalID)
-		}
-		result.Job, _ = p.jobs.DetailJob(ctx, request.JobID)
-		return result, nil
-	} else if !errors.Is(err, ErrJobNotFound) {
-		return nil, err
-	}
-
 	current, err = p.jobs.StartStage(ctx, run.ID, StageExtract, &parseOutput)
 	if err != nil {
 		return nil, err
@@ -214,9 +195,6 @@ func (p *Pipeline) run(ctx context.Context, request PipelineRequest, acquire acq
 		ImportJobID:    &request.JobID, ImportRunID: &run.ID})
 	if err != nil {
 		return fail(current, extractionErrorCode(err), err)
-	}
-	if len(extracted.Candidates.Entities) == 0 && len(extracted.Candidates.Claims) == 0 {
-		return fail(current, "no_candidates_extracted", ErrQualityGate)
 	}
 	threshold := request.QualityThreshold
 	if threshold <= 0 {
@@ -230,7 +208,37 @@ func (p *Pipeline) run(ctx context.Context, request PipelineRequest, acquire acq
 		return nil, err
 	}
 
-	current, err = p.jobs.StartStage(ctx, run.ID, StageMatch, &extractOutput)
+	current, err = p.jobs.StartStage(ctx, run.ID, StagePlan, &extractOutput)
+	if err != nil {
+		return nil, err
+	}
+	planInput := HashBytes([]byte(strings.Join([]string{
+		extractOutput,
+		strings.TrimSpace(request.Title),
+		strings.TrimSpace(request.Instructions),
+		strings.TrimSpace(request.RouteMode),
+		optionalUUIDString(request.PageID),
+	}, "\x00")))
+	planned, err := p.planner.Plan(ctx, PlanParams{
+		SourceVersionID: version.Version.ID, SourceLabel: sourceLabel,
+		PreferredTitle: request.Title, Instructions: request.Instructions,
+		RouteMode: request.RouteMode, TargetPageID: request.PageID,
+		WikiID: request.WikiID, Chunks: version.Chunks, Candidates: extracted.Candidates,
+		Provider: request.Provider, Model: request.Model, MaxInputTokens: request.MaxInputTokens,
+		InputHash: planInput, ImportJobID: &request.JobID, ImportRunID: &run.ID,
+	})
+	if err != nil {
+		return fail(current, planErrorCode(err), err)
+	}
+	if planned.Plan.QualityScore < threshold/2 {
+		return fail(current, "page_plan_quality_gate", ErrQualityGate)
+	}
+	planOutput := planned.Record.ID.String()
+	if err := p.jobs.CompleteStage(ctx, request.JobID, current, &planOutput); err != nil {
+		return nil, err
+	}
+
+	current, err = p.jobs.StartStage(ctx, run.ID, StageMatch, &planOutput)
 	if err != nil {
 		return nil, err
 	}
@@ -257,16 +265,13 @@ func (p *Pipeline) run(ctx context.Context, request PipelineRequest, acquire acq
 	}
 	composed, err := p.composer.Compose(ctx, ComposeParams{ImportJobID: request.JobID, WikiID: request.WikiID,
 		SourceVersionID: version.Version.ID, ActorID: request.ActorID, Candidates: extracted.Candidates,
-		Resolutions: resolutions, Decisions: decisions})
+		Plan: planned.Plan, Resolutions: resolutions, Decisions: decisions})
 	if err != nil {
 		return fail(current, "proposal_compose_failed", err)
 	}
 	result.Unresolved = composed.Unresolved
 	for _, proposal := range composed.Proposals {
 		result.ProposalIDs = append(result.ProposalIDs, proposal.ID)
-	}
-	if len(composed.Proposals) == 0 {
-		return fail(current, "no_reviewable_proposal", ErrQualityGate)
 	}
 	composeJSON, _ := json.Marshal(result.ProposalIDs)
 	composeOutput := HashBytes(composeJSON)
@@ -276,6 +281,19 @@ func (p *Pipeline) run(ctx context.Context, request PipelineRequest, acquire acq
 	current, err = p.jobs.StartStage(ctx, run.ID, StageReview, &composeOutput)
 	if err != nil {
 		return nil, err
+	}
+	if len(composed.Proposals) == 0 {
+		// Ignore-only plans and fully deduplicated candidates are valid no-op
+		// imports. Preserve the reviewed ImportPlan without fabricating an empty
+		// Proposal or presenting an evidence-grounded no-op as a failure.
+		if err := p.jobs.SkipStage(ctx, request.JobID, current, &composeOutput); err != nil {
+			return nil, err
+		}
+		if err := p.jobs.Succeed(ctx, request.JobID, run.ID, version.Version.ID, nil); err != nil {
+			return nil, err
+		}
+		result.Job, _ = p.jobs.DetailJob(ctx, request.JobID)
+		return result, nil
 	}
 	for _, proposal := range composed.Proposals {
 		if proposal.Status == governance.ProposalDraft {
@@ -299,6 +317,12 @@ func (p *Pipeline) run(ctx context.Context, request PipelineRequest, acquire acq
 func passesExtractionQualityGate(candidates *Candidates, threshold float64) bool {
 	if candidates == nil || candidates.PromptInjectionDetected {
 		return false
+	}
+	// Fact extraction is an enrichment layer. A source with no supported
+	// Entity/Claim vocabulary may still produce valuable encyclopedia pages in
+	// ImportPlan, whose own evidence and quality gate runs next.
+	if len(candidates.Entities) == 0 && len(candidates.Claims) == 0 {
+		return true
 	}
 	if candidates.QualityScore >= threshold {
 		return true
@@ -531,11 +555,40 @@ func extractionErrorCode(err error) string {
 }
 
 func (p *Pipeline) validate() error {
-	if p.jobs == nil || p.repository == nil || p.evidence == nil || p.parser == nil || p.extraction == nil ||
+	if p.jobs == nil || p.repository == nil || p.evidence == nil || p.parser == nil || p.extraction == nil || p.planner == nil ||
 		p.matcher == nil || p.classifier == nil || p.composer == nil || p.reviews == nil {
 		return fmt.Errorf("%w: pipeline dependencies", ErrInvalidJob)
 	}
 	return nil
+}
+
+func optionalUUIDString(value *uuid.UUID) string {
+	if value == nil {
+		return ""
+	}
+	return value.String()
+}
+
+func planErrorCode(err error) string {
+	var providerErr *ai.ProviderError
+	switch {
+	case errors.As(err, &providerErr) && providerErr.Code == "output_truncated":
+		return "page_plan_output_truncated"
+	case errors.Is(err, ai.ErrInvalidOutput):
+		return "page_plan_invalid_output"
+	case errors.Is(err, ai.ErrProvider):
+		return "page_plan_provider_failed"
+	case errors.Is(err, ai.ErrTimeout), errors.Is(err, context.DeadlineExceeded):
+		return "page_plan_timeout"
+	case errors.Is(err, ErrEvidenceRequired):
+		return "page_plan_evidence_invalid"
+	case errors.Is(err, ErrPlanTargetConflict):
+		return "page_plan_target_conflict"
+	case errors.Is(err, ErrNoPagePlan):
+		return "no_page_plan"
+	default:
+		return "page_plan_failed"
+	}
 }
 
 // DetailJob is a compact read helper used by the pipeline result and API.

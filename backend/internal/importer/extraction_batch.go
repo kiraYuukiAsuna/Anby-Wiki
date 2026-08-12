@@ -295,6 +295,17 @@ func (s *ExtractionService) mergeCandidateBatches(sourceVersionID uuid.UUID,
 				}
 				candidate.Subject.CandidateID = &mapped
 			}
+			if valueCandidateID, ok, valid := claimValueCandidateReference(candidate.Value); !valid {
+				dropped++
+				continue
+			} else if ok {
+				mapped, found := entityIDs[valueCandidateID]
+				if !found {
+					dropped++
+					continue
+				}
+				candidate.Value, _ = json.Marshal(map[string]uuid.UUID{"entity_candidate_id": mapped})
+			}
 			key, err := normalizedClaimKey(candidate)
 			if err != nil {
 				return nil, fmt.Errorf("%w: claim value", ai.ErrInvalidOutput)

@@ -27,6 +27,8 @@ type SourceImportConfig struct {
 		ContentHash string `json:"content_hash,omitempty"`
 	} `json:"source"`
 	Title            string     `json:"title,omitempty"`
+	Instructions     string     `json:"instructions,omitempty"`
+	RouteMode        string     `json:"route_mode,omitempty"`
 	PageID           *uuid.UUID `json:"page_id,omitempty"`
 	SourceID         *uuid.UUID `json:"source_id,omitempty"`
 	QualityThreshold float64    `json:"quality_threshold,omitempty"`
@@ -152,7 +154,8 @@ func (r *Runner) ProcessOne(ctx context.Context) (bool, error) {
 	request := PipelineRequest{
 		JobID: job.ID, RunKey: run.IdempotencyKey, WikiID: r.config.WikiID,
 		ActorID: job.InitiatedBy, PageID: config.PageID, SourceID: config.SourceID,
-		Title: config.Title, Provider: r.config.Provider, Model: r.config.Model,
+		Title: config.Title, Instructions: config.Instructions, RouteMode: config.RouteMode,
+		Provider: r.config.Provider, Model: r.config.Model,
 		MaxInputTokens:   maxInputTokens,
 		QualityThreshold: config.QualityThreshold,
 	}
@@ -185,7 +188,13 @@ func decodeSourceImportConfig(raw json.RawMessage) (*SourceImportConfig, error) 
 		validSource = strings.TrimSpace(config.Source.StorageKey) != "" && strings.TrimSpace(config.Source.Filename) != "" &&
 			strings.TrimSpace(config.Source.MIMEType) != "" && validSHA256(config.Source.ContentHash)
 	}
-	if !validSource || config.QualityThreshold < 0 || config.QualityThreshold > 1 {
+	if config.RouteMode == "" {
+		config.RouteMode = RouteModeAuto
+	}
+	if !validSource || config.QualityThreshold < 0 || config.QualityThreshold > 1 ||
+		(config.RouteMode != RouteModeAuto && config.RouteMode != RouteModeForceCreate) ||
+		len([]rune(config.Title)) > 255 || len([]rune(config.Instructions)) > 4000 ||
+		(config.RouteMode == RouteModeForceCreate && strings.TrimSpace(config.Title) == "") {
 		return nil, ErrInvalidJob
 	}
 	return &config, nil

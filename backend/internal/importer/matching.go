@@ -22,15 +22,18 @@ type EntityAlternative struct {
 	MatchedOn string    `json:"matched_on"`
 }
 
-// EntityResolution is an explainable match result. Ambiguous and new entities
-// deliberately have no EntityID: downstream code must route them to review.
+// EntityResolution is an explainable match result. New candidates receive a
+// stable planned Entity ID (the server-issued candidate UUID) so one frozen
+// Proposal can create the Entity and reference it from later Claim operations.
+// Ambiguous candidates deliberately receive neither ID.
 type EntityResolution struct {
-	CandidateID  uuid.UUID           `json:"candidate_id"`
-	Outcome      string              `json:"outcome"`
-	EntityID     *uuid.UUID          `json:"entity_id,omitempty"`
-	Score        float64             `json:"score"`
-	Reason       string              `json:"reason"`
-	Alternatives []EntityAlternative `json:"alternatives"`
+	CandidateID     uuid.UUID           `json:"candidate_id"`
+	Outcome         string              `json:"outcome"`
+	EntityID        *uuid.UUID          `json:"entity_id,omitempty"`
+	PlannedEntityID *uuid.UUID          `json:"planned_entity_id,omitempty"`
+	Score           float64             `json:"score"`
+	Reason          string              `json:"reason"`
+	Alternatives    []EntityAlternative `json:"alternatives"`
 }
 
 type EntityMatcher struct {
@@ -86,18 +89,22 @@ func (m *EntityMatcher) Match(ctx context.Context, wikiID uuid.UUID, pageID *uui
 			}
 			return alternatives[i].Score > alternatives[j].Score
 		})
+		plannedID := candidate.CandidateID
 		resolution := EntityResolution{CandidateID: candidate.CandidateID, Outcome: EntityNewReview,
-			Reason: "no sufficiently strong typed label or alias match", Alternatives: alternatives}
+			PlannedEntityID: &plannedID,
+			Reason:          "no sufficiently strong typed label or alias match", Alternatives: alternatives}
 		if len(alternatives) > 0 {
 			resolution.Score = alternatives[0].Score
 		}
 		if len(alternatives) > 1 && alternatives[0].Score >= 0.78 && alternatives[0].Score-alternatives[1].Score < 0.08 {
 			resolution.Outcome = EntityAmbiguous
+			resolution.PlannedEntityID = nil
 			resolution.Reason = "top candidates are too close; human resolution required"
 		} else if len(alternatives) > 0 && alternatives[0].Score >= 0.78 {
 			entityID := alternatives[0].EntityID
 			resolution.Outcome = EntityMatched
 			resolution.EntityID = &entityID
+			resolution.PlannedEntityID = nil
 			resolution.Reason = "typed label/alias match passed confidence and ambiguity thresholds"
 		}
 		results = append(results, resolution)

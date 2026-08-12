@@ -129,6 +129,23 @@ func (a *ImportAPI) createUploadJob(w http.ResponseWriter, r *http.Request) {
 		httpx.WriteError(w, r, http.StatusUnprocessableEntity, httpx.CodeValidationFailed, "来源标题超过 255 个字符")
 		return
 	}
+	instructions := strings.TrimSpace(r.FormValue("instructions"))
+	if len([]rune(instructions)) > 4000 {
+		httpx.WriteError(w, r, http.StatusUnprocessableEntity, httpx.CodeValidationFailed, "导入说明超过 4000 个字符")
+		return
+	}
+	routeMode := strings.TrimSpace(r.FormValue("route_mode"))
+	if routeMode == "" {
+		routeMode = importer.RouteModeAuto
+	}
+	if routeMode != importer.RouteModeAuto && routeMode != importer.RouteModeForceCreate {
+		httpx.WriteError(w, r, http.StatusUnprocessableEntity, httpx.CodeValidationFailed, "页面路由模式不合法")
+		return
+	}
+	if routeMode == importer.RouteModeForceCreate && title == "" {
+		httpx.WriteError(w, r, http.StatusUnprocessableEntity, httpx.CodeValidationFailed, "强制创建页面时必须填写标题")
+		return
+	}
 	asset, err := a.evidence.StoreAsset(r.Context(), evidence.StoreAssetParams{WikiID: a.wikiID,
 		Name: acquired.Filename, Content: bytes.NewReader(acquired.Content), MimeType: acquired.MIMEType, ActorID: actorID})
 	if err != nil {
@@ -138,7 +155,7 @@ func (a *ImportAPI) createUploadJob(w http.ResponseWriter, r *http.Request) {
 	config, _ := json.Marshal(map[string]any{"source": map[string]any{
 		"kind": "upload", "storage_key": asset.Revision.StorageKey, "filename": acquired.Filename,
 		"mime_type": acquired.MIMEType, "content_hash": acquired.ContentHash,
-	}, "title": title})
+	}, "title": title, "instructions": instructions, "route_mode": routeMode})
 	job, err := a.jobs.Create(r.Context(), actorID, "source_import", key, config)
 	if err != nil {
 		importError(w, r, err)

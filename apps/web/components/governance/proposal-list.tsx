@@ -104,6 +104,7 @@ const STATUS_META: Record<
 };
 
 const TARGET_LABEL: Record<Proposal["targetType"], string> = {
+  wiki: "百科导入批次",
   page: "百科页面",
   entity: "实体",
   claim: "事实声明",

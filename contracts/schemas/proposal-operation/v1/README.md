@@ -13,5 +13,8 @@ draft 2020-12）。Go 运行时在 backend/internal/governance/schema/ 内嵌字
 - risk：风险级别与可解释原因；
 - payload：新值或操作参数。
 
-schema_version=1 的操作类型只做 additive 演进；删除字段、改变既有语义或新增必填
-字段必须新建 v2。
+`create_entity` 必须在 target 同时携带 `wiki_id` 和预分配的最终 `entity_id`。因此同一
+Proposal 中排在后面的 `create_claim` 可以直接引用稳定 ID，Apply 不需要临时候选映射。
+
+项目尚处预发布阶段，schema_version=1 在冻结前允许直接替换；冻结后删除字段、改变
+既有语义或新增必填字段必须新建 v2。

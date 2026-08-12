@@ -36,6 +36,7 @@ const (
 	StageFetch    = "fetch"
 	StageParse    = "parse"
 	StageExtract  = "extract"
+	StagePlan     = "plan"
 	StageMatch    = "match"
 	StageCompose  = "compose"
 	StageReview   = "review"
@@ -49,8 +50,8 @@ const (
 )
 
 var stageProgress = map[string]int{
-	StageFetch: 10, StageParse: 30, StageExtract: 55,
-	StageMatch: 75, StageCompose: 90, StageReview: 95, StageComplete: 100,
+	StageFetch: 8, StageParse: 22, StageExtract: 42, StagePlan: 65,
+	StageMatch: 78, StageCompose: 90, StageReview: 96, StageComplete: 100,
 }
 
 type Job struct {
@@ -95,9 +96,10 @@ type StageRun struct {
 }
 
 type JobDetail struct {
-	Job    *Job       `json:"job"`
-	Runs   []Run      `json:"runs"`
-	Stages []StageRun `json:"stages"`
+	Job    *Job        `json:"job"`
+	Runs   []Run       `json:"runs"`
+	Stages []StageRun  `json:"stages"`
+	Plan   *ImportPlan `json:"plan"`
 }
 
 type JobPage struct {

@@ -46,6 +46,127 @@ func (e *KnowledgePatchEngine) PublishAppliedClaimInTx(ctx context.Context, tx p
 	return err
 }
 
+// ValidateWikiOperationInTx proves that every existing knowledge target belongs
+// to the Proposal wiki before the atomic batch starts mutating authoritative
+// state. plannedEntityIDs are stable IDs allocated by create_entity operations in
+// the same Proposal and are therefore valid dependency targets.
+func (e *KnowledgePatchEngine) ValidateWikiOperationInTx(
+	ctx context.Context,
+	tx pgx.Tx,
+	wikiID uuid.UUID,
+	op OperationV1,
+	plannedEntityIDs map[uuid.UUID]struct{},
+) error {
+	if e == nil || e.knowledge == nil || wikiID == uuid.Nil {
+		return ErrInvalidOperation
+	}
+	if op.Target.WikiID == nil || *op.Target.WikiID != wikiID {
+		return ErrInvalidOperation
+	}
+	requireEntity := func(entityID uuid.UUID) error {
+		if entityID == uuid.Nil {
+			return ErrInvalidOperation
+		}
+		if _, planned := plannedEntityIDs[entityID]; planned {
+			return nil
+		}
+		entity, err := e.knowledge.GetEntityInTx(ctx, tx, entityID)
+		if err != nil {
+			return err
+		}
+		if entity.WikiID != wikiID {
+			return fmt.Errorf(
+				"%w: entity=%s 不属于 Proposal wiki=%s",
+				ErrInvalidOperation, entityID, wikiID,
+			)
+		}
+		return nil
+	}
+	requireClaim := func(claimID uuid.UUID) (*knowledge.Claim, error) {
+		if claimID == uuid.Nil {
+			return nil, ErrInvalidOperation
+		}
+		claim, err := e.knowledge.GetClaimInTx(ctx, tx, claimID)
+		if err != nil {
+			return nil, err
+		}
+		if err := requireEntity(claim.SubjectEntityID); err != nil {
+			return nil, err
+		}
+		return claim, nil
+	}
+	validateClaimValue := func(raw json.RawMessage) error {
+		params, err := decodeClaimPayload(raw)
+		if err != nil {
+			return err
+		}
+		if params.Value.EntityID != nil {
+			return requireEntity(*params.Value.EntityID)
+		}
+		return nil
+	}
+
+	switch op.OperationType {
+	case OpCreateEntity:
+		if op.Target.WikiID == nil || *op.Target.WikiID != wikiID ||
+			op.Target.EntityID == nil || *op.Target.EntityID == uuid.Nil {
+			return ErrInvalidOperation
+		}
+		if _, planned := plannedEntityIDs[*op.Target.EntityID]; !planned {
+			return ErrInvalidOperation
+		}
+		return nil
+	case OpMergeEntity:
+		if op.Target.EntityID == nil {
+			return ErrInvalidOperation
+		}
+		var payload struct {
+			TargetEntityID uuid.UUID `json:"target_entity_id"`
+			Reason         string    `json:"reason"`
+		}
+		if err := decodePayload(&op, &payload); err != nil {
+			return err
+		}
+		if err := requireEntity(*op.Target.EntityID); err != nil {
+			return err
+		}
+		return requireEntity(payload.TargetEntityID)
+	case OpCreateClaim:
+		if op.Target.EntityID == nil {
+			return ErrInvalidOperation
+		}
+		if err := requireEntity(*op.Target.EntityID); err != nil {
+			return err
+		}
+		return validateClaimValue(op.Payload)
+	case OpSupersedeClaim:
+		if op.Target.ClaimID == nil {
+			return ErrInvalidOperation
+		}
+		if _, err := requireClaim(*op.Target.ClaimID); err != nil {
+			return err
+		}
+		var payload struct {
+			SubjectEntityID uuid.UUID `json:"subject_entity_id"`
+		}
+		if err := json.Unmarshal(op.Payload, &payload); err != nil {
+			return ErrInvalidOperation
+		}
+		if err := requireEntity(payload.SubjectEntityID); err != nil {
+			return err
+		}
+		return validateClaimValue(op.Payload)
+	case OpAddClaimSource:
+		if op.Target.ClaimID == nil {
+			return ErrInvalidOperation
+		}
+		_, err := requireClaim(*op.Target.ClaimID)
+		return err
+	default:
+		return fmt.Errorf("%w: %s", ErrUnsupportedOperation, op.OperationType)
+	}
+}
+
 func (e *KnowledgePatchEngine) RollbackClaimInTx(ctx context.Context, tx pgx.Tx, claimID, actorID, batchID uuid.UUID) (*uuid.UUID, error) {
 	claim, err := e.knowledge.RollbackClaimInTx(ctx, tx, claimID, actorID, &batchID)
 	if err != nil {
@@ -113,7 +234,7 @@ func (e *KnowledgePatchEngine) applyOne(ctx context.Context, tx pgx.Tx, op Opera
 	}
 	switch op.OperationType {
 	case OpCreateEntity:
-		if op.Target.WikiID == nil {
+		if op.Target.WikiID == nil || op.Target.EntityID == nil || *op.Target.EntityID == uuid.Nil {
 			return nil, ErrInvalidOperation
 		}
 		var p struct {
@@ -135,7 +256,8 @@ func (e *KnowledgePatchEngine) applyOne(ctx context.Context, tx pgx.Tx, op Opera
 				Description: label.Description, IsPrimary: label.IsPrimary}
 		}
 		entityParams := knowledge.CreateEntityParams{
-			WikiID: *op.Target.WikiID, TypeKey: p.TypeKey, CanonicalKey: p.CanonicalKey,
+			EntityID: *op.Target.EntityID, WikiID: *op.Target.WikiID,
+			TypeKey: p.TypeKey, CanonicalKey: p.CanonicalKey,
 			Labels: labels, ActorID: actorID,
 		}
 		var entity *knowledge.Entity

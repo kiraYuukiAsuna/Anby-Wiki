@@ -28,6 +28,7 @@ var (
 )
 
 const (
+	TargetWiki             = "wiki"
 	TargetPage             = "page"
 	TargetEntity           = "entity"
 	TargetClaim            = "claim"
@@ -52,7 +53,7 @@ const (
 )
 
 var validTargets = map[string]bool{
-	TargetPage: true, TargetEntity: true, TargetClaim: true,
+	TargetWiki: true, TargetPage: true, TargetEntity: true, TargetClaim: true,
 	TargetCollection: true, TargetExternalResource: true,
 }
 

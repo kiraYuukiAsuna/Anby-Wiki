@@ -94,6 +94,7 @@ const OPERATION_LABEL: Record<OperationType, string> = {
 
 const proposalSchema = z.object({
   targetType: z.enum([
+    "wiki",
     "page",
     "entity",
     "claim",
@@ -176,6 +177,7 @@ function template(type: OperationType): Record<string, unknown> {
         ...common(type, {
           wiki_id: SITE_ID,
           namespace_id: MAIN_NAMESPACE_ID,
+          page_id: clientUUID(),
         }),
         payload: {
           title: "新页面标题",
@@ -277,7 +279,7 @@ function template(type: OperationType): Record<string, unknown> {
       };
     case "create_entity":
       return {
-        ...common(type, { wiki_id: SITE_ID }),
+        ...common(type, { wiki_id: SITE_ID, entity_id: clientUUID() }),
         payload: {
           type_key: "concept",
           canonical_key: "new-concept",

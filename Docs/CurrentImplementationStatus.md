@@ -1,6 +1,6 @@
 # 当前实现状态
 
-> 更新时间：2026-08-11
+> 更新时间：2026-08-12
 > 产品与能力审计依据：[整体设计方案](WikiDesignOnePage.md)
 
 ## 总体结论
@@ -24,8 +24,8 @@ PostgreSQL、Redis、MinIO、Meilisearch、API、Linux Worker 与 Next.js Web �
 | 知识图谱 | Entity/Property/Claim、标签/别名/主标签、Page 主 Entity 绑定、Claim 验证、Entity 合并与回滚、联邦 Wiki/Entity 映射、图谱查询 |
 | 证据与媒体 | Source/Version/Chunk/Citation、Asset/AssetRevision、引用校验、反向使用、可审计来源与媒体目录 |
 | 结构化内容 | Dataset/View/Record、Component/Version/信息框、静态与动态 Collection、成员维护与投影 |
-| 治理 | ProposalOperation v1 全部 23 种 Operation、预览、风险、ReviewTask、冲突解决、批量审核、ChangeBatch、补偿回滚、审计事件、ChangeTag、AI Trust、事实一致性 |
-| 导入与 AI | URL/HTML/文本/PDF/PNG/JPEG/JSON/CSV 获取，图片及扫描 PDF 的中英 OCR、结构化数据规范化、分阶段进度、幂等 Job、解析成功后的不可变恢复点与无重复来源的失败重试、Worker 中断任务自动恢复、管理员可配置模型最大输入 Token、按输入预算与输出安全上限并行分批抽取、截断/结构不合法批次二分重试及跨批去重合并、Semantic Kernel 默认三次结构化调用与纠正重试、精确引文的跨 Chunk 安全纠偏及坏候选/坏 Claim 隔离、带页码/坐标/置信度的证据约束抽取、Proposal 生成、可持久查询的导入队列 |
+| 治理 | ProposalOperation v1 全部 23 种 Operation、预分配 Page/Entity ID 的同批依赖、Operation 集合事务冻结、Wiki 级多目标 Proposal、跨页面 Revision/Block 与 Claim 冲突检测、预览、风险、ReviewTask、批量审核、ChangeBatch、整批补偿回滚、审计事件、ChangeTag、AI Trust、事实一致性 |
+| 导入与 AI | URL/HTML/文本/PDF/PNG/JPEG/JSON/CSV 获取，图片及扫描 PDF 的中英 OCR、结构化数据规范化、七阶段进度、幂等 Job、解析成功后的不可变恢复点与无重复来源的失败重试、Worker 中断任务自动恢复、管理员可配置模型最大输入 Token、按输入预算与输出安全上限并行分批抽取、截断/结构不合法批次二分重试及跨批去重合并、Semantic Kernel 默认三次结构化调用与纠正重试、精确引文的跨 Chunk 安全纠偏及坏候选/坏 Claim 隔离、Entity 候选主体和值引用解析、来源概况与智能多页面 create/update/link/ignore 路由、强制单页模式与用户导入要求、证据约束 Typed Block 生成/补丁、显式且有证据的页面关联与反链投影、规划结果可视化、单 ImportJob 页面+Entity+Claim 复合 Proposal 与同一 ChangeBatch 原子应用、可持久查询的导入队列 |
 | 投影与搜索 | Outbox 租约/重试/死信、链接/目录/锚点/章节/渲染/知识使用/组件依赖/图谱投影、PostgreSQL fallback、Meilisearch 关键词/混合/语义检索 |
 | 规模与归档 | 章节懒加载、服务端可信 HTML 渲染、Revision 热冷分层与 S3 回源、Projection/Search 重建、容量基准命令 |
 | 协作 | Yjs WorkingDocument、增量同步、Presence、发布换基、AI 三方合并、人工冲突决议 |
@@ -126,7 +126,7 @@ Sonner、Geist 和响应式卡片提升工具型页面的可读性。
 - 文本、PNG OCR、JSON 与 CSV 导入均经真实队列、对象存储、Worker、AI Gateway、
   Schema 校验、匹配与 Proposal 生成成功；PNG 使用真实 Tesseract，扫描 PDF 的
   Poppler + Tesseract 回退通过运行测试。重新打开浏览器后仍可从 `/imports` 找回
-  Job、六阶段进度、运行记录、证据定位与 Proposal 链接；
+  Job、七阶段进度、运行记录、证据定位与 Proposal 链接；
 - 全量 Projection 重建共扫描 4 页：3 页成功重建、1 个未发布页按设计跳过、
   0 失败；随后一致性检查 30/30 状态一致，Outbox backlog/dead、Projection
   error/stale 均为 0；

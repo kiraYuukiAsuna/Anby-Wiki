@@ -47,6 +47,8 @@ export interface CreateImportUploadJobRequest {
     idempotencyKey: string;
     file: Blob;
     title?: string;
+    instructions?: string;
+    routeMode?: CreateImportUploadJobRouteModeEnum;
 }
 
 export interface GetImportJobRequest {
@@ -219,6 +221,14 @@ export class ImportsApi extends runtime.BaseAPI {
 
         if (requestParameters['title'] != null) {
             formParams.append('title', requestParameters['title'] as any);
+        }
+
+        if (requestParameters['instructions'] != null) {
+            formParams.append('instructions', requestParameters['instructions'] as any);
+        }
+
+        if (requestParameters['routeMode'] != null) {
+            formParams.append('route_mode', requestParameters['routeMode'] as any);
         }
 
 
@@ -396,6 +406,14 @@ export class ImportsApi extends runtime.BaseAPI {
 
 }
 
+/**
+ * @export
+ */
+export const CreateImportUploadJobRouteModeEnum = {
+    Auto: 'auto',
+    ForceCreate: 'force_create'
+} as const;
+export type CreateImportUploadJobRouteModeEnum = typeof CreateImportUploadJobRouteModeEnum[keyof typeof CreateImportUploadJobRouteModeEnum];
 /**
  * @export
  */

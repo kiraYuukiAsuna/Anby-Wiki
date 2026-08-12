@@ -101,13 +101,14 @@ DROP FUNCTION IF EXISTS search_document_update_vector();
 COMMIT;
 
 BEGIN;
+DROP TRIGGER import_plan_immutable ON import_plan;
+DROP TABLE import_plan;
 DROP TRIGGER import_extraction_immutable ON import_extraction;
 DROP TABLE import_extraction;
 DROP TABLE ai_request_usage;
 DROP TABLE prompt_template;
 DROP TABLE import_stage_run;
 DROP TABLE import_run;
-DROP INDEX import_job_succeeded_version_key;
 ALTER TABLE import_job
     DROP COLUMN updated_at,
     DROP COLUMN progress,

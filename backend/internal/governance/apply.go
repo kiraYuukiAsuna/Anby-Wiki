@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"sort"
 	"time"
 
 	"github.com/google/uuid"
@@ -55,6 +56,7 @@ type ApplyResult struct {
 	ProposalID     uuid.UUID   `json:"proposal_id"`
 	ChangeBatchID  uuid.UUID   `json:"change_batch_id"`
 	RevisionID     *uuid.UUID  `json:"revision_id,omitempty"`
+	RevisionIDs    []uuid.UUID `json:"revision_ids"`
 	PageIDs        []uuid.UUID `json:"page_ids"`
 	EntityIDs      []uuid.UUID `json:"entity_ids"`
 	EntityMergeIDs []uuid.UUID `json:"entity_merge_ids"`
@@ -63,19 +65,16 @@ type ApplyResult struct {
 	Idempotent     bool        `json:"idempotent"`
 }
 
+type preparedPageContent struct {
+	PageID            uuid.UUID
+	AST               json.RawMessage
+	ExpectedRevision  *uuid.UUID
+	ContentOperations []OperationV1
+}
+
 // Apply 是 Proposal 生效的唯一治理入口。Conflict 检测通过后，ChangeBatch、
 // Page/Knowledge 领域写入、Audit、Outbox 与 Proposal 状态在单事务提交。
 func (s *ApplyService) Apply(ctx context.Context, proposalID, actorID uuid.UUID) (*ApplyResult, error) {
-	if existing, err := s.repo.GetChangeBatchByProposal(ctx, nil, proposalID); err != nil {
-		return nil, err
-	} else if existing != nil && (existing.Status == BatchApplied || existing.Status == BatchRolledBack) {
-		return &ApplyResult{
-			ProposalID: proposalID, ChangeBatchID: existing.ID,
-			PageIDs: []uuid.UUID{}, EntityIDs: []uuid.UUID{},
-			EntityMergeIDs: []uuid.UUID{}, CollectionIDs: []uuid.UUID{},
-			ClaimIDs: []uuid.UUID{}, Idempotent: true,
-		}, nil
-	}
 	actorType, status, err := s.repo.GetActor(ctx, nil, actorID)
 	if err != nil || status != "active" {
 		return nil, ErrInvalidActor
@@ -83,16 +82,6 @@ func (s *ApplyService) Apply(ctx context.Context, proposalID, actorID uuid.UUID)
 	if actorType != "human" && actorType != "system" && actorType != "bot" {
 		return nil, ErrActorNotAllowed
 	}
-	if s.conflicts != nil {
-		conflicts, err := s.conflicts.DetectAndRecord(ctx, proposalID)
-		if err != nil {
-			return nil, err
-		}
-		if len(conflicts) > 0 {
-			return nil, ErrMergeConflict
-		}
-	}
-
 	p, err := s.repo.GetProposal(ctx, nil, proposalID)
 	if err != nil {
 		return nil, err
@@ -101,6 +90,16 @@ func (s *ApplyService) Apply(ctx context.Context, proposalID, actorID uuid.UUID)
 		if err := s.auth.Check(ctx, actorID, wikiIDForProposal(ctx, nil, s.repo, p), ActionApply, p.TargetID); err != nil {
 			return nil, err
 		}
+	}
+	if existing, err := s.repo.GetChangeBatchByProposal(ctx, nil, proposalID); err != nil {
+		return nil, err
+	} else if existing != nil && (existing.Status == BatchApplied || existing.Status == BatchRolledBack) {
+		return &ApplyResult{
+			ProposalID: proposalID, ChangeBatchID: existing.ID,
+			RevisionIDs: []uuid.UUID{}, PageIDs: []uuid.UUID{}, EntityIDs: []uuid.UUID{},
+			EntityMergeIDs: []uuid.UUID{}, CollectionIDs: []uuid.UUID{},
+			ClaimIDs: []uuid.UUID{}, Idempotent: true,
+		}, nil
 	}
 	records, err := s.repo.ListOperations(ctx, nil, proposalID)
 	if err != nil {
@@ -114,6 +113,18 @@ func (s *ApplyService) Apply(ctx context.Context, proposalID, actorID uuid.UUID)
 		}
 		ops[i] = *op
 	}
+	if err := s.validateWikiOperationTargets(ctx, nil, p, ops); err != nil {
+		return nil, err
+	}
+	if s.conflicts != nil {
+		conflicts, err := s.conflicts.DetectAndRecord(ctx, proposalID)
+		if err != nil {
+			return nil, err
+		}
+		if len(conflicts) > 0 {
+			return nil, ErrMergeConflict
+		}
+	}
 
 	contentOps := make([]OperationV1, 0, len(ops))
 	for i := range ops {
@@ -121,41 +132,13 @@ func (s *ApplyService) Apply(ctx context.Context, proposalID, actorID uuid.UUID)
 			contentOps = append(contentOps, ops[i])
 		}
 	}
-	var pageAST json.RawMessage
-	var pageExpected *uuid.UUID
-	if p.TargetType == TargetPage && len(contentOps) > 0 {
-		if p.TargetID == nil {
-			return nil, ErrInvalidProposal
-		}
-		currentRev, currentSnap, err := s.pages.CurrentContent(ctx, *p.TargetID)
-		if err != nil || currentRev == nil {
-			return nil, fmt.Errorf("governance: 读取 Apply Current 失败: %w", err)
-		}
-		currentDoc, err := ast.Parse(currentSnap.AST)
-		if err != nil {
-			return nil, err
-		}
-		resolvedConflicts, err := s.repo.ListMergeConflicts(ctx, p.ID)
-		if err != nil {
-			return nil, err
-		}
-		effectiveOps, err := applyConflictResolutions(currentDoc, contentOps, resolvedConflicts)
-		if err != nil {
-			return nil, err
-		}
-		proposed, err := s.pagePatch.Apply(currentDoc, *p.TargetID, effectiveOps)
-		if err != nil {
-			return nil, err
-		}
-		pageAST, err = ast.CanonicalJSON(proposed)
-		if err != nil {
-			return nil, err
-		}
-		pageExpected = &currentRev.ID
+	preparedPages, err := s.preparePageContent(ctx, p, contentOps)
+	if err != nil {
+		return nil, err
 	}
 
 	result := &ApplyResult{
-		ProposalID: proposalID, PageIDs: []uuid.UUID{},
+		ProposalID: proposalID, RevisionIDs: []uuid.UUID{}, PageIDs: []uuid.UUID{},
 		EntityIDs: []uuid.UUID{}, EntityMergeIDs: []uuid.UUID{},
 		CollectionIDs: []uuid.UUID{}, ClaimIDs: []uuid.UUID{},
 	}
@@ -213,6 +196,7 @@ func (s *ApplyService) Apply(ctx context.Context, proposalID, actorID uuid.UUID)
 					}
 					if applied.RevisionID != nil {
 						result.RevisionID = applied.RevisionID
+						result.RevisionIDs = appendUniqueUUID(result.RevisionIDs, *applied.RevisionID)
 					}
 				case isPageContentOperation(ops[i].OperationType):
 					// Content operations are applied as one immutable Revision below.
@@ -221,15 +205,26 @@ func (s *ApplyService) Apply(ctx context.Context, proposalID, actorID uuid.UUID)
 				}
 			}
 			if len(contentOps) > 0 {
+				prepared, ok := preparedPages[*locked.TargetID]
+				if !ok {
+					return ErrInvalidProposal
+				}
 				rev, err := s.pages.PublishInTx(ctx, tx, page.PublishParams{
-					PageID: *locked.TargetID, ActorID: actorID, ExpectedRevisionID: pageExpected,
-					AST: pageAST, Summary: "Apply Proposal " + proposalID.String(), ChangeBatchID: &batchID,
+					PageID: *locked.TargetID, ActorID: actorID, ExpectedRevisionID: prepared.ExpectedRevision,
+					AST: prepared.AST, Summary: "Apply Proposal " + proposalID.String(), ChangeBatchID: &batchID,
 				})
 				if err != nil {
 					return err
 				}
 				result.RevisionID = &rev.ID
+				result.RevisionIDs = appendUniqueUUID(result.RevisionIDs, rev.ID)
 				result.PageIDs = appendUniqueUUID(result.PageIDs, *locked.TargetID)
+			}
+		} else if locked.TargetType == TargetWiki {
+			if err := s.applyWikiOperationsInTx(
+				ctx, tx, locked, ops, preparedPages, actorID, batchID, result,
+			); err != nil {
+				return err
 			}
 		} else if locked.TargetType == TargetCollection {
 			for i := range ops {
@@ -333,6 +328,334 @@ func appendUniqueUUID(values []uuid.UUID, value uuid.UUID) []uuid.UUID {
 		}
 	}
 	return append(values, value)
+}
+
+func (s *ApplyService) preparePageContent(
+	ctx context.Context,
+	proposal *Proposal,
+	contentOps []OperationV1,
+) (map[uuid.UUID]preparedPageContent, error) {
+	prepared := map[uuid.UUID]preparedPageContent{}
+	if len(contentOps) == 0 {
+		return prepared, nil
+	}
+	if proposal == nil || (proposal.TargetType != TargetPage && proposal.TargetType != TargetWiki) {
+		return nil, ErrInvalidProposal
+	}
+	grouped := map[uuid.UUID][]OperationV1{}
+	for _, op := range contentOps {
+		if op.Target.PageID == nil || *op.Target.PageID == uuid.Nil {
+			return nil, ErrInvalidOperation
+		}
+		if proposal.TargetType == TargetPage &&
+			(proposal.TargetID == nil || *proposal.TargetID != *op.Target.PageID) {
+			return nil, ErrInvalidOperation
+		}
+		grouped[*op.Target.PageID] = append(grouped[*op.Target.PageID], op)
+	}
+	pageIDs := make([]uuid.UUID, 0, len(grouped))
+	for pageID := range grouped {
+		pageIDs = append(pageIDs, pageID)
+	}
+	sort.Slice(pageIDs, func(i, j int) bool {
+		return pageIDs[i].String() < pageIDs[j].String()
+	})
+	resolvedConflicts, err := s.repo.ListMergeConflicts(ctx, proposal.ID)
+	if err != nil {
+		return nil, err
+	}
+	for _, pageID := range pageIDs {
+		if proposal.TargetType == TargetWiki {
+			if proposal.TargetID == nil || *proposal.TargetID == uuid.Nil {
+				return nil, ErrInvalidProposal
+			}
+			targetPage, err := s.pages.GetPage(ctx, pageID)
+			if err != nil {
+				return nil, err
+			}
+			if targetPage.WikiID != *proposal.TargetID || targetPage.DeletedAt != nil {
+				return nil, fmt.Errorf(
+					"%w: page=%s 不属于 Proposal wiki=%s",
+					ErrInvalidOperation, pageID, *proposal.TargetID,
+				)
+			}
+		}
+		currentRev, currentSnap, err := s.pages.CurrentContent(ctx, pageID)
+		if err != nil {
+			return nil, fmt.Errorf("governance: 读取 Apply Current 失败: %w", err)
+		}
+		if currentSnap == nil {
+			currentSnap = &page.ContentSnapshot{AST: mustEmptyDocumentJSON()}
+		}
+		currentDoc, err := ast.Parse(currentSnap.AST)
+		if err != nil {
+			return nil, err
+		}
+		effectiveOps, err := applyConflictResolutions(
+			currentDoc, grouped[pageID], resolvedConflicts,
+		)
+		if err != nil {
+			return nil, err
+		}
+		proposed, err := s.pagePatch.Apply(currentDoc, pageID, effectiveOps)
+		if err != nil {
+			return nil, err
+		}
+		pageAST, err := ast.CanonicalJSON(proposed)
+		if err != nil {
+			return nil, err
+		}
+		var expected *uuid.UUID
+		if currentRev != nil {
+			value := currentRev.ID
+			expected = &value
+		}
+		prepared[pageID] = preparedPageContent{
+			PageID: pageID, AST: pageAST, ExpectedRevision: expected,
+			ContentOperations: effectiveOps,
+		}
+	}
+	return prepared, nil
+}
+
+func mustEmptyDocumentJSON() json.RawMessage {
+	raw, _ := ast.CanonicalJSON(ast.NewDocument())
+	return raw
+}
+
+func (s *ApplyService) applyWikiOperationsInTx(
+	ctx context.Context,
+	tx pgx.Tx,
+	proposal *Proposal,
+	ops []OperationV1,
+	preparedPages map[uuid.UUID]preparedPageContent,
+	actorID, batchID uuid.UUID,
+	result *ApplyResult,
+) error {
+	if proposal == nil || proposal.TargetID == nil || *proposal.TargetID == uuid.Nil {
+		return ErrInvalidProposal
+	}
+	if s.knowledge == nil {
+		return fmt.Errorf("%w: knowledge patch 未装配", ErrUnsupportedOperation)
+	}
+	if err := s.validateWikiOperationTargets(ctx, tx, proposal, ops); err != nil {
+		return err
+	}
+	createdPageIDs := map[uuid.UUID]bool{}
+	for i := range ops {
+		switch {
+		case isPageLifecycleOperation(ops[i].OperationType):
+			applied, err := s.applyPageLifecycleInTx(
+				ctx, tx, proposal, ops[i], actorID, batchID,
+			)
+			if err != nil {
+				return err
+			}
+			if applied.PageID != nil {
+				result.PageIDs = appendUniqueUUID(result.PageIDs, *applied.PageID)
+			}
+			if applied.RevisionID != nil {
+				result.RevisionID = applied.RevisionID
+				result.RevisionIDs = appendUniqueUUID(result.RevisionIDs, *applied.RevisionID)
+			}
+			if ops[i].OperationType == OpCreatePage && applied.PageID != nil {
+				createdPageIDs[*applied.PageID] = true
+			}
+		case isPageContentOperation(ops[i].OperationType):
+			// One immutable Revision per target page is published after all
+			// lifecycle and knowledge dependencies have been applied.
+		case isKnowledgeOperation(ops[i].OperationType):
+			if ops[i].OperationType == OpMergeEntity && s.auth != nil {
+				if err := s.auth.CheckTx(
+					ctx, tx, actorID, *proposal.TargetID,
+					ActionEntityMerge, nil,
+				); err != nil {
+					return err
+				}
+			}
+			if err := s.applyKnowledgeOperationInTx(
+				ctx, tx, proposal.ID, ops[i], actorID, batchID, result,
+			); err != nil {
+				return err
+			}
+		default:
+			return fmt.Errorf(
+				"%w: wiki target operation=%s",
+				ErrUnsupportedOperation, ops[i].OperationType,
+			)
+		}
+	}
+
+	pageIDs := make([]uuid.UUID, 0, len(preparedPages))
+	for pageID := range preparedPages {
+		pageIDs = append(pageIDs, pageID)
+	}
+	sort.Slice(pageIDs, func(i, j int) bool {
+		return pageIDs[i].String() < pageIDs[j].String()
+	})
+	for _, pageID := range pageIDs {
+		if createdPageIDs[pageID] {
+			return fmt.Errorf(
+				"%w: create_page initial_ast and page content operations target the same page=%s",
+				ErrInvalidOperation, pageID,
+			)
+		}
+		prepared := preparedPages[pageID]
+		if s.auth != nil {
+			if err := s.auth.CheckTx(
+				ctx, tx, actorID, *proposal.TargetID, ActionEdit, &pageID,
+			); err != nil {
+				return err
+			}
+		}
+		revision, err := s.pages.PublishInTx(ctx, tx, page.PublishParams{
+			PageID: pageID, ActorID: actorID,
+			ExpectedRevisionID: prepared.ExpectedRevision,
+			AST:                prepared.AST,
+			Summary:            "Apply Proposal " + proposal.ID.String(),
+			ChangeBatchID:      &batchID,
+		})
+		if err != nil {
+			return err
+		}
+		result.RevisionID = &revision.ID
+		result.RevisionIDs = appendUniqueUUID(result.RevisionIDs, revision.ID)
+		result.PageIDs = appendUniqueUUID(result.PageIDs, pageID)
+	}
+	return nil
+}
+
+func (s *ApplyService) validateWikiOperationTargets(
+	ctx context.Context,
+	tx pgx.Tx,
+	proposal *Proposal,
+	ops []OperationV1,
+) error {
+	if proposal == nil || proposal.TargetType != TargetWiki {
+		return nil
+	}
+	if proposal.TargetID == nil || *proposal.TargetID == uuid.Nil || s.pages == nil || s.knowledge == nil {
+		return ErrInvalidProposal
+	}
+	wikiID := *proposal.TargetID
+	plannedEntityIDs := make(map[uuid.UUID]struct{})
+	for i := range ops {
+		if ops[i].OperationType != OpCreateEntity {
+			continue
+		}
+		if ops[i].Target.EntityID == nil || *ops[i].Target.EntityID == uuid.Nil ||
+			ops[i].Target.WikiID == nil || *ops[i].Target.WikiID != wikiID {
+			return ErrInvalidOperation
+		}
+		if _, duplicate := plannedEntityIDs[*ops[i].Target.EntityID]; duplicate {
+			return fmt.Errorf(
+				"%w: duplicate create_entity=%s",
+				ErrInvalidOperation, *ops[i].Target.EntityID,
+			)
+		}
+		plannedEntityIDs[*ops[i].Target.EntityID] = struct{}{}
+	}
+	for i := range ops {
+		op := ops[i]
+		switch {
+		case op.OperationType == OpCreatePage:
+			if op.Target.WikiID == nil || *op.Target.WikiID != wikiID ||
+				op.Target.PageID == nil || *op.Target.PageID == uuid.Nil {
+				return ErrInvalidOperation
+			}
+		case isPageLifecycleOperation(op.OperationType), isPageContentOperation(op.OperationType):
+			if op.Target.PageID == nil || *op.Target.PageID == uuid.Nil {
+				return ErrInvalidOperation
+			}
+			targetPage, err := s.pages.GetPageInTx(ctx, tx, *op.Target.PageID)
+			if err != nil {
+				return err
+			}
+			if targetPage.WikiID != wikiID || targetPage.DeletedAt != nil {
+				return fmt.Errorf(
+					"%w: page=%s 不属于 Proposal wiki=%s",
+					ErrInvalidOperation, *op.Target.PageID, wikiID,
+				)
+			}
+		case isKnowledgeOperation(op.OperationType):
+			if err := s.knowledge.ValidateWikiOperationInTx(
+				ctx, tx, wikiID, op, plannedEntityIDs,
+			); err != nil {
+				return err
+			}
+		default:
+			return fmt.Errorf("%w: wiki target operation=%s", ErrUnsupportedOperation, op.OperationType)
+		}
+	}
+	return nil
+}
+
+func isKnowledgeOperation(operationType string) bool {
+	switch operationType {
+	case OpCreateEntity, OpMergeEntity, OpCreateClaim,
+		OpSupersedeClaim, OpAddClaimSource:
+		return true
+	default:
+		return false
+	}
+}
+
+func (s *ApplyService) applyKnowledgeOperationInTx(
+	ctx context.Context,
+	tx pgx.Tx,
+	proposalID uuid.UUID,
+	op OperationV1,
+	actorID, batchID uuid.UUID,
+	result *ApplyResult,
+) error {
+	applied, err := s.knowledge.ApplyOneInTx(ctx, tx, op, actorID, &batchID)
+	if err != nil {
+		return err
+	}
+	if applied.EntityID != nil {
+		result.EntityIDs = appendUniqueUUID(result.EntityIDs, *applied.EntityID)
+	}
+	if applied.OperationType == OpCreateEntity {
+		if applied.EntityID == nil || applied.EntityUpdatedAt == nil {
+			return fmt.Errorf(
+				"%w: create_entity 未返回生命周期凭据",
+				ErrUnsupportedOperation,
+			)
+		}
+		if err := s.emitEntityCreatedAudit(
+			ctx, tx, actorID, batchID, proposalID,
+			*applied.EntityID, *applied.EntityUpdatedAt,
+		); err != nil {
+			return err
+		}
+	}
+	if applied.EntityMergeID != nil {
+		result.EntityMergeIDs = appendUniqueUUID(
+			result.EntityMergeIDs, *applied.EntityMergeID,
+		)
+	}
+	if applied.ClaimID != nil {
+		if applied.SubjectEntityID == nil {
+			return fmt.Errorf(
+				"%w: Claim Operation 未返回 subject_entity_id",
+				ErrUnsupportedOperation,
+			)
+		}
+		if op.OperationType == OpCreateClaim || op.OperationType == OpSupersedeClaim {
+			if err := s.knowledge.PublishAppliedClaimInTx(ctx, tx, *applied.ClaimID); err != nil {
+				return err
+			}
+		}
+		result.ClaimIDs = append(result.ClaimIDs, *applied.ClaimID)
+		if err := s.emitKnowledgeEvents(
+			ctx, tx, actorID, batchID, proposalID,
+			*applied.ClaimID, *applied.SubjectEntityID,
+			applied.CitationID, op.OperationType,
+		); err != nil {
+			return err
+		}
+	}
+	return nil
 }
 
 func (s *ApplyService) emitProposalAudit(ctx context.Context, tx pgx.Tx, actorID, batchID, proposalID uuid.UUID) error {

@@ -155,19 +155,57 @@ func (s *Service) addOperationV1(
 	if err != nil {
 		return nil, err
 	}
-	base, _ := json.Marshal(op.Base)
-	target, _ := json.Marshal(op.Target)
-	evidence, _ := json.Marshal(op.Evidence)
-	risk, _ := json.Marshal(op.Risk)
-	params := AddOperationParams{
-		ProposalID: proposalID, SchemaVersion: op.SchemaVersion, OperationType: op.OperationType,
-		TargetPageID: op.Target.PageID, TargetBlockID: op.Target.BlockID,
-		TargetNodeID: op.Target.NodeID, TargetEntityID: op.Target.EntityID,
-		TargetClaimID: op.Target.ClaimID, ExpectedHash: op.ExpectedHash,
-		Target: target, Base: base, Evidence: evidence, Risk: risk, Payload: op.Payload,
-	}
+	params := operationParams(proposalID, op)
 	if actorID != nil {
 		return s.AddOperationAs(ctx, params, *actorID)
 	}
 	return s.AddOperation(ctx, params)
+}
+
+// AddOperationsV1 validates the complete frozen operation set before writing
+// it and then appends every operation in one transaction.
+func (s *Service) AddOperationsV1(
+	ctx context.Context,
+	proposalID uuid.UUID,
+	rawOperations [][]byte,
+) ([]OperationRecord, error) {
+	if proposalID == uuid.Nil || len(rawOperations) == 0 {
+		return nil, ErrInvalidOperation
+	}
+	params := make([]AddOperationParams, len(rawOperations))
+	for index := range rawOperations {
+		op, err := ParseOperationV1(rawOperations[index])
+		if err != nil {
+			return nil, err
+		}
+		params[index] = operationParams(proposalID, op)
+	}
+	return s.addOperations(ctx, params, nil, true)
+}
+
+func operationParams(proposalID uuid.UUID, op *OperationV1) AddOperationParams {
+	base, _ := json.Marshal(op.Base)
+	target, _ := json.Marshal(op.Target)
+	evidence, _ := json.Marshal(op.Evidence)
+	risk, _ := json.Marshal(op.Risk)
+	// target_entity_id is an indexed FK for an already authoritative Entity.
+	// CreateEntity and CreateClaim may target a preallocated UUID that does not
+	// exist until Apply commits the ChangeBatch, so their stable IDs are frozen
+	// only in target_json.
+	indexedEntityID := op.Target.EntityID
+	if op.OperationType == OpCreateEntity || op.OperationType == OpCreateClaim {
+		indexedEntityID = nil
+	}
+	indexedPageID := op.Target.PageID
+	if op.OperationType == OpCreatePage {
+		// The preallocated Page does not exist until Apply commits.
+		indexedPageID = nil
+	}
+	return AddOperationParams{
+		ProposalID: proposalID, SchemaVersion: op.SchemaVersion, OperationType: op.OperationType,
+		TargetPageID: indexedPageID, TargetBlockID: op.Target.BlockID,
+		TargetNodeID: op.Target.NodeID, TargetEntityID: indexedEntityID,
+		TargetClaimID: op.Target.ClaimID, ExpectedHash: op.ExpectedHash,
+		Target: target, Base: base, Evidence: evidence, Risk: risk, Payload: op.Payload,
+	}
 }

@@ -5,7 +5,11 @@ import {
   CheckCircle2,
   CircleDashed,
   CircleX,
+  FilePlus2,
+  FilePenLine,
+  Link2,
   LoaderCircle,
+  MinusCircle,
   SkipForward,
 } from "lucide-react";
 import Link from "next/link";
@@ -19,11 +23,18 @@ import { importsApi } from "@/lib/api";
 import { isUnauthorized, LOGIN_PATH } from "@/lib/auth";
 import { cn } from "@/lib/utils";
 
-const STAGES = ["fetch", "parse", "extract", "match", "compose", "review"] as const;
+const STAGES = ["fetch", "parse", "extract", "plan", "match", "compose", "review"] as const;
 const LABELS: Record<string, string> = {
-  fetch: "获取与安全扫描", parse: "解析与分块", extract: "结构化抽取",
-  match: "实体与 Claim 匹配", compose: "Proposal 合成", review: "进入审核",
+  fetch: "获取与安全扫描", parse: "解析与分块", extract: "事实候选抽取",
+  plan: "来源理解与多页面路由", match: "实体与 Claim 匹配", compose: "页面与知识 Proposal 合成", review: "进入审核",
 };
+
+const ROUTE_META = {
+  create: { label: "创建页面", icon: FilePlus2, className: "text-emerald-700 bg-emerald-50 dark:bg-emerald-950/40 dark:text-emerald-300" },
+  update: { label: "更新页面", icon: FilePenLine, className: "text-sky-700 bg-sky-50 dark:bg-sky-950/40 dark:text-sky-300" },
+  link: { label: "建立页面关联", icon: Link2, className: "text-violet-700 bg-violet-50 dark:bg-violet-950/40 dark:text-violet-300" },
+  ignore: { label: "忽略", icon: MinusCircle, className: "text-muted-foreground bg-muted" },
+} as const;
 
 const STAGE_STATUS_META = {
   pending: {
@@ -98,7 +109,15 @@ const ERROR_MESSAGES: Record<string, string> = {
   extraction_provider_failed: "模型供应商调用失败，请检查模型、额度和 API Key。",
   extraction_timeout: "模型调用超时，请稍后重试。",
   extraction_evidence_invalid: "模型返回的引用无法与来源文本核对。",
-  no_candidates_extracted: "来源中没有抽取到可审核的百科实体或受支持事实。",
+  page_plan_failed: "页面规划失败，请稍后重试。",
+  page_plan_invalid_output: "模型返回的页面规划结构不合法，已完成自适应拆分仍无法修复。",
+  page_plan_output_truncated: "页面规划输出达到模型长度上限，请提高输出上限或缩小来源。",
+  page_plan_provider_failed: "页面规划模型调用失败，请检查模型、额度和 API Key。",
+  page_plan_timeout: "页面规划模型调用超时，请稍后重试。",
+  page_plan_evidence_invalid: "页面规划引用的原文无法通过逐字核验。",
+  page_plan_target_conflict: "规划的新页面标题已存在，或目标页面在规划期间发生冲突。",
+  page_plan_quality_gate: "来源理解质量未达到当前 AI 配置阈值。",
+  no_page_plan: "来源有价值，但没有形成可审核的页面写入计划。",
   no_reviewable_proposal: "候选已完成匹配，但没有形成可写入的审核操作。",
 };
 
@@ -184,6 +203,45 @@ export function ImportJobProgress({ id }: { id: string }) {
           </li>;
         })}
       </ol>
+
+      {data.plan ? (
+        <section className="space-y-4 rounded-xl border border-border p-5">
+          <div className="flex flex-wrap items-start justify-between gap-3">
+            <div>
+              <h2 className="font-semibold">页面导入计划</h2>
+              <p className="mt-1 text-sm text-muted-foreground">{data.plan.profile.summary || data.plan.profile.title}</p>
+            </div>
+            <span className="rounded-full bg-muted px-2.5 py-1 text-xs text-muted-foreground">
+              质量 {Math.round(data.plan.qualityScore * 100)}% · {data.plan.routes.length} 条路由
+            </span>
+          </div>
+          <ol className="grid gap-3 lg:grid-cols-2">
+            {data.plan.routes.map((route, index) => {
+              const meta = ROUTE_META[route.action];
+              const RouteIcon = meta.icon;
+              return (
+                <li key={`${route.action}:${route.pageId ?? route.title}:${index}`} className="rounded-lg border border-border p-4">
+                  <div className="flex items-start justify-between gap-3">
+                    <div className="min-w-0">
+                      <p className="truncate text-sm font-medium">{route.title}</p>
+                      <p className="mt-1 text-xs leading-5 text-muted-foreground">{route.reason}</p>
+                    </div>
+                    <span className={`inline-flex shrink-0 items-center gap-1 rounded-full px-2 py-1 text-[11px] ${meta.className}`}>
+                      <RouteIcon className="size-3" aria-hidden />{meta.label}
+                    </span>
+                  </div>
+                  <div className="mt-3 flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-muted-foreground">
+                    <span>置信度 {Math.round(route.confidence * 100)}%</span>
+                    <span>{route.blocks.length} 个内容块</span>
+                    {route.relatedTo.length > 0 ? <span>关联到 {route.relatedTo.join("、")}</span> : null}
+                    {route.pageId ? <Link className="underline" href={`/pages/${route.pageId}`}>查看目标页</Link> : null}
+                  </div>
+                </li>
+              );
+            })}
+          </ol>
+        </section>
+      ) : null}
 
       {data.job.proposalId ? <Button asChild><Link href={`/governance/proposals/${data.job.proposalId}`}>查看待审核 Proposal</Link></Button> : null}
     </div>

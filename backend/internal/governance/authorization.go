@@ -179,6 +179,8 @@ func wikiIDForProposal(ctx context.Context, tx pgx.Tx, repo *Repository, p *Prop
 	var wikiID uuid.UUID
 	var err error
 	switch p.TargetType {
+	case TargetWiki:
+		wikiID = *p.TargetID
 	case TargetPage:
 		err = repo.q(tx).QueryRow(ctx, `SELECT wiki_id FROM page WHERE id=$1`, *p.TargetID).Scan(&wikiID)
 	case TargetEntity:

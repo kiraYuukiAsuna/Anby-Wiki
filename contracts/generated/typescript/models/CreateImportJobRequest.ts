@@ -13,6 +13,14 @@
  */
 
 import { mapValues } from '../runtime';
+import type { SourceImportConfig } from './SourceImportConfig';
+import {
+    SourceImportConfigFromJSON,
+    SourceImportConfigFromJSONTyped,
+    SourceImportConfigToJSON,
+    SourceImportConfigToJSONTyped,
+} from './SourceImportConfig';
+
 /**
  *
  * @export
@@ -27,10 +35,10 @@ export interface CreateImportJobRequest {
     jobType?: string;
     /**
      *
-     * @type {{ [key: string]: any; }}
+     * @type {SourceImportConfig}
      * @memberof CreateImportJobRequest
      */
-    config: { [key: string]: any; };
+    config: SourceImportConfig;
 }
 
 /**
@@ -52,7 +60,7 @@ export function CreateImportJobRequestFromJSONTyped(json: any, ignoreDiscriminat
     return {
 
         'jobType': json['job_type'] == null ? undefined : json['job_type'],
-        'config': json['config'],
+        'config': SourceImportConfigFromJSON(json['config']),
     };
 }
 
@@ -68,7 +76,7 @@ export function CreateImportJobRequestToJSONTyped(value?: CreateImportJobRequest
     return {
 
         'job_type': value['jobType'],
-        'config': value['config'],
+        'config': SourceImportConfigToJSON(value['config']),
     };
 }
 

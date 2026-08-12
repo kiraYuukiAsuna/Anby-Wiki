@@ -1681,7 +1681,7 @@ async function example() {
     pageSize: 56,
     // 'draft' | 'submitted' | 'in_review' | 'approved' | 'rejected' | 'conflicted' | 'applying' | 'applied' | 'failed' | 'rolled_back' (optional)
     status: status_example,
-    // 'page' | 'entity' | 'claim' | 'collection' | 'external_resource' (optional)
+    // 'wiki' | 'page' | 'entity' | 'claim' | 'collection' | 'external_resource' (optional)
     targetType: targetType_example,
   } satisfies ListProposalsRequest;
 
@@ -1705,7 +1705,7 @@ example().catch(console.error);
 | **cursor** | `string` | 上一页响应返回的 next_cursor；首页不传 | [Optional] [Defaults to `undefined`] |
 | **pageSize** | `number` | 每页条数，默认 20，最大 100 | [Optional] [Defaults to `20`] |
 | **status** | `draft`, `submitted`, `in_review`, `approved`, `rejected`, `conflicted`, `applying`, `applied`, `failed`, `rolled_back` |  | [Optional] [Defaults to `undefined`] [Enum: draft, submitted, in_review, approved, rejected, conflicted, applying, applied, failed, rolled_back] |
-| **targetType** | `page`, `entity`, `claim`, `collection`, `external_resource` |  | [Optional] [Defaults to `undefined`] [Enum: page, entity, claim, collection, external_resource] |
+| **targetType** | `wiki`, `page`, `entity`, `claim`, `collection`, `external_resource` |  | [Optional] [Defaults to `undefined`] [Enum: wiki, page, entity, claim, collection, external_resource] |
 
 ### Return type
 

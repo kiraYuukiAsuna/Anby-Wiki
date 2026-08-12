@@ -132,6 +132,7 @@ export const ImportJobCurrentStageEnum = {
     Fetch: 'fetch',
     Parse: 'parse',
     Extract: 'extract',
+    Plan: 'plan',
     Match: 'match',
     Compose: 'compose',
     Review: 'review',

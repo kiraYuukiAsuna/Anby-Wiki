@@ -9,6 +9,7 @@ Name | Type
 `proposalId` | string
 `changeBatchId` | string
 `revisionId` | string
+`revisionIds` | Array&lt;string&gt;
 `pageIds` | Array&lt;string&gt;
 `entityIds` | Array&lt;string&gt;
 `entityMergeIds` | Array&lt;string&gt;
@@ -26,6 +27,7 @@ const example = {
   "proposalId": null,
   "changeBatchId": null,
   "revisionId": null,
+  "revisionIds": null,
   "pageIds": null,
   "entityIds": null,
   "entityMergeIds": null,

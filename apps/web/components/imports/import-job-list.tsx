@@ -79,6 +79,7 @@ const STAGE_LABEL: Record<ImportJob["currentStage"], string> = {
   fetch: "获取来源",
   parse: "解析内容",
   extract: "抽取知识",
+  plan: "规划页面",
   match: "匹配实体",
   compose: "生成提议",
   review: "进入审核",

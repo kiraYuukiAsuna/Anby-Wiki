@@ -9,6 +9,7 @@ Name | Type
 `job` | [ImportJob](ImportJob.md)
 `runs` | [Array&lt;ImportRun&gt;](ImportRun.md)
 `stages` | [Array&lt;ImportStageRun&gt;](ImportStageRun.md)
+`plan` | [ImportPlan](ImportPlan.md)
 
 ## Example
 
@@ -20,6 +21,7 @@ const example = {
   "job": null,
   "runs": null,
   "stages": null,
+  "plan": null,
 } satisfies ImportJobDetail
 
 console.log(example)

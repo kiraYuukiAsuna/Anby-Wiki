@@ -65,6 +65,10 @@ func (s *Service) WithPublishObserver(observer PublishObserver) *Service {
 
 // CreatePageParams 创建页面的入参。Language/ContentModel 为空时用站点默认值。
 type CreatePageParams struct {
+	// PageID may be preallocated by Governance so other operations in the same
+	// ChangeBatch can refer to the page before it becomes authoritative. Direct
+	// callers leave it empty and the Page service generates an ID as before.
+	PageID       uuid.UUID
 	WikiID       uuid.UUID
 	NamespaceID  uuid.UUID
 	Title        string
@@ -122,9 +126,12 @@ func (s *Service) CreatePageInTx(
 	if err := s.ensureTitleAvailable(ctx, tx, p.WikiID, p.NamespaceID, normalized, uuid.Nil); err != nil {
 		return nil, err
 	}
-	pageID, err := s.ids.New()
-	if err != nil {
-		return nil, err
+	pageID := params.PageID
+	if pageID == uuid.Nil {
+		pageID, err = s.ids.New()
+		if err != nil {
+			return nil, err
+		}
 	}
 	p.ID = pageID
 	if err := s.repo.InsertPage(ctx, tx, p); err != nil {
@@ -141,6 +148,12 @@ func (s *Service) CreatePageInTx(
 // GetPage 按 ID 查询页面（含软删除页，由调用方判断 DeletedAt）。
 func (s *Service) GetPage(ctx context.Context, id uuid.UUID) (*Page, error) {
 	return s.repo.GetPageByID(ctx, nil, id)
+}
+
+// GetPageInTx exposes a transaction-scoped domain read to governance without
+// allowing the governance module to reach into the page repository directly.
+func (s *Service) GetPageInTx(ctx context.Context, tx pgx.Tx, id uuid.UUID) (*Page, error) {
+	return s.repo.GetPageByID(ctx, tx, id)
 }
 
 // CurrentContent 读取页面当前 Revision 与 ContentSnapshot（M1-T06 阅读路径，只读）。

@@ -9,11 +9,11 @@ Name | Type
 `schemaVersion` | number
 `operationType` | string
 `base` | [OperationBase](OperationBase.md)
-`target` | [OperationTarget](OperationTarget.md)
+`target` | [OperationCreateEntityAllOfTarget](OperationCreateEntityAllOfTarget.md)
 `expectedHash` | string
 `evidence` | [Array&lt;OperationEvidence&gt;](OperationEvidence.md)
 `risk` | [OperationRisk](OperationRisk.md)
-`payload` | { [key: string]: any; }
+`payload` | [OperationCreateEntityAllOfPayload](OperationCreateEntityAllOfPayload.md)
 
 ## Example
 

@@ -790,6 +790,13 @@ paths:
                 title:
                   type: string
                   maxLength: 255
+                instructions:
+                  type: string
+                  maxLength: 4000
+                route_mode:
+                  type: string
+                  enum: [auto, force_create]
+                  default: auto
       responses:
         "201":
           description: 已暂存来源并排队的导入任务
@@ -878,7 +885,7 @@ paths:
           in: query
           schema:
             type: string
-            enum: [page, entity, claim, collection, external_resource]
+            enum: [wiki, page, entity, claim, collection, external_resource]
       responses:
         "200":
           description: 当前 Actor 的 Proposal 游标分页结果
@@ -4208,6 +4215,29 @@ components:
         html:
           type: string
           description: 来自白名单内置渲染器、值已转义的 HTML。
+    SourceImportSource:
+      type: object
+      additionalProperties: false
+      required: [kind]
+      properties:
+        kind: { type: string, enum: [url, upload] }
+        url: { type: string, format: uri }
+        storage_key: { type: string }
+        filename: { type: string }
+        mime_type: { type: string }
+        content_hash: { type: string, pattern: "^[0-9a-f]{64}$" }
+    SourceImportConfig:
+      type: object
+      additionalProperties: false
+      required: [source]
+      properties:
+        source: { $ref: "#/components/schemas/SourceImportSource" }
+        title: { type: string, maxLength: 255 }
+        instructions: { type: string, maxLength: 4000 }
+        route_mode: { type: string, enum: [auto, force_create], default: auto }
+        page_id: { type: string, format: uuid }
+        source_id: { type: string, format: uuid }
+        quality_threshold: { type: number, minimum: 0, maximum: 1 }
     CreateImportJobRequest:
       type: object
       required: [config]
@@ -4215,9 +4245,7 @@ components:
         job_type:
           type: string
           default: source_import
-        config:
-          type: object
-          additionalProperties: true
+        config: { $ref: "#/components/schemas/SourceImportConfig" }
     ImportJob:
       type: object
       required: [id, job_type, status, initiated_by, idempotency_key, config, current_stage, progress, created_at, updated_at]
@@ -4230,7 +4258,7 @@ components:
         config: { type: object, additionalProperties: true }
         source_version_id: { type: string, format: uuid, nullable: true }
         proposal_id: { type: string, format: uuid, nullable: true }
-        current_stage: { type: string, enum: [queued, fetch, parse, extract, match, compose, review, complete] }
+        current_stage: { type: string, enum: [queued, fetch, parse, extract, plan, match, compose, review, complete] }
         progress: { type: integer, minimum: 0, maximum: 100 }
         error: { type: object, additionalProperties: true, nullable: true }
         created_at: { type: string, format: date-time }
@@ -4269,20 +4297,100 @@ components:
       properties:
         id: { type: string, format: uuid }
         import_run_id: { type: string, format: uuid }
-        stage: { type: string, enum: [fetch, parse, extract, match, compose, review] }
+        stage: { type: string, enum: [fetch, parse, extract, plan, match, compose, review] }
         status: { type: string, enum: [running, succeeded, failed, skipped, cancelled] }
         input_hash: { type: string, nullable: true }
         output_hash: { type: string, nullable: true }
         error: { type: object, additionalProperties: true, nullable: true }
         started_at: { type: string, format: date-time }
         finished_at: { type: string, format: date-time, nullable: true }
+    ImportPlanEvidence:
+      type: object
+      additionalProperties: false
+      required: [chunk_id, quotation, char_start, char_end]
+      properties:
+        chunk_id: { type: string, format: uuid }
+        quotation: { type: string }
+        char_start: { type: integer, minimum: 0 }
+        char_end: { type: integer, minimum: 1 }
+        page: { type: integer, minimum: 1, nullable: true }
+    ImportPlanSubject:
+      type: object
+      additionalProperties: false
+      required: [title, kind, summary]
+      properties:
+        title: { type: string }
+        kind: { type: string }
+        summary: { type: string }
+    ImportPlanProfile:
+      type: object
+      additionalProperties: false
+      required: [title, summary, language, useful, subjects]
+      properties:
+        title: { type: string }
+        summary: { type: string }
+        language: { type: string }
+        useful: { type: boolean }
+        subjects:
+          type: array
+          items: { $ref: "#/components/schemas/ImportPlanSubject" }
+    ImportPlannedBlock:
+      type: object
+      additionalProperties: false
+      required: [type, mode, target_block_id, evidence]
+      properties:
+        type: { type: string, enum: [heading, paragraph, bullet_list, quote] }
+        mode: { type: string, enum: [append, replace] }
+        target_block_id: { type: string, format: uuid, nullable: true }
+        text: { type: string }
+        level: { type: integer, minimum: 1, maximum: 6 }
+        items: { type: array, items: { type: string } }
+        evidence:
+          type: array
+          items: { $ref: "#/components/schemas/ImportPlanEvidence" }
+    ImportPageRoute:
+      type: object
+      additionalProperties: false
+      required: [action, title, page_id, reason, confidence, related_to, evidence, blocks]
+      properties:
+        action: { type: string, enum: [create, update, link, ignore] }
+        title: { type: string }
+        page_id: { type: string, format: uuid, nullable: true }
+        reason: { type: string }
+        confidence: { type: number, minimum: 0, maximum: 1 }
+        related_to:
+          type: array
+          items: { type: string }
+        evidence:
+          type: array
+          items: { $ref: "#/components/schemas/ImportPlanEvidence" }
+        blocks:
+          type: array
+          items: { $ref: "#/components/schemas/ImportPlannedBlock" }
+    ImportPlan:
+      type: object
+      additionalProperties: false
+      required: [schema_version, source_version_id, profile, routes, quality_score, prompt_injection_detected]
+      properties:
+        schema_version: { type: integer, enum: [1] }
+        source_version_id: { type: string, format: uuid }
+        profile: { $ref: "#/components/schemas/ImportPlanProfile" }
+        routes:
+          type: array
+          items: { $ref: "#/components/schemas/ImportPageRoute" }
+        quality_score: { type: number, minimum: 0, maximum: 1 }
+        prompt_injection_detected: { type: boolean }
     ImportJobDetail:
       type: object
-      required: [job, runs, stages]
+      required: [job, runs, stages, plan]
       properties:
         job: { $ref: "#/components/schemas/ImportJob" }
         runs: { type: array, items: { $ref: "#/components/schemas/ImportRun" } }
         stages: { type: array, items: { $ref: "#/components/schemas/ImportStageRun" } }
+        plan:
+          allOf:
+            - $ref: "#/components/schemas/ImportPlan"
+          nullable: true
     CreateProposalRequest:
       type: object
       required: [target_type]
@@ -4290,7 +4398,7 @@ components:
         import_job_id: { type: string, format: uuid, nullable: true }
         target_type:
           type: string
-          enum: [page, entity, claim, collection, external_resource]
+          enum: [wiki, page, entity, claim, collection, external_resource]
         target_id: { type: string, format: uuid, nullable: true }
         base_revision_id: { type: string, format: uuid, nullable: true }
         base_state_version: { type: integer, minimum: 0, nullable: true }
@@ -4365,6 +4473,11 @@ components:
         - type: object
           properties:
             operation_type: { type: string, enum: [create_page] }
+            target:
+              allOf:
+                - $ref: "#/components/schemas/OperationTarget"
+                - type: object
+                  required: [wiki_id, namespace_id, page_id]
             payload:
               type: object
               required: [title]
@@ -4433,7 +4546,35 @@ components:
     OperationRetargetExternalLink:
       allOf: [{$ref: "#/components/schemas/ProposalOperationEnvelope"}, {type: object, properties: {operation_type: {type: string, enum: [retarget_external_link]}}}]
     OperationCreateEntity:
-      allOf: [{$ref: "#/components/schemas/ProposalOperationEnvelope"}, {type: object, properties: {operation_type: {type: string, enum: [create_entity]}}}]
+      allOf:
+        - $ref: "#/components/schemas/ProposalOperationEnvelope"
+        - type: object
+          properties:
+            operation_type: { type: string, enum: [create_entity] }
+            target:
+              allOf:
+                - $ref: "#/components/schemas/OperationTarget"
+                - type: object
+                  required: [wiki_id, entity_id]
+            payload:
+              type: object
+              required: [type_key, canonical_key, labels]
+              additionalProperties: false
+              properties:
+                type_key: { type: string, minLength: 1, maxLength: 100 }
+                canonical_key: { type: string, minLength: 1, maxLength: 255 }
+                labels:
+                  type: array
+                  minItems: 1
+                  items:
+                    type: object
+                    required: [language, label, is_primary]
+                    additionalProperties: false
+                    properties:
+                      language: { type: string, minLength: 1, maxLength: 64 }
+                      label: { type: string, minLength: 1, maxLength: 255 }
+                      description: { type: string, maxLength: 1000 }
+                      is_primary: { type: boolean }
     OperationMergeEntity:
       allOf:
         - $ref: "#/components/schemas/ProposalOperationEnvelope"
@@ -4832,7 +4973,7 @@ components:
       properties:
         id: { type: string, format: uuid }
         import_job_id: { type: string, format: uuid, nullable: true }
-        target_type: { type: string, enum: [page, entity, claim, collection, external_resource] }
+        target_type: { type: string, enum: [wiki, page, entity, claim, collection, external_resource] }
         target_id: { type: string, format: uuid, nullable: true }
         base_revision_id: { type: string, format: uuid, nullable: true }
         base_state_version: { type: integer, nullable: true }
@@ -4931,11 +5072,12 @@ components:
         reason: { type: string }
     ApplyProposalResult:
       type: object
-      required: [proposal_id, change_batch_id, page_ids, entity_ids, entity_merge_ids, collection_ids, claim_ids, idempotent]
+      required: [proposal_id, change_batch_id, revision_ids, page_ids, entity_ids, entity_merge_ids, collection_ids, claim_ids, idempotent]
       properties:
         proposal_id: { type: string, format: uuid }
         change_batch_id: { type: string, format: uuid }
         revision_id: { type: string, format: uuid, nullable: true }
+        revision_ids: { type: array, items: { type: string, format: uuid } }
         page_ids: { type: array, items: { type: string, format: uuid } }
         entity_ids: { type: array, items: { type: string, format: uuid } }
         entity_merge_ids: { type: array, items: { type: string, format: uuid } }

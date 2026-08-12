@@ -87,8 +87,11 @@ func (s *ApplyService) applyPageLifecycleInTx(
 	}
 	switch op.OperationType {
 	case OpCreatePage:
-		if proposal.TargetType != TargetPage || proposal.TargetID != nil ||
-			op.Target.WikiID == nil || op.Target.NamespaceID == nil {
+		pageCreateProposal := proposal.TargetType == TargetPage && proposal.TargetID == nil
+		wikiCreateProposal := proposal.TargetType == TargetWiki && proposal.TargetID != nil &&
+			op.Target.WikiID != nil && *proposal.TargetID == *op.Target.WikiID
+		if (!pageCreateProposal && !wikiCreateProposal) || op.Target.WikiID == nil ||
+			op.Target.NamespaceID == nil || op.Target.PageID == nil || *op.Target.PageID == uuid.Nil {
 			return nil, ErrInvalidOperation
 		}
 		var payload createPageOperationPayload
@@ -110,7 +113,7 @@ func (s *ApplyService) applyPageLifecycleInTx(
 			}
 		}
 		created, err := s.pages.CreatePageInTx(ctx, tx, page.CreatePageParams{
-			WikiID: *op.Target.WikiID, NamespaceID: *op.Target.NamespaceID,
+			PageID: *op.Target.PageID, WikiID: *op.Target.WikiID, NamespaceID: *op.Target.NamespaceID,
 			Title: payload.Title, Language: payload.Language,
 			ContentModel: payload.ContentModel, ActorID: actorID,
 		}, &changeBatchID)
@@ -132,9 +135,16 @@ func (s *ApplyService) applyPageLifecycleInTx(
 		return result, nil
 
 	case OpRenamePage:
-		if proposal.TargetType != TargetPage || proposal.TargetID == nil ||
-			op.Target.PageID == nil || *op.Target.PageID != *proposal.TargetID {
+		pageTarget := proposal.TargetType == TargetPage && proposal.TargetID != nil &&
+			op.Target.PageID != nil && *op.Target.PageID == *proposal.TargetID
+		wikiTarget := proposal.TargetType == TargetWiki && proposal.TargetID != nil && op.Target.PageID != nil
+		if !pageTarget && !wikiTarget {
 			return nil, ErrInvalidOperation
+		}
+		if wikiTarget {
+			if err := s.requirePageInProposalWikiInTx(ctx, tx, proposal, *op.Target.PageID); err != nil {
+				return nil, err
+			}
 		}
 		var payload renamePageOperationPayload
 		if err := decodeOperationPayload(op.Payload, &payload); err != nil {
@@ -143,13 +153,13 @@ func (s *ApplyService) applyPageLifecycleInTx(
 		if s.auth != nil {
 			if err := s.auth.CheckTx(
 				ctx, tx, actorID, wikiIDForProposal(ctx, tx, s.repo, proposal),
-				ActionRename, proposal.TargetID,
+				ActionRename, op.Target.PageID,
 			); err != nil {
 				return nil, err
 			}
 		}
 		renamed, err := s.pages.RenamePageInTx(
-			ctx, tx, *proposal.TargetID, payload.NewTitle, actorID, &changeBatchID,
+			ctx, tx, *op.Target.PageID, payload.NewTitle, actorID, &changeBatchID,
 		)
 		if err != nil {
 			return nil, err
@@ -157,9 +167,16 @@ func (s *ApplyService) applyPageLifecycleInTx(
 		return &pageLifecycleResult{PageID: &renamed.ID}, nil
 
 	case OpCreateRedirect:
-		if proposal.TargetType != TargetPage || proposal.TargetID == nil ||
-			op.Target.PageID == nil || *op.Target.PageID != *proposal.TargetID {
+		pageTarget := proposal.TargetType == TargetPage && proposal.TargetID != nil &&
+			op.Target.PageID != nil && *op.Target.PageID == *proposal.TargetID
+		wikiTarget := proposal.TargetType == TargetWiki && proposal.TargetID != nil && op.Target.PageID != nil
+		if !pageTarget && !wikiTarget {
 			return nil, ErrInvalidOperation
+		}
+		if wikiTarget {
+			if err := s.requirePageInProposalWikiInTx(ctx, tx, proposal, *op.Target.PageID); err != nil {
+				return nil, err
+			}
 		}
 		var payload createRedirectOperationPayload
 		if err := decodeOperationPayload(op.Payload, &payload); err != nil {
@@ -168,13 +185,13 @@ func (s *ApplyService) applyPageLifecycleInTx(
 		if s.auth != nil {
 			if err := s.auth.CheckTx(
 				ctx, tx, actorID, wikiIDForProposal(ctx, tx, s.repo, proposal),
-				ActionEdit, proposal.TargetID,
+				ActionEdit, op.Target.PageID,
 			); err != nil {
 				return nil, err
 			}
 		}
 		_, err := s.pages.CreateRedirectInTx(
-			ctx, tx, *proposal.TargetID, page.RedirectTarget{
+			ctx, tx, *op.Target.PageID, page.RedirectTarget{
 				Kind: payload.TargetKind, PageID: payload.TargetPageID,
 				NamespaceID:     payload.TargetNamespaceID,
 				Title:           payload.TargetTitle,
@@ -185,8 +202,31 @@ func (s *ApplyService) applyPageLifecycleInTx(
 		if err != nil {
 			return nil, err
 		}
-		return &pageLifecycleResult{PageID: proposal.TargetID}, nil
+		return &pageLifecycleResult{PageID: op.Target.PageID}, nil
 	default:
 		return nil, fmt.Errorf("%w: %s", ErrUnsupportedOperation, op.OperationType)
 	}
+}
+
+func (s *ApplyService) requirePageInProposalWikiInTx(
+	ctx context.Context,
+	tx pgx.Tx,
+	proposal *Proposal,
+	pageID uuid.UUID,
+) error {
+	if proposal == nil || proposal.TargetType != TargetWiki ||
+		proposal.TargetID == nil || *proposal.TargetID == uuid.Nil || pageID == uuid.Nil {
+		return ErrInvalidOperation
+	}
+	targetPage, err := s.pages.GetPageInTx(ctx, tx, pageID)
+	if err != nil {
+		return err
+	}
+	if targetPage.WikiID != *proposal.TargetID || targetPage.DeletedAt != nil {
+		return fmt.Errorf(
+			"%w: page=%s 不属于 Proposal wiki=%s",
+			ErrInvalidOperation, pageID, *proposal.TargetID,
+		)
+	}
+	return nil
 }

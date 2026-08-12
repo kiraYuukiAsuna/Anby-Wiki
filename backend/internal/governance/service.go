@@ -161,34 +161,57 @@ func (s *Service) addOperation(
 	in AddOperationParams,
 	actorID *uuid.UUID,
 ) (*OperationRecord, error) {
-	if in.ProposalID == uuid.Nil || strings.TrimSpace(in.OperationType) == "" {
+	operations, err := s.addOperations(ctx, []AddOperationParams{in}, actorID, false)
+	if err != nil {
+		return nil, err
+	}
+	return &operations[0], nil
+}
+
+// addOperations freezes a set of ordered operations in one transaction. This
+// is required for composite import Proposals: a crash must never leave a draft
+// containing only the leading CreateEntity operations.
+func (s *Service) addOperations(
+	ctx context.Context,
+	inputs []AddOperationParams,
+	actorID *uuid.UUID,
+	requireEmpty bool,
+) ([]OperationRecord, error) {
+	if len(inputs) == 0 {
 		return nil, ErrInvalidOperation
 	}
-	if in.SchemaVersion == 0 {
-		in.SchemaVersion = 1
-	}
-	if in.SchemaVersion != 1 || !isJSONObject(in.Payload) {
-		return nil, ErrInvalidOperation
-	}
-	if len(in.Evidence) == 0 {
-		in.Evidence = json.RawMessage(`[]`)
-	}
-	if len(in.Base) == 0 {
-		in.Base = json.RawMessage(`{}`)
-	}
-	if len(in.Target) == 0 {
-		in.Target = json.RawMessage(`{}`)
-	}
-	if len(in.Risk) == 0 {
-		in.Risk = json.RawMessage(`{"level":"low","reasons":[]}`)
-	}
-	if !isJSONObject(in.Base) || !isJSONObject(in.Target) || !isJSONArray(in.Evidence) || !isJSONObject(in.Risk) {
-		return nil, ErrInvalidOperation
+	proposalID := inputs[0].ProposalID
+	for i := range inputs {
+		in := &inputs[i]
+		if in.ProposalID == uuid.Nil || in.ProposalID != proposalID || strings.TrimSpace(in.OperationType) == "" {
+			return nil, ErrInvalidOperation
+		}
+		if in.SchemaVersion == 0 {
+			in.SchemaVersion = 1
+		}
+		if in.SchemaVersion != 1 || !isJSONObject(in.Payload) {
+			return nil, ErrInvalidOperation
+		}
+		if len(in.Evidence) == 0 {
+			in.Evidence = json.RawMessage(`[]`)
+		}
+		if len(in.Base) == 0 {
+			in.Base = json.RawMessage(`{}`)
+		}
+		if len(in.Target) == 0 {
+			in.Target = json.RawMessage(`{}`)
+		}
+		if len(in.Risk) == 0 {
+			in.Risk = json.RawMessage(`{"level":"low","reasons":[]}`)
+		}
+		if !isJSONObject(in.Base) || !isJSONObject(in.Target) || !isJSONArray(in.Evidence) || !isJSONObject(in.Risk) {
+			return nil, ErrInvalidOperation
+		}
 	}
 
-	var result *OperationRecord
+	result := make([]OperationRecord, 0, len(inputs))
 	err := s.txm.InTx(ctx, func(tx pgx.Tx) error {
-		p, err := s.repo.GetProposalForUpdate(ctx, tx, in.ProposalID)
+		p, err := s.repo.GetProposalForUpdate(ctx, tx, proposalID)
 		if err != nil {
 			return err
 		}
@@ -198,31 +221,33 @@ func (s *Service) addOperation(
 		if p.Status != ProposalDraft {
 			return fmt.Errorf("%w: status=%s", ErrProposalNotDraft, p.Status)
 		}
-		n, err := s.repo.CountOperations(ctx, tx, in.ProposalID)
+		n, err := s.repo.CountOperations(ctx, tx, proposalID)
 		if err != nil {
 			return err
 		}
-		opID, err := s.ids.New()
-		if err != nil {
-			return err
+		if requireEmpty && n != 0 {
+			return ErrOperationSequenceRace
 		}
-		op := &OperationRecord{
-			ID: opID, ProposalID: in.ProposalID, Sequence: n + 1,
-			SchemaVersion: in.SchemaVersion, OperationType: strings.TrimSpace(in.OperationType),
-			TargetPageID: in.TargetPageID, TargetBlockID: in.TargetBlockID,
-			TargetNodeID: in.TargetNodeID, TargetEntityID: in.TargetEntityID,
-			TargetClaimID: in.TargetClaimID, ExpectedHash: in.ExpectedHash,
-			Target: compactJSON(in.Target), Base: compactJSON(in.Base), Evidence: compactJSON(in.Evidence),
-			Risk: compactJSON(in.Risk), Payload: compactJSON(in.Payload),
+		for index := range inputs {
+			in := &inputs[index]
+			opID, err := s.ids.New()
+			if err != nil {
+				return err
+			}
+			op := OperationRecord{
+				ID: opID, ProposalID: proposalID, Sequence: n + index + 1,
+				SchemaVersion: in.SchemaVersion, OperationType: strings.TrimSpace(in.OperationType),
+				TargetPageID: in.TargetPageID, TargetBlockID: in.TargetBlockID,
+				TargetNodeID: in.TargetNodeID, TargetEntityID: in.TargetEntityID,
+				TargetClaimID: in.TargetClaimID, ExpectedHash: in.ExpectedHash,
+				Target: compactJSON(in.Target), Base: compactJSON(in.Base), Evidence: compactJSON(in.Evidence),
+				Risk: compactJSON(in.Risk), Payload: compactJSON(in.Payload),
+			}
+			if err := s.repo.InsertOperation(ctx, tx, &op); err != nil {
+				return err
+			}
+			result = append(result, op)
 		}
-		if err := s.repo.InsertOperation(ctx, tx, op); err != nil {
-			return err
-		}
-		ops, err := s.repo.ListOperations(ctx, tx, in.ProposalID)
-		if err != nil {
-			return err
-		}
-		result = &ops[len(ops)-1]
 		return nil
 	})
 	return result, err

@@ -13,12 +13,44 @@ import (
 
 	"github.com/anby/wiki/backend/internal/ai"
 	"github.com/anby/wiki/backend/internal/evidence"
+	"github.com/anby/wiki/backend/internal/knowledge"
 	"github.com/anby/wiki/backend/internal/platform/id"
 )
 
 type splittingExtractionGenerator struct {
 	calls       int
 	failureCode string
+}
+
+type plannedClaimKnowledge struct{}
+
+type rejectingClaimKnowledge struct {
+	property *knowledge.Property
+	err      error
+}
+
+func (f rejectingClaimKnowledge) GetEntity(context.Context, uuid.UUID) (*knowledge.Entity, error) {
+	return nil, errors.New("planned IDs must not be read before Apply")
+}
+
+func (f rejectingClaimKnowledge) GetPropertyByKey(context.Context, string) (*knowledge.Property, error) {
+	return f.property, f.err
+}
+
+func (rejectingClaimKnowledge) ListClaims(context.Context, knowledge.ListClaimsParams) ([]knowledge.Claim, error) {
+	return nil, errors.New("rejected claims must not query existing claims")
+}
+
+func (plannedClaimKnowledge) GetEntity(context.Context, uuid.UUID) (*knowledge.Entity, error) {
+	return nil, errors.New("planned IDs must not be read before Apply")
+}
+
+func (plannedClaimKnowledge) GetPropertyByKey(_ context.Context, key string) (*knowledge.Property, error) {
+	return &knowledge.Property{ID: uuid.New(), PropertyKey: key, ValueType: knowledge.ValueTypeEntity, IsMultivalued: true}, nil
+}
+
+func (plannedClaimKnowledge) ListClaims(context.Context, knowledge.ListClaimsParams) ([]knowledge.Claim, error) {
+	return nil, errors.New("planned subjects cannot have existing claims")
 }
 
 func (g *splittingExtractionGenerator) Generate(_ context.Context, request ai.Request) (*ai.Result, error) {
@@ -321,6 +353,160 @@ func TestMergeCandidateBatchesDeduplicatesAndRemapsClaimSubject(t *testing.T) {
 	if merged.Claims[0].Subject.CandidateID == nil ||
 		*merged.Claims[0].Subject.CandidateID != merged.Entities[0].CandidateID {
 		t.Fatal("claim subject was not remapped to the server-generated entity candidate ID")
+	}
+}
+
+func TestMergeCandidateBatchesRemapsEntityValuedClaimCandidate(t *testing.T) {
+	sourceVersionID := uuid.New()
+	subjectID, valueID := uuid.New(), uuid.New()
+	chunkID := uuid.New()
+	part := extractionBatchResult{Candidates: &Candidates{
+		SchemaVersion: 1, SourceVersionID: sourceVersionID, QualityScore: 0.9,
+		Entities: []EntityCandidate{
+			{CandidateID: subjectID, TypeKey: "work", Label: "Story", Aliases: []string{}, Confidence: 0.9,
+				Evidence: []CandidateEvidence{{ChunkID: chunkID, Quotation: "Story", CharStart: 0, CharEnd: 5}}},
+			{CandidateID: valueID, TypeKey: "person", Label: "Author", Aliases: []string{}, Confidence: 0.9,
+				Evidence: []CandidateEvidence{{ChunkID: chunkID, Quotation: "Author", CharStart: 6, CharEnd: 12}}},
+		},
+		Claims: []ClaimCandidate{{CandidateID: uuid.New(), Subject: CandidateSubject{CandidateID: &subjectID},
+			PropertyKey: "author", Value: json.RawMessage(`{"entity_candidate_id":"` + valueID.String() + `"}`),
+			Confidence: 0.9, Evidence: []CandidateEvidence{{ChunkID: chunkID, Quotation: "Author", CharStart: 6, CharEnd: 12}}}},
+	}}
+	service := NewExtractionService(nil, nil, nil, id.NewGenerator())
+	merged, err := service.mergeCandidateBatches(sourceVersionID, []extractionBatchResult{part})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(merged.Entities) != 2 || len(merged.Claims) != 1 {
+		t.Fatalf("entities=%d claims=%d", len(merged.Entities), len(merged.Claims))
+	}
+	valueCandidate, ok, valid := claimValueCandidateReference(merged.Claims[0].Value)
+	if !valid || !ok || valueCandidate != merged.Entities[1].CandidateID {
+		t.Fatalf("entity value was not remapped: value=%s ok=%v valid=%v", valueCandidate, ok, valid)
+	}
+}
+
+func TestResolveClaimCandidateReferencesUsesPlannedStableIDs(t *testing.T) {
+	subjectCandidateID, valueCandidateID := uuid.New(), uuid.New()
+	subjectEntityID, valueEntityID := uuid.New(), uuid.New()
+	claim := ClaimCandidate{
+		CandidateID: uuid.New(), Subject: CandidateSubject{CandidateID: &subjectCandidateID},
+		PropertyKey: "author",
+		Value:       json.RawMessage(`{"entity_candidate_id":"` + valueCandidateID.String() + `"}`),
+	}
+	resolved, ok := resolveClaimCandidateReferences(claim, map[uuid.UUID]uuid.UUID{
+		subjectCandidateID: subjectEntityID,
+		valueCandidateID:   valueEntityID,
+	})
+	if !ok || resolved.Subject.EntityID == nil || *resolved.Subject.EntityID != subjectEntityID {
+		t.Fatalf("subject was not resolved: %#v", resolved.Subject)
+	}
+	if got, ok := claimValueEntityID(resolved.Value); !ok || got != valueEntityID {
+		t.Fatalf("value entity=%s ok=%v, want %s", got, ok, valueEntityID)
+	}
+}
+
+func TestClassifyCreatesClaimBetweenTwoPlannedEntities(t *testing.T) {
+	subjectCandidateID, valueCandidateID := uuid.New(), uuid.New()
+	classifier := NewClaimClassifier(plannedClaimKnowledge{})
+	decisions, err := classifier.Classify(context.Background(), []ClaimCandidate{{
+		CandidateID: uuid.New(), Subject: CandidateSubject{CandidateID: &subjectCandidateID},
+		PropertyKey: "author",
+		Value:       json.RawMessage(`{"entity_candidate_id":"` + valueCandidateID.String() + `"}`),
+	}}, []EntityResolution{
+		{CandidateID: subjectCandidateID, Outcome: EntityNewReview, PlannedEntityID: &subjectCandidateID},
+		{CandidateID: valueCandidateID, Outcome: EntityNewReview, PlannedEntityID: &valueCandidateID},
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(decisions) != 1 || decisions[0].Outcome != ClaimNew || decisions[0].SubjectEntityID != subjectCandidateID {
+		t.Fatalf("unexpected decisions: %#v", decisions)
+	}
+	if got, ok := claimValueEntityID(decisions[0].ResolvedValue); !ok || got != valueCandidateID {
+		t.Fatalf("resolved target=%s ok=%v, want %s", got, ok, valueCandidateID)
+	}
+}
+
+func TestClassifySkipsOneUnsupportedOrMalformedClaim(t *testing.T) {
+	subjectCandidateID := uuid.New()
+	resolutions := []EntityResolution{{
+		CandidateID: subjectCandidateID, Outcome: EntityNewReview, PlannedEntityID: &subjectCandidateID,
+	}}
+	claim := ClaimCandidate{
+		CandidateID: uuid.New(), Subject: CandidateSubject{CandidateID: &subjectCandidateID},
+		PropertyKey: "unsupported", Value: json.RawMessage(`{"string":"value"}`),
+	}
+	classifier := NewClaimClassifier(rejectingClaimKnowledge{err: knowledge.ErrPropertyNotFound})
+	decisions, err := classifier.Classify(context.Background(), []ClaimCandidate{claim}, resolutions)
+	if err != nil || len(decisions) != 0 {
+		t.Fatalf("unsupported property decisions=%#v error=%v", decisions, err)
+	}
+
+	claim.PropertyKey = "release_date"
+	classifier = NewClaimClassifier(rejectingClaimKnowledge{property: &knowledge.Property{
+		ID: uuid.New(), PropertyKey: "release_date", ValueType: knowledge.ValueTypeDate,
+	}})
+	decisions, err = classifier.Classify(context.Background(), []ClaimCandidate{claim}, resolutions)
+	if err != nil || len(decisions) != 0 {
+		t.Fatalf("malformed value decisions=%#v error=%v", decisions, err)
+	}
+}
+
+func TestCompositeOperationsUseStableEntityIDs(t *testing.T) {
+	wikiID, subjectID, valueID := uuid.New(), uuid.New(), uuid.New()
+	params := ComposeParams{WikiID: wikiID}
+	entityOp, err := newEntityOperation(params, EntityCandidate{
+		CandidateID: subjectID, TypeKey: "work", Label: "Story", Aliases: []string{},
+	}, subjectID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if entityOp.Target.EntityID == nil || *entityOp.Target.EntityID != subjectID {
+		t.Fatalf("create target=%v, want %s", entityOp.Target.EntityID, subjectID)
+	}
+	var entityPayload struct {
+		CanonicalKey string `json:"canonical_key"`
+	}
+	if err := json.Unmarshal(entityOp.Payload, &entityPayload); err != nil || entityPayload.CanonicalKey != "work:Story" {
+		t.Fatalf("canonical key=%q error=%v, want work:Story", entityPayload.CanonicalKey, err)
+	}
+	claimOp, err := claimOperation(wikiID, 0, ClaimCandidate{PropertyKey: "author"}, ClaimDecision{
+		SubjectEntityID: subjectID, Outcome: ClaimNew, Risk: RiskLow, Reason: "new",
+		ResolvedValue: json.RawMessage(`{"entity_id":"` + valueID.String() + `"}`),
+	}, nil, nil, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if claimOp.Target.EntityID == nil || *claimOp.Target.EntityID != subjectID {
+		t.Fatalf("claim subject=%v, want %s", claimOp.Target.EntityID, subjectID)
+	}
+	var payload struct {
+		Value struct {
+			EntityID uuid.UUID `json:"entity_id"`
+		} `json:"value"`
+	}
+	if err := json.Unmarshal(claimOp.Payload, &payload); err != nil || payload.Value.EntityID != valueID {
+		t.Fatalf("claim value=%s error=%v, want %s", payload.Value.EntityID, err, valueID)
+	}
+}
+
+func TestNewEntityOperationBoundsLongCanonicalKey(t *testing.T) {
+	wikiID, entityID := uuid.New(), uuid.New()
+	op, err := newEntityOperation(ComposeParams{WikiID: wikiID}, EntityCandidate{
+		CandidateID: entityID, TypeKey: "concept", Label: strings.Repeat("界", 255), Aliases: []string{},
+	}, entityID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var payload struct {
+		CanonicalKey string `json:"canonical_key"`
+	}
+	if err := json.Unmarshal(op.Payload, &payload); err != nil {
+		t.Fatal(err)
+	}
+	if len([]rune(payload.CanonicalKey)) > 255 || !strings.HasPrefix(payload.CanonicalKey, "concept:") {
+		t.Fatalf("unexpected bounded canonical key %q", payload.CanonicalKey)
 	}
 }
 

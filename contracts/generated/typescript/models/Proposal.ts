@@ -149,6 +149,7 @@ export interface Proposal {
  * @export
  */
 export const ProposalTargetTypeEnum = {
+    Wiki: 'wiki',
     Page: 'page',
     Entity: 'entity',
     Claim: 'claim',

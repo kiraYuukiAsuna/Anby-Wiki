@@ -414,7 +414,8 @@ func (s *AuditService) List(
 			OR (ae.aggregate_type='proposal' AND EXISTS (
 				SELECT 1 FROM proposal pr
 				WHERE pr.id=ae.aggregate_id AND (
-					(pr.target_type='page' AND EXISTS (
+					(pr.target_type='wiki' AND pr.target_id=$7)
+					OR (pr.target_type='page' AND EXISTS (
 						SELECT 1 FROM page p WHERE p.id=pr.target_id AND p.wiki_id=$7
 					))
 					OR (pr.target_type='entity' AND EXISTS (

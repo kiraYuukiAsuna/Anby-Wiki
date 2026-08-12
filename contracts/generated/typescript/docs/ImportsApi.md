@@ -165,7 +165,7 @@ example().catch(console.error);
 
 ## createImportUploadJob
 
-> ImportJob createImportUploadJob(idempotencyKey, file, title)
+> ImportJob createImportUploadJob(idempotencyKey, file, title, instructions, routeMode)
 
 校验并暂存用户文件，幂等创建来源导入任务
 
@@ -195,6 +195,10 @@ async function example() {
     file: BINARY_DATA_HERE,
     // string (optional)
     title: title_example,
+    // string (optional)
+    instructions: instructions_example,
+    // string (optional)
+    routeMode: routeMode_example,
   } satisfies CreateImportUploadJobRequest;
 
   try {
@@ -217,6 +221,8 @@ example().catch(console.error);
 | **idempotencyKey** | `string` | 变更类请求的幂等键（客户端生成的 UUID）。 服务端对相同 Actor + 幂等键的重复请求返回首次处理结果，不重复执行。  | [Defaults to `undefined`] |
 | **file** | `Blob` |  | [Defaults to `undefined`] |
 | **title** | `string` |  | [Optional] [Defaults to `undefined`] |
+| **instructions** | `string` |  | [Optional] [Defaults to `undefined`] |
+| **routeMode** | `auto`, `force_create` |  | [Optional] [Defaults to `&#39;auto&#39;`] [Enum: auto, force_create] |
 
 ### Return type
 

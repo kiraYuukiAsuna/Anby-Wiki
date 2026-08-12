@@ -933,7 +933,7 @@ CREATE TABLE proposal (
     id                 uuid        PRIMARY KEY,
     import_job_id      uuid        REFERENCES import_job (id),
     target_type        text        NOT NULL
-                                   CHECK (target_type IN ('page', 'entity', 'claim', 'collection', 'external_resource')),
+                                   CHECK (target_type IN ('wiki', 'page', 'entity', 'claim', 'collection', 'external_resource')),
     target_id          uuid,
     base_revision_id   uuid        REFERENCES revision (id),
     base_state_version integer,
@@ -1169,13 +1169,9 @@ ALTER TABLE import_job
     ADD COLUMN source_version_id uuid REFERENCES source_version (id),
     ADD COLUMN proposal_id uuid REFERENCES proposal (id),
     ADD COLUMN current_stage text NOT NULL DEFAULT 'queued'
-        CHECK (current_stage IN ('queued','fetch','parse','extract','match','compose','review','complete')),
+        CHECK (current_stage IN ('queued','fetch','parse','extract','plan','match','compose','review','complete')),
     ADD COLUMN progress integer NOT NULL DEFAULT 0 CHECK (progress BETWEEN 0 AND 100),
     ADD COLUMN updated_at timestamptz NOT NULL DEFAULT now();
-
-CREATE UNIQUE INDEX import_job_succeeded_version_key
-    ON import_job (job_type, source_version_id)
-    WHERE status = 'succeeded' AND source_version_id IS NOT NULL;
 
 CREATE TABLE import_run (
     id              uuid        PRIMARY KEY,
@@ -1201,7 +1197,7 @@ CREATE TABLE import_stage_run (
     id          uuid        PRIMARY KEY,
     import_run_id uuid      NOT NULL REFERENCES import_run (id),
     stage       text        NOT NULL
-                            CHECK (stage IN ('fetch','parse','extract','match','compose','review')),
+                            CHECK (stage IN ('fetch','parse','extract','plan','match','compose','review')),
     status      text        NOT NULL DEFAULT 'running'
                             CHECK (status IN ('running','succeeded','failed','skipped','cancelled')),
     input_hash  text,
@@ -1269,6 +1265,26 @@ CREATE TABLE import_extraction (
 
 CREATE TRIGGER import_extraction_immutable
     BEFORE UPDATE OR DELETE ON import_extraction
+    FOR EACH ROW EXECUTE FUNCTION reject_immutable_mutation();
+
+CREATE TABLE import_plan (
+    id                  uuid        PRIMARY KEY,
+    import_job_id       uuid        NOT NULL REFERENCES import_job (id),
+    source_version_id   uuid        NOT NULL REFERENCES source_version (id),
+    input_hash          text        NOT NULL CHECK (input_hash ~ '^[0-9a-f]{64}$'),
+    schema_version      integer     NOT NULL DEFAULT 1 CHECK (schema_version = 1),
+    prompt_key          text        NOT NULL,
+    prompt_version      integer     NOT NULL,
+    model               text        NOT NULL,
+    plan_json           jsonb       NOT NULL,
+    quality_score       double precision NOT NULL CHECK (quality_score BETWEEN 0 AND 1),
+    created_at          timestamptz NOT NULL DEFAULT now(),
+    UNIQUE (import_job_id, input_hash, schema_version),
+    CONSTRAINT import_plan_document_object CHECK (jsonb_typeof(plan_json) = 'object')
+);
+
+CREATE TRIGGER import_plan_immutable
+    BEFORE UPDATE OR DELETE ON import_plan
     FOR EACH ROW EXECUTE FUNCTION reject_immutable_mutation();
 
 COMMIT;
