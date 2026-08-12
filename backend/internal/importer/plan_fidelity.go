@@ -23,7 +23,7 @@ import (
 
 const (
 	ImportPlanFidelitySchemaURL = "https://anby.wiki/schemas/import-plan-fidelity/v1/audit.schema.json"
-	ImportPlanFidelityPromptKey = "source-import-plan-fidelity-v2"
+	ImportPlanFidelityPromptKey = "source-import-plan-fidelity-v3"
 
 	planFidelityValidationAttempts = 3
 )
@@ -182,6 +182,7 @@ func (p *PagePlanner) auditPlanFidelityBatch(ctx context.Context, params PlanPar
 	}
 	validationFeedback := "No prior validation failure."
 	var lastValidationErr error
+	var lastOutput json.RawMessage
 	for attempt := 0; attempt < planFidelityValidationAttempts; attempt++ {
 		if err := ctx.Err(); err != nil {
 			return nil, err
@@ -201,6 +202,7 @@ func (p *PagePlanner) auditPlanFidelityBatch(ctx context.Context, params PlanPar
 			ImportJobID: params.ImportJobID, ImportRunID: params.ImportRunID,
 		})
 		if err == nil {
+			lastOutput = append(lastOutput[:0], result.JSON...)
 			var audit *PlanFidelityAudit
 			audit, err = ValidatePlanFidelityAudit(result.JSON, params.SourceVersionID, chunks, plan)
 			if err == nil {
@@ -212,6 +214,18 @@ func (p *PagePlanner) auditPlanFidelityBatch(ctx context.Context, params PlanPar
 		}
 		lastValidationErr = err
 		validationFeedback = planFidelityValidationFeedback(err)
+	}
+	// Fidelity is a repair/quality pass over a plan whose existing blocks have
+	// already passed strict evidence validation. After three failed correction
+	// attempts, isolate only unverifiable repair blocks and revoke their claimed
+	// coverage improvement. Never let an ungrounded repair into the plan, but do
+	// not discard the independently grounded draft because one optional patch is
+	// bad. The normal quality gate still rejects genuinely low coverage.
+	if len(lastOutput) > 0 {
+		audit, rejected, err := salvagePlanFidelityAudit(lastOutput, params.SourceVersionID, chunks, plan)
+		if err == nil && rejected > 0 {
+			return audit, nil
+		}
 	}
 	return nil, lastValidationErr
 }
@@ -226,47 +240,86 @@ func isPlanFidelityValidationError(err error) bool {
 
 func planFidelityValidationFeedback(err error) string {
 	if errors.Is(err, ErrEvidenceRequired) {
-		return "The previous response cited unverifiable evidence. Copy an exact contiguous quotation, its chunk_id, and Unicode character offsets from the supplied source window."
+		return "The previous response cited unverifiable evidence. The requested article language applies only to missing_blocks.text, never to evidence.quotation. Keep each quotation in the source language and copy it verbatim, including punctuation, line breaks, and indentation, with its exact chunk_id and Unicode offsets."
 	}
 	return "The previous response failed server validation. Echo source_version_id exactly, use only authoritative create/update route_index values, keep coverage_after greater than or equal to coverage_before, and satisfy the JSON schema exactly."
 }
 
 func ValidatePlanFidelityAudit(raw []byte, sourceVersionID uuid.UUID, chunks []evidence.SourceChunk,
 	plan *ImportPlan) (*PlanFidelityAudit, error) {
+	audit, _, err := validatePlanFidelityAudit(raw, sourceVersionID, chunks, plan, false)
+	return audit, err
+}
+
+// salvagePlanFidelityAudit is intentionally available only after strict
+// validation and all correction attempts fail. It may remove invalid repair
+// blocks, but it can never manufacture or broaden evidence.
+func salvagePlanFidelityAudit(raw []byte, sourceVersionID uuid.UUID, chunks []evidence.SourceChunk,
+	plan *ImportPlan) (*PlanFidelityAudit, int, error) {
+	return validatePlanFidelityAudit(raw, sourceVersionID, chunks, plan, true)
+}
+
+func validatePlanFidelityAudit(raw []byte, sourceVersionID uuid.UUID, chunks []evidence.SourceChunk,
+	plan *ImportPlan, discardInvalidRepairs bool) (*PlanFidelityAudit, int, error) {
 	instance, err := jsonschema.UnmarshalJSON(bytes.NewReader(raw))
 	if err != nil || compiledImportPlanFidelitySchema.Validate(instance) != nil {
-		return nil, fmt.Errorf("%w: import plan fidelity schema", ai.ErrInvalidOutput)
+		return nil, 0, fmt.Errorf("%w: import plan fidelity schema", ai.ErrInvalidOutput)
 	}
 	var audit PlanFidelityAudit
 	if err := json.Unmarshal(raw, &audit); err != nil {
-		return nil, fmt.Errorf("%w: import plan fidelity document", ai.ErrInvalidOutput)
+		return nil, 0, fmt.Errorf("%w: import plan fidelity document", ai.ErrInvalidOutput)
 	}
 	if plan == nil || audit.SourceVersionID != sourceVersionID || audit.CoverageAfter < audit.CoverageBefore {
-		return nil, fmt.Errorf("%w: import plan fidelity metadata", ai.ErrInvalidOutput)
+		return nil, 0, fmt.Errorf("%w: import plan fidelity metadata", ai.ErrInvalidOutput)
 	}
 	catalog := newEvidenceCatalog(sourceVersionID, chunks)
+	originalBlockCount := len(audit.MissingBlocks)
+	retained := make([]PlanFidelityMissingBlock, 0, originalBlockCount)
+	rejected := 0
 	for index := range audit.MissingBlocks {
-		block := &audit.MissingBlocks[index]
+		block := audit.MissingBlocks[index]
 		block.Text = strings.TrimSpace(block.Text)
 		block.AfterHeading = strings.TrimSpace(block.AfterHeading)
 		if block.RouteIndex < 0 || block.RouteIndex >= len(plan.Routes) || block.Text == "" {
-			return nil, fmt.Errorf("%w: import plan fidelity route", ai.ErrInvalidOutput)
+			if discardInvalidRepairs {
+				rejected++
+				continue
+			}
+			return nil, 0, fmt.Errorf("%w: import plan fidelity route", ai.ErrInvalidOutput)
 		}
 		route := plan.Routes[block.RouteIndex]
 		if route.Action != RouteCreate && route.Action != RouteUpdate {
-			return nil, fmt.Errorf("%w: import plan fidelity action", ai.ErrInvalidOutput)
+			if discardInvalidRepairs {
+				rejected++
+				continue
+			}
+			return nil, 0, fmt.Errorf("%w: import plan fidelity action", ai.ErrInvalidOutput)
 		}
 		block.Evidence = catalog.normalize(block.Evidence)
 		if len(block.Evidence) == 0 {
-			return nil, ErrEvidenceRequired
+			if discardInvalidRepairs {
+				rejected++
+				continue
+			}
+			return nil, 0, ErrEvidenceRequired
 		}
 		if block.AfterHeading != "" && !routeHasHeading(route, block.AfterHeading) {
 			// A valid fact is more important than a guessed section label. Append
 			// it to the route instead of allowing the model to invent structure.
 			block.AfterHeading = ""
 		}
+		retained = append(retained, block)
 	}
-	return &audit, nil
+	audit.MissingBlocks = retained
+	if rejected > 0 && originalBlockCount > 0 {
+		// Only verified repairs may earn coverage improvement. Rejected repairs
+		// contribute zero; accepted repairs receive their proportional share.
+		improvement := max(0.0, audit.CoverageAfter-audit.CoverageBefore)
+		retainedFraction := float64(len(retained)) / float64(originalBlockCount)
+		audit.CoverageAfter = audit.CoverageBefore + improvement*retainedFraction
+		audit.Complete = false
+	}
+	return &audit, rejected, nil
 }
 
 func planFidelityDraftView(plan *ImportPlan) []planFidelityRouteView {

@@ -31,6 +31,12 @@ type retryingFidelityGenerator struct {
 	feedback   []string
 }
 
+type unverifiableFidelityGenerator struct {
+	mu       sync.Mutex
+	calls    int
+	feedback []string
+}
+
 type retryingPlanGenerator struct {
 	mu         sync.Mutex
 	calls      int
@@ -89,6 +95,36 @@ func (g *retryingFidelityGenerator) Generate(_ context.Context, request ai.Reque
 	}
 	if g.validAfter > 0 && g.calls >= g.validAfter {
 		audit.CoverageAfter = audit.CoverageBefore
+	}
+	raw, err := json.Marshal(audit)
+	if err != nil {
+		return nil, err
+	}
+	return &ai.Result{JSON: raw, PromptKey: request.PromptKey, PromptVersion: 1, Model: "test"}, nil
+}
+
+func (g *unverifiableFidelityGenerator) Generate(_ context.Context, request ai.Request) (*ai.Result, error) {
+	g.mu.Lock()
+	defer g.mu.Unlock()
+	g.calls++
+	g.feedback = append(g.feedback, request.Variables["validation_feedback"].(string))
+
+	var chunks []struct {
+		ChunkID uuid.UUID `json:"chunk_id"`
+	}
+	if err := json.Unmarshal([]byte(request.Variables["chunks_json"].(string)), &chunks); err != nil {
+		return nil, err
+	}
+	sourceVersionID := uuid.MustParse(request.Variables["source_version_id"].(string))
+	audit := PlanFidelityAudit{
+		SchemaVersion: 1, SourceVersionID: sourceVersionID, Complete: false,
+		CoverageBefore: 0.82, CoverageAfter: 0.95,
+		MissingBlocks: []PlanFidelityMissingBlock{{
+			RouteIndex: 0, Text: "客户端必须在使用断言前进行验证。",
+			Evidence: []CandidateEvidence{{
+				ChunkID: chunks[0].ChunkID, Quotation: "客户端必须验证断言。", CharStart: 0, CharEnd: 10,
+			}},
+		}},
 	}
 	raw, err := json.Marshal(audit)
 	if err != nil {
@@ -329,6 +365,80 @@ func TestValidatePlanFidelityAuditRepairsExactEvidenceAndRejectsInventedRoute(t 
 	}
 }
 
+func TestSalvagePlanFidelityAuditDropsUnverifiableRepairAndRevokesCoverage(t *testing.T) {
+	sourceVersionID, chunkID := uuid.New(), uuid.New()
+	chunks := []evidence.SourceChunk{{
+		ID: chunkID, SourceVersionID: sourceVersionID,
+		TextContent: "Clients MUST validate the assertion before use.", LocatorJSON: json.RawMessage(`{}`),
+	}}
+	plan := &ImportPlan{Routes: []PageRoute{{Action: RouteCreate, Title: "Subject"}}}
+	audit := PlanFidelityAudit{
+		SchemaVersion: 1, SourceVersionID: sourceVersionID, Complete: false,
+		CoverageBefore: 0.82, CoverageAfter: 0.95,
+		MissingBlocks: []PlanFidelityMissingBlock{{
+			RouteIndex: 0, Text: "客户端必须在使用断言前进行验证。",
+			Evidence: []CandidateEvidence{{
+				ChunkID: chunkID, Quotation: "客户端必须验证断言。", CharStart: 0, CharEnd: 10,
+			}},
+		}},
+	}
+	raw, err := json.Marshal(audit)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := ValidatePlanFidelityAudit(raw, sourceVersionID, chunks, plan); !errors.Is(err, ErrEvidenceRequired) {
+		t.Fatalf("strict validation error=%v, want ErrEvidenceRequired", err)
+	}
+
+	salvaged, rejected, err := salvagePlanFidelityAudit(raw, sourceVersionID, chunks, plan)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if rejected != 1 || len(salvaged.MissingBlocks) != 0 {
+		t.Fatalf("rejected=%d missing_blocks=%#v, want 1/empty", rejected, salvaged.MissingBlocks)
+	}
+	if salvaged.CoverageAfter != salvaged.CoverageBefore || salvaged.Complete {
+		t.Fatalf("unexpected salvaged coverage: %#v", salvaged)
+	}
+}
+
+func TestSalvagePlanFidelityAuditKeepsOnlyVerifiedRepairCoverage(t *testing.T) {
+	sourceVersionID, chunkID := uuid.New(), uuid.New()
+	quotation := "Clients MUST validate the assertion before use."
+	chunks := []evidence.SourceChunk{{
+		ID: chunkID, SourceVersionID: sourceVersionID, TextContent: quotation, LocatorJSON: json.RawMessage(`{}`),
+	}}
+	plan := &ImportPlan{Routes: []PageRoute{{Action: RouteCreate, Title: "Subject"}}}
+	audit := PlanFidelityAudit{
+		SchemaVersion: 1, SourceVersionID: sourceVersionID, Complete: false,
+		CoverageBefore: 0.6, CoverageAfter: 0.9,
+		MissingBlocks: []PlanFidelityMissingBlock{
+			{RouteIndex: 0, Text: "客户端必须在使用前验证断言。", Evidence: []CandidateEvidence{{
+				ChunkID: chunkID, Quotation: quotation, CharStart: 0, CharEnd: len([]rune(quotation)),
+			}}},
+			{RouteIndex: 0, Text: "未经来源支持的补充。", Evidence: []CandidateEvidence{{
+				ChunkID: chunkID, Quotation: "invented quotation", CharStart: 0, CharEnd: 18,
+			}}},
+		},
+	}
+	raw, err := json.Marshal(audit)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	salvaged, rejected, err := salvagePlanFidelityAudit(raw, sourceVersionID, chunks, plan)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if rejected != 1 || len(salvaged.MissingBlocks) != 1 ||
+		salvaged.MissingBlocks[0].Evidence[0].Quotation != quotation {
+		t.Fatalf("unexpected retained repairs: rejected=%d audit=%#v", rejected, salvaged)
+	}
+	if delta := salvaged.CoverageAfter - 0.75; delta < -1e-9 || delta > 1e-9 {
+		t.Fatalf("coverage_after=%f, want proportional 0.75", salvaged.CoverageAfter)
+	}
+}
+
 func TestAuditPlanFidelityBatchRetriesSemanticValidationWithFeedback(t *testing.T) {
 	sourceVersionID := uuid.New()
 	chunks := []evidence.SourceChunk{{
@@ -382,6 +492,38 @@ func TestAuditPlanFidelityBatchStopsAfterValidationAttemptLimit(t *testing.T) {
 	generator.mu.Unlock()
 	if calls != planFidelityValidationAttempts {
 		t.Fatalf("calls=%d, want %d", calls, planFidelityValidationAttempts)
+	}
+}
+
+func TestAuditPlanFidelityBatchIsolatesBadRepairAfterRetryLimit(t *testing.T) {
+	sourceVersionID := uuid.New()
+	chunks := []evidence.SourceChunk{{
+		ID: uuid.New(), SourceVersionID: sourceVersionID,
+		TextContent: "Clients MUST validate the assertion before use.", LocatorJSON: json.RawMessage(`{}`),
+	}}
+	generator := &unverifiableFidelityGenerator{}
+	planner := &PagePlanner{ai: generator}
+	plan := &ImportPlan{Routes: []PageRoute{{Action: RouteCreate, Title: "Subject"}}}
+
+	audit, err := planner.auditPlanFidelityBatch(context.Background(), PlanParams{
+		SourceVersionID: sourceVersionID, Provider: "test", Model: "test",
+	}, json.RawMessage(`[]`), plan, chunks)
+	if err != nil {
+		t.Fatal(err)
+	}
+	generator.mu.Lock()
+	calls := generator.calls
+	feedback := append([]string(nil), generator.feedback...)
+	generator.mu.Unlock()
+	if calls != planFidelityValidationAttempts {
+		t.Fatalf("calls=%d, want %d", calls, planFidelityValidationAttempts)
+	}
+	if audit == nil || len(audit.MissingBlocks) != 0 || audit.CoverageAfter != audit.CoverageBefore {
+		t.Fatalf("unexpected isolated audit: %#v", audit)
+	}
+	if len(feedback) != planFidelityValidationAttempts ||
+		!strings.Contains(feedback[1], "never to evidence.quotation") {
+		t.Fatalf("unexpected evidence correction feedback: %#v", feedback)
 	}
 }
 

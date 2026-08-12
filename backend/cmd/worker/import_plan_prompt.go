@@ -96,6 +96,7 @@ Audit rules:
 - route_index must be an existing create/update route_index from draft_plan_json. Never create a route or redirect a fact to a merely incidental subject.
 - after_heading is an exact existing heading text when one is clearly appropriate, otherwise an empty string.
 - Every missing block requires one or more evidence objects copied from this source window. quotation must be a short exact contiguous substring, and chunk_id plus Unicode char offsets must identify it exactly.
+- A requested output language applies only to missing_blocks.text. Never translate evidence.quotation: keep it in the source language and preserve its exact punctuation, line breaks, and indentation.
 - Do not duplicate facts already present in the draft or in another missing block.
 - coverage_after estimates coverage after all returned missing_blocks are inserted. Set complete=true and missing_blocks=[] only when no material omission remains; complete=false requires at least one repair.`
 

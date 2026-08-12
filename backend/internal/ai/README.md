@@ -16,10 +16,12 @@ Gateway 使用同一份权威 JSON Schema 严格校验；JSON Object 抽取固�
 Worker 首次启用来源导入时，幂等登记当前 `source-extraction-v5` Prompt；该版本明确区分
 临时候选 UUID 与持久化 Entity ID，并提供运行时支持的 Entity type / Claim property
 词表与关系方向约束。页面规划使用 `source-import-plan-v4`，多窗口结果另经
-`source-import-plan-consolidate-v2` 收敛，并由 `source-import-plan-fidelity-v2` 对照原始
+`source-import-plan-consolidate-v2` 收敛，并由 `source-import-plan-fidelity-v3` 对照原始
 Chunk 做证据化遗漏审计和章节级修复。规划与收敛输出复用 ImportPlan v1 权威 Schema，
 保真审计使用独立的只允许既有 route_index 和精确 evidence 的内部 Schema；最终质量分由
-服务端计算而非采信模型自评分。Extraction 输出 Schema 继续直接复用 `importer` 内嵌的权威副本。Prompt key
+服务端计算而非采信模型自评分。保真 v3 明确禁止翻译 evidence 引文，并在三次语义纠正耗尽后
+隔离无法核验的可选修复、同步撤销对应覆盖率增益。Extraction 输出 Schema 继续直接复用
+`importer` 内嵌的权威副本。Prompt key
 升级使用新 key，避免覆盖或静默改写运维已激活的旧 Prompt。
 
 Semantic Kernel 边界在 `json_object` 模式下会把权威 JSON Schema 一并放入系统消息，
