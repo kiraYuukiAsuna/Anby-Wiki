@@ -166,6 +166,8 @@ export * from './OperationSupersedeClaim';
 export * from './OperationTarget';
 export * from './OutlineItem';
 export * from './Page';
+export * from './PageCatalogItem';
+export * from './PageCatalogPage';
 export * from './PageCollection';
 export * from './PageCollectionList';
 export * from './PageContent';

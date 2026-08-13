@@ -26,6 +26,7 @@ All URIs are relative to *http://localhost:3000*
 | [**listBulkReviewBatches**](GovernanceApi.md#listbulkreviewbatches) | **GET** /api/v1/bulk-review-batches | 查询当前 Wiki 的批量审核批次 |
 | [**listChangeTags**](GovernanceApi.md#listchangetags) | **GET** /api/v1/change-tags | 列出不可变变更标签词表 |
 | [**listPageProtections**](GovernanceApi.md#listpageprotections) | **GET** /api/v1/page-protections | 列出当前 Wiki 的 PageProtection |
+| [**listPendingApplyProposals**](GovernanceApi.md#listpendingapplyproposals) | **GET** /api/v1/apply-queue | 列出当前 Wiki 已批准、待原子应用的 Proposal |
 | [**listProposals**](GovernanceApi.md#listproposals) | **GET** /api/v1/proposals | 列出当前 Actor 创建的 Proposal |
 | [**listReviewTasks**](GovernanceApi.md#listreviewtasks) | **GET** /api/v1/review-tasks | 人工审核队列 |
 | [**listRoles**](GovernanceApi.md#listroles) | **GET** /api/v1/roles | 列出 PageProtection 可用角色 |
@@ -1647,6 +1648,84 @@ example().catch(console.error);
 | **400** | 请求格式错误 |  -  |
 | **401** | 未认证 |  -  |
 | **403** | 已认证但无权限 |  -  |
+
+[[Back to top]](#) [[Back to API list]](../README.md#api-endpoints) [[Back to Model list]](../README.md#models) [[Back to README]](../README.md)
+
+
+## listPendingApplyProposals
+
+> ProposalListPage listPendingApplyProposals(cursor, pageSize)
+
+列出当前 Wiki 已批准、待原子应用的 Proposal
+
+面向 applier/admin 的治理工作队列。返回当前 Wiki 中所有 Actor 创建且状态为 approved 的 Proposal，不局限于当前账号；只提供发现能力，正式写入仍必须调用 Proposal Apply 领域事务。
+
+### Example
+
+```ts
+import {
+  Configuration,
+  GovernanceApi,
+} from '';
+import type { ListPendingApplyProposalsRequest } from '';
+
+async function example() {
+  console.log("🚀 Testing  SDK...");
+  const config = new Configuration({
+    // To configure API key authorization: sessionCookie
+    apiKey: "YOUR API KEY",
+  });
+  const api = new GovernanceApi(config);
+
+  const body = {
+    // string | 上一页响应返回的 next_cursor；首页不传 (optional)
+    cursor: cursor_example,
+    // number | 每页条数，默认 20，最大 100 (optional)
+    pageSize: 56,
+  } satisfies ListPendingApplyProposalsRequest;
+
+  try {
+    const data = await api.listPendingApplyProposals(body);
+    console.log(data);
+  } catch (error) {
+    console.error(error);
+  }
+}
+
+// Run the test
+example().catch(console.error);
+```
+
+### Parameters
+
+
+| Name | Type | Description  | Notes |
+|------------- | ------------- | ------------- | -------------|
+| **cursor** | `string` | 上一页响应返回的 next_cursor；首页不传 | [Optional] [Defaults to `undefined`] |
+| **pageSize** | `number` | 每页条数，默认 20，最大 100 | [Optional] [Defaults to `20`] |
+
+### Return type
+
+[**ProposalListPage**](ProposalListPage.md)
+
+### Authorization
+
+[sessionCookie](../README.md#sessionCookie)
+
+### HTTP request headers
+
+- **Content-Type**: Not defined
+- **Accept**: `application/json`
+
+
+### HTTP response details
+| Status code | Description | Response headers |
+|-------------|-------------|------------------|
+| **200** | 待原子应用 Proposal 游标分页结果 |  -  |
+| **400** | 请求格式错误 |  -  |
+| **401** | 未认证 |  -  |
+| **403** | 已认证但无权限 |  -  |
+| **500** | 服务端内部错误 |  -  |
 
 [[Back to top]](#) [[Back to API list]](../README.md#api-endpoints) [[Back to Model list]](../README.md#models) [[Back to README]](../README.md)
 

@@ -2,6 +2,7 @@ import Link from "next/link";
 import {
   Archive,
   ArrowRight,
+  BadgeCheck,
   Bot,
   BrainCircuit,
   FileCheck2,
@@ -52,6 +53,12 @@ export default function GovernancePage() {
               <Link href="/governance/review">
                 打开审核队列
                 <ArrowRight aria-hidden />
+              </Link>
+            </Button>
+            <Button asChild variant="outline">
+              <Link href="/governance/apply">
+                <BadgeCheck aria-hidden />
+                待原子应用
               </Link>
             </Button>
             <Button asChild variant="outline">
@@ -119,6 +126,16 @@ export default function GovernancePage() {
               </li>
             </ol>
           </div>
+          <Link
+            href="/governance/apply"
+            className="group flex items-center justify-between rounded-2xl border border-emerald-500/20 bg-emerald-500/5 p-4 text-sm font-medium transition hover:border-emerald-500/35 hover:bg-emerald-500/10"
+          >
+            <span className="flex items-center gap-2">
+              <BadgeCheck className="size-4 text-emerald-700" aria-hidden />
+              待原子应用
+            </span>
+            <ArrowRight className="size-4 transition-transform group-hover:translate-x-0.5" aria-hidden />
+          </Link>
           <Link
             href="/imports"
             className="group flex items-center justify-between rounded-2xl border border-border/75 bg-muted/35 p-4 text-sm font-medium transition hover:border-primary/20 hover:bg-primary/5"

@@ -3,6 +3,7 @@
 import Link from "next/link";
 import {
   Archive,
+  BadgeCheck,
   BookOpenText,
   Bot,
   BrainCircuit,
@@ -33,6 +34,7 @@ const GROUPS = [
     label: "知识",
     items: [
       { href: "/", label: "首页", icon: House, exact: true },
+      { href: "/pages", label: "全部百科页面", icon: BookOpenText, exact: true },
       { href: "/explore", label: "探索与搜索", icon: Compass },
       { href: "/collections", label: "专题合集", icon: Layers3 },
       { href: "/datasets", label: "可查询数据", icon: DatabaseZap },
@@ -63,6 +65,11 @@ const GROUPS = [
         href: "/governance/review",
         label: "审核队列",
         icon: ShieldCheck,
+      },
+      {
+        href: "/governance/apply",
+        label: "待原子应用",
+        icon: BadgeCheck,
       },
       {
         href: "/governance/bulk",

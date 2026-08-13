@@ -78,7 +78,7 @@ func (r *Repository) GetProposalByIdempotency(ctx context.Context, tx pgx.Tx, ac
 }
 
 type proposalListCursor struct {
-	CreatedAt time.Time `json:"t"`
+	Timestamp time.Time `json:"t"`
 	ID        uuid.UUID `json:"i"`
 }
 
@@ -106,10 +106,10 @@ func (r *Repository) ListOwnedProposals(
 	afterID := uuid.Nil
 	if cursor != "" {
 		after, err := decodeProposalCursor(cursor)
-		if err != nil || after.CreatedAt.IsZero() || after.ID == uuid.Nil {
+		if err != nil || after.Timestamp.IsZero() || after.ID == uuid.Nil {
 			return nil, ErrInvalidProposalCursor
 		}
-		afterTime = &after.CreatedAt
+		afterTime = &after.Timestamp
 		afterID = after.ID
 	}
 	rows, err := r.pool.Query(ctx, `SELECT `+proposalColumns+` FROM proposal
@@ -136,7 +136,73 @@ func (r *Repository) ListOwnedProposals(
 	}
 	if len(result.Items) > limit {
 		last := result.Items[limit-1]
-		next := encodeProposalCursor(proposalListCursor{CreatedAt: last.CreatedAt, ID: last.ID})
+		next := encodeProposalCursor(proposalListCursor{Timestamp: last.CreatedAt, ID: last.ID})
+		result.NextCursor = &next
+		result.Items = result.Items[:limit]
+	}
+	return result, nil
+}
+
+func (r *Repository) ListPendingApplyProposals(
+	ctx context.Context, wikiID uuid.UUID, cursor string, limit int,
+) (*ProposalPage, error) {
+	var afterTime *time.Time
+	afterID := uuid.Nil
+	if cursor != "" {
+		after, err := decodeProposalCursor(cursor)
+		if err != nil || after.Timestamp.IsZero() || after.ID == uuid.Nil {
+			return nil, ErrInvalidProposalCursor
+		}
+		afterTime = &after.Timestamp
+		afterID = after.ID
+	}
+	rows, err := r.pool.Query(ctx, `SELECT `+proposalColumns+` FROM proposal
+		WHERE proposal.status='approved'
+		  AND ($2::timestamptz IS NULL OR (proposal.updated_at,proposal.id)<($2,$3))
+		  AND (
+			(proposal.target_type='wiki' AND proposal.target_id=$1)
+			OR (proposal.target_type='page' AND EXISTS (
+				SELECT 1 FROM page p WHERE p.id=proposal.target_id AND p.wiki_id=$1
+			))
+			OR (proposal.target_type='entity' AND EXISTS (
+				SELECT 1 FROM entity e WHERE e.id=proposal.target_id AND e.wiki_id=$1
+			))
+			OR (proposal.target_type='claim' AND EXISTS (
+				SELECT 1 FROM claim c JOIN entity e ON e.id=c.subject_entity_id
+				WHERE c.id=proposal.target_id AND e.wiki_id=$1
+			))
+			OR (proposal.target_type='collection' AND EXISTS (
+				SELECT 1 FROM collection c WHERE c.id=proposal.target_id AND c.wiki_id=$1
+			))
+			OR (proposal.target_type='external_resource' AND EXISTS (
+				SELECT 1 FROM proposal_operation po WHERE po.proposal_id=proposal.id
+				  AND po.target_json->>'wiki_id'=$1::text
+			))
+			OR (proposal.target_id IS NULL AND EXISTS (
+				SELECT 1 FROM proposal_operation po WHERE po.proposal_id=proposal.id
+				  AND po.target_json->>'wiki_id'=$1::text
+			))
+		  )
+		ORDER BY proposal.updated_at DESC,proposal.id DESC
+		LIMIT $4`, wikiID, afterTime, afterID, limit+1)
+	if err != nil {
+		return nil, fmt.Errorf("governance: 列出待应用 Proposal 失败: %w", err)
+	}
+	defer rows.Close()
+	result := &ProposalPage{Items: make([]Proposal, 0, limit)}
+	for rows.Next() {
+		proposal, err := scanProposal(rows)
+		if err != nil {
+			return nil, fmt.Errorf("governance: 扫描待应用 Proposal 失败: %w", err)
+		}
+		result.Items = append(result.Items, *proposal)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	if len(result.Items) > limit {
+		last := result.Items[limit-1]
+		next := encodeProposalCursor(proposalListCursor{Timestamp: last.UpdatedAt, ID: last.ID})
 		result.NextCursor = &next
 		result.Items = result.Items[:limit]
 	}

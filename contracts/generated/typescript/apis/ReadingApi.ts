@@ -14,6 +14,11 @@
 
 import * as runtime from '../runtime';
 import {
+    type PageCatalogPage,
+    PageCatalogPageFromJSON,
+    PageCatalogPageToJSON,
+} from '../models/PageCatalogPage';
+import {
     type PageWithContent,
     PageWithContentFromJSON,
     PageWithContentToJSON,
@@ -28,6 +33,12 @@ export interface GetPageByTitleRequest {
     namespace: string;
     title: string;
     contentMode?: GetPageByTitleContentModeEnum;
+}
+
+export interface ListPublishedPagesRequest {
+    cursor?: string;
+    pageSize?: number;
+    sort?: ListPublishedPagesSortEnum;
 }
 
 /**
@@ -151,6 +162,57 @@ export class ReadingApi extends runtime.BaseAPI {
         return await response.value();
     }
 
+    /**
+     * Creates request options for listPublishedPages without sending the request
+     */
+    async listPublishedPagesRequestOpts(requestParameters: ListPublishedPagesRequest): Promise<runtime.RequestOpts> {
+        const queryParameters: any = {};
+
+        if (requestParameters['cursor'] != null) {
+            queryParameters['cursor'] = requestParameters['cursor'];
+        }
+
+        if (requestParameters['pageSize'] != null) {
+            queryParameters['page_size'] = requestParameters['pageSize'];
+        }
+
+        if (requestParameters['sort'] != null) {
+            queryParameters['sort'] = requestParameters['sort'];
+        }
+
+        const headerParameters: runtime.HTTPHeaders = {};
+
+
+        let urlPath = `/api/v1/pages`;
+
+        return {
+            path: urlPath,
+            method: 'GET',
+            headers: headerParameters,
+            query: queryParameters,
+        };
+    }
+
+    /**
+     * 匿名可读。只返回未删除、属于内容命名空间且已有 Current Revision 的页面； recent 按最近更新倒序，title 按规范化标题升序，均使用稳定游标分页。
+     * 浏览已发布百科页面目录
+     */
+    async listPublishedPagesRaw(requestParameters: ListPublishedPagesRequest, initOverrides?: RequestInit | runtime.InitOverrideFunction): Promise<runtime.ApiResponse<PageCatalogPage>> {
+        const requestOptions = await this.listPublishedPagesRequestOpts(requestParameters);
+        const response = await this.request(requestOptions, initOverrides);
+
+        return new runtime.JSONApiResponse(response, (jsonValue) => PageCatalogPageFromJSON(jsonValue));
+    }
+
+    /**
+     * 匿名可读。只返回未删除、属于内容命名空间且已有 Current Revision 的页面； recent 按最近更新倒序，title 按规范化标题升序，均使用稳定游标分页。
+     * 浏览已发布百科页面目录
+     */
+    async listPublishedPages(requestParameters: ListPublishedPagesRequest = {}, initOverrides?: RequestInit | runtime.InitOverrideFunction): Promise<PageCatalogPage> {
+        const response = await this.listPublishedPagesRaw(requestParameters, initOverrides);
+        return await response.value();
+    }
+
 }
 
 /**
@@ -171,3 +233,11 @@ export const GetPageByTitleContentModeEnum = {
     Sections: 'sections'
 } as const;
 export type GetPageByTitleContentModeEnum = typeof GetPageByTitleContentModeEnum[keyof typeof GetPageByTitleContentModeEnum];
+/**
+ * @export
+ */
+export const ListPublishedPagesSortEnum = {
+    Recent: 'recent',
+    Title: 'title'
+} as const;
+export type ListPublishedPagesSortEnum = typeof ListPublishedPagesSortEnum[keyof typeof ListPublishedPagesSortEnum];

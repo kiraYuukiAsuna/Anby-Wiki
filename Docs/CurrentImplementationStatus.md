@@ -24,7 +24,7 @@ PostgreSQL、Redis、MinIO、Meilisearch、API、Linux Worker 与 Next.js Web �
 | 知识图谱 | Entity/Property/Claim、标签/别名/主标签、Page 主 Entity 绑定、Claim 验证、Entity 合并与回滚、联邦 Wiki/Entity 映射、图谱查询 |
 | 证据与媒体 | Source/Version/Chunk/Citation、Asset/AssetRevision、引用校验、相同证据 Citation 幂等复用、按页面聚合并可展开到 Block/Node 的反向使用、按全文首次出现统一编号的 References 投影、逐处正文回链、可审计来源与媒体目录 |
 | 结构化内容 | Dataset/View/Record、Component/Version、内置 Entity/Claim 信息框（按页面语言→`und`→任意主标签降级、同属性多值聚合、Entity 可跳转、验证摘要与类型感知排序）、静态与动态 Collection、成员维护、页面反向归属查询与投影 |
-| 治理 | ProposalOperation v1 全部 24 种 Operation（含可原子应用和补偿回滚的 Page 主 Entity 绑定）、预分配 Page/Entity ID 的同批依赖、Operation 集合事务冻结、Wiki 级多目标 Proposal、跨页面 Revision/Block 与 Claim 冲突检测、预览、风险、ReviewTask、批量审核、ChangeBatch、整批补偿回滚、审计事件、ChangeTag、AI Trust、事实一致性 |
+| 治理 | ProposalOperation v1 全部 24 种 Operation（含可原子应用和补偿回滚的 Page 主 Entity 绑定）、预分配 Page/Entity ID 的同批依赖、Operation 集合事务冻结、Wiki 级多目标 Proposal、跨页面 Revision/Block 与 Claim 冲突检测、预览、风险、ReviewTask、面向 applier/admin 的跨 Actor 待原子应用队列、批量审核、ChangeBatch、整批补偿回滚、审计事件、ChangeTag、AI Trust、事实一致性 |
 | 导入与 AI | URL/HTML/文本/PDF/PNG/JPEG/JSON/CSV 获取，图片及扫描 PDF 的中英 OCR、来源标题/作者/发布者/日期/DOI 等安全元数据推导、结构化数据规范化、七阶段进度、幂等 Job、解析成功后的不可变恢复点与无重复来源的失败重试、Worker 中断任务自动恢复、管理员可配置模型最大输入 Token、按输入预算与输出安全上限并行分批抽取/规划、截断或结构不合法批次二分重试及跨批去重、单 Chunk 规划的三次语义纠正、全局 ImportPlan 收敛与确定性结构清理、对照原始 Chunk 的生成后保真审计与证据化章节修复、保真分窗的三次语义纠正、并发真因保留及坏修复隔离与覆盖率回退、服务端五维质量评分及默认 0.70 硬门槛、Semantic Kernel 默认三次结构化调用与纠正重试、精确引文的跨 Chunk 安全纠偏、纯空白差异原文回填及坏候选/坏 Claim 隔离、Entity 缩写/别名归并、Claim 方向/类型/非自引用门禁、作品/RFC 的发布组织、文档编号/类别/状态、更新与废止专用属性、仅由页面路由授权图谱写入、来源概况与智能多页面 create/update/link/ignore 路由、强制单页模式与用户导入要求、证据约束 Typed Block 生成/补丁及正文 Entity 引用、确定性 H2 层级与标准 See also、主 Entity 绑定及信息框、显式且有证据的页面关联与反链投影、规划结果可视化、单 ImportJob 页面+Entity+Claim 复合 Proposal 与同一 ChangeBatch 原子应用、可持久查询的导入队列 |
 | 投影与搜索 | Outbox 租约/重试/死信、链接/目录/锚点/章节/渲染/知识使用/References/相关推荐/组件依赖/图谱投影、可解释的链接+Collection+Entity 相关度、PostgreSQL fallback、Meilisearch 关键词/混合/语义检索 |
 | 规模与归档 | 章节懒加载、服务端可信 HTML 渲染、Revision 热冷分层与 S3 回源、Projection/Search 重建、容量基准命令 |
@@ -48,7 +48,7 @@ PostgreSQL、Redis、MinIO、Meilisearch、API、Linux Worker 与 Next.js Web �
 
 ## Web 信息架构
 
-Web 使用桌面优先的现代百科 Shell：固定全局导航、命令面板、搜索、上下文侧栏、
+Web 使用桌面优先的现代百科 Shell：可浏览最近发布条目、专题与实体的百科首页、全部页面目录、固定全局导航、视口内滚动的命令面板、搜索、上下文侧栏、
 目录与站点页脚。正文保留维基式可扫描排版，同时使用 shadcn/Radix、Lucide、
 Sonner、Geist 和响应式卡片提升工具型页面的可读性。
 
@@ -66,7 +66,7 @@ outlines。References/Related 是 Current Revision
 - `/sources`、`/assets`、Asset Revision、`/datasets`、`/components`、
   `/collections`；
 - `/imports` 及每个 Job 的阶段、运行记录和进度详情；
-- `/governance` 下的 Proposal 创建/详情、审核队列、批量审核、审计活动、页面保护、
+- `/governance` 下的 Proposal 创建/详情、审核队列、待原子应用队列、批量审核、审计活动、页面保护、
   AI Trust、事实一致性与 Revision 存储；
 - `/admin/ai` 的加密 Provider 密钥、模型、输出模式、超时、重试和连通性测试；
 - `/explore` 的搜索工作台、反向链接和 `/explore/graph` 图谱工作台。

@@ -284,6 +284,11 @@ export interface ListPageProtectionsRequest {
     includeExpired?: boolean;
 }
 
+export interface ListPendingApplyProposalsRequest {
+    cursor?: string;
+    pageSize?: number;
+}
+
 export interface ListProposalsRequest {
     cursor?: string;
     pageSize?: number;
@@ -1393,6 +1398,53 @@ export class GovernanceApi extends runtime.BaseAPI {
      */
     async listPageProtections(requestParameters: ListPageProtectionsRequest = {}, initOverrides?: RequestInit | runtime.InitOverrideFunction): Promise<PageProtectionList> {
         const response = await this.listPageProtectionsRaw(requestParameters, initOverrides);
+        return await response.value();
+    }
+
+    /**
+     * Creates request options for listPendingApplyProposals without sending the request
+     */
+    async listPendingApplyProposalsRequestOpts(requestParameters: ListPendingApplyProposalsRequest): Promise<runtime.RequestOpts> {
+        const queryParameters: any = {};
+
+        if (requestParameters['cursor'] != null) {
+            queryParameters['cursor'] = requestParameters['cursor'];
+        }
+
+        if (requestParameters['pageSize'] != null) {
+            queryParameters['page_size'] = requestParameters['pageSize'];
+        }
+
+        const headerParameters: runtime.HTTPHeaders = {};
+
+
+        let urlPath = `/api/v1/apply-queue`;
+
+        return {
+            path: urlPath,
+            method: 'GET',
+            headers: headerParameters,
+            query: queryParameters,
+        };
+    }
+
+    /**
+     * 面向 applier/admin 的治理工作队列。返回当前 Wiki 中所有 Actor 创建且状态为 approved 的 Proposal，不局限于当前账号；只提供发现能力，正式写入仍必须调用 Proposal Apply 领域事务。
+     * 列出当前 Wiki 已批准、待原子应用的 Proposal
+     */
+    async listPendingApplyProposalsRaw(requestParameters: ListPendingApplyProposalsRequest, initOverrides?: RequestInit | runtime.InitOverrideFunction): Promise<runtime.ApiResponse<ProposalListPage>> {
+        const requestOptions = await this.listPendingApplyProposalsRequestOpts(requestParameters);
+        const response = await this.request(requestOptions, initOverrides);
+
+        return new runtime.JSONApiResponse(response, (jsonValue) => ProposalListPageFromJSON(jsonValue));
+    }
+
+    /**
+     * 面向 applier/admin 的治理工作队列。返回当前 Wiki 中所有 Actor 创建且状态为 approved 的 Proposal，不局限于当前账号；只提供发现能力，正式写入仍必须调用 Proposal Apply 领域事务。
+     * 列出当前 Wiki 已批准、待原子应用的 Proposal
+     */
+    async listPendingApplyProposals(requestParameters: ListPendingApplyProposalsRequest = {}, initOverrides?: RequestInit | runtime.InitOverrideFunction): Promise<ProposalListPage> {
+        const response = await this.listPendingApplyProposalsRaw(requestParameters, initOverrides);
         return await response.value();
     }
 

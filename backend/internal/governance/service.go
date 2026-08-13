@@ -58,6 +58,24 @@ func (s *Service) ListOwnedProposals(
 	return s.repo.ListOwnedProposals(ctx, actorID, status, targetType, cursor, limit)
 }
 
+// ListPendingApplyProposals returns approved proposals for one Wiki after the
+// caller has passed ActionApply authorization. It is a read-only work queue;
+// applying an item still goes exclusively through ApplyService.Apply.
+func (s *Service) ListPendingApplyProposals(
+	ctx context.Context, wikiID uuid.UUID, cursor string, limit int,
+) (*ProposalPage, error) {
+	if wikiID == uuid.Nil {
+		return nil, ErrInvalidProposal
+	}
+	if limit <= 0 {
+		limit = DefaultProposalPageSize
+	}
+	if limit > MaxProposalPageSize {
+		limit = MaxProposalPageSize
+	}
+	return s.repo.ListPendingApplyProposals(ctx, wikiID, cursor, limit)
+}
+
 func validProposalStatus(status string) bool {
 	switch status {
 	case ProposalDraft, ProposalSubmitted, ProposalInReview, ProposalApproved,

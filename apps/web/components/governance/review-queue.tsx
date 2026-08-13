@@ -3,7 +3,7 @@
 import { useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { LoaderCircle, LockKeyhole, ShieldAlert } from "lucide-react";
+import { ArrowRight, BadgeCheck, LoaderCircle, LockKeyhole, ShieldAlert } from "lucide-react";
 import { toast } from "sonner";
 import useSWR from "swr";
 import useSWRMutation from "swr/mutation";
@@ -58,7 +58,17 @@ export function ReviewQueue() {
     try {
       await trigger({ id, approve, reason });
       await mutate();
-      toast.success(approve ? "提案已批准" : "提案已拒绝");
+      toast.success(
+        approve ? "提案已批准，可前往待应用队列" : "提案已拒绝",
+        approve
+          ? {
+              action: {
+                label: "去应用",
+                onClick: () => router.push("/governance/apply"),
+              },
+            }
+          : undefined,
+      );
     } catch (decisionError) {
       if (isUnauthorized(decisionError)) {
         toast.error("请先登录后再提交审核");
@@ -116,9 +126,19 @@ export function ReviewQueue() {
   }
   if (!data?.items.length) {
     return (
-      <p className="rounded-lg border border-dashed border-border p-8 text-center text-sm text-muted-foreground">
-        当前没有待审核提案。
-      </p>
+      <div className="rounded-2xl border border-dashed border-border p-8 text-center">
+        <BadgeCheck
+          className="mx-auto size-7 text-muted-foreground"
+          aria-hidden
+        />
+        <p className="mt-3 text-sm text-muted-foreground">当前没有待审核提案。</p>
+        <Button asChild variant="outline" size="sm" className="mt-4">
+          <Link href="/governance/apply">
+            查看已批准待应用
+            <ArrowRight aria-hidden />
+          </Link>
+        </Button>
+      </div>
     );
   }
 

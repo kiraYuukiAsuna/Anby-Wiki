@@ -922,6 +922,30 @@ paths:
         "403": { $ref: "#/components/responses/Forbidden" }
         "409": { $ref: "#/components/responses/Conflict" }
         "422": { $ref: "#/components/responses/UnprocessableEntity" }
+  /api/v1/apply-queue:
+    get:
+      operationId: listPendingApplyProposals
+      tags: [governance]
+      summary: 列出当前 Wiki 已批准、待原子应用的 Proposal
+      description: |
+        面向 applier/admin 的治理工作队列。返回当前 Wiki 中所有 Actor 创建且状态为
+        approved 的 Proposal，不局限于当前账号；只提供发现能力，正式写入仍必须调用
+        Proposal Apply 领域事务。
+      security:
+        - sessionCookie: []
+      parameters:
+        - $ref: "#/components/parameters/Cursor"
+        - $ref: "#/components/parameters/PageSize"
+      responses:
+        "200":
+          description: 待原子应用 Proposal 游标分页结果
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/ProposalListPage" }
+        "400": { $ref: "#/components/responses/BadRequest" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "500": { $ref: "#/components/responses/Internal" }
   /api/v1/proposals/{id}:
     get:
       operationId: getProposal
@@ -1850,6 +1874,31 @@ paths:
         "500":
           $ref: "#/components/responses/Internal"
   /api/v1/pages:
+    get:
+      operationId: listPublishedPages
+      summary: 浏览已发布百科页面目录
+      description: |
+        匿名可读。只返回未删除、属于内容命名空间且已有 Current Revision 的页面；
+        recent 按最近更新倒序，title 按规范化标题升序，均使用稳定游标分页。
+      tags: [reading]
+      parameters:
+        - $ref: "#/components/parameters/Cursor"
+        - $ref: "#/components/parameters/PageSize"
+        - name: sort
+          in: query
+          required: false
+          schema:
+            type: string
+            enum: [recent, title]
+            default: recent
+      responses:
+        "200":
+          description: 已发布页面目录
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/PageCatalogPage" }
+        "400": { $ref: "#/components/responses/BadRequest" }
+        "500": { $ref: "#/components/responses/Internal" }
     post:
       operationId: createPage
       summary: 创建页面
@@ -5599,6 +5648,28 @@ components:
         updated_at:
           type: string
           format: date-time
+    PageCatalogItem:
+      allOf:
+        - $ref: "#/components/schemas/Page"
+        - type: object
+          required: [namespace_key]
+          properties:
+            namespace_key:
+              type: string
+              description: 页面所在命名空间的稳定 key
+    PageCatalogPage:
+      type: object
+      required: [items, next_cursor, total]
+      properties:
+        items:
+          type: array
+          items: { $ref: "#/components/schemas/PageCatalogItem" }
+        next_cursor:
+          type: string
+          nullable: true
+        total:
+          type: integer
+          minimum: 0
     Revision:
       type: object
       required:

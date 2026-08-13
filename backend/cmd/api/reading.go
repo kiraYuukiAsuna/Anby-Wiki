@@ -77,7 +77,45 @@ type pageWithContentResponse struct {
 	Redirect   *redirectResponse    `json:"redirect,omitempty"`
 }
 
+type pageCatalogItemResponse struct {
+	pageResponse
+	NamespaceKey string `json:"namespace_key"`
+}
+
+type pageCatalogResponse struct {
+	Items      []pageCatalogItemResponse `json:"items"`
+	NextCursor *string                   `json:"next_cursor"`
+	Total      int                       `json:"total"`
+}
+
 // ---- handlers ----
+
+// listPages GET /api/v1/pages?sort=&cursor=&page_size= exposes the published
+// Page directory used by the Wiki home and all-pages browser.
+func (a *ReadAPI) listPages(w http.ResponseWriter, r *http.Request) {
+	limit, ok := pageSizeFrom(w, r)
+	if !ok {
+		return
+	}
+	result, err := a.pages.ListPublishedPages(
+		r.Context(), a.wikiID, r.URL.Query().Get("sort"),
+		r.URL.Query().Get("cursor"), limit,
+	)
+	if err != nil {
+		serviceError(w, r, err)
+		return
+	}
+	items := make([]pageCatalogItemResponse, len(result.Items))
+	for index := range result.Items {
+		items[index] = pageCatalogItemResponse{
+			pageResponse: toPageResponse(&result.Items[index].Page),
+			NamespaceKey: result.Items[index].NamespaceKey,
+		}
+	}
+	httpx.WriteJSON(w, http.StatusOK, pageCatalogResponse{
+		Items: items, NextCursor: result.NextCursor, Total: result.Total,
+	})
+}
 
 // getPageByTitle GET /api/v1/pages/by-title?namespace=&title=：
 // 规范化标题解析（活页面优先，其次别名）；命中后跟随站内重定向。

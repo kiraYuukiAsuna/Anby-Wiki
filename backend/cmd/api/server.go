@@ -118,6 +118,7 @@ func NewRouter(logger *slog.Logger, deps Deps, writeAPI *WriteAPI, readAPI *Read
 				r.Get("/pages/{id}/collaboration", collaborationAPI.connect)
 			}
 			if readAPI != nil {
+				r.Get("/pages", readAPI.listPages)
 				r.Get("/pages/by-title", readAPI.getPageByTitle)
 				r.Get("/pages/{id}", readAPI.getPageByID)
 			}
@@ -229,6 +230,7 @@ func NewRouter(logger *slog.Logger, deps Deps, writeAPI *WriteAPI, readAPI *Read
 			}
 			if governanceAPI != nil {
 				r.Get("/proposals", governanceAPI.listProposals)
+				r.Get("/apply-queue", governanceAPI.listPendingApplyProposals)
 				r.Post("/proposals", governanceAPI.createProposal)
 				r.Get("/proposals/{id}", governanceAPI.getProposal)
 				r.Post("/proposals/{id}/operations", governanceAPI.addOperation)

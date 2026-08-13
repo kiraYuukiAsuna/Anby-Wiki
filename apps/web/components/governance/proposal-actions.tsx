@@ -143,14 +143,19 @@ export function ProposalActions({ proposal }: { proposal: Proposal }) {
           ) : null}
 
           {proposal.status === "approved" ? (
-            <Button disabled={pending !== null} onClick={() => void apply()}>
-              {pending === "apply" ? (
-                <LoaderCircle aria-hidden className="animate-spin" />
-              ) : (
-                <CheckCircle2 aria-hidden />
-              )}
-              原子应用
-            </Button>
+            <>
+              <Button variant="outline" asChild>
+                <Link href="/governance/apply">打开待应用队列<ArrowRight aria-hidden /></Link>
+              </Button>
+              <Button disabled={pending !== null} onClick={() => void apply()}>
+                {pending === "apply" ? (
+                  <LoaderCircle aria-hidden className="animate-spin" />
+                ) : (
+                  <CheckCircle2 aria-hidden />
+                )}
+                原子应用
+              </Button>
+            </>
           ) : null}
 
           {canRollback ? (

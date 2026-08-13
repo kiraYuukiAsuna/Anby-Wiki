@@ -178,6 +178,41 @@ func (a *GovernanceAPI) listProposals(w http.ResponseWriter, r *http.Request) {
 	})
 }
 
+func (a *GovernanceAPI) listPendingApplyProposals(w http.ResponseWriter, r *http.Request) {
+	actorID, ok := actorIDFrom(w, r)
+	if !ok {
+		return
+	}
+	if a.auth == nil {
+		governanceError(w, r, governance.ErrPermissionDenied)
+		return
+	}
+	if err := a.auth.Check(
+		r.Context(), actorID, a.wikiID, governance.ActionApply, nil,
+	); err != nil {
+		governanceError(w, r, err)
+		return
+	}
+	limit, ok := pageSizeFrom(w, r)
+	if !ok {
+		return
+	}
+	page, err := a.proposals.ListPendingApplyProposals(
+		r.Context(), a.wikiID, r.URL.Query().Get("cursor"), limit,
+	)
+	if err != nil {
+		governanceError(w, r, err)
+		return
+	}
+	items := make([]proposalResponse, len(page.Items))
+	for index := range page.Items {
+		items[index] = toProposalResponse(&page.Items[index], nil, nil)
+	}
+	httpx.WriteJSON(w, http.StatusOK, proposalListPageResponse{
+		Items: items, NextCursor: page.NextCursor,
+	})
+}
+
 func (a *GovernanceAPI) createProposal(w http.ResponseWriter, r *http.Request) {
 	actorID, ok := actorIDFrom(w, r)
 	if !ok {

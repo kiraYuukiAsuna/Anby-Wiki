@@ -192,6 +192,8 @@ docs/OperationSupersedeClaim.md
 docs/OperationTarget.md
 docs/OutlineItem.md
 docs/Page.md
+docs/PageCatalogItem.md
+docs/PageCatalogPage.md
 docs/PageCollection.md
 docs/PageCollectionList.md
 docs/PageContent.md
@@ -451,6 +453,8 @@ models/OperationSupersedeClaim.ts
 models/OperationTarget.ts
 models/OutlineItem.ts
 models/Page.ts
+models/PageCatalogItem.ts
+models/PageCatalogPage.ts
 models/PageCollection.ts
 models/PageCollectionList.ts
 models/PageContent.ts

@@ -6,6 +6,7 @@ All URIs are relative to *http://localhost:3000*
 |------------- | ------------- | -------------|
 | [**getPageByID**](ReadingApi.md#getpagebyid) | **GET** /api/v1/pages/{id} | 按 ID 读取页面当前版本 |
 | [**getPageByTitle**](ReadingApi.md#getpagebytitle) | **GET** /api/v1/pages/by-title | 按标题/别名读取页面当前版本 |
+| [**listPublishedPages**](ReadingApi.md#listpublishedpages) | **GET** /api/v1/pages | 浏览已发布百科页面目录 |
 
 
 
@@ -157,6 +158,81 @@ No authorization required
 | **404** | 资源不存在 |  -  |
 | **410** | 资源曾存在但已删除（如软删除页面、重定向目标已删除） |  -  |
 | **422** | 请求语义可理解但无法处理（如重定向环/重定向链过深） |  -  |
+| **500** | 服务端内部错误 |  -  |
+
+[[Back to top]](#) [[Back to API list]](../README.md#api-endpoints) [[Back to Model list]](../README.md#models) [[Back to README]](../README.md)
+
+
+## listPublishedPages
+
+> PageCatalogPage listPublishedPages(cursor, pageSize, sort)
+
+浏览已发布百科页面目录
+
+匿名可读。只返回未删除、属于内容命名空间且已有 Current Revision 的页面； recent 按最近更新倒序，title 按规范化标题升序，均使用稳定游标分页。
+
+### Example
+
+```ts
+import {
+  Configuration,
+  ReadingApi,
+} from '';
+import type { ListPublishedPagesRequest } from '';
+
+async function example() {
+  console.log("🚀 Testing  SDK...");
+  const api = new ReadingApi();
+
+  const body = {
+    // string | 上一页响应返回的 next_cursor；首页不传 (optional)
+    cursor: cursor_example,
+    // number | 每页条数，默认 20，最大 100 (optional)
+    pageSize: 56,
+    // 'recent' | 'title' (optional)
+    sort: sort_example,
+  } satisfies ListPublishedPagesRequest;
+
+  try {
+    const data = await api.listPublishedPages(body);
+    console.log(data);
+  } catch (error) {
+    console.error(error);
+  }
+}
+
+// Run the test
+example().catch(console.error);
+```
+
+### Parameters
+
+
+| Name | Type | Description  | Notes |
+|------------- | ------------- | ------------- | -------------|
+| **cursor** | `string` | 上一页响应返回的 next_cursor；首页不传 | [Optional] [Defaults to `undefined`] |
+| **pageSize** | `number` | 每页条数，默认 20，最大 100 | [Optional] [Defaults to `20`] |
+| **sort** | `recent`, `title` |  | [Optional] [Defaults to `&#39;recent&#39;`] [Enum: recent, title] |
+
+### Return type
+
+[**PageCatalogPage**](PageCatalogPage.md)
+
+### Authorization
+
+No authorization required
+
+### HTTP request headers
+
+- **Content-Type**: Not defined
+- **Accept**: `application/json`
+
+
+### HTTP response details
+| Status code | Description | Response headers |
+|-------------|-------------|------------------|
+| **200** | 已发布页面目录 |  -  |
+| **400** | 请求格式错误 |  -  |
 | **500** | 服务端内部错误 |  -  |
 
 [[Back to top]](#) [[Back to API list]](../README.md#api-endpoints) [[Back to Model list]](../README.md#models) [[Back to README]](../README.md)
