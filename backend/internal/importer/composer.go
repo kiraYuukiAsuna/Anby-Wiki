@@ -251,6 +251,7 @@ func (c *ProposalComposer) buildClaimOperations(ctx context.Context, params Comp
 func (c *ProposalComposer) createCitations(ctx context.Context, params ComposeParams, items []CandidateEvidence) ([]uuid.UUID, []governance.OperationEvidence, error) {
 	ids := make([]uuid.UUID, 0, len(items))
 	out := make([]governance.OperationEvidence, 0, len(items))
+	seen := make(map[uuid.UUID]bool, len(items))
 	for _, item := range items {
 		start, end := int32(item.CharStart), int32(item.CharEnd)
 		locator := &evidence.Locator{CharStart: &start, CharEnd: &end}
@@ -265,6 +266,10 @@ func (c *ProposalComposer) createCitations(ctx context.Context, params ComposePa
 		if err != nil {
 			return nil, nil, err
 		}
+		if seen[citation.ID] {
+			continue
+		}
+		seen[citation.ID] = true
 		ids = append(ids, citation.ID)
 		out = append(out, governance.OperationEvidence{CitationID: &citation.ID, SourceChunkID: &item.ChunkID})
 	}

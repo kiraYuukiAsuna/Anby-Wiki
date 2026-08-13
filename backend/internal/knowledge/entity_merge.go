@@ -393,6 +393,10 @@ func (s *Service) migrateMergeClaims(
 			newClaim.TargetEntityID = &target
 			newClaim.ValueJSON, _ = json.Marshal(map[string]uuid.UUID{"entity_id": target})
 		}
+		if err := validateClaimEndpoints(newClaim.SubjectEntityID, newClaim.TargetEntityID); err != nil {
+			return nil, fmt.Errorf("%w: merge would create self-referential claim %s",
+				ErrInvalidEntityMerge, old.ID)
+		}
 		compensated := mergeOldClaimStatus(old.Status)
 		if err := s.repo.updateClaimMergeStatus(ctx, tx, old.ID, old.Status, compensated); err != nil {
 			return nil, err

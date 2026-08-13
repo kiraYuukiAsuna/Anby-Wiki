@@ -298,6 +298,44 @@ func TestValidateCandidatesFromChunksRepairsSourceAndDropsOnlyAmbiguousClaims(t 
 	}
 }
 
+func TestValidateCandidatesFromChunksDropsSelfReferentialClaim(t *testing.T) {
+	sourceVersionID, chunkID := uuid.New(), uuid.New()
+	workID, organizationID := uuid.New(), uuid.New()
+	quotation := "RFC 7523 was published by the Internet Engineering Task Force."
+	evidenceItem := []CandidateEvidence{{
+		ChunkID: chunkID, Quotation: quotation, CharStart: 0, CharEnd: len([]rune(quotation)),
+	}}
+	entityValue := func(candidateID uuid.UUID) json.RawMessage {
+		value, _ := json.Marshal(map[string]uuid.UUID{"entity_candidate_id": candidateID})
+		return value
+	}
+	candidates := Candidates{
+		SchemaVersion: 1, SourceVersionID: sourceVersionID, QualityScore: 0.9,
+		Entities: []EntityCandidate{
+			{CandidateID: workID, TypeKey: "work", Label: "RFC 7523", Aliases: []string{}, Confidence: 0.9, Evidence: evidenceItem},
+			{CandidateID: organizationID, TypeKey: "organization", Label: "Internet Engineering Task Force", Aliases: []string{}, Confidence: 0.9, Evidence: evidenceItem},
+		},
+		Claims: []ClaimCandidate{
+			{CandidateID: uuid.New(), Subject: CandidateSubject{CandidateID: &workID}, PropertyKey: "part_of", Value: entityValue(workID), Confidence: 0.9, Evidence: evidenceItem},
+			{CandidateID: uuid.New(), Subject: CandidateSubject{CandidateID: &workID}, PropertyKey: "issued_by", Value: entityValue(organizationID), Confidence: 0.9, Evidence: evidenceItem},
+		},
+	}
+	raw, err := json.Marshal(candidates)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	validated, _, err := ValidateCandidatesFromChunks(raw, sourceVersionID, []evidence.SourceChunk{{
+		ID: chunkID, SourceVersionID: sourceVersionID, TextContent: quotation, LocatorJSON: []byte(`{}`),
+	}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(validated.Claims) != 1 || validated.Claims[0].PropertyKey != "issued_by" {
+		t.Fatalf("self relation was not isolated from valid claims: %#v", validated.Claims)
+	}
+}
+
 func TestBatchSourceChunksBoundsOutputAndPreservesOrder(t *testing.T) {
 	sourceVersionID := uuid.New()
 	chunks := make([]evidence.SourceChunk, 78)
@@ -486,6 +524,25 @@ func TestClassifyCreatesClaimBetweenTwoPlannedEntities(t *testing.T) {
 	}
 }
 
+func TestClassifySkipsSelfReferenceAfterStableResolution(t *testing.T) {
+	firstCandidateID, aliasCandidateID, stableEntityID := uuid.New(), uuid.New(), uuid.New()
+	classifier := NewClaimClassifier(plannedClaimKnowledge{})
+	decisions, err := classifier.Classify(context.Background(), []ClaimCandidate{{
+		CandidateID: uuid.New(), Subject: CandidateSubject{CandidateID: &firstCandidateID},
+		PropertyKey: "part_of",
+		Value:       json.RawMessage(`{"entity_candidate_id":"` + aliasCandidateID.String() + `"}`),
+	}}, []EntityResolution{
+		{CandidateID: firstCandidateID, Outcome: EntityNewReview, PlannedEntityID: &stableEntityID},
+		{CandidateID: aliasCandidateID, Outcome: EntityNewReview, PlannedEntityID: &stableEntityID},
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(decisions) != 0 {
+		t.Fatalf("self relation survived stable-ID resolution: %#v", decisions)
+	}
+}
+
 func TestClassifySkipsOneUnsupportedOrMalformedClaim(t *testing.T) {
 	subjectCandidateID := uuid.New()
 	resolutions := []EntityResolution{{
@@ -613,6 +670,49 @@ func TestNormalizeCandidatesDeduplicatesNamesAndRejectsWrongRelationDirection(t 
 	selected = selectCandidatesForPlan(normalized, plan)
 	if len(selected.Entities) != 2 || len(selected.Claims) != 1 {
 		t.Fatalf("profile-only subject became an authoritative graph write: %#v", selected)
+	}
+}
+
+func TestNormalizeCandidatesDropsSelfReferenceCreatedByIdentityMerge(t *testing.T) {
+	shortID, fullID := uuid.New(), uuid.New()
+	value, _ := json.Marshal(map[string]uuid.UUID{"entity_candidate_id": fullID})
+	candidates := &Candidates{SchemaVersion: 1, SourceVersionID: uuid.New(), QualityScore: 0.9,
+		Entities: []EntityCandidate{
+			{CandidateID: shortID, TypeKey: "person", Label: "M. Jones", Aliases: []string{}},
+			{CandidateID: fullID, TypeKey: "person", Label: "Michael B. Jones", Aliases: []string{}},
+		},
+		Claims: []ClaimCandidate{{
+			CandidateID: uuid.New(), Subject: CandidateSubject{CandidateID: &shortID},
+			PropertyKey: "part_of", Value: value,
+		}},
+	}
+
+	normalized := normalizeCandidatesForUse(candidates)
+	if len(normalized.Entities) != 1 {
+		t.Fatalf("equivalent identities were not consolidated: %#v", normalized.Entities)
+	}
+	if len(normalized.Claims) != 0 {
+		t.Fatalf("identity merge created a retained self relation: %#v", normalized.Claims)
+	}
+}
+
+func TestNormalizeCandidatesUsesIssuedByForWorkOrganizationRelation(t *testing.T) {
+	workID, organizationID := uuid.New(), uuid.New()
+	value, _ := json.Marshal(map[string]uuid.UUID{"entity_candidate_id": organizationID})
+	candidates := &Candidates{SchemaVersion: 1, SourceVersionID: uuid.New(), QualityScore: 0.9,
+		Entities: []EntityCandidate{
+			{CandidateID: workID, TypeKey: "work", Label: "RFC 7523", Aliases: []string{}},
+			{CandidateID: organizationID, TypeKey: "organization", Label: "IETF", Aliases: []string{}},
+		},
+		Claims: []ClaimCandidate{
+			{CandidateID: uuid.New(), Subject: CandidateSubject{CandidateID: &workID}, PropertyKey: "part_of", Value: value},
+			{CandidateID: uuid.New(), Subject: CandidateSubject{CandidateID: &workID}, PropertyKey: "issued_by", Value: value},
+		},
+	}
+
+	normalized := normalizeCandidatesForUse(candidates)
+	if len(normalized.Claims) != 1 || normalized.Claims[0].PropertyKey != "issued_by" {
+		t.Fatalf("work-to-organization relation was not normalized safely: %#v", normalized.Claims)
 	}
 }
 

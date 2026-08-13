@@ -12,7 +12,7 @@
 `up` 一次创建当前完整 Schema、约束、索引、触发器和以下固定种子：
 
 - 默认 Wiki、7 个 Namespace 和 System Actor。
-- 10 个基础 EntityType 与 8 个基础 Property。
+- 10 个基础 EntityType 与 14 个基础 Property，以及 Citation 不可变证据身份唯一索引。
 - `editor`、`reviewer`、`applier`、`admin` 四个内置 Role。
 
 `down` 删除完整 Schema，仅用于本地开发和尚未承载生产数据的环境。执行会永久删除全部业务数据。

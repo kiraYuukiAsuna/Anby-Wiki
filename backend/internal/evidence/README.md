@@ -84,6 +84,10 @@ chunk.locator 叠加表示更细粒度定位（如 chunk 定位到页，citation
 - `AddSourceVersion`：`unique(source_id, version_hash)` 是重复导入不重复抽取的
   DB 基础。version_hash 重复（含并发撞唯一索引）返回既有版本与其 chunks，
   `AddSourceVersionResult.Reused=true`，未重复插入；
+- `CreateCitation`：以 `(source_version_id, source_chunk_id, locator_json,
+  quotation_hash)` 作为不可变证据身份。重试、多窗口收敛或不同页面使用
+  同一证据时返回既有稳定 Citation ID；`NULLS NOT DISTINCT` 唯一索引
+  保证空 Chunk/Locator/Quotation 也有相同幂等语义；
 - source_version / source_chunk / citation 均不可变（000007 触发器），
   「修改」语义靠登记新版本实现。
 

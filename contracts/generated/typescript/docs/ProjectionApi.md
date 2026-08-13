@@ -14,7 +14,8 @@ All URIs are relative to *http://localhost:3000*
 | [**listClaimUsages**](ProjectionApi.md#listclaimusages) | **GET** /api/v1/claims/{id}/usages | Claim 页面使用位置 |
 | [**listComponentUsages**](ProjectionApi.md#listcomponentusages) | **GET** /api/v1/components/{id}/usages | Component 页面依赖位置 |
 | [**listEntityMentions**](ProjectionApi.md#listentitymentions) | **GET** /api/v1/entities/{id}/mentions | Entity 页面提及位置 |
-| [**listSourceUsages**](ProjectionApi.md#listsourceusages) | **GET** /api/v1/sources/{id}/usages | Source 页面使用位置 |
+| [**listSourceUsageLocations**](ProjectionApi.md#listsourceusagelocations) | **GET** /api/v1/sources/{id}/usages/{page_id} | Source 在指定页面的使用明细 |
+| [**listSourceUsages**](ProjectionApi.md#listsourceusages) | **GET** /api/v1/sources/{id}/usages | Source 页面使用聚合 |
 | [**locatePageSection**](ProjectionApi.md#locatepagesection) | **GET** /api/v1/pages/{id}/section-locator/{block_id} | 将稳定 Block ID 定位到其章节分片 |
 | [**resolvePageAnchor**](ProjectionApi.md#resolvepageanchor) | **GET** /api/v1/pages/{id}/anchors/{slug} | 解析当前或历史章节锚点 |
 
@@ -760,13 +761,92 @@ No authorization required
 [[Back to top]](#) [[Back to API list]](../README.md#api-endpoints) [[Back to Model list]](../README.md#models) [[Back to README]](../README.md)
 
 
+## listSourceUsageLocations
+
+> SourceUsageLocationListPage listSourceUsageLocations(id, pageId, cursor, pageSize)
+
+Source 在指定页面的使用明细
+
+匿名分页读取一个 Source 在指定当前页面中的 Block、Node、Citation 与可选 Claim 上下文。页面必须属于当前 Wiki，只读 citation_usage，不扫描 AST JSON。
+
+### Example
+
+```ts
+import {
+  Configuration,
+  ProjectionApi,
+} from '';
+import type { ListSourceUsageLocationsRequest } from '';
+
+async function example() {
+  console.log("🚀 Testing  SDK...");
+  const api = new ProjectionApi();
+
+  const body = {
+    // string | Entity、Claim 或 Citation 稳定 ID
+    id: 38400000-8cf0-11bd-b23e-10b96e4ef00d,
+    // string
+    pageId: 38400000-8cf0-11bd-b23e-10b96e4ef00d,
+    // string | 上一页响应返回的 next_cursor；首页不传 (optional)
+    cursor: cursor_example,
+    // number | 每页条数，默认 20，最大 100 (optional)
+    pageSize: 56,
+  } satisfies ListSourceUsageLocationsRequest;
+
+  try {
+    const data = await api.listSourceUsageLocations(body);
+    console.log(data);
+  } catch (error) {
+    console.error(error);
+  }
+}
+
+// Run the test
+example().catch(console.error);
+```
+
+### Parameters
+
+
+| Name | Type | Description  | Notes |
+|------------- | ------------- | ------------- | -------------|
+| **id** | `string` | Entity、Claim 或 Citation 稳定 ID | [Defaults to `undefined`] |
+| **pageId** | `string` |  | [Defaults to `undefined`] |
+| **cursor** | `string` | 上一页响应返回的 next_cursor；首页不传 | [Optional] [Defaults to `undefined`] |
+| **pageSize** | `number` | 每页条数，默认 20，最大 100 | [Optional] [Defaults to `20`] |
+
+### Return type
+
+[**SourceUsageLocationListPage**](SourceUsageLocationListPage.md)
+
+### Authorization
+
+No authorization required
+
+### HTTP request headers
+
+- **Content-Type**: Not defined
+- **Accept**: `application/json`
+
+
+### HTTP response details
+| Status code | Description | Response headers |
+|-------------|-------------|------------------|
+| **200** | 一页 Source 使用明细 |  * X-Request-ID -  <br>  |
+| **400** | 请求格式错误 |  -  |
+| **404** | 资源不存在 |  -  |
+| **500** | 服务端内部错误 |  -  |
+
+[[Back to top]](#) [[Back to API list]](../README.md#api-endpoints) [[Back to Model list]](../README.md#models) [[Back to README]](../README.md)
+
+
 ## listSourceUsages
 
 > SourceUsageListPage listSourceUsages(id, cursor, pageSize)
 
-Source 页面使用位置
+Source 页面使用聚合
 
-匿名反向查询一个 Source 经 SourceVersion、Citation 被当前页面使用的位置。 只读 citation_usage 及证据身份链，不扫描 AST JSON。
+匿名按当前页面聚合一个 Source 经 SourceVersion、Citation 被使用的次数、 区块数与 Citation 数。总数描述完整结果而非当前分页，只读投影且不扫描 AST JSON。
 
 ### Example
 
@@ -828,7 +908,7 @@ No authorization required
 ### HTTP response details
 | Status code | Description | Response headers |
 |-------------|-------------|------------------|
-| **200** | 一页 Source 使用位置 |  * X-Request-ID -  <br>  |
+| **200** | 一页 Source 页面聚合 |  * X-Request-ID -  <br>  |
 | **400** | 请求格式错误 |  -  |
 | **404** | 资源不存在 |  -  |
 | **500** | 服务端内部错误 |  -  |

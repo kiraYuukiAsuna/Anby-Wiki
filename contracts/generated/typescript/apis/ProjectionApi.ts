@@ -68,6 +68,11 @@ import {
     SourceUsageListPageFromJSON,
     SourceUsageListPageToJSON,
 } from '../models/SourceUsageListPage';
+import {
+    type SourceUsageLocationListPage,
+    SourceUsageLocationListPageFromJSON,
+    SourceUsageLocationListPageToJSON,
+} from '../models/SourceUsageLocationListPage';
 
 export interface GetPageOutlineRequest {
     id: string;
@@ -117,6 +122,13 @@ export interface ListComponentUsagesRequest {
 
 export interface ListEntityMentionsRequest {
     id: string;
+    cursor?: string;
+    pageSize?: number;
+}
+
+export interface ListSourceUsageLocationsRequest {
+    id: string;
+    pageId: string;
     cursor?: string;
     pageSize?: number;
 }
@@ -663,6 +675,69 @@ export class ProjectionApi extends runtime.BaseAPI {
     }
 
     /**
+     * Creates request options for listSourceUsageLocations without sending the request
+     */
+    async listSourceUsageLocationsRequestOpts(requestParameters: ListSourceUsageLocationsRequest): Promise<runtime.RequestOpts> {
+        if (requestParameters['id'] == null) {
+            throw new runtime.RequiredError(
+                'id',
+                'Required parameter "id" was null or undefined when calling listSourceUsageLocations().'
+            );
+        }
+
+        if (requestParameters['pageId'] == null) {
+            throw new runtime.RequiredError(
+                'pageId',
+                'Required parameter "pageId" was null or undefined when calling listSourceUsageLocations().'
+            );
+        }
+
+        const queryParameters: any = {};
+
+        if (requestParameters['cursor'] != null) {
+            queryParameters['cursor'] = requestParameters['cursor'];
+        }
+
+        if (requestParameters['pageSize'] != null) {
+            queryParameters['page_size'] = requestParameters['pageSize'];
+        }
+
+        const headerParameters: runtime.HTTPHeaders = {};
+
+
+        let urlPath = `/api/v1/sources/{id}/usages/{page_id}`;
+        urlPath = urlPath.replace('{id}', encodeURIComponent(String(requestParameters['id'])));
+        urlPath = urlPath.replace('{page_id}', encodeURIComponent(String(requestParameters['pageId'])));
+
+        return {
+            path: urlPath,
+            method: 'GET',
+            headers: headerParameters,
+            query: queryParameters,
+        };
+    }
+
+    /**
+     * 匿名分页读取一个 Source 在指定当前页面中的 Block、Node、Citation 与可选 Claim 上下文。页面必须属于当前 Wiki，只读 citation_usage，不扫描 AST JSON。
+     * Source 在指定页面的使用明细
+     */
+    async listSourceUsageLocationsRaw(requestParameters: ListSourceUsageLocationsRequest, initOverrides?: RequestInit | runtime.InitOverrideFunction): Promise<runtime.ApiResponse<SourceUsageLocationListPage>> {
+        const requestOptions = await this.listSourceUsageLocationsRequestOpts(requestParameters);
+        const response = await this.request(requestOptions, initOverrides);
+
+        return new runtime.JSONApiResponse(response, (jsonValue) => SourceUsageLocationListPageFromJSON(jsonValue));
+    }
+
+    /**
+     * 匿名分页读取一个 Source 在指定当前页面中的 Block、Node、Citation 与可选 Claim 上下文。页面必须属于当前 Wiki，只读 citation_usage，不扫描 AST JSON。
+     * Source 在指定页面的使用明细
+     */
+    async listSourceUsageLocations(requestParameters: ListSourceUsageLocationsRequest, initOverrides?: RequestInit | runtime.InitOverrideFunction): Promise<SourceUsageLocationListPage> {
+        const response = await this.listSourceUsageLocationsRaw(requestParameters, initOverrides);
+        return await response.value();
+    }
+
+    /**
      * Creates request options for listSourceUsages without sending the request
      */
     async listSourceUsagesRequestOpts(requestParameters: ListSourceUsagesRequest): Promise<runtime.RequestOpts> {
@@ -698,8 +773,8 @@ export class ProjectionApi extends runtime.BaseAPI {
     }
 
     /**
-     * 匿名反向查询一个 Source 经 SourceVersion、Citation 被当前页面使用的位置。 只读 citation_usage 及证据身份链，不扫描 AST JSON。
-     * Source 页面使用位置
+     * 匿名按当前页面聚合一个 Source 经 SourceVersion、Citation 被使用的次数、 区块数与 Citation 数。总数描述完整结果而非当前分页，只读投影且不扫描 AST JSON。
+     * Source 页面使用聚合
      */
     async listSourceUsagesRaw(requestParameters: ListSourceUsagesRequest, initOverrides?: RequestInit | runtime.InitOverrideFunction): Promise<runtime.ApiResponse<SourceUsageListPage>> {
         const requestOptions = await this.listSourceUsagesRequestOpts(requestParameters);
@@ -709,8 +784,8 @@ export class ProjectionApi extends runtime.BaseAPI {
     }
 
     /**
-     * 匿名反向查询一个 Source 经 SourceVersion、Citation 被当前页面使用的位置。 只读 citation_usage 及证据身份链，不扫描 AST JSON。
-     * Source 页面使用位置
+     * 匿名按当前页面聚合一个 Source 经 SourceVersion、Citation 被使用的次数、 区块数与 Citation 数。总数描述完整结果而非当前分页，只读投影且不扫描 AST JSON。
+     * Source 页面使用聚合
      */
     async listSourceUsages(requestParameters: ListSourceUsagesRequest, initOverrides?: RequestInit | runtime.InitOverrideFunction): Promise<SourceUsageListPage> {
         const response = await this.listSourceUsagesRaw(requestParameters, initOverrides);

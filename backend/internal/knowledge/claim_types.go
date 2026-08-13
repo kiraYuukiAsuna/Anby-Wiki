@@ -33,6 +33,9 @@ var (
 	ErrSubjectTypeMismatch = errors.New("knowledge: subject 实体类型与 property.subject_type 不匹配")
 	// ErrTargetTypeMismatch entity 值的目标实体类型与 property.target_type 不匹配。
 	ErrTargetTypeMismatch = errors.New("knowledge: target 实体类型与 property.target_type 不匹配")
+	// ErrSelfReferentialClaim entity 值指向 Claim subject 自身。当前内置关系均为
+	// 非自反谓词；领域边界拒绝自环，防止错误关系进入图谱与信息框。
+	ErrSelfReferentialClaim = errors.New("knowledge: entity claim 不能指向 subject 自身")
 	// ErrClaimNotMultivalued property.is_multivalued=false 且同 subject+property
 	// 已有 published claim；提示调用方改用 SupersedeClaim。
 	ErrClaimNotMultivalued = errors.New("knowledge: 单值 property 已存在 published claim，应先 Supersede")

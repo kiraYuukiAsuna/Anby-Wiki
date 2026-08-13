@@ -38,7 +38,31 @@ export interface SourceUsageListPage {
      * @type {string}
      * @memberof SourceUsageListPage
      */
-    nextCursor?: string;
+    nextCursor: string;
+    /**
+     *
+     * @type {number}
+     * @memberof SourceUsageListPage
+     */
+    totalUsageCount: number;
+    /**
+     *
+     * @type {number}
+     * @memberof SourceUsageListPage
+     */
+    totalPageCount: number;
+    /**
+     *
+     * @type {number}
+     * @memberof SourceUsageListPage
+     */
+    totalBlockCount: number;
+    /**
+     *
+     * @type {number}
+     * @memberof SourceUsageListPage
+     */
+    totalCitationCount: number;
 }
 
 /**
@@ -46,6 +70,11 @@ export interface SourceUsageListPage {
  */
 export function instanceOfSourceUsageListPage(value: object): value is SourceUsageListPage {
     if (!('items' in value) || value['items'] === undefined) return false;
+    if ((!('nextCursor' in (value as Record<string, any>)) && !('next_cursor' in (value as Record<string, any>))) || ((value as Record<string, any>)['nextCursor'] === undefined && (value as Record<string, any>)['next_cursor'] === undefined)) return false;
+    if ((!('totalUsageCount' in (value as Record<string, any>)) && !('total_usage_count' in (value as Record<string, any>))) || ((value as Record<string, any>)['totalUsageCount'] === undefined && (value as Record<string, any>)['total_usage_count'] === undefined)) return false;
+    if ((!('totalPageCount' in (value as Record<string, any>)) && !('total_page_count' in (value as Record<string, any>))) || ((value as Record<string, any>)['totalPageCount'] === undefined && (value as Record<string, any>)['total_page_count'] === undefined)) return false;
+    if ((!('totalBlockCount' in (value as Record<string, any>)) && !('total_block_count' in (value as Record<string, any>))) || ((value as Record<string, any>)['totalBlockCount'] === undefined && (value as Record<string, any>)['total_block_count'] === undefined)) return false;
+    if ((!('totalCitationCount' in (value as Record<string, any>)) && !('total_citation_count' in (value as Record<string, any>))) || ((value as Record<string, any>)['totalCitationCount'] === undefined && (value as Record<string, any>)['total_citation_count'] === undefined)) return false;
     return true;
 }
 
@@ -60,7 +89,11 @@ export function SourceUsageListPageFromJSONTyped(json: any, ignoreDiscriminator:
     return {
 
         'items': ((json['items'] as Array<any>).map(SourceUsageFromJSON)),
-        'nextCursor': json['next_cursor'] == null ? undefined : json['next_cursor'],
+        'nextCursor': json['next_cursor'],
+        'totalUsageCount': json['total_usage_count'],
+        'totalPageCount': json['total_page_count'],
+        'totalBlockCount': json['total_block_count'],
+        'totalCitationCount': json['total_citation_count'],
     };
 }
 
@@ -77,6 +110,10 @@ export function SourceUsageListPageToJSONTyped(value?: SourceUsageListPage | nul
 
         'items': ((value['items'] as Array<any>).map(SourceUsageToJSON)),
         'next_cursor': value['nextCursor'],
+        'total_usage_count': value['totalUsageCount'],
+        'total_page_count': value['totalPageCount'],
+        'total_block_count': value['totalBlockCount'],
+        'total_citation_count': value['totalCitationCount'],
     };
 }
 

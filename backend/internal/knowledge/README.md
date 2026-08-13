@@ -71,8 +71,8 @@ Page 指针、Audit、Outbox 与 ChangeBatch 原子提交。审计账本保存�
 
 | 类型 | 表 | 说明 |
 |---|---|---|
-| `Property` | `property` | 谓词定义（000004 固定 UUID 种子 8 个）。`value_type` ∈ string/number/date/entity/coordinate/composite；`subject_type_id`/`target_type_id` 列约束与 `schema_json.subject_type`/`target_type`（type_key 形态）由服务层并列校验 |
-| `Claim` | `claim` | 结构化事实。业务状态与验证状态正交（设计 §6.5）；`superseded_by` 指向链上下一个 claim；有效时间双开区间（DB `claim_valid_time_check` 兜底，服务层先给 `ErrInvalidValidTime`） |
+| `Property` | `property` | 谓词定义（固定 UUID 种子 14 个，含作品/RFC 的发布组织、文档编号/类别/状态、更新与废止关系）。`value_type` ∈ string/number/date/entity/coordinate/composite；`subject_type_id`/`target_type_id` 列约束与 `schema_json.subject_type`/`target_type`（type_key 形态）由服务层并列校验 |
+| `Claim` | `claim` | 结构化事实。业务状态与验证状态正交（设计 §6.5）；`superseded_by` 指向链上下一个 claim；有效时间双开区间（DB `claim_valid_time_check` 兜底，服务层先给 `ErrInvalidValidTime`）；当前内置 Entity 谓词均非自反，subject=target 由服务层与 `claim_no_self_reference_check` 双重拒绝 |
 | `ClaimSource` | `claim_source` | claim↔citation 关联（PK = claim+citation）。校验 citation_id、support_type 与 Citation 存在性；DB 外键并发兜底 |
 
 ## 值类型形态（value_json）
@@ -107,6 +107,9 @@ proposed ────────────► published  ◄─────�
 - 单值不变量：`is_multivalued=false` 时同 subject+property 至多一个 published——
   CreateClaim 创建侧拒绝（提示先 Supersede），PublishClaim 发布侧兜底（防御性），
   计数均在 subject 实体行锁内，序列化并发。
+- 非自反不变量：Entity 值不能指回同一 subject。Create/Supersede 与 Entity Merge
+  都在领域事务中校验；数据库 CHECK 最终兜底，错误使用 `ErrSelfReferentialClaim` 或
+  `ErrInvalidEntityMerge` 返回。
 
 ## 验证状态（claim.verification_status，与业务状态正交）
 

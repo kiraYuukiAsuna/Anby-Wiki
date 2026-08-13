@@ -285,11 +285,13 @@ type CreateCitationParams struct {
 	ActorID         uuid.UUID
 }
 
-// CreateCitation 创建证据引用（citation 表的唯一权威写入入口，INV-07 定位侧）。
+// CreateCitation 创建或复用证据引用（citation 表的唯一权威写入入口，INV-07 定位侧）。
 // 校验链：Actor 准入 → source_version 存在 → chunk 存在且属于该 version
 // （跨版本拒绝）→ quotation 非空时是 chunk 文本子串（严格拒绝，见下）→
 // locator 形态。quotation_hash = SHA-256(quotation) 由服务端计算。
 //
+// 完全相同的 SourceVersion/Chunk/Locator/QuotationHash 幂等返回已有 Citation，
+// 避免重试或同批多页面为同一证据制造不同稳定 ID。
 // quotation 子串校验是严格拒绝而非警告：citation 是权威证据数据，
 // 无法在定位文本中复核的引文不应落库（宽松警告会把无法核验的引文变成权威数据）。
 func (s *Service) CreateCitation(ctx context.Context, params CreateCitationParams) (*Citation, error) {
@@ -343,10 +345,16 @@ func (s *Service) CreateCitation(ctx context.Context, params CreateCitationParam
 		QuotationHash:   quotationHash,
 		CreatedBy:       params.ActorID,
 	}
-	if err := s.repo.InsertCitation(ctx, nil, c); err != nil {
+	inserted, err := s.repo.InsertCitationIfAbsent(ctx, nil, c)
+	if err != nil {
 		return nil, err
 	}
-	return c, nil
+	if inserted {
+		return c, nil
+	}
+	return s.repo.GetCitationByEvidenceIdentity(
+		ctx, nil, c.SourceVersionID, c.SourceChunkID, c.LocatorJSON, c.QuotationHash,
+	)
 }
 
 // GetCitationDetail 沿不可变 Citation → SourceVersion → Source（→ Chunk/URL）

@@ -144,6 +144,7 @@ func NewRouter(logger *slog.Logger, deps Deps, writeAPI *WriteAPI, readAPI *Read
 				r.Get("/claims/{id}/usages", projectionAPI.listClaimUsages)
 				r.Get("/citations/{id}/usages", projectionAPI.listCitationUsages)
 				r.Get("/sources/{id}/usages", projectionAPI.listSourceUsages)
+				r.Get("/sources/{id}/usages/{page_id}", projectionAPI.listSourceUsageLocations)
 				r.Get("/components/{id}/usages", projectionAPI.listComponentUsages)
 			}
 			if knowledgeReadAPI != nil {

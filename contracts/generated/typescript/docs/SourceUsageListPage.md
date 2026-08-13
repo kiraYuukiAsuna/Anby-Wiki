@@ -8,6 +8,10 @@ Name | Type
 ------------ | -------------
 `items` | [Array&lt;SourceUsage&gt;](SourceUsage.md)
 `nextCursor` | string
+`totalUsageCount` | number
+`totalPageCount` | number
+`totalBlockCount` | number
+`totalCitationCount` | number
 
 ## Example
 
@@ -18,6 +22,10 @@ import type { SourceUsageListPage } from ''
 const example = {
   "items": null,
   "nextCursor": null,
+  "totalUsageCount": null,
+  "totalPageCount": null,
+  "totalBlockCount": null,
+  "totalCitationCount": null,
 } satisfies SourceUsageListPage
 
 console.log(example)

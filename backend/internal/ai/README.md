@@ -13,10 +13,11 @@ Gateway 使用同一份权威 JSON Schema 严格校验；JSON Object 抽取固�
 408 和 5xx 标记为可重试，其他 4xx 不重试。新增供应商时实现窄 `Provider` 接口，
 供应商 DTO 必须留在本包。
 
-Worker 首次启用来源导入时，幂等登记当前 `source-extraction-v5` Prompt；该版本明确区分
+Worker 首次启用来源导入时，幂等登记当前 `source-extraction-v6` Prompt；该版本明确区分
 临时候选 UUID 与持久化 Entity ID，并提供运行时支持的 Entity type / Claim property
-词表与关系方向约束。页面规划使用 `source-import-plan-v4`，多窗口结果另经
-`source-import-plan-consolidate-v2` 收敛，并由 `source-import-plan-fidelity-v3` 对照原始
+词表与关系方向约束；作品/RFC 属性有独立语义，禁止用 `part_of` 代替发布组织，也禁止
+任何 Entity 关系指回主体自身。页面规划使用 `source-import-plan-v5`，多窗口结果另经
+`source-import-plan-consolidate-v3` 收敛，并由 `source-import-plan-fidelity-v3` 对照原始
 Chunk 做证据化遗漏审计和章节级修复。规划与收敛输出复用 ImportPlan v1 权威 Schema，
 保真审计使用独立的只允许既有 route_index 和精确 evidence 的内部 Schema；最终质量分由
 服务端计算而非采信模型自评分。保真 v3 明确禁止翻译 evidence 引文，并在三次语义纠正耗尽后

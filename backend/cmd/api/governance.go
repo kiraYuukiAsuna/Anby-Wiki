@@ -15,6 +15,7 @@ import (
 
 	"github.com/anby/wiki/backend/internal/collaboration"
 	"github.com/anby/wiki/backend/internal/governance"
+	"github.com/anby/wiki/backend/internal/knowledge"
 	"github.com/anby/wiki/backend/internal/page"
 	"github.com/anby/wiki/backend/internal/platform/httpx"
 )
@@ -860,6 +861,10 @@ func governanceError(w http.ResponseWriter, r *http.Request, err error) {
 		errors.Is(err, governance.ErrInvalidBulkReviewStatus):
 		httpx.WriteError(w, r, http.StatusBadRequest, httpx.CodeBadRequest, err.Error())
 	case errors.Is(err, governance.ErrInvalidProposal), errors.Is(err, governance.ErrInvalidOperation), errors.Is(err, governance.ErrProposalHasNoOps):
+		httpx.WriteError(w, r, http.StatusUnprocessableEntity, httpx.CodeValidationFailed, err.Error())
+	case errors.Is(err, knowledge.ErrSelfReferentialClaim),
+		errors.Is(err, knowledge.ErrSubjectTypeMismatch),
+		errors.Is(err, knowledge.ErrTargetTypeMismatch):
 		httpx.WriteError(w, r, http.StatusUnprocessableEntity, httpx.CodeValidationFailed, err.Error())
 	case errors.Is(err, governance.ErrInvalidResolution):
 		httpx.WriteError(w, r, http.StatusUnprocessableEntity, httpx.CodeValidationFailed, err.Error())

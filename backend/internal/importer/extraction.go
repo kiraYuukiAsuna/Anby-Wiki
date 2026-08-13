@@ -22,7 +22,7 @@ import (
 
 const (
 	ExtractionSchemaURL = "https://anby.wiki/schemas/extraction/v1/candidates.schema.json"
-	ExtractionPromptKey = "source-extraction-v5"
+	ExtractionPromptKey = "source-extraction-v6"
 )
 
 //go:embed schema/candidates.schema.json
@@ -223,6 +223,9 @@ func ValidateCandidatesFromChunks(raw []byte, sourceVersionID uuid.UUID, chunks 
 		}
 		valueCandidateID, hasValueCandidate, validValue := claimValueCandidateReference(candidate.Value)
 		if !validValue || (hasValueCandidate && entityIDCounts[valueCandidateID] != 1) {
+			continue
+		}
+		if claimCandidateSelfReferential(candidate) {
 			continue
 		}
 		if candidate.ValidFrom != nil && candidate.ValidTo != nil && !candidate.ValidTo.After(*candidate.ValidFrom) {

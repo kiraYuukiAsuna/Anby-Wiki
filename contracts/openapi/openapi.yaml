@@ -3640,10 +3640,10 @@ paths:
   /api/v1/sources/{id}/usages:
     get:
       operationId: listSourceUsages
-      summary: Source 页面使用位置
+      summary: Source 页面使用聚合
       description: |
-        匿名反向查询一个 Source 经 SourceVersion、Citation 被当前页面使用的位置。
-        只读 citation_usage 及证据身份链，不扫描 AST JSON。
+        匿名按当前页面聚合一个 Source 经 SourceVersion、Citation 被使用的次数、
+        区块数与 Citation 数。总数描述完整结果而非当前分页，只读投影且不扫描 AST JSON。
       tags: [projection]
       parameters:
         - $ref: "#/components/parameters/ReferenceTargetId"
@@ -3651,7 +3651,7 @@ paths:
         - $ref: "#/components/parameters/PageSize"
       responses:
         "200":
-          description: 一页 Source 使用位置
+          description: 一页 Source 页面聚合
           headers:
             X-Request-ID:
               $ref: "#/components/headers/X-Request-ID"
@@ -3659,6 +3659,38 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/SourceUsageListPage"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "500":
+          $ref: "#/components/responses/Internal"
+  /api/v1/sources/{id}/usages/{page_id}:
+    get:
+      operationId: listSourceUsageLocations
+      summary: Source 在指定页面的使用明细
+      description: |
+        匿名分页读取一个 Source 在指定当前页面中的 Block、Node、Citation 与可选 Claim
+        上下文。页面必须属于当前 Wiki，只读 citation_usage，不扫描 AST JSON。
+      tags: [projection]
+      parameters:
+        - $ref: "#/components/parameters/ReferenceTargetId"
+        - name: page_id
+          in: path
+          required: true
+          schema: { type: string, format: uuid }
+        - $ref: "#/components/parameters/Cursor"
+        - $ref: "#/components/parameters/PageSize"
+      responses:
+        "200":
+          description: 一页 Source 使用明细
+          headers:
+            X-Request-ID:
+              $ref: "#/components/headers/X-Request-ID"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/SourceUsageLocationListPage"
         "400":
           $ref: "#/components/responses/BadRequest"
         "404":
@@ -6177,9 +6209,9 @@ components:
         - page_id
         - page_title
         - revision_id
-        - block_id
-        - node_id
-        - citation_id
+        - usage_count
+        - block_count
+        - citation_count
       properties:
         page_id: { type: string, format: uuid }
         page_title: { type: string }
@@ -6187,6 +6219,25 @@ components:
           type: string
           format: uuid
           description: 产生该投影的当前 Revision
+        usage_count:
+          type: integer
+          format: int64
+          minimum: 1
+          description: 当前 Revision 中引用此 Source 的位置数
+        block_count:
+          type: integer
+          format: int64
+          minimum: 1
+          description: 包含引用的不同 Block 数
+        citation_count:
+          type: integer
+          format: int64
+          minimum: 1
+          description: 使用的不同 Citation 数
+    SourceUsageLocation:
+      type: object
+      required: [block_id, node_id, citation_id]
+      properties:
         block_id: { type: string, format: uuid }
         node_id: { type: string }
         citation_id: { type: string, format: uuid }
@@ -6197,11 +6248,25 @@ components:
           description: 通过 Claim 展示证据时的上下文；正文直接引用时为空
     SourceUsageListPage:
       type: object
-      required: [items]
+      required: [items, next_cursor, total_usage_count, total_page_count, total_block_count, total_citation_count]
       properties:
         items:
           type: array
           items: { $ref: "#/components/schemas/SourceUsage" }
+        next_cursor:
+          type: string
+          nullable: true
+        total_usage_count: { type: integer, format: int64, minimum: 0 }
+        total_page_count: { type: integer, format: int64, minimum: 0 }
+        total_block_count: { type: integer, format: int64, minimum: 0 }
+        total_citation_count: { type: integer, format: int64, minimum: 0 }
+    SourceUsageLocationListPage:
+      type: object
+      required: [items, next_cursor]
+      properties:
+        items:
+          type: array
+          items: { $ref: "#/components/schemas/SourceUsageLocation" }
         next_cursor:
           type: string
           nullable: true

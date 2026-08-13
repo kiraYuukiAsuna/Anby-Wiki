@@ -1,32 +1,28 @@
 
-# SourceUsage
+# SourceUsageLocation
 
 
 ## Properties
 
 Name | Type
 ------------ | -------------
-`pageId` | string
-`pageTitle` | string
-`revisionId` | string
-`usageCount` | number
-`blockCount` | number
-`citationCount` | number
+`blockId` | string
+`nodeId` | string
+`citationId` | string
+`claimId` | string
 
 ## Example
 
 ```typescript
-import type { SourceUsage } from ''
+import type { SourceUsageLocation } from ''
 
 // TODO: Update the object below with actual values
 const example = {
-  "pageId": null,
-  "pageTitle": null,
-  "revisionId": null,
-  "usageCount": null,
-  "blockCount": null,
-  "citationCount": null,
-} satisfies SourceUsage
+  "blockId": null,
+  "nodeId": null,
+  "citationId": null,
+  "claimId": null,
+} satisfies SourceUsageLocation
 
 console.log(example)
 
@@ -35,7 +31,7 @@ const exampleJSON: string = JSON.stringify(example)
 console.log(exampleJSON)
 
 // Parse the JSON string back to an object
-const exampleParsed = JSON.parse(exampleJSON) as SourceUsage
+const exampleParsed = JSON.parse(exampleJSON) as SourceUsageLocation
 console.log(exampleParsed)
 ```
 

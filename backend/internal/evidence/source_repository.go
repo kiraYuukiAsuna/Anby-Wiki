@@ -427,20 +427,57 @@ func (r *Repository) GetAssetRevisionByID(ctx context.Context, tx pgx.Tx, id uui
 	return rev, nil
 }
 
-// InsertCitation 插入证据引用，created_at 由 DB 默认值回填。citation 不可变（000007 触发器）。
-func (r *Repository) InsertCitation(ctx context.Context, tx pgx.Tx, c *Citation) error {
+// InsertCitationIfAbsent 按不可变证据身份幂等插入 Citation。
+// inserted=false 表示已有并发或先前调用创建了相同证据。
+func (r *Repository) InsertCitationIfAbsent(ctx context.Context, tx pgx.Tx, c *Citation) (bool, error) {
 	err := r.q(tx).QueryRow(ctx, `
 		INSERT INTO citation (id, source_version_id, source_chunk_id, locator_json,
 			quotation, quotation_hash, created_by)
 		VALUES ($1, $2, $3, $4::jsonb, $5, $6, $7)
+		ON CONFLICT ON CONSTRAINT citation_evidence_identity_key DO NOTHING
 		RETURNING created_at`,
 		c.ID, c.SourceVersionID, c.SourceChunkID, c.LocatorJSON,
 		c.Quotation, c.QuotationHash, c.CreatedBy,
 	).Scan(&c.CreatedAt)
-	if err != nil {
-		return fmt.Errorf("evidence: 插入 citation 失败: %w", err)
+	if errors.Is(err, pgx.ErrNoRows) {
+		return false, nil
 	}
-	return nil
+	if err != nil {
+		return false, fmt.Errorf("evidence: upsert citation 失败: %w", err)
+	}
+	return true, nil
+}
+
+// GetCitationByEvidenceIdentity 按 Citation 的不可变证据身份读取稳定记录。
+func (r *Repository) GetCitationByEvidenceIdentity(
+	ctx context.Context,
+	tx pgx.Tx,
+	sourceVersionID uuid.UUID,
+	sourceChunkID *uuid.UUID,
+	locatorJSON []byte,
+	quotationHash *string,
+) (*Citation, error) {
+	var c Citation
+	err := r.q(tx).QueryRow(ctx, `
+		SELECT id, source_version_id, source_chunk_id, locator_json,
+		       quotation, quotation_hash, created_by, created_at
+		FROM citation
+		WHERE source_version_id = $1
+		  AND source_chunk_id IS NOT DISTINCT FROM $2
+		  AND locator_json IS NOT DISTINCT FROM $3::jsonb
+		  AND quotation_hash IS NOT DISTINCT FROM $4`,
+		sourceVersionID, sourceChunkID, locatorJSON, quotationHash,
+	).Scan(
+		&c.ID, &c.SourceVersionID, &c.SourceChunkID, &c.LocatorJSON,
+		&c.Quotation, &c.QuotationHash, &c.CreatedBy, &c.CreatedAt,
+	)
+	if errors.Is(err, pgx.ErrNoRows) {
+		return nil, fmt.Errorf("%w: source_version_id=%s", ErrCitationNotFound, sourceVersionID)
+	}
+	if err != nil {
+		return nil, fmt.Errorf("evidence: 按证据身份查询 citation 失败: %w", err)
+	}
+	return &c, nil
 }
 
 // GetCitationByID 按稳定 ID 读取不可变 Citation。

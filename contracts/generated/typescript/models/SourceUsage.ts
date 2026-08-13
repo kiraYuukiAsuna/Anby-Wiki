@@ -38,29 +38,23 @@ export interface SourceUsage {
      */
     revisionId: string;
     /**
-     *
-     * @type {string}
+     * 当前 Revision 中引用此 Source 的位置数
+     * @type {number}
      * @memberof SourceUsage
      */
-    blockId: string;
+    usageCount: number;
     /**
-     *
-     * @type {string}
+     * 包含引用的不同 Block 数
+     * @type {number}
      * @memberof SourceUsage
      */
-    nodeId: string;
+    blockCount: number;
     /**
-     *
-     * @type {string}
+     * 使用的不同 Citation 数
+     * @type {number}
      * @memberof SourceUsage
      */
-    citationId: string;
-    /**
-     * 通过 Claim 展示证据时的上下文；正文直接引用时为空
-     * @type {string}
-     * @memberof SourceUsage
-     */
-    claimId?: string;
+    citationCount: number;
 }
 
 /**
@@ -70,9 +64,9 @@ export function instanceOfSourceUsage(value: object): value is SourceUsage {
     if ((!('pageId' in (value as Record<string, any>)) && !('page_id' in (value as Record<string, any>))) || ((value as Record<string, any>)['pageId'] === undefined && (value as Record<string, any>)['page_id'] === undefined)) return false;
     if ((!('pageTitle' in (value as Record<string, any>)) && !('page_title' in (value as Record<string, any>))) || ((value as Record<string, any>)['pageTitle'] === undefined && (value as Record<string, any>)['page_title'] === undefined)) return false;
     if ((!('revisionId' in (value as Record<string, any>)) && !('revision_id' in (value as Record<string, any>))) || ((value as Record<string, any>)['revisionId'] === undefined && (value as Record<string, any>)['revision_id'] === undefined)) return false;
-    if ((!('blockId' in (value as Record<string, any>)) && !('block_id' in (value as Record<string, any>))) || ((value as Record<string, any>)['blockId'] === undefined && (value as Record<string, any>)['block_id'] === undefined)) return false;
-    if ((!('nodeId' in (value as Record<string, any>)) && !('node_id' in (value as Record<string, any>))) || ((value as Record<string, any>)['nodeId'] === undefined && (value as Record<string, any>)['node_id'] === undefined)) return false;
-    if ((!('citationId' in (value as Record<string, any>)) && !('citation_id' in (value as Record<string, any>))) || ((value as Record<string, any>)['citationId'] === undefined && (value as Record<string, any>)['citation_id'] === undefined)) return false;
+    if ((!('usageCount' in (value as Record<string, any>)) && !('usage_count' in (value as Record<string, any>))) || ((value as Record<string, any>)['usageCount'] === undefined && (value as Record<string, any>)['usage_count'] === undefined)) return false;
+    if ((!('blockCount' in (value as Record<string, any>)) && !('block_count' in (value as Record<string, any>))) || ((value as Record<string, any>)['blockCount'] === undefined && (value as Record<string, any>)['block_count'] === undefined)) return false;
+    if ((!('citationCount' in (value as Record<string, any>)) && !('citation_count' in (value as Record<string, any>))) || ((value as Record<string, any>)['citationCount'] === undefined && (value as Record<string, any>)['citation_count'] === undefined)) return false;
     return true;
 }
 
@@ -89,10 +83,9 @@ export function SourceUsageFromJSONTyped(json: any, ignoreDiscriminator: boolean
         'pageId': json['page_id'],
         'pageTitle': json['page_title'],
         'revisionId': json['revision_id'],
-        'blockId': json['block_id'],
-        'nodeId': json['node_id'],
-        'citationId': json['citation_id'],
-        'claimId': json['claim_id'] == null ? undefined : json['claim_id'],
+        'usageCount': json['usage_count'],
+        'blockCount': json['block_count'],
+        'citationCount': json['citation_count'],
     };
 }
 
@@ -110,10 +103,9 @@ export function SourceUsageToJSONTyped(value?: SourceUsage | null, ignoreDiscrim
         'page_id': value['pageId'],
         'page_title': value['pageTitle'],
         'revision_id': value['revisionId'],
-        'block_id': value['blockId'],
-        'node_id': value['nodeId'],
-        'citation_id': value['citationId'],
-        'claim_id': value['claimId'],
+        'usage_count': value['usageCount'],
+        'block_count': value['blockCount'],
+        'citation_count': value['citationCount'],
     };
 }
 

@@ -95,20 +95,37 @@ type ReferenceUsagePage struct {
 	NextCursor *string
 }
 
-// SourceUsage is one current-page Citation whose immutable SourceVersion
-// belongs to a Source. It is derived entirely from citation_usage.
+// SourceUsage is one current Page whose Revision cites a Source. Counts keep
+// the backlink summary compact without discarding occurrence-level audit data.
 type SourceUsage struct {
-	PageID     uuid.UUID
-	PageTitle  string
-	RevisionID uuid.UUID
+	PageID        uuid.UUID
+	PageTitle     string
+	RevisionID    uuid.UUID
+	UsageCount    int64
+	BlockCount    int64
+	CitationCount int64
+}
+
+type SourceUsagePage struct {
+	Items              []SourceUsage
+	NextCursor         *string
+	TotalUsageCount    int64
+	TotalPageCount     int64
+	TotalBlockCount    int64
+	TotalCitationCount int64
+}
+
+// SourceUsageLocation is one auditable CitationReference occurrence inside a
+// selected current Page. It is fetched only when the grouped Page is expanded.
+type SourceUsageLocation struct {
 	BlockID    uuid.UUID
 	NodeID     string
 	CitationID uuid.UUID
 	ClaimID    *uuid.UUID
 }
 
-type SourceUsagePage struct {
-	Items      []SourceUsage
+type SourceUsageLocationPage struct {
+	Items      []SourceUsageLocation
 	NextCursor *string
 }
 
@@ -414,8 +431,8 @@ func (q *Queries) CitationUsages(
 	return q.referenceUsages(ctx, wikiID, "citation", citationID, cursor, limit)
 }
 
-// SourceUsages returns every CitationReference in a current Revision whose
-// Citation resolves through SourceVersion to sourceID.
+// SourceUsages groups current CitationReference occurrences by Page. Totals
+// always describe the complete Source backlink set, not only the loaded page.
 func (q *Queries) SourceUsages(
 	ctx context.Context,
 	wikiID, sourceID uuid.UUID,
@@ -427,14 +444,31 @@ func (q *Queries) SourceUsages(
 	); err != nil {
 		return nil, err
 	}
-	afterPageID, afterBlockID, afterNodeID, err := usageCursor(cursor)
+	afterPageID, err := sourceUsageCursor(cursor)
 	if err != nil {
 		return nil, err
 	}
 	limit = usageLimit(limit)
+	result := &SourceUsagePage{Items: []SourceUsage{}}
+	if err := q.pool.QueryRow(ctx, `
+		SELECT COUNT(*), COUNT(DISTINCT u.page_id),
+		       COUNT(DISTINCT (u.page_id, u.block_id)),
+		       COUNT(DISTINCT u.citation_id)
+		FROM citation_usage u
+		JOIN citation c ON c.id=u.citation_id
+		JOIN source_version sv ON sv.id=c.source_version_id
+		JOIN page p ON p.id=u.page_id
+		WHERE sv.source_id=$1 AND p.deleted_at IS NULL
+		  AND p.wiki_id=$2
+		  AND p.current_revision_id=u.revision_id`, sourceID, wikiID).Scan(
+		&result.TotalUsageCount, &result.TotalPageCount,
+		&result.TotalBlockCount, &result.TotalCitationCount,
+	); err != nil {
+		return nil, fmt.Errorf("projection: 统计 Source 使用位置失败: %w", err)
+	}
 	rows, err := q.pool.Query(ctx, `
-		SELECT p.id,p.display_title,u.revision_id,u.block_id,u.node_id,
-		       u.citation_id,u.claim_id
+		SELECT p.id,p.display_title,u.revision_id,COUNT(*),
+		       COUNT(DISTINCT u.block_id),COUNT(DISTINCT u.citation_id)
 		FROM citation_usage u
 		JOIN citation c ON c.id=u.citation_id
 		JOIN source_version sv ON sv.id=c.source_version_id
@@ -442,36 +476,94 @@ func (q *Queries) SourceUsages(
 		WHERE sv.source_id=$1 AND p.deleted_at IS NULL
 		  AND p.wiki_id=$2
 		  AND p.current_revision_id=u.revision_id
-		  AND ($3::uuid IS NULL
-		       OR (u.page_id,u.block_id,u.node_id)>($3,$4,$5))
-		ORDER BY u.page_id,u.block_id,u.node_id LIMIT $6`,
-		sourceID, wikiID, afterPageID, afterBlockID, afterNodeID, limit+1,
+		  AND ($3::uuid IS NULL OR u.page_id>$3)
+		GROUP BY p.id,p.display_title,u.revision_id
+		ORDER BY p.id LIMIT $4`, sourceID, wikiID, afterPageID, limit+1,
 	)
 	if err != nil {
-		return nil, fmt.Errorf("projection: 查询 Source 使用位置失败: %w", err)
+		return nil, fmt.Errorf("projection: 查询 Source 页面聚合失败: %w", err)
 	}
 	defer rows.Close()
 	scanned := []SourceUsage{}
 	for rows.Next() {
 		var item SourceUsage
 		if err := rows.Scan(
-			&item.PageID, &item.PageTitle, &item.RevisionID,
-			&item.BlockID, &item.NodeID, &item.CitationID,
-			&item.ClaimID,
+			&item.PageID, &item.PageTitle, &item.RevisionID, &item.UsageCount,
+			&item.BlockCount, &item.CitationCount,
 		); err != nil {
-			return nil, fmt.Errorf("projection: 扫描 Source 使用位置失败: %w", err)
+			return nil, fmt.Errorf("projection: 扫描 Source 页面聚合失败: %w", err)
 		}
 		scanned = append(scanned, item)
 	}
 	if err := rows.Err(); err != nil {
-		return nil, fmt.Errorf("projection: 遍历 Source 使用位置失败: %w", err)
-	}
-	result := &SourceUsagePage{
-		Items: make([]SourceUsage, 0, min(len(scanned), limit)),
+		return nil, fmt.Errorf("projection: 遍历 Source 页面聚合失败: %w", err)
 	}
 	if len(scanned) > limit {
 		last := scanned[limit-1]
-		next := encodeUsageCursor(last.PageID, last.BlockID, last.NodeID)
+		next := encodeSourceUsageCursor(last.PageID)
+		result.NextCursor = &next
+		scanned = scanned[:limit]
+	}
+	result.Items = append(result.Items, scanned...)
+	return result, nil
+}
+
+// SourceUsageLocations returns occurrence-level audit details for one Page in
+// a Source usage summary. The nested page is current-Wiki scoped before query.
+func (q *Queries) SourceUsageLocations(
+	ctx context.Context,
+	wikiID, sourceID, pageID uuid.UUID,
+	cursor string,
+	limit int,
+) (*SourceUsageLocationPage, error) {
+	if err := q.ensureReferenceTargetExists(ctx, wikiID, "source", sourceID); err != nil {
+		return nil, err
+	}
+	if err := q.ensureWikiPageExists(ctx, wikiID, pageID); err != nil {
+		return nil, err
+	}
+	afterPageID, afterBlockID, afterNodeID, err := usageCursor(cursor)
+	if err != nil {
+		return nil, err
+	}
+	if afterPageID != nil && *afterPageID != pageID {
+		return nil, fmt.Errorf("%w: Source 使用位置游标页面不匹配", page.ErrInvalidCursor)
+	}
+	limit = usageLimit(limit)
+	rows, err := q.pool.Query(ctx, `
+		SELECT u.block_id,u.node_id,u.citation_id,u.claim_id
+		FROM citation_usage u
+		JOIN citation c ON c.id=u.citation_id
+		JOIN source_version sv ON sv.id=c.source_version_id
+		JOIN page p ON p.id=u.page_id
+		WHERE sv.source_id=$1 AND u.page_id=$2
+		  AND p.wiki_id=$3 AND p.deleted_at IS NULL
+		  AND p.current_revision_id=u.revision_id
+		  AND ($4::uuid IS NULL OR (u.block_id,u.node_id)>($4,$5))
+		ORDER BY u.block_id,u.node_id LIMIT $6`,
+		sourceID, pageID, wikiID, afterBlockID, afterNodeID, limit+1,
+	)
+	if err != nil {
+		return nil, fmt.Errorf("projection: 查询 Source 页面使用明细失败: %w", err)
+	}
+	defer rows.Close()
+	scanned := []SourceUsageLocation{}
+	for rows.Next() {
+		var item SourceUsageLocation
+		if err := rows.Scan(&item.BlockID, &item.NodeID, &item.CitationID, &item.ClaimID); err != nil {
+			return nil, fmt.Errorf("projection: 扫描 Source 页面使用明细失败: %w", err)
+		}
+		scanned = append(scanned, item)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, fmt.Errorf("projection: 遍历 Source 页面使用明细失败: %w", err)
+	}
+	result := &SourceUsageLocationPage{
+		Items: make([]SourceUsageLocation, 0, min(len(scanned), limit)),
+	}
+	if len(scanned) > limit {
+		last := scanned[limit-1]
+		next := encodeUsageCursor(pageID, last.BlockID, last.NodeID)
 		result.NextCursor = &next
 		scanned = scanned[:limit]
 	}
@@ -714,6 +806,25 @@ func usageCursor(
 		&decoded.sourceNodeID, nil
 }
 
+func sourceUsageCursor(cursor string) (*uuid.UUID, error) {
+	if cursor == "" {
+		return nil, nil
+	}
+	raw, err := base64.RawURLEncoding.DecodeString(cursor)
+	if err != nil {
+		return nil, fmt.Errorf("%w: Source usage cursor 非 base64url", page.ErrInvalidCursor)
+	}
+	pageID, err := uuid.Parse(string(raw))
+	if err != nil {
+		return nil, fmt.Errorf("%w: Source usage cursor 页面非法", page.ErrInvalidCursor)
+	}
+	return &pageID, nil
+}
+
+func encodeSourceUsageCursor(pageID uuid.UUID) string {
+	return base64.RawURLEncoding.EncodeToString([]byte(pageID.String()))
+}
+
 func encodeUsageCursor(pageID, blockID uuid.UUID, nodeID string) string {
 	return encodeBacklinkCursor(backlinkRow{
 		Backlink: Backlink{
@@ -733,6 +844,19 @@ func (q *Queries) ensurePageExists(ctx context.Context, pageID uuid.UUID) error 
 	}
 	if err != nil {
 		return fmt.Errorf("projection: 查询页面失败: %w", err)
+	}
+	return nil
+}
+
+func (q *Queries) ensureWikiPageExists(ctx context.Context, wikiID, pageID uuid.UUID) error {
+	var exists bool
+	if err := q.pool.QueryRow(ctx, `SELECT EXISTS(
+		SELECT 1 FROM page WHERE id=$1 AND wiki_id=$2 AND deleted_at IS NULL
+	)`, pageID, wikiID).Scan(&exists); err != nil {
+		return fmt.Errorf("projection: 检查 Wiki 页面失败: %w", err)
+	}
+	if !exists {
+		return fmt.Errorf("%w: page id=%s", ErrReferenceTargetNotFound, pageID)
 	}
 	return nil
 }

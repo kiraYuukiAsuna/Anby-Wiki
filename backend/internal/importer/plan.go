@@ -24,11 +24,11 @@ import (
 
 const (
 	ImportPlanSchemaURL = "https://anby.wiki/schemas/import-plan/v1/plan.schema.json"
-	ImportPlanPromptKey = "source-import-plan-v4"
+	ImportPlanPromptKey = "source-import-plan-v5"
 	// ImportPlanConsolidatePromptKey reduces independently grounded source
 	// windows into one coherent article plan. It uses the same output contract
 	// but receives only validated draft material, never raw source instructions.
-	ImportPlanConsolidatePromptKey = "source-import-plan-consolidate-v2"
+	ImportPlanConsolidatePromptKey = "source-import-plan-consolidate-v3"
 	planBatchConcurrency           = 3
 	planLeafValidationAttempts     = 3
 

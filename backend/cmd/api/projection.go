@@ -174,18 +174,33 @@ type referenceUsageListResponse struct {
 }
 
 type sourceUsageResponse struct {
-	PageID     uuid.UUID  `json:"page_id"`
-	PageTitle  string     `json:"page_title"`
-	RevisionID uuid.UUID  `json:"revision_id"`
+	PageID        uuid.UUID `json:"page_id"`
+	PageTitle     string    `json:"page_title"`
+	RevisionID    uuid.UUID `json:"revision_id"`
+	UsageCount    int64     `json:"usage_count"`
+	BlockCount    int64     `json:"block_count"`
+	CitationCount int64     `json:"citation_count"`
+}
+
+type sourceUsageListResponse struct {
+	Items              []sourceUsageResponse `json:"items"`
+	NextCursor         *string               `json:"next_cursor"`
+	TotalUsageCount    int64                 `json:"total_usage_count"`
+	TotalPageCount     int64                 `json:"total_page_count"`
+	TotalBlockCount    int64                 `json:"total_block_count"`
+	TotalCitationCount int64                 `json:"total_citation_count"`
+}
+
+type sourceUsageLocationResponse struct {
 	BlockID    uuid.UUID  `json:"block_id"`
 	NodeID     string     `json:"node_id"`
 	CitationID uuid.UUID  `json:"citation_id"`
 	ClaimID    *uuid.UUID `json:"claim_id"`
 }
 
-type sourceUsageListResponse struct {
-	Items      []sourceUsageResponse `json:"items"`
-	NextCursor *string               `json:"next_cursor"`
+type sourceUsageLocationListResponse struct {
+	Items      []sourceUsageLocationResponse `json:"items"`
+	NextCursor *string                       `json:"next_cursor"`
 }
 
 type componentUsageResponse struct {
@@ -522,15 +537,54 @@ func (a *ProjectionAPI) listSourceUsages(
 		return
 	}
 	response := sourceUsageListResponse{
-		Items:      make([]sourceUsageResponse, len(result.Items)),
-		NextCursor: result.NextCursor,
+		Items: make([]sourceUsageResponse, len(result.Items)), NextCursor: result.NextCursor,
+		TotalUsageCount: result.TotalUsageCount, TotalPageCount: result.TotalPageCount,
+		TotalBlockCount: result.TotalBlockCount, TotalCitationCount: result.TotalCitationCount,
 	}
 	for index, item := range result.Items {
 		response.Items[index] = sourceUsageResponse{
 			PageID: item.PageID, PageTitle: item.PageTitle,
-			RevisionID: item.RevisionID, BlockID: item.BlockID,
-			NodeID: item.NodeID, CitationID: item.CitationID,
-			ClaimID: item.ClaimID,
+			RevisionID: item.RevisionID, UsageCount: item.UsageCount,
+			BlockCount: item.BlockCount, CitationCount: item.CitationCount,
+		}
+	}
+	httpx.WriteJSON(w, http.StatusOK, response)
+}
+
+// listSourceUsageLocations GET /api/v1/sources/{id}/usages/{page_id}.
+func (a *ProjectionAPI) listSourceUsageLocations(w http.ResponseWriter, r *http.Request) {
+	sourceID, ok := pageIDFrom(w, r)
+	if !ok {
+		return
+	}
+	pageID, err := uuid.Parse(chi.URLParam(r, "page_id"))
+	if err != nil {
+		httpx.WriteError(w, r, http.StatusBadRequest, httpx.CodeBadRequest, "page_id 必须是 UUID")
+		return
+	}
+	limit, ok := pageSizeFrom(w, r)
+	if !ok {
+		return
+	}
+	result, err := a.queries.SourceUsageLocations(
+		r.Context(), a.wikiID, sourceID, pageID,
+		r.URL.Query().Get("cursor"), limit,
+	)
+	if errors.Is(err, projection.ErrReferenceTargetNotFound) {
+		httpx.WriteError(w, r, http.StatusNotFound, httpx.CodeNotFound, err.Error())
+		return
+	}
+	if err != nil {
+		serviceError(w, r, err)
+		return
+	}
+	response := sourceUsageLocationListResponse{
+		Items: make([]sourceUsageLocationResponse, len(result.Items)), NextCursor: result.NextCursor,
+	}
+	for index, item := range result.Items {
+		response.Items[index] = sourceUsageLocationResponse{
+			BlockID: item.BlockID, NodeID: item.NodeID,
+			CitationID: item.CitationID, ClaimID: item.ClaimID,
 		}
 	}
 	httpx.WriteJSON(w, http.StatusOK, response)

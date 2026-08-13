@@ -73,6 +73,9 @@ func (c *ClaimClassifier) Classify(ctx context.Context, candidates []ClaimCandid
 		if !ok {
 			continue // unresolved entity candidates remain visible in matching review
 		}
+		if targetID, entityValue := claimValueEntityID(candidate.Value); entityValue && targetID == subjectID {
+			continue // every current entity-valued property is non-reflexive
+		}
 		if !planned[subjectID] {
 			exists, checked := knownExisting[subjectID]
 			if !checked {

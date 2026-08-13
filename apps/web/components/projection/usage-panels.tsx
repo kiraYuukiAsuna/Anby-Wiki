@@ -2,6 +2,8 @@
 
 import {
   ArrowRight,
+  ChevronDown,
+  ChevronRight,
   Component,
   FileText,
   Inbox,
@@ -16,7 +18,9 @@ import useSWRInfinite from "swr/infinite";
 
 import type {
   ComponentUsageListPage,
+  SourceUsage,
   SourceUsageListPage,
+  SourceUsageLocationListPage,
 } from "../../../../contracts/generated/typescript";
 
 import { Button } from "@/components/ui/button";
@@ -48,7 +52,7 @@ export function SourceUsagePanel({ sourceId }: { sourceId: string }) {
     [usages.data],
   );
   const lastPage = usages.data?.[usages.data.length - 1];
-  const pageCount = new Set(items.map((item) => item.pageId)).size;
+  const totals = usages.data?.[0];
 
   return (
     <section className="mt-9 border-t border-border/75 pt-8">
@@ -60,12 +64,12 @@ export function SourceUsagePanel({ sourceId }: { sourceId: string }) {
           </span>
           <h2 className="mt-2 text-xl font-semibold">哪些页面使用此来源</h2>
           <p className="mt-1 text-sm text-muted-foreground">
-            沿 SourceVersion 与 Citation 身份链查询当前页面，不扫描正文 AST。
+            按页面聚合 SourceVersion 与 Citation 身份链；展开后查看精确引用位置。
           </p>
         </div>
-        {items.length > 0 ? (
+        {totals && totals.totalUsageCount > 0 ? (
           <span className="rounded-full border bg-muted/35 px-3 py-1 text-xs text-muted-foreground">
-            {items.length} 处引用 · {pageCount} 个页面
+            {totals.totalUsageCount} 处引用 · {totals.totalPageCount} 个页面
           </span>
         ) : null}
       </div>
@@ -90,40 +94,7 @@ export function SourceUsagePanel({ sourceId }: { sourceId: string }) {
       {items.length > 0 ? (
         <ol className="mt-5 divide-y overflow-hidden rounded-2xl border bg-card">
           {items.map((item) => (
-            <li
-              key={`${item.pageId}:${item.blockId}:${item.nodeId}`}
-              className="flex flex-wrap items-center gap-3 p-4"
-            >
-              <span className="flex size-9 shrink-0 items-center justify-center rounded-xl bg-emerald-100 text-emerald-700">
-                <FileText className="size-4" aria-hidden />
-              </span>
-              <div className="min-w-0 flex-1">
-                <Link
-                  href={`/pages/${item.pageId}`}
-                  className="font-medium hover:text-primary hover:underline"
-                >
-                  {item.pageTitle}
-                </Link>
-                <p className="mt-1 truncate font-mono text-[10px] text-muted-foreground">
-                  block {item.blockId.slice(0, 8)} · revision{" "}
-                  {item.revisionId.slice(0, 8)}
-                </p>
-              </div>
-              {item.claimId ? (
-                <Button asChild size="xs" variant="ghost">
-                  <Link href={`/claims/${item.claimId}`}>
-                    Claim
-                    <ArrowRight aria-hidden />
-                  </Link>
-                </Button>
-              ) : null}
-              <Button asChild size="xs" variant="outline">
-                <Link href={`/citations/${item.citationId}`}>
-                  <Quote aria-hidden />
-                  Citation
-                </Link>
-              </Button>
-            </li>
+            <SourceUsagePageRow key={item.pageId} sourceId={sourceId} item={item} />
           ))}
         </ol>
       ) : null}
@@ -138,10 +109,144 @@ export function SourceUsagePanel({ sourceId }: { sourceId: string }) {
           {usages.isValidating ? (
             <LoaderCircle className="animate-spin" aria-hidden />
           ) : null}
-          加载更多使用位置
+          加载更多页面
         </Button>
       ) : null}
     </section>
+  );
+}
+
+function SourceUsagePageRow({
+  sourceId,
+  item,
+}: {
+  sourceId: string;
+  item: SourceUsage;
+}) {
+  const [expanded, setExpanded] = useState(false);
+  const locations = useSWRInfinite<SourceUsageLocationListPage>(
+    (pageIndex, previousPage) => {
+      if (!expanded) return null;
+      if (pageIndex > 0 && !previousPage?.nextCursor) return null;
+      return [
+        "projection:source-usage-locations",
+        sourceId,
+        item.pageId,
+        pageIndex === 0 ? "" : (previousPage?.nextCursor ?? ""),
+      ] as const;
+    },
+    (cacheKey) => {
+      const [, id, pageId, cursor] = cacheKey as readonly [
+        string,
+        string,
+        string,
+        string,
+      ];
+      return projectionApi().listSourceUsageLocations({
+        id,
+        pageId,
+        cursor: cursor || undefined,
+        pageSize: PAGE_SIZE,
+      });
+    },
+  );
+  const locationItems = useMemo(
+    () => locations.data?.flatMap((page) => page.items) ?? [],
+    [locations.data],
+  );
+  const lastLocationPage = locations.data?.[locations.data.length - 1];
+
+  return (
+    <li>
+      <div className="flex flex-wrap items-center gap-3 p-4">
+        <button
+          type="button"
+          onClick={() => setExpanded((value) => !value)}
+          aria-expanded={expanded}
+          aria-label={`${expanded ? "收起" : "展开"}${item.pageTitle}的引用位置`}
+          className="flex size-9 shrink-0 items-center justify-center rounded-xl bg-emerald-100 text-emerald-700 transition-colors hover:bg-emerald-200"
+        >
+          {expanded ? (
+            <ChevronDown className="size-4" aria-hidden />
+          ) : (
+            <ChevronRight className="size-4" aria-hidden />
+          )}
+        </button>
+        <div className="min-w-0 flex-1">
+          <Link
+            href={`/pages/${item.pageId}`}
+            className="font-medium hover:text-primary hover:underline"
+          >
+            {item.pageTitle}
+          </Link>
+          <p className="mt-1 text-xs text-muted-foreground">
+            {item.usageCount} 处引用 · {item.blockCount} 个区块 ·{" "}
+            {item.citationCount} 个 Citation
+          </p>
+        </div>
+        <span className="max-w-full break-all font-mono text-[10px] text-muted-foreground">
+          revision {item.revisionId}
+        </span>
+      </div>
+
+      {expanded ? (
+        <div className="border-t bg-muted/15 px-4 py-3 pl-16">
+          {locations.isLoading && !locations.data ? (
+            <p className="text-xs text-muted-foreground">正在加载精确位置…</p>
+          ) : null}
+          {locations.error ? (
+            <p className="text-xs text-destructive">引用位置暂时无法读取。</p>
+          ) : null}
+          {locationItems.length > 0 ? (
+            <ul className="space-y-2">
+              {locationItems.map((location) => (
+                <li
+                  key={`${location.blockId}:${location.nodeId}:${location.citationId}`}
+                  className="flex flex-wrap items-center gap-2 rounded-xl border bg-background px-3 py-2"
+                >
+                  <FileText className="size-3.5 text-muted-foreground" aria-hidden />
+                  <Link
+                    href={`/pages/${item.pageId}#${location.blockId}`}
+                    className="min-w-0 flex-1 break-all font-mono text-[10px] text-muted-foreground hover:text-primary hover:underline"
+                  >
+                    Block {location.blockId} · Node {location.nodeId}
+                  </Link>
+                  {location.claimId ? (
+                    <Button asChild size="xs" variant="ghost">
+                      <Link href={`/claims/${location.claimId}`}>
+                        Claim
+                        <ArrowRight aria-hidden />
+                      </Link>
+                    </Button>
+                  ) : null}
+                  <Button asChild size="xs" variant="outline">
+                    <Link href={`/citations/${location.citationId}`}>
+                      <Quote aria-hidden />
+                      Citation
+                    </Link>
+                  </Button>
+                </li>
+              ))}
+            </ul>
+          ) : null}
+          {lastLocationPage?.nextCursor ? (
+            <Button
+              type="button"
+              size="sm"
+              variant="ghost"
+              className="mt-2 w-full"
+              disabled={locations.isValidating}
+              onClick={() => void locations.setSize(locations.size + 1)}
+            >
+              {locations.isValidating ? (
+                <LoaderCircle className="animate-spin" aria-hidden />
+              ) : null}
+              加载更多引用位置
+            </Button>
+          ) : null}
+        </div>
+      ) : null}
+    </li>
   );
 }
 

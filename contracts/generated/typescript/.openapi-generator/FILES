@@ -266,6 +266,8 @@ docs/SourceImportSource.md
 docs/SourceSummary.md
 docs/SourceUsage.md
 docs/SourceUsageListPage.md
+docs/SourceUsageLocation.md
+docs/SourceUsageLocationListPage.md
 docs/SourceVersionSummary.md
 docs/SourcesApi.md
 docs/SubmitProposalResult.md
@@ -519,6 +521,8 @@ models/SourceImportSource.ts
 models/SourceSummary.ts
 models/SourceUsage.ts
 models/SourceUsageListPage.ts
+models/SourceUsageLocation.ts
+models/SourceUsageLocationListPage.ts
 models/SourceVersionSummary.ts
 models/SubmitProposalResult.ts
 models/UpdateAIConfigRequest.ts

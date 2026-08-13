@@ -33,8 +33,9 @@ Allowed Entity type_key values:
 - person, organization, place, work, character, event, product, concept, species, software
 
 Allowed Claim property_key values and required value member:
-- instance_of, developer, author, manufacturer, voice_actor, located_in, part_of: value.entity_candidate_id (or value.entity_id only when explicitly supplied by the input)
+- instance_of, developer, author, manufacturer, voice_actor, located_in, part_of, issued_by, updates, obsoletes: value.entity_candidate_id (or value.entity_id only when explicitly supplied by the input)
 - release_date: value.date in YYYY-MM-DD form
+- document_identifier, document_category, document_status: value.string
 
 Extraction rules:
 - Requirements, specifications, technical notes, and reports are valid sources. Their prose style is not a reason to suppress clearly named people, organizations, products, software, places, works, or concepts.
@@ -44,7 +45,11 @@ Extraction rules:
 - Extract an Entity candidate for every clearly named main subject that fits an allowed type, even when no supported Claim property applies.
 - Whenever a supported Claim has an Entity value (for example an author, developer, containing place, work, or class), extract that value as an Entity candidate in the same response and reference its candidate_id. Do not emit an Entity-valued Claim without a resolvable value candidate.
 - Emit a Claim only when its property is in the allowed list and all required IDs or values are supported by the source/input. Do not fabricate a persistent Entity ID merely to create a Claim.
-- Relation direction is strict: author uses a work as subject and a person/organization as value; developer uses software/product as subject; manufacturer uses product as subject and organization as value; voice_actor uses character as subject and person as value; located_in requires a place value and never means employer or affiliation; part_of never means that a person works for an organization; instance_of points from the described subject to a class/concept. Do not reverse a relation to fit the available property list.
+- Relation direction is strict: author uses a work as subject and a person/organization as value; developer uses software/product as subject; manufacturer uses product as subject and organization as value; voice_actor uses character as subject and person as value; located_in requires a place value and never means employer or affiliation; issued_by uses a work as subject and the explicitly named issuing/publishing standards organization as value; updates and obsoletes point from one work to another work; instance_of points from the described subject to a class/concept.
+- part_of means an explicit containment, membership, or work-series relationship. It never means author, publisher, issuing body, employer, loose association, or mere mention. Never use part_of when issued_by is the supported relation.
+- For an RFC or comparable standard, use document_identifier for an explicit identifier such as "RFC 7523", document_category for an explicit category or track, document_status for an explicit lifecycle status, release_date for an explicit publication date, and issued_by for an explicitly stated issuing organization.
+- Every Entity-valued Claim must have different subject and value identities. Never emit a self-referential relation, even when the same subject has multiple labels or aliases.
+- Do not reverse a relation or substitute the nearest available property merely to fit the property list. Omit a relation when none of the allowed properties expresses it exactly.
 - Nearby names are not enough evidence for a Claim. The exact quotation must express the property relation in the stated direction.
 - Every Entity and Claim candidate must cite an exact non-empty quotation from one supplied Chunk. Copy quotation text verbatim: do not translate, normalize punctuation, insert ellipses, or combine non-contiguous text. Prefer the shortest quotation that still supports the candidate.
 - For every evidence item, copy chunk_id exactly from the same Chunk object that contains the quotation. Never use source_version_id as chunk_id and never invent a chunk UUID. char_start and char_end are Unicode character offsets within that one Chunk.

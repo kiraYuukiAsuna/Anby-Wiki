@@ -407,8 +407,12 @@ go run ./cmd/worker -check-consistency -sample-size 100
 - `GET /api/v1/entities/{id}/mentions`
 - `GET /api/v1/claims/{id}/usages`
 - `GET /api/v1/citations/{id}/usages`
+- `GET /api/v1/sources/{id}/usages`：按 Current Page 聚合使用位置，同时返回
+  全量页面、Block、Citation 与位置总数；
+- `GET /api/v1/sources/{id}/usages/{page_id}`：按需展开指定页面的
+  Block/Node/Citation 审计明细。
 
-三者按 `(page_id, block_id, node_id)` 游标分页，每条返回页面 ID/标题、
+前三者按 `(page_id, block_id, node_id)` 游标分页，每条返回页面 ID/标题、
 `revision_id`、`block_id`、`node_id`；Entity 额外返回 mention_text，Citation
 保留可空 claim_id。查询 SQL 只读投影表并要求投影 revision 等于 Page Current，
 不解析或扫描 AST JSON；投影缺失时返回空列表而不是同步回源。

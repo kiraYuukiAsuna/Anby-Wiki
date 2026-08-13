@@ -236,6 +236,8 @@ export * from './SourceImportSource';
 export * from './SourceSummary';
 export * from './SourceUsage';
 export * from './SourceUsageListPage';
+export * from './SourceUsageLocation';
+export * from './SourceUsageLocationListPage';
 export * from './SourceVersionSummary';
 export * from './SubmitProposalResult';
 export * from './UpdateAIConfigRequest';

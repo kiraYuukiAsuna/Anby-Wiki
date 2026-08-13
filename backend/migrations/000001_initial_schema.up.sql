@@ -445,7 +445,9 @@ CREATE TABLE claim (
     created_at         timestamptz NOT NULL DEFAULT now(),
     superseded_by      uuid        REFERENCES claim (id),
     CONSTRAINT claim_valid_time_check
-        CHECK (valid_to IS NULL OR valid_from IS NULL OR valid_to > valid_from)
+        CHECK (valid_to IS NULL OR valid_from IS NULL OR valid_to > valid_from),
+    CONSTRAINT claim_no_self_reference_check
+        CHECK (target_entity_id IS NULL OR target_entity_id <> subject_entity_id)
 );
 
 CREATE INDEX claim_subject_property_status_idx ON claim (subject_entity_id, property_id, status);
@@ -578,6 +580,31 @@ INSERT INTO property (id, property_key, name, value_type, is_multivalued) VALUES
     ('00000000-0000-7000-8000-000000000406', 'release_date', '发布日期', 'date',   false),
     ('00000000-0000-7000-8000-000000000407', 'located_in',   '位于',     'entity', true),
     ('00000000-0000-7000-8000-000000000408', 'part_of',      '属于',     'entity', true);
+
+INSERT INTO property
+    (id, property_key, name, value_type, is_multivalued, subject_type_id, target_type_id)
+VALUES
+    ('00000000-0000-7000-8000-000000000409', 'issued_by',
+     '发布组织', 'entity', true,
+     '00000000-0000-7000-8000-000000000304',
+     '00000000-0000-7000-8000-000000000302'),
+    ('00000000-0000-7000-8000-000000000410', 'document_identifier',
+     '文档编号', 'string', true,
+     '00000000-0000-7000-8000-000000000304', NULL),
+    ('00000000-0000-7000-8000-000000000411', 'document_category',
+     '文档类别', 'string', false,
+     '00000000-0000-7000-8000-000000000304', NULL),
+    ('00000000-0000-7000-8000-000000000412', 'document_status',
+     '文档状态', 'string', false,
+     '00000000-0000-7000-8000-000000000304', NULL),
+    ('00000000-0000-7000-8000-000000000413', 'updates',
+     '更新了', 'entity', true,
+     '00000000-0000-7000-8000-000000000304',
+     '00000000-0000-7000-8000-000000000304'),
+    ('00000000-0000-7000-8000-000000000414', 'obsoletes',
+     '废止了', 'entity', true,
+     '00000000-0000-7000-8000-000000000304',
+     '00000000-0000-7000-8000-000000000304');
 
 COMMIT;
 
@@ -758,7 +785,10 @@ CREATE TABLE citation (
     quotation         text,
     quotation_hash    text,
     created_by        uuid        NOT NULL REFERENCES actor (id),
-    created_at        timestamptz NOT NULL DEFAULT now()
+    created_at        timestamptz NOT NULL DEFAULT now(),
+    CONSTRAINT citation_evidence_identity_key
+        UNIQUE NULLS NOT DISTINCT
+        (source_version_id, source_chunk_id, locator_json, quotation_hash)
 );
 
 CREATE INDEX citation_source_version_idx ON citation (source_version_id);

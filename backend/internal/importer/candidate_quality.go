@@ -69,7 +69,8 @@ func normalizeCandidatesForUse(input *Candidates) *Candidates {
 	claimKeys := map[string]bool{}
 	for _, raw := range input.Claims {
 		candidate := raw
-		if !remapClaimCandidate(&candidate, remappedIDs) || !claimCandidateTypeSafe(candidate, types) {
+		if !remapClaimCandidate(&candidate, remappedIDs) || claimCandidateSelfReferential(candidate) ||
+			!claimCandidateTypeSafe(candidate, types) {
 			continue
 		}
 		candidate.Evidence = mergeCandidateEvidence(nil, candidate.Evidence)
@@ -81,6 +82,23 @@ func normalizeCandidatesForUse(input *Candidates) *Candidates {
 		result.Claims = append(result.Claims, candidate)
 	}
 	return result
+}
+
+func claimCandidateSelfReferential(candidate ClaimCandidate) bool {
+	var value struct {
+		EntityCandidateID *uuid.UUID `json:"entity_candidate_id"`
+		EntityID          *uuid.UUID `json:"entity_id"`
+	}
+	if json.Unmarshal(candidate.Value, &value) != nil {
+		return false
+	}
+	if candidate.Subject.CandidateID != nil && value.EntityCandidateID != nil {
+		return *candidate.Subject.CandidateID == *value.EntityCandidateID
+	}
+	if candidate.Subject.EntityID != nil && value.EntityID != nil {
+		return *candidate.Subject.EntityID == *value.EntityID
+	}
+	return false
 }
 
 func matchingEntityCandidate(existing []EntityCandidate, incoming EntityCandidate) (int, bool) {
@@ -296,8 +314,22 @@ func claimCandidateTypeSafe(candidate ClaimCandidate, types map[uuid.UUID]string
 		return (subjectType == "" || oneOf(subjectType, "place", "organization", "event")) &&
 			(valueType == "" || valueType == "place")
 	case "part_of":
+		// A work can belong to a work/series, but an issuing or publishing
+		// organization is not its container. Keep this deterministic guard even
+		// when a provider ignores the prompt's issued_by instruction.
+		if subjectType == "work" && valueType == "organization" {
+			return false
+		}
 		return (subjectType == "" || oneOf(subjectType, "organization", "place", "work", "event", "product", "concept", "software", "species")) &&
 			(valueType == "" || oneOf(valueType, "organization", "place", "work", "event", "product", "concept", "software"))
+	case "issued_by":
+		return (subjectType == "" || subjectType == "work") &&
+			(valueType == "" || valueType == "organization")
+	case "updates", "obsoletes":
+		return (subjectType == "" || subjectType == "work") &&
+			(valueType == "" || valueType == "work")
+	case "document_identifier", "document_category", "document_status":
+		return subjectType == "" || subjectType == "work"
 	case "instance_of":
 		return valueType == "" || oneOf(valueType, "concept", "species")
 	case "release_date":

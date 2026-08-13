@@ -23,7 +23,7 @@ import (
 
 // RendererVersion 渲染器版本。渲染规则发生任何影响输出的变更时必须升版
 // （M3 的 RenderedPage 投影按此版本判断缓存是否需要重建）。变更规则见 README。
-const RendererVersion = "v7"
+const RendererVersion = "v8"
 
 type renderContext struct {
 	citationNumbers map[string]int

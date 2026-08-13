@@ -441,7 +441,7 @@
 .wiki-rendered .entity-infobox {
   float: right;
   margin: 0.2rem 0 1.25rem 1.5rem;
-  width: min(19rem, 44%);
+  width: min(22rem, 48%);
   overflow: hidden;
   border: 1px solid color-mix(in oklch, var(--primary) 18%, var(--border));
   border-radius: 1rem;
@@ -454,12 +454,28 @@
   box-shadow: 0 18px 45px color-mix(in oklch, var(--foreground) 8%, transparent);
 }
 
-.wiki-rendered .entity-infobox h2 {
-  margin: 0;
+.wiki-rendered .entity-infobox-header {
   border: 0;
   background: color-mix(in oklch, var(--primary) 9%, transparent);
   padding: 1rem 1.1rem;
+}
+
+.wiki-rendered .entity-infobox-type {
+  margin: 0 0 0.3rem;
+  color: var(--muted-foreground);
+  font-size: 0.68rem;
+  font-weight: 650;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+}
+
+.wiki-rendered .entity-infobox h2 {
+  margin: 0;
+  border: 0;
+  padding: 0;
   font-size: 1rem;
+  line-height: 1.45;
+  overflow-wrap: anywhere;
 }
 
 .wiki-rendered .entity-infobox dl {
@@ -483,6 +499,41 @@
 .wiki-rendered .entity-infobox dt {
   color: var(--muted-foreground);
   font-weight: 550;
+}
+
+.wiki-rendered .entity-infobox dd {
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+
+.wiki-rendered .entity-infobox-value a {
+  color: color-mix(in oklch, var(--primary) 82%, var(--foreground));
+  font-weight: 540;
+  text-decoration: none;
+}
+
+.wiki-rendered .entity-infobox-value a:hover {
+  text-decoration: underline;
+  text-underline-offset: 0.2em;
+}
+
+.wiki-rendered .entity-infobox-separator {
+  color: var(--muted-foreground);
+}
+
+.wiki-rendered .entity-infobox-empty {
+  margin: 0;
+  padding: 1rem 1.1rem;
+  color: var(--muted-foreground);
+  font-size: 0.78rem;
+}
+
+.wiki-rendered .entity-infobox-verification {
+  border-top: 1px solid var(--border);
+  padding: 0.65rem 1.1rem 0.75rem;
+  color: var(--muted-foreground);
+  font-size: 0.68rem;
+  line-height: 1.4;
 }
 
 .wiki-rendered [data-component-renderer="key-value"] {

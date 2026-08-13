@@ -128,6 +128,9 @@ func (s *Service) prepareClaim(ctx context.Context, tx pgx.Tx, params CreateClai
 	if err != nil {
 		return nil, err
 	}
+	if err := validateClaimEndpoints(subject.ID, targetEntityID); err != nil {
+		return nil, fmt.Errorf("%w: property=%q entity=%s", err, prop.PropertyKey, subject.ID)
+	}
 
 	// entity 值：目标实体必须存在且 active，类型匹配 target_type 约束。
 	if targetEntityID != nil {
@@ -219,6 +222,13 @@ func (s *Service) prepareClaim(ctx context.Context, tx pgx.Tx, params CreateClai
 		ChangeBatchID:      params.ChangeBatchID,
 		CreatedBy:          params.ActorID,
 	}, nil
+}
+
+func validateClaimEndpoints(subjectID uuid.UUID, targetEntityID *uuid.UUID) error {
+	if subjectID != uuid.Nil && targetEntityID != nil && *targetEntityID == subjectID {
+		return ErrSelfReferentialClaim
+	}
+	return nil
 }
 
 // checkTypeKeyConstraint 按 schema_json 中的 type_key 约束校验实体类型

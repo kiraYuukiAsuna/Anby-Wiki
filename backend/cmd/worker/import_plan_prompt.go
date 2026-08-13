@@ -13,6 +13,7 @@ Routing rules:
 - route_mode=force_create requires one create route whose title exactly matches preferred_title; do not update an existing page instead.
 - A weak keyword overlap is not enough to update a page. Prefer create when the subject is distinct, and ignore incidental mentions.
 - Multiple create/update routes are allowed, but each must cover a genuinely independent subject with enough source content.
+- Authors, editors, contributors, publishers, and issuing organizations named only by the document header, byline, author-address section, or metadata are contextual attributes of the main work. Do not create or update standalone pages for them unless the source contains independent biographical or organizational coverage beyond their role in this work.
 - link means the source confirms relevance but adds no new content. A link route targets one existing candidate page and related_to contains the exact title of each create/update route that should reference it. Do not link every output page indiscriminately. A link route requires exact source evidence. ignore means unsuitable, redundant, navigational, or unsupported content.
 
 Writing rules:
@@ -62,6 +63,7 @@ The draft already contains exact evidence copied from immutable source Chunks. P
 - Merge routes that refer to the same page or subject. Preserve valid create/update/link/ignore intent and use only supplied candidate page_id and target_block_id values.
 - Reorder and rewrite blocks into concise neutral encyclopedia prose. Start new pages with a lead paragraph, then use a small number of substantive sections.
 - Remove repeated introductions, repeated facts, duplicate author sections, empty/orphan headings, tables of contents, boilerplate, acknowledgements, contact details, and bibliography/reference-list dumps.
+- Drop standalone routes for authors, editors, contributors, publishers, or issuing organizations when the draft supports only their role or contact/header metadata for the main work; keep their supported facts on the main work route instead.
 - Every retained factual block must keep one or more evidence objects copied exactly from draft_plan_json. Never invent or alter chunk_id, quotation, char offsets, or page. You may discard unnecessary evidence and blocks.
 - Headings must be followed by substantive content before the next heading at the same or higher level.
 - Keep distinct, sufficiently supported subjects as distinct routes; do not collapse genuinely separate pages merely to shorten output.

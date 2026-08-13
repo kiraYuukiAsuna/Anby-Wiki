@@ -50,8 +50,8 @@ M3 引入 RenderedPage 投影与缓存时复用本包，并按 `RendererVersion`
 
 ## 版本策略
 
-`RendererVersion` 当前为 `"v7"`。v7 把 Citation marker 与当前页面的 References
-统一编号并建立正文锚点。规则：
+`RendererVersion` 当前为 `"v8"`。v8 更新 Entity/Claim 信息框的可信 HTML；旧投影会
+因版本不匹配自动失效。规则：
 
 - 任何影响输出字节流的变更（标签结构、属性、转义行为、URL 策略）都必须升版
   （`v2`、`v3`…），并在本节追加变更说明；
@@ -62,6 +62,8 @@ M3 引入 RenderedPage 投影与缓存时复用本包，并按 `RendererVersion`
 
 版本记录：
 
+- `v8`：Entity 标签按目标语言、`und`、其他主标签依次回退；多值 Claim 按 Property
+  合并并链接目标 Entity，同时过滤历史自环 Claim、显示类型与待核验摘要。
 - `v7`：Citation 使用全文稳定编号，正文 marker 链接文末 References，并为每次出现
   输出独立回链锚点；章节懒加载显式携带全文 Citation 顺序。
 - `v6`：补齐媒体、数据视图、Embed、页内锚点、数学/mention，并由动态 resolver

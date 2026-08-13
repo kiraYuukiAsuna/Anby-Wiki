@@ -387,6 +387,12 @@ func knowledgeMutationError(
 		httpx.WriteError(
 			w, r, http.StatusBadRequest, httpx.CodeBadRequest, err.Error(),
 		)
+	case errors.Is(err, knowledge.ErrSelfReferentialClaim),
+		errors.Is(err, knowledge.ErrSubjectTypeMismatch),
+		errors.Is(err, knowledge.ErrTargetTypeMismatch):
+		httpx.WriteError(
+			w, r, http.StatusUnprocessableEntity, httpx.CodeValidationFailed, err.Error(),
+		)
 	case errors.Is(err, governance.ErrPermissionDenied),
 		errors.Is(err, page.ErrInvalidActor),
 		errors.Is(err, page.ErrActorNotAllowed),

@@ -99,7 +99,7 @@
         "subject": { "$ref": "#/$defs/subject" },
         "property_key": {
           "type": "string",
-          "enum": ["instance_of", "developer", "author", "manufacturer", "voice_actor", "release_date", "located_in", "part_of"]
+          "enum": ["instance_of", "developer", "author", "manufacturer", "voice_actor", "release_date", "located_in", "part_of", "issued_by", "document_identifier", "document_category", "document_status", "updates", "obsoletes"]
         },
         "value": { "$ref": "#/$defs/value" },
         "valid_from": { "type": "string", "format": "date-time" },
