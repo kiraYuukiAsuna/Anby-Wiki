@@ -1,6 +1,8 @@
 import Link from "next/link";
 import type { Proposal } from "../../../../contracts/generated/typescript";
 
+import { compactId } from "@/lib/display-id";
+
 const OPERATION_LABEL: Record<string, string> = {
   create_page: "创建页面", insert_block: "追加内容块", replace_block: "更新内容块",
   create_entity: "创建实体", merge_entity: "合并实体", create_claim: "创建事实",
@@ -40,7 +42,7 @@ export function KnowledgeProposalDetail({ proposal }: { proposal: Proposal }) {
       <header className="flex flex-wrap items-start justify-between gap-3">
         <div>
           <p className="text-xs font-medium tracking-widest text-muted-foreground uppercase">{isWikiImport ? "Atomic Wiki Import" : "Knowledge Proposal"}</p>
-          <h1 className="mt-1 text-2xl font-bold tracking-tight">{isWikiImport ? "百科导入变更批次" : "知识变更提案"} {proposal.id.slice(0, 8)}</h1>
+          <h1 className="mt-1 text-2xl font-bold tracking-tight">{isWikiImport ? "百科导入变更批次" : "知识变更提案"} {compactId(proposal.id)}</h1>
           <p className="mt-1 font-mono text-xs text-muted-foreground">{proposal.id}</p>
         </div>
         <div className="flex gap-2 text-xs">

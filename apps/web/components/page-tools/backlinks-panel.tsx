@@ -10,15 +10,60 @@ import {
   TriangleAlert,
 } from "lucide-react";
 import Link from "next/link";
+import { useMemo } from "react";
 import useSWRInfinite from "swr/infinite";
 
-import type { BacklinkListPage } from "../../../../contracts/generated/typescript";
+import type {
+  Backlink,
+  BacklinkListPage,
+} from "../../../../contracts/generated/typescript";
 
 import { Button } from "@/components/ui/button";
 import { projectionApi } from "@/lib/api";
+import { compactId } from "@/lib/display-id";
 import { cn } from "@/lib/utils";
 
 const PAGE_SIZE = 24;
+
+type BacklinkPageGroup = {
+  pageId: string;
+  pageTitle: string;
+  items: Backlink[];
+  blockCount: number;
+  displayTexts: string[];
+};
+
+function groupBacklinksByPage(items: Backlink[]): BacklinkPageGroup[] {
+  const groups = new Map<
+    string,
+    BacklinkPageGroup & { blockIds: Set<string>; displayTextSet: Set<string> }
+  >();
+  for (const item of items) {
+    let group = groups.get(item.sourcePageId);
+    if (!group) {
+      group = {
+        pageId: item.sourcePageId,
+        pageTitle: item.sourceTitle,
+        items: [],
+        blockCount: 0,
+        displayTexts: [],
+        blockIds: new Set<string>(),
+        displayTextSet: new Set<string>(),
+      };
+      groups.set(item.sourcePageId, group);
+    }
+    group.items.push(item);
+    group.blockIds.add(item.sourceBlockId);
+    if (item.displayText.trim()) group.displayTextSet.add(item.displayText.trim());
+  }
+  return Array.from(groups.values(), (group) => ({
+    pageId: group.pageId,
+    pageTitle: group.pageTitle,
+    items: group.items,
+    blockCount: group.blockIds.size,
+    displayTexts: Array.from(group.displayTextSet),
+  }));
+}
 
 export function BacklinksPanel({
   pageId,
@@ -47,7 +92,11 @@ export function BacklinksPanel({
     { revalidateFirstPage: true },
   );
 
-  const items = state.data?.flatMap((page) => page.items) ?? [];
+  const items = useMemo(
+    () => state.data?.flatMap((page) => page.items) ?? [],
+    [state.data],
+  );
+  const groups = useMemo(() => groupBacklinksByPage(items), [items]);
   const lastPage = state.data?.at(-1);
   const loadingMore =
     state.isValidating &&
@@ -107,14 +156,17 @@ export function BacklinksPanel({
           </div>
         ) : (
           <>
+            <p className="mb-3 text-xs text-muted-foreground">
+              已加载 {groups.length} 个来源页面 · {items.length} 处链入
+            </p>
             <ul className="grid gap-3 md:grid-cols-2">
-              {items.map((item) => (
+              {groups.map((group) => (
                 <li
-                  key={`${item.sourcePageId}:${item.sourceBlockId}`}
+                  key={group.pageId}
                   className="group rounded-xl border bg-background/55 p-4 transition hover:border-primary/25 hover:bg-primary/[0.025]"
                 >
                   <Link
-                    href={`/pages/${item.sourcePageId}#${item.sourceBlockId}`}
+                    href={`/pages/${group.pageId}#${group.items[0].sourceBlockId}`}
                     className="flex items-start gap-3"
                   >
                     <CornerUpLeft
@@ -123,20 +175,56 @@ export function BacklinksPanel({
                     />
                     <span className="min-w-0 flex-1">
                       <span className="flex items-center gap-1 font-semibold">
-                        <span className="truncate">{item.sourceTitle}</span>
+                        <span className="truncate">{group.pageTitle}</span>
                         <ArrowUpRight
                           className="size-3.5 shrink-0 opacity-0 transition-opacity group-hover:opacity-100"
                           aria-hidden
                         />
                       </span>
                       <span className="mt-1 block text-xs leading-5 text-muted-foreground">
-                        展示文本“{item.displayText}”
-                      </span>
-                      <span className="mt-2 block truncate font-mono text-[9px] text-muted-foreground/75">
-                        block:{item.sourceBlockId}
+                        {group.items.length} 处链入 · {group.blockCount} 个区块
                       </span>
                     </span>
                   </Link>
+                  {group.displayTexts.length > 0 ? (
+                    <p className="mt-2 line-clamp-2 text-xs text-muted-foreground">
+                      展示文本：
+                      {group.displayTexts.map((text) => `“${text}”`).join("、")}
+                    </p>
+                  ) : null}
+                  {group.items.length > 1 ? (
+                    <details className="mt-2 text-xs text-muted-foreground">
+                      <summary className="cursor-pointer select-none hover:text-foreground">
+                        查看 {group.items.length} 个精确位置
+                      </summary>
+                      <ul className="mt-2 space-y-1.5 border-l pl-3">
+                        {group.items.map((item) => (
+                          <li
+                            key={`${item.sourceBlockId}:${item.sourceNodeId}`}
+                          >
+                            <Link
+                              href={`/pages/${item.sourcePageId}#${item.sourceBlockId}`}
+                              className="hover:text-foreground hover:underline"
+                            >
+                              Block{" "}
+                              <span title={item.sourceBlockId}>
+                                {compactId(item.sourceBlockId)}
+                              </span>{" "}
+                              · Node {item.sourceNodeId} · “{item.displayText}”
+                            </Link>
+                          </li>
+                        ))}
+                      </ul>
+                    </details>
+                  ) : (
+                    <p className="mt-2 font-mono text-[9px] text-muted-foreground/75">
+                      Block{" "}
+                      <span title={group.items[0].sourceBlockId}>
+                        {compactId(group.items[0].sourceBlockId)}
+                      </span>{" "}
+                      · Node {group.items[0].sourceNodeId}
+                    </p>
+                  )}
                 </li>
               ))}
             </ul>

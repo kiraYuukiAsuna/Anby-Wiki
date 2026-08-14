@@ -7,7 +7,7 @@ import {
   DetailShell,
 } from "@/components/knowledge/detail-shell";
 import { ClaimVerificationControl } from "@/components/knowledge/claim-verification-control";
-import { UsageList } from "@/components/knowledge/usage-list";
+import { ReferenceUsagePanel } from "@/components/knowledge/reference-usage-panel";
 import { fetchClaimDetail } from "@/lib/knowledge";
 
 export const dynamic = "force-dynamic";
@@ -99,8 +99,14 @@ export default async function ClaimDetailPage({
         )}
       </DetailSection>
 
-      <DetailSection title={`页面使用位置 (${usages.items.length})`}>
-        <UsageList items={usages.items} />
+      <DetailSection
+        title={`页面引用 (${usages.totalPageCount} 个页面 · ${usages.totalUsageCount} 处)`}
+      >
+        <ReferenceUsagePanel
+          kind="claim"
+          targetId={detail.id}
+          initialPage={usages}
+        />
       </DetailSection>
     </DetailShell>
   );

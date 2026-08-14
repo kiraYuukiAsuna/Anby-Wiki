@@ -34,6 +34,7 @@ import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { governanceApi } from "@/lib/api";
 import { LOGIN_PATH, useSession } from "@/lib/auth";
+import { compactId } from "@/lib/display-id";
 import { cn } from "@/lib/utils";
 
 const PAGE_SIZE = 30;
@@ -234,7 +235,7 @@ function AuditCard({
             ))}
             {event.changeBatchId ? (
               <span className="rounded-full border px-2 py-0.5 font-mono text-[10px] text-muted-foreground">
-                batch {event.changeBatchId.slice(0, 8)}
+                batch {compactId(event.changeBatchId)}
               </span>
             ) : null}
           </div>

@@ -8,6 +8,9 @@ Name | Type
 ------------ | -------------
 `items` | [Array&lt;ReferenceUsage&gt;](ReferenceUsage.md)
 `nextCursor` | string
+`totalUsageCount` | number
+`totalPageCount` | number
+`totalBlockCount` | number
 
 ## Example
 
@@ -18,6 +21,9 @@ import type { ReferenceUsageListPage } from ''
 const example = {
   "items": null,
   "nextCursor": null,
+  "totalUsageCount": null,
+  "totalPageCount": null,
+  "totalBlockCount": null,
 } satisfies ReferenceUsageListPage
 
 console.log(example)

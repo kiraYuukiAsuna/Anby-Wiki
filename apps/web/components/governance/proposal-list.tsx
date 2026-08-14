@@ -31,6 +31,7 @@ import type {
 import { Button } from "@/components/ui/button";
 import { governanceApi } from "@/lib/api";
 import { LOGIN_PATH, useSession } from "@/lib/auth";
+import { compactId } from "@/lib/display-id";
 import { cn } from "@/lib/utils";
 
 const PAGE_SIZE = 20;
@@ -135,7 +136,7 @@ function ProposalRow({ proposal }: { proposal: Proposal }) {
   const risk = RISK_META[proposal.riskLevel];
   const StatusIcon = status.icon;
   const targetIdentity = proposal.targetId
-    ? proposal.targetId.slice(0, 8)
+    ? compactId(proposal.targetId)
     : "新建目标";
 
   return (

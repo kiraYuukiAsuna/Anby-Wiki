@@ -431,7 +431,7 @@ export class ProjectionApi extends runtime.BaseAPI {
     }
 
     /**
-     * 投影查询端点（匿名可读，无需登录）。列出指向该页面的已解析页面引用来源： 来源页（id/标题）+ 所在 Block + 展示文本。数据来自 page_link_projection 投影表 （设计 §17.3：关系查询走投影表，不扫 AST），由 Worker 异步构建， 新发布内容与投影之间存在最终一致窗口。 按 (source_page_id, source_block_id, source_node_id) 升序游标分页： 首页不传 cursor；后续页传上一页响应的 next_cursor；next_cursor 为 null 表示没有更多。 游标无法解析返回 400 validation_failed；页面不存在返回 404；软删除页返回 410 gone。
+     * 投影查询端点（匿名可读，无需登录）。列出指向该页面的已解析页面引用来源： 来源页（id/标题）+ 所在 Block/Node + 展示文本。数据来自 page_link_projection 投影表 （设计 §17.3：关系查询走投影表，不扫 AST），由 Worker 异步构建， 新发布内容与投影之间存在最终一致窗口。 按 (source_page_id, source_block_id, source_node_id) 升序游标分页： 首页不传 cursor；后续页传上一页响应的 next_cursor；next_cursor 为 null 表示没有更多。 游标无法解析返回 400 validation_failed；页面不存在返回 404；软删除页返回 410 gone。
      * 页面反向链接
      */
     async listBacklinksRaw(requestParameters: ListBacklinksRequest, initOverrides?: RequestInit | runtime.InitOverrideFunction): Promise<runtime.ApiResponse<BacklinkListPage>> {
@@ -442,7 +442,7 @@ export class ProjectionApi extends runtime.BaseAPI {
     }
 
     /**
-     * 投影查询端点（匿名可读，无需登录）。列出指向该页面的已解析页面引用来源： 来源页（id/标题）+ 所在 Block + 展示文本。数据来自 page_link_projection 投影表 （设计 §17.3：关系查询走投影表，不扫 AST），由 Worker 异步构建， 新发布内容与投影之间存在最终一致窗口。 按 (source_page_id, source_block_id, source_node_id) 升序游标分页： 首页不传 cursor；后续页传上一页响应的 next_cursor；next_cursor 为 null 表示没有更多。 游标无法解析返回 400 validation_failed；页面不存在返回 404；软删除页返回 410 gone。
+     * 投影查询端点（匿名可读，无需登录）。列出指向该页面的已解析页面引用来源： 来源页（id/标题）+ 所在 Block/Node + 展示文本。数据来自 page_link_projection 投影表 （设计 §17.3：关系查询走投影表，不扫 AST），由 Worker 异步构建， 新发布内容与投影之间存在最终一致窗口。 按 (source_page_id, source_block_id, source_node_id) 升序游标分页： 首页不传 cursor；后续页传上一页响应的 next_cursor；next_cursor 为 null 表示没有更多。 游标无法解析返回 400 validation_failed；页面不存在返回 404；软删除页返回 410 gone。
      * 页面反向链接
      */
     async listBacklinks(requestParameters: ListBacklinksRequest, initOverrides?: RequestInit | runtime.InitOverrideFunction): Promise<BacklinkListPage> {

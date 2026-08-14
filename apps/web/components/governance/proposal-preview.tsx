@@ -7,6 +7,7 @@ import type {
 import { DiffView } from "@/components/history/diff-view";
 import { MergeToWorkingDocument } from "@/components/governance/merge-to-working-document";
 import { MergeConflictPanel } from "@/components/governance/merge-conflict-panel";
+import { compactId } from "@/lib/display-id";
 
 const RISK_STYLES: Record<string, string> = {
   low: "bg-green-500/10 text-green-700",
@@ -61,7 +62,7 @@ export function ProposalPreview({
             Proposal Preview
           </p>
           <h1 className="mt-1 text-2xl font-bold tracking-tight">
-            变更提案 {proposal.id.slice(0, 8)}
+            变更提案 {compactId(proposal.id)}
           </h1>
           <p className="mt-1 font-mono text-xs text-muted-foreground">
             {proposal.id}

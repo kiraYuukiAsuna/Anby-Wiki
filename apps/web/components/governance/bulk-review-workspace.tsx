@@ -29,6 +29,7 @@ import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
 import { governanceApi } from "@/lib/api";
 import { isUnauthorized, LOGIN_PATH } from "@/lib/auth";
+import { compactId } from "@/lib/display-id";
 import { cn } from "@/lib/utils";
 
 const decisionSchema = z.string().trim().min(1, "请记录审核依据").max(1000);
@@ -297,7 +298,7 @@ export function BulkReviewWorkspace({ id }: { id: string }) {
             Frozen review batch
           </p>
           <h1 className="mt-3 text-3xl font-semibold tracking-[-0.04em]">
-            批次 {batch.id.slice(0, 8)}
+            批次 {compactId(batch.id)}
           </h1>
           <p className="mt-3 font-mono text-xs text-muted-foreground">{batch.id}</p>
         </div>

@@ -28,6 +28,7 @@ import {
 import { Button } from "@/components/ui/button";
 import { knowledgeApi } from "@/lib/api";
 import { isUnauthorized, LOGIN_PATH, useSession } from "@/lib/auth";
+import { compactId } from "@/lib/display-id";
 import { cn } from "@/lib/utils";
 
 const PAGE_SIZE = 30;
@@ -169,7 +170,7 @@ function IssueCard({ issue }: { issue: FactConsistencyIssue }) {
                 variant="outline"
               >
                 <Link href={`/claims/${claimId}`}>
-                  Claim {claimId.slice(0, 8)}
+                  Claim {compactId(claimId)}
                   <ArrowRight aria-hidden />
                 </Link>
               </Button>

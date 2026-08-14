@@ -1,8 +1,10 @@
 // 历史/回滚界面的共用展示辅助（M2-T05）。
 
-/** UUID 短 id 展示（取前 8 位，完整值放 title/aria）。 */
+import { compactId } from "@/lib/display-id";
+
+/** UUID 短 id 展示（保留随机尾部，完整值放 title/aria）。 */
 export function shortId(id: string): string {
-  return id.slice(0, 8);
+  return compactId(id);
 }
 
 /** 本地化日期时间（与 components/revision-info.tsx 一致的格式）。 */

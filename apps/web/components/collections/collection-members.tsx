@@ -11,6 +11,7 @@ import type {
 
 import { Button } from "@/components/ui/button";
 import { collectionsApi } from "@/lib/api";
+import { compactId } from "@/lib/display-id";
 
 const PAGE_SIZE = 20;
 
@@ -89,7 +90,7 @@ export function CollectionMembers({
                 <p>{member.sourceType === "manual" ? "人工来源" : "规则来源"}</p>
                 {member.sourceRevisionId ? (
                   <p className="font-mono" title={member.sourceRevisionId}>
-                    Revision {member.sourceRevisionId.slice(0, 8)}
+                    Revision {compactId(member.sourceRevisionId)}
                   </p>
                 ) : (
                   <p>实时查询</p>

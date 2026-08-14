@@ -2307,7 +2307,7 @@ paths:
       summary: 页面反向链接
       description: |
         投影查询端点（匿名可读，无需登录）。列出指向该页面的已解析页面引用来源：
-        来源页（id/标题）+ 所在 Block + 展示文本。数据来自 page_link_projection 投影表
+        来源页（id/标题）+ 所在 Block/Node + 展示文本。数据来自 page_link_projection 投影表
         （设计 §17.3：关系查询走投影表，不扫 AST），由 Worker 异步构建，
         新发布内容与投影之间存在最终一致窗口。
         按 (source_page_id, source_block_id, source_node_id) 升序游标分页：
@@ -5979,7 +5979,7 @@ components:
           example: v1
     Backlink:
       type: object
-      required: [source_page_id, source_title, source_block_id, display_text]
+      required: [source_page_id, source_title, source_block_id, source_node_id, display_text]
       description: 一条反向链接：指向目标页的已解析引用来源
       properties:
         source_page_id:
@@ -5994,6 +5994,9 @@ components:
           type: string
           format: uuid
           description: 引用所在 Block ID
+        source_node_id:
+          type: string
+          description: 引用节点在 Block content 内的稳定定位键
         display_text:
           type: string
           description: 引用的展示文本
@@ -6279,7 +6282,12 @@ components:
       allOf:
         - $ref: "#/components/schemas/CursorPage"
         - type: object
-          required: [items, next_cursor]
+          required:
+            - items
+            - next_cursor
+            - total_usage_count
+            - total_page_count
+            - total_block_count
           properties:
             items:
               type: array
@@ -6289,6 +6297,18 @@ components:
               type: string
               nullable: true
               description: 下一页游标；null 表示没有更多
+            total_usage_count:
+              type: integer
+              format: int64
+              description: 当前 Revision 中的引用位置总数（不受分页影响）
+            total_page_count:
+              type: integer
+              format: int64
+              description: 当前 Revision 中引用该目标的页面总数（不受分页影响）
+            total_block_count:
+              type: integer
+              format: int64
+              description: 当前 Revision 中包含引用的页面区块总数（不受分页影响）
     SourceUsage:
       type: object
       required:

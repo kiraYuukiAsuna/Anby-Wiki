@@ -17,6 +17,7 @@ import { useMemo, useState } from "react";
 import useSWRInfinite from "swr/infinite";
 
 import type {
+  ComponentUsage,
   ComponentUsageListPage,
   SourceUsage,
   SourceUsageListPage,
@@ -25,8 +26,54 @@ import type {
 
 import { Button } from "@/components/ui/button";
 import { projectionApi } from "@/lib/api";
+import { compactId } from "@/lib/display-id";
 
 const PAGE_SIZE = 20;
+
+type ComponentUsagePageGroup = {
+  pageId: string;
+  pageTitle: string;
+  revisionId: string;
+  items: ComponentUsage[];
+  blockCount: number;
+  versions: number[];
+};
+
+function groupComponentUsagesByPage(
+  items: ComponentUsage[],
+): ComponentUsagePageGroup[] {
+  const groups = new Map<
+    string,
+    ComponentUsagePageGroup & { blockIds: Set<string>; versionSet: Set<number> }
+  >();
+  for (const item of items) {
+    let group = groups.get(item.pageId);
+    if (!group) {
+      group = {
+        pageId: item.pageId,
+        pageTitle: item.pageTitle,
+        revisionId: item.revisionId,
+        items: [],
+        blockCount: 0,
+        versions: [],
+        blockIds: new Set<string>(),
+        versionSet: new Set<number>(),
+      };
+      groups.set(item.pageId, group);
+    }
+    group.items.push(item);
+    group.blockIds.add(item.blockId);
+    group.versionSet.add(item.componentVersion);
+  }
+  return Array.from(groups.values(), (group) => ({
+    pageId: group.pageId,
+    pageTitle: group.pageTitle,
+    revisionId: group.revisionId,
+    items: group.items,
+    blockCount: group.blockIds.size,
+    versions: Array.from(group.versionSet).sort((left, right) => right - left),
+  }));
+}
 
 export function SourceUsagePanel({ sourceId }: { sourceId: string }) {
   const usages = useSWRInfinite<SourceUsageListPage>(
@@ -289,7 +336,7 @@ export function ComponentUsagePanel({
     [usages.data],
   );
   const lastPage = usages.data?.[usages.data.length - 1];
-  const pageCount = new Set(items.map((item) => item.pageId)).size;
+  const groups = useMemo(() => groupComponentUsagesByPage(items), [items]);
 
   return (
     <section className="mt-9 border-t border-border/75 pt-8">
@@ -330,7 +377,7 @@ export function ComponentUsagePanel({
 
       {items.length > 0 ? (
         <p className="mt-4 text-xs text-muted-foreground">
-          已加载 {items.length} 处依赖，覆盖 {pageCount} 个页面。
+          已加载 {items.length} 处依赖，覆盖 {groups.length} 个页面。
         </p>
       ) : null}
       {usages.isLoading && !usages.data ? (
@@ -352,38 +399,76 @@ export function ComponentUsagePanel({
       ) : null}
       {items.length > 0 ? (
         <ol className="mt-5 divide-y overflow-hidden rounded-2xl border bg-card">
-          {items.map((item) => (
+          {groups.map((group) => (
             <li
-              key={`${item.pageId}:${item.blockId}`}
-              className="flex flex-wrap items-center gap-3 p-4"
+              key={group.pageId}
+              className="p-4"
             >
-              <span className="flex size-9 shrink-0 items-center justify-center rounded-xl bg-violet-100 text-violet-700">
-                <Component className="size-4" aria-hidden />
-              </span>
-              <div className="min-w-0 flex-1">
-                <Link
-                  href={`/pages/${item.pageId}`}
-                  className="font-medium hover:text-primary hover:underline"
-                >
-                  {item.pageTitle}
-                </Link>
-                <p className="mt-1 truncate font-mono text-[10px] text-muted-foreground">
-                  v{item.componentVersion} · block{" "}
-                  {item.blockId.slice(0, 8)}
-                </p>
+              <div className="flex flex-wrap items-center gap-3">
+                <span className="flex size-9 shrink-0 items-center justify-center rounded-xl bg-violet-100 text-violet-700">
+                  <Component className="size-4" aria-hidden />
+                </span>
+                <div className="min-w-0 flex-1">
+                  <Link
+                    href={`/pages/${group.pageId}#${group.items[0].blockId}`}
+                    className="font-medium hover:text-primary hover:underline"
+                  >
+                    {group.pageTitle}
+                  </Link>
+                  <p className="mt-1 text-xs text-muted-foreground">
+                    {group.items.length} 处依赖 · {group.blockCount} 个区块 · 版本{" "}
+                    {group.versions.map((item) => `v${item}`).join("、")}
+                  </p>
+                  <p className="mt-1 font-mono text-[10px] text-muted-foreground">
+                    revision{" "}
+                    <span title={group.revisionId}>{compactId(group.revisionId)}</span>
+                  </p>
+                </div>
+                {group.items.length === 1 ? (
+                  <Button asChild size="xs" variant="outline">
+                    <Link href={`/entities/${group.items[0].entityId}`}>
+                      <Waypoints aria-hidden />
+                      Entity
+                    </Link>
+                  </Button>
+                ) : null}
+                <Button asChild size="xs" variant="ghost">
+                  <Link href={`/pages/${group.pageId}#${group.items[0].blockId}`}>
+                    打开页面
+                    <ArrowRight aria-hidden />
+                  </Link>
+                </Button>
               </div>
-              <Button asChild size="xs" variant="outline">
-                <Link href={`/entities/${item.entityId}`}>
-                  <Waypoints aria-hidden />
-                  Entity
-                </Link>
-              </Button>
-              <Button asChild size="xs" variant="ghost">
-                <Link href={`/pages/${item.pageId}`}>
-                  打开页面
-                  <ArrowRight aria-hidden />
-                </Link>
-              </Button>
+              {group.items.length > 1 ? (
+                <details className="mt-3 text-xs text-muted-foreground">
+                  <summary className="cursor-pointer select-none hover:text-foreground">
+                    查看 {group.items.length} 个精确依赖
+                  </summary>
+                  <ul className="mt-2 space-y-1.5 border-l pl-3">
+                    {group.items.map((item) => (
+                      <li
+                        key={`${item.blockId}:${item.componentVersion}:${item.entityId}`}
+                        className="flex flex-wrap items-center gap-2"
+                      >
+                        <Link
+                          href={`/pages/${item.pageId}#${item.blockId}`}
+                          className="min-w-0 flex-1 hover:text-foreground hover:underline"
+                        >
+                          v{item.componentVersion} · Block{" "}
+                          <span title={item.blockId}>{compactId(item.blockId)}</span>
+                        </Link>
+                        <Link
+                          href={`/entities/${item.entityId}`}
+                          title={item.entityId}
+                          className="text-violet-700 hover:underline"
+                        >
+                          Entity {compactId(item.entityId)}
+                        </Link>
+                      </li>
+                    ))}
+                  </ul>
+                </details>
+              ) : null}
             </li>
           ))}
         </ol>

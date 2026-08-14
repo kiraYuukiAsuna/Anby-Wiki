@@ -39,6 +39,24 @@ export interface ReferenceUsageListPage {
      * @memberof ReferenceUsageListPage
      */
     nextCursor: string;
+    /**
+     * 当前 Revision 中的引用位置总数（不受分页影响）
+     * @type {number}
+     * @memberof ReferenceUsageListPage
+     */
+    totalUsageCount: number;
+    /**
+     * 当前 Revision 中引用该目标的页面总数（不受分页影响）
+     * @type {number}
+     * @memberof ReferenceUsageListPage
+     */
+    totalPageCount: number;
+    /**
+     * 当前 Revision 中包含引用的页面区块总数（不受分页影响）
+     * @type {number}
+     * @memberof ReferenceUsageListPage
+     */
+    totalBlockCount: number;
 }
 
 /**
@@ -47,6 +65,9 @@ export interface ReferenceUsageListPage {
 export function instanceOfReferenceUsageListPage(value: object): value is ReferenceUsageListPage {
     if (!('items' in value) || value['items'] === undefined) return false;
     if ((!('nextCursor' in (value as Record<string, any>)) && !('next_cursor' in (value as Record<string, any>))) || ((value as Record<string, any>)['nextCursor'] === undefined && (value as Record<string, any>)['next_cursor'] === undefined)) return false;
+    if ((!('totalUsageCount' in (value as Record<string, any>)) && !('total_usage_count' in (value as Record<string, any>))) || ((value as Record<string, any>)['totalUsageCount'] === undefined && (value as Record<string, any>)['total_usage_count'] === undefined)) return false;
+    if ((!('totalPageCount' in (value as Record<string, any>)) && !('total_page_count' in (value as Record<string, any>))) || ((value as Record<string, any>)['totalPageCount'] === undefined && (value as Record<string, any>)['total_page_count'] === undefined)) return false;
+    if ((!('totalBlockCount' in (value as Record<string, any>)) && !('total_block_count' in (value as Record<string, any>))) || ((value as Record<string, any>)['totalBlockCount'] === undefined && (value as Record<string, any>)['total_block_count'] === undefined)) return false;
     return true;
 }
 
@@ -62,6 +83,9 @@ export function ReferenceUsageListPageFromJSONTyped(json: any, ignoreDiscriminat
 
         'items': ((json['items'] as Array<any>).map(ReferenceUsageFromJSON)),
         'nextCursor': json['next_cursor'],
+        'totalUsageCount': json['total_usage_count'],
+        'totalPageCount': json['total_page_count'],
+        'totalBlockCount': json['total_block_count'],
     };
 }
 
@@ -78,6 +102,9 @@ export function ReferenceUsageListPageToJSONTyped(value?: ReferenceUsageListPage
 
         'items': ((value['items'] as Array<any>).map(ReferenceUsageToJSON)),
         'next_cursor': value['nextCursor'],
+        'total_usage_count': value['totalUsageCount'],
+        'total_page_count': value['totalPageCount'],
+        'total_block_count': value['totalBlockCount'],
     };
 }
 

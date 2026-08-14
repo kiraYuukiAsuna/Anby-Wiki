@@ -29,6 +29,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { assetsApi } from "@/lib/api";
 import { useSession } from "@/lib/auth";
+import { compactId } from "@/lib/display-id";
 import { cn } from "@/lib/utils";
 
 const PAGE_SIZE = 24;
@@ -112,7 +113,7 @@ function AssetCard({ asset }: { asset: Asset }) {
           <time dateTime={asset.updatedAt.toISOString()}>
             {DATE_FORMATTER.format(asset.updatedAt)}
           </time>
-          <span className="font-mono">{revision.id.slice(0, 8)}</span>
+          <span className="font-mono" title={revision.id}>{compactId(revision.id)}</span>
         </div>
         <Button asChild type="button" size="sm" variant="outline" className="mt-4 w-full">
           <Link href={`/assets/revisions/${revision.id}`}>
@@ -179,7 +180,7 @@ export function AssetLibrary() {
       if (inputRef.current) inputRef.current.value = "";
       setName("");
       toast.success("资产已保存", {
-        description: `不可变版本 ${asset.currentRevision.id.slice(0, 8)}`,
+        description: `不可变版本 ${compactId(asset.currentRevision.id)}`,
       });
     } catch {
       toast.error("资产上传失败", {

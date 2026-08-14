@@ -31,6 +31,7 @@ import {
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { governanceApi } from "@/lib/api";
+import { compactId } from "@/lib/display-id";
 
 const rollbackConfirmation = z.literal("ROLLBACK");
 
@@ -66,7 +67,7 @@ export function ProposalActions({ proposal }: { proposal: Proposal }) {
     try {
       const result = await governanceApi().applyProposal({ id: proposal.id });
       toast.success(result.idempotent ? "该提案已经生效" : "提案已原子生效", {
-        description: `ChangeBatch ${result.changeBatchId.slice(0, 8)} 已写入审计账本${result.revisionIds.length ? `，发布 ${result.revisionIds.length} 个页面 Revision` : ""}。`,
+        description: `ChangeBatch ${compactId(result.changeBatchId)} 已写入审计账本${result.revisionIds.length ? `，发布 ${result.revisionIds.length} 个页面 Revision` : ""}。`,
       });
       router.refresh();
     } catch (error) {

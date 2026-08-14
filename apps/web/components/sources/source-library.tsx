@@ -31,6 +31,7 @@ import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { sourcesApi } from "@/lib/api";
 import { useSession } from "@/lib/auth";
+import { compactId } from "@/lib/display-id";
 import { cn } from "@/lib/utils";
 
 const PAGE_SIZE = 24;
@@ -102,7 +103,7 @@ function SourceCard({ source }: { source: EvidenceSource }) {
               "尚未登记作者或发布者"}
           </p>
           <p className="mt-3 font-mono text-[10px] text-muted-foreground">
-            {source.id.slice(0, 12)}
+            {compactId(source.id)}
           </p>
         </div>
       </div>
@@ -202,7 +203,7 @@ export function SourceLibrary() {
       setMetadata("{}");
       await state.mutate();
       toast.success("来源已登记", {
-        description: `稳定 ID ${created.id.slice(0, 8)}`,
+        description: `稳定 ID ${compactId(created.id)}`,
       });
     } catch {
       toast.error("来源登记失败", {

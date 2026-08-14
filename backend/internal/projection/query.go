@@ -29,6 +29,7 @@ type Backlink struct {
 	SourcePageID  uuid.UUID
 	SourceTitle   string
 	SourceBlockID uuid.UUID
+	SourceNodeID  string
 	DisplayText   string
 }
 
@@ -91,8 +92,11 @@ type ReferenceUsage struct {
 
 // ReferenceUsagePage 是一页知识/证据反向使用位置。
 type ReferenceUsagePage struct {
-	Items      []ReferenceUsage
-	NextCursor *string
+	Items           []ReferenceUsage
+	NextCursor      *string
+	TotalUsageCount int64
+	TotalPageCount  int64
+	TotalBlockCount int64
 }
 
 // SourceUsage is one current Page whose Revision cites a Source. Counts keep
@@ -155,7 +159,7 @@ func NewQueries(pool *pgxpool.Pool) *Queries {
 	return &Queries{pool: pool}
 }
 
-// backlinkRow 扫描用内部行：Backlink + 行键 source_node_id（游标用，不透出 API）。
+// backlinkRow 保留行键 source_node_id，既用于游标也透出为精确定位信息。
 type backlinkRow struct {
 	Backlink
 	sourceNodeID string
@@ -221,6 +225,7 @@ func (q *Queries) Backlinks(
 			&r.sourceNodeID, &r.DisplayText); err != nil {
 			return nil, fmt.Errorf("projection: 扫描反链行失败: %w", err)
 		}
+		r.SourceNodeID = r.sourceNodeID
 		scanned = append(scanned, r)
 	}
 	if err := rows.Err(); err != nil {
@@ -700,6 +705,36 @@ func (q *Queries) referenceUsages(
 			  AND ($3::uuid IS NULL OR (u.page_id, u.block_id, u.node_id) > ($3, $4, $5))
 			ORDER BY u.page_id, u.block_id, u.node_id LIMIT $6`,
 	}
+	countQueries := map[string]string{
+		"entity": `
+			SELECT count(*), count(DISTINCT u.page_id),
+			       count(DISTINCT (u.page_id, u.block_id))
+			FROM entity_mention_projection u JOIN page p ON p.id = u.page_id
+			WHERE u.entity_id = $1 AND p.wiki_id = $2 AND p.deleted_at IS NULL
+			  AND p.current_revision_id = u.revision_id`,
+		"claim": `
+			SELECT count(*), count(DISTINCT u.page_id),
+			       count(DISTINCT (u.page_id, u.block_id))
+			FROM claim_usage u JOIN page p ON p.id = u.page_id
+			WHERE u.claim_id = $1 AND p.wiki_id = $2 AND p.deleted_at IS NULL
+			  AND p.current_revision_id = u.revision_id`,
+		"citation": `
+			SELECT count(*), count(DISTINCT u.page_id),
+			       count(DISTINCT (u.page_id, u.block_id))
+			FROM citation_usage u JOIN page p ON p.id = u.page_id
+			WHERE u.citation_id = $1 AND p.wiki_id = $2 AND p.deleted_at IS NULL
+			  AND p.current_revision_id = u.revision_id`,
+	}
+	result := &ReferenceUsagePage{
+		Items: make([]ReferenceUsage, 0, limit),
+	}
+	if err := q.pool.QueryRow(ctx, countQueries[kind], targetID, wikiID).Scan(
+		&result.TotalUsageCount,
+		&result.TotalPageCount,
+		&result.TotalBlockCount,
+	); err != nil {
+		return nil, fmt.Errorf("projection: 统计 %s 使用位置失败: %w", kind, err)
+	}
 	rows, err := q.pool.Query(ctx, queries[kind], targetID, wikiID,
 		afterPageID, afterBlockID, afterNodeID, limit+1)
 	if err != nil {
@@ -720,7 +755,7 @@ func (q *Queries) referenceUsages(
 		return nil, fmt.Errorf("projection: 迭代 %s 使用位置失败: %w", kind, err)
 	}
 
-	result := &ReferenceUsagePage{Items: make([]ReferenceUsage, 0, min(len(scanned), limit))}
+	result.Items = make([]ReferenceUsage, 0, min(len(scanned), limit))
 	if len(scanned) > limit {
 		last := scanned[limit-1]
 		cursor := encodeBacklinkCursor(backlinkRow{

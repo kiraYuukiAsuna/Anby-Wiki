@@ -39,11 +39,12 @@ func NewProjectionAPI(
 
 // ---- 响应 DTO（与 contracts/openapi/openapi.yaml 对应，契约为准）----
 
-// backlinkResponse 一条反向链接：来源页 + 所在 Block + 展示文本。
+// backlinkResponse 一条反向链接：来源页 + 所在 Block/Node + 展示文本。
 type backlinkResponse struct {
 	SourcePageID  uuid.UUID `json:"source_page_id"`
 	SourceTitle   string    `json:"source_title"`
 	SourceBlockID uuid.UUID `json:"source_block_id"`
+	SourceNodeID  string    `json:"source_node_id"`
 	DisplayText   string    `json:"display_text"`
 }
 
@@ -169,8 +170,11 @@ type referenceUsageResponse struct {
 }
 
 type referenceUsageListResponse struct {
-	Items      []referenceUsageResponse `json:"items"`
-	NextCursor *string                  `json:"next_cursor"`
+	Items           []referenceUsageResponse `json:"items"`
+	NextCursor      *string                  `json:"next_cursor"`
+	TotalUsageCount int64                    `json:"total_usage_count"`
+	TotalPageCount  int64                    `json:"total_page_count"`
+	TotalBlockCount int64                    `json:"total_block_count"`
 }
 
 type sourceUsageResponse struct {
@@ -247,6 +251,7 @@ func (a *ProjectionAPI) listBacklinks(w http.ResponseWriter, r *http.Request) {
 			SourcePageID:  b.SourcePageID,
 			SourceTitle:   b.SourceTitle,
 			SourceBlockID: b.SourceBlockID,
+			SourceNodeID:  b.SourceNodeID,
 			DisplayText:   b.DisplayText,
 		}
 	}
@@ -663,8 +668,11 @@ func (a *ProjectionAPI) listReferenceUsages(
 		return
 	}
 	resp := referenceUsageListResponse{
-		Items:      make([]referenceUsageResponse, len(result.Items)),
-		NextCursor: result.NextCursor,
+		Items:           make([]referenceUsageResponse, len(result.Items)),
+		NextCursor:      result.NextCursor,
+		TotalUsageCount: result.TotalUsageCount,
+		TotalPageCount:  result.TotalPageCount,
+		TotalBlockCount: result.TotalBlockCount,
 	}
 	for i, usage := range result.Items {
 		var mentionText *string

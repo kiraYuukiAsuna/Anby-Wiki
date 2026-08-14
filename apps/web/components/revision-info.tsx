@@ -4,6 +4,8 @@ import { History } from "lucide-react";
 
 import type { Revision } from "../../../contracts/generated/typescript";
 
+import { compactId } from "@/lib/display-id";
+
 function formatDateTime(date: Date): string {
   return new Intl.DateTimeFormat("zh-CN", {
     dateStyle: "medium",
@@ -20,7 +22,7 @@ export function RevisionInfo({
 }) {
   return (
     <footer className="mt-10 flex flex-wrap items-center gap-x-4 gap-y-1 border-t border-border pt-4 text-xs text-muted-foreground">
-      <span title={revision.id}>版本 {revision.id.slice(0, 8)}</span>
+      <span title={revision.id}>版本 {compactId(revision.id)}</span>
       <time dateTime={revision.createdAt.toISOString()}>
         {formatDateTime(revision.createdAt)}
       </time>

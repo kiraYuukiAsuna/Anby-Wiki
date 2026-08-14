@@ -23,6 +23,7 @@ import type {
   TextNode,
 } from "@/lib/ast/schema";
 import { safeHttpUrl } from "@/lib/http-url";
+import { compactId } from "@/lib/display-id";
 import { AssetImage, AssetVideo } from "@/components/ast/asset-media";
 
 const HEADING_STYLES: Record<number, string> = {
@@ -186,7 +187,7 @@ export function BlockView({
             <p className="text-sm font-semibold">知识组件</p>
             <p className="mt-0.5 text-xs text-violet-700">
               组件版本 {block.component_version} · 实体{" "}
-              {block.entity_id.slice(0, 8)}
+              {compactId(block.entity_id)}
             </p>
           </div>
         </aside>

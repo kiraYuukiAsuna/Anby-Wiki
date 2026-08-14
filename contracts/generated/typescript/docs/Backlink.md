@@ -10,6 +10,7 @@ Name | Type
 `sourcePageId` | string
 `sourceTitle` | string
 `sourceBlockId` | string
+`sourceNodeId` | string
 `displayText` | string
 
 ## Example
@@ -22,6 +23,7 @@ const example = {
   "sourcePageId": null,
   "sourceTitle": Anby Demara,
   "sourceBlockId": null,
+  "sourceNodeId": null,
   "displayText": null,
 } satisfies Backlink
 

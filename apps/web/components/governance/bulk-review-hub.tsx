@@ -24,6 +24,7 @@ import { Checkbox } from "@/components/ui/checkbox";
 import { Input } from "@/components/ui/input";
 import { governanceApi } from "@/lib/api";
 import { isUnauthorized, LOGIN_PATH } from "@/lib/auth";
+import { compactId } from "@/lib/display-id";
 import { cn } from "@/lib/utils";
 
 const createBatchSchema = z.object({
@@ -67,7 +68,7 @@ function BatchCard({ batch }: { batch: BulkReviewBatchSummary }) {
             </span>
           </div>
           <p className="mt-3 font-mono text-sm font-semibold">
-            {batch.id.slice(0, 8)}
+            {compactId(batch.id)}
           </p>
           <p className="mt-1 text-xs text-muted-foreground">
             {new Intl.DateTimeFormat("zh-CN", {
@@ -313,7 +314,7 @@ export function BulkReviewHub() {
                     />
                     <span className="min-w-0">
                       <span className="block truncate font-mono text-xs">
-                        {task.proposalId.slice(0, 12)}
+                        {compactId(task.proposalId)}
                       </span>
                       <span className="block text-[11px] text-muted-foreground">
                         {new Intl.DateTimeFormat("zh-CN", {

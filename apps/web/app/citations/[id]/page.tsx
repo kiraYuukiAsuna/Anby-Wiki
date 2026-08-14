@@ -1,4 +1,3 @@
-import Link from "next/link";
 import { notFound } from "next/navigation";
 
 import {
@@ -6,7 +5,7 @@ import {
   DetailSection,
   DetailShell,
 } from "@/components/knowledge/detail-shell";
-import { UsageList } from "@/components/knowledge/usage-list";
+import { ReferenceUsagePanel } from "@/components/knowledge/reference-usage-panel";
 import { safeHttpUrl } from "@/lib/http-url";
 import { fetchCitationDetail } from "@/lib/knowledge";
 import type {
@@ -89,25 +88,14 @@ export default async function CitationDetailPage({
         </DetailSection>
       ) : null}
 
-      <DetailSection title={`页面使用位置 (${usages.items.length})`}>
-        <UsageList items={usages.items} />
-        {usages.items.some((item) => item.claimId) ? (
-          <p className="mt-3 text-xs text-muted-foreground">
-            含 Claim 上下文的引用可返回
-            {" "}
-            {usages.items
-              .filter((item) => item.claimId)
-              .map((item) => (
-                <Link
-                  key={`${item.pageId}:${item.nodeId}:claim`}
-                  href={`/claims/${item.claimId}`}
-                  className="ml-1 text-blue-600 hover:underline"
-                >
-                  {item.claimId.slice(0, 8)}
-                </Link>
-              ))}
-          </p>
-        ) : null}
+      <DetailSection
+        title={`页面引用 (${usages.totalPageCount} 个页面 · ${usages.totalUsageCount} 处)`}
+      >
+        <ReferenceUsagePanel
+          kind="citation"
+          targetId={detail.id}
+          initialPage={usages}
+        />
       </DetailSection>
     </DetailShell>
   );

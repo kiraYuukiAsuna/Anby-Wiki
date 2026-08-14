@@ -38,6 +38,12 @@ export interface Backlink {
      */
     sourceBlockId: string;
     /**
+     * 引用节点在 Block content 内的稳定定位键
+     * @type {string}
+     * @memberof Backlink
+     */
+    sourceNodeId: string;
+    /**
      * 引用的展示文本
      * @type {string}
      * @memberof Backlink
@@ -52,6 +58,7 @@ export function instanceOfBacklink(value: object): value is Backlink {
     if ((!('sourcePageId' in (value as Record<string, any>)) && !('source_page_id' in (value as Record<string, any>))) || ((value as Record<string, any>)['sourcePageId'] === undefined && (value as Record<string, any>)['source_page_id'] === undefined)) return false;
     if ((!('sourceTitle' in (value as Record<string, any>)) && !('source_title' in (value as Record<string, any>))) || ((value as Record<string, any>)['sourceTitle'] === undefined && (value as Record<string, any>)['source_title'] === undefined)) return false;
     if ((!('sourceBlockId' in (value as Record<string, any>)) && !('source_block_id' in (value as Record<string, any>))) || ((value as Record<string, any>)['sourceBlockId'] === undefined && (value as Record<string, any>)['source_block_id'] === undefined)) return false;
+    if ((!('sourceNodeId' in (value as Record<string, any>)) && !('source_node_id' in (value as Record<string, any>))) || ((value as Record<string, any>)['sourceNodeId'] === undefined && (value as Record<string, any>)['source_node_id'] === undefined)) return false;
     if ((!('displayText' in (value as Record<string, any>)) && !('display_text' in (value as Record<string, any>))) || ((value as Record<string, any>)['displayText'] === undefined && (value as Record<string, any>)['display_text'] === undefined)) return false;
     return true;
 }
@@ -69,6 +76,7 @@ export function BacklinkFromJSONTyped(json: any, ignoreDiscriminator: boolean): 
         'sourcePageId': json['source_page_id'],
         'sourceTitle': json['source_title'],
         'sourceBlockId': json['source_block_id'],
+        'sourceNodeId': json['source_node_id'],
         'displayText': json['display_text'],
     };
 }
@@ -87,6 +95,7 @@ export function BacklinkToJSONTyped(value?: Backlink | null, ignoreDiscriminator
         'source_page_id': value['sourcePageId'],
         'source_title': value['sourceTitle'],
         'source_block_id': value['sourceBlockId'],
+        'source_node_id': value['sourceNodeId'],
         'display_text': value['displayText'],
     };
 }

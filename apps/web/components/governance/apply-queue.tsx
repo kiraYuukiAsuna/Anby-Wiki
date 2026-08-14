@@ -25,6 +25,7 @@ import {
 import { Button } from "@/components/ui/button";
 import { governanceApi } from "@/lib/api";
 import { LOGIN_PATH, useSession } from "@/lib/auth";
+import { compactId } from "@/lib/display-id";
 import { cn } from "@/lib/utils";
 
 const PAGE_SIZE = 30;
@@ -74,7 +75,7 @@ function ApplyQueueItem({
           <div className="flex flex-wrap items-start justify-between gap-2">
             <div className="min-w-0">
               <p className="font-semibold">
-                {TARGET_LABEL[proposal.targetType]} · {proposal.targetId?.slice(0, 8) ?? "新建目标"}
+                {TARGET_LABEL[proposal.targetType]} · {proposal.targetId ? compactId(proposal.targetId) : "新建目标"}
               </p>
               <p className="mt-1 truncate font-mono text-[11px] text-muted-foreground">Proposal {proposal.id}</p>
             </div>
@@ -128,7 +129,7 @@ export function ApplyQueue() {
       const result = await governanceApi().applyProposal({ id: proposal.id });
       await state.mutate();
       toast.success(result.idempotent ? "该提案已经生效" : "提案已原子生效", {
-        description: `ChangeBatch ${result.changeBatchId.slice(0, 8)} 已写入审计账本${result.revisionIds.length ? `，发布 ${result.revisionIds.length} 个页面 Revision` : ""}。`,
+        description: `ChangeBatch ${compactId(result.changeBatchId)} 已写入审计账本${result.revisionIds.length ? `，发布 ${result.revisionIds.length} 个页面 Revision` : ""}。`,
       });
     } catch (error) {
       if (error instanceof ResponseError && error.response.status === 409) {

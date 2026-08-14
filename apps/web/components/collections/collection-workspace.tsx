@@ -41,6 +41,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { collectionsApi } from "@/lib/api";
 import { useSession } from "@/lib/auth";
+import { compactId } from "@/lib/display-id";
 import {
   collectionSummary,
   isDynamicCollectionQuery,
@@ -154,7 +155,7 @@ function MemberList({
               </p>
               {member.sourceRevisionId ? (
                 <p className="mt-1 font-mono">
-                  rev {member.sourceRevisionId.slice(0, 8)}
+                  rev {compactId(member.sourceRevisionId)}
                 </p>
               ) : null}
             </div>

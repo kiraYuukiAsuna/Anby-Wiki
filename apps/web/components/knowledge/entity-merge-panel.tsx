@@ -39,6 +39,7 @@ import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { knowledgeApi } from "@/lib/api";
 import { isUnauthorized, LOGIN_PATH, useSession } from "@/lib/auth";
+import { compactId } from "@/lib/display-id";
 
 const mergeSchema = z.object({
   targetEntityId: z.string().uuid("请选择合法目标 Entity"),
@@ -183,7 +184,7 @@ function MergedEntityPanel({
             <div>
               <dt className="text-amber-800/75">合并批次</dt>
               <dd className="mt-1 font-mono font-semibold text-amber-950">
-                {merge.id.slice(0, 8)}
+                {compactId(merge.id)}
               </dd>
             </div>
             <div>
@@ -233,7 +234,7 @@ function MergedEntityPanel({
           {merge ? (
             <div className="rounded-xl border border-destructive/20 bg-destructive/5 p-4 text-xs leading-5">
               <p className="font-semibold text-destructive">
-                将补偿批次 {merge.id.slice(0, 8)}
+                将补偿批次 {compactId(merge.id)}
               </p>
               <p className="mt-1 text-muted-foreground">
                 最多恢复 {merge.claimMappings.length} 条 Claim，并撤销{" "}
@@ -452,7 +453,7 @@ export function EntityMergePanel({
       {result ? (
         <div className="mt-3 rounded-xl border border-emerald-200 bg-emerald-50/70 p-4 text-sm">
           <p className="font-semibold text-emerald-900">
-            合并批次 {result.id.slice(0, 8)} 已记录
+            合并批次 {compactId(result.id)} 已记录
           </p>
           <p className="mt-1 text-xs text-emerald-800">
             映射了 {result.labelMappings.length} 个标签与{" "}

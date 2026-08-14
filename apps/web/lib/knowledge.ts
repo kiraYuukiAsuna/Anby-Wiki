@@ -8,6 +8,8 @@ import {
 } from "../../../contracts/generated/typescript";
 import { knowledgeApi, projectionApi } from "./api";
 
+const REFERENCE_USAGE_PAGE_SIZE = 50;
+
 export type KnowledgeDetailResult<T> =
   | { kind: "ok"; detail: T; usages: ReferenceUsageListPage }
   | { kind: "not_found" };
@@ -32,7 +34,11 @@ export function fetchEntityDetail(
 ): Promise<KnowledgeDetailResult<EntityDetail>> {
   return fetchDetail(
     () => knowledgeApi().getEntity({ id }),
-    () => projectionApi().listEntityMentions({ id, pageSize: 100 }),
+    () =>
+      projectionApi().listEntityMentions({
+        id,
+        pageSize: REFERENCE_USAGE_PAGE_SIZE,
+      }),
   );
 }
 
@@ -41,7 +47,11 @@ export function fetchClaimDetail(
 ): Promise<KnowledgeDetailResult<ClaimDetail>> {
   return fetchDetail(
     () => knowledgeApi().getClaim({ id }),
-    () => projectionApi().listClaimUsages({ id, pageSize: 100 }),
+    () =>
+      projectionApi().listClaimUsages({
+        id,
+        pageSize: REFERENCE_USAGE_PAGE_SIZE,
+      }),
   );
 }
 
@@ -50,6 +60,10 @@ export function fetchCitationDetail(
 ): Promise<KnowledgeDetailResult<CitationDetail>> {
   return fetchDetail(
     () => knowledgeApi().getCitation({ id }),
-    () => projectionApi().listCitationUsages({ id, pageSize: 100 }),
+    () =>
+      projectionApi().listCitationUsages({
+        id,
+        pageSize: REFERENCE_USAGE_PAGE_SIZE,
+      }),
   );
 }
