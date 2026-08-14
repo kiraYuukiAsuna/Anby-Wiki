@@ -3,7 +3,6 @@ package importer
 import (
 	"encoding/json"
 	"fmt"
-	"strings"
 	"unicode/utf8"
 
 	"github.com/google/uuid"
@@ -200,15 +199,6 @@ func remapCandidatesEvidence(candidates *Candidates, chunks []modelSourceChunk) 
 	for index := range candidates.Claims {
 		candidates.Claims[index].Evidence = remapCandidateEvidence(candidates.Claims[index].Evidence, chunks)
 	}
-}
-
-func modelWindowHash(inputHash, model string, candidates []PageCandidate, chunks []modelSourceChunk) string {
-	candidateJSON, _ := json.Marshal(candidates)
-	parts := []string{ImportPlanPromptKey, inputHash, strings.TrimSpace(model), HashBytes(candidateJSON)}
-	for _, chunk := range chunks {
-		parts = append(parts, chunk.Original.ID.String(), fmt.Sprintf("%d:%d", chunk.Start, chunk.End), chunk.View.TextHash)
-	}
-	return HashBytes([]byte(strings.Join(parts, "\x00")))
 }
 
 func planModelChunkViews(chunks []modelSourceChunk) []map[string]any {

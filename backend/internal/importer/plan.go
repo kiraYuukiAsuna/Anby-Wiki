@@ -132,19 +132,6 @@ type ImportPlanRecord struct {
 	CreatedAt       time.Time
 }
 
-type ImportPlanPartRecord struct {
-	ID              uuid.UUID
-	ImportJobID     uuid.UUID
-	SourceVersionID uuid.UUID
-	InputHash       string
-	WindowHash      string
-	PromptKey       string
-	PromptVersion   int
-	Model           string
-	PlanJSON        json.RawMessage
-	CreatedAt       time.Time
-}
-
 type PageCandidateBlock struct {
 	ID   string `json:"block_id"`
 	Type string `json:"type"`
@@ -441,11 +428,6 @@ func (p *PagePlanner) generatePlanBatch(ctx context.Context, params PlanParams, 
 // already exhausted every smaller input shape.
 func (p *PagePlanner) generateValidatedPlanBatch(ctx context.Context, params PlanParams,
 	candidates []PageCandidate, chunks []modelSourceChunk) (*ImportPlan, *ai.Result, error) {
-	if cached, result, err := p.cachedPlanPart(ctx, params, candidates, chunks); err != nil {
-		return nil, nil, err
-	} else if cached != nil {
-		return cached, result, nil
-	}
 	maxAttempts := 1
 	if len(chunks) == 1 {
 		maxAttempts = planLeafValidationAttempts
@@ -464,9 +446,6 @@ func (p *PagePlanner) generateValidatedPlanBatch(ctx context.Context, params Pla
 			candidates, params.RouteMode)
 		if err == nil {
 			remapImportPlanEvidence(plan, chunks)
-			if err := p.cachePlanPart(ctx, params, candidates, chunks, plan, result); err != nil {
-				return nil, nil, err
-			}
 			return plan, result, nil
 		}
 		if !isPlanSemanticValidationError(err) {
@@ -476,51 +455,6 @@ func (p *PagePlanner) generateValidatedPlanBatch(ctx context.Context, params Pla
 		validationFeedback = planValidationFeedback(err)
 	}
 	return nil, nil, lastErr
-}
-
-func (p *PagePlanner) cachedPlanPart(ctx context.Context, params PlanParams,
-	candidates []PageCandidate, chunks []modelSourceChunk) (*ImportPlan, *ai.Result, error) {
-	if p.repo == nil || params.RouteMode == RouteModeForceCreate || params.ImportJobID == nil ||
-		*params.ImportJobID == uuid.Nil || !validSHA256(params.InputHash) {
-		return nil, nil, nil
-	}
-	part, err := p.repo.GetImportPlanPart(ctx, *params.ImportJobID, params.InputHash,
-		modelWindowHash(params.InputHash, params.Model, candidates, chunks))
-	if errors.Is(err, ErrImportPlanNotFound) {
-		return nil, nil, nil
-	}
-	if err != nil {
-		return nil, nil, err
-	}
-	var plan ImportPlan
-	if err := json.Unmarshal(part.PlanJSON, &plan); err != nil {
-		return nil, nil, err
-	}
-	normalizeImportPlanCollections(&plan)
-	return &plan, &ai.Result{PromptKey: part.PromptKey, PromptVersion: part.PromptVersion, Model: part.Model}, nil
-}
-
-func (p *PagePlanner) cachePlanPart(ctx context.Context, params PlanParams, candidates []PageCandidate,
-	chunks []modelSourceChunk, plan *ImportPlan, result *ai.Result) error {
-	if p.repo == nil || p.ids == nil || params.RouteMode == RouteModeForceCreate || plan == nil || result == nil || params.ImportJobID == nil ||
-		*params.ImportJobID == uuid.Nil || !validSHA256(params.InputHash) {
-		return nil
-	}
-	raw, err := json.Marshal(plan)
-	if err != nil {
-		return err
-	}
-	partID, err := p.ids.New()
-	if err != nil {
-		return err
-	}
-	part := &ImportPlanPartRecord{
-		ID: partID, ImportJobID: *params.ImportJobID, SourceVersionID: params.SourceVersionID,
-		InputHash: params.InputHash, WindowHash: modelWindowHash(params.InputHash, params.Model, candidates, chunks),
-		PromptKey: result.PromptKey, PromptVersion: result.PromptVersion, Model: result.Model, PlanJSON: raw,
-	}
-	_, err = p.repo.InsertImportPlanPartIfAbsent(ctx, part)
-	return err
 }
 
 func isPlanSemanticValidationError(err error) bool {

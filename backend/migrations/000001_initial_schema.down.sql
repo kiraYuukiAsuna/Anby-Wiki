@@ -109,8 +109,6 @@ COMMIT;
 BEGIN;
 DROP TRIGGER import_plan_immutable ON import_plan;
 DROP TABLE import_plan;
-DROP TRIGGER import_plan_part_immutable ON import_plan_part;
-DROP TABLE import_plan_part;
 DROP TRIGGER import_extraction_immutable ON import_extraction;
 DROP TABLE import_extraction;
 DROP TABLE ai_request_usage;

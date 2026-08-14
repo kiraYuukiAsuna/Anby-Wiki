@@ -1299,25 +1299,6 @@ CREATE TRIGGER import_extraction_immutable
     BEFORE UPDATE OR DELETE ON import_extraction
     FOR EACH ROW EXECUTE FUNCTION reject_immutable_mutation();
 
-CREATE TABLE import_plan_part (
-    id                  uuid        PRIMARY KEY,
-    import_job_id       uuid        NOT NULL REFERENCES import_job (id),
-    source_version_id   uuid        NOT NULL REFERENCES source_version (id),
-    input_hash          text        NOT NULL CHECK (input_hash ~ '^[0-9a-f]{64}$'),
-    window_hash         text        NOT NULL CHECK (window_hash ~ '^[0-9a-f]{64}$'),
-    prompt_key          text        NOT NULL CHECK (prompt_key <> ''),
-    prompt_version      integer     NOT NULL CHECK (prompt_version > 0),
-    model               text        NOT NULL,
-    plan_json           jsonb       NOT NULL,
-    created_at          timestamptz NOT NULL DEFAULT now(),
-    UNIQUE (import_job_id, input_hash, window_hash, prompt_key, prompt_version),
-    CONSTRAINT import_plan_part_document_object CHECK (jsonb_typeof(plan_json) = 'object')
-);
-
-CREATE TRIGGER import_plan_part_immutable
-    BEFORE UPDATE OR DELETE ON import_plan_part
-    FOR EACH ROW EXECUTE FUNCTION reject_immutable_mutation();
-
 CREATE TABLE import_plan (
     id                  uuid        PRIMARY KEY,
     import_job_id       uuid        NOT NULL REFERENCES import_job (id),

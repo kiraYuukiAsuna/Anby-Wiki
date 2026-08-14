@@ -378,42 +378,6 @@ func (r *Repository) InsertExtractionIfAbsent(ctx context.Context, extraction *E
 	return err == nil, err
 }
 
-func (r *Repository) GetImportPlanPart(ctx context.Context, importJobID uuid.UUID,
-	inputHash, windowHash string) (*ImportPlanPartRecord, error) {
-	var part ImportPlanPartRecord
-	err := r.pool.QueryRow(ctx, `SELECT id,import_job_id,source_version_id,input_hash,window_hash,
-		prompt_key,prompt_version,model,plan_json,created_at FROM import_plan_part
-		WHERE import_job_id=$1 AND input_hash=$2 AND window_hash=$3 AND prompt_key=$4
-		AND EXISTS (SELECT 1 FROM prompt_template p
-			WHERE p.prompt_key=import_plan_part.prompt_key
-			AND p.version=import_plan_part.prompt_version AND p.active)`,
-		importJobID, inputHash, windowHash, ImportPlanPromptKey).Scan(
-		&part.ID, &part.ImportJobID, &part.SourceVersionID, &part.InputHash, &part.WindowHash,
-		&part.PromptKey, &part.PromptVersion, &part.Model, &part.PlanJSON, &part.CreatedAt,
-	)
-	if errors.Is(err, pgx.ErrNoRows) {
-		return nil, ErrImportPlanNotFound
-	}
-	return &part, err
-}
-
-func (r *Repository) InsertImportPlanPartIfAbsent(ctx context.Context, part *ImportPlanPartRecord) (bool, error) {
-	if part == nil {
-		return false, ErrInvalidJob
-	}
-	err := r.pool.QueryRow(ctx, `INSERT INTO import_plan_part
-		(id,import_job_id,source_version_id,input_hash,window_hash,prompt_key,prompt_version,model,plan_json)
-		VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9::jsonb)
-		ON CONFLICT (import_job_id,input_hash,window_hash,prompt_key,prompt_version) DO NOTHING RETURNING created_at`,
-		part.ID, part.ImportJobID, part.SourceVersionID, part.InputHash, part.WindowHash,
-		part.PromptKey, part.PromptVersion, part.Model, part.PlanJSON,
-	).Scan(&part.CreatedAt)
-	if errors.Is(err, pgx.ErrNoRows) {
-		return false, nil
-	}
-	return err == nil, err
-}
-
 func (r *Repository) GetImportPlan(
 	ctx context.Context,
 	importJobID uuid.UUID,
