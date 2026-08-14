@@ -72,6 +72,7 @@ func (s *Service) Runtime(ctx context.Context, wikiID uuid.UUID) (*RuntimeConfig
 		Enabled: true, Provider: stored.Provider, BaseURL: stored.BaseURL,
 		Model: stored.Model, ResponseFormat: stored.ResponseFormat,
 		MaxInputTokens:        effectiveMaxInputTokens(stored.MaxInputTokens),
+		ChunkCharacters:       effectiveChunkCharacters(stored.ChunkCharacters),
 		RequestTimeoutSeconds: stored.RequestTimeoutSeconds,
 		MaxAttempts:           effectiveMaxAttempts(stored.MaxInputTokens, stored.MaxAttempts), APIKey: key,
 	}, nil
@@ -105,7 +106,7 @@ func (s *Service) Update(ctx context.Context, params UpdateParams) (*Config, err
 	params.APIKey = strings.TrimSpace(params.APIKey)
 	if params.WikiID == uuid.Nil || params.ActorID == uuid.Nil || validateValues(
 		params.Provider, params.BaseURL, params.Model, params.ResponseFormat,
-		params.MaxInputTokens, params.RequestTimeoutSeconds, params.MaxAttempts,
+		params.MaxInputTokens, params.ChunkCharacters, params.RequestTimeoutSeconds, params.MaxAttempts,
 	) != nil {
 		return nil, ErrInvalidConfig
 	}
@@ -141,6 +142,7 @@ func (s *Service) Update(ctx context.Context, params UpdateParams) (*Config, err
 			BaseURL: params.BaseURL, Model: params.Model,
 			ResponseFormat:        params.ResponseFormat,
 			MaxInputTokens:        params.MaxInputTokens,
+			ChunkCharacters:       params.ChunkCharacters,
 			RequestTimeoutSeconds: params.RequestTimeoutSeconds,
 			MaxAttempts:           params.MaxAttempts, APIKeyCiphertext: ciphertext,
 			UpdatedBy: params.ActorID, UpdatedAt: now,
@@ -157,6 +159,7 @@ func (s *Service) Update(ctx context.Context, params UpdateParams) (*Config, err
 			"provider": result.Provider, "model": result.Model,
 			"response_format":         result.ResponseFormat,
 			"max_input_tokens":        result.MaxInputTokens,
+			"chunk_characters":        result.ChunkCharacters,
 			"request_timeout_seconds": result.RequestTimeoutSeconds,
 			"max_attempts":            result.MaxAttempts,
 			"credential_changed":      credentialChanged,
@@ -177,6 +180,7 @@ func defaultConfig() *Config {
 		Version: 1, Provider: ProviderDeepSeek,
 		BaseURL: "https://api.deepseek.com", ResponseFormat: ResponseFormatJSONObject,
 		MaxInputTokens:        DefaultMaxInputTokens,
+		ChunkCharacters:       DefaultChunkCharacters,
 		RequestTimeoutSeconds: 180, MaxAttempts: 3,
 	}
 }
@@ -188,6 +192,7 @@ func redact(value *StoredConfig) *Config {
 		BaseURL: value.BaseURL, Model: value.Model,
 		ResponseFormat:        value.ResponseFormat,
 		MaxInputTokens:        effectiveMaxInputTokens(value.MaxInputTokens),
+		ChunkCharacters:       effectiveChunkCharacters(value.ChunkCharacters),
 		RequestTimeoutSeconds: value.RequestTimeoutSeconds,
 		MaxAttempts:           effectiveMaxAttempts(value.MaxInputTokens, value.MaxAttempts),
 		APIKeyConfigured:      value.APIKeyCiphertext != "",
@@ -200,13 +205,20 @@ func validateStored(value *StoredConfig) error {
 		return ErrInvalidConfig
 	}
 	return validateValues(value.Provider, value.BaseURL, value.Model, value.ResponseFormat,
-		effectiveMaxInputTokens(value.MaxInputTokens), value.RequestTimeoutSeconds,
+		effectiveMaxInputTokens(value.MaxInputTokens), effectiveChunkCharacters(value.ChunkCharacters), value.RequestTimeoutSeconds,
 		effectiveMaxAttempts(value.MaxInputTokens, value.MaxAttempts))
 }
 
 func effectiveMaxInputTokens(value int) int {
 	if value == 0 {
 		return DefaultMaxInputTokens
+	}
+	return value
+}
+
+func effectiveChunkCharacters(value int) int {
+	if value == 0 {
+		return DefaultChunkCharacters
 	}
 	return value
 }
@@ -221,11 +233,12 @@ func effectiveMaxAttempts(storedMaxInputTokens, value int) int {
 	return value
 }
 
-func validateValues(provider, baseURL, model, responseFormat string, maxInputTokens, timeout, attempts int) error {
+func validateValues(provider, baseURL, model, responseFormat string, maxInputTokens, chunkCharacters, timeout, attempts int) error {
 	if provider != ProviderOpenAICompatible && provider != ProviderDeepSeek {
 		return ErrInvalidConfig
 	}
 	if model == "" || maxInputTokens < MinMaxInputTokens || maxInputTokens > MaxMaxInputTokens ||
+		chunkCharacters < MinChunkCharacters || chunkCharacters > MaxChunkCharacters ||
 		timeout < 5 || timeout > 300 || attempts < 1 || attempts > 5 {
 		return ErrInvalidConfig
 	}

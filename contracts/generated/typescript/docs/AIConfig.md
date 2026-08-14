@@ -13,6 +13,7 @@ Name | Type
 `model` | string
 `responseFormat` | string
 `maxInputTokens` | number
+`chunkCharacters` | number
 `requestTimeoutSeconds` | number
 `maxAttempts` | number
 `apiKeyConfigured` | boolean
@@ -33,6 +34,7 @@ const example = {
   "model": null,
   "responseFormat": null,
   "maxInputTokens": null,
+  "chunkCharacters": null,
   "requestTimeoutSeconds": null,
   "maxAttempts": null,
   "apiKeyConfigured": null,

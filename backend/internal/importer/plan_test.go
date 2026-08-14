@@ -17,11 +17,10 @@ import (
 	"github.com/anby/wiki/backend/internal/platform/id"
 )
 
-type consolidatingPlanGenerator struct {
-	mu               sync.Mutex
-	mapCalls         int
-	consolidateCalls int
-	fidelityCalls    int
+type mergingPlanGenerator struct {
+	mu            sync.Mutex
+	mapCalls      int
+	fidelityCalls int
 }
 
 type retryingFidelityGenerator struct {
@@ -44,6 +43,58 @@ type retryingPlanGenerator struct {
 	feedback   []string
 }
 
+type selectivelyFailingPlanGenerator struct {
+	failText string
+	calls    []string
+}
+
+func (g *selectivelyFailingPlanGenerator) Generate(_ context.Context, request ai.Request) (*ai.Result, error) {
+	var chunks []struct {
+		ChunkID uuid.UUID `json:"chunk_id"`
+		Text    string    `json:"text"`
+	}
+	if err := json.Unmarshal([]byte(request.Variables["chunks_json"].(string)), &chunks); err != nil {
+		return nil, err
+	}
+	texts := make([]string, len(chunks))
+	for index := range chunks {
+		texts[index] = chunks[index].Text
+	}
+	g.calls = append(g.calls, strings.Join(texts, "|"))
+	if len(chunks) != 1 || chunks[0].Text == g.failText {
+		return nil, &ai.ProviderError{Code: "invalid_structured_output", Err: ai.ErrInvalidOutput}
+	}
+	document := generatedImportPlanDocument{
+		Profile: SourceProfile{Title: "Subject", Summary: "Summary", Language: "en", Useful: true,
+			Subjects: []SourceSubject{}},
+		Routes: []generatedPageRoute{{
+			Action: RouteCreate, Title: "Subject", Reason: "documented", Confidence: 0.9,
+			Blocks: []generatedPlannedBlock{{Type: string(ast.BlockParagraph), Text: chunks[0].Text,
+				Evidence: []generatedPlanEvidence{{ChunkID: chunks[0].ChunkID, Quotation: chunks[0].Text}}}},
+		}},
+	}
+	raw, _ := json.Marshal(document)
+	return &ai.Result{JSON: raw, PromptKey: request.PromptKey, PromptVersion: 1, Model: "test"}, nil
+}
+
+func marshalGeneratedFidelityAudit(audit PlanFidelityAudit) ([]byte, error) {
+	generated := generatedPlanFidelityAudit{
+		Complete: audit.Complete, CoverageBefore: audit.CoverageBefore,
+		CoverageAfter: audit.CoverageAfter,
+		MissingBlocks: make([]generatedPlanFidelityMissingBlock, 0, len(audit.MissingBlocks)),
+	}
+	for _, block := range audit.MissingBlocks {
+		items := make([]generatedPlanEvidence, 0, len(block.Evidence))
+		for _, item := range block.Evidence {
+			items = append(items, generatedPlanEvidence{ChunkID: item.ChunkID, Quotation: item.Quotation})
+		}
+		generated.MissingBlocks = append(generated.MissingBlocks, generatedPlanFidelityMissingBlock{
+			RouteIndex: block.RouteIndex, AfterHeading: block.AfterHeading, Text: block.Text, Evidence: items,
+		})
+	}
+	return json.Marshal(generated)
+}
+
 func (g *retryingPlanGenerator) Generate(_ context.Context, request ai.Request) (*ai.Result, error) {
 	g.mu.Lock()
 	defer g.mu.Unlock()
@@ -60,21 +111,17 @@ func (g *retryingPlanGenerator) Generate(_ context.Context, request ai.Request) 
 	if g.validAfter > 0 && g.calls >= g.validAfter {
 		quotation = chunks[0].Text
 	}
-	sourceVersionID := uuid.MustParse(request.Variables["source_version_id"].(string))
-	plan := &ImportPlan{
-		SchemaVersion: 1, SourceVersionID: sourceVersionID,
+	plan := &generatedImportPlanDocument{
 		Profile: SourceProfile{Title: "Subject", Summary: "Summary", Language: "en", Useful: true, Subjects: []SourceSubject{}},
-		Routes: []PageRoute{{
+		Routes: []generatedPageRoute{{
 			Action: RouteCreate, Title: "Subject", Reason: "documented", Confidence: 0.9,
-			RelatedTo: []string{}, Evidence: []CandidateEvidence{}, Blocks: []PlannedBlock{{
-				Type: string(ast.BlockParagraph), Mode: BlockAppend, Text: "Verified prose.",
-				Evidence: []CandidateEvidence{{
+			Blocks: []generatedPlannedBlock{{
+				Type: string(ast.BlockParagraph), Text: "Verified prose.",
+				Evidence: []generatedPlanEvidence{{
 					ChunkID: chunks[0].ChunkID, Quotation: quotation,
-					CharStart: 0, CharEnd: len([]rune(quotation)),
 				}},
 			}},
 		}},
-		QualityScore: 0.9,
 	}
 	raw, err := json.Marshal(plan)
 	if err != nil {
@@ -88,15 +135,14 @@ func (g *retryingFidelityGenerator) Generate(_ context.Context, request ai.Reque
 	defer g.mu.Unlock()
 	g.calls++
 	g.feedback = append(g.feedback, request.Variables["validation_feedback"].(string))
-	sourceVersionID, _ := uuid.Parse(request.Variables["source_version_id"].(string))
 	audit := PlanFidelityAudit{
-		SchemaVersion: 1, SourceVersionID: sourceVersionID, Complete: true,
+		Complete:       true,
 		CoverageBefore: 0.9, CoverageAfter: 0.8, MissingBlocks: []PlanFidelityMissingBlock{},
 	}
 	if g.validAfter > 0 && g.calls >= g.validAfter {
 		audit.CoverageAfter = audit.CoverageBefore
 	}
-	raw, err := json.Marshal(audit)
+	raw, err := marshalGeneratedFidelityAudit(audit)
 	if err != nil {
 		return nil, err
 	}
@@ -115,9 +161,8 @@ func (g *unverifiableFidelityGenerator) Generate(_ context.Context, request ai.R
 	if err := json.Unmarshal([]byte(request.Variables["chunks_json"].(string)), &chunks); err != nil {
 		return nil, err
 	}
-	sourceVersionID := uuid.MustParse(request.Variables["source_version_id"].(string))
 	audit := PlanFidelityAudit{
-		SchemaVersion: 1, SourceVersionID: sourceVersionID, Complete: false,
+		Complete:       false,
 		CoverageBefore: 0.82, CoverageAfter: 0.95,
 		MissingBlocks: []PlanFidelityMissingBlock{{
 			RouteIndex: 0, Text: "客户端必须在使用断言前进行验证。",
@@ -126,62 +171,48 @@ func (g *unverifiableFidelityGenerator) Generate(_ context.Context, request ai.R
 			}},
 		}},
 	}
-	raw, err := json.Marshal(audit)
+	raw, err := marshalGeneratedFidelityAudit(audit)
 	if err != nil {
 		return nil, err
 	}
 	return &ai.Result{JSON: raw, PromptKey: request.PromptKey, PromptVersion: 1, Model: "test"}, nil
 }
 
-func (g *consolidatingPlanGenerator) Generate(_ context.Context, request ai.Request) (*ai.Result, error) {
-	sourceVersionID, _ := uuid.Parse(request.Variables["source_version_id"].(string))
+func (g *mergingPlanGenerator) Generate(_ context.Context, request ai.Request) (*ai.Result, error) {
 	if request.PromptKey == ImportPlanFidelityPromptKey {
 		g.mu.Lock()
 		g.fidelityCalls++
 		g.mu.Unlock()
-		audit := PlanFidelityAudit{SchemaVersion: 1, SourceVersionID: sourceVersionID,
-			Complete: true, CoverageBefore: 0.95, CoverageAfter: 0.95, MissingBlocks: []PlanFidelityMissingBlock{}}
-		raw, err := json.Marshal(audit)
+		audit := PlanFidelityAudit{Complete: true, CoverageBefore: 0.95,
+			CoverageAfter: 0.95, MissingBlocks: []PlanFidelityMissingBlock{}}
+		raw, err := marshalGeneratedFidelityAudit(audit)
 		if err != nil {
 			return nil, err
 		}
 		return &ai.Result{JSON: raw, PromptKey: request.PromptKey, PromptVersion: 1, Model: "test"}, nil
 	}
-	plan := &ImportPlan{SchemaVersion: 1, SourceVersionID: sourceVersionID,
-		Profile:      SourceProfile{Title: "Source", Summary: "Summary", Language: "en", Useful: true, Subjects: []SourceSubject{}},
-		QualityScore: 0.9, PromptInjectionDetected: false}
-	if request.PromptKey == ImportPlanConsolidatePromptKey {
-		g.mu.Lock()
-		g.consolidateCalls++
-		g.mu.Unlock()
-		var draft ImportPlan
-		if err := json.Unmarshal([]byte(request.Variables["draft_plan_json"].(string)), &draft); err != nil {
-			return nil, err
-		}
-		evidenceItem := draft.Routes[0].Blocks[0].Evidence
-		plan.Routes = []PageRoute{{Action: RouteCreate, Title: "Alpha", Reason: "consolidated", Confidence: 0.9,
-			RelatedTo: []string{}, Evidence: []CandidateEvidence{}, Blocks: []PlannedBlock{{
-				Type: string(ast.BlockParagraph), Mode: BlockAppend, Text: "A coherent article.", Evidence: evidenceItem,
-			}}}}
-	} else {
-		g.mu.Lock()
-		g.mapCalls++
-		g.mu.Unlock()
-		var chunks []struct {
-			ChunkID uuid.UUID `json:"chunk_id"`
-			Text    string    `json:"text"`
-		}
-		if err := json.Unmarshal([]byte(request.Variables["chunks_json"].(string)), &chunks); err != nil {
-			return nil, err
-		}
-		item := CandidateEvidence{ChunkID: chunks[0].ChunkID, Quotation: chunks[0].Text,
-			CharStart: 0, CharEnd: len([]rune(chunks[0].Text))}
-		plan.Routes = []PageRoute{{Action: RouteCreate, Title: "Alpha", Reason: "window", Confidence: 0.8,
-			RelatedTo: []string{}, Evidence: []CandidateEvidence{}, Blocks: []PlannedBlock{{
-				Type: string(ast.BlockParagraph), Mode: BlockAppend, Text: chunks[0].Text, Evidence: []CandidateEvidence{item},
-			}}}}
+	plan := &generatedImportPlanDocument{
+		Profile: SourceProfile{Title: "Source", Summary: "Summary", Language: "en", Useful: true, Subjects: []SourceSubject{}},
 	}
-	normalizeImportPlanCollections(plan)
+	g.mu.Lock()
+	g.mapCalls++
+	g.mu.Unlock()
+	var chunks []struct {
+		ChunkID uuid.UUID `json:"chunk_id"`
+		Text    string    `json:"text"`
+	}
+	if err := json.Unmarshal([]byte(request.Variables["chunks_json"].(string)), &chunks); err != nil {
+		return nil, err
+	}
+	blocks := make([]generatedPlannedBlock, 0, len(chunks))
+	for _, chunk := range chunks {
+		blocks = append(blocks, generatedPlannedBlock{
+			Type: string(ast.BlockParagraph), Text: chunk.Text,
+			Evidence: []generatedPlanEvidence{{ChunkID: chunk.ChunkID, Quotation: chunk.Text}},
+		})
+	}
+	plan.Routes = []generatedPageRoute{{Action: RouteCreate, Title: "Alpha", Reason: "window", Confidence: 0.8,
+		Blocks: blocks}}
 	raw, err := json.Marshal(plan)
 	if err != nil {
 		return nil, err
@@ -244,7 +275,7 @@ func TestValidateImportPlanRepairsEvidenceAndRejectsInventedTargets(t *testing.T
 	}
 }
 
-func TestGeneratePlanConsolidatesParallelSourceWindows(t *testing.T) {
+func TestGeneratePlanDeterministicallyMergesParallelSourceWindows(t *testing.T) {
 	sourceVersionID := uuid.New()
 	chunks := make([]evidence.SourceChunk, 7)
 	for index := range chunks {
@@ -252,7 +283,7 @@ func TestGeneratePlanConsolidatesParallelSourceWindows(t *testing.T) {
 		chunks[index] = evidence.SourceChunk{ID: uuid.New(), SourceVersionID: sourceVersionID,
 			Ordinal: index, TextContent: text, LocatorJSON: json.RawMessage(`{}`)}
 	}
-	generator := &consolidatingPlanGenerator{}
+	generator := &mergingPlanGenerator{}
 	planner := &PagePlanner{ai: generator}
 	jobID, runID := uuid.New(), uuid.New()
 	generated, err := planner.generatePlan(context.Background(), PlanParams{
@@ -264,14 +295,52 @@ func TestGeneratePlanConsolidatesParallelSourceWindows(t *testing.T) {
 		t.Fatal(err)
 	}
 	generator.mu.Lock()
-	mapCalls, consolidateCalls, fidelityCalls := generator.mapCalls, generator.consolidateCalls, generator.fidelityCalls
+	mapCalls, fidelityCalls := generator.mapCalls, generator.fidelityCalls
 	generator.mu.Unlock()
-	if mapCalls != 2 || consolidateCalls != 1 || fidelityCalls != 0 {
-		t.Fatalf("map calls=%d consolidate calls=%d fidelity calls=%d, want 2/1/0", mapCalls, consolidateCalls, fidelityCalls)
+	if mapCalls != 2 || fidelityCalls != 0 {
+		t.Fatalf("map calls=%d fidelity calls=%d, want 2/0", mapCalls, fidelityCalls)
 	}
-	if generated.PromptKey != ImportPlanConsolidatePromptKey || len(generated.Plan.Routes) != 1 ||
-		len(generated.Plan.Routes[0].Blocks) != 1 || generated.Plan.Routes[0].Blocks[0].Text != "A coherent article." {
-		t.Fatalf("unexpected consolidated plan: %#v", generated)
+	if generated.PromptKey != ImportPlanPromptKey || len(generated.Plan.Routes) != 1 ||
+		len(generated.Plan.Routes[0].Blocks) != len(chunks) {
+		t.Fatalf("unexpected merged plan: %#v", generated)
+	}
+}
+
+func TestGeneratePlanIsolatesSmallInvalidWindow(t *testing.T) {
+	sourceVersionID := uuid.New()
+	good := strings.Repeat("supported material ", 300)
+	bad := "bad"
+	chunks := []evidence.SourceChunk{
+		{ID: uuid.New(), SourceVersionID: sourceVersionID, Ordinal: 0, TextContent: good, LocatorJSON: json.RawMessage(`{}`)},
+		{ID: uuid.New(), SourceVersionID: sourceVersionID, Ordinal: 1, TextContent: bad, LocatorJSON: json.RawMessage(`{}`)},
+	}
+	gateway := &selectivelyFailingPlanGenerator{failText: bad}
+	planner := &PagePlanner{ai: gateway}
+	generated, err := planner.generatePlan(context.Background(), PlanParams{
+		SourceVersionID: sourceVersionID, RouteMode: RouteModeAuto, Chunks: chunks,
+		Provider: "test", Model: "test", MaxInputTokens: 4096,
+	}, nil)
+	if err != nil {
+		t.Fatalf("%v; calls=%d lengths=%v", err, len(gateway.calls), func() []int {
+			result := make([]int, len(gateway.calls))
+			for index := range gateway.calls {
+				result[index] = len([]rune(gateway.calls[index]))
+			}
+			return result
+		}())
+	}
+	if len(generated.Plan.Routes) != 1 || len(generated.Plan.Routes[0].Blocks) == 0 ||
+		!strings.Contains(generated.Plan.Routes[0].Blocks[0].Text, "supported material") ||
+		generated.Plan.QualityScore < DefaultQualityThreshold ||
+		generated.coverage >= 1 || generated.coverage < DefaultQualityThreshold {
+		t.Fatalf("unexpected locally recovered plan: %#v", generated.Plan)
+	}
+}
+
+func TestProviderSchemaErrorsAreNotAdaptivelySplit(t *testing.T) {
+	err := &ai.ProviderError{Code: "invalid_schema", Err: ai.ErrInvalidOutput}
+	if isAdaptiveBatchError(err) || isPlanSemanticValidationError(err) || isPlanFidelityValidationError(err) {
+		t.Fatal("provider schema errors must remain hard configuration failures")
 	}
 }
 
@@ -286,7 +355,7 @@ func TestGenerateValidatedPlanBatchRetriesSingleChunkEvidenceFailure(t *testing.
 
 	plan, _, err := planner.generateValidatedPlanBatch(context.Background(), PlanParams{
 		SourceVersionID: sourceVersionID, Chunks: chunks, Provider: "test", Model: "test",
-	}, nil, chunks)
+	}, nil, initialModelSourceChunks(chunks))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -343,11 +412,10 @@ func TestValidatePlanFidelityAuditRepairsExactEvidenceAndRejectsInventedRoute(t 
 		TextContent: text, LocatorJSON: json.RawMessage(`{"page":7}`)}}
 	plan := &ImportPlan{Routes: []PageRoute{{Action: RouteCreate, Title: "JWT profile",
 		Blocks: []PlannedBlock{{Type: string(ast.BlockParagraph), Text: "The profile defines JWT assertions."}}}}}
-	audit := PlanFidelityAudit{SchemaVersion: 1, SourceVersionID: sourceVersionID,
-		Complete: false, CoverageBefore: 0.6, CoverageAfter: 0.9,
+	audit := PlanFidelityAudit{Complete: false, CoverageBefore: 0.6, CoverageAfter: 0.9,
 		MissingBlocks: []PlanFidelityMissingBlock{{RouteIndex: 0, AfterHeading: "Invented section",
 			Text: text, Evidence: []CandidateEvidence{{ChunkID: uuid.New(), Quotation: text, CharStart: 99, CharEnd: 100}}}}}
-	raw, _ := json.Marshal(audit)
+	raw, _ := marshalGeneratedFidelityAudit(audit)
 	validated, err := ValidatePlanFidelityAudit(raw, sourceVersionID, chunks, plan)
 	if err != nil {
 		t.Fatal(err)
@@ -359,8 +427,16 @@ func TestValidatePlanFidelityAuditRepairsExactEvidenceAndRejectsInventedRoute(t 
 		t.Fatalf("audit evidence was not canonicalized: %#v", validated.MissingBlocks[0])
 	}
 	audit.MissingBlocks[0].RouteIndex = 1
-	raw, _ = json.Marshal(audit)
+	raw, _ = marshalGeneratedFidelityAudit(audit)
 	if _, err := ValidatePlanFidelityAudit(raw, sourceVersionID, chunks, plan); !errors.Is(err, ai.ErrInvalidOutput) {
+		t.Fatalf("error=%v, want ai.ErrInvalidOutput", err)
+	}
+}
+
+func TestValidatePlanFidelityAuditRejectsContradictoryCompleteState(t *testing.T) {
+	plan := &ImportPlan{Routes: []PageRoute{{Action: RouteCreate, Title: "Subject"}}}
+	raw := []byte(`{"complete":false,"coverage_before":0.8,"coverage_after":0.8,"missing_blocks":[]}`)
+	if _, err := ValidatePlanFidelityAudit(raw, uuid.New(), nil, plan); !errors.Is(err, ai.ErrInvalidOutput) {
 		t.Fatalf("error=%v, want ai.ErrInvalidOutput", err)
 	}
 }
@@ -373,7 +449,7 @@ func TestSalvagePlanFidelityAuditDropsUnverifiableRepairAndRevokesCoverage(t *te
 	}}
 	plan := &ImportPlan{Routes: []PageRoute{{Action: RouteCreate, Title: "Subject"}}}
 	audit := PlanFidelityAudit{
-		SchemaVersion: 1, SourceVersionID: sourceVersionID, Complete: false,
+		Complete:       false,
 		CoverageBefore: 0.82, CoverageAfter: 0.95,
 		MissingBlocks: []PlanFidelityMissingBlock{{
 			RouteIndex: 0, Text: "客户端必须在使用断言前进行验证。",
@@ -382,7 +458,7 @@ func TestSalvagePlanFidelityAuditDropsUnverifiableRepairAndRevokesCoverage(t *te
 			}},
 		}},
 	}
-	raw, err := json.Marshal(audit)
+	raw, err := marshalGeneratedFidelityAudit(audit)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -410,7 +486,7 @@ func TestSalvagePlanFidelityAuditKeepsOnlyVerifiedRepairCoverage(t *testing.T) {
 	}}
 	plan := &ImportPlan{Routes: []PageRoute{{Action: RouteCreate, Title: "Subject"}}}
 	audit := PlanFidelityAudit{
-		SchemaVersion: 1, SourceVersionID: sourceVersionID, Complete: false,
+		Complete:       false,
 		CoverageBefore: 0.6, CoverageAfter: 0.9,
 		MissingBlocks: []PlanFidelityMissingBlock{
 			{RouteIndex: 0, Text: "客户端必须在使用前验证断言。", Evidence: []CandidateEvidence{{
@@ -421,7 +497,7 @@ func TestSalvagePlanFidelityAuditKeepsOnlyVerifiedRepairCoverage(t *testing.T) {
 			}}},
 		},
 	}
-	raw, err := json.Marshal(audit)
+	raw, err := marshalGeneratedFidelityAudit(audit)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -454,7 +530,7 @@ func TestAuditPlanFidelityBatchRetriesSemanticValidationWithFeedback(t *testing.
 
 	audit, err := planner.auditPlanFidelityBatch(context.Background(), PlanParams{
 		SourceVersionID: sourceVersionID, Chunks: chunks, Provider: "test", Model: "test",
-	}, json.RawMessage(`[]`), plan, chunks)
+	}, json.RawMessage(`[]`), plan, initialModelSourceChunks(chunks))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -483,7 +559,7 @@ func TestAuditPlanFidelityBatchStopsAfterValidationAttemptLimit(t *testing.T) {
 
 	_, err := planner.auditPlanFidelityBatch(context.Background(), PlanParams{
 		SourceVersionID: sourceVersionID, Provider: "test", Model: "test",
-	}, json.RawMessage(`[]`), plan, chunks)
+	}, json.RawMessage(`[]`), plan, initialModelSourceChunks(chunks))
 	if !errors.Is(err, ai.ErrInvalidOutput) {
 		t.Fatalf("error=%v, want ai.ErrInvalidOutput", err)
 	}
@@ -507,7 +583,7 @@ func TestAuditPlanFidelityBatchIsolatesBadRepairAfterRetryLimit(t *testing.T) {
 
 	audit, err := planner.auditPlanFidelityBatch(context.Background(), PlanParams{
 		SourceVersionID: sourceVersionID, Provider: "test", Model: "test",
-	}, json.RawMessage(`[]`), plan, chunks)
+	}, json.RawMessage(`[]`), plan, initialModelSourceChunks(chunks))
 	if err != nil {
 		t.Fatal(err)
 	}

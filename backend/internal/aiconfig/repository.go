@@ -47,11 +47,6 @@ func (r *Repository) Get(ctx context.Context, tx pgx.Tx, wikiID uuid.UUID) (*Sto
 	if err := json.Unmarshal(raw, &value); err != nil {
 		return nil, fmt.Errorf("aiconfig: 已存配置损坏: %w", err)
 	}
-	// Version 1 configurations written before max_input_tokens existed remain
-	// valid and adopt the conservative default without an eager data rewrite.
-	if value.MaxInputTokens == 0 {
-		value.MaxInputTokens = DefaultMaxInputTokens
-	}
 	return &value, nil
 }
 

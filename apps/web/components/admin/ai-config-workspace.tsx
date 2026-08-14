@@ -41,6 +41,7 @@ const configSchema = z
     model: z.string().trim().min(1, "请输入模型 ID").max(256),
     responseFormat: z.enum(["json_object", "json_schema"]),
     maxInputTokens: z.coerce.number().int().min(4096).max(2_000_000),
+    chunkCharacters: z.coerce.number().int().min(1000).max(128_000),
     requestTimeoutSeconds: z.coerce.number().int().min(5).max(300),
     maxAttempts: z.coerce.number().int().min(1).max(5),
     apiKey: z.string(),
@@ -69,6 +70,7 @@ function ConfigForm({
   const [model, setModel] = useState(config.model);
   const [responseFormat, setResponseFormat] = useState(config.responseFormat);
   const [maxInputTokens, setMaxInputTokens] = useState(String(config.maxInputTokens));
+  const [chunkCharacters, setChunkCharacters] = useState(String(config.chunkCharacters));
   const [requestTimeoutSeconds, setRequestTimeoutSeconds] = useState(
     String(config.requestTimeoutSeconds),
   );
@@ -85,6 +87,7 @@ function ConfigForm({
       model,
       responseFormat,
       maxInputTokens,
+      chunkCharacters,
       requestTimeoutSeconds,
       maxAttempts,
       apiKey,
@@ -101,6 +104,7 @@ function ConfigForm({
       model: parsed.data.model,
       responseFormat: parsed.data.responseFormat,
       maxInputTokens: parsed.data.maxInputTokens,
+      chunkCharacters: parsed.data.chunkCharacters,
       requestTimeoutSeconds: parsed.data.requestTimeoutSeconds,
       maxAttempts: parsed.data.maxAttempts,
       ...(parsed.data.apiKey.trim()
@@ -263,6 +267,22 @@ function ConfigForm({
             />
             <p className="mt-1.5 text-[11px] leading-5 text-muted-foreground">
               用于估算单次上下文并切分来源；系统会额外预留 Prompt 与输出空间。
+            </p>
+          </div>
+          <div>
+            <Label htmlFor="ai-chunk-characters">来源 Chunk 字符数</Label>
+            <Input
+              id="ai-chunk-characters"
+              className="mt-2 h-9"
+              type="number"
+              min={1000}
+              max={128_000}
+              step={1000}
+              value={chunkCharacters}
+              onChange={(event) => setChunkCharacters(event.target.value)}
+            />
+            <p className="mt-1.5 text-[11px] leading-5 text-muted-foreground">
+              新来源解析时的持久化分片上限；已固化的来源版本不会被重新切分。
             </p>
           </div>
           <div className="grid grid-cols-2 gap-3">

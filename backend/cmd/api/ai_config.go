@@ -32,6 +32,7 @@ type updateAIConfigRequest struct {
 	Model                 string `json:"model"`
 	ResponseFormat        string `json:"response_format"`
 	MaxInputTokens        int    `json:"max_input_tokens"`
+	ChunkCharacters       int    `json:"chunk_characters"`
 	RequestTimeoutSeconds int    `json:"request_timeout_seconds"`
 	MaxAttempts           int    `json:"max_attempts"`
 	APIKey                string `json:"api_key"`
@@ -45,6 +46,7 @@ type aiConfigResponse struct {
 	Model                 string     `json:"model"`
 	ResponseFormat        string     `json:"response_format"`
 	MaxInputTokens        int        `json:"max_input_tokens"`
+	ChunkCharacters       int        `json:"chunk_characters"`
 	RequestTimeoutSeconds int        `json:"request_timeout_seconds"`
 	MaxAttempts           int        `json:"max_attempts"`
 	APIKeyConfigured      bool       `json:"api_key_configured"`
@@ -86,6 +88,7 @@ func (a *AIConfigAPI) update(w http.ResponseWriter, r *http.Request) {
 		Provider: request.Provider, BaseURL: request.BaseURL, Model: request.Model,
 		ResponseFormat:        request.ResponseFormat,
 		MaxInputTokens:        request.MaxInputTokens,
+		ChunkCharacters:       request.ChunkCharacters,
 		RequestTimeoutSeconds: request.RequestTimeoutSeconds,
 		MaxAttempts:           request.MaxAttempts, APIKey: request.APIKey,
 	})
@@ -146,6 +149,7 @@ func toAIConfigResponse(value *aiconfig.Config) aiConfigResponse {
 		Version: value.Version, Enabled: value.Enabled, Provider: value.Provider,
 		BaseURL: value.BaseURL, Model: value.Model, ResponseFormat: value.ResponseFormat,
 		MaxInputTokens:        value.MaxInputTokens,
+		ChunkCharacters:       value.ChunkCharacters,
 		RequestTimeoutSeconds: value.RequestTimeoutSeconds, MaxAttempts: value.MaxAttempts,
 		APIKeyConfigured: value.APIKeyConfigured,
 		UpdatedBy:        value.UpdatedBy, UpdatedAt: value.UpdatedAt,

@@ -120,12 +120,7 @@ func assembleImportRunner(ctx context.Context, pool *pgxpool.Pool, cfg config.Co
 		return nil, err
 	}
 	if _, err := registry.EnsureActive(ctx, importer.ImportPlanPromptKey, 1, importPlanPromptSystem,
-		importPlanPromptUser, importer.ImportPlanSchemaJSON()); err != nil {
-		return nil, err
-	}
-	if _, err := registry.EnsureActive(ctx, importer.ImportPlanConsolidatePromptKey, 1,
-		importPlanConsolidatePromptSystem, importPlanConsolidatePromptUser,
-		importer.ImportPlanSchemaJSON()); err != nil {
+		importPlanPromptUser, importer.ImportPlanGenerationSchemaJSON()); err != nil {
 		return nil, err
 	}
 	if _, err := registry.EnsureActive(ctx, importer.ImportPlanFidelityPromptKey, 1,
@@ -157,7 +152,8 @@ func assembleImportRunner(ctx context.Context, pool *pgxpool.Pool, cfg config.Co
 			if err != nil {
 				return importer.RunnerRuntime{}, err
 			}
-			return importer.RunnerRuntime{Available: true, MaxInputTokens: runtime.MaxInputTokens}, nil
+			return importer.RunnerRuntime{Available: true, Model: runtime.Model, MaxInputTokens: runtime.MaxInputTokens,
+				ChunkCharacters: runtime.ChunkCharacters}, nil
 		},
 	}), nil
 }

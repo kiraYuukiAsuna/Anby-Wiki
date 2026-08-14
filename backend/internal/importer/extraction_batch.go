@@ -19,7 +19,7 @@ import (
 const (
 	// DefaultModelMaxInputTokens is used only when a legacy caller has not
 	// supplied the administrator-managed model input limit.
-	DefaultModelMaxInputTokens = 65536
+	DefaultModelMaxInputTokens = 128000
 
 	// A model may accept a large input while still having a much smaller output
 	// allowance. Keeping extraction batches bounded prevents a valid but large
@@ -45,53 +45,48 @@ type extractionBatchResult struct {
 }
 
 func (s *ExtractionService) generateCandidates(ctx context.Context, params ExtractParams) (*generatedCandidates, error) {
-	batches := batchSourceChunks(params.Chunks, params.MaxInputTokens)
+	batches := batchModelSourceChunks(initialModelSourceChunks(params.Chunks), params.MaxInputTokens)
 	type batchOutcome struct {
 		parts    []extractionBatchResult
 		rejected int
 		err      error
 	}
 	outcomes := make([]batchOutcome, len(batches))
-	batchCtx, cancel := context.WithCancel(ctx)
-	defer cancel()
 	limit := make(chan struct{}, extractionBatchConcurrency)
 	var wait sync.WaitGroup
 	for index := range batches {
 		wait.Add(1)
-		go func() {
+		go func(index int) {
 			defer wait.Done()
 			select {
 			case limit <- struct{}{}:
 				defer func() { <-limit }()
-			case <-batchCtx.Done():
-				outcomes[index].err = batchCtx.Err()
+			case <-ctx.Done():
+				outcomes[index].err = ctx.Err()
 				return
 			}
 			outcomes[index].parts, outcomes[index].rejected, outcomes[index].err =
-				s.generateBatch(batchCtx, params, batches[index])
-			if outcomes[index].err != nil {
-				cancel()
-			}
-		}()
+				s.generateBatch(ctx, params, batches[index])
+		}(index)
 	}
 	wait.Wait()
 
 	parts := make([]extractionBatchResult, 0, len(batches))
 	rejectedBatches := 0
-	var cancelled error
+	var firstError error
 	for index := range outcomes {
 		outcome := outcomes[index]
 		if outcome.err != nil {
-			if !errors.Is(outcome.err, context.Canceled) {
-				return nil, outcome.err
+			if firstError == nil {
+				firstError = outcome.err
 			}
-			cancelled = outcome.err
+			continue
 		}
 		rejectedBatches += outcome.rejected
 		parts = append(parts, outcome.parts...)
 	}
-	if cancelled != nil {
-		return nil, cancelled
+	if firstError != nil {
+		return nil, firstError
 	}
 	if len(parts) == 0 {
 		if rejectedBatches > 0 {
@@ -127,10 +122,10 @@ func (s *ExtractionService) generateCandidates(ctx context.Context, params Extra
 // large or too complex for the model. Transport, authentication, quota and
 // timeout errors retain their original semantics.
 func (s *ExtractionService) generateBatch(ctx context.Context, params ExtractParams,
-	chunks []evidence.SourceChunk) ([]extractionBatchResult, int, error) {
+	chunks []modelSourceChunk) ([]extractionBatchResult, int, error) {
 	result, err := s.generateBatchOnce(ctx, params, chunks)
 	if err != nil {
-		if isAdaptiveBatchError(err) && len(chunks) > 1 {
+		if isAdaptiveBatchError(err) {
 			return s.splitBatch(ctx, params, chunks)
 		}
 		return nil, 0, err
@@ -138,15 +133,18 @@ func (s *ExtractionService) generateBatch(ctx context.Context, params ExtractPar
 
 	var candidates *Candidates
 	if len(chunks) > 0 {
-		candidates, _, err = ValidateCandidatesFromChunks(result.JSON, params.SourceVersionID, chunks)
+		candidates, _, err = ValidateCandidatesFromChunks(result.JSON, params.SourceVersionID, modelSourceChunkViews(chunks))
+		if err == nil {
+			remapCandidatesEvidence(candidates, chunks)
+		}
 	} else {
 		candidates, _, err = ValidateCandidates(ctx, result.JSON, params.SourceVersionID, s.chunks)
 	}
 	if errors.Is(err, ErrEvidenceRequired) {
-		return nil, 1, nil
+		return s.splitBatch(ctx, params, chunks)
 	}
 	if err != nil {
-		if errors.Is(err, ai.ErrInvalidOutput) && len(chunks) > 1 {
+		if errors.Is(err, ai.ErrInvalidOutput) {
 			return s.splitBatch(ctx, params, chunks)
 		}
 		return nil, 0, err
@@ -155,13 +153,16 @@ func (s *ExtractionService) generateBatch(ctx context.Context, params ExtractPar
 }
 
 func (s *ExtractionService) splitBatch(ctx context.Context, params ExtractParams,
-	chunks []evidence.SourceChunk) ([]extractionBatchResult, int, error) {
-	middle := len(chunks) / 2
-	left, leftRejected, err := s.generateBatch(ctx, params, chunks[:middle])
+	chunks []modelSourceChunk) ([]extractionBatchResult, int, error) {
+	leftChunks, rightChunks, ok := splitModelSourceChunks(chunks)
+	if !ok {
+		return nil, 1, nil
+	}
+	left, leftRejected, err := s.generateBatch(ctx, params, leftChunks)
 	if err != nil {
 		return nil, 0, err
 	}
-	right, rightRejected, err := s.generateBatch(ctx, params, chunks[middle:])
+	right, rightRejected, err := s.generateBatch(ctx, params, rightChunks)
 	if err != nil {
 		return nil, 0, err
 	}
@@ -169,14 +170,15 @@ func (s *ExtractionService) splitBatch(ctx context.Context, params ExtractParams
 }
 
 func (s *ExtractionService) generateBatchOnce(ctx context.Context, params ExtractParams,
-	chunks []evidence.SourceChunk) (*ai.Result, error) {
+	chunks []modelSourceChunk) (*ai.Result, error) {
+	views := modelSourceChunkViews(chunks)
 	chunkViews := make([]map[string]any, len(chunks))
 	for index := range chunks {
 		chunkViews[index] = map[string]any{
-			"chunk_id": chunks[index].ID,
-			"ordinal":  chunks[index].Ordinal,
-			"text":     chunks[index].TextContent,
-			"locator":  json.RawMessage(chunks[index].LocatorJSON),
+			"chunk_id": views[index].ID,
+			"ordinal":  views[index].Ordinal,
+			"text":     views[index].TextContent,
+			"locator":  json.RawMessage(views[index].LocatorJSON),
 		}
 	}
 	chunksJSON, err := json.Marshal(chunkViews)
@@ -196,33 +198,10 @@ func (s *ExtractionService) generateBatchOnce(ctx context.Context, params Extrac
 
 func isAdaptiveBatchError(err error) bool {
 	var providerErr *ai.ProviderError
-	return errors.As(err, &providerErr) &&
-		(providerErr.Code == "output_truncated" || providerErr.Code == "invalid_structured_output")
-}
-
-func batchSourceChunks(chunks []evidence.SourceChunk, maxInputTokens int) [][]evidence.SourceChunk {
-	if len(chunks) == 0 {
-		return [][]evidence.SourceChunk{{}}
+	if errors.As(err, &providerErr) {
+		return providerErr.Code == "output_truncated" || providerErr.Code == "invalid_structured_output"
 	}
-	if maxInputTokens <= 0 {
-		maxInputTokens = DefaultModelMaxInputTokens
-	}
-	reserve := max(extractionInputMinReserve, maxInputTokens/5)
-	budget := max(1, maxInputTokens-reserve)
-	budget = min(budget, extractionBatchTarget)
-
-	batches := make([][]evidence.SourceChunk, 0, (len(chunks)+extractionBatchMaxChunks-1)/extractionBatchMaxChunks)
-	start, tokens := 0, 0
-	for index := range chunks {
-		chunkTokens := estimateChunkInputTokens(chunks[index])
-		if index > start && (index-start >= extractionBatchMaxChunks || tokens+chunkTokens > budget) {
-			batches = append(batches, chunks[start:index])
-			start, tokens = index, 0
-		}
-		tokens += chunkTokens
-	}
-	batches = append(batches, chunks[start:])
-	return batches
+	return errors.Is(err, ai.ErrInvalidOutput)
 }
 
 func estimateChunkInputTokens(chunk evidence.SourceChunk) int {

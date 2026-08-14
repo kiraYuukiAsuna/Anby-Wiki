@@ -47,8 +47,10 @@ type RunnerConfig struct {
 }
 
 type RunnerRuntime struct {
-	Available      bool
-	MaxInputTokens int
+	Available       bool
+	Model           string
+	MaxInputTokens  int
+	ChunkCharacters int
 }
 
 type Runner struct {
@@ -101,6 +103,8 @@ func (r *Runner) ProcessOne(ctx context.Context) (bool, error) {
 	ctx, span := otel.Tracer("github.com/anby/wiki/backend/importer").Start(ctx, "import.process")
 	defer span.End()
 	maxInputTokens := DefaultModelMaxInputTokens
+	chunkCharacters := 0
+	model := r.config.Model
 	if r.config.Runtime != nil {
 		runtime, err := r.config.Runtime(ctx)
 		if err != nil {
@@ -114,6 +118,12 @@ func (r *Runner) ProcessOne(ctx context.Context) (bool, error) {
 		}
 		if runtime.MaxInputTokens > 0 {
 			maxInputTokens = runtime.MaxInputTokens
+		}
+		if strings.TrimSpace(runtime.Model) != "" {
+			model = strings.TrimSpace(runtime.Model)
+		}
+		if runtime.ChunkCharacters > 0 {
+			chunkCharacters = runtime.ChunkCharacters
 		}
 	} else if r.config.Availability != nil {
 		available, err := r.config.Availability(ctx)
@@ -155,8 +165,9 @@ func (r *Runner) ProcessOne(ctx context.Context) (bool, error) {
 		JobID: job.ID, RunKey: run.IdempotencyKey, WikiID: r.config.WikiID,
 		ActorID: job.InitiatedBy, PageID: config.PageID, SourceID: config.SourceID,
 		Title: config.Title, Instructions: config.Instructions, RouteMode: config.RouteMode,
-		Provider: r.config.Provider, Model: r.config.Model,
+		Provider: r.config.Provider, Model: model,
 		MaxInputTokens:   maxInputTokens,
+		ChunkCharacters:  chunkCharacters,
 		QualityThreshold: config.QualityThreshold,
 	}
 	switch config.Source.Kind {

@@ -62,6 +62,12 @@ export interface AIConfig {
      */
     maxInputTokens: number;
     /**
+     * 来源持久化分片的最大 Unicode 字符数；新解析的来源版本使用此值。
+     * @type {number}
+     * @memberof AIConfig
+     */
+    chunkCharacters: number;
+    /**
      *
      * @type {number}
      * @memberof AIConfig
@@ -134,6 +140,7 @@ export function instanceOfAIConfig(value: object): value is AIConfig {
     if (!('model' in value) || value['model'] === undefined) return false;
     if ((!('responseFormat' in (value as Record<string, any>)) && !('response_format' in (value as Record<string, any>))) || ((value as Record<string, any>)['responseFormat'] === undefined && (value as Record<string, any>)['response_format'] === undefined)) return false;
     if ((!('maxInputTokens' in (value as Record<string, any>)) && !('max_input_tokens' in (value as Record<string, any>))) || ((value as Record<string, any>)['maxInputTokens'] === undefined && (value as Record<string, any>)['max_input_tokens'] === undefined)) return false;
+    if ((!('chunkCharacters' in (value as Record<string, any>)) && !('chunk_characters' in (value as Record<string, any>))) || ((value as Record<string, any>)['chunkCharacters'] === undefined && (value as Record<string, any>)['chunk_characters'] === undefined)) return false;
     if ((!('requestTimeoutSeconds' in (value as Record<string, any>)) && !('request_timeout_seconds' in (value as Record<string, any>))) || ((value as Record<string, any>)['requestTimeoutSeconds'] === undefined && (value as Record<string, any>)['request_timeout_seconds'] === undefined)) return false;
     if ((!('maxAttempts' in (value as Record<string, any>)) && !('max_attempts' in (value as Record<string, any>))) || ((value as Record<string, any>)['maxAttempts'] === undefined && (value as Record<string, any>)['max_attempts'] === undefined)) return false;
     if ((!('apiKeyConfigured' in (value as Record<string, any>)) && !('api_key_configured' in (value as Record<string, any>))) || ((value as Record<string, any>)['apiKeyConfigured'] === undefined && (value as Record<string, any>)['api_key_configured'] === undefined)) return false;
@@ -157,6 +164,7 @@ export function AIConfigFromJSONTyped(json: any, ignoreDiscriminator: boolean): 
         'model': json['model'],
         'responseFormat': json['response_format'],
         'maxInputTokens': json['max_input_tokens'],
+        'chunkCharacters': json['chunk_characters'],
         'requestTimeoutSeconds': json['request_timeout_seconds'],
         'maxAttempts': json['max_attempts'],
         'apiKeyConfigured': json['api_key_configured'],
@@ -183,6 +191,7 @@ export function AIConfigToJSONTyped(value?: AIConfig | null, ignoreDiscriminator
         'model': value['model'],
         'response_format': value['responseFormat'],
         'max_input_tokens': value['maxInputTokens'],
+        'chunk_characters': value['chunkCharacters'],
         'request_timeout_seconds': value['requestTimeoutSeconds'],
         'max_attempts': value['maxAttempts'],
         'api_key_configured': value['apiKeyConfigured'],

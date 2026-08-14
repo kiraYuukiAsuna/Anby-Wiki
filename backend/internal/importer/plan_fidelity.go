@@ -23,7 +23,7 @@ import (
 
 const (
 	ImportPlanFidelitySchemaURL = "https://anby.wiki/schemas/import-plan-fidelity/v1/audit.schema.json"
-	ImportPlanFidelityPromptKey = "source-import-plan-fidelity-v3"
+	ImportPlanFidelityPromptKey = "source-import-plan-fidelity-v4"
 
 	planFidelityValidationAttempts = 3
 )
@@ -44,13 +44,25 @@ type PlanFidelityMissingBlock struct {
 	Evidence     []CandidateEvidence `json:"evidence"`
 }
 
+type generatedPlanFidelityMissingBlock struct {
+	RouteIndex   int                     `json:"route_index"`
+	AfterHeading string                  `json:"after_heading"`
+	Text         string                  `json:"text"`
+	Evidence     []generatedPlanEvidence `json:"evidence"`
+}
+
+type generatedPlanFidelityAudit struct {
+	Complete       bool                                `json:"complete"`
+	CoverageBefore float64                             `json:"coverage_before"`
+	CoverageAfter  float64                             `json:"coverage_after"`
+	MissingBlocks  []generatedPlanFidelityMissingBlock `json:"missing_blocks"`
+}
+
 type PlanFidelityAudit struct {
-	SchemaVersion   int                        `json:"schema_version"`
-	SourceVersionID uuid.UUID                  `json:"source_version_id"`
-	Complete        bool                       `json:"complete"`
-	CoverageBefore  float64                    `json:"coverage_before"`
-	CoverageAfter   float64                    `json:"coverage_after"`
-	MissingBlocks   []PlanFidelityMissingBlock `json:"missing_blocks"`
+	Complete       bool                       `json:"complete"`
+	CoverageBefore float64                    `json:"coverage_before"`
+	CoverageAfter  float64                    `json:"coverage_after"`
+	MissingBlocks  []PlanFidelityMissingBlock `json:"missing_blocks"`
 }
 
 type planFidelityRouteView struct {
@@ -66,11 +78,10 @@ type planFidelityOutcome struct {
 	err    error
 }
 
-// ensurePlanFidelity performs the source-vs-plan audit introduced after the
-// normal planning/reduction pass. Each source window is checked against the
-// complete draft, so material facts lost at a map boundary or by the reducer
-// are returned as small, evidence-backed repair blocks rather than requiring
-// another full-plan generation.
+// ensurePlanFidelity performs a source-vs-plan audit after deterministic plan
+// merging. Each source window is checked against the complete draft, so facts
+// lost at a window boundary return as small evidence-backed repairs rather than
+// requiring another full-plan generation.
 func (p *PagePlanner) ensurePlanFidelity(ctx context.Context, params PlanParams, plan *ImportPlan) (float64, error) {
 	if plan == nil {
 		return 0, ErrQualityGate
@@ -94,10 +105,10 @@ func (p *PagePlanner) ensurePlanFidelity(ctx context.Context, params PlanParams,
 	if availableForChunks < extractionInputMinReserve {
 		return 0, fmt.Errorf("%w: fidelity audit input budget", ErrQualityGate)
 	}
-	batches := batchSourceChunks(params.Chunks, availableForChunks)
+	batches := batchModelSourceChunksWithinBudget(
+		initialModelSourceChunks(params.Chunks), min(availableForChunks, extractionBatchTarget),
+	)
 	outcomes := make([]planFidelityOutcome, len(batches))
-	auditCtx, cancel := context.WithCancel(ctx)
-	defer cancel()
 	limit := make(chan struct{}, planBatchConcurrency)
 	var wait sync.WaitGroup
 	for index := range batches {
@@ -107,17 +118,14 @@ func (p *PagePlanner) ensurePlanFidelity(ctx context.Context, params PlanParams,
 			select {
 			case limit <- struct{}{}:
 				defer func() { <-limit }()
-			case <-auditCtx.Done():
-				outcomes[index].err = auditCtx.Err()
+			case <-ctx.Done():
+				outcomes[index].err = ctx.Err()
 				return
 			}
 			outcomes[index].audit, outcomes[index].err = p.auditPlanFidelityBatch(
-				auditCtx, params, draftJSON, plan, batches[index],
+				ctx, params, draftJSON, plan, batches[index],
 			)
-			outcomes[index].weight = sourceChunkRuneCount(batches[index])
-			if outcomes[index].err != nil {
-				cancel()
-			}
+			outcomes[index].weight = modelSourceChunkRuneCount(batches[index])
 		}(index)
 	}
 	wait.Wait()
@@ -149,10 +157,8 @@ func (p *PagePlanner) ensurePlanFidelity(ctx context.Context, params PlanParams,
 	return coverage, nil
 }
 
-// planFidelityOutcomeError prefers the batch error that triggered sibling
-// cancellation. Batch order is deterministic, but completion order is not;
-// returning the first array entry used to turn a useful validation error into
-// a generic context.Canceled failure whenever an earlier sibling stopped first.
+// planFidelityOutcomeError prefers a concrete batch failure over a parent
+// cancellation so the job records the actionable cause.
 func planFidelityOutcomeError(ctx context.Context, outcomes []planFidelityOutcome) error {
 	var cancelled error
 	for index := range outcomes {
@@ -175,8 +181,36 @@ func planFidelityOutcomeError(ctx context.Context, outcomes []planFidelityOutcom
 }
 
 func (p *PagePlanner) auditPlanFidelityBatch(ctx context.Context, params PlanParams, draftJSON []byte,
-	plan *ImportPlan, chunks []evidence.SourceChunk) (*PlanFidelityAudit, error) {
-	chunksJSON, err := json.Marshal(planChunkViews(chunks))
+	plan *ImportPlan, chunks []modelSourceChunk) (*PlanFidelityAudit, error) {
+	audit, err := p.auditPlanFidelityWindow(ctx, params, draftJSON, plan, chunks)
+	if err == nil {
+		return audit, nil
+	}
+	leftChunks, rightChunks, ok := splitModelSourceChunks(chunks)
+	if !ok || (!isAdaptiveBatchError(err) && !isPlanFidelityValidationError(err)) {
+		return nil, err
+	}
+	left, leftErr := p.auditPlanFidelityBatch(ctx, params, draftJSON, plan, leftChunks)
+	if leftErr != nil {
+		return nil, leftErr
+	}
+	right, rightErr := p.auditPlanFidelityBatch(ctx, params, draftJSON, plan, rightChunks)
+	if rightErr != nil {
+		return nil, rightErr
+	}
+	leftWeight, rightWeight := max(1, modelSourceChunkRuneCount(leftChunks)), max(1, modelSourceChunkRuneCount(rightChunks))
+	total := float64(leftWeight + rightWeight)
+	return &PlanFidelityAudit{
+		Complete:       left.Complete && right.Complete,
+		CoverageBefore: (left.CoverageBefore*float64(leftWeight) + right.CoverageBefore*float64(rightWeight)) / total,
+		CoverageAfter:  (left.CoverageAfter*float64(leftWeight) + right.CoverageAfter*float64(rightWeight)) / total,
+		MissingBlocks:  append(append([]PlanFidelityMissingBlock{}, left.MissingBlocks...), right.MissingBlocks...),
+	}, nil
+}
+
+func (p *PagePlanner) auditPlanFidelityWindow(ctx context.Context, params PlanParams, draftJSON []byte,
+	plan *ImportPlan, chunks []modelSourceChunk) (*PlanFidelityAudit, error) {
+	chunksJSON, err := json.Marshal(planModelChunkViews(chunks))
 	if err != nil {
 		return nil, err
 	}
@@ -201,11 +235,15 @@ func (p *PagePlanner) auditPlanFidelityBatch(ctx context.Context, params PlanPar
 			},
 			ImportJobID: params.ImportJobID, ImportRunID: params.ImportRunID,
 		})
+		if err != nil && isAdaptiveBatchError(err) {
+			return nil, err
+		}
 		if err == nil {
 			lastOutput = append(lastOutput[:0], result.JSON...)
 			var audit *PlanFidelityAudit
-			audit, err = ValidatePlanFidelityAudit(result.JSON, params.SourceVersionID, chunks, plan)
+			audit, err = ValidatePlanFidelityAudit(result.JSON, params.SourceVersionID, modelSourceChunkViews(chunks), plan)
 			if err == nil {
+				remapPlanFidelityEvidence(audit, chunks)
 				return audit, nil
 			}
 		}
@@ -222,8 +260,9 @@ func (p *PagePlanner) auditPlanFidelityBatch(ctx context.Context, params PlanPar
 	// not discard the independently grounded draft because one optional patch is
 	// bad. The normal quality gate still rejects genuinely low coverage.
 	if len(lastOutput) > 0 {
-		audit, rejected, err := salvagePlanFidelityAudit(lastOutput, params.SourceVersionID, chunks, plan)
+		audit, rejected, err := salvagePlanFidelityAudit(lastOutput, params.SourceVersionID, modelSourceChunkViews(chunks), plan)
 		if err == nil && rejected > 0 {
+			remapPlanFidelityEvidence(audit, chunks)
 			return audit, nil
 		}
 	}
@@ -232,7 +271,7 @@ func (p *PagePlanner) auditPlanFidelityBatch(ctx context.Context, params PlanPar
 
 func isPlanFidelityValidationError(err error) bool {
 	var providerErr *ai.ProviderError
-	if errors.As(err, &providerErr) && (providerErr.Code == "invalid_schema" || providerErr.Code == "output_truncated") {
+	if errors.As(err, &providerErr) {
 		return false
 	}
 	return errors.Is(err, ai.ErrInvalidOutput) || errors.Is(err, ErrEvidenceRequired)
@@ -240,9 +279,9 @@ func isPlanFidelityValidationError(err error) bool {
 
 func planFidelityValidationFeedback(err error) string {
 	if errors.Is(err, ErrEvidenceRequired) {
-		return "The previous response cited unverifiable evidence. The requested article language applies only to missing_blocks.text, never to evidence.quotation. Keep each quotation in the source language and copy it verbatim, including punctuation, line breaks, and indentation, with its exact chunk_id and Unicode offsets."
+		return "The previous response cited unverifiable evidence. The requested article language applies only to missing_blocks.text, never to evidence.quotation. Keep each quotation in the source language and copy it verbatim, including punctuation, line breaks, and indentation, with its exact chunk_id. Do not calculate offsets."
 	}
-	return "The previous response failed server validation. Echo source_version_id exactly, use only authoritative create/update route_index values, keep coverage_after greater than or equal to coverage_before, and satisfy the JSON schema exactly."
+	return "The previous response failed server validation. Use only authoritative create/update route_index values, keep coverage_after greater than or equal to coverage_before, and satisfy the JSON schema exactly."
 }
 
 func ValidatePlanFidelityAudit(raw []byte, sourceVersionID uuid.UUID, chunks []evidence.SourceChunk,
@@ -265,11 +304,22 @@ func validatePlanFidelityAudit(raw []byte, sourceVersionID uuid.UUID, chunks []e
 	if err != nil || compiledImportPlanFidelitySchema.Validate(instance) != nil {
 		return nil, 0, fmt.Errorf("%w: import plan fidelity schema", ai.ErrInvalidOutput)
 	}
-	var audit PlanFidelityAudit
-	if err := json.Unmarshal(raw, &audit); err != nil {
+	var generated generatedPlanFidelityAudit
+	if err := json.Unmarshal(raw, &generated); err != nil {
 		return nil, 0, fmt.Errorf("%w: import plan fidelity document", ai.ErrInvalidOutput)
 	}
-	if plan == nil || audit.SourceVersionID != sourceVersionID || audit.CoverageAfter < audit.CoverageBefore {
+	audit := PlanFidelityAudit{
+		Complete: generated.Complete, CoverageBefore: generated.CoverageBefore,
+		CoverageAfter: generated.CoverageAfter, MissingBlocks: make([]PlanFidelityMissingBlock, 0, len(generated.MissingBlocks)),
+	}
+	for _, block := range generated.MissingBlocks {
+		audit.MissingBlocks = append(audit.MissingBlocks, PlanFidelityMissingBlock{
+			RouteIndex: block.RouteIndex, AfterHeading: block.AfterHeading, Text: block.Text,
+			Evidence: generatedEvidenceCandidates(block.Evidence),
+		})
+	}
+	if plan == nil || audit.CoverageAfter < audit.CoverageBefore ||
+		audit.Complete != (len(audit.MissingBlocks) == 0) {
 		return nil, 0, fmt.Errorf("%w: import plan fidelity metadata", ai.ErrInvalidOutput)
 	}
 	catalog := newEvidenceCatalog(sourceVersionID, chunks)
@@ -322,6 +372,15 @@ func validatePlanFidelityAudit(raw []byte, sourceVersionID uuid.UUID, chunks []e
 	return &audit, rejected, nil
 }
 
+func remapPlanFidelityEvidence(audit *PlanFidelityAudit, chunks []modelSourceChunk) {
+	if audit == nil {
+		return
+	}
+	for index := range audit.MissingBlocks {
+		audit.MissingBlocks[index].Evidence = remapCandidateEvidence(audit.MissingBlocks[index].Evidence, chunks)
+	}
+}
+
 func planFidelityDraftView(plan *ImportPlan) []planFidelityRouteView {
 	if plan == nil {
 		return []planFidelityRouteView{}
@@ -348,17 +407,6 @@ func planFidelityDraftView(plan *ImportPlan) []planFidelityRouteView {
 		result = append(result, planFidelityRouteView{
 			RouteIndex: routeIndex, Action: route.Action, Title: route.Title, Blocks: blocks,
 		})
-	}
-	return result
-}
-
-func planChunkViews(chunks []evidence.SourceChunk) []map[string]any {
-	result := make([]map[string]any, len(chunks))
-	for index := range chunks {
-		result[index] = map[string]any{
-			"chunk_id": chunks[index].ID, "ordinal": chunks[index].Ordinal,
-			"text": chunks[index].TextContent, "locator": json.RawMessage(chunks[index].LocatorJSON),
-		}
 	}
 	return result
 }

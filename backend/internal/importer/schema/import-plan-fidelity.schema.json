@@ -4,17 +4,8 @@
   "title": "Anby Wiki ImportPlan Fidelity Audit v1",
   "type": "object",
   "additionalProperties": false,
-  "required": [
-    "schema_version",
-    "source_version_id",
-    "complete",
-    "coverage_before",
-    "coverage_after",
-    "missing_blocks"
-  ],
+  "required": ["complete", "coverage_before", "coverage_after", "missing_blocks"],
   "properties": {
-    "schema_version": { "const": 1 },
-    "source_version_id": { "$ref": "#/$defs/uuid" },
     "complete": { "type": "boolean" },
     "coverage_before": { "type": "number", "minimum": 0, "maximum": 1 },
     "coverage_after": { "type": "number", "minimum": 0, "maximum": 1 },
@@ -24,20 +15,6 @@
       "items": { "$ref": "#/$defs/missing_block" }
     }
   },
-  "oneOf": [
-    {
-      "properties": {
-        "complete": { "const": true },
-        "missing_blocks": { "maxItems": 0 }
-      }
-    },
-    {
-      "properties": {
-        "complete": { "const": false },
-        "missing_blocks": { "minItems": 1 }
-      }
-    }
-  ],
   "$defs": {
     "uuid": {
       "type": "string",
@@ -46,13 +23,10 @@
     "evidence": {
       "type": "object",
       "additionalProperties": false,
-      "required": ["chunk_id", "quotation", "char_start", "char_end"],
+      "required": ["chunk_id", "quotation"],
       "properties": {
         "chunk_id": { "$ref": "#/$defs/uuid" },
-        "quotation": { "type": "string", "minLength": 1, "maxLength": 4000 },
-        "char_start": { "type": "integer", "minimum": 0 },
-        "char_end": { "type": "integer", "minimum": 1 },
-        "page": { "type": ["integer", "null"], "minimum": 1 }
+        "quotation": { "type": "string", "minLength": 1, "maxLength": 4000 }
       }
     },
     "missing_block": {

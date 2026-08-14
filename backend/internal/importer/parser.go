@@ -29,7 +29,10 @@ var (
 	ErrOCRFailed                = fmt.Errorf("%w: OCR 执行失败", ErrParseFailed)
 )
 
-const maxPDFTextBytes = 32 << 20
+const (
+	maxPDFTextBytes              = 32 << 20
+	DefaultSourceChunkCharacters = 32000
+)
 
 type TextBlock struct {
 	Text        string
@@ -43,7 +46,7 @@ type Parser struct{ MaxChunkRunes int }
 
 func NewParser(maxChunkRunes int) *Parser {
 	if maxChunkRunes <= 0 {
-		maxChunkRunes = 1200
+		maxChunkRunes = DefaultSourceChunkCharacters
 	}
 	return &Parser{MaxChunkRunes: maxChunkRunes}
 }
@@ -184,15 +187,50 @@ func (p *Parser) chunk(blocks []TextBlock) []evidence.ChunkInput {
 	result := []evidence.ChunkInput{}
 	for _, block := range blocks {
 		runes := []rune(block.Text)
-		for start := 0; start < len(runes); start += p.MaxChunkRunes {
-			end := min(start+p.MaxChunkRunes, len(runes))
+		for start := 0; start < len(runes); {
+			end := semanticChunkEnd(runes, start, p.MaxChunkRunes)
 			charStart, charEnd := int32(start), int32(end)
 			locator := evidence.Locator{Page: block.Page, Section: block.Section,
 				CharStart: &charStart, CharEnd: &charEnd,
 				ImageRegion: block.ImageRegion, OCR: block.OCR}
 			result = append(result, evidence.ChunkInput{Ordinal: len(result), Locator: locator,
 				TextContent: string(runes[start:end])})
+			start = end
 		}
 	}
 	return result
+}
+
+// semanticChunkEnd keeps the configured size as a hard upper bound while
+// preferring a nearby paragraph, line, sentence, or word boundary. This keeps
+// persisted evidence stable and avoids cutting a quotation in the middle of a
+// sentence merely because its last rune happened to land on the size limit.
+func semanticChunkEnd(runes []rune, start, limit int) int {
+	end := min(start+limit, len(runes))
+	if end == len(runes) || limit <= 0 {
+		return end
+	}
+	minimum := start + limit*2/3
+	for index := end - 1; index >= minimum; index-- {
+		if index > start && runes[index-1] == '\n' && runes[index] == '\n' {
+			return index + 1
+		}
+	}
+	for index := end - 1; index >= minimum; index-- {
+		if runes[index] == '\n' {
+			return index + 1
+		}
+	}
+	for index := end - 1; index >= minimum; index-- {
+		switch runes[index] {
+		case '.', '!', '?', '\u3002', '\uff01', '\uff1f', ';', '\uff1b':
+			return index + 1
+		}
+	}
+	for index := end - 1; index >= minimum; index-- {
+		if runes[index] == ' ' || runes[index] == '\t' {
+			return index + 1
+		}
+	}
+	return end
 }

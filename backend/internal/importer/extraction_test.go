@@ -67,16 +67,25 @@ func (g *splittingExtractionGenerator) Generate(_ context.Context, request ai.Re
 		if code == "" {
 			code = "output_truncated"
 		}
-		return nil, &ai.ProviderError{Code: code, Err: ai.ErrInvalidOutput}
+		if code == "gateway_invalid_output" {
+			return nil, ai.ErrInvalidOutput
+		}
+		if code != "evidence_invalid" {
+			return nil, &ai.ProviderError{Code: code, Err: ai.ErrInvalidOutput}
+		}
 	}
 	sourceVersionID := uuid.MustParse(request.Variables["source_version_id"].(string))
+	quotation := chunks[0].Text
+	if len(chunks) > 1 && g.failureCode == "evidence_invalid" {
+		quotation = "invented quotation"
+	}
 	candidates := Candidates{
 		SchemaVersion: 1, SourceVersionID: sourceVersionID, QualityScore: 0.9,
 		Entities: []EntityCandidate{{
 			CandidateID: uuid.New(), TypeKey: "concept", Label: chunks[0].Text,
 			Aliases: []string{}, Confidence: 0.9, Evidence: []CandidateEvidence{{
-				ChunkID: chunks[0].ChunkID, Quotation: chunks[0].Text,
-				CharStart: 0, CharEnd: len([]rune(chunks[0].Text)),
+				ChunkID: chunks[0].ChunkID, Quotation: quotation,
+				CharStart: 0, CharEnd: len([]rune(quotation)),
 			}},
 		}},
 		Claims: []ClaimCandidate{},
@@ -336,7 +345,7 @@ func TestValidateCandidatesFromChunksDropsSelfReferentialClaim(t *testing.T) {
 	}
 }
 
-func TestBatchSourceChunksBoundsOutputAndPreservesOrder(t *testing.T) {
+func TestBatchModelSourceChunksBoundsOutputAndPreservesOrder(t *testing.T) {
 	sourceVersionID := uuid.New()
 	chunks := make([]evidence.SourceChunk, 78)
 	for index := range chunks {
@@ -345,7 +354,7 @@ func TestBatchSourceChunksBoundsOutputAndPreservesOrder(t *testing.T) {
 			TextContent: "small chunk", LocatorJSON: []byte(`{}`),
 		}
 	}
-	batches := batchSourceChunks(chunks, DefaultModelMaxInputTokens)
+	batches := batchModelSourceChunks(initialModelSourceChunks(chunks), DefaultModelMaxInputTokens)
 	wantBatches := (len(chunks) + extractionBatchMaxChunks - 1) / extractionBatchMaxChunks
 	if len(batches) != wantBatches {
 		t.Fatalf("batch count=%d, want %d", len(batches), wantBatches)
@@ -356,15 +365,15 @@ func TestBatchSourceChunksBoundsOutputAndPreservesOrder(t *testing.T) {
 			t.Fatalf("batch has %d chunks, max=%d", len(batch), extractionBatchMaxChunks)
 		}
 		for _, chunk := range batch {
-			if chunk.Ordinal != ordinal {
-				t.Fatalf("ordinal=%d, want %d", chunk.Ordinal, ordinal)
+			if chunk.View.Ordinal != ordinal {
+				t.Fatalf("ordinal=%d, want %d", chunk.View.Ordinal, ordinal)
 			}
 			ordinal++
 		}
 	}
 }
 
-func TestBatchSourceChunksUsesConfiguredInputBudget(t *testing.T) {
+func TestBatchModelSourceChunksUsesConfiguredInputBudget(t *testing.T) {
 	sourceVersionID := uuid.New()
 	chunks := make([]evidence.SourceChunk, 6)
 	for index := range chunks {
@@ -373,14 +382,16 @@ func TestBatchSourceChunksUsesConfiguredInputBudget(t *testing.T) {
 			TextContent: strings.Repeat("a", 1200), LocatorJSON: []byte(`{}`),
 		}
 	}
-	batches := batchSourceChunks(chunks, 4096)
+	batches := batchModelSourceChunks(initialModelSourceChunks(chunks), 4096)
 	if len(batches) < 2 {
 		t.Fatalf("batch count=%d, configured input budget was not applied", len(batches))
 	}
 }
 
 func TestGenerateCandidatesSplitsInvalidStructuredBatchesAndMergesResults(t *testing.T) {
-	for _, failureCode := range []string{"output_truncated", "invalid_structured_output"} {
+	for _, failureCode := range []string{
+		"output_truncated", "invalid_structured_output", "gateway_invalid_output", "evidence_invalid",
+	} {
 		t.Run(failureCode, func(t *testing.T) {
 			sourceVersionID := uuid.New()
 			chunks := []evidence.SourceChunk{

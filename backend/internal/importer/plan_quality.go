@@ -8,10 +8,8 @@ import (
 	"github.com/anby/wiki/backend/internal/ast"
 )
 
-// refineImportPlan is a deterministic safety net around model-authored and
-// cross-batch plans. The model consolidator handles semantic organization;
-// this pass enforces structural invariants even when consolidation is skipped
-// or safely falls back after a provider error.
+// refineImportPlan deterministically merges model-authored windows and
+// enforces the final article structure without another full-plan model call.
 func refineImportPlan(plan *ImportPlan) {
 	if plan == nil {
 		return

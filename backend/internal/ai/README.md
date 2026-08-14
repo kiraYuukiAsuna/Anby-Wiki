@@ -16,11 +16,11 @@ Gateway 使用同一份权威 JSON Schema 严格校验；JSON Object 抽取固�
 Worker 首次启用来源导入时，幂等登记当前 `source-extraction-v6` Prompt；该版本明确区分
 临时候选 UUID 与持久化 Entity ID，并提供运行时支持的 Entity type / Claim property
 词表与关系方向约束；作品/RFC 属性有独立语义，禁止用 `part_of` 代替发布组织，也禁止
-任何 Entity 关系指回主体自身。页面规划使用 `source-import-plan-v5`，多窗口结果另经
-`source-import-plan-consolidate-v3` 收敛，并由 `source-import-plan-fidelity-v3` 对照原始
-Chunk 做证据化遗漏审计和章节级修复。规划与收敛输出复用 ImportPlan v1 权威 Schema，
-保真审计使用独立的只允许既有 route_index 和精确 evidence 的内部 Schema；最终质量分由
-服务端计算而非采信模型自评分。保真 v3 明确禁止翻译 evidence 引文，并在三次语义纠正耗尽后
+任何 Entity 关系指回主体自身。页面规划使用 `source-import-plan-v6`，多窗口结果由服务端
+确定性合并，并由 `source-import-plan-fidelity-v4` 对照原始 Chunk 做证据化遗漏审计和章节级修复。
+模型规划使用只包含语义内容和 `chunk_id + quotation` 的轻量 Schema；服务端再生成完整
+ImportPlan v1。保真审计使用独立的只允许既有 route_index 和精确 evidence 的内部 Schema；最终质量分由
+服务端计算而非采信模型自评分。保真 v4 明确禁止翻译 evidence 引文，并在三次语义纠正耗尽后
 隔离无法核验的可选修复、同步撤销对应覆盖率增益。Extraction 输出 Schema 继续直接复用
 `importer` 内嵌的权威副本。Prompt key
 升级使用新 key，避免覆盖或静默改写运维已激活的旧 Prompt。

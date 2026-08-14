@@ -23,14 +23,11 @@ import (
 )
 
 const (
-	ImportPlanSchemaURL = "https://anby.wiki/schemas/import-plan/v1/plan.schema.json"
-	ImportPlanPromptKey = "source-import-plan-v5"
-	// ImportPlanConsolidatePromptKey reduces independently grounded source
-	// windows into one coherent article plan. It uses the same output contract
-	// but receives only validated draft material, never raw source instructions.
-	ImportPlanConsolidatePromptKey = "source-import-plan-consolidate-v3"
-	planBatchConcurrency           = 3
-	planLeafValidationAttempts     = 3
+	ImportPlanSchemaURL           = "https://anby.wiki/schemas/import-plan/v1/plan.schema.json"
+	ImportPlanGenerationSchemaURL = "https://anby.wiki/schemas/import-plan-generation/v1/plan.schema.json"
+	ImportPlanPromptKey           = "source-import-plan-v6"
+	planBatchConcurrency          = 3
+	planLeafValidationAttempts    = 3
 
 	RouteCreate = "create"
 	RouteUpdate = "update"
@@ -55,8 +52,23 @@ var importPlanSchemaJSON []byte
 
 var compiledImportPlanSchema = mustCompileImportPlanSchema()
 
+//go:embed schema/import-plan-generation.schema.json
+var importPlanGenerationSchemaJSON []byte
+
+var compiledImportPlanGenerationSchema = mustCompileJSONSchema(
+	ImportPlanGenerationSchemaURL,
+	importPlanGenerationSchemaJSON,
+)
+
 func ImportPlanSchemaJSON() json.RawMessage {
 	return append(json.RawMessage(nil), importPlanSchemaJSON...)
+}
+
+// ImportPlanGenerationSchemaJSON is deliberately smaller than the persisted
+// ImportPlan contract. The model supplies semantic choices and exact quotes;
+// the service owns immutable IDs, offsets, page metadata, defaults, and score.
+func ImportPlanGenerationSchemaJSON() json.RawMessage {
+	return append(json.RawMessage(nil), importPlanGenerationSchemaJSON...)
 }
 
 type SourceProfile struct {
@@ -117,6 +129,19 @@ type ImportPlanRecord struct {
 	Model           string
 	PlanJSON        json.RawMessage
 	QualityScore    float64
+	CreatedAt       time.Time
+}
+
+type ImportPlanPartRecord struct {
+	ID              uuid.UUID
+	ImportJobID     uuid.UUID
+	SourceVersionID uuid.UUID
+	InputHash       string
+	WindowHash      string
+	PromptKey       string
+	PromptVersion   int
+	Model           string
+	PlanJSON        json.RawMessage
 	CreatedAt       time.Time
 }
 
@@ -212,6 +237,7 @@ func (p *PagePlanner) Plan(ctx context.Context, params PlanParams) (*PlanResult,
 		return nil, err
 	}
 	plan := generated.Plan
+	planCoverage := generated.coverage
 	if DetectPromptInjection(chunkTexts(params.Chunks)) {
 		plan.PromptInjectionDetected = true
 	}
@@ -232,7 +258,7 @@ func (p *PagePlanner) Plan(ctx context.Context, params PlanParams) (*PlanResult,
 	if err != nil {
 		return nil, err
 	}
-	plan.QualityScore = assessImportPlanQuality(plan, params.Chunks, fidelity)
+	plan.QualityScore = assessImportPlanQuality(plan, params.Chunks, fidelity*planCoverage)
 	if plan.QualityScore < DefaultQualityThreshold {
 		return nil, ErrQualityGate
 	}
@@ -272,18 +298,23 @@ type generatedImportPlan struct {
 	PromptKey     string
 	PromptVersion int
 	Model         string
+	coverage      float64
+}
+
+type generatedPlanBatch struct {
+	plans          []*ImportPlan
+	result         *ai.Result
+	failedWeight   int
+	recoverableErr error
 }
 
 func (p *PagePlanner) generatePlan(ctx context.Context, params PlanParams, candidates []PageCandidate) (*generatedImportPlan, error) {
-	batches := batchSourceChunks(params.Chunks, params.MaxInputTokens)
+	batches := batchModelSourceChunks(initialModelSourceChunks(params.Chunks), params.MaxInputTokens)
 	type planBatchOutcome struct {
-		plans  []*ImportPlan
-		result *ai.Result
-		err    error
+		batch generatedPlanBatch
+		err   error
 	}
 	outcomes := make([]planBatchOutcome, len(batches))
-	batchCtx, cancel := context.WithCancel(ctx)
-	defer cancel()
 	limit := make(chan struct{}, planBatchConcurrency)
 	var wait sync.WaitGroup
 	for index := range batches {
@@ -293,15 +324,12 @@ func (p *PagePlanner) generatePlan(ctx context.Context, params PlanParams, candi
 			select {
 			case limit <- struct{}{}:
 				defer func() { <-limit }()
-			case <-batchCtx.Done():
-				outcomes[index].err = batchCtx.Err()
+			case <-ctx.Done():
+				outcomes[index].err = ctx.Err()
 				return
 			}
-			outcomes[index].plans, outcomes[index].result, outcomes[index].err =
-				p.generatePlanBatch(batchCtx, params, candidates, batches[index])
-			if outcomes[index].err != nil {
-				cancel()
-			}
+			outcomes[index].batch, outcomes[index].err =
+				p.generatePlanBatch(ctx, params, candidates, batches[index])
 		}(index)
 	}
 	wait.Wait()
@@ -309,29 +337,32 @@ func (p *PagePlanner) generatePlan(ctx context.Context, params PlanParams, candi
 	parts := make([]*ImportPlan, 0, len(batches))
 	var first *ai.Result
 	var firstError error
+	totalWeight, failedWeight := 0, 0
 	for index := range outcomes {
 		outcome := outcomes[index]
+		weight := max(1, modelSourceChunkRuneCount(batches[index]))
+		totalWeight += weight
 		if outcome.err != nil {
-			if firstError == nil && !errors.Is(outcome.err, context.Canceled) {
-				firstError = outcome.err
-			}
+			return nil, outcome.err
+		}
+		failedWeight += outcome.batch.failedWeight
+		if firstError == nil && outcome.batch.recoverableErr != nil {
+			firstError = outcome.batch.recoverableErr
+		}
+		if outcome.batch.result == nil {
 			continue
 		}
-		if outcome.result == nil {
-			if firstError == nil {
-				firstError = fmt.Errorf("%w: empty import plan batch", ai.ErrInvalidOutput)
-			}
-			continue
-		}
+		result := outcome.batch.result
 		if first == nil {
-			first = outcome.result
-		} else if outcome.result.PromptKey != first.PromptKey || outcome.result.PromptVersion != first.PromptVersion ||
-			outcome.result.Model != first.Model {
+			first = result
+		} else if result.PromptKey != first.PromptKey || result.PromptVersion != first.PromptVersion ||
+			result.Model != first.Model {
 			return nil, fmt.Errorf("%w: inconsistent import plan batch metadata", ai.ErrInvalidOutput)
 		}
-		parts = append(parts, outcome.plans...)
+		parts = append(parts, outcome.batch.plans...)
 	}
-	if firstError != nil {
+	if firstError != nil && (len(parts) == 0 || totalWeight == 0 ||
+		float64(totalWeight-failedWeight)/float64(totalWeight) < DefaultQualityThreshold) {
 		return nil, firstError
 	}
 	if err := ctx.Err(); err != nil {
@@ -342,91 +373,65 @@ func (p *PagePlanner) generatePlan(ctx context.Context, params PlanParams, candi
 	}
 	merged := mergeImportPlanParts(params.SourceVersionID, parts)
 	refineImportPlan(merged)
-	if len(parts) > 1 {
-		consolidated, result, err := p.consolidatePlan(ctx, params, candidates, merged)
-		if err == nil && consolidated != nil && result != nil {
-			merged = consolidated
-			first = result
-		} else if ctx.Err() != nil {
-			return nil, ctx.Err()
-		}
-		// A reducer timeout or invalid structure must not throw away already
-		// validated map results. The deterministic refinement above remains a
-		// safe, evidence-grounded fallback.
+	if params.RouteMode == RouteModeForceCreate && !hasForcedCreateRoute(merged.Routes, params.PreferredTitle) {
+		return nil, ErrNoPagePlan
 	}
-	refineImportPlan(merged)
+	coverage := 1.0
+	if failedWeight > 0 {
+		coverage = float64(totalWeight-failedWeight) / float64(totalWeight)
+	}
 	return &generatedImportPlan{Plan: merged, PromptKey: first.PromptKey,
-		PromptVersion: first.PromptVersion, Model: first.Model}, nil
+		PromptVersion: first.PromptVersion, Model: first.Model, coverage: coverage}, nil
 }
 
-func (p *PagePlanner) consolidatePlan(ctx context.Context, params PlanParams, candidates []PageCandidate,
-	draft *ImportPlan) (*ImportPlan, *ai.Result, error) {
-	draftJSON, err := json.Marshal(draft)
-	if err != nil {
-		return nil, nil, err
-	}
-	maxInputTokens := params.MaxInputTokens
-	if maxInputTokens <= 0 {
-		maxInputTokens = DefaultModelMaxInputTokens
-	}
-	// The reducer has prompt/schema overhead and must still leave room for a
-	// complete rewritten plan. A conservative byte/token estimate makes the
-	// optional pass self-disabling for unusually large plans.
-	budget := maxInputTokens - max(extractionInputMinReserve, maxInputTokens/5)
-	if (len(draftJSON)+2)/3+4096 > budget {
-		return nil, nil, nil
-	}
-	candidatesJSON, err := json.Marshal(candidates)
-	if err != nil {
-		return nil, nil, err
-	}
-	result, err := p.ai.Generate(ctx, ai.Request{
-		Provider: params.Provider, Model: params.Model, PromptKey: ImportPlanConsolidatePromptKey,
-		Variables: map[string]any{
-			"source_version_id": params.SourceVersionID.String(),
-			"source_label":      strings.TrimSpace(params.SourceLabel),
-			"preferred_title":   strings.TrimSpace(params.PreferredTitle),
-			"instructions":      strings.TrimSpace(params.Instructions),
-			"route_mode":        params.RouteMode,
-			"candidate_pages":   string(candidatesJSON),
-			"draft_plan_json":   string(draftJSON),
-		},
-		ImportJobID: params.ImportJobID, ImportRunID: params.ImportRunID,
-	})
-	if err != nil {
-		return nil, nil, err
-	}
-	plan, _, err := ValidateImportPlan(result.JSON, params.SourceVersionID, params.Chunks,
-		candidates, params.RouteMode, params.PreferredTitle)
-	if err != nil {
-		return nil, nil, err
-	}
-	plan.PromptInjectionDetected = plan.PromptInjectionDetected || draft.PromptInjectionDetected
-	return plan, result, nil
+func isRecoverablePlanWindowError(err error) bool {
+	return isAdaptiveBatchError(err) || isPlanSemanticValidationError(err)
 }
 
 func (p *PagePlanner) generatePlanBatch(ctx context.Context, params PlanParams, candidates []PageCandidate,
-	chunks []evidence.SourceChunk) ([]*ImportPlan, *ai.Result, error) {
+	chunks []modelSourceChunk) (generatedPlanBatch, error) {
 	plan, result, err := p.generateValidatedPlanBatch(ctx, params, candidates, chunks)
-	if err != nil {
-		if (isAdaptiveBatchError(err) || isPlanSemanticValidationError(err)) && len(chunks) > 1 {
-			middle := len(chunks) / 2
-			left, leftResult, leftErr := p.generatePlanBatch(ctx, params, candidates, chunks[:middle])
-			if leftErr != nil {
-				return nil, nil, leftErr
-			}
-			right, rightResult, rightErr := p.generatePlanBatch(ctx, params, candidates, chunks[middle:])
-			if rightErr != nil {
-				return nil, nil, rightErr
-			}
-			if leftResult.PromptKey != rightResult.PromptKey || leftResult.PromptVersion != rightResult.PromptVersion || leftResult.Model != rightResult.Model {
-				return nil, nil, fmt.Errorf("%w: inconsistent split plan metadata", ai.ErrInvalidOutput)
-			}
-			return append(left, right...), leftResult, nil
-		}
-		return nil, nil, err
+	if err == nil {
+		return generatedPlanBatch{plans: []*ImportPlan{plan}, result: result}, nil
 	}
-	return []*ImportPlan{plan}, result, nil
+	if !isRecoverablePlanWindowError(err) {
+		return generatedPlanBatch{}, err
+	}
+	leftChunks, rightChunks, ok := splitModelSourceChunks(chunks)
+	if !ok {
+		return generatedPlanBatch{
+			failedWeight: modelSourceChunkRuneCount(chunks), recoverableErr: err,
+		}, nil
+	}
+	left, leftErr := p.generatePlanBatch(ctx, params, candidates, leftChunks)
+	if leftErr != nil {
+		return generatedPlanBatch{}, leftErr
+	}
+	right, rightErr := p.generatePlanBatch(ctx, params, candidates, rightChunks)
+	if rightErr != nil {
+		return generatedPlanBatch{}, rightErr
+	}
+	combined := generatedPlanBatch{
+		plans:        append(append([]*ImportPlan{}, left.plans...), right.plans...),
+		failedWeight: left.failedWeight + right.failedWeight,
+	}
+	if left.recoverableErr != nil {
+		combined.recoverableErr = left.recoverableErr
+	} else {
+		combined.recoverableErr = right.recoverableErr
+	}
+	switch {
+	case left.result == nil:
+		combined.result = right.result
+	case right.result == nil:
+		combined.result = left.result
+	case left.result.PromptKey != right.result.PromptKey ||
+		left.result.PromptVersion != right.result.PromptVersion || left.result.Model != right.result.Model:
+		return generatedPlanBatch{}, fmt.Errorf("%w: inconsistent split plan metadata", ai.ErrInvalidOutput)
+	default:
+		combined.result = left.result
+	}
+	return combined, nil
 }
 
 // generateValidatedPlanBatch lets adaptive splitting handle complex
@@ -435,7 +440,12 @@ func (p *PagePlanner) generatePlanBatch(ctx context.Context, params PlanParams, 
 // with one bad quotation could make the whole import fail after splitting had
 // already exhausted every smaller input shape.
 func (p *PagePlanner) generateValidatedPlanBatch(ctx context.Context, params PlanParams,
-	candidates []PageCandidate, chunks []evidence.SourceChunk) (*ImportPlan, *ai.Result, error) {
+	candidates []PageCandidate, chunks []modelSourceChunk) (*ImportPlan, *ai.Result, error) {
+	if cached, result, err := p.cachedPlanPart(ctx, params, candidates, chunks); err != nil {
+		return nil, nil, err
+	} else if cached != nil {
+		return cached, result, nil
+	}
 	maxAttempts := 1
 	if len(chunks) == 1 {
 		maxAttempts = planLeafValidationAttempts
@@ -450,9 +460,13 @@ func (p *PagePlanner) generateValidatedPlanBatch(ctx context.Context, params Pla
 		if err != nil {
 			return nil, nil, err
 		}
-		plan, _, err := ValidateImportPlan(result.JSON, params.SourceVersionID, chunks,
-			candidates, params.RouteMode, params.PreferredTitle)
+		plan, _, err := DecodeGeneratedImportPlan(result.JSON, params.SourceVersionID, modelSourceChunkViews(chunks),
+			candidates, params.RouteMode)
 		if err == nil {
+			remapImportPlanEvidence(plan, chunks)
+			if err := p.cachePlanPart(ctx, params, candidates, chunks, plan, result); err != nil {
+				return nil, nil, err
+			}
 			return plan, result, nil
 		}
 		if !isPlanSemanticValidationError(err) {
@@ -464,20 +478,69 @@ func (p *PagePlanner) generateValidatedPlanBatch(ctx context.Context, params Pla
 	return nil, nil, lastErr
 }
 
+func (p *PagePlanner) cachedPlanPart(ctx context.Context, params PlanParams,
+	candidates []PageCandidate, chunks []modelSourceChunk) (*ImportPlan, *ai.Result, error) {
+	if p.repo == nil || params.RouteMode == RouteModeForceCreate || params.ImportJobID == nil ||
+		*params.ImportJobID == uuid.Nil || !validSHA256(params.InputHash) {
+		return nil, nil, nil
+	}
+	part, err := p.repo.GetImportPlanPart(ctx, *params.ImportJobID, params.InputHash,
+		modelWindowHash(params.InputHash, params.Model, candidates, chunks))
+	if errors.Is(err, ErrImportPlanNotFound) {
+		return nil, nil, nil
+	}
+	if err != nil {
+		return nil, nil, err
+	}
+	var plan ImportPlan
+	if err := json.Unmarshal(part.PlanJSON, &plan); err != nil {
+		return nil, nil, err
+	}
+	normalizeImportPlanCollections(&plan)
+	return &plan, &ai.Result{PromptKey: part.PromptKey, PromptVersion: part.PromptVersion, Model: part.Model}, nil
+}
+
+func (p *PagePlanner) cachePlanPart(ctx context.Context, params PlanParams, candidates []PageCandidate,
+	chunks []modelSourceChunk, plan *ImportPlan, result *ai.Result) error {
+	if p.repo == nil || p.ids == nil || params.RouteMode == RouteModeForceCreate || plan == nil || result == nil || params.ImportJobID == nil ||
+		*params.ImportJobID == uuid.Nil || !validSHA256(params.InputHash) {
+		return nil
+	}
+	raw, err := json.Marshal(plan)
+	if err != nil {
+		return err
+	}
+	partID, err := p.ids.New()
+	if err != nil {
+		return err
+	}
+	part := &ImportPlanPartRecord{
+		ID: partID, ImportJobID: *params.ImportJobID, SourceVersionID: params.SourceVersionID,
+		InputHash: params.InputHash, WindowHash: modelWindowHash(params.InputHash, params.Model, candidates, chunks),
+		PromptKey: result.PromptKey, PromptVersion: result.PromptVersion, Model: result.Model, PlanJSON: raw,
+	}
+	_, err = p.repo.InsertImportPlanPartIfAbsent(ctx, part)
+	return err
+}
+
 func isPlanSemanticValidationError(err error) bool {
+	var providerErr *ai.ProviderError
+	if errors.As(err, &providerErr) {
+		return false
+	}
 	return errors.Is(err, ai.ErrInvalidOutput) || errors.Is(err, ErrEvidenceRequired)
 }
 
 func planValidationFeedback(err error) string {
 	if errors.Is(err, ErrEvidenceRequired) {
-		return "The previous response lost all verifiable evidence in this source window. Copy each quotation from exactly one supplied chunk_id; preserve every letter, punctuation mark, line break, and indentation, and use Unicode character offsets within that chunk."
+		return "The previous response lost all verifiable evidence in this source window. Copy each quotation from exactly one supplied chunk_id and preserve every letter, punctuation mark, line break, and indentation. Do not calculate offsets; the server derives them."
 	}
-	return "The previous response passed provider JSON generation but failed application validation. Use only supplied page_id and block_id values, obey the route/block invariants, and satisfy the ImportPlan schema exactly."
+	return "The previous response passed JSON generation but failed application validation. Use only supplied page_id and replace_block_id values, include only fields present in the schema, and keep every evidence quotation verbatim."
 }
 
 func (p *PagePlanner) generatePlanOnce(ctx context.Context, params PlanParams, candidates []PageCandidate,
-	chunks []evidence.SourceChunk, validationFeedback string) (*ai.Result, error) {
-	chunksJSON, err := json.Marshal(planChunkViews(chunks))
+	chunks []modelSourceChunk, validationFeedback string) (*ai.Result, error) {
+	chunksJSON, err := json.Marshal(planModelChunkViews(chunks))
 	if err != nil {
 		return nil, err
 	}
@@ -1105,16 +1168,20 @@ func chunkTexts(chunks []evidence.SourceChunk) []string {
 }
 
 func mustCompileImportPlanSchema() *jsonschema.Schema {
-	doc, err := jsonschema.UnmarshalJSON(bytes.NewReader(importPlanSchemaJSON))
+	return mustCompileJSONSchema(ImportPlanSchemaURL, importPlanSchemaJSON)
+}
+
+func mustCompileJSONSchema(schemaURL string, raw []byte) *jsonschema.Schema {
+	doc, err := jsonschema.UnmarshalJSON(bytes.NewReader(raw))
 	if err != nil {
 		panic(err)
 	}
 	compiler := jsonschema.NewCompiler()
 	compiler.AssertFormat()
-	if err := compiler.AddResource(ImportPlanSchemaURL, doc); err != nil {
+	if err := compiler.AddResource(schemaURL, doc); err != nil {
 		panic(err)
 	}
-	schema, err := compiler.Compile(ImportPlanSchemaURL)
+	schema, err := compiler.Compile(schemaURL)
 	if err != nil {
 		panic(err)
 	}

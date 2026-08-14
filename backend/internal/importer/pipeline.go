@@ -77,6 +77,7 @@ type PipelineRequest struct {
 	Provider         string
 	Model            string
 	MaxInputTokens   int
+	ChunkCharacters  int
 	QualityThreshold float64
 	// ExpectedContentHash binds an upload retry to the immutable content that
 	// was accepted by the API. URL jobs leave it empty because their config is
@@ -437,7 +438,11 @@ func (p *Pipeline) prepareParsedSource(
 	if err != nil {
 		return nil, "", err
 	}
-	chunks, err := p.parser.Parse(ctx, acquired.MIMEType, acquired.Content)
+	parser := p.parser
+	if request.ChunkCharacters > 0 {
+		parser = NewParser(request.ChunkCharacters)
+	}
+	chunks, err := parser.Parse(ctx, acquired.MIMEType, acquired.Content)
 	if err != nil {
 		// Asset and Source were deliberately persisted before parsing so a failed
 		// parser never destroys the original evidence.

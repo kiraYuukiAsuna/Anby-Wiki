@@ -35,6 +35,29 @@ func TestParseStructuredSources(t *testing.T) {
 	}
 }
 
+func TestDefaultParserUsesConfiguredProductDefault(t *testing.T) {
+	parser := NewParser(0)
+	if parser.MaxChunkRunes != 32000 {
+		t.Fatalf("default chunk characters=%d, want 32000", parser.MaxChunkRunes)
+	}
+}
+
+func TestParserPrefersSemanticBoundaryWithinLimit(t *testing.T) {
+	parser := NewParser(12)
+	chunks, err := parser.Parse(context.Background(), "text/plain", []byte("Alpha one. Beta two. Gamma."))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(chunks) < 2 || chunks[0].TextContent != "Alpha one." {
+		t.Fatalf("unexpected semantic chunks: %#v", chunks)
+	}
+	for _, chunk := range chunks {
+		if len([]rune(chunk.TextContent)) > 12 {
+			t.Fatalf("chunk exceeded limit: %q", chunk.TextContent)
+		}
+	}
+}
+
 func TestParseTesseractTSVPreservesImageLocator(t *testing.T) {
 	content := strings.Join([]string{
 		"level\tpage_num\tblock_num\tpar_num\tline_num\tword_num\tleft\ttop\twidth\theight\tconf\ttext",

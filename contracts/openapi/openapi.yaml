@@ -5002,6 +5002,7 @@ components:
         - model
         - response_format
         - max_input_tokens
+        - chunk_characters
         - request_timeout_seconds
         - max_attempts
         - api_key_configured
@@ -5020,7 +5021,14 @@ components:
           type: integer
           minimum: 4096
           maximum: 2000000
+          default: 128000
           description: 模型上下文允许的最大输入 Token；Worker 据此预留 Prompt/输出空间并分批抽取。
+        chunk_characters:
+          type: integer
+          minimum: 1000
+          maximum: 128000
+          default: 32000
+          description: 来源持久化分片的最大 Unicode 字符数；新解析的来源版本使用此值。
         request_timeout_seconds:
           type: integer
           minimum: 5
@@ -5042,6 +5050,7 @@ components:
         - model
         - response_format
         - max_input_tokens
+        - chunk_characters
         - request_timeout_seconds
         - max_attempts
       properties:
@@ -5058,6 +5067,12 @@ components:
           type: integer
           minimum: 4096
           maximum: 2000000
+          default: 128000
+        chunk_characters:
+          type: integer
+          minimum: 1000
+          maximum: 128000
+          default: 32000
         request_timeout_seconds:
           type: integer
           minimum: 5

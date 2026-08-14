@@ -7,7 +7,8 @@ Page、Knowledge、Evidence 或 Governance 的权威表。所有正式写入均�
 ## 运行时
 
 API 的 `POST /api/v1/import-jobs` 只创建队列项。Provider、API 根地址、模型、输出模式、
-模型最大输入 Token、超时、尝试次数和密钥由管理员在 `/admin/ai` 配置；API Key 使用部署主密钥加密写入
+模型最大输入 Token、来源 Chunk 字符数、超时、尝试次数和密钥由管理员在 `/admin/ai` 配置；默认
+上下文上限为 128000 Token，默认持久 Chunk 上限为 32000 Unicode 字符。API Key 使用部署主密钥加密写入
 `wiki_site.settings_json`，不再通过 Worker 环境变量注入。配置缺失、禁用或不可解密时，
 Worker 不领取 `source_import`，已有任务保持 queued。
 
@@ -18,8 +19,11 @@ Go Gateway 再执行最终独立校验。Sidecar 不访问数据库、对象存�
 Worker 会从管理员提供的最大输入 Token 中预留 Prompt/Schema 空间，再按估算 Token 和
 单批最多 6 个 Chunk 分批调用，最多并行处理 3 批；较大上下文仍受独立的输出安全批量
 上限约束。每批候选分别完成 Schema 与逐字证据核验后，以服务端生成的候选 ID 去重合并。
-若供应商返回 `output_truncated` 或 `invalid_structured_output`，只二分重试对应批次；
-已完成批次以及获取、安全扫描、解析恢复点均不会重跑。模型结构化调用默认最多尝试 3 次。
+若供应商返回 `output_truncated` 或 `invalid_structured_output`，只二分重试对应模型窗口；
+即使持久 Chunk 本身只有一个，仍可在不创建新 SourceChunk 的前提下按语义边界临时二分，核验后的
+证据会映射回原始 Chunk ID 和全局字符位置。获取、安全扫描和解析恢复点不会重跑；页面规划中已经
+通过 Schema 与逐字证据核验的窗口会按任务输入和窗口范围缓存，任务重试只补未成功窗口。模型结构化
+调用默认最多尝试 3 次。
 
 部署环境只保留 `AI_CONFIG_MASTER_KEY`、`AI_KERNEL_URL`、
 `AI_KERNEL_INTERNAL_TOKEN` 以及对象存储配置：
@@ -68,7 +72,7 @@ Gateway 相同的权威 JSON Schema 预校验并纠正失败输出；OpenAI comp
 缩写/全名与 label/alias 命中的同一 Entity，并确定性拒绝方向、类型不成立或主体等于
 Entity 值的自引用 Claim；相同约束在逐字证据核验、稳定 ID 分类与 Knowledge 写入边界
 重复兜底，旧 Extraction 复用时也会重新执行。
-事实候选允许为空：来源随后仍会进入 `source-import-plan-v5`，由不受固定 Entity/Claim
+事实候选允许为空：来源随后仍会进入 `source-import-plan-v6`，由不受固定 Entity/Claim
 词表限制的页面规划判断百科价值。模型提供的
 引文必须逐字存在；服务端会重新推导 rune 范围以纠正模型常见的 Unicode/字节计数偏差。
 引文重复出现时选择离模型提示位置最近的精确匹配，最近距离并列才拒绝；模糊匹配、翻译
@@ -97,25 +101,26 @@ Operation 排在 Claim Operation 之前，Claim 的主体和 Entity 值在 Compo
 可核验 Entity/Claim 继续进入治理。新实体 canonical key 使用 `type_key:label`，避免
 不同类型的同名实体在整批应用时互相冲突。
 
-`source-import-plan-v5` 在事实抽取之后执行来源理解与页面路由。它先按标题、来源名、
+`source-import-plan-v6` 在事实抽取之后执行来源理解与页面路由。它先按标题、来源名、
 Entity/alias 召回已有 Page 及可替换 Block，再允许一份来源同时生成多个 `create`、
 `update`、`link` 与 `ignore` 路由。`link.related_to` 显式选择同批 create/update
 页面并携带原文证据，随后编译为稳定 `page_reference`，由投影生成反链；每个新写或改写
 Block 都必须绑定可逐字核验的 SourceChunk evidence；update/replace 只能引用服务端给出的
-Page/Block ID。模型输出过长、结构错误或局部证据失败时按 Chunk 自适应二分，已经成功的
-批次不重跑；拆到单 Chunk 后仍有语义错误时，服务端携带校验反馈最多尝试三次。对 RFC 等硬换行文本，
+Page/Block ID。模型只输出页面语义、正文和 `chunk_id + quotation`；SourceVersion、字符范围、页码、
+空集合、Block 模式和质量分均由服务端补齐，避免让模型重复计算机械字段。输出过长、结构错误或局部
+证据失败时按临时模型窗口自适应二分，已经成功的规划窗口会持久复用；窗口仍有语义错误时，服务端
+携带校验反馈最多尝试三次。对 RFC 等硬换行文本，
 只允许将字母、标点和大小写全部一致的纯空白差异回填为不可变 Chunk 中的原始逐字引文；
-独立窗口并行规划后，再由 `source-import-plan-consolidate-v3` 在同一证据集合上
-做全局收敛，消除重复导语、空标题和参考文献堆叠。收敛调用失败时回退到已验证窗口，并经过
-确定性的段落去重、无内容标题与非正文区段清理，不会因可选优化丢失整次导入。
+独立窗口并行规划后直接经过确定性的路由/段落合并、无内容标题与非正文区段清理，不再用一次
+大输出 LLM 调用重写整份计划，避免可选的“收敛”步骤成为新的单点失败。
 作者、编辑、贡献者、出版者或发布机构若只出现在文档头、署名、联系方式或
-元数据中，规划与收敛阶段都不为其生成独立页面；只有来源提供独立人物或机构
+元数据中，规划与合并阶段都不为其生成独立页面；只有来源提供独立人物或机构
 内容时才保留路由。Composer 调用 Citation 领域服务后再按稳定 ID 去重，同一段不可变
 证据在重试、多窗口或多路由中只会建立一个 Citation 记录。
 
-收敛后由 `source-import-plan-fidelity-v3` 按原始 Chunk 分窗比较完整页面计划，逐项检查定义、
+确定性合并后由 `source-import-plan-fidelity-v4` 按原始 Chunk 分窗比较完整页面计划，逐项检查定义、
 约束、禁止事项、条件、例外、先后顺序、数量、互操作和安全要求。模型只能返回带精确 Chunk
-引文的遗漏段落，服务端重新核验引文并把修复插入已有路由和章节；不能借审计新建页面或猜测
+引文的遗漏段落；模型同样只给 `chunk_id + quotation`，服务端重新定位并把修复插入已有路由和章节；不能借审计新建页面或猜测
 章节，目标页面语言也不得用于翻译 evidence 引文。单个保真分窗经过三次纠正仍含坏修复时，
 只丢弃无法核验的修复并撤销其覆盖率增益，已经独立核验的页面计划和同窗修复不会被连带丢弃；
 回退后的覆盖率仍必须通过质量门槛。最终 `quality_score` 不再采用模型自评分，而由服务端按原文保真度 35%、证据支撑 25%、
