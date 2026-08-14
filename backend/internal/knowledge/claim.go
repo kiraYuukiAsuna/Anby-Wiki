@@ -871,6 +871,12 @@ func (s *Service) GetPropertyByKey(ctx context.Context, propertyKey string) (*Pr
 	return s.repo.GetPropertyByKey(ctx, nil, propertyKey)
 }
 
+// GetPropertyByKeyInTx exposes a transaction-scoped domain read for
+// governance preflight checks without leaking Repository access.
+func (s *Service) GetPropertyByKeyInTx(ctx context.Context, tx pgx.Tx, propertyKey string) (*Property, error) {
+	return s.repo.GetPropertyByKey(ctx, tx, propertyKey)
+}
+
 // ListClaimSources 列出 Claim 的全部来源（只读）。
 func (s *Service) ListClaimSources(ctx context.Context, claimID uuid.UUID) ([]ClaimSource, error) {
 	return s.repo.ListClaimSources(ctx, nil, claimID)

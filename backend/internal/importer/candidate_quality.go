@@ -70,7 +70,7 @@ func normalizeCandidatesForUse(input *Candidates) *Candidates {
 	for _, raw := range input.Claims {
 		candidate := raw
 		if !remapClaimCandidate(&candidate, remappedIDs) || claimCandidateSelfReferential(candidate) ||
-			!claimCandidateTypeSafe(candidate, types) {
+			!claimCandidateTypeSafe(candidate, types) || !claimCandidateRelationExplicit(candidate) {
 			continue
 		}
 		candidate.Evidence = mergeCandidateEvidence(nil, candidate.Evidence)
@@ -82,6 +82,31 @@ func normalizeCandidatesForUse(input *Candidates) *Candidates {
 		result.Claims = append(result.Claims, candidate)
 	}
 	return result
+}
+
+// claimCandidateRelationExplicit applies a deliberately conservative guard to
+// instance_of, the only built-in taxonomic relation. Models often misuse it as
+// a generic "related to" edge for every nearby technical term. Page prose is
+// still retained when this guard drops a Claim, so requiring an explicit
+// classification phrase improves graph precision without losing source
+// content. Other properties already have stronger direction/type guards.
+func claimCandidateRelationExplicit(candidate ClaimCandidate) bool {
+	if candidate.PropertyKey != "instance_of" {
+		return true
+	}
+	for _, item := range candidate.Evidence {
+		text := " " + strings.ToLower(strings.Join(strings.Fields(item.Quotation), " ")) + " "
+		for _, marker := range []string{
+			" is a ", " is an ", " is the ", " are a ", " are an ",
+			" type of ", " kind of ", " class of ", " instance of ",
+			"是一种", "是一个", "是一类", "属于一种", "属于一类", "为一种",
+		} {
+			if strings.Contains(text, marker) {
+				return true
+			}
+		}
+	}
+	return false
 }
 
 func claimCandidateSelfReferential(candidate ClaimCandidate) bool {

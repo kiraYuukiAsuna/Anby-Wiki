@@ -63,6 +63,34 @@ func (c *ClaimClassifier) Classify(ctx context.Context, candidates []ClaimCandid
 		}
 	}
 	decisions := make([]ClaimDecision, 0, len(candidates))
+	type singleValueSelection struct {
+		index     int
+		candidate ClaimCandidate
+		decision  ClaimDecision
+	}
+	singleValueSelections := make(map[string]singleValueSelection)
+	recordDecision := func(candidate ClaimCandidate, property *knowledge.Property, decision ClaimDecision) {
+		if property.IsMultivalued {
+			decisions = append(decisions, decision)
+			return
+		}
+		key := decision.SubjectEntityID.String() + "\x00" + property.PropertyKey
+		selected, ok := singleValueSelections[key]
+		if !ok {
+			index := len(decisions)
+			decisions = append(decisions, decision)
+			singleValueSelections[key] = singleValueSelection{
+				index: index, candidate: candidate, decision: decision,
+			}
+			return
+		}
+		if preferSingleValueDecision(candidate, decision, selected.candidate, selected.decision) {
+			decisions[selected.index] = decision
+			selected.candidate = candidate
+			selected.decision = decision
+			singleValueSelections[key] = selected
+		}
+	}
 	knownExisting := make(map[uuid.UUID]bool)
 	for _, rawCandidate := range candidates {
 		candidate, ok := resolveClaimCandidateReferences(rawCandidate, resolved)
@@ -133,7 +161,7 @@ func (c *ClaimClassifier) Classify(ctx context.Context, candidates []ClaimCandid
 			Outcome: ClaimNew, Risk: RiskLow, Reason: "no active claim has this property",
 			ResolvedValue: candidate.Value}
 		if planned[subjectID] {
-			decisions = append(decisions, decision)
+			recordDecision(candidate, property, decision)
 			continue
 		}
 		claims, err := c.knowledge.ListClaims(ctx, knowledge.ListClaimsParams{
@@ -154,7 +182,8 @@ func (c *ClaimClassifier) Classify(ctx context.Context, candidates []ClaimCandid
 				decision.Reason = "same normalized value and validity interval already exists"
 				break
 			}
-			if !timeRangesOverlap(candidate.ValidFrom, candidate.ValidTo, existing.ValidFrom, existing.ValidTo) {
+			if property.IsMultivalued &&
+				!timeRangesOverlap(candidate.ValidFrom, candidate.ValidTo, existing.ValidFrom, existing.ValidTo) {
 				continue
 			}
 			claimID := existing.ID
@@ -174,9 +203,42 @@ func (c *ClaimClassifier) Classify(ctx context.Context, candidates []ClaimCandid
 			}
 			break
 		}
-		decisions = append(decisions, decision)
+		recordDecision(candidate, property, decision)
 	}
 	return decisions, nil
+}
+
+// preferSingleValueDecision keeps one deterministic operation for a
+// (subject, property) pair. Supporting an already-published value is safer than
+// replacing it; otherwise confidence, evidence coverage, then candidate ID
+// provide a stable tie-break. This prevents a model batch from producing a
+// Proposal that can never satisfy the knowledge domain's single-value rule.
+func preferSingleValueDecision(candidate ClaimCandidate, decision ClaimDecision,
+	selectedCandidate ClaimCandidate, selectedDecision ClaimDecision) bool {
+	priority := func(outcome string) int {
+		switch outcome {
+		case ClaimSupport:
+			return 4
+		case ClaimSupersede:
+			return 3
+		case ClaimNew:
+			return 2
+		case ClaimContradiction:
+			return 1
+		default:
+			return 0
+		}
+	}
+	if left, right := priority(decision.Outcome), priority(selectedDecision.Outcome); left != right {
+		return left > right
+	}
+	if candidate.Confidence != selectedCandidate.Confidence {
+		return candidate.Confidence > selectedCandidate.Confidence
+	}
+	if len(candidate.Evidence) != len(selectedCandidate.Evidence) {
+		return len(candidate.Evidence) > len(selectedCandidate.Evidence)
+	}
+	return candidate.CandidateID.String() < selectedCandidate.CandidateID.String()
 }
 
 func resolveClaimCandidateReferences(candidate ClaimCandidate, resolved map[uuid.UUID]uuid.UUID) (ClaimCandidate, bool) {

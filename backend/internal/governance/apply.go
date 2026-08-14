@@ -113,6 +113,9 @@ func (s *ApplyService) Apply(ctx context.Context, proposalID, actorID uuid.UUID)
 		}
 		ops[i] = *op
 	}
+	if err := s.validateSingleValueClaimOperations(ctx, nil, ops); err != nil {
+		return nil, err
+	}
 	if err := s.validateWikiOperationTargets(ctx, nil, p, ops); err != nil {
 		return nil, err
 	}
@@ -619,6 +622,66 @@ func (s *ApplyService) validateWikiOperationTargets(
 		default:
 			return fmt.Errorf("%w: wiki target operation=%s", ErrUnsupportedOperation, op.OperationType)
 		}
+	}
+	return nil
+}
+
+// validateSingleValueClaimOperations rejects an internally impossible
+// Proposal before opening its atomic write transaction. Knowledge still owns
+// and enforces cardinality at write time; this preflight prevents a reviewed
+// batch from failing halfway through because it contains multiple new values
+// for the same single-valued property.
+func (s *ApplyService) validateSingleValueClaimOperations(
+	ctx context.Context,
+	tx pgx.Tx,
+	ops []OperationV1,
+) error {
+	if s.knowledge == nil || s.knowledge.knowledge == nil {
+		return nil
+	}
+	seen := make(map[string]int)
+	for index := range ops {
+		op := ops[index]
+		if op.OperationType != OpCreateClaim && op.OperationType != OpSupersedeClaim {
+			continue
+		}
+		payload, err := decodeClaimPayload(op.Payload)
+		if err != nil {
+			return fmt.Errorf("%w: claim operation %d payload", ErrInvalidOperation, index+1)
+		}
+		var subjectID uuid.UUID
+		if op.OperationType == OpCreateClaim {
+			if op.Target.EntityID == nil {
+				return fmt.Errorf("%w: create_claim operation %d 缺少 subject", ErrInvalidOperation, index+1)
+			}
+			subjectID = *op.Target.EntityID
+		} else {
+			var envelope struct {
+				SubjectEntityID uuid.UUID `json:"subject_entity_id"`
+			}
+			if err := json.Unmarshal(op.Payload, &envelope); err != nil {
+				return fmt.Errorf("%w: supersede_claim operation %d payload", ErrInvalidOperation, index+1)
+			}
+			subjectID = envelope.SubjectEntityID
+		}
+		if subjectID == uuid.Nil {
+			return fmt.Errorf("%w: claim operation %d subject 为空", ErrInvalidOperation, index+1)
+		}
+		property, err := s.knowledge.knowledge.GetPropertyByKeyInTx(ctx, tx, payload.PropertyKey)
+		if err != nil {
+			return err
+		}
+		if property.IsMultivalued {
+			continue
+		}
+		key := subjectID.String() + "\x00" + property.PropertyKey
+		if first, duplicate := seen[key]; duplicate {
+			return fmt.Errorf(
+				"%w: operations %d and %d both set single-valued property %q for subject=%s",
+				ErrInvalidOperation, first+1, index+1, property.PropertyKey, subjectID,
+			)
+		}
+		seen[key] = index
 	}
 	return nil
 }

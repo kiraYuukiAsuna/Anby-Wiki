@@ -899,7 +899,12 @@ func governanceError(w http.ResponseWriter, r *http.Request, err error) {
 		httpx.WriteError(w, r, http.StatusUnprocessableEntity, httpx.CodeValidationFailed, err.Error())
 	case errors.Is(err, knowledge.ErrSelfReferentialClaim),
 		errors.Is(err, knowledge.ErrSubjectTypeMismatch),
-		errors.Is(err, knowledge.ErrTargetTypeMismatch):
+		errors.Is(err, knowledge.ErrTargetTypeMismatch),
+		errors.Is(err, knowledge.ErrInvalidClaimValue),
+		errors.Is(err, knowledge.ErrInvalidOriginType),
+		errors.Is(err, knowledge.ErrInvalidRank),
+		errors.Is(err, knowledge.ErrInvalidValidTime),
+		errors.Is(err, knowledge.ErrPropertyNotFound):
 		httpx.WriteError(w, r, http.StatusUnprocessableEntity, httpx.CodeValidationFailed, err.Error())
 	case errors.Is(err, governance.ErrInvalidResolution):
 		httpx.WriteError(w, r, http.StatusUnprocessableEntity, httpx.CodeValidationFailed, err.Error())
@@ -915,6 +920,8 @@ func governanceError(w http.ResponseWriter, r *http.Request, err error) {
 		errors.Is(err, collaboration.ErrSequenceMismatch),
 		errors.Is(err, collaboration.ErrIdempotencyConflict),
 		errors.Is(err, collaboration.ErrDocumentInactive),
+		errors.Is(err, knowledge.ErrClaimNotMultivalued),
+		errors.Is(err, knowledge.ErrInvalidClaimTransition),
 		errors.Is(err, page.ErrStaleRevision):
 		httpx.WriteError(w, r, http.StatusConflict, httpx.CodeConflict, err.Error())
 	case errors.Is(err, collaboration.ErrDocumentNotFound), errors.Is(err, collaboration.ErrDocumentPageMismatch):

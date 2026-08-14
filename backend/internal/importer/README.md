@@ -62,7 +62,7 @@ Gateway 相同的权威 JSON Schema 预校验并纠正失败输出；OpenAI comp
 原生 strict JSON Schema。抽取固定 `temperature=0`，DeepSeek 同时关闭 thinking，避免
 推理正文污染 JSON 结果。
 
-`source-extraction-v6` Prompt 同时提供当前固定 Entity type / Claim property 词表，
+`source-extraction-v7` Prompt 同时提供当前固定 Entity type / Claim property 词表，
 明确要求模型生成临时 `candidate_id`、用 `entity_candidate_id` 表达同批 Entity 值、
 禁止猜测持久化 Entity ID，并为 Entity 关系规定严格的 subject/value 类型和方向；
 其中作品/RFC 可使用 `issued_by`、`document_identifier`、`document_category`、
@@ -70,7 +70,10 @@ Gateway 相同的权威 JSON Schema 预校验并纠正失败输出；OpenAI comp
 参考文献、致谢、样板与联系信息中的孤立名称不会仅因出现而成为候选。跨批合并还会归并
 缩写/全名与 label/alias 命中的同一 Entity，并确定性拒绝方向、类型不成立或主体等于
 Entity 值的自引用 Claim；相同约束在逐字证据核验、稳定 ID 分类与 Knowledge 写入边界
-重复兜底，旧 Extraction 复用时也会重新执行。
+重复兜底，旧 Extraction 复用时也会重新执行。`instance_of` 仅保留引文中明确表达分类
+关系的候选，不再把相邻技术术语当作通用关联边；同一主体的单值属性若在一个模型批次中
+出现多个值，分类器按“支持现有事实优先，其次置信度、证据覆盖、稳定 ID”只保留一个，
+Composer/Apply 前置校验与 Knowledge 写入约束继续防御不可能应用的 Proposal。
 事实候选允许为空：来源随后仍会进入 `source-import-plan-v6`，由不受固定 Entity/Claim
 词表限制的页面规划判断百科价值。模型提供的
 引文必须逐字存在；服务端会重新推导 rune 范围以纠正模型常见的 Unicode/字节计数偏差。

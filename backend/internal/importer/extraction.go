@@ -22,7 +22,7 @@ import (
 
 const (
 	ExtractionSchemaURL = "https://anby.wiki/schemas/extraction/v1/candidates.schema.json"
-	ExtractionPromptKey = "source-extraction-v6"
+	ExtractionPromptKey = "source-extraction-v7"
 )
 
 //go:embed schema/candidates.schema.json

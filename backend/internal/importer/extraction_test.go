@@ -24,6 +24,8 @@ type splittingExtractionGenerator struct {
 
 type plannedClaimKnowledge struct{}
 
+type singleValuePlannedClaimKnowledge struct{ plannedClaimKnowledge }
+
 type rejectingClaimKnowledge struct {
 	property *knowledge.Property
 	err      error
@@ -51,6 +53,13 @@ func (plannedClaimKnowledge) GetPropertyByKey(_ context.Context, key string) (*k
 
 func (plannedClaimKnowledge) ListClaims(context.Context, knowledge.ListClaimsParams) ([]knowledge.Claim, error) {
 	return nil, errors.New("planned subjects cannot have existing claims")
+}
+
+func (singleValuePlannedClaimKnowledge) GetPropertyByKey(_ context.Context, key string) (*knowledge.Property, error) {
+	return &knowledge.Property{
+		ID: uuid.New(), PropertyKey: key, ValueType: knowledge.ValueTypeEntity,
+		IsMultivalued: false,
+	}, nil
 }
 
 func (g *splittingExtractionGenerator) Generate(_ context.Context, request ai.Request) (*ai.Result, error) {
@@ -532,6 +541,56 @@ func TestClassifyCreatesClaimBetweenTwoPlannedEntities(t *testing.T) {
 	}
 	if got, ok := claimValueEntityID(decisions[0].ResolvedValue); !ok || got != valueCandidateID {
 		t.Fatalf("resolved target=%s ok=%v, want %s", got, ok, valueCandidateID)
+	}
+}
+
+func TestClassifyKeepsBestSingleValueClaimWithinPlannedBatch(t *testing.T) {
+	subjectCandidateID := uuid.New()
+	lowValueCandidateID, highValueCandidateID := uuid.New(), uuid.New()
+	lowClaimID, highClaimID := uuid.New(), uuid.New()
+	classifier := NewClaimClassifier(singleValuePlannedClaimKnowledge{})
+	decisions, err := classifier.Classify(context.Background(), []ClaimCandidate{
+		{
+			CandidateID: lowClaimID, Subject: CandidateSubject{CandidateID: &subjectCandidateID},
+			PropertyKey: "instance_of", Confidence: 0.7,
+			Value: json.RawMessage(`{"entity_candidate_id":"` + lowValueCandidateID.String() + `"}`),
+		},
+		{
+			CandidateID: highClaimID, Subject: CandidateSubject{CandidateID: &subjectCandidateID},
+			PropertyKey: "instance_of", Confidence: 0.95,
+			Value: json.RawMessage(`{"entity_candidate_id":"` + highValueCandidateID.String() + `"}`),
+		},
+	}, []EntityResolution{
+		{CandidateID: subjectCandidateID, Outcome: EntityNewReview, PlannedEntityID: &subjectCandidateID},
+		{CandidateID: lowValueCandidateID, Outcome: EntityNewReview, PlannedEntityID: &lowValueCandidateID},
+		{CandidateID: highValueCandidateID, Outcome: EntityNewReview, PlannedEntityID: &highValueCandidateID},
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(decisions) != 1 || decisions[0].CandidateID != highClaimID {
+		t.Fatalf("single-value decisions=%#v, want only %s", decisions, highClaimID)
+	}
+	if got, ok := claimValueEntityID(decisions[0].ResolvedValue); !ok || got != highValueCandidateID {
+		t.Fatalf("resolved target=%s ok=%v, want %s", got, ok, highValueCandidateID)
+	}
+}
+
+func TestInstanceOfRequiresExplicitClassificationEvidence(t *testing.T) {
+	explicit := ClaimCandidate{PropertyKey: "instance_of", Evidence: []CandidateEvidence{{
+		Quotation: "A DPoP proof is a JWT signed by the client.",
+	}}}
+	if !claimCandidateRelationExplicit(explicit) {
+		t.Fatal("explicit classification was rejected")
+	}
+	implicit := ClaimCandidate{PropertyKey: "instance_of", Evidence: []CandidateEvidence{{
+		Quotation: "The DPoP mechanism uses a JWT and a JWK.",
+	}}}
+	if claimCandidateRelationExplicit(implicit) {
+		t.Fatal("associative mention was accepted as instance_of")
+	}
+	if !claimCandidateRelationExplicit(ClaimCandidate{PropertyKey: "author"}) {
+		t.Fatal("non-taxonomic properties must not use the instance_of guard")
 	}
 }
 

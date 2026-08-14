@@ -82,6 +82,9 @@ func (c *ProposalComposer) Compose(ctx context.Context, params ComposeParams) (*
 	for _, candidate := range params.Candidates.Claims {
 		claims[candidate.CandidateID] = candidate
 	}
+	if err := c.validateDecisionCardinality(ctx, params.Decisions, claims); err != nil {
+		return nil, err
+	}
 	bySubject := make(map[uuid.UUID][]ClaimDecision)
 	for _, decision := range params.Decisions {
 		bySubject[decision.SubjectEntityID] = append(bySubject[decision.SubjectEntityID], decision)
@@ -172,6 +175,48 @@ func (c *ProposalComposer) Compose(ctx context.Context, params ComposeParams) (*
 	}
 	result.Proposals = append(result.Proposals, *proposal)
 	return result, nil
+}
+
+// validateDecisionCardinality is the compose boundary's defensive check. The
+// classifier normally resolves these conflicts, but an impossible operation
+// set must fail before citations and a reviewable Proposal are persisted.
+func (c *ProposalComposer) validateDecisionCardinality(
+	ctx context.Context,
+	decisions []ClaimDecision,
+	candidates map[uuid.UUID]ClaimCandidate,
+) error {
+	properties := make(map[string]*knowledge.Property)
+	seen := make(map[string]uuid.UUID)
+	for _, decision := range decisions {
+		if decision.Outcome == ClaimSupport {
+			continue
+		}
+		candidate, ok := candidates[decision.CandidateID]
+		if !ok {
+			return fmt.Errorf("%w: unknown claim candidate %s", ErrInvalidJob, decision.CandidateID)
+		}
+		property := properties[candidate.PropertyKey]
+		if property == nil {
+			var err error
+			property, err = c.knowledge.GetPropertyByKey(ctx, candidate.PropertyKey)
+			if err != nil {
+				return err
+			}
+			properties[candidate.PropertyKey] = property
+		}
+		if property.IsMultivalued {
+			continue
+		}
+		key := decision.SubjectEntityID.String() + "\x00" + candidate.PropertyKey
+		if first, duplicate := seen[key]; duplicate {
+			return fmt.Errorf(
+				"%w: claim candidates %s and %s set single-valued property %q for subject=%s",
+				ErrInvalidJob, first, decision.CandidateID, candidate.PropertyKey, decision.SubjectEntityID,
+			)
+		}
+		seen[key] = decision.CandidateID
+	}
+	return nil
 }
 
 func newEntityOperation(params ComposeParams, candidate EntityCandidate, entityID uuid.UUID) (governance.OperationV1, error) {
