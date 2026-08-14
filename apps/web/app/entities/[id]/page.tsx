@@ -10,7 +10,10 @@ import {
 import { EntityFederationPanel } from "@/components/knowledge/entity-federation-panel";
 import { EntityMergePanel } from "@/components/knowledge/entity-merge-panel";
 import { EntityMetadataManager } from "@/components/knowledge/entity-metadata-manager";
-import { UsageList } from "@/components/knowledge/usage-list";
+import {
+  groupReferenceUsagesByPage,
+  PageGroupedUsageList,
+} from "@/components/knowledge/usage-list";
 import { fetchEntityDetail } from "@/lib/knowledge";
 
 export const dynamic = "force-dynamic";
@@ -25,6 +28,7 @@ export default async function EntityDetailPage({
   if (result.kind === "not_found") notFound();
 
   const { detail, usages } = result;
+  const mentionPages = groupReferenceUsagesByPage(usages.items);
   const title =
     detail.labels.find((label) => label.isPrimary)?.label ?? detail.canonicalKey;
 
@@ -73,7 +77,7 @@ export default async function EntityDetailPage({
           mergedIntoEntityId={detail.mergedIntoEntityId}
           sourceLabelCount={detail.labels.length}
           sourceAliasCount={detail.aliases.length}
-          sourcePageCount={usages.items.length}
+          sourcePageCount={mentionPages.length}
         />
       </DetailSection>
 
@@ -102,8 +106,10 @@ export default async function EntityDetailPage({
         <EntityMetadataManager initialDetail={detail} />
       </DetailSection>
 
-      <DetailSection title={`页面提及 (${usages.items.length})`}>
-        <UsageList items={usages.items} />
+      <DetailSection
+        title={`页面提及 (${mentionPages.length} 个页面 · ${usages.items.length} 处)`}
+      >
+        <PageGroupedUsageList groups={mentionPages} />
       </DetailSection>
     </DetailShell>
   );
