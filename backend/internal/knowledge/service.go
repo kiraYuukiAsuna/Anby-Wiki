@@ -155,6 +155,22 @@ func (s *Service) GetEntityInTx(ctx context.Context, tx pgx.Tx, id uuid.UUID) (*
 	return s.repo.GetEntityByID(ctx, tx, id)
 }
 
+// GetEntityByCanonicalKey resolves the exact Wiki-scoped identity after
+// applying the same normalization used by CreateEntity. Governance uses this
+// read to detect stale create_entity operations before opening an apply
+// transaction; writes remain exclusively owned by this service.
+func (s *Service) GetEntityByCanonicalKey(
+	ctx context.Context,
+	wikiID uuid.UUID,
+	canonicalKey string,
+) (*Entity, error) {
+	key, err := normalizeKey(canonicalKey)
+	if err != nil {
+		return nil, err
+	}
+	return s.repo.GetEntityByCanonicalKey(ctx, nil, wikiID, key)
+}
+
 // GetEntityType 按 ID 查询实体类型。
 func (s *Service) GetEntityType(ctx context.Context, id uuid.UUID) (*EntityType, error) {
 	return s.repo.GetEntityTypeByID(ctx, nil, id)

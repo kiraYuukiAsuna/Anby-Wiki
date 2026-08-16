@@ -25,6 +25,9 @@ var (
 	ErrOperationSequenceRace = errors.New("governance: Operation 序号冲突")
 	ErrApprovalRequired      = errors.New("governance: 缺少有效审核批准证据")
 	ErrRepairProjectionStale = errors.New("governance: 引用修复投影不是 Current Revision")
+	// ErrIdentityConflict 表示 Proposal 审核后，其计划创建的页面标题或实体
+	// canonical_key 已被其他 ChangeBatch 占用。该 Proposal 已过期，不能靠重试恢复。
+	ErrIdentityConflict = errors.New("governance: 提案基线已过期，计划创建的页面或实体已存在")
 )
 
 const (

@@ -47,10 +47,20 @@ func (s *ConflictService) DetectAndRecord(ctx context.Context, proposalID uuid.U
 	var conflicts []MergeConflict
 	if p.TargetType == TargetPage {
 		conflicts, err = s.detectPage(ctx, p, records)
+		if err == nil {
+			var identityConflicts []MergeConflict
+			identityConflicts, err = s.detectIdentityConflicts(ctx, p, records)
+			conflicts = append(identityConflicts, conflicts...)
+		}
 	} else if p.TargetType == TargetWiki {
 		conflicts, err = s.detectWiki(ctx, p, records)
 	} else {
-		conflicts, err = s.detectClaims(ctx, p, records)
+		conflicts, err = s.detectIdentityConflicts(ctx, p, records)
+		if err == nil {
+			var claimConflicts []MergeConflict
+			claimConflicts, err = s.detectClaims(ctx, p, records)
+			conflicts = append(conflicts, claimConflicts...)
+		}
 	}
 	if err != nil || len(conflicts) == 0 {
 		return conflicts, err
@@ -85,6 +95,10 @@ func (s *ConflictService) detectWiki(
 ) ([]MergeConflict, error) {
 	if p == nil || p.TargetID == nil || *p.TargetID == uuid.Nil {
 		return nil, ErrInvalidProposal
+	}
+	identityConflicts, err := s.detectIdentityConflicts(ctx, p, records)
+	if err != nil {
+		return nil, err
 	}
 	byPage := map[uuid.UUID][]OperationRecord{}
 	for i := range records {
@@ -163,6 +177,7 @@ func (s *ConflictService) detectWiki(
 	if err != nil {
 		return nil, err
 	}
+	conflicts = append(identityConflicts, conflicts...)
 	return append(conflicts, claimConflicts...), nil
 }
 

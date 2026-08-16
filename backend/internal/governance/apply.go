@@ -125,6 +125,11 @@ func (s *ApplyService) Apply(ctx context.Context, proposalID, actorID uuid.UUID)
 			return nil, err
 		}
 		if len(conflicts) > 0 {
+			for _, conflict := range conflicts {
+				if isIdentityConflict(conflict) {
+					return nil, identityConflictError(conflicts)
+				}
+			}
 			return nil, ErrMergeConflict
 		}
 	}
@@ -325,6 +330,19 @@ func (s *ApplyService) Apply(ctx context.Context, proposalID, actorID uuid.UUID)
 		return s.repo.UpdateProposalStatus(ctx, tx, proposalID, ProposalApplying, ProposalApplied)
 	})
 	if err != nil {
+		// A competing ChangeBatch may win the unique index after preflight but
+		// before this transaction writes. Preserve the domain conflict instead
+		// of leaking a deterministic stale Proposal as HTTP 500.
+		if isIdentityWriteConflict(err) {
+			if s.conflicts != nil {
+				if detected, detectErr := s.conflicts.DetectAndRecord(ctx, proposalID); detectErr == nil && len(detected) > 0 {
+					if identityConflictCount(detected) > 0 {
+						return nil, identityConflictError(detected)
+					}
+				}
+			}
+			return nil, fmt.Errorf("%w: %v", ErrIdentityConflict, err)
+		}
 		return nil, err
 	}
 	return result, nil

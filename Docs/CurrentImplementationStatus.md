@@ -1,6 +1,6 @@
 # 当前实现状态
 
-> 更新时间：2026-08-14
+> 更新时间：2026-08-16
 > 产品与能力审计依据：[整体设计方案](WikiDesignOnePage.md)
 
 ## 总体结论
@@ -24,7 +24,7 @@ PostgreSQL、Redis、MinIO、Meilisearch、API、Linux Worker 与 Next.js Web �
 | 知识图谱 | Entity/Property/Claim、标签/别名/主标签、Page 主 Entity 绑定、Claim 验证、Entity 合并与回滚、联邦 Wiki/Entity 映射、图谱查询 |
 | 证据与媒体 | Source/Version/Chunk/Citation、Asset/AssetRevision、引用校验、相同证据 Citation 幂等复用、按页面聚合并可展开到 Block/Node 的反向使用、按全文首次出现统一编号的 References 投影、逐处正文回链、可审计来源与媒体目录 |
 | 结构化内容 | Dataset/View/Record、Component/Version、内置 Entity/Claim 信息框（按页面语言→`und`→任意主标签降级、同属性多值聚合、Entity 可跳转、验证摘要与类型感知排序）、静态与动态 Collection、成员维护、页面反向归属查询与投影；Entity/Claim/Citation 反向使用、页面反链和 Component 依赖在 Web 中按来源页面聚合，并可展开到具体 Block/Node；列表返回真实总位置/页面/区块数并支持游标续页 |
-| 治理 | ProposalOperation v1 全部 24 种 Operation（含可原子应用和补偿回滚的 Page 主 Entity 绑定）、预分配 Page/Entity ID 的同批依赖、Operation 集合事务冻结、Wiki 级多目标 Proposal、跨页面 Revision/Block 与 Claim 冲突检测、预览、风险、ReviewTask、面向 applier/admin 的跨 Actor 待原子应用队列、批量审核、ChangeBatch、整批补偿回滚、审计事件、ChangeTag、AI Trust、事实一致性 |
+| 治理 | ProposalOperation v1 全部 24 种 Operation（含可原子应用和补偿回滚的 Page 主 Entity 绑定）、预分配 Page/Entity ID 的同批依赖、Operation 集合事务冻结、Wiki 级多目标 Proposal、跨页面 Revision/Block、Claim 及 Page/Entity 身份冲突检测、并发唯一索引冲突到 HTTP 409 的领域映射、预览、风险、ReviewTask、面向 applier/admin 的跨 Actor 待原子应用队列、带分类失败原因和终态跳过语义的批量审核、ChangeBatch、整批补偿回滚、审计事件、ChangeTag、AI Trust、事实一致性 |
 | 导入与 AI | URL/HTML/文本/PDF/PNG/JPEG/JSON/CSV 获取，图片及扫描 PDF 的中英 OCR、来源标题/作者/发布者/日期/DOI 等安全元数据推导、结构化数据规范化、七阶段进度、幂等 Job、解析成功后的不可变恢复点与无重复来源的失败重试、Worker 中断任务自动恢复、管理员可配置模型最大输入 Token 与来源 Chunk 字符数（默认 128000 Token / 32000 字符）、按输入预算与输出安全上限并行分批抽取/规划、单个持久 Chunk 内的临时语义窗口二分及证据回映射、截断或结构不合法窗口重试及跨批去重、轻量模型规划 Schema 与服务端机械字段补全、确定性 ImportPlan 合并和结构清理、对照原始 Chunk 的生成后保真审计与证据化章节修复、保真分窗的三次语义纠正、并发真因保留及坏修复隔离与覆盖率回退、服务端五维质量评分及默认 0.70 硬门槛、Semantic Kernel 默认三次结构化调用与纠正重试、精确引文的跨 Chunk 安全纠偏、纯空白差异原文回填及坏候选/坏 Claim 隔离、Entity 缩写/别名归并、Claim 方向/类型/非自引用门禁、`instance_of` 明确分类证据门禁与批内单值属性确定性消歧、作品/RFC 的发布组织、文档编号/类别/状态、更新与废止专用属性、仅由页面路由授权图谱写入、来源概况与智能多页面 create/update/link/ignore 路由、强制单页模式与用户导入要求、证据约束 Typed Block 生成/补丁及正文 Entity 引用、确定性 H2 层级与标准 See also、主 Entity 绑定及信息框、显式且有证据的页面关联与反链投影、规划结果可视化、单 ImportJob 页面+Entity+Claim 复合 Proposal 与同一 ChangeBatch 原子应用、可持久查询的导入队列 |
 | 投影与搜索 | Outbox 租约/重试/死信、链接/目录/锚点/章节/渲染/知识使用/References/相关推荐/组件依赖/图谱投影、可解释的链接+Collection+Entity 相关度、PostgreSQL fallback、Meilisearch 关键词/混合/语义检索 |
 | 规模与归档 | 章节懒加载、服务端可信 HTML 渲染、Revision 热冷分层与 S3 回源、Projection/Search 重建、容量基准命令 |
@@ -73,6 +73,19 @@ outlines。References/Related 是 Current Revision
 
 服务端数据统一通过 `apps/web/lib/api.ts` 创建的生成客户端访问，SWR 是唯一服务端
 数据客户端缓存；Zustand 只保存本地交互状态。
+
+## 2026-08-16 导入提案身份冲突修复
+
+- Apply 在打开权威写事务前，按 Page 的 `wiki + namespace + normalized_title`
+  及 Entity 的 `wiki + canonical_key` 检测审核等待期间产生的身份占用；冲突与
+  Proposal 的 `conflicted` 状态在同一事务记录，不再执行注定回滚的写入。
+- 唯一索引仍保留最终并发兜底；即使另一个 ChangeBatch 在预检后抢先提交，页面
+  标题、Entity canonical key 和重复绑定错误也会映射为 HTTP 409，而不是 500。
+- 身份冲突不会自动合并或改写已冻结 Operation。批量审核把它记录为
+  `identity_conflict` 并终态跳过；页面/Revision、状态、校验、权限及未知错误分别
+  保留独立分类，避免无意义重试。
+- Web 会解析契约 Error 响应并展示真实原因；身份冲突详情明确要求基于 Current
+  重新导入，同时禁用对该类语义冲突无效的 Current/Proposed 决议按钮。
 
 ## 搜索、渲染与存储
 

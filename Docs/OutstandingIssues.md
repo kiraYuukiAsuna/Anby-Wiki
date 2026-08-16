@@ -99,6 +99,9 @@
 
 ## 本轮已关闭
 
+- 导入 Proposal 的身份占用误报 500：Apply 现会预检并持久化 Page/Entity 身份
+  冲突，并发唯一索引竞态映射为 409；批量审核保留分类原因并停止重试不可变的
+  过期提案，Web 提示改为可操作的“基于 Current 重新导入”。
 - 2026-08 JavaScript 新披露漏洞：生产链 `nanoid` 与开发工具链 `fast-uri`、Hono、
   `ip-address`、`js-yaml`、Undici 均锁定已修复版本；完整和 production-only
   `npm audit` 恢复为 0。

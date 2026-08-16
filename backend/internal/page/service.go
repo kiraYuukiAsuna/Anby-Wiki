@@ -236,11 +236,22 @@ func escapeLikePattern(s string) string {
 // 规范化后先查活页面，再查 page_alias；命中别名时 ViaAlias=true；
 // 都不命中（或别名指向已软删除页面）返回 ErrPageNotFound。
 func (s *Service) ResolveTitle(ctx context.Context, wikiID uuid.UUID, namespaceKey, title string) (*ResolvedPage, error) {
-	normalized, err := NormalizeTitle(title)
+	namespaceID, err := s.repo.GetNamespaceIDByKey(ctx, nil, wikiID, namespaceKey)
 	if err != nil {
 		return nil, err
 	}
-	namespaceID, err := s.repo.GetNamespaceIDByKey(ctx, nil, wikiID, namespaceKey)
+	return s.ResolveTitleByNamespaceID(ctx, wikiID, namespaceID, title)
+}
+
+// ResolveTitleByNamespaceID is the domain-owned exact identity read used by
+// Governance preflight. It includes rename aliases, matching ResolveTitle,
+// without exposing the Page repository to another domain.
+func (s *Service) ResolveTitleByNamespaceID(
+	ctx context.Context,
+	wikiID, namespaceID uuid.UUID,
+	title string,
+) (*ResolvedPage, error) {
+	normalized, err := NormalizeTitle(title)
 	if err != nil {
 		return nil, err
 	}
@@ -251,7 +262,7 @@ func (s *Service) ResolveTitle(ctx context.Context, wikiID uuid.UUID, namespaceK
 	}
 	alias, err := s.repo.GetAliasByTitle(ctx, nil, wikiID, namespaceID, normalized)
 	if errors.Is(err, errAliasNotFound) {
-		return nil, fmt.Errorf("%w: %s:%q", ErrPageNotFound, namespaceKey, normalized)
+		return nil, fmt.Errorf("%w: namespace=%s title=%q", ErrPageNotFound, namespaceID, normalized)
 	}
 	if err != nil {
 		return nil, err
@@ -261,7 +272,7 @@ func (s *Service) ResolveTitle(ctx context.Context, wikiID uuid.UUID, namespaceK
 		return nil, err
 	}
 	if p.DeletedAt != nil {
-		return nil, fmt.Errorf("%w: %s:%q 指向已删除页面", ErrPageNotFound, namespaceKey, normalized)
+		return nil, fmt.Errorf("%w: namespace=%s title=%q 指向已删除页面", ErrPageNotFound, namespaceID, normalized)
 	}
 	return &ResolvedPage{Page: p, ViaAlias: true}, nil
 }

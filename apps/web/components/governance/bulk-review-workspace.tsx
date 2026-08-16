@@ -55,13 +55,24 @@ const applyMeta = {
   skipped: "已跳过",
 } as const;
 
+const applyErrorMeta: Record<string, string> = {
+  identity_conflict: "同名页面或实体已被其他提案创建，需重新导入",
+  merge_conflict: "页面或事实基线发生冲突，需人工决议",
+  state_conflict: "提案状态或基线已变化",
+  validation_failed: "提案内容未通过应用校验",
+  permission_denied: "应用者权限不足",
+  apply_failed: "应用服务发生未分类错误",
+};
+
 function BatchOverview({ batch }: { batch: BulkReviewBatch }) {
   const reviewed = batch.items.filter((item) => item.decision !== "pending").length;
-  const applied = batch.items.filter((item) => item.applyStatus === "applied").length;
+  const processed = batch.items.filter(
+    (item) => item.applyStatus === "applied" || item.applyStatus === "skipped",
+  ).length;
   const progress =
     batch.status === "reviewing"
       ? Math.round((reviewed / batch.items.length) * 100)
-      : Math.round((applied / Math.max(1, batch.items.filter((item) => item.decision === "approved").length)) * 100);
+      : Math.round((processed / Math.max(1, batch.items.filter((item) => item.decision === "approved").length)) * 100);
 
   return (
     <div className="rounded-2xl border bg-card p-5">
@@ -145,12 +156,17 @@ function ProposalRow({
               <span>{item.selectedForReview ? "抽中审核" : "抽样通过后自动批准"}</span>
               <span className={decisionMeta[item.decision].tone}>{decisionMeta[item.decision].label}</span>
               <span>{applyMeta[item.applyStatus]}</span>
+              {item.applyErrorCode ? (
+                <span className="font-medium text-rose-700">
+                  {applyErrorMeta[item.applyErrorCode] ?? item.applyErrorCode}
+                </span>
+              ) : null}
             </div>
           </div>
         </div>
         {item.applyStatus === "applied" ? (
           <Check className="size-4 text-emerald-600" aria-label="已应用" />
-        ) : item.applyStatus === "failed" ? (
+        ) : item.applyStatus === "failed" || item.applyStatus === "skipped" ? (
           <CircleAlert className="size-4 text-destructive" aria-label="应用失败" />
         ) : null}
       </div>

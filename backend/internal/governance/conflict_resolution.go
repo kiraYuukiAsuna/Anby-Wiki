@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"fmt"
 
 	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5"
@@ -60,6 +61,18 @@ func (s *ConflictResolutionService) Resolve(
 	proposal, err := s.repo.GetProposal(ctx, nil, params.ProposalID)
 	if err != nil {
 		return nil, err
+	}
+	conflicts, err := s.repo.ListMergeConflicts(ctx, params.ProposalID)
+	if err != nil {
+		return nil, err
+	}
+	for _, conflict := range conflicts {
+		if conflict.ID == params.ConflictID && isIdentityConflict(conflict) {
+			return nil, fmt.Errorf(
+				"%w: 身份冲突不能改写已审核 Operation，请重新运行对应导入",
+				ErrInvalidResolution,
+			)
+		}
 	}
 	if s.auth != nil {
 		if err := s.auth.Check(

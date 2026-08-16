@@ -914,6 +914,8 @@ func governanceError(w http.ResponseWriter, r *http.Request, err error) {
 		httpx.WriteError(w, r, http.StatusUnprocessableEntity, httpx.CodeValidationFailed, err.Error())
 	case errors.Is(err, governance.ErrInvalidTransition), errors.Is(err, governance.ErrProposalNotDraft),
 		errors.Is(err, governance.ErrPatchTargetModified), errors.Is(err, governance.ErrMergeConflict),
+		errors.Is(err, governance.ErrIdentityConflict), errors.Is(err, page.ErrTitleConflict),
+		errors.Is(err, knowledge.ErrDuplicateEntityKey), errors.Is(err, knowledge.ErrBindingExists),
 		errors.Is(err, governance.ErrRollbackStale), errors.Is(err, governance.ErrApprovalRequired),
 		errors.Is(err, governance.ErrBulkReviewIncomplete), errors.Is(err, governance.ErrBulkReviewPaused),
 		errors.Is(err, governance.ErrMergedASTMismatch),

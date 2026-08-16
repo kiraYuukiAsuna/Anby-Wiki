@@ -26,6 +26,10 @@ import { Button } from "@/components/ui/button";
 import { governanceApi } from "@/lib/api";
 import { LOGIN_PATH, useSession } from "@/lib/auth";
 import { compactId } from "@/lib/display-id";
+import {
+  isIdentityConflictMessage,
+  readGovernanceError,
+} from "@/lib/governance-error";
 import { cn } from "@/lib/utils";
 
 const PAGE_SIZE = 30;
@@ -132,13 +136,21 @@ export function ApplyQueue() {
         description: `ChangeBatch ${compactId(result.changeBatchId)} 已写入审计账本${result.revisionIds.length ? `，发布 ${result.revisionIds.length} 个页面 Revision` : ""}。`,
       });
     } catch (error) {
-      if (error instanceof ResponseError && error.response.status === 409) {
+      const detail = await readGovernanceError(error);
+      if (detail?.status === 409) {
         await state.mutate();
-        toast.error("原子应用未执行", { description: "对象基线已经变化，请打开提案处理冲突后重试。" });
-      } else if (error instanceof ResponseError && error.response.status === 403) {
+        const identityConflict = isIdentityConflictMessage(detail.message);
+        toast.error(identityConflict ? "提案已过期，未执行任何写入" : "原子应用未执行", {
+          description:
+            detail.message ??
+            "对象基线已经变化，请打开提案检查冲突后再决定如何处理。",
+        });
+      } else if (detail?.status === 403) {
         toast.error("当前账号没有应用权限");
       } else {
-        toast.error("原子应用失败", { description: "请检查提案状态或稍后重试。" });
+        toast.error("原子应用失败", {
+          description: detail?.message ?? "服务暂时不可用，请记录时间并联系管理员。",
+        });
       }
     } finally {
       setApplyingId(null);

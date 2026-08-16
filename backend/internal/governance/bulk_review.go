@@ -14,6 +14,8 @@ import (
 	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5"
 
+	"github.com/anby/wiki/backend/internal/knowledge"
+	"github.com/anby/wiki/backend/internal/page"
 	"github.com/anby/wiki/backend/internal/platform/db"
 	"github.com/anby/wiki/backend/internal/platform/id"
 )
@@ -44,6 +46,13 @@ const (
 	BulkApplyApplied = "applied"
 	BulkApplyFailed  = "failed"
 	BulkApplySkipped = "skipped"
+
+	BulkApplyErrorIdentityConflict = "identity_conflict"
+	BulkApplyErrorMergeConflict    = "merge_conflict"
+	BulkApplyErrorStateConflict    = "state_conflict"
+	BulkApplyErrorValidation       = "validation_failed"
+	BulkApplyErrorPermission       = "permission_denied"
+	BulkApplyErrorInternal         = "apply_failed"
 )
 
 type BulkReviewBatch struct {
@@ -601,7 +610,9 @@ func (s *BulkReviewService) ApplyNextWave(ctx context.Context, batchID, actorID 
 		applied, applyErr := s.apply.Apply(ctx, item.ProposalID, actorID)
 		if applyErr != nil {
 			failed = true
-			if err := s.recordApply(ctx, batchID, actorID, item, nil, "apply_failed"); err != nil {
+			if err := s.recordApply(
+				ctx, batchID, actorID, item, nil, bulkApplyErrorCode(applyErr),
+			); err != nil {
 				return nil, err
 			}
 		} else {
@@ -660,12 +671,43 @@ func (s *BulkReviewService) ApplyNextWave(ctx context.Context, batchID, actorID 
 	return &BulkReviewWaveResult{BatchID: batchID, Wave: wave, Status: final.Status, Items: waveItems}, nil
 }
 
+func bulkApplyErrorCode(err error) string {
+	switch {
+	case errors.Is(err, ErrIdentityConflict),
+		errors.Is(err, page.ErrTitleConflict),
+		errors.Is(err, knowledge.ErrDuplicateEntityKey),
+		errors.Is(err, knowledge.ErrBindingExists):
+		return BulkApplyErrorIdentityConflict
+	case errors.Is(err, ErrMergeConflict):
+		return BulkApplyErrorMergeConflict
+	case errors.Is(err, ErrInvalidTransition),
+		errors.Is(err, ErrPatchTargetModified),
+		errors.Is(err, ErrApprovalRequired),
+		errors.Is(err, page.ErrStaleRevision):
+		return BulkApplyErrorStateConflict
+	case errors.Is(err, ErrInvalidProposal), errors.Is(err, ErrInvalidOperation):
+		return BulkApplyErrorValidation
+	case errors.Is(err, ErrInvalidActor), errors.Is(err, ErrActorNotAllowed),
+		errors.Is(err, ErrPermissionDenied):
+		return BulkApplyErrorPermission
+	default:
+		return BulkApplyErrorInternal
+	}
+}
+
 func (s *BulkReviewService) recordApply(ctx context.Context, batchID, actorID uuid.UUID, item BulkReviewItem, changeBatchID *uuid.UUID, code string) error {
 	return s.txm.InTx(ctx, func(tx pgx.Tx) error {
 		status, eventType := BulkApplyApplied, "bulk_review.proposal_applied"
 		var errorCode *string
 		if changeBatchID == nil {
 			status, eventType, errorCode = BulkApplyFailed, "bulk_review.proposal_apply_failed", &code
+			if code == BulkApplyErrorIdentityConflict {
+				// Identity-conflicted Proposals are immutable and cannot become
+				// applicable through retry. Keep the batch resumable while making
+				// this terminal item ineligible for later waves.
+				status = BulkApplySkipped
+				eventType = "bulk_review.proposal_apply_skipped"
+			}
 		}
 		if _, err := tx.Exec(ctx, `UPDATE bulk_review_batch_item SET apply_status=$3,
 			change_batch_id=$4,apply_error_code=$5,applied_at=CASE WHEN $3='applied' THEN now() ELSE NULL END

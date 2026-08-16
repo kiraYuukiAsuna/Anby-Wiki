@@ -1,8 +1,10 @@
 "use client";
 
+import Link from "next/link";
 import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { toast } from "sonner";
+import { z } from "zod";
 import type { MergeConflict, Proposal } from "../../../../contracts/generated/typescript";
 
 import { Button } from "@/components/ui/button";
@@ -13,6 +15,7 @@ export function MergeConflictPanel({ proposal }: { proposal: Proposal }) {
   const [resolving, setResolving] = useState<string | null>(null);
   const conflicts = proposal.conflicts;
   if (conflicts.length === 0) return null;
+  const hasIdentityConflict = conflicts.some(isIdentityConflict);
 
   const resolve = async (
     conflict: MergeConflict,
@@ -43,9 +46,15 @@ export function MergeConflictPanel({ proposal }: { proposal: Proposal }) {
     <section className="rounded-lg border border-amber-500/50 bg-amber-500/5 p-4">
       <h2 className="text-lg font-semibold">MergeConflict 决议</h2>
       <p className="mt-1 text-sm text-muted-foreground">
-        逐项比较 Base / Current / Proposed。全部解决后 Proposal 恢复 approved，
-        Apply 时仍会重新检查 Current。
+        {hasIdentityConflict
+          ? "身份冲突表示其他变更已先创建同名页面或实体；原提案保持不可变，需要基于 Current 重新导入。"
+          : "逐项比较 Base / Current / Proposed。全部解决后 Proposal 恢复 approved，Apply 时仍会重新检查 Current。"}
       </p>
+      {hasIdentityConflict && proposal.importJobId ? (
+        <Button className="mt-3" size="sm" variant="outline" asChild>
+          <Link href={`/imports/${proposal.importJobId}`}>查看原导入任务</Link>
+        </Button>
+      ) : null}
       <div className="mt-4 space-y-4">
         {conflicts.map((conflict) => (
           <article key={conflict.id} className="rounded-lg border border-border bg-background p-3">
@@ -56,7 +65,11 @@ export function MergeConflictPanel({ proposal }: { proposal: Proposal }) {
                 </p>
                 <p className="text-xs text-muted-foreground">{conflict.status}</p>
               </div>
-              {conflict.status === "open" ? (
+              {conflict.status === "open" && isIdentityConflict(conflict) ? (
+                <span className="text-xs font-medium text-amber-800 dark:text-amber-300">
+                  需重新导入，不能自动合并
+                </span>
+              ) : conflict.status === "open" ? (
                 <div className="flex flex-wrap gap-2">
                   <Button
                     size="sm"
@@ -125,4 +138,15 @@ function resolutionReason(choice: string): string {
     default:
       return "人工忽略此变更";
   }
+}
+
+const identityConflictValueSchema = z.object({
+  kind: z.enum(["page_identity", "entity_identity"]),
+});
+
+function isIdentityConflict(conflict: MergeConflict): boolean {
+  return (
+    conflict.conflictType === "semantic" &&
+    identityConflictValueSchema.safeParse(conflict.proposedValue).success
+  );
 }

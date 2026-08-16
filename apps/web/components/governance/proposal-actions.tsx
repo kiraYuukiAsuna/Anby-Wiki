@@ -14,7 +14,6 @@ import {
 import { toast } from "sonner";
 import { z } from "zod";
 import {
-  ResponseError,
   type Proposal,
   type RollbackChangeBatchResult,
 } from "../../../../contracts/generated/typescript";
@@ -32,6 +31,10 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { governanceApi } from "@/lib/api";
 import { compactId } from "@/lib/display-id";
+import {
+  isIdentityConflictMessage,
+  readGovernanceError,
+} from "@/lib/governance-error";
 
 const rollbackConfirmation = z.literal("ROLLBACK");
 
@@ -56,7 +59,7 @@ export function ProposalActions({ proposal }: { proposal: Proposal }) {
       );
       router.refresh();
     } catch (error) {
-      showGovernanceError(error, "提交提案失败");
+      await showGovernanceError(error, "提交提案失败");
     } finally {
       setPending(null);
     }
@@ -71,7 +74,7 @@ export function ProposalActions({ proposal }: { proposal: Proposal }) {
       });
       router.refresh();
     } catch (error) {
-      showGovernanceError(error, "应用提案失败");
+      await showGovernanceError(error, "应用提案失败");
     } finally {
       setPending(null);
     }
@@ -95,7 +98,7 @@ export function ProposalActions({ proposal }: { proposal: Proposal }) {
       setConfirmation("");
       router.refresh();
     } catch (error) {
-      showGovernanceError(error, "整批回滚失败");
+      await showGovernanceError(error, "整批回滚失败");
     } finally {
       setPending(null);
     }
@@ -297,23 +300,29 @@ function rollbackSummary(result: RollbackChangeBatchResult): string {
   return facts.join("；") || "该批次没有需要追加的补偿对象。";
 }
 
-function showGovernanceError(error: unknown, fallback: string) {
-  if (error instanceof ResponseError) {
-    if (error.response.status === 401) {
+async function showGovernanceError(error: unknown, fallback: string) {
+  const detail = await readGovernanceError(error);
+  if (detail) {
+    if (detail.status === 401) {
       toast.error("请先登录再执行治理操作");
       return;
     }
-    if (error.response.status === 403) {
+    if (detail.status === 403) {
       toast.error("当前账号没有执行该操作的权限");
       return;
     }
-    if (error.response.status === 409) {
-      toast.error(fallback, {
-        description: "对象状态或基线已经变化，请刷新后检查最新审计记录。",
+    if (detail.status === 409) {
+      const identityConflict = isIdentityConflictMessage(detail.message);
+      toast.error(identityConflict ? "提案已过期，未执行任何写入" : fallback, {
+        description:
+          detail.message ??
+          "对象状态或基线已经变化，请刷新后检查最新审计记录。",
       });
       return;
     }
-    toast.error(`${fallback}（HTTP ${error.response.status}）`);
+    toast.error(`${fallback}（HTTP ${detail.status}）`, {
+      description: detail.message ?? undefined,
+    });
     return;
   }
   toast.error(fallback, { description: "网络连接异常，请稍后重试。" });
