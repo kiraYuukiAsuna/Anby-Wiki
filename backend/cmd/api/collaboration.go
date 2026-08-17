@@ -67,10 +67,10 @@ func (a *CollaborationAPI) connect(w http.ResponseWriter, r *http.Request) {
 		httpx.WriteError(w, r, http.StatusBadRequest, httpx.CodeBadRequest, "last_sequence 非法")
 		return
 	}
-	if err := a.authorization.Check(
+	if authErr := a.authorization.Check(
 		r.Context(), principal.ActorID, a.wikiID, governance.ActionEdit, &pageID,
-	); err != nil {
-		serviceError(w, r, err)
+	); authErr != nil {
+		serviceError(w, r, authErr)
 		return
 	}
 	document, err := a.service.Open(r.Context(), pageID, principal.ActorID)
@@ -100,25 +100,23 @@ func (a *CollaborationAPI) connect(w http.ResponseWriter, r *http.Request) {
 
 	ctx, cancel := context.WithCancel(r.Context())
 	var writers sync.WaitGroup
-	writers.Add(1)
-	go func() {
-		defer writers.Done()
+	writers.Go(func() {
 		defer cancel()
 		a.writeBroadcasts(ctx, conn, subscription.Messages())
-	}()
+	})
 	defer func() {
 		cancel()
 		writers.Wait()
 	}()
 
 	for {
-		messageType, value, err := conn.Read(ctx)
-		if err != nil {
+		messageType, value, readErr := conn.Read(ctx)
+		if readErr != nil {
 			return
 		}
-		if err := a.authorization.Check(
+		if authErr := a.authorization.Check(
 			ctx, principal.ActorID, a.wikiID, governance.ActionEdit, &pageID,
-		); err != nil {
+		); authErr != nil {
 			_ = conn.Close(websocket.StatusPolicyViolation, "edit permission revoked")
 			return
 		}
@@ -150,7 +148,11 @@ func (a *CollaborationAPI) connect(w http.ResponseWriter, r *http.Request) {
 				_ = conn.Close(websocket.StatusPolicyViolation, "invalid presence")
 				return
 			}
-			a.hub.Broadcast(document.ID, collaboration.HubMessage{Data: presence})
+			a.hub.BroadcastExcept(
+				document.ID,
+				collaboration.HubMessage{Data: presence},
+				subscription,
+			)
 		}
 	}
 }
@@ -179,31 +181,31 @@ func writeRecovery(ctx context.Context, conn *websocket.Conn, recovery collabora
 	if err != nil {
 		return err
 	}
-	if err := writeSocket(ctx, conn, websocket.MessageText, hello); err != nil {
-		return err
+	if writeErr := writeSocket(ctx, conn, websocket.MessageText, hello); writeErr != nil {
+		return writeErr
 	}
 	if recovery.Snapshot != nil {
-		frame, err := collaboration.EncodeServerFrame(
+		frame, frameErr := collaboration.EncodeServerFrame(
 			collaboration.FrameSnapshot,
 			recovery.Snapshot.UpToSequence,
 			recovery.Snapshot.State,
 		)
-		if err != nil {
-			return err
+		if frameErr != nil {
+			return frameErr
 		}
-		if err := writeSocket(ctx, conn, websocket.MessageBinary, frame); err != nil {
-			return err
+		if writeErr := writeSocket(ctx, conn, websocket.MessageBinary, frame); writeErr != nil {
+			return writeErr
 		}
 	}
 	for _, update := range recovery.Updates {
-		frame, err := collaboration.EncodeServerFrame(
+		frame, frameErr := collaboration.EncodeServerFrame(
 			collaboration.FrameUpdate, update.Sequence, update.Bytes,
 		)
-		if err != nil {
-			return err
+		if frameErr != nil {
+			return frameErr
 		}
-		if err := writeSocket(ctx, conn, websocket.MessageBinary, frame); err != nil {
-			return err
+		if writeErr := writeSocket(ctx, conn, websocket.MessageBinary, frame); writeErr != nil {
+			return writeErr
 		}
 	}
 	ready, err := json.Marshal(map[string]any{

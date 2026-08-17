@@ -29,12 +29,22 @@ export interface PublishRevisionRequest {
     expectedRevisionId?: string;
     /**
      * 可选的 active WorkingDocument。提供时，发布 Revision 与工作副本换基
-     * 在同一事务完成；文档基线过期时返回 409 stale_revision。
+     * 在同一事务完成，并且必须同时提供 expected_sequence。
+     * 文档基线过期时返回 409 stale_revision。
      *
      * @type {string}
      * @memberof PublishRevisionRequest
      */
     workingDocumentId?: string;
+    /**
+     * 发布者物化 ast 时已经恢复到的 WorkingDocument durable sequence。
+     * 必须与 working_document_id 同时提供；服务端在同一事务锁定工作副本后
+     * 比较 latest_sequence，不一致返回 409 conflict，禁止旧工作副本发布。
+     *
+     * @type {number}
+     * @memberof PublishRevisionRequest
+     */
+    expectedSequence?: number;
     /**
      * Typed Block AST v1 文档（权威 Schema：contracts/schemas/ast/v1/ast.schema.json）。
      * 必须是 JSON 对象，type='document' 且 schema_version=1。
@@ -77,6 +87,7 @@ export function PublishRevisionRequestFromJSONTyped(json: any, ignoreDiscriminat
 
         'expectedRevisionId': json['expected_revision_id'] == null ? undefined : json['expected_revision_id'],
         'workingDocumentId': json['working_document_id'] == null ? undefined : json['working_document_id'],
+        'expectedSequence': json['expected_sequence'] == null ? undefined : json['expected_sequence'],
         'ast': json['ast'],
         'summary': json['summary'] == null ? undefined : json['summary'],
         'isMinor': json['is_minor'] == null ? undefined : json['is_minor'],
@@ -96,6 +107,7 @@ export function PublishRevisionRequestToJSONTyped(value?: PublishRevisionRequest
 
         'expected_revision_id': value['expectedRevisionId'],
         'working_document_id': value['workingDocumentId'],
+        'expected_sequence': value['expectedSequence'],
         'ast': value['ast'],
         'summary': value['summary'],
         'is_minor': value['isMinor'],

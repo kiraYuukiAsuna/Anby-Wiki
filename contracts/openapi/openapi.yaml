@@ -5879,6 +5879,15 @@ components:
     PublishRevisionRequest:
       type: object
       required: [ast]
+      allOf:
+        - if:
+            required: [working_document_id]
+          then:
+            required: [expected_sequence]
+        - if:
+            required: [expected_sequence]
+          then:
+            required: [working_document_id]
       properties:
         expected_revision_id:
           type: string
@@ -5891,7 +5900,16 @@ components:
           format: uuid
           description: |
             可选的 active WorkingDocument。提供时，发布 Revision 与工作副本换基
-            在同一事务完成；文档基线过期时返回 409 stale_revision。
+            在同一事务完成，并且必须同时提供 expected_sequence。
+            文档基线过期时返回 409 stale_revision。
+        expected_sequence:
+          type: integer
+          format: int64
+          minimum: 0
+          description: |
+            发布者物化 ast 时已经恢复到的 WorkingDocument durable sequence。
+            必须与 working_document_id 同时提供；服务端在同一事务锁定工作副本后
+            比较 latest_sequence，不一致返回 409 conflict，禁止旧工作副本发布。
         ast:
           type: object
           additionalProperties: true

@@ -13,6 +13,7 @@ const CLIENT_ID_KEY = "anbywiki.collaboration.client-id";
 const SEQUENCE_KEY_PREFIX = "anbywiki.collaboration.sequence.";
 const INITIAL_RECONNECT_DELAY_MS = 500;
 const MAX_RECONNECT_DELAY_MS = 10_000;
+const PRESENCE_HEARTBEAT_MS = 10_000;
 
 export type CollaborationStatus =
   | "connecting"
@@ -26,11 +27,22 @@ export interface CollaborationClientOptions {
   initialAst: Document;
   onAst: (ast: Document) => void;
   onStatus?: (status: CollaborationStatus) => void;
+  onPresence?: (presence: CollaborationPresence) => void;
   socketFactory?: (url: string) => WebSocket;
+}
+
+export interface CollaborationPresence {
+  actorId: string;
+  cursor: Record<string, unknown>;
 }
 
 export interface PreparedAstUpdate {
   expectedSequence: number;
+  update: Uint8Array;
+}
+
+interface PendingUpdate {
+  id: Uint8Array;
   update: Uint8Array;
 }
 
@@ -53,8 +65,11 @@ export class CollaborationClient {
   private reconnectTimer: ReturnType<typeof setTimeout> | null = null;
   private receiveQueue = Promise.resolve();
   private pendingAst: Document | null = null;
+  private readonly pendingUpdates: PendingUpdate[] = [];
   private documentId: string | null = null;
   private renderedAstJSON: string;
+  private lastPresence: Record<string, unknown> | null = null;
+  private readonly presenceHeartbeat: ReturnType<typeof setInterval>;
 
   constructor(options: CollaborationClientOptions) {
     this.options = options;
@@ -62,6 +77,10 @@ export class CollaborationClient {
     this.latestSequence = readSequence(options.pageId);
     this.renderedAstJSON = JSON.stringify(options.initialAst);
     this.ydoc.on("update", this.onDocumentUpdate);
+    this.presenceHeartbeat = setInterval(
+      () => this.transmitPresence(),
+      PRESENCE_HEARTBEAT_MS,
+    );
   }
 
   connect(): void {
@@ -102,7 +121,7 @@ export class CollaborationClient {
     // The editor already renders this AST. Remember it before the server echoes
     // the Yjs update so that an acknowledgement cannot remount the editor.
     this.renderedAstJSON = JSON.stringify(ast);
-    if (!this.ready) {
+    if (!this.ready && getYjsAstRoot(this.ydoc).size === 0) {
       this.pendingAst = ast;
       return;
     }
@@ -119,6 +138,24 @@ export class CollaborationClient {
 
   getLatestSequence(): number {
     return this.latestSequence;
+  }
+
+  isReady(): boolean {
+    return this.ready;
+  }
+
+  hasPendingUpdates(): boolean {
+    return this.pendingUpdates.length > 0;
+  }
+
+  refresh(): void {
+    if (this.closed) return;
+    this.ready = false;
+    if (this.socket) {
+      this.socket.close(1012, "refresh collaboration state");
+      return;
+    }
+    this.connect();
   }
 
   getAst(): Document {
@@ -148,8 +185,8 @@ export class CollaborationClient {
   }
 
   sendPresence(cursor: Record<string, unknown>): void {
-    if (!this.ready || this.socket?.readyState !== WebSocket.OPEN) return;
-    this.socket.send(JSON.stringify({ type: "presence", cursor }));
+    this.lastPresence = cursor;
+    this.transmitPresence();
   }
 
   close(): void {
@@ -157,6 +194,7 @@ export class CollaborationClient {
     this.ready = false;
     if (this.reconnectTimer) clearTimeout(this.reconnectTimer);
     this.reconnectTimer = null;
+    clearInterval(this.presenceHeartbeat);
     this.ydoc.off("update", this.onDocumentUpdate);
     this.socket?.close(1000, "editor closed");
     this.socket = null;
@@ -168,18 +206,13 @@ export class CollaborationClient {
     update: Uint8Array,
     origin: unknown,
   ): void => {
-    if (
-      origin === REMOTE_ORIGIN ||
-      !this.ready ||
-      this.socket?.readyState !== WebSocket.OPEN
-    ) {
-      return;
-    }
-    const updateID = uuidBytes(clientUUID());
-    const frame = new Uint8Array(updateID.length + update.length);
-    frame.set(updateID);
-    frame.set(update, updateID.length);
-    this.socket.send(frame);
+    if (origin === REMOTE_ORIGIN) return;
+    const pending = {
+      id: uuidBytes(clientUUID()),
+      update: update.slice(),
+    };
+    this.pendingUpdates.push(pending);
+    this.sendPendingUpdate(pending);
   };
 
   private async receive(value: string | ArrayBuffer | Blob): Promise<void> {
@@ -199,12 +232,28 @@ export class CollaborationClient {
       type?: string;
       document_id?: string;
       latest_sequence?: number;
+      actor_id?: string;
+      cursor?: unknown;
     };
     if (message.type === "hello") {
       if (!message.document_id || !isUUID(message.document_id)) {
         throw new Error("invalid collaboration hello message");
       }
       this.documentId = message.document_id;
+      return;
+    }
+    if (message.type === "presence") {
+      if (
+        !message.actor_id ||
+        !isUUID(message.actor_id) ||
+        !isRecord(message.cursor)
+      ) {
+        throw new Error("invalid collaboration presence message");
+      }
+      this.options.onPresence?.({
+        actorId: message.actor_id,
+        cursor: message.cursor,
+      });
       return;
     }
     if (message.type !== "ready") return;
@@ -222,6 +271,7 @@ export class CollaborationClient {
       getYjsAstRoot(this.ydoc).size > 0 || this.latestSequence > 0;
     const pendingAst = this.pendingAst;
     this.pendingAst = null;
+    this.flushPendingUpdates();
     if (!hasRecoveredState) {
       syncYjsAst(
         this.ydoc,
@@ -231,6 +281,7 @@ export class CollaborationClient {
     } else if (pendingAst) {
       syncYjsAst(this.ydoc, pendingAst, "editor");
     }
+    this.transmitPresence();
     if (hasRecoveredState || pendingAst) {
       this.emitAstIfChanged();
     }
@@ -247,7 +298,11 @@ export class CollaborationClient {
       throw new Error("collaboration sequence exceeds safe integer range");
     }
     const sequence = Number(rawSequence);
-    Y.applyUpdate(this.ydoc, frame.slice(9), REMOTE_ORIGIN);
+    const update = frame.slice(9);
+    if (frame[0] === 2) {
+      this.acknowledgePendingUpdate(update);
+    }
+    Y.applyUpdate(this.ydoc, update, REMOTE_ORIGIN);
     this.latestSequence = Math.max(this.latestSequence, sequence);
     writeSequence(this.options.pageId, this.latestSequence);
     if (this.ready) {
@@ -261,6 +316,50 @@ export class CollaborationClient {
     if (astJSON === this.renderedAstJSON) return;
     this.renderedAstJSON = astJSON;
     this.options.onAst(ast);
+  }
+
+  private sendPendingUpdate(pending: PendingUpdate): void {
+    if (!this.ready || this.socket?.readyState !== WebSocket.OPEN) return;
+    const frame = new Uint8Array(pending.id.length + pending.update.length);
+    frame.set(pending.id);
+    frame.set(pending.update, pending.id.length);
+    try {
+      this.socket.send(frame);
+    } catch {
+      // Keep the stable idempotency key queued for the next reconnect.
+    }
+  }
+
+  private flushPendingUpdates(): void {
+    for (const pending of this.pendingUpdates) {
+      this.sendPendingUpdate(pending);
+    }
+  }
+
+  private acknowledgePendingUpdate(update: Uint8Array): void {
+    const index = this.pendingUpdates.findIndex((pending) =>
+      equalBytes(pending.update, update),
+    );
+    if (index >= 0) {
+      this.pendingUpdates.splice(index, 1);
+    }
+  }
+
+  private transmitPresence(): void {
+    if (
+      !this.lastPresence ||
+      !this.ready ||
+      this.socket?.readyState !== WebSocket.OPEN
+    ) {
+      return;
+    }
+    try {
+      this.socket.send(
+        JSON.stringify({ type: "presence", cursor: this.lastPresence }),
+      );
+    } catch {
+      // Presence is ephemeral; the heartbeat retries after reconnect.
+    }
   }
 
   private scheduleReconnect(): void {
@@ -332,4 +431,16 @@ function isUUID(value: string): boolean {
   return /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(
     value,
   );
+}
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return value !== null && typeof value === "object" && !Array.isArray(value);
+}
+
+function equalBytes(left: Uint8Array, right: Uint8Array): boolean {
+  if (left.length !== right.length) return false;
+  for (let index = 0; index < left.length; index += 1) {
+    if (left[index] !== right[index]) return false;
+  }
+  return true;
 }

@@ -1,14 +1,17 @@
 # 当前实现状态
 
-> 更新时间：2026-08-16
+> 更新时间：2026-08-17
 > 产品与能力审计依据：[整体设计方案](WikiDesignOnePage.md)
 
 ## 总体结论
 
 `WikiDesignOnePage.md` 定义的模块化单体 API、独立 Worker、权威数据、治理写入、
-可重建投影、知识与证据、导入、搜索、协作及平台化能力，均已落到代码与 HTTP
-契约。适合用户操作或查看的后端能力均在 Web 中提供持久、可重新发现的入口；
-导入队列、治理任务、审计活动和后台工具不再只存在于一次性流程页面。
+可重建投影、知识与证据、导入、搜索及平台化主链路已落到代码与 HTTP 契约。适合
+用户操作或查看的主要后端能力已在 Web 中提供持久、可重新发现的入口；导入队列、
+治理任务、审计活动和后台工具不再只存在于一次性流程页面。协作领域已经具备在线
+Yjs update、持久恢复、普通发布与 AI 合并的 sequence CAS、同标签页断线 update
+重发及 Block 级 Presence；自动 snapshot/compact、跨标签页离线恢复与多 API
+实例实时广播尚未闭环，不能概括为全部协作设计能力均已完成。
 
 当前代码已通过编译、契约、依赖安全和部署静态门禁，并在本机隔离环境完成
 PostgreSQL、Redis、MinIO、Meilisearch、API、Linux Worker 与 Next.js Web 的真实
@@ -16,10 +19,10 @@ PostgreSQL、Redis、MinIO、Meilisearch、API、Linux Worker 与 Next.js Web �
 正式域名安全边界与账号恢复等仍须在发布环境验收。详见
 [待解决问题](OutstandingIssues.md)。
 
-## 设计能力闭环
+## 设计能力覆盖与已知边界
 
 | 领域 | 当前实现 |
-|---|---|
+| --- | --- |
 | 页面核心 | Wiki/Namespace、Page、不可变 Revision/ContentSnapshot、稳定 Block ID、历史、Diff、回滚、改名、PageRedirect、BlockRedirect、页面保护 |
 | 知识图谱 | Entity/Property/Claim、标签/别名/主标签、Page 主 Entity 绑定、Claim 验证、Entity 合并与回滚、联邦 Wiki/Entity 映射、图谱查询 |
 | 证据与媒体 | Source/Version/Chunk/Citation、Asset/AssetRevision、引用校验、相同证据 Citation 幂等复用、按页面聚合并可展开到 Block/Node 的反向使用、按全文首次出现统一编号的 References 投影、逐处正文回链、可审计来源与媒体目录 |
@@ -28,7 +31,7 @@ PostgreSQL、Redis、MinIO、Meilisearch、API、Linux Worker 与 Next.js Web �
 | 导入与 AI | URL/HTML/文本/PDF/PNG/JPEG/JSON/CSV 获取，图片及扫描 PDF 的中英 OCR、来源标题/作者/发布者/日期/DOI 等安全元数据推导、结构化数据规范化、七阶段进度、幂等 Job、解析成功后的不可变恢复点与无重复来源的失败重试、Worker 中断任务自动恢复、管理员可配置模型最大输入 Token 与来源 Chunk 字符数（默认 128000 Token / 32000 字符）、按输入预算与输出安全上限并行分批抽取/规划、单个持久 Chunk 内的临时语义窗口二分及证据回映射、截断或结构不合法窗口重试及跨批去重、轻量模型规划 Schema 与服务端机械字段补全、确定性 ImportPlan 合并和结构清理、对照原始 Chunk 的生成后保真审计与证据化章节修复、保真分窗的三次语义纠正、并发真因保留及坏修复隔离与覆盖率回退、服务端五维质量评分及默认 0.70 硬门槛、Semantic Kernel 默认三次结构化调用与纠正重试、精确引文的跨 Chunk 安全纠偏、纯空白差异原文回填及坏候选/坏 Claim 隔离、Entity 缩写/别名归并、Claim 方向/类型/非自引用门禁、`instance_of` 明确分类证据门禁与批内单值属性确定性消歧、作品/RFC 的发布组织、文档编号/类别/状态、更新与废止专用属性、仅由页面路由授权图谱写入、来源概况与智能多页面 create/update/link/ignore 路由、强制单页模式与用户导入要求、证据约束 Typed Block 生成/补丁及正文 Entity 引用、确定性 H2 层级与标准 See also、主 Entity 绑定及信息框、显式且有证据的页面关联与反链投影、规划结果可视化、单 ImportJob 页面+Entity+Claim 复合 Proposal 与同一 ChangeBatch 原子应用、可持久查询的导入队列 |
 | 投影与搜索 | Outbox 租约/重试/死信、链接/目录/锚点/章节/渲染/知识使用/References/相关推荐/组件依赖/图谱投影、可解释的链接+Collection+Entity 相关度、PostgreSQL fallback、Meilisearch 关键词/混合/语义检索 |
 | 规模与归档 | 章节懒加载、服务端可信 HTML 渲染、Revision 热冷分层与 S3 回源、Projection/Search 重建、容量基准命令 |
-| 协作 | Yjs WorkingDocument、增量同步、Presence、发布换基、AI 三方合并、人工冲突决议 |
+| 协作 | Yjs WorkingDocument、持久增量 update、重连游标、普通发布与 AI 合并的 sequence CAS、未确认 update 幂等重发、Block 级 Presence、三方合并与人工冲突决议；snapshot/compact 尚无运行时调用，跨标签页离线恢复和多 API 实例广播仍待实现 |
 | 平台 | 本地账号/Session/RBAC、Redis 限流、安全头、OTel/Prometheus、备份恢复、Doctor、多 Wiki 读取隔离、生产部署清单 |
 
 ## 关键不变量
@@ -45,6 +48,27 @@ PostgreSQL、Redis、MinIO、Meilisearch、API、Linux Worker 与 Next.js Web �
 - Claim 值按 Property 的完整 JSON Schema 校验；Entity label/alias 的语言、长度和
   alias type 同时有服务层与数据库约束；当前内置 Entity 属性禁止 subject=target，
   导入过滤、领域服务和数据库 CHECK 三层兜底。
+
+## 2026-08-17 协作链路复核
+
+- 在线 Yjs update 会按客户端幂等键和服务端单调 sequence 持久化，重连可按游标补发；
+  AI Proposal 合并使用 `expected_sequence` CAS，服务端重新计算权威合并 AST。
+- 普通 WorkingDocument 发布现要求 `working_document_id + expected_sequence`，
+  在 Page/WorkingDocument 行锁事务内同时检查 Revision 基线与 latest sequence；
+  前端只从同一 Y.Doc 物化 AST，并在本地 update 获得服务端回显前阻止发布。
+- 本地 Yjs update 保留稳定幂等 ID，服务端回显前持续排队；同一标签页短暂断线时，
+  客户端先恢复远端 update，再合并并重发未确认 update。浏览器关闭或重载后的离线
+  恢复仍依赖 localStorage AST 草稿，不等价于持久 Yjs 操作日志。
+- Presence 已接入 BlockEditor 选区、10 秒心跳、服务端排除发送者广播及 30 秒过期，
+  编辑页显示远端 Actor 和稳定 Block ID；尚未提供字符级光标装饰和 Actor 名称解析。
+- `SaveSnapshot(..., compact)` 与恢复读取已实现，但仓库没有 API、Worker 或周期任务
+  调用；进程内 Hub 也意味着多 API 副本部署前需补跨实例广播或连接粘性。
+- 因此当前可确认在线增量同步、同标签页断线合并、Block Presence、普通发布/AI CAS
+  和 Revision 换基；不能把自动压缩、跨标签页离线 CRDT 恢复、字符级协作光标或
+  多副本实时广播视为已验收能力。
+- Go 全量测试、Vet/Build、Web TypeScript/ESLint/生产构建、OpenAPI 校验和契约检查
+  已通过。BlockEditor 改为 client-only 动态加载后，浏览器验证 `/dev/editor` 从
+  SSR `window is not defined` 500 恢复为 200，插入标题后编辑内容与 AST 同步更新。
 
 ## Web 信息架构
 

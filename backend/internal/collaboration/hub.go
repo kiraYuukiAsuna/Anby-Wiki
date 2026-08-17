@@ -59,9 +59,30 @@ func (s *Subscription) Close() {
 // Broadcast disconnects slow subscribers instead of silently dropping a
 // durable update. Their clients reconnect using the last server sequence.
 func (h *Hub) Broadcast(documentID uuid.UUID, message HubMessage) {
+	h.broadcast(documentID, message, nil)
+}
+
+// BroadcastExcept is used for ephemeral presence, which the sender already
+// owns locally and does not need echoed back.
+func (h *Hub) BroadcastExcept(
+	documentID uuid.UUID,
+	message HubMessage,
+	except *Subscription,
+) {
+	h.broadcast(documentID, message, except)
+}
+
+func (h *Hub) broadcast(
+	documentID uuid.UUID,
+	message HubMessage,
+	except *Subscription,
+) {
 	h.mu.Lock()
 	defer h.mu.Unlock()
 	for subscription := range h.rooms[documentID] {
+		if subscription == except {
+			continue
+		}
 		copied := HubMessage{Binary: message.Binary, Data: append([]byte(nil), message.Data...)}
 		select {
 		case subscription.messages <- copied:

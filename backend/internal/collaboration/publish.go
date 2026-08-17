@@ -20,6 +20,7 @@ type PublishParams struct {
 	PageID             uuid.UUID
 	ActorID            uuid.UUID
 	ExpectedRevisionID *uuid.UUID
+	ExpectedSequence   *int64
 	AST                json.RawMessage
 	Summary            string
 	IsMinor            bool
@@ -57,9 +58,10 @@ func (p *Publisher) Publish(ctx context.Context, params PublishParams) (*page.Re
 		var documentPageID uuid.UUID
 		var baseRevisionID *uuid.UUID
 		var status string
-		if err := tx.QueryRow(ctx, `SELECT page_id,base_revision_id,status
+		var latestSequence int64
+		if err := tx.QueryRow(ctx, `SELECT page_id,base_revision_id,status,latest_sequence
 			FROM working_document WHERE id=$1 FOR UPDATE`, params.DocumentID).
-			Scan(&documentPageID, &baseRevisionID, &status); err != nil {
+			Scan(&documentPageID, &baseRevisionID, &status, &latestSequence); err != nil {
 			if errors.Is(err, pgx.ErrNoRows) {
 				return ErrDocumentNotFound
 			}
@@ -75,31 +77,41 @@ func (p *Publisher) Publish(ctx context.Context, params PublishParams) (*page.Re
 			!sameRevision(currentRevisionID, params.ExpectedRevisionID) {
 			return page.ErrStaleRevision
 		}
+		if !sameSequence(params.ExpectedSequence, latestSequence) {
+			expectedSequence := int64(-1)
+			if params.ExpectedSequence != nil {
+				expectedSequence = *params.ExpectedSequence
+			}
+			return fmt.Errorf(
+				"%w: expected=%d actual=%d",
+				ErrSequenceMismatch, expectedSequence, latestSequence,
+			)
+		}
 
-		var err error
-		revision, err = p.pages.PublishInTx(ctx, tx, page.PublishParams{
+		published, publishErr := p.pages.PublishInTx(ctx, tx, page.PublishParams{
 			PageID: params.PageID, ActorID: params.ActorID,
 			ExpectedRevisionID: params.ExpectedRevisionID,
 			AST:                params.AST, Summary: params.Summary, IsMinor: params.IsMinor,
 		})
-		if err != nil {
-			return err
+		if publishErr != nil {
+			return publishErr
 		}
-		if _, err := tx.Exec(ctx, `UPDATE working_document
+		revision = published
+		if _, execErr := tx.Exec(ctx, `UPDATE working_document
 			SET base_revision_id=$2, updated_at=now() WHERE id=$1`,
-			params.DocumentID, revision.ID); err != nil {
-			return err
+			params.DocumentID, revision.ID); execErr != nil {
+			return execErr
 		}
-		auditID, err := p.ids.New()
-		if err != nil {
-			return err
+		auditID, idErr := p.ids.New()
+		if idErr != nil {
+			return idErr
 		}
-		if _, err := tx.Exec(ctx, `INSERT INTO audit_event
+		if _, execErr := tx.Exec(ctx, `INSERT INTO audit_event
 			(id,actor_id,event_type,aggregate_type,aggregate_id,payload_json)
 			VALUES ($1,$2,'working_document.rebased','working_document',$3,
 				jsonb_build_object('page_id',$4::uuid,'revision_id',$5::uuid))`,
-			auditID, params.ActorID, params.DocumentID, params.PageID, revision.ID); err != nil {
-			return err
+			auditID, params.ActorID, params.DocumentID, params.PageID, revision.ID); execErr != nil {
+			return execErr
 		}
 		return nil
 	})
@@ -114,4 +126,8 @@ func sameRevision(left, right *uuid.UUID) bool {
 		return left == nil && right == nil
 	}
 	return *left == *right
+}
+
+func sameSequence(expected *int64, actual int64) bool {
+	return expected != nil && *expected >= 0 && *expected == actual
 }

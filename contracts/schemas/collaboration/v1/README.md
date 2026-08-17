@@ -18,7 +18,7 @@ Go API strips spoofed identity headers.
 Server binary frame:
 
 | Bytes | Value |
-|---|---|
+| --- | --- |
 | `0` | `1` snapshot or `2` update |
 | `1..8` | unsigned big-endian durable server sequence |
 | `9..` | opaque Yjs payload |
@@ -26,7 +26,7 @@ Server binary frame:
 Client update frame:
 
 | Bytes | Value |
-|---|---|
+| --- | --- |
 | `0..15` | UUID client update idempotency key |
 | `16..` | opaque Yjs update |
 
@@ -37,7 +37,9 @@ idempotent; reusing the key with different bytes closes the connection.
 
 Clients send `{"type":"presence","cursor":{...}}`. The server adds the
 authenticated `actor_id`. Presence is limited to 4 KiB, is not persisted, and
-is absent after process restart.
+is absent after process restart. The browser sends a heartbeat for its latest
+stable Block ID; the server does not echo presence to the sender. Remote entries
+expire in the editor after 30 seconds.
 
 ## Reconnect
 
@@ -45,3 +47,15 @@ Clients persist the last applied server sequence. If the cursor predates
 compaction, the server sends the latest snapshot and subsequent updates.
 Otherwise it sends only updates after the cursor. Repeated Yjs updates are safe
 and expected around the subscribe/recovery race window.
+
+Each local Yjs update keeps the same client update UUID until the server echoes
+the persisted payload. Unacknowledged updates remain queued across transient
+WebSocket reconnects, merge with recovered remote updates in the local Y.Doc,
+and are then resent idempotently.
+
+## Publish CAS
+
+An HTTP publish that includes `working_document_id` must also include the
+durable `expected_sequence` from which the browser materialized `ast`. The API
+locks the Page and WorkingDocument in one transaction and rejects a sequence
+mismatch with HTTP 409 before creating a Revision or rebasing the document.

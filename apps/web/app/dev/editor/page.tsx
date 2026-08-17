@@ -4,10 +4,23 @@
 
 import { useState } from "react";
 
+import dynamic from "next/dynamic";
 import { notFound } from "next/navigation";
 
-import { BlockEditor } from "@/components/editor/block-editor";
 import { parseDocument, type Document } from "@/lib/ast/schema";
+
+const BlockEditor = dynamic(
+  () =>
+    import("@/components/editor/block-editor").then(
+      (module) => module.BlockEditor,
+    ),
+  {
+    ssr: false,
+    loading: () => (
+      <div className="min-h-80 animate-pulse bg-muted" aria-label="编辑器加载中" />
+    ),
+  },
+);
 
 const SAMPLE_AST: Document = parseDocument({
   type: "document",

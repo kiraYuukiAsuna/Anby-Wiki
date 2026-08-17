@@ -8,6 +8,7 @@ Name | Type
 ------------ | -------------
 `expectedRevisionId` | string
 `workingDocumentId` | string
+`expectedSequence` | number
 `ast` | { [key: string]: any; }
 `summary` | string
 `isMinor` | boolean
@@ -21,6 +22,7 @@ import type { PublishRevisionRequest } from ''
 const example = {
   "expectedRevisionId": null,
   "workingDocumentId": null,
+  "expectedSequence": null,
   "ast": null,
   "summary": 初版,
   "isMinor": null,

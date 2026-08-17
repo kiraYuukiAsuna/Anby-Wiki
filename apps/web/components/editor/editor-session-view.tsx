@@ -7,13 +7,14 @@
 // 网络/5xx 可重试；草稿只是恢复辅助，绝不自动发布。
 "use client";
 
-import { useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
+import dynamic from "next/dynamic";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
+import { UsersRound } from "lucide-react";
 import { toast } from "sonner";
 import { ResponseError } from "../../../../contracts/generated/typescript";
 
-import { BlockEditor } from "@/components/editor/block-editor";
 import { ConflictBanner } from "@/components/editor/conflict-banner";
 import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
@@ -32,9 +33,28 @@ import { parseDocument, type Document } from "@/lib/ast/schema";
 import { isUnauthorized, LOGIN_PATH } from "@/lib/auth";
 import {
   CollaborationClient,
+  type CollaborationPresence,
   type CollaborationStatus,
 } from "@/lib/collaboration/client";
 import { useEditorSession } from "@/lib/editor-session";
+
+const PRESENCE_TTL_MS = 30_000;
+const BlockEditor = dynamic(
+  () =>
+    import("@/components/editor/block-editor").then(
+      (module) => module.BlockEditor,
+    ),
+  {
+    ssr: false,
+    loading: () => (
+      <div className="min-h-80 animate-pulse bg-muted" aria-label="编辑器加载中" />
+    ),
+  },
+);
+
+interface RemotePresence extends CollaborationPresence {
+  lastSeenAt: number;
+}
 
 export interface EditorSessionViewProps {
   pageId: string;
@@ -68,8 +88,42 @@ export function EditorSessionView({
   const [collaborationStatus, setCollaborationStatus] =
     useState<CollaborationStatus>("connecting");
   const collaborationRef = useRef<CollaborationClient | null>(null);
+  const presenceCursorRef = useRef<Record<string, unknown> | null>(null);
+  const [remotePresence, setRemotePresence] = useState<
+    Record<string, RemotePresence>
+  >({});
   // 丢弃草稿后需要重挂载 BlockEditor（其 initialAst 只在挂载时读取一次）。
   const [editorEpoch, setEditorEpoch] = useState(0);
+
+  const receivePresence = useCallback((presence: CollaborationPresence) => {
+    setRemotePresence((current) => ({
+      ...current,
+      [presence.actorId]: {
+        ...presence,
+        lastSeenAt: Date.now(),
+      },
+    }));
+  }, []);
+
+  const publishPresence = useCallback((cursor: Record<string, unknown>) => {
+    presenceCursorRef.current = cursor;
+    collaborationRef.current?.sendPresence(cursor);
+  }, []);
+
+  useEffect(() => {
+    const timer = setInterval(() => {
+      const cutoff = Date.now() - PRESENCE_TTL_MS;
+      setRemotePresence((current) => {
+        const entries = Object.entries(current).filter(
+          ([, presence]) => presence.lastSeenAt >= cutoff,
+        );
+        return entries.length === Object.keys(current).length
+          ? current
+          : Object.fromEntries(entries);
+      });
+    }, PRESENCE_TTL_MS / 2);
+    return () => clearInterval(timer);
+  }, []);
 
   // 进入编辑页：建立会话并恢复本地草稿。草稿 base 落后时提示，
   // 默认保留内容（base 已重置到服务端 current，可继续编辑或手动丢弃）。
@@ -95,18 +149,22 @@ export function EditorSessionView({
         setEditorEpoch((epoch) => epoch + 1);
       },
       onStatus: setCollaborationStatus,
+      onPresence: receivePresence,
     });
     // Only an explicitly restored local draft should override recovered
     // WorkingDocument state. The published initial AST may be stale.
     if (restore !== "none") collaboration.syncAst(currentAst);
     collaborationRef.current = collaboration;
+    if (presenceCursorRef.current) {
+      collaboration.sendPresence(presenceCursorRef.current);
+    }
     collaboration.connect();
     return () => {
       collaborationRef.current = null;
       collaboration.close();
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [pageId, baseRevisionId]);
+  }, [pageId, baseRevisionId, receivePresence]);
 
   const openPublishDialog = () => {
     if (session.conflict) {
@@ -138,16 +196,40 @@ export function EditorSessionView({
   const publish = async () => {
     session.setPublishing(true);
     try {
-      const workingDocumentId =
-        collaborationRef.current?.getDocumentId() ?? null;
+      const collaboration = collaborationRef.current;
+      const workingDocumentId = collaboration?.getDocumentId() ?? null;
+      if (!collaboration?.isReady() || !workingDocumentId) {
+        toast.warning("协作内容尚未同步完成", {
+          description: "请等待连接恢复并完成同步后再发布。",
+        });
+        return;
+      }
+      if (collaboration.hasPendingUpdates()) {
+        toast.info("正在确认最新编辑", {
+          description: "本地修改尚未收到服务端确认，请稍后再发布。",
+        });
+        return;
+      }
+      const expectedSequence = collaboration.getLatestSequence();
+      let publishAst: Document;
+      try {
+        publishAst = collaboration.getAst();
+      } catch {
+        toast.error("协作内容校验失败，无法发布", {
+          description: "WorkingDocument 不能物化为合法 AST，请重新同步后重试。",
+        });
+        collaboration.refresh();
+        return;
+      }
       await pagesApi().publishRevision({
         id: pageId,
         publishRevisionRequest: {
           ...(session.baseRevisionId
             ? { expectedRevisionId: session.baseRevisionId }
             : {}),
-          ...(workingDocumentId ? { workingDocumentId } : {}),
-          ast: session.ast as { [key: string]: unknown },
+          workingDocumentId,
+          expectedSequence,
+          ast: publishAst as { [key: string]: unknown },
           summary: session.summary || undefined,
           isMinor: session.isMinor,
         },
@@ -168,6 +250,14 @@ export function EditorSessionView({
       }
       if (error instanceof ResponseError && error.response.status === 409) {
         const code = await readErrorCode(error);
+        if (code === "conflict" && collaborationRef.current) {
+          collaborationRef.current.refresh();
+          toast.warning("协作内容已在其他客户端更新", {
+            description: "已重新同步 WorkingDocument；请确认最新内容后再次发布。",
+          });
+          setPublishOpen(false);
+          return;
+        }
         if (code === "stale_revision") {
           // 首次 409 拉取服务端 Current，供冲突条展示与「放弃修改」回退。
           // 已有冲突时幂等保留首次 Base/Current，不重复请求。
@@ -260,6 +350,34 @@ export function EditorSessionView({
         onReset={() => setEditorEpoch((epoch) => epoch + 1)}
       />
 
+      {Object.keys(remotePresence).length > 0 ? (
+        <div
+          className="flex flex-wrap items-center gap-2 border-y border-border py-2 text-xs text-muted-foreground"
+          data-collaboration-presence
+        >
+          <UsersRound className="size-4" />
+          <span>{Object.keys(remotePresence).length} 位协作者在线</span>
+          {Object.values(remotePresence)
+            .slice(0, 4)
+            .map((presence) => {
+              const blockID =
+                typeof presence.cursor.block_id === "string"
+                  ? presence.cursor.block_id
+                  : null;
+              return (
+                <span
+                  key={presence.actorId}
+                  className="font-mono"
+                  title={presence.actorId}
+                >
+                  {presence.actorId.slice(0, 8)}
+                  {blockID ? ` @ ${blockID.slice(0, 8)}` : ""}
+                </span>
+              );
+            })}
+        </div>
+      ) : null}
+
       <div className="rounded-lg border border-border p-4">
         {session.ast ? (
           <BlockEditor
@@ -270,6 +388,7 @@ export function EditorSessionView({
               session.setAst(ast);
               collaborationRef.current?.syncAst(ast);
             }}
+            onPresenceChange={publishPresence}
           />
         ) : null}
       </div>

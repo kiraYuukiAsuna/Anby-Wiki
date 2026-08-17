@@ -56,6 +56,8 @@ export interface BlockEditorProps {
   initialAst: Document;
   /** 每次编辑后回传序列化后的 AST v1 Document。 */
   onChange?: (ast: Document) => void;
+  /** 协作 Presence 只发送稳定 Block ID 和选区类型，不发送正文。 */
+  onPresenceChange?: (cursor: Record<string, unknown>) => void;
   /** 传给 BlockNoteView 的 editable。 */
   editable?: boolean;
   /** 既有页面 ID；用于发现主 Entity 并插入可信信息框。 */
@@ -65,6 +67,7 @@ export interface BlockEditorProps {
 export function BlockEditor({
   initialAst,
   onChange,
+  onPresenceChange,
   editable = true,
   pageId,
 }: BlockEditorProps) {
@@ -103,12 +106,22 @@ export function BlockEditor({
       const selected = getSelectedPageReference(editor);
       setSelectedRef(selected);
       if (selected) setRefDisplayText(selected.displayText);
+      try {
+        const cursor = editor.getTextCursorPosition();
+        onPresenceChange?.({
+          block_id: cursor.block.id,
+          selection: selected ? "reference" : "text",
+        });
+      } catch {
+        // Some atomic node selections do not expose a text cursor.
+      }
     };
     const unsubscribe = editor.onSelectionChange(syncSelection);
+    syncSelection();
     return () => {
       unsubscribe();
     };
-  }, [editor, editable]);
+  }, [editor, editable, onPresenceChange]);
 
   const openLinkEditor = () => {
     setLinkDefaultText(editor.getSelectedText());

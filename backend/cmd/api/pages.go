@@ -131,6 +131,7 @@ type upsertBlockRedirectRequest struct {
 type publishRevisionRequest struct {
 	ExpectedRevisionID *uuid.UUID      `json:"expected_revision_id"`
 	WorkingDocumentID  *uuid.UUID      `json:"working_document_id"`
+	ExpectedSequence   *int64          `json:"expected_sequence"`
 	AST                json.RawMessage `json:"ast"`
 	Summary            string          `json:"summary"`
 	IsMinor            bool            `json:"is_minor"`
@@ -487,6 +488,13 @@ func (a *WriteAPI) publishRevision(w http.ResponseWriter, r *http.Request) {
 	if !a.authorize(w, r, actorID, governance.ActionEdit, &pageID) {
 		return
 	}
+	if !validWorkingDocumentCursor(req.WorkingDocumentID, req.ExpectedSequence) {
+		httpx.WriteError(
+			w, r, http.StatusBadRequest, httpx.CodeValidationFailed,
+			"working_document_id 与非负 expected_sequence 必须同时提供",
+		)
+		return
+	}
 	var rev *page.Revision
 	var err error
 	if req.WorkingDocumentID != nil {
@@ -496,7 +504,8 @@ func (a *WriteAPI) publishRevision(w http.ResponseWriter, r *http.Request) {
 		}
 		rev, err = a.collaborationPublisher.Publish(r.Context(), collaboration.PublishParams{
 			DocumentID: *req.WorkingDocumentID, PageID: pageID, ActorID: actorID,
-			ExpectedRevisionID: req.ExpectedRevisionID, AST: req.AST,
+			ExpectedRevisionID: req.ExpectedRevisionID, ExpectedSequence: req.ExpectedSequence,
+			AST:     req.AST,
 			Summary: req.Summary, IsMinor: req.IsMinor,
 		})
 	} else {
@@ -511,6 +520,13 @@ func (a *WriteAPI) publishRevision(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	httpx.WriteJSON(w, http.StatusCreated, toRevisionResponse(rev))
+}
+
+func validWorkingDocumentCursor(documentID *uuid.UUID, sequence *int64) bool {
+	if documentID == nil || sequence == nil {
+		return documentID == nil && sequence == nil
+	}
+	return *documentID != uuid.Nil && *sequence >= 0
 }
 
 // ---- 输入解析与错误映射 ----
@@ -580,6 +596,8 @@ func serviceError(w http.ResponseWriter, r *http.Request, err error) {
 	case errors.Is(err, page.ErrStaleRevision):
 		httpx.WriteError(w, r, http.StatusConflict, httpx.CodeStaleRevision, err.Error())
 	case errors.Is(err, collaboration.ErrDocumentInactive):
+		httpx.WriteError(w, r, http.StatusConflict, httpx.CodeConflict, err.Error())
+	case errors.Is(err, collaboration.ErrSequenceMismatch):
 		httpx.WriteError(w, r, http.StatusConflict, httpx.CodeConflict, err.Error())
 	case errors.Is(err, page.ErrTitleConflict):
 		httpx.WriteError(w, r, http.StatusConflict, httpx.CodeConflict, err.Error())

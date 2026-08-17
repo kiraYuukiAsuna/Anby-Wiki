@@ -1,11 +1,11 @@
 # 待解决问题
 
-设计能力与静态质量门禁已经闭环；以下项目仍阻塞生产发布或“已完成真实联调”的
-结论。
+主要业务链路与静态质量门禁已经闭环；以下项目仍阻塞生产发布或“全部设计能力已
+完成真实联调”的结论。
 
 ## 1. 生产容器与人工可访问性尚未在发布环境验收
 
-### 现状
+### 1.1 现状
 
 - 本轮已在隔离环境启动 PostgreSQL、Redis、MinIO、Meilisearch、API、Linux Worker
   与 Web，并完成最新 Schema `up → down → up`、Doctor、真实数据联调、投影重建、
@@ -18,7 +18,7 @@
 - 新增的 References/Related topics/Related outlines/信息框阅读结构已通过本地构建与
   隔离迁移验证，但尚未在生产现有数据上完成投影全量重建、真实导入和浏览器验收。
 
-### 关闭条件
+### 1.2 关闭条件
 
 1. 在具备 Docker daemon 的 CI/发布机通过 Compose config、五个 target 构建、
    非 root 用户及 healthcheck 元数据校验。
@@ -31,14 +31,14 @@
 
 ## 2. 账号恢复与二次验证未完成
 
-### 现状
+### 2.1 现状
 
 - 已提供用户名/邮箱唯一、Argon2id 密码哈希、独立 Actor、服务端 Session、
   注册/登录/退出和账号停用即时生效。
 - 当前没有邮件发送基础设施，尚未验证邮箱所有权，也不提供忘记密码流程。
 - 尚未提供 MFA、备用恢复码、登录设备列表与全部会话吊销。
 
-### 关闭条件
+### 2.2 关闭条件
 
 1. 接入邮件供应商，实现邮箱验证、验证状态与重发限流。
 2. 实现一次性、短时效、只存哈希的密码重置令牌，并在重置后吊销已有会话。
@@ -47,14 +47,14 @@
 
 ## 3. 默认无 TLS，显式 CSRF 防护未恢复
 
-### 现状
+### 3.1 现状
 
 - 生产 Compose 不终结 TLS；`web` 是唯一发布端口的服务。
 - 明文公网暴露时，登录凭据和 Session Cookie 可被网络观察者读取。
 - Session Cookie 使用 HttpOnly 与 `SameSite=Lax`，但 ADR-0020 已移除
   Origin/Referer 门禁；`SameSite=Lax` 不是完整 CSRF 防护。
 
-### 关闭条件
+### 3.2 关闭条件
 
 1. 在云 LB、Cloudflare 或独立代理终结 HTTPS，并启用 HSTS。
 2. 设置 `SESSION_COOKIE_SECURE=true`。
@@ -64,7 +64,7 @@
 
 ## 4. Meilisearch 容量与语义质量尚未在目标环境验收
 
-### 现状
+### 4.1 现状
 
 - PostgreSQL-only 的结构性容量阻塞已经解除：生产路径已接入 Meilisearch，支持
   关键词、facet、混合与语义检索，并可从 PostgreSQL staging 重建。
@@ -73,7 +73,7 @@
 - 尚未按 ADR-0012 的 10 万页面同口径复测吞吐、P95/P99、索引任务延迟和重建
   时间；中文召回质量、内存占用和无外网模型预置策略也尚未在目标硬件确认。
 
-### 关闭条件
+### 4.2 关闭条件
 
 1. 在目标规格上导入 10 万页面并运行关键词/过滤/混合/语义基准。
 2. 记录吞吐、P50/P95/P99、索引积压、全量重建时间、内存和磁盘水位。
@@ -82,23 +82,57 @@
 
 ## 5. 正式发布输入与 Beta 验收未确定
 
-### 缺少输入
+### 5.1 缺少输入
 
 - 正式域名、TLS/DNS 边界和最终网络拓扑。
 - Internal Beta 用户范围、角色分配和数据范围。
 - Beta 观察期、SLO 判定窗口、告警接收人和发布负责人。
 
-### 关闭条件
+### 5.2 关闭条件
 
 1. 将正式配置与机密写入仓库外、权限为 `0600` 的部署环境文件；替换所有占位值。
 2. 按 [Deploy.md](../Deploy.md) 完成迁移 gate、Doctor、备份恢复、
    API/Worker/Web/Meilisearch 健康检查。
 3. 在约定 Beta 范围和观察期内满足错误率、延迟、队列积压、Projection lag、
    搜索容量、恢复和安全门禁。
-4. 问题 1–4 同时关闭后，才可给出生产发布授权。
+4. 问题 1–4 和问题 6 同时关闭后，才可给出生产发布授权。
+
+## 6. 协作持久化与横向扩展尚未闭环
+
+### 6.1 现状
+
+- 在线 Yjs update、重连游标、AI Proposal 合并和普通 WorkingDocument 发布均已使用
+  durable sequence。普通发布会在同一事务检查 `expected_sequence`，前端也会等待
+  本地 update 的服务端回显并从同一 Y.Doc 物化 AST。
+- 同一标签页短暂断线时，未确认 Yjs update 会保留原幂等 ID，在恢复远端 update 后
+  合并并重发；浏览器关闭或重载后的恢复仍依赖完整 AST 草稿，不是持久化 Yjs 操作日志。
+- Presence 已接入心跳、服务端排除发送者广播、过期清理和 Block 级位置展示；目前显示
+  Actor 短 ID 与 Block 短 ID，不包含名称解析或字符级光标装饰。
+- WorkingDocument snapshot/compact 服务方法仍没有运行时调用方，长生命周期文档会持续
+  累积 update。
+- 实时 Hub 仅在单 API 进程内广播。当前生产 Compose 是单 API 实例，但水平扩展前需要
+  跨实例广播或 WorkingDocument 级连接粘性。
+
+### 6.2 关闭条件
+
+1. 为在线并发、发布前迟到 update、断线期间双方修改、重连和 sequence CAS 增加可重复
+   自动化或浏览器验收。
+2. 增加 snapshot/compact 触发策略和恢复演练，证明压缩前后状态与 sequence 连续。
+3. 若产品继续声明跨标签页或浏览器重启后的离线 CRDT 合并，需持久化未确认 Yjs update；
+   否则明确该场景降级为 AST 草稿恢复和人工冲突处理。
+4. 明确 Block 级 Presence 是否满足首版产品范围；若需要协作光标，再增加 Actor 名称解析、
+   字符位置协议与编辑器 Decoration。
+5. 在保持单 API 实例的部署约束与实现跨实例广播之间作出明确选择，并同步部署门禁。
 
 ## 本轮已关闭
 
+- 普通协作发布缺少 sequence 防护：OpenAPI、生成客户端、Web 和 Go 发布事务现要求
+  `working_document_id + expected_sequence`；sequence 不一致返回 409，前端重新恢复
+  WorkingDocument。未确认 update 会按稳定幂等 ID 跨瞬时断线重发，Presence 形成
+  Block 级最小 UI 闭环。
+- BlockEditor 的 Client Component 预渲染曾因 BlockNote 访问 `window` 返回 500；
+  真实编辑会话与开发验证页现均通过 `next/dynamic({ssr:false})` 加载，浏览器冒烟已
+  验证编辑器加载和 AST 更新。
 - 导入 Proposal 的身份占用误报 500：Apply 现会预检并持久化 Page/Entity 身份
   冲突，并发唯一索引竞态映射为 409；批量审核保留分类原因并停止重试不可变的
   过期提案，Web 提示改为可操作的“基于 Current 重新导入”。
