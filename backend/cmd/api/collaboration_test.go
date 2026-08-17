@@ -1,6 +1,7 @@
 package main
 
 import (
+	"encoding/base64"
 	"encoding/json"
 	"testing"
 
@@ -70,5 +71,38 @@ func TestValidWorkingDocumentCursor(t *testing.T) {
 					test.documentID, test.sequence, got, test.want)
 			}
 		})
+	}
+}
+
+func TestSnapshotMessage(t *testing.T) {
+	t.Parallel()
+
+	state := []byte("opaque-yjs-state")
+	raw, err := json.Marshal(map[string]any{
+		"type":           "snapshot",
+		"up_to_sequence": 42,
+		"state":          base64.StdEncoding.EncodeToString(state),
+		"compact":        true,
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	sequence, decoded, compact, err := snapshotMessage(raw)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if sequence != 42 || string(decoded) != string(state) || !compact {
+		t.Fatalf("unexpected snapshot: sequence=%d state=%q compact=%t",
+			sequence, decoded, compact)
+	}
+}
+
+func TestSnapshotMessageRejectsInvalidState(t *testing.T) {
+	t.Parallel()
+
+	if _, _, _, err := snapshotMessage(
+		[]byte(`{"type":"snapshot","up_to_sequence":1,"state":"***","compact":true}`),
+	); err == nil {
+		t.Fatal("invalid base64 snapshot was accepted")
 	}
 }

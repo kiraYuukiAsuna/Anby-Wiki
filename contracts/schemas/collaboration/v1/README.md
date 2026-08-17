@@ -13,7 +13,7 @@ Go API strips spoofed identity headers.
 1. A JSON `hello` message described by `message.schema.json`.
 2. An optional binary snapshot frame.
 3. Zero or more binary update frames.
-4. Live binary update and JSON presence messages.
+4. Live binary update, JSON presence, and `snapshot_saved` messages.
 
 Server binary frame:
 
@@ -52,6 +52,19 @@ Each local Yjs update keeps the same client update UUID until the server echoes
 the persisted payload. Unacknowledged updates remain queued across transient
 WebSocket reconnects, merge with recovered remote updates in the local Y.Doc,
 and are then resent idempotently.
+
+## Snapshot and Compaction
+
+After 100 durable updates and only when no local update is awaiting an echo,
+the browser sends:
+
+`{"type":"snapshot","up_to_sequence":100,"state":"<base64 Yjs state>","compact":true}`
+
+The authenticated service stores at most 16 MiB of opaque Yjs state and removes
+covered updates in the same transaction. It then broadcasts
+`{"type":"snapshot_saved","up_to_sequence":100}`. A reconnect cursor older than
+that sequence receives the snapshot followed by later updates. Snapshot bytes
+and document content are never logged.
 
 ## Publish CAS
 

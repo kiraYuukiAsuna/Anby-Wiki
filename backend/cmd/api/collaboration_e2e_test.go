@@ -3,6 +3,7 @@ package main
 import (
 	"bytes"
 	"context"
+	"encoding/base64"
 	"encoding/json"
 	"fmt"
 	"io"
@@ -43,9 +44,10 @@ type e2ePresence struct {
 }
 
 type e2eRecovery struct {
-	Hello   e2eHello
-	Updates []e2eServerUpdate
-	Ready   int64
+	Hello     e2eHello
+	Snapshots []e2eServerUpdate
+	Updates   []e2eServerUpdate
+	Ready     int64
 }
 
 type e2eServerUpdate struct {
@@ -125,6 +127,20 @@ func TestCollaborationE2E(t *testing.T) {
 	assertE2EUpdate(t, readE2EUpdate(t, firstConn), 1, updatePayload)
 	assertE2EUpdate(t, readE2EUpdate(t, secondConn), 1, updatePayload)
 
+	snapshotPayload := []byte("e2e-yjs-snapshot-v1")
+	writeE2EJSON(t, firstConn, map[string]any{
+		"type":           "snapshot",
+		"up_to_sequence": 1,
+		"state":          base64.StdEncoding.EncodeToString(snapshotPayload),
+		"compact":        true,
+	})
+	if sequence := readE2ESnapshotSaved(t, firstConn); sequence != 1 {
+		t.Fatalf("first snapshot result sequence=%d, want 1", sequence)
+	}
+	if sequence := readE2ESnapshotSaved(t, secondConn); sequence != 1 {
+		t.Fatalf("second snapshot result sequence=%d, want 1", sequence)
+	}
+
 	emptyAST := map[string]any{
 		"type":           "document",
 		"schema_version": 1,
@@ -162,11 +178,14 @@ func TestCollaborationE2E(t *testing.T) {
 		t, secondClient, baseURL, page.ID, uuid.New(), 0,
 	)
 	defer reconnected.CloseNow()
-	if recovered.Ready != 1 || len(recovered.Updates) != 1 {
-		t.Fatalf("recovery ready=%d updates=%d, want sequence 1 with one update",
-			recovered.Ready, len(recovered.Updates))
+	if recovered.Ready != 1 || len(recovered.Snapshots) != 1 ||
+		len(recovered.Updates) != 0 {
+		t.Fatalf(
+			"recovery ready=%d snapshots=%d updates=%d, want one snapshot and no covered updates",
+			recovered.Ready, len(recovered.Snapshots), len(recovered.Updates),
+		)
 	}
-	assertE2EUpdate(t, recovered.Updates[0], 1, updatePayload)
+	assertE2EUpdate(t, recovered.Snapshots[0], 1, snapshotPayload)
 }
 
 func registerE2EUser(
@@ -296,10 +315,12 @@ func readE2ERecovery(t *testing.T, conn *websocket.Conn) e2eRecovery {
 	for {
 		messageType, payload := readE2EMessage(t, conn)
 		if messageType == websocket.MessageBinary {
-			recovery.Updates = append(
-				recovery.Updates,
-				decodeE2EUpdate(t, payload),
-			)
+			kind, update := decodeE2EServerFrame(t, payload)
+			if kind == collaboration.FrameSnapshot {
+				recovery.Snapshots = append(recovery.Snapshots, update)
+			} else {
+				recovery.Updates = append(recovery.Updates, update)
+			}
 			continue
 		}
 		var envelope struct {
@@ -348,19 +369,42 @@ func readE2EUpdate(t *testing.T, conn *websocket.Conn) e2eServerUpdate {
 	if messageType != websocket.MessageBinary {
 		t.Fatalf("update message type = %v", messageType)
 	}
-	return decodeE2EUpdate(t, payload)
-}
-
-func decodeE2EUpdate(t *testing.T, frame []byte) e2eServerUpdate {
-	t.Helper()
-	kind, sequence, payload, err := collaboration.DecodeServerFrame(frame)
-	if err != nil {
-		t.Fatalf("decode server update: %v", err)
-	}
+	kind, update := decodeE2EServerFrame(t, payload)
 	if kind != collaboration.FrameUpdate {
 		t.Fatalf("server frame kind = %d, want update", kind)
 	}
-	return e2eServerUpdate{Sequence: sequence, Payload: payload}
+	return update
+}
+
+func decodeE2EServerFrame(
+	t *testing.T,
+	frame []byte,
+) (byte, e2eServerUpdate) {
+	t.Helper()
+	kind, sequence, payload, err := collaboration.DecodeServerFrame(frame)
+	if err != nil {
+		t.Fatalf("decode server frame: %v", err)
+	}
+	return kind, e2eServerUpdate{Sequence: sequence, Payload: payload}
+}
+
+func readE2ESnapshotSaved(t *testing.T, conn *websocket.Conn) int64 {
+	t.Helper()
+	messageType, payload := readE2EMessage(t, conn)
+	if messageType != websocket.MessageText {
+		t.Fatalf("snapshot result message type = %v", messageType)
+	}
+	var result struct {
+		Type         string `json:"type"`
+		UpToSequence int64  `json:"up_to_sequence"`
+	}
+	if err := json.Unmarshal(payload, &result); err != nil {
+		t.Fatalf("decode snapshot result: %v", err)
+	}
+	if result.Type != "snapshot_saved" {
+		t.Fatalf("unexpected snapshot result type %q", result.Type)
+	}
+	return result.UpToSequence
 }
 
 func writeE2EJSON(t *testing.T, conn *websocket.Conn, value any) {

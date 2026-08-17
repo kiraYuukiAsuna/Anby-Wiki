@@ -14,6 +14,8 @@ const SEQUENCE_KEY_PREFIX = "anbywiki.collaboration.sequence.";
 const INITIAL_RECONNECT_DELAY_MS = 500;
 const MAX_RECONNECT_DELAY_MS = 10_000;
 const PRESENCE_HEARTBEAT_MS = 10_000;
+const SNAPSHOT_UPDATE_INTERVAL = 100;
+const MAX_SNAPSHOT_BYTES = 16 << 20;
 
 export type CollaborationStatus =
   | "connecting"
@@ -70,6 +72,8 @@ export class CollaborationClient {
   private renderedAstJSON: string;
   private lastPresence: Record<string, unknown> | null = null;
   private readonly presenceHeartbeat: ReturnType<typeof setInterval>;
+  private lastSnapshotSequence = 0;
+  private snapshotInFlight = false;
 
   constructor(options: CollaborationClientOptions) {
     this.options = options;
@@ -105,6 +109,7 @@ export class CollaborationClient {
       if (this.socket !== socket) return;
       this.socket = null;
       this.ready = false;
+      this.snapshotInFlight = false;
       if (this.closed) return;
       if (event.code === 1008) {
         this.closed = true;
@@ -234,6 +239,7 @@ export class CollaborationClient {
       latest_sequence?: number;
       actor_id?: string;
       cursor?: unknown;
+      up_to_sequence?: number;
     };
     if (message.type === "hello") {
       if (!message.document_id || !isUUID(message.document_id)) {
@@ -254,6 +260,20 @@ export class CollaborationClient {
         actorId: message.actor_id,
         cursor: message.cursor,
       });
+      return;
+    }
+    if (message.type === "snapshot_saved") {
+      if (
+        !Number.isSafeInteger(message.up_to_sequence) ||
+        (message.up_to_sequence ?? -1) < 0
+      ) {
+        throw new Error("invalid collaboration snapshot result");
+      }
+      this.lastSnapshotSequence = Math.max(
+        this.lastSnapshotSequence,
+        message.up_to_sequence!,
+      );
+      this.snapshotInFlight = false;
       return;
     }
     if (message.type !== "ready") return;
@@ -282,6 +302,7 @@ export class CollaborationClient {
       syncYjsAst(this.ydoc, pendingAst, "editor");
     }
     this.transmitPresence();
+    this.maybeSaveSnapshot();
     if (hasRecoveredState || pendingAst) {
       this.emitAstIfChanged();
     }
@@ -299,7 +320,12 @@ export class CollaborationClient {
     }
     const sequence = Number(rawSequence);
     const update = frame.slice(9);
-    if (frame[0] === 2) {
+    if (frame[0] === 1) {
+      this.lastSnapshotSequence = Math.max(
+        this.lastSnapshotSequence,
+        sequence,
+      );
+    } else {
       this.acknowledgePendingUpdate(update);
     }
     Y.applyUpdate(this.ydoc, update, REMOTE_ORIGIN);
@@ -307,6 +333,7 @@ export class CollaborationClient {
     writeSequence(this.options.pageId, this.latestSequence);
     if (this.ready) {
       this.emitAstIfChanged();
+      this.maybeSaveSnapshot();
     }
   }
 
@@ -359,6 +386,36 @@ export class CollaborationClient {
       );
     } catch {
       // Presence is ephemeral; the heartbeat retries after reconnect.
+    }
+  }
+
+  private maybeSaveSnapshot(): void {
+    if (
+      !this.ready ||
+      this.snapshotInFlight ||
+      this.pendingUpdates.length > 0 ||
+      this.latestSequence - this.lastSnapshotSequence <
+      SNAPSHOT_UPDATE_INTERVAL ||
+      this.socket?.readyState !== WebSocket.OPEN
+    ) {
+      return;
+    }
+    const state = Y.encodeStateAsUpdate(this.ydoc);
+    if (state.length === 0 || state.length > MAX_SNAPSHOT_BYTES) {
+      return;
+    }
+    this.snapshotInFlight = true;
+    try {
+      this.socket.send(
+        JSON.stringify({
+          type: "snapshot",
+          up_to_sequence: this.latestSequence,
+          state: bytesToBase64(state),
+          compact: true,
+        }),
+      );
+    } catch {
+      this.snapshotInFlight = false;
     }
   }
 
@@ -443,4 +500,15 @@ function equalBytes(left: Uint8Array, right: Uint8Array): boolean {
     if (left[index] !== right[index]) return false;
   }
   return true;
+}
+
+function bytesToBase64(value: Uint8Array): string {
+  const chunks: string[] = [];
+  const chunkSize = 0x8000;
+  for (let index = 0; index < value.length; index += chunkSize) {
+    chunks.push(
+      String.fromCharCode(...value.subarray(index, index + chunkSize)),
+    );
+  }
+  return btoa(chunks.join(""));
 }

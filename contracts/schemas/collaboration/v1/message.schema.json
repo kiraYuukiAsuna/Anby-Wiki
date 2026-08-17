@@ -48,6 +48,15 @@
           "additionalProperties": true
         }
       }
+    },
+    {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["type", "up_to_sequence"],
+      "properties": {
+        "type": { "const": "snapshot_saved" },
+        "up_to_sequence": { "type": "integer", "minimum": 0 }
+      }
     }
   ]
 }

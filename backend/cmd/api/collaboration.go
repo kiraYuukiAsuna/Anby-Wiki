@@ -2,6 +2,7 @@ package main
 
 import (
 	"context"
+	"encoding/base64"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -21,8 +22,9 @@ import (
 )
 
 const (
-	maxPresenceBytes = 4096
-	socketWriteLimit = 5 * time.Second
+	maxPresenceBytes        = 4096
+	maxSnapshotMessageBytes = 4*collaboration.MaxSnapshotBytes/3 + 64<<10
+	socketWriteLimit        = 5 * time.Second
 )
 
 type CollaborationAPI struct {
@@ -85,7 +87,7 @@ func (a *CollaborationAPI) connect(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	defer conn.CloseNow()
-	conn.SetReadLimit(collaboration.MaxUpdateBytes + 16)
+	conn.SetReadLimit(maxSnapshotMessageBytes)
 
 	subscription := a.hub.Subscribe(document.ID)
 	defer subscription.Close()
@@ -122,6 +124,10 @@ func (a *CollaborationAPI) connect(w http.ResponseWriter, r *http.Request) {
 		}
 		switch messageType {
 		case websocket.MessageBinary:
+			if len(value) > collaboration.MaxUpdateBytes+16 {
+				_ = conn.Close(websocket.StatusPolicyViolation, "update frame too large")
+				return
+			}
 			updateID, updateBytes, err := collaboration.DecodeClientUpdate(value)
 			if err != nil {
 				_ = conn.Close(websocket.StatusPolicyViolation, "invalid update frame")
@@ -143,16 +149,57 @@ func (a *CollaborationAPI) connect(w http.ResponseWriter, r *http.Request) {
 			}
 			a.hub.Broadcast(document.ID, collaboration.HubMessage{Binary: true, Data: frame})
 		case websocket.MessageText:
-			presence, err := presenceMessage(value, principal.ActorID)
-			if err != nil {
-				_ = conn.Close(websocket.StatusPolicyViolation, "invalid presence")
+			var envelope struct {
+				Type string `json:"type"`
+			}
+			if json.Unmarshal(value, &envelope) != nil {
+				_ = conn.Close(websocket.StatusPolicyViolation, "invalid control message")
 				return
 			}
-			a.hub.BroadcastExcept(
-				document.ID,
-				collaboration.HubMessage{Data: presence},
-				subscription,
-			)
+			switch envelope.Type {
+			case "presence":
+				presence, err := presenceMessage(value, principal.ActorID)
+				if err != nil {
+					_ = conn.Close(websocket.StatusPolicyViolation, "invalid presence")
+					return
+				}
+				a.hub.BroadcastExcept(
+					document.ID,
+					collaboration.HubMessage{Data: presence},
+					subscription,
+				)
+			case "snapshot":
+				upToSequence, state, compact, err := snapshotMessage(value)
+				if err != nil {
+					_ = conn.Close(websocket.StatusPolicyViolation, "invalid snapshot")
+					return
+				}
+				snapshot, err := a.service.SaveSnapshot(
+					ctx, document.ID, principal.ActorID,
+					upToSequence, state, compact,
+				)
+				if err != nil {
+					if errors.Is(err, collaboration.ErrInvalidSnapshot) ||
+						errors.Is(err, collaboration.ErrIdempotencyConflict) {
+						_ = conn.Close(websocket.StatusPolicyViolation, "snapshot rejected")
+					} else {
+						_ = conn.Close(websocket.StatusInternalError, "persist snapshot failed")
+					}
+					return
+				}
+				saved, err := json.Marshal(map[string]any{
+					"type":           "snapshot_saved",
+					"up_to_sequence": snapshot.UpToSequence,
+				})
+				if err != nil {
+					_ = conn.Close(websocket.StatusInternalError, "encode snapshot result")
+					return
+				}
+				a.hub.Broadcast(document.ID, collaboration.HubMessage{Data: saved})
+			default:
+				_ = conn.Close(websocket.StatusPolicyViolation, "unknown control message")
+				return
+			}
 		}
 	}
 }
@@ -276,4 +323,26 @@ func presenceMessage(value []byte, actorID uuid.UUID) ([]byte, error) {
 		return nil, fmt.Errorf("encode presence: %w", err)
 	}
 	return output, nil
+}
+
+func snapshotMessage(value []byte) (int64, []byte, bool, error) {
+	if len(value) == 0 || len(value) > maxSnapshotMessageBytes {
+		return 0, nil, false, errors.New("snapshot size")
+	}
+	var input struct {
+		Type         string `json:"type"`
+		UpToSequence int64  `json:"up_to_sequence"`
+		State        string `json:"state"`
+		Compact      bool   `json:"compact"`
+	}
+	if err := json.Unmarshal(value, &input); err != nil ||
+		input.Type != "snapshot" || input.UpToSequence < 0 || input.State == "" ||
+		base64.StdEncoding.DecodedLen(len(input.State)) > collaboration.MaxSnapshotBytes {
+		return 0, nil, false, errors.New("snapshot shape")
+	}
+	state, err := base64.StdEncoding.DecodeString(input.State)
+	if err != nil || len(state) == 0 || len(state) > collaboration.MaxSnapshotBytes {
+		return 0, nil, false, errors.New("snapshot state")
+	}
+	return input.UpToSequence, state, input.Compact, nil
 }
