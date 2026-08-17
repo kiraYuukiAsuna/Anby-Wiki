@@ -39,6 +39,19 @@ function fulfilled<T>(result: PromiseSettledResult<T>): T | undefined {
   return result.status === "fulfilled" ? result.value : undefined;
 }
 
+function withoutExplicitPageLinks(
+  related: RelatedPageList | undefined,
+): RelatedPageList | undefined {
+  if (!related?.ready) return related;
+
+  return {
+    ...related,
+    items: related.items.filter(
+      (item) => !item.reasons.some((reason) => reason.type === "page_link"),
+    ),
+  };
+}
+
 export async function PageView({ data }: { data: PageWithContent }) {
   const { page } = data;
   // 生成客户端把 nullable content 标为非空类型，运行时仍可能为 null（未发布）。
@@ -85,10 +98,13 @@ export async function PageView({ data }: { data: PageWithContent }) {
       ? rawReferences
       : undefined;
   const rawRelated = fulfilled<RelatedPageList>(relatedResult);
-  const related =
-    contentRevisionId && rawRelated && rawRelated.revisionId === contentRevisionId
+  const related = withoutExplicitPageLinks(
+    contentRevisionId &&
+      rawRelated &&
+      rawRelated.revisionId === contentRevisionId
       ? rawRelated
-      : undefined;
+      : undefined,
+  );
   const collections =
     fulfilled<PageCollectionList>(collectionsResult)?.items ?? [];
   let nextTopLevelNumber =
@@ -96,18 +112,6 @@ export async function PageView({ data }: { data: PageWithContent }) {
       const first = Number.parseInt(entry.positionKey?.split(".")[0] ?? "", 10);
       return Number.isFinite(first) ? Math.max(largest, first) : largest;
     }, 0) + 1;
-  const showReferences = Boolean(
-    references && (!references.ready || references.items.length > 0),
-  );
-  if (showReferences) {
-    toc.push({
-      id: "references",
-      level: 2,
-      text: "References",
-      positionKey: String(nextTopLevelNumber),
-    });
-    nextTopLevelNumber++;
-  }
   if (related?.ready && related.items.length > 0) {
     toc.push({
       id: "related-topics",
@@ -122,6 +126,18 @@ export async function PageView({ data }: { data: PageWithContent }) {
       id: "related-outlines",
       level: 2,
       text: "Related outlines",
+      positionKey: String(nextTopLevelNumber),
+    });
+    nextTopLevelNumber++;
+  }
+  const showReferences = Boolean(
+    references && (!references.ready || references.items.length > 0),
+  );
+  if (showReferences) {
+    toc.push({
+      id: "references",
+      level: 2,
+      text: "References",
       positionKey: String(nextTopLevelNumber),
     });
   }

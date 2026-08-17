@@ -126,6 +126,9 @@
     background-image:
       radial-gradient(circle at 15% -10%, color-mix(in oklch, var(--primary) 7%, transparent), transparent 28rem),
       linear-gradient(to bottom, color-mix(in oklch, var(--background) 98%, white), var(--background));
+    background-position: top left;
+    background-repeat: no-repeat;
+    background-size: 100% 48rem;
   }
   html {
     @apply font-sans;

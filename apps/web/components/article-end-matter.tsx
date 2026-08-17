@@ -2,6 +2,7 @@ import Link from "next/link";
 import {
   ArrowUpRight,
   BookOpen,
+  ChevronDown,
   FolderTree,
   Network,
   Quote,
@@ -16,6 +17,8 @@ import type {
   RelatedPage,
   RelatedPageList,
 } from "../../../contracts/generated/typescript";
+
+const DEFAULT_VISIBLE_REFERENCES = 10;
 
 const RELATED_REASON_LABELS: Record<string, string> = {
   page_link: "正文链接",
@@ -83,6 +86,7 @@ function ReferenceItem({ item }: { item: PageReference }) {
   return (
     <li
       id={`cite-note-${item.number}`}
+      value={item.number}
       className="scroll-mt-20 pl-1 text-sm leading-6 text-foreground/90"
     >
       <span className="mr-1.5 inline-flex items-center gap-1 text-xs">
@@ -164,6 +168,13 @@ export function ArticleEndMatter({
 }) {
   const showReferenceStatus = references?.ready === false;
   const referenceItems = references?.ready ? references.items : [];
+  const visibleReferenceItems = referenceItems.slice(
+    0,
+    DEFAULT_VISIBLE_REFERENCES,
+  );
+  const collapsedReferenceItems = referenceItems.slice(
+    DEFAULT_VISIBLE_REFERENCES,
+  );
   const relatedItems = related?.ready ? related.items : [];
   if (
     !showReferenceStatus &&
@@ -176,34 +187,11 @@ export function ArticleEndMatter({
 
   return (
     <div className="clear-both mt-10 space-y-9 border-t border-border pt-1">
-      {showReferenceStatus || referenceItems.length > 0 ? (
-        <section aria-labelledby="references">
-          <h2
-            id="references"
-            className="scroll-mt-20 border-b border-border pb-2 pt-7 text-2xl font-semibold tracking-tight"
-          >
-            References
-          </h2>
-          {showReferenceStatus ? (
-            <p className="mt-3 flex items-center gap-2 text-sm text-muted-foreground">
-              <BookOpen className="size-4" aria-hidden />
-              当前版本的引用索引正在生成，完成后会自动显示可回溯的参考文献。
-            </p>
-          ) : (
-            <ol className="mt-4 list-decimal space-y-4 pl-7 marker:font-medium marker:text-muted-foreground">
-              {referenceItems.map((item) => (
-                <ReferenceItem key={item.citationId} item={item} />
-              ))}
-            </ol>
-          )}
-        </section>
-      ) : null}
-
       {relatedItems.length > 0 ? (
         <section aria-labelledby="related-topics">
           <h2
             id="related-topics"
-            className="scroll-mt-20 border-b border-border pb-2 text-2xl font-semibold tracking-tight"
+            className="scroll-mt-20 border-b border-border pb-2 pt-7 text-2xl font-semibold tracking-tight"
           >
             Related topics
           </h2>
@@ -251,6 +239,55 @@ export function ArticleEndMatter({
               </Link>
             ))}
           </div>
+        </section>
+      ) : null}
+
+      {showReferenceStatus || referenceItems.length > 0 ? (
+        <section aria-labelledby="references">
+          <h2
+            id="references"
+            className="scroll-mt-20 border-b border-border pb-2 text-2xl font-semibold tracking-tight"
+          >
+            References
+          </h2>
+          {showReferenceStatus ? (
+            <p className="mt-3 flex items-center gap-2 text-sm text-muted-foreground">
+              <BookOpen className="size-4" aria-hidden />
+              当前版本的引用索引正在生成，完成后会自动显示可回溯的参考文献。
+            </p>
+          ) : (
+            <>
+              <ol className="mt-4 list-decimal space-y-4 pl-7 marker:font-medium marker:text-muted-foreground">
+                {visibleReferenceItems.map((item) => (
+                  <ReferenceItem key={item.citationId} item={item} />
+                ))}
+              </ol>
+              {collapsedReferenceItems.length > 0 ? (
+                <details className="group mt-5 rounded-xl border border-border bg-muted/20 px-4 py-3">
+                  <summary className="flex cursor-pointer list-none items-center gap-2 text-sm font-medium text-muted-foreground transition hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring">
+                    <ChevronDown
+                      className="size-4 transition-transform group-open:rotate-180"
+                      aria-hidden
+                    />
+                    <span className="group-open:hidden">
+                      展开后续 {collapsedReferenceItems.length} 条参考文献
+                    </span>
+                    <span className="hidden group-open:inline">
+                      收起后续 {collapsedReferenceItems.length} 条参考文献
+                    </span>
+                  </summary>
+                  <ol
+                    start={DEFAULT_VISIBLE_REFERENCES + 1}
+                    className="mt-4 list-decimal space-y-4 pl-7 marker:font-medium marker:text-muted-foreground"
+                  >
+                    {collapsedReferenceItems.map((item) => (
+                      <ReferenceItem key={item.citationId} item={item} />
+                    ))}
+                  </ol>
+                </details>
+              ) : null}
+            </>
+          )}
         </section>
       ) : null}
     </div>
