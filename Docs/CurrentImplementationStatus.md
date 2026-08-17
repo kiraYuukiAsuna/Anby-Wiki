@@ -15,8 +15,9 @@ Yjs update、持久恢复、普通发布与 AI 合并的 sequence CAS、同标�
 
 当前代码已通过编译、契约、依赖安全和部署静态门禁，并在本机隔离环境完成
 PostgreSQL、Redis、MinIO、Meilisearch、API、Linux Worker 与 Next.js Web 的真实
-联调。“实现完成”仍不等于“生产发布就绪”：Docker/OCI 发布产物、目标规模容量、
-正式域名安全边界与账号恢复等仍须在发布环境验收。详见
+联调。提交 `9c06ade` 又在远端生产拓扑完成五个 OCI target 构建、迁移 gate、Doctor、
+滚动替换和健康检查。“实现完成”仍不等于“生产发布就绪”：目标规模容量、正式域名
+安全边界、账号恢复、备份恢复与人工可访问性等仍须验收。详见
 [待解决问题](OutstandingIssues.md)。
 
 ## 设计能力覆盖与已知边界
@@ -69,6 +70,21 @@ PostgreSQL、Redis、MinIO、Meilisearch、API、Linux Worker 与 Next.js Web �
 - Go 全量测试、Vet/Build、Web TypeScript/ESLint/生产构建、OpenAPI 校验和契约检查
   已通过。BlockEditor 改为 client-only 动态加载后，浏览器验证 `/dev/editor` 从
   SSR `window is not defined` 500 恢复为 200，插入标题后编辑内容与 AST 同步更新。
+- 远端 `9c06ade` 双用户 E2E 通过正式注册/Session、WebSocket 和 Page API，验证
+  Presence 到达对端、update 双端回显、重复 update 保持同一 sequence、陈旧 sequence
+  发布返回 409、最新 sequence 发布成功以及断线后按游标恢复 update。
+
+## 2026-08-17 远端生产拓扑联调
+
+- `/home/Dev/Anby-Wiki` 已快进到 `9c06ade`，生产部署机顺序构建
+  `ai-kernel/api/worker/web/migrate` 五个本地镜像；Web 镜像内 Next.js production
+  build 和 Linux Go binaries 构建通过。
+- 初始化迁移保持版本 1，Migration gate 报告 `current=1 expected=1 compatible=1..1
+  dirty=false`；Doctor 为 0 error/critical，仅发现 6 条可安全清理的过期 Session。
+- PostgreSQL、Redis、MinIO、Meilisearch、Semantic Kernel、API、Worker 和 Web
+  均完成滚动替换并保持 healthy；Web `/healthz`、`/readyz` 与首页探针通过。
+- 部署环境文件原先缺少 AI 基础设施密钥且数据库密码与持久卷不一致；本次从仍健康的
+  旧容器恢复相同值到权限 `0600` 的部署环境文件，全程未输出密钥。该环境文件已备份。
 
 ## Web 信息架构
 

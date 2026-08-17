@@ -3084,6 +3084,14 @@ Claim 独立后：
 - 34 个桌面路由和 390×844 移动端浏览器回归；
 - OpenAPI operation 与 Web 生成客户端调用路径覆盖检查。
 
+远端提交 `9c06ade` 进一步完成：
+
+- 五个 OCI target 构建、Migration gate、Doctor 与完整生产拓扑滚动部署；
+- PostgreSQL、Redis、MinIO、Meilisearch、Semantic Kernel、API、Worker、Web
+  全部 healthy，Web/API 探针通过；
+- 双用户正式 Session + WebSocket E2E，覆盖 Presence、update 广播、幂等重放、
+  断线恢复、陈旧 sequence 409 和最新 sequence 发布。
+
 ### 18.3 第一版修复后的协作实现边界
 
 这些边界不否定 Yjs/WorkingDocument 架构，但必须区分“已有协议或服务方法”和“已完成用户闭环”：
@@ -3100,7 +3108,7 @@ Claim 独立后：
 
 仍待发布环境验收：
 
-1. Docker Compose 和五个 OCI target 的真实发布机验证；
+1. PostgreSQL 与对象存储备份恢复演练及 RPO/RTO；
 2. 完整键盘、读屏、对比度和网络失败态人工验收；
 3. 邮箱验证、账号恢复、MFA 和会话管理；
 4. 正式 TLS、Cookie Secure 与完整 CSRF 防护；
@@ -3453,9 +3461,9 @@ AST 适合保存一份不可变文档快照，但不适合高频关系查询。
 
 ### Q9：现在可以生产使用吗？
 
-核心链路已实现并完成本地真实联调，但仍有明确的生产阻塞：
+核心链路已实现，并完成本地联调及远端生产拓扑部署/E2E，但仍有明确的发布阻塞：
 
-- 发布机容器验证；
+- 备份恢复演练；
 - TLS/CSRF；
 - 账号恢复/MFA；
 - 目标容量；

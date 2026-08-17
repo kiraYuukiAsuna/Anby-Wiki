@@ -3,15 +3,15 @@
 主要业务链路与静态质量门禁已经闭环；以下项目仍阻塞生产发布或“全部设计能力已
 完成真实联调”的结论。
 
-## 1. 生产容器与人工可访问性尚未在发布环境验收
+## 1. 备份恢复与人工可访问性尚未在发布环境验收
 
 ### 1.1 现状
 
 - 本轮已在隔离环境启动 PostgreSQL、Redis、MinIO、Meilisearch、API、Linux Worker
   与 Web，并完成最新 Schema `up → down → up`、Doctor、真实数据联调、投影重建、
   dead 回放、Revision 冷归档回源和桌面/移动端浏览器回归。
-- Docker daemon 不可用；生产部署静态检查与 YAML 解析通过，但 Compose 展开、
-  healthcheck 和五个 OCI target 未在本机实跑。
+- 远端生产机已对提交 `9c06ade` 完成 Compose config、五个 OCI target 顺序构建、
+  Migration gate、Doctor 和完整拓扑滚动替换；全部数据/应用容器及 Web/API 探针健康。
 - Chrome headless 已覆盖 34 个真实数据路由、导入持久队列、治理流程、斜杠标题和
   390×844 移动端退化；完整键盘顺序、读屏器语义、对比度和正式网络失败态仍需要
   人工验收。
@@ -20,13 +20,11 @@
 
 ### 1.2 关闭条件
 
-1. 在具备 Docker daemon 的 CI/发布机通过 Compose config、五个 target 构建、
-   非 root 用户及 healthcheck 元数据校验。
-2. 用发布清单启动一次完整容器拓扑并运行迁移 gate、Doctor、备份恢复和服务
-   healthcheck。
-3. 在浏览器人工覆盖正文、编辑、历史、搜索、治理和所有 Hub 的键盘、焦点、读屏、
+1. 在远端生产拓扑完成 PostgreSQL 和对象存储备份恢复演练并记录 RPO/RTO；当前迁移、
+   Doctor 与服务 healthcheck 已通过。
+2. 在浏览器人工覆盖正文、编辑、历史、搜索、治理和所有 Hub 的键盘、焦点、读屏、
    对比度，以及断网、超时和 5xx 状态。
-4. 部署后全量重建 Projection，确认 References 编号/多回链、Related topics 原因、
+3. 部署后全量重建 Projection，确认 References 编号/多回链、Related topics 原因、
    Collection 归属形成的 Related outlines 和信息框在新旧页面及章节懒加载路径上一致。
 
 ## 2. 账号恢复与二次验证未完成
@@ -115,21 +113,21 @@
 
 ### 6.2 关闭条件
 
-1. 为在线并发、发布前迟到 update、断线期间双方修改、重连和 sequence CAS 增加可重复
-   自动化或浏览器验收。
-2. 增加 snapshot/compact 触发策略和恢复演练，证明压缩前后状态与 sequence 连续。
-3. 若产品继续声明跨标签页或浏览器重启后的离线 CRDT 合并，需持久化未确认 Yjs update；
+1. 增加 snapshot/compact 触发策略和恢复演练，证明压缩前后状态与 sequence 连续。
+2. 若产品继续声明跨标签页或浏览器重启后的离线 CRDT 合并，需持久化未确认 Yjs update；
    否则明确该场景降级为 AST 草稿恢复和人工冲突处理。
-4. 明确 Block 级 Presence 是否满足首版产品范围；若需要协作光标，再增加 Actor 名称解析、
+3. 明确 Block 级 Presence 是否满足首版产品范围；若需要协作光标，再增加 Actor 名称解析、
    字符位置协议与编辑器 Decoration。
-5. 在保持单 API 实例的部署约束与实现跨实例广播之间作出明确选择，并同步部署门禁。
+4. 在保持单 API 实例的部署约束与实现跨实例广播之间作出明确选择，并同步部署门禁。
 
 ## 本轮已关闭
 
 - 普通协作发布缺少 sequence 防护：OpenAPI、生成客户端、Web 和 Go 发布事务现要求
   `working_document_id + expected_sequence`；sequence 不一致返回 409，前端重新恢复
   WorkingDocument。未确认 update 会按稳定幂等 ID 跨瞬时断线重发，Presence 形成
-  Block 级最小 UI 闭环。
+  Block 级最小 UI 闭环；远端双用户 E2E 已覆盖广播、幂等重放、断线恢复与发布 CAS。
+- 生产 Compose/OCI 验收：远端生产机已完成 `9c06ade` 五个本地业务镜像构建、迁移
+  gate、Doctor、滚动替换和全服务 healthcheck；仅保留备份恢复与人工可访问性验收。
 - BlockEditor 的 Client Component 预渲染曾因 BlockNote 访问 `window` 返回 500；
   真实编辑会话与开发验证页现均通过 `next/dynamic({ssr:false})` 加载，浏览器冒烟已
   验证编辑器加载和 AST 更新。
