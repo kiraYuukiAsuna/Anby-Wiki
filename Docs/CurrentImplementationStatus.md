@@ -10,12 +10,12 @@
 用户操作或查看的主要后端能力已在 Web 中提供持久、可重新发现的入口；导入队列、
 治理任务、审计活动和后台工具不再只存在于一次性流程页面。协作领域已经具备在线
 Yjs update、持久恢复、普通发布与 AI 合并的 sequence CAS、同标签页断线 update
-重发及 Block 级 Presence；自动 snapshot/compact、跨标签页离线恢复与多 API
-实例实时广播尚未闭环，不能概括为全部协作设计能力均已完成。
+重发、每 100 个已确认 sequence 自动 snapshot/compact 及 Block 级 Presence；
+跨标签页离线恢复与多 API 实例实时广播尚未闭环，不能概括为全部协作设计能力均已完成。
 
 当前代码已通过编译、契约、依赖安全和部署静态门禁，并在本机隔离环境完成
 PostgreSQL、Redis、MinIO、Meilisearch、API、Linux Worker 与 Next.js Web 的真实
-联调。提交 `9c06ade` 又在远端生产拓扑完成五个 OCI target 构建、迁移 gate、Doctor、
+联调。提交 `c84233c` 又在远端生产拓扑完成五个 OCI target 构建、迁移 gate、Doctor、
 滚动替换和健康检查。“实现完成”仍不等于“生产发布就绪”：目标规模容量、正式域名
 安全边界、账号恢复、备份恢复与人工可访问性等仍须验收。详见
 [待解决问题](OutstandingIssues.md)。
@@ -32,7 +32,7 @@ PostgreSQL、Redis、MinIO、Meilisearch、API、Linux Worker 与 Next.js Web �
 | 导入与 AI | URL/HTML/文本/PDF/PNG/JPEG/JSON/CSV 获取，图片及扫描 PDF 的中英 OCR、来源标题/作者/发布者/日期/DOI 等安全元数据推导、结构化数据规范化、七阶段进度、幂等 Job、解析成功后的不可变恢复点与无重复来源的失败重试、Worker 中断任务自动恢复、管理员可配置模型最大输入 Token 与来源 Chunk 字符数（默认 128000 Token / 32000 字符）、按输入预算与输出安全上限并行分批抽取/规划、单个持久 Chunk 内的临时语义窗口二分及证据回映射、截断或结构不合法窗口重试及跨批去重、轻量模型规划 Schema 与服务端机械字段补全、确定性 ImportPlan 合并和结构清理、对照原始 Chunk 的生成后保真审计与证据化章节修复、保真分窗的三次语义纠正、并发真因保留及坏修复隔离与覆盖率回退、服务端五维质量评分及默认 0.70 硬门槛、Semantic Kernel 默认三次结构化调用与纠正重试、精确引文的跨 Chunk 安全纠偏、纯空白差异原文回填及坏候选/坏 Claim 隔离、Entity 缩写/别名归并、Claim 方向/类型/非自引用门禁、`instance_of` 明确分类证据门禁与批内单值属性确定性消歧、作品/RFC 的发布组织、文档编号/类别/状态、更新与废止专用属性、仅由页面路由授权图谱写入、来源概况与智能多页面 create/update/link/ignore 路由、强制单页模式与用户导入要求、证据约束 Typed Block 生成/补丁及正文 Entity 引用、确定性 H2 层级与标准 See also、主 Entity 绑定及信息框、显式且有证据的页面关联与反链投影、规划结果可视化、单 ImportJob 页面+Entity+Claim 复合 Proposal 与同一 ChangeBatch 原子应用、可持久查询的导入队列 |
 | 投影与搜索 | Outbox 租约/重试/死信、链接/目录/锚点/章节/渲染/知识使用/References/相关推荐/组件依赖/图谱投影、可解释的链接+Collection+Entity 相关度、PostgreSQL fallback、Meilisearch 关键词/混合/语义检索 |
 | 规模与归档 | 章节懒加载、服务端可信 HTML 渲染、Revision 热冷分层与 S3 回源、Projection/Search 重建、容量基准命令 |
-| 协作 | Yjs WorkingDocument、持久增量 update、重连游标、普通发布与 AI 合并的 sequence CAS、未确认 update 幂等重发、Block 级 Presence、三方合并与人工冲突决议；snapshot/compact 尚无运行时调用，跨标签页离线恢复和多 API 实例广播仍待实现 |
+| 协作 | Yjs WorkingDocument、持久增量 update、重连游标、普通发布与 AI 合并的 sequence CAS、未确认 update 幂等重发、自动 snapshot/compact、Block 级 Presence、三方合并与人工冲突决议；跨标签页离线恢复和多 API 实例广播仍待实现 |
 | 平台 | 本地账号/Session/RBAC、Redis 限流、安全头、OTel/Prometheus、备份恢复、Doctor、多 Wiki 读取隔离、生产部署清单 |
 
 ## 关键不变量
@@ -62,27 +62,37 @@ PostgreSQL、Redis、MinIO、Meilisearch、API、Linux Worker 与 Next.js Web �
   恢复仍依赖 localStorage AST 草稿，不等价于持久 Yjs 操作日志。
 - Presence 已接入 BlockEditor 选区、10 秒心跳、服务端排除发送者广播及 30 秒过期，
   编辑页显示远端 Actor 和稳定 Block ID；尚未提供字符级光标装饰和 Actor 名称解析。
-- `SaveSnapshot(..., compact)` 与恢复读取已实现，但仓库没有 API、Worker 或周期任务
-  调用；进程内 Hub 也意味着多 API 副本部署前需补跨实例广播或连接粘性。
-- 因此当前可确认在线增量同步、同标签页断线合并、Block Presence、普通发布/AI CAS
-  和 Revision 换基；不能把自动压缩、跨标签页离线 CRDT 恢复、字符级协作光标或
-  多副本实时广播视为已验收能力。
+- 客户端在 100 个已确认 durable sequence 且无 pending update 时上传最多 16 MiB 的
+  Yjs state；服务端经 `SaveSnapshot(..., compact=true)` 同事务保存并删除 covered
+  update，再广播 `snapshot_saved`。远端 E2E 已证明旧游标只恢复 snapshot、不再恢复
+  被压缩的 update。
+- 进程内 Hub 意味着多 API 副本部署前仍需补跨实例广播或连接粘性。
+- 因此当前可确认在线增量同步、同标签页断线合并、Block Presence、普通发布/AI CAS、
+  Revision 换基和自动压缩；不能把跨标签页离线 CRDT 恢复、字符级协作光标或多副本
+  实时广播视为已验收能力。
+- 当前 Internal Beta 明确采用单 API 实例，并把浏览器重启后的恢复定义为 AST 草稿
+  加人工冲突处理；跨实例广播、持久离线 update 和字符级光标是非阻断后续能力。
 - Go 全量测试、Vet/Build、Web TypeScript/ESLint/生产构建、OpenAPI 校验和契约检查
   已通过。BlockEditor 改为 client-only 动态加载后，浏览器验证 `/dev/editor` 从
   SSR `window is not defined` 500 恢复为 200，插入标题后编辑内容与 AST 同步更新。
-- 远端 `9c06ade` 双用户 E2E 通过正式注册/Session、WebSocket 和 Page API，验证
+- 远端 `c84233c` 双用户 E2E 通过正式注册/Session、WebSocket 和 Page API，验证
   Presence 到达对端、update 双端回显、重复 update 保持同一 sequence、陈旧 sequence
-  发布返回 409、最新 sequence 发布成功以及断线后按游标恢复 update。
+  发布返回 409、最新 sequence 发布成功、snapshot compact covered update，以及旧游标
+  重连只恢复 snapshot。
 
 ## 2026-08-17 远端生产拓扑联调
 
-- `/home/Dev/Anby-Wiki` 已快进到 `9c06ade`，生产部署机顺序构建
+- `/home/Dev/Anby-Wiki` 已快进到 `c84233c`，生产部署机顺序构建
   `ai-kernel/api/worker/web/migrate` 五个本地镜像；Web 镜像内 Next.js production
   build 和 Linux Go binaries 构建通过。
 - 初始化迁移保持版本 1，Migration gate 报告 `current=1 expected=1 compatible=1..1
-  dirty=false`；Doctor 为 0 error/critical，仅发现 6 条可安全清理的过期 Session。
+  dirty=false`；显式清理 6 条过期 Session 后，只读 Doctor 为 0
+  info/warning/error/critical。
 - PostgreSQL、Redis、MinIO、Meilisearch、Semantic Kernel、API、Worker 和 Web
   均完成滚动替换并保持 healthy；Web `/healthz`、`/readyz` 与首页探针通过。
+- 常驻 Worker Prometheus 显示 Outbox backlog/pending/claimed/retrying/dead 均为 0，
+  Projection error/stale 均为 0；部署后十分钟内 API/Worker/Web/AI Kernel 无 error、
+  panic 或 fatal 日志。
 - 部署环境文件原先缺少 AI 基础设施密钥且数据库密码与持久卷不一致；本次从仍健康的
   旧容器恢复相同值到权限 `0600` 的部署环境文件，全程未输出密钥。该环境文件已备份。
 

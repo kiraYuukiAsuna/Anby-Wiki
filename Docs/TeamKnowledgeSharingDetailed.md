@@ -1210,7 +1210,7 @@ Zustand 只保存当前编辑会话，localStorage 草稿只用于：
 CRDT 状态 ≠ 正式版本历史
 ```
 
-当前实现已经具备在线增量同步、持久 update、普通发布与 AI 合并的 sequence CAS、同标签页断线重发和 Block 级 Presence，但不能把全部设计目标都视为完成的产品体验。自动 snapshot/compact、跨标签页离线恢复、字符级光标和多副本广播的当前边界会在本章后续明确说明。
+当前实现已经具备在线增量同步、持久 update、普通发布与 AI 合并的 sequence CAS、同标签页断线重发、自动 snapshot/compact 和 Block 级 Presence，但不能把全部设计目标都视为完成的产品体验。跨标签页离线恢复、字符级光标和多副本广播的当前边界会在本章后续明确说明。
 
 ### 8.2 Yjs 与 AST 的映射
 
@@ -1318,7 +1318,11 @@ working_document_snapshot
 
 重复 Yjs update 是安全且预期的。
 
-当前仓库已经实现 `SaveSnapshot(..., compact)` 和恢复读取，但没有 API、Worker 或周期任务调用它，因此运行中的 WorkingDocument 目前主要依赖增量 update 恢复，不能把自动 snapshot/compact 描述为已投入运行。
+客户端在累计 100 个已确认 durable sequence、没有 pending update 且连接 ready 时，
+把最多 16 MiB 的 Yjs state 作为 snapshot 请求发送。服务端通过
+`SaveSnapshot(..., compact=true)` 在同一事务中保存 snapshot 并删除 covered update，
+随后广播 `snapshot_saved`。远端 E2E 已验证 last_sequence 早于 compact 点的客户端
+只恢复 snapshot 和后续 update，不会再次收到被覆盖 update。
 
 断线期间的浏览器编辑也需要分层说明：
 
@@ -3084,13 +3088,13 @@ Claim 独立后：
 - 34 个桌面路由和 390×844 移动端浏览器回归；
 - OpenAPI operation 与 Web 生成客户端调用路径覆盖检查。
 
-远端提交 `9c06ade` 进一步完成：
+远端提交 `c84233c` 进一步完成：
 
 - 五个 OCI target 构建、Migration gate、Doctor 与完整生产拓扑滚动部署；
 - PostgreSQL、Redis、MinIO、Meilisearch、Semantic Kernel、API、Worker、Web
   全部 healthy，Web/API 探针通过；
 - 双用户正式 Session + WebSocket E2E，覆盖 Presence、update 广播、幂等重放、
-  断线恢复、陈旧 sequence 409 和最新 sequence 发布。
+  断线恢复、陈旧 sequence 409、最新 sequence 发布及 snapshot/compact 恢复。
 
 ### 18.3 第一版修复后的协作实现边界
 
@@ -3099,10 +3103,10 @@ Claim 独立后：
 1. 普通发布和 AI 合并均已使用 sequence CAS；发布 AST 与 sequence 来自同一 Y.Doc。
 2. 同标签页瞬时断线会重发未确认 Yjs update；浏览器关闭或重载后的恢复仍是 AST 草稿，不是持久化 Yjs 操作日志。
 3. Presence 已提供心跳与 Block 级远端位置提示，尚无名称解析和字符级光标 Decoration。
-4. snapshot/compact 服务方法存在，但仓库没有调用方或周期任务，运行时仍主要重放增量 update。
+4. 自动 snapshot/compact 已投入运行并通过远端恢复 E2E。
 5. 实时广播 Hub 是进程内实现，当前单 API 实例可用，水平扩展前需要跨实例广播或连接粘性。
 
-因此演示和分享可以确认“在线同步、同标签页断线合并、Block Presence、普通发布/AI CAS 已有实现”，但不应宣称“字符级协作光标、自动压缩、跨重启离线 CRDT 恢复和多 API 副本协作已经闭环”。
+因此演示和分享可以确认“在线同步、同标签页断线合并、Block Presence、普通发布/AI CAS 和自动压缩已有实现”，但不应宣称“字符级协作光标、跨重启离线 CRDT 恢复和多 API 副本协作已经闭环”。
 
 ### 18.4 不能宣称“生产就绪”的部分
 
@@ -3270,7 +3274,7 @@ Yjs 可以证明客户端最终看到同一个文档状态，但不能证明这�
 - 发布其中一个版本；
 - 展示 Revision 历史。
 
-这里可以展示 Block 级 Presence 和同标签页瞬时断线后的 update 合并；不要把它扩展为字符级协作光标、自动 snapshot/compact 或跨浏览器重启的离线 CRDT Demo。
+这里可以展示 Block 级 Presence、同标签页瞬时断线后的 update 合并和 snapshot 恢复；不要把它扩展为字符级协作光标或跨浏览器重启的离线 CRDT Demo。
 
 ### Part 5：AI 导入全链路，25 分钟
 
@@ -3337,7 +3341,7 @@ Yjs 可以证明客户端最终看到同一个文档状态，但不能证明这�
 6. 等待两个客户端都同步到最新内容；
 7. 发布并展示 WorkingDocument 换基；
 8. 展示远端 Actor 与 Block 级 Presence；
-9. 明确说明当前 Demo 不覆盖字符级光标、自动 compact 和跨重启离线合并。
+9. 明确说明当前 Demo 不覆盖字符级光标和跨重启离线合并。
 
 ### Demo C：来源导入，10 分钟
 
@@ -3467,7 +3471,6 @@ AST 适合保存一份不可变文档快照，但不适合高频关系查询。
 - TLS/CSRF；
 - 账号恢复/MFA；
 - 目标容量；
-- 自动 snapshot/compact、跨重启离线恢复与多 API 实例协作；
 - 正式 Beta 范围和 SLO；
 - 完整人工可访问性验收。
 

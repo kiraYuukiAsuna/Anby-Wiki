@@ -10,7 +10,7 @@
 - 本轮已在隔离环境启动 PostgreSQL、Redis、MinIO、Meilisearch、API、Linux Worker
   与 Web，并完成最新 Schema `up → down → up`、Doctor、真实数据联调、投影重建、
   dead 回放、Revision 冷归档回源和桌面/移动端浏览器回归。
-- 远端生产机已对提交 `9c06ade` 完成 Compose config、五个 OCI target 顺序构建、
+- 远端生产机已对提交 `c84233c` 完成 Compose config、五个 OCI target 顺序构建、
   Migration gate、Doctor 和完整拓扑滚动替换；全部数据/应用容器及 Web/API 探针健康。
 - Chrome headless 已覆盖 34 个真实数据路由、导入持久队列、治理流程、斜杠标题和
   390×844 移动端退化；完整键盘顺序、读屏器语义、对比度和正式网络失败态仍需要
@@ -93,9 +93,9 @@
    API/Worker/Web/Meilisearch 健康检查。
 3. 在约定 Beta 范围和观察期内满足错误率、延迟、队列积压、Projection lag、
    搜索容量、恢复和安全门禁。
-4. 问题 1–4 和问题 6 同时关闭后，才可给出生产发布授权。
+4. 问题 1–4 同时关闭后，才可给出生产发布授权。
 
-## 6. 协作持久化与横向扩展尚未闭环
+## 6. 非阻断协作演进项
 
 ### 6.1 现状
 
@@ -106,19 +106,21 @@
   合并并重发；浏览器关闭或重载后的恢复仍依赖完整 AST 草稿，不是持久化 Yjs 操作日志。
 - Presence 已接入心跳、服务端排除发送者广播、过期清理和 Block 级位置展示；目前显示
   Actor 短 ID 与 Block 短 ID，不包含名称解析或字符级光标装饰。
-- WorkingDocument snapshot/compact 服务方法仍没有运行时调用方，长生命周期文档会持续
-  累积 update。
+- WorkingDocument 已在每 100 个确认 sequence 后自动上传 snapshot，并在同一事务
+  compact covered update；远端 E2E 已验证旧游标恢复 snapshot 且不再返回被覆盖 update。
 - 实时 Hub 仅在单 API 进程内广播。当前生产 Compose 是单 API 实例，但水平扩展前需要
   跨实例广播或 WorkingDocument 级连接粘性。
 
 ### 6.2 关闭条件
 
-1. 增加 snapshot/compact 触发策略和恢复演练，证明压缩前后状态与 sequence 连续。
-2. 若产品继续声明跨标签页或浏览器重启后的离线 CRDT 合并，需持久化未确认 Yjs update；
-   否则明确该场景降级为 AST 草稿恢复和人工冲突处理。
-3. 明确 Block 级 Presence 是否满足首版产品范围；若需要协作光标，再增加 Actor 名称解析、
-   字符位置协议与编辑器 Decoration。
-4. 在保持单 API 实例的部署约束与实现跨实例广播之间作出明确选择，并同步部署门禁。
+这些能力不阻塞当前单 API Internal Beta：
+
+1. 首版只承诺同一标签页瞬时断线的 CRDT update 合并；浏览器关闭或重启后明确降级为
+   AST 草稿恢复和人工冲突处理。未来若扩展承诺，再持久化未确认 Yjs update。
+2. Block 级 Presence 满足首版范围；Actor 名称解析、字符位置协议和编辑器 Decoration
+   作为体验增强。
+3. 当前生产清单明确保持单 API 实例；进入水平扩展里程碑前必须实现跨实例广播或
+   WorkingDocument 级连接粘性，并新增多副本 E2E。
 
 ## 本轮已关闭
 
@@ -126,7 +128,11 @@
   `working_document_id + expected_sequence`；sequence 不一致返回 409，前端重新恢复
   WorkingDocument。未确认 update 会按稳定幂等 ID 跨瞬时断线重发，Presence 形成
   Block 级最小 UI 闭环；远端双用户 E2E 已覆盖广播、幂等重放、断线恢复与发布 CAS。
-- 生产 Compose/OCI 验收：远端生产机已完成 `9c06ade` 五个本地业务镜像构建、迁移
+- WorkingDocument 自动压缩：浏览器在 100 个已确认 sequence 后上传 Yjs state，
+  服务端保存 snapshot 并原子 compact covered update；远端恢复 E2E 已通过。
+- 首版协作范围已冻结：跨浏览器重启离线 CRDT 与多 API 实时广播不属于当前
+  Internal Beta 承诺，分别降级为 AST 草稿/人工冲突和单 API 部署约束。
+- 生产 Compose/OCI 验收：远端生产机已完成 `c84233c` 五个本地业务镜像构建、迁移
   gate、Doctor、滚动替换和全服务 healthcheck；仅保留备份恢复与人工可访问性验收。
 - BlockEditor 的 Client Component 预渲染曾因 BlockNote 访问 `window` 返回 500；
   真实编辑会话与开发验证页现均通过 `next/dynamic({ssr:false})` 加载，浏览器冒烟已
