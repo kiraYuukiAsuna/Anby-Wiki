@@ -3053,7 +3053,7 @@ Claim 独立后：
 
 ## 18. 当前已经实现到什么程度
 
-截至 2026-08-17 的项目状态：
+截至 2026-08-18 的项目状态：
 
 ### 18.1 已落到代码和契约的能力
 
@@ -3099,6 +3099,10 @@ Claim 独立后：
   HTTPS 首页/API 与 WSS 协作 E2E 已通过。
 - 144/144 个 OpenAPI operation 均有生成客户端调用和可达页面/global layout owner；
   69 个写操作均落在实际表单、按钮或命令入口，并由 `make web-api-coverage` 持续检查。
+- 独立数据库、对象存储 bucket、Meilisearch index 和 Redis DB 上动态命中 144/144
+  个 OpenAPI handler；核心、治理、BulkReview、Import/AI 配置和协作成功工作流通过。
+- 测试发现并修复两处真实问题：`create_entity` 的严格 payload 解码与 Schema 漂移；
+  Parse 成功但后续模型失败时 ImportJob 不暴露已持久化 SourceVersion 恢复点。
 
 ### 18.3 第一版修复后的协作实现边界
 
@@ -3112,7 +3116,14 @@ Claim 独立后：
 
 因此演示和分享可以确认“在线同步、同标签页断线合并、Block Presence、普通发布/AI CAS 和自动压缩已有实现”，但不应宣称“字符级协作光标、跨重启离线 CRDT 恢复和多 API 副本协作已经闭环”。
 
-### 18.4 不能宣称“生产就绪”的部分
+### 18.4 AI Trust 的当前边界
+
+AI Trust 档案、管理页面、风险策略和审计已经实现，但只作用于预置的 `ai/import`
+Actor。公开注册只创建 human Actor，当前用户发起的 ImportJob 也以该 human 创建
+Proposal，因此普通导入尚未使用 AI Trust 分档。分享时可以展示控制面和策略设计，
+不能宣称 `untrusted/assisted/trusted` 已经控制现有导入的抽样或自动批准。
+
+### 18.5 不能宣称“生产就绪”的部分
 
 仍待发布环境验收：
 

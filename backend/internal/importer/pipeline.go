@@ -376,8 +376,9 @@ func (p *Pipeline) prepareParsedSource(
 		if err != nil {
 			return nil, "", err
 		}
-		parseOutput := checkpoint.Version.ID.String()
-		if err := p.jobs.SkipStage(ctx, request.JobID, parseStage, &parseOutput); err != nil {
+		if err := p.jobs.CompleteParseStage(
+			ctx, request.JobID, parseStage, checkpoint.Version.ID, true,
+		); err != nil {
 			return nil, "", err
 		}
 		return &evidence.AddSourceVersionResult{
@@ -457,8 +458,9 @@ func (p *Pipeline) prepareParsedSource(
 		_, failed := fail(parseStage, "source_version_failed", err)
 		return nil, "", failed
 	}
-	parseOutput := version.Version.ID.String()
-	if err := p.jobs.CompleteStage(ctx, request.JobID, parseStage, &parseOutput); err != nil {
+	if err := p.jobs.CompleteParseStage(
+		ctx, request.JobID, parseStage, version.Version.ID, false,
+	); err != nil {
 		return nil, "", err
 	}
 	return version, sourceLabel, nil

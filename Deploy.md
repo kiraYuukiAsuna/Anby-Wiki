@@ -261,7 +261,29 @@ sh scripts/deploy.sh rollback   # 切回 RELEASE_ID 对应的已有本地镜像
 本地镜像。回滚不会重新构建、不会 pull，也**从不**执行 down 迁移；旧镜像必须
 显式兼容线上数据库版本。需要缩表时，先发布一个兼容新旧两版的中间版本。
 
-### 2.6 备份
+### 2.6 隔离全 API E2E
+
+全 API 测试会创建、审核、应用、回滚和归档数据，并覆盖站点 AI 配置，只能指向独立的
+PostgreSQL database、MinIO bucket、Meilisearch index 和 Redis DB，禁止对生产数据运行。
+测试管理员必须是空隔离库迁移后的首个注册账号。
+
+```sh
+cd backend
+API_E2E_BASE_URL=http://127.0.0.1:14545 \
+API_E2E_PASSWORD='<isolated-test-password>' \
+API_E2E_RUN_ID='<isolated-run-id>' \
+go test ./cmd/api -run 'TestAPI.*E2E$' -count=1 -v
+
+COLLABORATION_E2E_BASE_URL=http://127.0.0.1:14545 \
+COLLABORATION_E2E_PASSWORD='<isolated-test-password>' \
+go test ./cmd/api -run TestCollaborationE2E -count=1 -v
+```
+
+`TestAPIContractE2E` 从 OpenAPI 动态读取全部 operation；除故意不可达模型配置产生的
+契约内 502/504 外，任何 5xx 都失败。成功工作流另行验证权威写入、异步投影、治理状态机、
+Import 恢复点和双用户协作语义。
+
+### 2.7 备份
 
 数据在命名卷 `pgdata` 与 `miniodata` 中，随 `docker compose down` 保留，
 但 `down -v` 会删除。备份脚本见 `scripts/backup/postgres-backup.sh`、

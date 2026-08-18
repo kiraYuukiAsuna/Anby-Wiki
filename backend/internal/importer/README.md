@@ -37,7 +37,9 @@ Worker 被强制终止或部署替换后，超过完整任务超时仍处于 run
 `worker_interrupted` 并自动重新排队，防止任务永久卡死。
 同一任务在解析成功后会把不可变 SourceVersion 作为恢复点；后续失败重试复用已通过
 安全扫描的资产、SourceVersion 与 Chunk，把获取和解析阶段记为 skipped，直接从抽取继续，
-不会重复创建来源或再次执行安全扫描。上传恢复点还必须与 Job 中固定的内容哈希一致。
+不会重复创建来源或再次执行安全扫描。完成或跳过 Parse stage 与写入
+`ImportJob.source_version_id` 在同一事务提交，因此后续模型失败时 API 仍能展示并导航
+已固化的 SourceVersion/Chunk；上传恢复点还必须与 Job 中固定的内容哈希一致。
 
 HTTP 产品入口同时接收受控公网 URL 与 multipart 文件上传。支持 HTML、纯文本、
 JSON、CSV、PDF、PNG 与 JPEG：公网 JSON 作为 API 快照，上传的 JSON/CSV 作为

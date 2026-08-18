@@ -1,6 +1,6 @@
 # 当前实现状态
 
-> 更新时间：2026-08-17
+> 更新时间：2026-08-18
 > 产品与能力审计依据：[整体设计方案](WikiDesignOnePage.md)
 
 ## 总体结论
@@ -16,7 +16,9 @@ Yjs update、持久恢复、普通发布与 AI 合并的 sequence CAS、同标�
 当前代码已通过编译、契约、依赖安全和部署静态门禁，并在本机隔离环境完成
 PostgreSQL、Redis、MinIO、Meilisearch、API、Linux Worker 与 Next.js Web 的真实
 联调。提交 `c84233c` 又在远端生产拓扑完成五个 OCI target 构建、迁移 gate、Doctor、
-滚动替换和健康检查。“实现完成”仍不等于“生产发布就绪”：目标规模容量、正式域名
+滚动替换和健康检查。另一个完全隔离的远端数据库/bucket/index/Redis DB 已执行
+144/144 OpenAPI operation handler 探针、核心成功工作流、治理、批量审核、导入、
+AI 配置和双用户协作 E2E。“实现完成”仍不等于“生产发布就绪”：目标规模容量、正式域名
 安全边界、账号恢复、备份恢复与人工可访问性等仍须验收。详见
 [待解决问题](OutstandingIssues.md)。
 
@@ -28,8 +30,8 @@ PostgreSQL、Redis、MinIO、Meilisearch、API、Linux Worker 与 Next.js Web �
 | 知识图谱 | Entity/Property/Claim、标签/别名/主标签、Page 主 Entity 绑定、Claim 验证、Entity 合并与回滚、联邦 Wiki/Entity 映射、图谱查询 |
 | 证据与媒体 | Source/Version/Chunk/Citation、Asset/AssetRevision、引用校验、相同证据 Citation 幂等复用、按页面聚合并可展开到 Block/Node 的反向使用、按全文首次出现统一编号的 References 投影、逐处正文回链、可审计来源与媒体目录 |
 | 结构化内容 | Dataset/View/Record、Component/Version、内置 Entity/Claim 信息框（按页面语言→`und`→任意主标签降级、同属性多值聚合、Entity 可跳转、验证摘要与类型感知排序）、静态与动态 Collection、成员维护、页面反向归属查询与投影；Entity/Claim/Citation 反向使用、页面反链和 Component 依赖在 Web 中按来源页面聚合，并可展开到具体 Block/Node；列表返回真实总位置/页面/区块数并支持游标续页 |
-| 治理 | ProposalOperation v1 全部 24 种 Operation（含可原子应用和补偿回滚的 Page 主 Entity 绑定）、预分配 Page/Entity ID 的同批依赖、Operation 集合事务冻结、Wiki 级多目标 Proposal、跨页面 Revision/Block、Claim 及 Page/Entity 身份冲突检测、并发唯一索引冲突到 HTTP 409 的领域映射、预览、风险、ReviewTask、面向 applier/admin 的跨 Actor 待原子应用队列、带分类失败原因和终态跳过语义的批量审核、ChangeBatch、整批补偿回滚、审计事件、ChangeTag、AI Trust、事实一致性 |
-| 导入与 AI | URL/HTML/文本/PDF/PNG/JPEG/JSON/CSV 获取，图片及扫描 PDF 的中英 OCR、来源标题/作者/发布者/日期/DOI 等安全元数据推导、结构化数据规范化、七阶段进度、幂等 Job、解析成功后的不可变恢复点与无重复来源的失败重试、Worker 中断任务自动恢复、管理员可配置模型最大输入 Token 与来源 Chunk 字符数（默认 128000 Token / 32000 字符）、按输入预算与输出安全上限并行分批抽取/规划、单个持久 Chunk 内的临时语义窗口二分及证据回映射、截断或结构不合法窗口重试及跨批去重、轻量模型规划 Schema 与服务端机械字段补全、确定性 ImportPlan 合并和结构清理、对照原始 Chunk 的生成后保真审计与证据化章节修复、保真分窗的三次语义纠正、并发真因保留及坏修复隔离与覆盖率回退、服务端五维质量评分及默认 0.70 硬门槛、Semantic Kernel 默认三次结构化调用与纠正重试、精确引文的跨 Chunk 安全纠偏、纯空白差异原文回填及坏候选/坏 Claim 隔离、Entity 缩写/别名归并、Claim 方向/类型/非自引用门禁、`instance_of` 明确分类证据门禁与批内单值属性确定性消歧、作品/RFC 的发布组织、文档编号/类别/状态、更新与废止专用属性、仅由页面路由授权图谱写入、来源概况与智能多页面 create/update/link/ignore 路由、强制单页模式与用户导入要求、证据约束 Typed Block 生成/补丁及正文 Entity 引用、确定性 H2 层级与标准 See also、主 Entity 绑定及信息框、显式且有证据的页面关联与反链投影、规划结果可视化、单 ImportJob 页面+Entity+Claim 复合 Proposal 与同一 ChangeBatch 原子应用、可持久查询的导入队列 |
+| 治理 | ProposalOperation v1 全部 24 种 Operation（含可原子应用和补偿回滚的 Page 主 Entity 绑定）、预分配 Page/Entity ID 的同批依赖、Operation 集合事务冻结、Wiki 级多目标 Proposal、跨页面 Revision/Block、Claim 及 Page/Entity 身份冲突检测、并发唯一索引冲突到 HTTP 409 的领域映射、预览、风险、ReviewTask、面向 applier/admin 的跨 Actor 待原子应用队列、带分类失败原因和终态跳过语义的批量审核、ChangeBatch、整批补偿回滚、审计事件、ChangeTag、AI Trust 档案/策略、事实一致性；AI Trust 仅作用于预置的 `ai/import` Actor，当前用户导入仍以 human Actor 创建 Proposal |
+| 导入与 AI | URL/HTML/文本/PDF/PNG/JPEG/JSON/CSV 获取，图片及扫描 PDF 的中英 OCR、来源标题/作者/发布者/日期/DOI 等安全元数据推导、结构化数据规范化、七阶段进度、幂等 Job、解析成功后原子写入且通过 ImportJob API 可见的不可变 SourceVersion 恢复点与无重复来源的失败重试、Worker 中断任务自动恢复、管理员可配置模型最大输入 Token 与来源 Chunk 字符数（默认 128000 Token / 32000 字符）、按输入预算与输出安全上限并行分批抽取/规划、单个持久 Chunk 内的临时语义窗口二分及证据回映射、截断或结构不合法窗口重试及跨批去重、轻量模型规划 Schema 与服务端机械字段补全、确定性 ImportPlan 合并和结构清理、对照原始 Chunk 的生成后保真审计与证据化章节修复、保真分窗的三次语义纠正、并发真因保留及坏修复隔离与覆盖率回退、服务端五维质量评分及默认 0.70 硬门槛、Semantic Kernel 默认三次结构化调用与纠正重试、精确引文的跨 Chunk 安全纠偏、纯空白差异原文回填及坏候选/坏 Claim 隔离、Entity 缩写/别名归并、Claim 方向/类型/非自引用门禁、`instance_of` 明确分类证据门禁与批内单值属性确定性消歧、作品/RFC 的发布组织、文档编号/类别/状态、更新与废止专用属性、仅由页面路由授权图谱写入、来源概况与智能多页面 create/update/link/ignore 路由、强制单页模式与用户导入要求、证据约束 Typed Block 生成/补丁及正文 Entity 引用、确定性 H2 层级与标准 See also、主 Entity 绑定及信息框、显式且有证据的页面关联与反链投影、规划结果可视化、单 ImportJob 页面+Entity+Claim 复合 Proposal 与同一 ChangeBatch 原子应用、可持久查询的导入队列 |
 | 投影与搜索 | Outbox 租约/重试/死信、链接/目录/锚点/章节/渲染/知识使用/References/相关推荐/组件依赖/图谱投影、可解释的链接+Collection+Entity 相关度、PostgreSQL fallback、Meilisearch 关键词/混合/语义检索 |
 | 规模与归档 | 章节懒加载、服务端可信 HTML 渲染、Revision 热冷分层与 S3 回源、Projection/Search 重建、容量基准命令 |
 | 协作 | Yjs WorkingDocument、持久增量 update、重连游标、普通发布与 AI 合并的 sequence CAS、未确认 update 幂等重发、自动 snapshot/compact、Block 级 Presence、三方合并与人工冲突决议；跨标签页离线恢复和多 API 实例广播仍待实现 |
@@ -237,6 +239,11 @@ outlines。References/Related 是 Current Revision
   headless 覆盖 34 个桌面路由、关键成功/空状态，以及真实 390×844 设备度量；
   窄屏 `html/body scrollWidth === clientWidth === 390`，斜杠标题的分段与编码
   URL 均可访问；
+- 隔离远端全栈动态命中 144/144 个 OpenAPI operation handler，除故意指向
+  `.invalid` 模型地址的 AI 连通性检查按契约返回 502 外，没有非预期 5xx；页面、
+  Asset、Source/Citation、Dataset、Component、Collection、Entity/Claim/联邦、
+  Proposal/Review/Apply、BulkReview、审计/保护/回滚、Import cancel/retry/upload、
+  AI 配置脱敏、Revision 归档和双用户协作成功工作流均通过；
 - Doctor 健康退出（0 error/critical；仅报告两条刻意未附 Citation 的测试 Claim
   证据警告）；
 - gitleaks v8.28.0。
@@ -247,8 +254,9 @@ outlines。References/Related 是 Current Revision
 - 10 万页面目标硬件容量、搜索语义质量和长时间队列/SLO 观察；
 - 正式域名下的 HSTS、CSRF、账号恢复/MFA 与完整键盘、读屏、对比度人工验收。
 
-仓库仍没有覆盖全部领域的完整自动化测试套件；现有 Go 单元/适配器/OCR 运行测试
-与本轮真实系统演练不能替代发布环境的容量、安全和人工可访问性验收。
+仓库现有 Go 单元测试、144-operation handler 探针和高风险成功工作流仍不能穷举
+全部 ProposalOperation 组合、外部模型供应商行为或容量/安全/人工可访问性；本轮真实
+系统演练不能替代发布环境验收。
 
 ## 2026-08-18 Web API 可操作性审计
 
@@ -264,6 +272,27 @@ outlines。References/Related 是 Current Revision
   传输协议，由 `/pages/[id]/edit` 使用并经 HTTPS/WSS E2E 覆盖。
 - 新增 `scripts/check-web-api-coverage.mjs` 并纳入 `make check`。以后新增 operation
   没有前端调用，或调用只存在于未挂载组件中，提交门禁会失败。
+
+## 2026-08-18 API 语义与工作流审计
+
+- `TestAPIContractE2E` 从权威 OpenAPI 动态读取并命中 144/144 个 operation；所有
+  handler 禁止非预期 5xx，只有配置为测试 `.invalid` 地址的 `testAIConfig`
+  允许契约声明的 502/504 依赖失败。
+- 成功工作流覆盖 Page/Revision/Diff/rollback/rename/redirect/BlockRedirect、
+  section/anchor/projection、Asset、Source/Chunk/Citation、Dataset、Component、
+  Manual/Rule Collection、Entity/Claim、联邦、Entity merge/rollback、Proposal
+  preview/review/apply、BulkReview 全状态机、ChangeTag/audit/protection、
+  ChangeBatch rollback、Import cancel/retry/upload、AI 配置与 Revision archive。
+- 正式 Session + WebSocket 双用户测试继续覆盖 Presence、update 广播、幂等重放、
+  stale sequence 409、当前 sequence 发布和 snapshot/compact 恢复。
+- 修复 `create_entity` 的 Schema/运行时解码漂移：`language` 和 `description` 现在
+  可通过严格 payload 解码，不再让 Schema 合法 Proposal 在 Apply 预检时误报 422。
+- Parse stage 完成或恢复跳过时，Worker 现在在同一事务完成 stage 并写入
+  `ImportJob.source_version_id`。即使后续模型调用失败，失败任务 API 仍可导航到
+  已持久化 SourceVersion/Chunk，并从同一 checkpoint 重试。
+- AI Trust 的更新成功路径依赖预先存在的 `ai/import` Actor；公开注册只创建 human，
+  当前用户发起的导入 Proposal 也以 human 为作者，因此该策略尚未进入普通导入闭环，
+  详见 [待解决问题](OutstandingIssues.md)。
 
 ## 数据库状态
 

@@ -127,8 +127,36 @@
 3. 当前生产清单明确保持单 API 实例；进入水平扩展里程碑前必须实现跨实例广播或
    WorkingDocument 级连接粘性，并新增多副本 E2E。
 
+## 7. AI Trust Actor 身份闭环尚未完成
+
+### 7.1 现状
+
+- AI Trust 档案、管理员页面、风险策略和审计写入已经实现，契约只允许
+  `untrusted`、`assisted`、`trusted`。
+- 档案只列出并更新预先存在的 `ai/import` Actor；本地账号注册只创建 human Actor，
+  当前没有公开 API 或部署命令负责 provision 这两类 Actor。
+- 用户发起的 ImportJob 会以发起者 human Actor 创建 Proposal，因此当前普通导入不会
+  命中 `AITrustService.ApplyPolicy` 的 `ai/import` 分支。页面可达和空状态正常，但不能
+  把 AI Trust 概括为已进入用户导入闭环。
+
+### 7.2 关闭条件
+
+该项不阻塞当前全人工审核的 Internal Beta，但在承诺 AI 分级抽样或自动批准前必须关闭：
+
+1. 冻结 AI/import Actor、Job 发起者和 Proposal 作者之间的身份/归属模型。
+2. 提供经领域服务和审计保护的 provision/disable/rotation 运维入口，不直接改表。
+3. 让 Import/AI Proposal 使用对应机器 Actor，同时保留 human 发起者的可见性与权限。
+4. 增加 `untrusted/assisted/trusted` 三档策略、抽样命中和管理员更新成功路径 E2E。
+
 ## 本轮已关闭
 
+- 144 个 OpenAPI operation 的动态审计：隔离全栈已逐个命中 handler，并完成核心、
+  治理、BulkReview、Import/AI 配置与双用户协作成功工作流；故意不可达模型地址按
+  契约返回 502，其余没有非预期 5xx。
+- `create_entity` Schema 合法 payload 曾因严格解码结构缺少 `language/description`
+  在 Apply 预检误报 422；运行时结构与 Schema 已对齐并增加回归测试。
+- ImportJob 在 Parse 后、模型失败前曾不暴露已持久化 SourceVersion；Parse stage
+  完成/跳过与 `source_version_id` 现已同事务提交，失败详情和重试均复用该恢复点。
 - 普通协作发布缺少 sequence 防护：OpenAPI、生成客户端、Web 和 Go 发布事务现要求
   `working_document_id + expected_sequence`；sequence 不一致返回 409，前端重新恢复
   WorkingDocument。未确认 update 会按稳定幂等 ID 跨瞬时断线重发，Presence 形成

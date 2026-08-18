@@ -22,8 +22,10 @@ type createEntityIdentityPayload struct {
 	TypeKey      string `json:"type_key"`
 	CanonicalKey string `json:"canonical_key"`
 	Labels       []struct {
-		Label     string `json:"label"`
-		IsPrimary bool   `json:"is_primary"`
+		Language    string `json:"language"`
+		Label       string `json:"label"`
+		Description string `json:"description"`
+		IsPrimary   bool   `json:"is_primary"`
 	} `json:"labels"`
 }
 

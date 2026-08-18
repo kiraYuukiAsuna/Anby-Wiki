@@ -259,6 +259,25 @@ func (r *Repository) AdvanceJob(ctx context.Context, tx pgx.Tx, jobID uuid.UUID,
 	return err
 }
 
+func (r *Repository) AdvanceParsedJob(
+	ctx context.Context,
+	tx pgx.Tx,
+	jobID, sourceVersionID uuid.UUID,
+	progress int,
+) error {
+	command, err := r.q(tx).Exec(ctx, `UPDATE import_job
+		SET source_version_id=$2,current_stage=$3,progress=$4,updated_at=now()
+		WHERE id=$1 AND status='running'`,
+		jobID, sourceVersionID, StageParse, progress)
+	if err != nil {
+		return err
+	}
+	if command.RowsAffected() != 1 {
+		return ErrInvalidTransition
+	}
+	return nil
+}
+
 func (r *Repository) FinishRun(ctx context.Context, tx pgx.Tx, runID uuid.UUID, status string, errorJSON []byte) error {
 	_, err := r.q(tx).Exec(ctx, `UPDATE import_run SET status=$2,error_json=$3::jsonb,finished_at=now()
 		WHERE id=$1 AND status='running'`, runID, status, errorJSON)

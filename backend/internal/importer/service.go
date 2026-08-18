@@ -274,6 +274,37 @@ func (s *Service) SkipStage(ctx context.Context, jobID uuid.UUID, stageRun *Stag
 	})
 }
 
+// CompleteParseStage atomically exposes the immutable parse checkpoint on the
+// ImportJob. Later model or governance failures must not hide persisted source
+// evidence from API clients or retry logic.
+func (s *Service) CompleteParseStage(
+	ctx context.Context,
+	jobID uuid.UUID,
+	stageRun *StageRun,
+	sourceVersionID uuid.UUID,
+	skipped bool,
+) error {
+	if stageRun == nil || stageRun.Stage != StageParse ||
+		sourceVersionID == uuid.Nil {
+		return ErrInvalidJob
+	}
+	status := StageSucceeded
+	if skipped {
+		status = StageSkipped
+	}
+	output := sourceVersionID.String()
+	return s.txm.InTx(ctx, func(tx pgx.Tx) error {
+		if err := s.repo.CompleteStage(
+			ctx, tx, stageRun.ID, status, &output, nil,
+		); err != nil {
+			return err
+		}
+		return s.repo.AdvanceParsedJob(
+			ctx, tx, jobID, sourceVersionID, stageProgress[StageParse],
+		)
+	})
+}
+
 func safeError(stage, code string) []byte {
 	value, _ := json.Marshal(map[string]string{"stage": stage, "code": code})
 	return value
@@ -311,8 +342,7 @@ func (s *Service) Succeed(ctx context.Context, jobID, runID uuid.UUID, sourceVer
 }
 
 // SucceedReused completes a duplicate submission by linking the canonical
-// proposal without claiming a second successful owner for source_version_id.
-// The skipped parse stage retains the reused version ID in its output hash.
+// proposal. CompleteParseStage has already linked the reused SourceVersion.
 func (s *Service) SucceedReused(ctx context.Context, jobID, runID uuid.UUID, proposalID *uuid.UUID) error {
 	return s.txm.InTx(ctx, func(tx pgx.Tx) error {
 		job, err := s.repo.GetJobForUpdate(ctx, tx, jobID)
