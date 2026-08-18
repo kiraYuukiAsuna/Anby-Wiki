@@ -150,6 +150,13 @@
 
 ## 本轮已关闭
 
+- Agent CLI：Go CLI 已通过嵌入 OpenAPI 覆盖全部 HTTP operation，并单独覆盖 Yjs
+  WebSocket；输入输出统一 JSON，path/query/header/body/response 有契约校验。浏览器
+  后台可签发一次性授权码、查看和撤销 SHA-256 存储的 Bearer Token，权限实时继承账号。
+- Go `1.26.5` 新披露的 7 个标准库可达漏洞：构建与模块基线已升级到 `1.26.6`；
+  Nano ID 同期升级到 `3.3.18`，Go/Web 依赖审计和 gitleaks 均恢复为 0。
+- 初始化 down 在已有 Page 时会提前删除 Namespace 种子并触发 FK：已移除冗余的提前
+  seed DELETE，含真实页面的隔离库 `down → up` 通过。
 - 全 API 修复生产部署：`2e14c32` 已完成五镜像构建、Migration gate、Doctor 与
   API/Worker/Web/AI Kernel 滚动替换；缺失的 `WEB_BIND/WEB_PORT` 已持久化回部署
   环境文件，正式域名和 `127.0.0.1:4444` 绑定验证通过。

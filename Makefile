@@ -15,6 +15,7 @@ endif
 .PHONY: \
 	help bootstrap \
 	dev dev-api dev-worker dev-web \
+	cli-build cli-install \
 	pg-start pg-stop pg-reset migrate-up migrate-down migrate-version migration-check \
 	format-check typecheck lint lint-go lint-web shell-check \
 	build build-go build-web check \
@@ -50,6 +51,13 @@ dev-worker: ## 使用当前 shell 环境启动 Worker
 
 dev-web: ## 使用当前 shell 环境启动 Web
 	cd $(WEB_DIR) && npm run dev
+
+cli-build: ## 构建 Agent JSON CLI 到 bin/anby-wiki
+	mkdir -p bin
+	cd $(BACKEND_DIR) && go build -trimpath -o ../bin/anby-wiki ./cmd/anby-wiki
+
+cli-install: ## 安装 Agent JSON CLI 到当前 Go bin
+	cd $(BACKEND_DIR) && go install ./cmd/anby-wiki
 
 ##@ 本地数据库
 
@@ -134,7 +142,7 @@ security-web:
 	cd $(WEB_DIR) && npm audit --omit=dev --audit-level=high
 
 security-secrets:
-	go run github.com/zricethezav/gitleaks/v8@$(GITLEAKS_VERSION) dir . --config .gitleaks.toml --no-banner --redact
+	GITLEAKS_VERSION=$(GITLEAKS_VERSION) $(SH) scripts/check-secrets.sh
 
 ##@ 性能
 

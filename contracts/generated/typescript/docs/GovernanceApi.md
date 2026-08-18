@@ -59,6 +59,8 @@ import type { AddProposalOperationRequest } from '';
 async function example() {
   console.log("🚀 Testing  SDK...");
   const config = new Configuration({
+    // Configure HTTP bearer authorization: cliBearer
+    accessToken: "YOUR BEARER TOKEN",
     // To configure API key authorization: sessionCookie
     apiKey: "YOUR API KEY",
   });
@@ -97,7 +99,7 @@ example().catch(console.error);
 
 ### Authorization
 
-[sessionCookie](../README.md#sessionCookie)
+[cliBearer](../README.md#cliBearer), [sessionCookie](../README.md#sessionCookie)
 
 ### HTTP request headers
 
@@ -134,6 +136,8 @@ import type { ApplyNextBulkReviewWaveRequest } from '';
 async function example() {
   console.log("🚀 Testing  SDK...");
   const config = new Configuration({
+    // Configure HTTP bearer authorization: cliBearer
+    accessToken: "YOUR BEARER TOKEN",
     // To configure API key authorization: sessionCookie
     apiKey: "YOUR API KEY",
   });
@@ -169,7 +173,7 @@ example().catch(console.error);
 
 ### Authorization
 
-[sessionCookie](../README.md#sessionCookie)
+[cliBearer](../README.md#cliBearer), [sessionCookie](../README.md#sessionCookie)
 
 ### HTTP request headers
 
@@ -207,6 +211,8 @@ import type { ApplyProposalRequest } from '';
 async function example() {
   console.log("🚀 Testing  SDK...");
   const config = new Configuration({
+    // Configure HTTP bearer authorization: cliBearer
+    accessToken: "YOUR BEARER TOKEN",
     // To configure API key authorization: sessionCookie
     apiKey: "YOUR API KEY",
   });
@@ -242,7 +248,7 @@ example().catch(console.error);
 
 ### Authorization
 
-[sessionCookie](../README.md#sessionCookie)
+[cliBearer](../README.md#cliBearer), [sessionCookie](../README.md#sessionCookie)
 
 ### HTTP request headers
 
@@ -281,6 +287,8 @@ import type { ArchiveRevisionSnapshotsOperationRequest } from '';
 async function example() {
   console.log("🚀 Testing  SDK...");
   const config = new Configuration({
+    // Configure HTTP bearer authorization: cliBearer
+    accessToken: "YOUR BEARER TOKEN",
     // To configure API key authorization: sessionCookie
     apiKey: "YOUR API KEY",
   });
@@ -316,7 +324,7 @@ example().catch(console.error);
 
 ### Authorization
 
-[sessionCookie](../README.md#sessionCookie)
+[cliBearer](../README.md#cliBearer), [sessionCookie](../README.md#sessionCookie)
 
 ### HTTP request headers
 
@@ -354,6 +362,8 @@ import type { AssignChangeTagOperationRequest } from '';
 async function example() {
   console.log("🚀 Testing  SDK...");
   const config = new Configuration({
+    // Configure HTTP bearer authorization: cliBearer
+    accessToken: "YOUR BEARER TOKEN",
     // To configure API key authorization: sessionCookie
     apiKey: "YOUR API KEY",
   });
@@ -392,7 +402,7 @@ example().catch(console.error);
 
 ### Authorization
 
-[sessionCookie](../README.md#sessionCookie)
+[cliBearer](../README.md#cliBearer), [sessionCookie](../README.md#sessionCookie)
 
 ### HTTP request headers
 
@@ -431,6 +441,8 @@ import type { CreateBulkReviewBatchOperationRequest } from '';
 async function example() {
   console.log("🚀 Testing  SDK...");
   const config = new Configuration({
+    // Configure HTTP bearer authorization: cliBearer
+    accessToken: "YOUR BEARER TOKEN",
     // To configure API key authorization: sessionCookie
     apiKey: "YOUR API KEY",
   });
@@ -466,7 +478,7 @@ example().catch(console.error);
 
 ### Authorization
 
-[sessionCookie](../README.md#sessionCookie)
+[cliBearer](../README.md#cliBearer), [sessionCookie](../README.md#sessionCookie)
 
 ### HTTP request headers
 
@@ -504,6 +516,8 @@ import type { CreateChangeTagOperationRequest } from '';
 async function example() {
   console.log("🚀 Testing  SDK...");
   const config = new Configuration({
+    // Configure HTTP bearer authorization: cliBearer
+    accessToken: "YOUR BEARER TOKEN",
     // To configure API key authorization: sessionCookie
     apiKey: "YOUR API KEY",
   });
@@ -539,7 +553,7 @@ example().catch(console.error);
 
 ### Authorization
 
-[sessionCookie](../README.md#sessionCookie)
+[cliBearer](../README.md#cliBearer), [sessionCookie](../README.md#sessionCookie)
 
 ### HTTP request headers
 
@@ -577,6 +591,8 @@ import type { CreatePageProtectionOperationRequest } from '';
 async function example() {
   console.log("🚀 Testing  SDK...");
   const config = new Configuration({
+    // Configure HTTP bearer authorization: cliBearer
+    accessToken: "YOUR BEARER TOKEN",
     // To configure API key authorization: sessionCookie
     apiKey: "YOUR API KEY",
   });
@@ -612,7 +628,7 @@ example().catch(console.error);
 
 ### Authorization
 
-[sessionCookie](../README.md#sessionCookie)
+[cliBearer](../README.md#cliBearer), [sessionCookie](../README.md#sessionCookie)
 
 ### HTTP request headers
 
@@ -650,6 +666,8 @@ import type { CreateProposalOperationRequest } from '';
 async function example() {
   console.log("🚀 Testing  SDK...");
   const config = new Configuration({
+    // Configure HTTP bearer authorization: cliBearer
+    accessToken: "YOUR BEARER TOKEN",
     // To configure API key authorization: sessionCookie
     apiKey: "YOUR API KEY",
   });
@@ -688,7 +706,7 @@ example().catch(console.error);
 
 ### Authorization
 
-[sessionCookie](../README.md#sessionCookie)
+[cliBearer](../README.md#cliBearer), [sessionCookie](../README.md#sessionCookie)
 
 ### HTTP request headers
 
@@ -727,6 +745,8 @@ import type { DecideBulkReviewProposalRequest } from '';
 async function example() {
   console.log("🚀 Testing  SDK...");
   const config = new Configuration({
+    // Configure HTTP bearer authorization: cliBearer
+    accessToken: "YOUR BEARER TOKEN",
     // To configure API key authorization: sessionCookie
     apiKey: "YOUR API KEY",
   });
@@ -768,7 +788,7 @@ example().catch(console.error);
 
 ### Authorization
 
-[sessionCookie](../README.md#sessionCookie)
+[cliBearer](../README.md#cliBearer), [sessionCookie](../README.md#sessionCookie)
 
 ### HTTP request headers
 
@@ -807,6 +827,8 @@ import type { DecideReviewTaskRequest } from '';
 async function example() {
   console.log("🚀 Testing  SDK...");
   const config = new Configuration({
+    // Configure HTTP bearer authorization: cliBearer
+    accessToken: "YOUR BEARER TOKEN",
     // To configure API key authorization: sessionCookie
     apiKey: "YOUR API KEY",
   });
@@ -845,7 +867,7 @@ example().catch(console.error);
 
 ### Authorization
 
-[sessionCookie](../README.md#sessionCookie)
+[cliBearer](../README.md#cliBearer), [sessionCookie](../README.md#sessionCookie)
 
 ### HTTP request headers
 
@@ -882,6 +904,8 @@ import type { DeletePageProtectionRequest } from '';
 async function example() {
   console.log("🚀 Testing  SDK...");
   const config = new Configuration({
+    // Configure HTTP bearer authorization: cliBearer
+    accessToken: "YOUR BEARER TOKEN",
     // To configure API key authorization: sessionCookie
     apiKey: "YOUR API KEY",
   });
@@ -917,7 +941,7 @@ example().catch(console.error);
 
 ### Authorization
 
-[sessionCookie](../README.md#sessionCookie)
+[cliBearer](../README.md#cliBearer), [sessionCookie](../README.md#sessionCookie)
 
 ### HTTP request headers
 
@@ -954,6 +978,8 @@ import type { FinalizeBulkReviewBatchRequest } from '';
 async function example() {
   console.log("🚀 Testing  SDK...");
   const config = new Configuration({
+    // Configure HTTP bearer authorization: cliBearer
+    accessToken: "YOUR BEARER TOKEN",
     // To configure API key authorization: sessionCookie
     apiKey: "YOUR API KEY",
   });
@@ -989,7 +1015,7 @@ example().catch(console.error);
 
 ### Authorization
 
-[sessionCookie](../README.md#sessionCookie)
+[cliBearer](../README.md#cliBearer), [sessionCookie](../README.md#sessionCookie)
 
 ### HTTP request headers
 
@@ -1027,6 +1053,8 @@ import type { GetBulkReviewBatchRequest } from '';
 async function example() {
   console.log("🚀 Testing  SDK...");
   const config = new Configuration({
+    // Configure HTTP bearer authorization: cliBearer
+    accessToken: "YOUR BEARER TOKEN",
     // To configure API key authorization: sessionCookie
     apiKey: "YOUR API KEY",
   });
@@ -1062,7 +1090,7 @@ example().catch(console.error);
 
 ### Authorization
 
-[sessionCookie](../README.md#sessionCookie)
+[cliBearer](../README.md#cliBearer), [sessionCookie](../README.md#sessionCookie)
 
 ### HTTP request headers
 
@@ -1098,6 +1126,8 @@ import type { GetProposalRequest } from '';
 async function example() {
   console.log("🚀 Testing  SDK...");
   const config = new Configuration({
+    // Configure HTTP bearer authorization: cliBearer
+    accessToken: "YOUR BEARER TOKEN",
     // To configure API key authorization: sessionCookie
     apiKey: "YOUR API KEY",
   });
@@ -1133,7 +1163,7 @@ example().catch(console.error);
 
 ### Authorization
 
-[sessionCookie](../README.md#sessionCookie)
+[cliBearer](../README.md#cliBearer), [sessionCookie](../README.md#sessionCookie)
 
 ### HTTP request headers
 
@@ -1171,6 +1201,8 @@ import type { GetRevisionStorageStatsRequest } from '';
 async function example() {
   console.log("🚀 Testing  SDK...");
   const config = new Configuration({
+    // Configure HTTP bearer authorization: cliBearer
+    accessToken: "YOUR BEARER TOKEN",
     // To configure API key authorization: sessionCookie
     apiKey: "YOUR API KEY",
   });
@@ -1198,7 +1230,7 @@ This endpoint does not need any parameter.
 
 ### Authorization
 
-[sessionCookie](../README.md#sessionCookie)
+[cliBearer](../README.md#cliBearer), [sessionCookie](../README.md#sessionCookie)
 
 ### HTTP request headers
 
@@ -1235,6 +1267,8 @@ import type { ListAITrustProfilesRequest } from '';
 async function example() {
   console.log("🚀 Testing  SDK...");
   const config = new Configuration({
+    // Configure HTTP bearer authorization: cliBearer
+    accessToken: "YOUR BEARER TOKEN",
     // To configure API key authorization: sessionCookie
     apiKey: "YOUR API KEY",
   });
@@ -1262,7 +1296,7 @@ This endpoint does not need any parameter.
 
 ### Authorization
 
-[sessionCookie](../README.md#sessionCookie)
+[cliBearer](../README.md#cliBearer), [sessionCookie](../README.md#sessionCookie)
 
 ### HTTP request headers
 
@@ -1300,6 +1334,8 @@ import type { ListAuditEventsRequest } from '';
 async function example() {
   console.log("🚀 Testing  SDK...");
   const config = new Configuration({
+    // Configure HTTP bearer authorization: cliBearer
+    accessToken: "YOUR BEARER TOKEN",
     // To configure API key authorization: sessionCookie
     apiKey: "YOUR API KEY",
   });
@@ -1350,7 +1386,7 @@ example().catch(console.error);
 
 ### Authorization
 
-[sessionCookie](../README.md#sessionCookie)
+[cliBearer](../README.md#cliBearer), [sessionCookie](../README.md#sessionCookie)
 
 ### HTTP request headers
 
@@ -1388,6 +1424,8 @@ import type { ListBulkReviewAuditEventsRequest } from '';
 async function example() {
   console.log("🚀 Testing  SDK...");
   const config = new Configuration({
+    // Configure HTTP bearer authorization: cliBearer
+    accessToken: "YOUR BEARER TOKEN",
     // To configure API key authorization: sessionCookie
     apiKey: "YOUR API KEY",
   });
@@ -1423,7 +1461,7 @@ example().catch(console.error);
 
 ### Authorization
 
-[sessionCookie](../README.md#sessionCookie)
+[cliBearer](../README.md#cliBearer), [sessionCookie](../README.md#sessionCookie)
 
 ### HTTP request headers
 
@@ -1459,6 +1497,8 @@ import type { ListBulkReviewBatchesRequest } from '';
 async function example() {
   console.log("🚀 Testing  SDK...");
   const config = new Configuration({
+    // Configure HTTP bearer authorization: cliBearer
+    accessToken: "YOUR BEARER TOKEN",
     // To configure API key authorization: sessionCookie
     apiKey: "YOUR API KEY",
   });
@@ -1500,7 +1540,7 @@ example().catch(console.error);
 
 ### Authorization
 
-[sessionCookie](../README.md#sessionCookie)
+[cliBearer](../README.md#cliBearer), [sessionCookie](../README.md#sessionCookie)
 
 ### HTTP request headers
 
@@ -1595,6 +1635,8 @@ import type { ListPageProtectionsRequest } from '';
 async function example() {
   console.log("🚀 Testing  SDK...");
   const config = new Configuration({
+    // Configure HTTP bearer authorization: cliBearer
+    accessToken: "YOUR BEARER TOKEN",
     // To configure API key authorization: sessionCookie
     apiKey: "YOUR API KEY",
   });
@@ -1633,7 +1675,7 @@ example().catch(console.error);
 
 ### Authorization
 
-[sessionCookie](../README.md#sessionCookie)
+[cliBearer](../README.md#cliBearer), [sessionCookie](../README.md#sessionCookie)
 
 ### HTTP request headers
 
@@ -1672,6 +1714,8 @@ import type { ListPendingApplyProposalsRequest } from '';
 async function example() {
   console.log("🚀 Testing  SDK...");
   const config = new Configuration({
+    // Configure HTTP bearer authorization: cliBearer
+    accessToken: "YOUR BEARER TOKEN",
     // To configure API key authorization: sessionCookie
     apiKey: "YOUR API KEY",
   });
@@ -1710,7 +1754,7 @@ example().catch(console.error);
 
 ### Authorization
 
-[sessionCookie](../README.md#sessionCookie)
+[cliBearer](../README.md#cliBearer), [sessionCookie](../README.md#sessionCookie)
 
 ### HTTP request headers
 
@@ -1748,6 +1792,8 @@ import type { ListProposalsRequest } from '';
 async function example() {
   console.log("🚀 Testing  SDK...");
   const config = new Configuration({
+    // Configure HTTP bearer authorization: cliBearer
+    accessToken: "YOUR BEARER TOKEN",
     // To configure API key authorization: sessionCookie
     apiKey: "YOUR API KEY",
   });
@@ -1792,7 +1838,7 @@ example().catch(console.error);
 
 ### Authorization
 
-[sessionCookie](../README.md#sessionCookie)
+[cliBearer](../README.md#cliBearer), [sessionCookie](../README.md#sessionCookie)
 
 ### HTTP request headers
 
@@ -1829,6 +1875,8 @@ import type { ListReviewTasksRequest } from '';
 async function example() {
   console.log("🚀 Testing  SDK...");
   const config = new Configuration({
+    // Configure HTTP bearer authorization: cliBearer
+    accessToken: "YOUR BEARER TOKEN",
     // To configure API key authorization: sessionCookie
     apiKey: "YOUR API KEY",
   });
@@ -1864,7 +1912,7 @@ example().catch(console.error);
 
 ### Authorization
 
-[sessionCookie](../README.md#sessionCookie)
+[cliBearer](../README.md#cliBearer), [sessionCookie](../README.md#sessionCookie)
 
 ### HTTP request headers
 
@@ -1899,6 +1947,8 @@ import type { ListRolesRequest } from '';
 async function example() {
   console.log("🚀 Testing  SDK...");
   const config = new Configuration({
+    // Configure HTTP bearer authorization: cliBearer
+    accessToken: "YOUR BEARER TOKEN",
     // To configure API key authorization: sessionCookie
     apiKey: "YOUR API KEY",
   });
@@ -1926,7 +1976,7 @@ This endpoint does not need any parameter.
 
 ### Authorization
 
-[sessionCookie](../README.md#sessionCookie)
+[cliBearer](../README.md#cliBearer), [sessionCookie](../README.md#sessionCookie)
 
 ### HTTP request headers
 
@@ -1962,6 +2012,8 @@ import type { MergeProposalToWorkingDocumentOperationRequest } from '';
 async function example() {
   console.log("🚀 Testing  SDK...");
   const config = new Configuration({
+    // Configure HTTP bearer authorization: cliBearer
+    accessToken: "YOUR BEARER TOKEN",
     // To configure API key authorization: sessionCookie
     apiKey: "YOUR API KEY",
   });
@@ -2000,7 +2052,7 @@ example().catch(console.error);
 
 ### Authorization
 
-[sessionCookie](../README.md#sessionCookie)
+[cliBearer](../README.md#cliBearer), [sessionCookie](../README.md#sessionCookie)
 
 ### HTTP request headers
 
@@ -2040,6 +2092,8 @@ import type { PauseBulkReviewBatchRequest } from '';
 async function example() {
   console.log("🚀 Testing  SDK...");
   const config = new Configuration({
+    // Configure HTTP bearer authorization: cliBearer
+    accessToken: "YOUR BEARER TOKEN",
     // To configure API key authorization: sessionCookie
     apiKey: "YOUR API KEY",
   });
@@ -2075,7 +2129,7 @@ example().catch(console.error);
 
 ### Authorization
 
-[sessionCookie](../README.md#sessionCookie)
+[cliBearer](../README.md#cliBearer), [sessionCookie](../README.md#sessionCookie)
 
 ### HTTP request headers
 
@@ -2113,6 +2167,8 @@ import type { PreviewProposalRequest } from '';
 async function example() {
   console.log("🚀 Testing  SDK...");
   const config = new Configuration({
+    // Configure HTTP bearer authorization: cliBearer
+    accessToken: "YOUR BEARER TOKEN",
     // To configure API key authorization: sessionCookie
     apiKey: "YOUR API KEY",
   });
@@ -2148,7 +2204,7 @@ example().catch(console.error);
 
 ### Authorization
 
-[sessionCookie](../README.md#sessionCookie)
+[cliBearer](../README.md#cliBearer), [sessionCookie](../README.md#sessionCookie)
 
 ### HTTP request headers
 
@@ -2186,6 +2242,8 @@ import type { ResolveMergeConflictOperationRequest } from '';
 async function example() {
   console.log("🚀 Testing  SDK...");
   const config = new Configuration({
+    // Configure HTTP bearer authorization: cliBearer
+    accessToken: "YOUR BEARER TOKEN",
     // To configure API key authorization: sessionCookie
     apiKey: "YOUR API KEY",
   });
@@ -2227,7 +2285,7 @@ example().catch(console.error);
 
 ### Authorization
 
-[sessionCookie](../README.md#sessionCookie)
+[cliBearer](../README.md#cliBearer), [sessionCookie](../README.md#sessionCookie)
 
 ### HTTP request headers
 
@@ -2266,6 +2324,8 @@ import type { ResumeBulkReviewBatchRequest } from '';
 async function example() {
   console.log("🚀 Testing  SDK...");
   const config = new Configuration({
+    // Configure HTTP bearer authorization: cliBearer
+    accessToken: "YOUR BEARER TOKEN",
     // To configure API key authorization: sessionCookie
     apiKey: "YOUR API KEY",
   });
@@ -2301,7 +2361,7 @@ example().catch(console.error);
 
 ### Authorization
 
-[sessionCookie](../README.md#sessionCookie)
+[cliBearer](../README.md#cliBearer), [sessionCookie](../README.md#sessionCookie)
 
 ### HTTP request headers
 
@@ -2339,6 +2399,8 @@ import type { RollbackChangeBatchRequest } from '';
 async function example() {
   console.log("🚀 Testing  SDK...");
   const config = new Configuration({
+    // Configure HTTP bearer authorization: cliBearer
+    accessToken: "YOUR BEARER TOKEN",
     // To configure API key authorization: sessionCookie
     apiKey: "YOUR API KEY",
   });
@@ -2374,7 +2436,7 @@ example().catch(console.error);
 
 ### Authorization
 
-[sessionCookie](../README.md#sessionCookie)
+[cliBearer](../README.md#cliBearer), [sessionCookie](../README.md#sessionCookie)
 
 ### HTTP request headers
 
@@ -2411,6 +2473,8 @@ import type { SubmitProposalRequest } from '';
 async function example() {
   console.log("🚀 Testing  SDK...");
   const config = new Configuration({
+    // Configure HTTP bearer authorization: cliBearer
+    accessToken: "YOUR BEARER TOKEN",
     // To configure API key authorization: sessionCookie
     apiKey: "YOUR API KEY",
   });
@@ -2446,7 +2510,7 @@ example().catch(console.error);
 
 ### Authorization
 
-[sessionCookie](../README.md#sessionCookie)
+[cliBearer](../README.md#cliBearer), [sessionCookie](../README.md#sessionCookie)
 
 ### HTTP request headers
 
@@ -2483,6 +2547,8 @@ import type { UpdateAITrustProfileOperationRequest } from '';
 async function example() {
   console.log("🚀 Testing  SDK...");
   const config = new Configuration({
+    // Configure HTTP bearer authorization: cliBearer
+    accessToken: "YOUR BEARER TOKEN",
     // To configure API key authorization: sessionCookie
     apiKey: "YOUR API KEY",
   });
@@ -2521,7 +2587,7 @@ example().catch(console.error);
 
 ### Authorization
 
-[sessionCookie](../README.md#sessionCookie)
+[cliBearer](../README.md#cliBearer), [sessionCookie](../README.md#sessionCookie)
 
 ### HTTP request headers
 

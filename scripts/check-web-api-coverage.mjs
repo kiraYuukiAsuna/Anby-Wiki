@@ -24,6 +24,7 @@ function relative(absolute) {
 function parseOperations(source) {
   let currentPath = "";
   let currentMethod = "";
+  let currentOperation = null;
   const operations = [];
   for (const line of source.split("\n")) {
     const pathMatch = line.match(/^  (\/[^:]+):\s*$/);
@@ -38,11 +39,20 @@ function parseOperations(source) {
     }
     const operationMatch = line.match(/^      operationId:\s*(\S+)\s*$/);
     if (operationMatch) {
-      operations.push({
+      currentOperation = {
         id: operationMatch[1],
         method: currentMethod,
         path: currentPath,
-      });
+        cliOnly: false,
+      };
+      operations.push(currentOperation);
+      continue;
+    }
+    if (
+      currentOperation &&
+      /^      x-anby-cli-only:\s*true\s*$/.test(line)
+    ) {
+      currentOperation.cliOnly = true;
     }
   }
   return operations;
@@ -128,8 +138,13 @@ function owningRoutes(start) {
 
 const failures = [];
 const routeOwners = new Set();
+let cliOwned = 0;
 
 for (const operation of operations) {
+  if (operation.cliOnly) {
+    cliOwned += 1;
+    continue;
+  }
   const callPattern = new RegExp(`\\.\\s*${operation.id}\\s*\\(`);
   const callsites = files.filter((file) => callPattern.test(sources.get(file)));
   const routes = [...new Set(callsites.flatMap(owningRoutes))].sort();
@@ -155,5 +170,5 @@ if (failures.length > 0) {
 }
 
 console.log(
-  `web api coverage: ${operations.length}/${operations.length} operations have callsites and routable UI owners (${routeOwners.size} owners)`,
+  `web api coverage: ${operations.length - cliOwned}/${operations.length} Web-owned operations have callsites and routable UI owners (${routeOwners.size} owners); ${cliOwned} operations are Agent CLI transport`,
 );

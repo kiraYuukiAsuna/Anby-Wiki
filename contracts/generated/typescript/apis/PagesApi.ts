@@ -128,6 +128,14 @@ export class PagesApi extends runtime.BaseAPI {
 
         headerParameters['Content-Type'] = 'application/json';
 
+        if (this.configuration && this.configuration.accessToken) {
+            const token = this.configuration.accessToken;
+            const tokenString = await token("cliBearer", []);
+
+            if (tokenString) {
+                headerParameters["Authorization"] = `Bearer ${tokenString}`;
+            }
+        }
 
         let urlPath = `/api/v1/pages`;
 
@@ -184,6 +192,14 @@ export class PagesApi extends runtime.BaseAPI {
 
         headerParameters['Content-Type'] = 'application/json';
 
+        if (this.configuration && this.configuration.accessToken) {
+            const token = this.configuration.accessToken;
+            const tokenString = await token("cliBearer", []);
+
+            if (tokenString) {
+                headerParameters["Authorization"] = `Bearer ${tokenString}`;
+            }
+        }
 
         let urlPath = `/api/v1/pages/{id}/redirect`;
         urlPath = urlPath.replace('{id}', encodeURIComponent(String(requestParameters['id'])));
@@ -239,6 +255,14 @@ export class PagesApi extends runtime.BaseAPI {
 
         const headerParameters: runtime.HTTPHeaders = {};
 
+        if (this.configuration && this.configuration.accessToken) {
+            const token = this.configuration.accessToken;
+            const tokenString = await token("cliBearer", []);
+
+            if (tokenString) {
+                headerParameters["Authorization"] = `Bearer ${tokenString}`;
+            }
+        }
 
         let urlPath = `/api/v1/pages/{id}/block-redirects/{block_id}`;
         urlPath = urlPath.replace('{id}', encodeURIComponent(String(requestParameters['id'])));
@@ -284,6 +308,14 @@ export class PagesApi extends runtime.BaseAPI {
 
         const headerParameters: runtime.HTTPHeaders = {};
 
+        if (this.configuration && this.configuration.accessToken) {
+            const token = this.configuration.accessToken;
+            const tokenString = await token("cliBearer", []);
+
+            if (tokenString) {
+                headerParameters["Authorization"] = `Bearer ${tokenString}`;
+            }
+        }
 
         let urlPath = `/api/v1/pages/{id}/redirect`;
         urlPath = urlPath.replace('{id}', encodeURIComponent(String(requestParameters['id'])));
@@ -427,6 +459,14 @@ export class PagesApi extends runtime.BaseAPI {
 
         headerParameters['Content-Type'] = 'application/json';
 
+        if (this.configuration && this.configuration.accessToken) {
+            const token = this.configuration.accessToken;
+            const tokenString = await token("cliBearer", []);
+
+            if (tokenString) {
+                headerParameters["Authorization"] = `Bearer ${tokenString}`;
+            }
+        }
 
         let urlPath = `/api/v1/pages/{id}/revisions`;
         urlPath = urlPath.replace('{id}', encodeURIComponent(String(requestParameters['id'])));
@@ -484,6 +524,14 @@ export class PagesApi extends runtime.BaseAPI {
 
         headerParameters['Content-Type'] = 'application/json';
 
+        if (this.configuration && this.configuration.accessToken) {
+            const token = this.configuration.accessToken;
+            const tokenString = await token("cliBearer", []);
+
+            if (tokenString) {
+                headerParameters["Authorization"] = `Bearer ${tokenString}`;
+            }
+        }
 
         let urlPath = `/api/v1/pages/{id}/rename`;
         urlPath = urlPath.replace('{id}', encodeURIComponent(String(requestParameters['id'])));
@@ -548,6 +596,14 @@ export class PagesApi extends runtime.BaseAPI {
 
         headerParameters['Content-Type'] = 'application/json';
 
+        if (this.configuration && this.configuration.accessToken) {
+            const token = this.configuration.accessToken;
+            const tokenString = await token("cliBearer", []);
+
+            if (tokenString) {
+                headerParameters["Authorization"] = `Bearer ${tokenString}`;
+            }
+        }
 
         let urlPath = `/api/v1/pages/{id}/block-redirects/{block_id}`;
         urlPath = urlPath.replace('{id}', encodeURIComponent(String(requestParameters['id'])));

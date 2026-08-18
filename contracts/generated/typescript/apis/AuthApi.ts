@@ -24,6 +24,31 @@ import {
     AuthSessionToJSON,
 } from '../models/AuthSession';
 import {
+    type CLIAuthCode,
+    CLIAuthCodeFromJSON,
+    CLIAuthCodeToJSON,
+} from '../models/CLIAuthCode';
+import {
+    type CLIAuthExchangeResult,
+    CLIAuthExchangeResultFromJSON,
+    CLIAuthExchangeResultToJSON,
+} from '../models/CLIAuthExchangeResult';
+import {
+    type CLITokenList,
+    CLITokenListFromJSON,
+    CLITokenListToJSON,
+} from '../models/CLITokenList';
+import {
+    type CreateCLIAuthCodeRequest,
+    CreateCLIAuthCodeRequestFromJSON,
+    CreateCLIAuthCodeRequestToJSON,
+} from '../models/CreateCLIAuthCodeRequest';
+import {
+    type ExchangeCLIAuthCodeRequest,
+    ExchangeCLIAuthCodeRequestFromJSON,
+    ExchangeCLIAuthCodeRequestToJSON,
+} from '../models/ExchangeCLIAuthCodeRequest';
+import {
     type LoginRequest,
     LoginRequestFromJSON,
     LoginRequestToJSON,
@@ -34,6 +59,14 @@ import {
     RegisterRequestToJSON,
 } from '../models/RegisterRequest';
 
+export interface CreateCLIAuthCodeOperationRequest {
+    createCLIAuthCodeRequest: CreateCLIAuthCodeRequest;
+}
+
+export interface ExchangeCLIAuthCodeOperationRequest {
+    exchangeCLIAuthCodeRequest: ExchangeCLIAuthCodeRequest;
+}
+
 export interface LoginOperationRequest {
     loginRequest: LoginRequest;
 }
@@ -42,10 +75,112 @@ export interface RegisterOperationRequest {
     registerRequest: RegisterRequest;
 }
 
+export interface RevokeCLITokenRequest {
+    id: string;
+}
+
 /**
  *
  */
 export class AuthApi extends runtime.BaseAPI {
+
+    /**
+     * Creates request options for createCLIAuthCode without sending the request
+     */
+    async createCLIAuthCodeRequestOpts(requestParameters: CreateCLIAuthCodeOperationRequest): Promise<runtime.RequestOpts> {
+        if (requestParameters['createCLIAuthCodeRequest'] == null) {
+            throw new runtime.RequiredError(
+                'createCLIAuthCodeRequest',
+                'Required parameter "createCLIAuthCodeRequest" was null or undefined when calling createCLIAuthCode().'
+            );
+        }
+
+        const queryParameters: any = {};
+
+        const headerParameters: runtime.HTTPHeaders = {};
+
+        headerParameters['Content-Type'] = 'application/json';
+
+
+        let urlPath = `/api/v1/auth/cli/codes`;
+
+        return {
+            path: urlPath,
+            method: 'POST',
+            headers: headerParameters,
+            query: queryParameters,
+            body: CreateCLIAuthCodeRequestToJSON(requestParameters['createCLIAuthCodeRequest']),
+        };
+    }
+
+    /**
+     * 仅浏览器 Session 可调用。授权码十分钟内有效且只能兑换一次；响应中的明文码 不会再次返回，服务端只持久化 SHA-256。
+     * 创建一次性 CLI 授权码
+     */
+    async createCLIAuthCodeRaw(requestParameters: CreateCLIAuthCodeOperationRequest, initOverrides?: RequestInit | runtime.InitOverrideFunction): Promise<runtime.ApiResponse<CLIAuthCode>> {
+        const requestOptions = await this.createCLIAuthCodeRequestOpts(requestParameters);
+        const response = await this.request(requestOptions, initOverrides);
+
+        return new runtime.JSONApiResponse(response, (jsonValue) => CLIAuthCodeFromJSON(jsonValue));
+    }
+
+    /**
+     * 仅浏览器 Session 可调用。授权码十分钟内有效且只能兑换一次；响应中的明文码 不会再次返回，服务端只持久化 SHA-256。
+     * 创建一次性 CLI 授权码
+     */
+    async createCLIAuthCode(requestParameters: CreateCLIAuthCodeOperationRequest, initOverrides?: RequestInit | runtime.InitOverrideFunction): Promise<CLIAuthCode> {
+        const response = await this.createCLIAuthCodeRaw(requestParameters, initOverrides);
+        return await response.value();
+    }
+
+    /**
+     * Creates request options for exchangeCLIAuthCode without sending the request
+     */
+    async exchangeCLIAuthCodeRequestOpts(requestParameters: ExchangeCLIAuthCodeOperationRequest): Promise<runtime.RequestOpts> {
+        if (requestParameters['exchangeCLIAuthCodeRequest'] == null) {
+            throw new runtime.RequiredError(
+                'exchangeCLIAuthCodeRequest',
+                'Required parameter "exchangeCLIAuthCodeRequest" was null or undefined when calling exchangeCLIAuthCode().'
+            );
+        }
+
+        const queryParameters: any = {};
+
+        const headerParameters: runtime.HTTPHeaders = {};
+
+        headerParameters['Content-Type'] = 'application/json';
+
+
+        let urlPath = `/api/v1/auth/cli/exchange`;
+
+        return {
+            path: urlPath,
+            method: 'POST',
+            headers: headerParameters,
+            query: queryParameters,
+            body: ExchangeCLIAuthCodeRequestToJSON(requestParameters['exchangeCLIAuthCodeRequest']),
+        };
+    }
+
+    /**
+     * CLI 用短时授权码换取只显示一次的 Bearer Token。
+     * 兑换一次性授权码
+     */
+    async exchangeCLIAuthCodeRaw(requestParameters: ExchangeCLIAuthCodeOperationRequest, initOverrides?: RequestInit | runtime.InitOverrideFunction): Promise<runtime.ApiResponse<CLIAuthExchangeResult>> {
+        const requestOptions = await this.exchangeCLIAuthCodeRequestOpts(requestParameters);
+        const response = await this.request(requestOptions, initOverrides);
+
+        return new runtime.JSONApiResponse(response, (jsonValue) => CLIAuthExchangeResultFromJSON(jsonValue));
+    }
+
+    /**
+     * CLI 用短时授权码换取只显示一次的 Bearer Token。
+     * 兑换一次性授权码
+     */
+    async exchangeCLIAuthCode(requestParameters: ExchangeCLIAuthCodeOperationRequest, initOverrides?: RequestInit | runtime.InitOverrideFunction): Promise<CLIAuthExchangeResult> {
+        const response = await this.exchangeCLIAuthCodeRaw(requestParameters, initOverrides);
+        return await response.value();
+    }
 
     /**
      * Creates request options for getSession without sending the request
@@ -55,6 +190,14 @@ export class AuthApi extends runtime.BaseAPI {
 
         const headerParameters: runtime.HTTPHeaders = {};
 
+        if (this.configuration && this.configuration.accessToken) {
+            const token = this.configuration.accessToken;
+            const tokenString = await token("cliBearer", []);
+
+            if (tokenString) {
+                headerParameters["Authorization"] = `Bearer ${tokenString}`;
+            }
+        }
 
         let urlPath = `/api/v1/auth/session`;
 
@@ -81,6 +224,43 @@ export class AuthApi extends runtime.BaseAPI {
      */
     async getSession(initOverrides?: RequestInit | runtime.InitOverrideFunction): Promise<AuthSession> {
         const response = await this.getSessionRaw(initOverrides);
+        return await response.value();
+    }
+
+    /**
+     * Creates request options for listCLITokens without sending the request
+     */
+    async listCLITokensRequestOpts(): Promise<runtime.RequestOpts> {
+        const queryParameters: any = {};
+
+        const headerParameters: runtime.HTTPHeaders = {};
+
+
+        let urlPath = `/api/v1/auth/cli/tokens`;
+
+        return {
+            path: urlPath,
+            method: 'GET',
+            headers: headerParameters,
+            query: queryParameters,
+        };
+    }
+
+    /**
+     * 列出当前账号的 CLI Token
+     */
+    async listCLITokensRaw(initOverrides?: RequestInit | runtime.InitOverrideFunction): Promise<runtime.ApiResponse<CLITokenList>> {
+        const requestOptions = await this.listCLITokensRequestOpts();
+        const response = await this.request(requestOptions, initOverrides);
+
+        return new runtime.JSONApiResponse(response, (jsonValue) => CLITokenListFromJSON(jsonValue));
+    }
+
+    /**
+     * 列出当前账号的 CLI Token
+     */
+    async listCLITokens(initOverrides?: RequestInit | runtime.InitOverrideFunction): Promise<CLITokenList> {
+        const response = await this.listCLITokensRaw(initOverrides);
         return await response.value();
     }
 
@@ -214,6 +394,94 @@ export class AuthApi extends runtime.BaseAPI {
     async register(requestParameters: RegisterOperationRequest, initOverrides?: RequestInit | runtime.InitOverrideFunction): Promise<AuthResult> {
         const response = await this.registerRaw(requestParameters, initOverrides);
         return await response.value();
+    }
+
+    /**
+     * Creates request options for revokeCLIToken without sending the request
+     */
+    async revokeCLITokenRequestOpts(requestParameters: RevokeCLITokenRequest): Promise<runtime.RequestOpts> {
+        if (requestParameters['id'] == null) {
+            throw new runtime.RequiredError(
+                'id',
+                'Required parameter "id" was null or undefined when calling revokeCLIToken().'
+            );
+        }
+
+        const queryParameters: any = {};
+
+        const headerParameters: runtime.HTTPHeaders = {};
+
+
+        let urlPath = `/api/v1/auth/cli/tokens/{id}`;
+        urlPath = urlPath.replace('{id}', encodeURIComponent(String(requestParameters['id'])));
+
+        return {
+            path: urlPath,
+            method: 'DELETE',
+            headers: headerParameters,
+            query: queryParameters,
+        };
+    }
+
+    /**
+     * 撤销当前账号的指定 CLI Token
+     */
+    async revokeCLITokenRaw(requestParameters: RevokeCLITokenRequest, initOverrides?: RequestInit | runtime.InitOverrideFunction): Promise<runtime.ApiResponse<void>> {
+        const requestOptions = await this.revokeCLITokenRequestOpts(requestParameters);
+        const response = await this.request(requestOptions, initOverrides);
+
+        return new runtime.VoidApiResponse(response);
+    }
+
+    /**
+     * 撤销当前账号的指定 CLI Token
+     */
+    async revokeCLIToken(requestParameters: RevokeCLITokenRequest, initOverrides?: RequestInit | runtime.InitOverrideFunction): Promise<void> {
+        await this.revokeCLITokenRaw(requestParameters, initOverrides);
+    }
+
+    /**
+     * Creates request options for revokeCurrentCLIToken without sending the request
+     */
+    async revokeCurrentCLITokenRequestOpts(): Promise<runtime.RequestOpts> {
+        const queryParameters: any = {};
+
+        const headerParameters: runtime.HTTPHeaders = {};
+
+        if (this.configuration && this.configuration.accessToken) {
+            const token = this.configuration.accessToken;
+            const tokenString = await token("cliBearer", []);
+
+            if (tokenString) {
+                headerParameters["Authorization"] = `Bearer ${tokenString}`;
+            }
+        }
+
+        let urlPath = `/api/v1/auth/cli/token`;
+
+        return {
+            path: urlPath,
+            method: 'DELETE',
+            headers: headerParameters,
+            query: queryParameters,
+        };
+    }
+
+    /**
+     * 撤销当前 Bearer Token
+     */
+    async revokeCurrentCLITokenRaw(initOverrides?: RequestInit | runtime.InitOverrideFunction): Promise<runtime.ApiResponse<void>> {
+        const requestOptions = await this.revokeCurrentCLITokenRequestOpts();
+        const response = await this.request(requestOptions, initOverrides);
+
+        return new runtime.VoidApiResponse(response);
+    }
+
+    /**
+     * 撤销当前 Bearer Token
+     */
+    async revokeCurrentCLIToken(initOverrides?: RequestInit | runtime.InitOverrideFunction): Promise<void> {
+        await this.revokeCurrentCLITokenRaw(initOverrides);
     }
 
 }

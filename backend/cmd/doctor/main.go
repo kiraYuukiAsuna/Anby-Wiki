@@ -29,7 +29,10 @@ func run(ctx context.Context, args []string, stdout, stderr io.Writer) int {
 	fs.SetOutput(stderr)
 	format := fs.String("format", "human", "报告格式: human|json")
 	stuckAfter := fs.Duration("claimed-stuck-after", 5*time.Minute, "Outbox claimed 卡死阈值")
-	repairExpiredSessions := fs.Bool("repair-expired-sessions", false, "显式删除过期认证会话")
+	repairExpiredSessions := fs.Bool(
+		"repair-expired-sessions", false,
+		"显式删除过期认证会话及已使用/过期 CLI 授权码",
+	)
 	if err := fs.Parse(args); err != nil {
 		return exitUsage
 	}

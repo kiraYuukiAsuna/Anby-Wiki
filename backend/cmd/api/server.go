@@ -102,6 +102,11 @@ func NewRouter(logger *slog.Logger, deps Deps, writeAPI *WriteAPI, readAPI *Read
 				r.Post("/auth/login", authAPI.login)
 				r.Get("/auth/session", authAPI.session)
 				r.Post("/auth/logout", authAPI.logout)
+				r.Post("/auth/cli/codes", authAPI.createCLIAuthCode)
+				r.Post("/auth/cli/exchange", authAPI.exchangeCLIAuthCode)
+				r.Get("/auth/cli/tokens", authAPI.listCLITokens)
+				r.Delete("/auth/cli/tokens/{id}", authAPI.revokeCLIToken)
+				r.Delete("/auth/cli/token", authAPI.revokeCurrentCLIToken)
 			}
 			if writeAPI != nil {
 				r.Post("/pages", writeAPI.createPage)

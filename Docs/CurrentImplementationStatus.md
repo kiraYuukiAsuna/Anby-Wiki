@@ -35,7 +35,7 @@ AI 配置和双用户协作 E2E。“实现完成”仍不等于“生产发布�
 | 投影与搜索 | Outbox 租约/重试/死信、链接/目录/锚点/章节/渲染/知识使用/References/相关推荐/组件依赖/图谱投影、可解释的链接+Collection+Entity 相关度、PostgreSQL fallback、Meilisearch 关键词/混合/语义检索 |
 | 规模与归档 | 章节懒加载、服务端可信 HTML 渲染、Revision 热冷分层与 S3 回源、Projection/Search 重建、容量基准命令 |
 | 协作 | Yjs WorkingDocument、持久增量 update、重连游标、普通发布与 AI 合并的 sequence CAS、未确认 update 幂等重发、自动 snapshot/compact、Block 级 Presence、三方合并与人工冲突决议；跨标签页离线恢复和多 API 实例广播仍待实现 |
-| 平台 | 本地账号/Session/RBAC、Redis 限流、安全头、OTel/Prometheus、备份恢复、Doctor、多 Wiki 读取隔离、生产部署清单 |
+| 平台 | 本地账号/Session/RBAC、一次性授权码与可撤销 Agent CLI Bearer Token、149 个 OpenAPI operation 和协作 WebSocket 的 JSON CLI、Redis 限流、安全头、OTel/Prometheus、备份恢复、Doctor、多 Wiki 读取隔离、生产部署清单 |
 
 ## 关键不变量
 
@@ -184,22 +184,23 @@ outlines。References/Related 是 Current Revision
 - 新披露的 `brace-expansion` 漏洞通过 `5.0.9` 修复；安装期幂等适配器只让
   遗留 `minimatch@3` 读取新版函数导出，未知版本会直接失败，避免“审计通过但
   ESLint 损坏”。
-- 2026-08 新披露的 Nano ID 零长度生成器拒绝服务通过 `nanoid@3.3.17` override
+- 2026-08 新披露的 Nano ID 零长度生成器拒绝服务通过 `nanoid@3.3.18` override
   固定；开发工具链同时锁定已修复的 `fast-uri@3.1.5`、`hono@4.13.1`、
   `ip-address@10.5.0`、`js-yaml@4.3.1` 与 `undici@7.29.0`。
 - 完整 `npm audit --audit-level=high` 与 production-only audit 均为 0。
-- gRPC 已升级到 `1.82.1`，OpenTelemetry 家族统一到 `1.44.0`；
+- Go 构建基线升级到 `1.26.6`，修复 `net/url`、`html/template`、TLS、HTTP/2、
+  XML/ASN.1 与 IDNA 标准库可达漏洞；gRPC 为 `1.82.1`，OpenTelemetry 家族为 `1.44.0`；
   `govulncheck` 报告 0 个可达漏洞。
-- gitleaks 继续扫描全仓库，只精确豁免构建目录和两个字面部署占位值，不豁免整个
-  环境模板。
+- gitleaks 扫描全部 tracked 与未忽略 untracked 源文件，包括环境模板；忽略的本机
+  `0600` 部署环境文件不再被 `dir` 模式误当成仓库内容。
 
 ## 运维与发布拓扑
 
 - 预发布阶段只维护 `000001_initial_schema.up/down.sql`。
 - 开发环境不使用 Docker；`scripts/dev.sh` 连接自行提供的 PostgreSQL、Redis、
   MinIO，并可按配置连接外部 Meilisearch。
-- 生产 Compose 包含 PostgreSQL、Redis、MinIO、Meilisearch、Semantic Kernel、API、Worker、Web、
-  migrate 和 doctor；不包含 Nginx、OIDC 或 TLS 终结。
+- 生产 Compose 包含 PostgreSQL、Redis、MinIO、Meilisearch、Semantic Kernel、API、
+  Worker、Web、CLI tools image、migrate 和 doctor；不包含 Nginx、OIDC 或 TLS 终结。
 - 数据与应用服务继承只读根文件系统、非 root、capability drop 和
   `no-new-privileges` 策略。应用镜像在部署机本地按 `RELEASE_ID` 构建。
 - `.gitattributes` 固定 Shell 与部署门禁文件为 LF，使 Windows+WSL 与 Linux CI
@@ -266,15 +267,15 @@ outlines。References/Related 是 Current Revision
 - 10 万页面目标硬件容量、搜索语义质量和长时间队列/SLO 观察；
 - 正式域名下的 HSTS、CSRF、账号恢复/MFA 与完整键盘、读屏、对比度人工验收。
 
-仓库现有 Go 单元测试、144-operation handler 探针和高风险成功工作流仍不能穷举
+仓库现有 Go 单元测试、149-operation handler 探针和高风险成功工作流仍不能穷举
 全部 ProposalOperation 组合、外部模型供应商行为或容量/安全/人工可访问性；本轮真实
 系统演练不能替代发布环境验收。
 
-## 2026-08-18 Web API 可操作性审计
+## 2026-08-18 Web/API/CLI 可操作性审计
 
-- 权威 OpenAPI 当前共有 144 个 operation：75 个 GET、69 个写操作。全部通过生成
-  客户端调用，调用文件均可沿 TypeScript import 图反向到达 46 个页面/global layout
-  owner；不存在未挂路由的 API 组件。
+- 权威 OpenAPI 当前共有 149 个 operation。147 个 Web-owned operation 全部通过生成
+  客户端调用，调用文件均可沿 TypeScript import 图反向到达 47 个页面/global layout
+  owner；`exchangeCLIAuthCode` 与 `revokeCurrentCLIToken` 是明确的 CLI transport。
 - 69 个写操作分别落在注册/登录、页面编辑与工具、导入、资产、来源、Dataset、
   Component、Collection、Entity、联邦和治理工作区，均有表单、按钮或明确命令入口。
   动态详情页都有上游列表、搜索、审计、引用或关联对象链接。
@@ -287,7 +288,7 @@ outlines。References/Related 是 Current Revision
 
 ## 2026-08-18 API 语义与工作流审计
 
-- `TestAPIContractE2E` 从权威 OpenAPI 动态读取并命中 144/144 个 operation；所有
+- `TestAPIContractE2E` 从权威 OpenAPI 动态读取并命中 149/149 个 operation；所有
   handler 禁止非预期 5xx，只有配置为测试 `.invalid` 地址的 `testAIConfig`
   允许契约声明的 502/504 依赖失败。
 - 成功工作流覆盖 Page/Revision/Diff/rollback/rename/redirect/BlockRedirect、
@@ -306,11 +307,30 @@ outlines。References/Related 是 Current Revision
   当前用户发起的导入 Proposal 也以 human 为作者，因此该策略尚未进入普通导入闭环，
   详见 [待解决问题](OutstandingIssues.md)。
 
+## Agent CLI
+
+- `backend/cmd/anby-wiki` 提供供 Agent 使用的 Go CLI；stdin/stdout 均为单一 JSON
+  envelope，退出码区分成功、输入/契约错误和远端错误。
+- CLI 从嵌入的权威 OpenAPI 读取 149 个 operationId，支持清单、搜索、Schema 描述和
+  通用调用；发送前校验 path/query/header、JSON/multipart body，收到 JSON 后按状态码
+  校验响应。文件上传读取本地路径，二进制响应统一转为 base64 JSON。
+- Yjs 协作 WebSocket 不属于 OpenAPI，另由 `collaboration.run` 覆盖恢复、
+  durable update、Presence 和 snapshot/compact，opaque bytes 均通过 base64。
+- `/settings/cli` 使用浏览器 Session 生成十分钟一次性授权码，CLI 兑换只显示一次的
+  Bearer Token。数据库只保存 SHA-256；后台显示前缀、状态、到期和最近使用时间并可撤销。
+- CLI Token 映射到签发 Actor，不复制角色；每次请求实时读取 Actor/账号状态并继续经过
+  现有 RBAC、PageProtection、Proposal Review/Apply 与领域服务边界。
+- 详细协议与示例见 [Agent CLI](AgentCLI.md)。
+- 隔离 PostgreSQL/Redis/Meilisearch 上的真实 E2E 已覆盖授权码兑换、Bearer Session、
+  禁止 Bearer 递归签发、后台撤销、CLI 创建 Page、WorkingDocument 恢复和 CLI 自撤销。
+- 初始化 Schema 在包含真实 Page 的隔离库上完成 `down → up`；同时修复了旧 down
+  脚本在删除 Page 前提前删除 Namespace 种子导致的 FK 失败。
+
 ## 数据库状态
 
 - 唯一迁移版本：`000001_initial_schema`。
 - 初始化文件包含当前全部表、函数、触发器、约束、索引和固定种子；up/down 配对、
   命名与静态检查通过。
-- 当前表和约束已在 PostgreSQL 17 隔离空库重新执行 `up → down → up`；
-  up 后 83 张表、down 后仅 `schema_migrations`，再次 up 结果一致。
+- 当前表和约束已在 PostgreSQL 17 隔离库重新执行 `up → down → up`；
+  up 后 85 张表、down 后仅 `schema_migrations`，再次 up 结果一致。
 - 首次生产上线后必须冻结版本 1，并恢复只增不改的增量迁移策略。

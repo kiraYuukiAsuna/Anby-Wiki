@@ -17,7 +17,7 @@ Compose 本身不终结 TLS。默认 `WEB_BIND=127.0.0.1`，适合由宿主机�
 ## 本地构建策略
 
 商业业务镜像不发布到 registry。部署机使用当前受保护源码与 Dockerfile 本地构建
-`ai-kernel`、`api`、`worker`、`web`、`migrate` 五个 target，并按 `RELEASE_ID` 标记为
+`ai-kernel`、`api`、`worker`、`web`、`cli`、`migrate` 六个 target，并按 `RELEASE_ID` 标记为
 `anby-wiki-<target>:<release>`。Compose 对这些服务设置 `pull_policy: never`。发布脚本
 按上述顺序逐个构建，避免同时运行 Python、Go 与 Node 构建耗尽小规格部署机内存。
 
@@ -90,7 +90,7 @@ sh scripts/deploy.sh deploy
 固定顺序：
 
 1. 校验环境、`RELEASE_ID`、迁移窗口、机密变量与环境文件权限；
-2. 从当前源码本地构建五个业务镜像；
+2. 从当前源码本地构建六个业务镜像；
 3. 运行 `storage-init` 修正命名卷根目录属主；
 4. 启动并等待 PostgreSQL、Redis、MinIO、Meilisearch；
 5. 运行 `minio-init` 创建私有 bucket；
@@ -103,7 +103,7 @@ sh scripts/deploy.sh deploy
 
 ## 回滚
 
-把环境文件中的 `RELEASE_ID` 改为上一个版本，确认该版本的五个本地镜像仍保留，
+把环境文件中的 `RELEASE_ID` 改为上一个版本，确认该版本的六个本地镜像仍保留，
 并保持线上数据库实际版本与兼容窗口正确，然后执行：
 
 ```sh

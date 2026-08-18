@@ -238,6 +238,8 @@ import type { UploadAssetRequest } from '';
 async function example() {
   console.log("🚀 Testing  SDK...");
   const config = new Configuration({
+    // Configure HTTP bearer authorization: cliBearer
+    accessToken: "YOUR BEARER TOKEN",
     // To configure API key authorization: sessionCookie
     apiKey: "YOUR API KEY",
   });
@@ -276,7 +278,7 @@ example().catch(console.error);
 
 ### Authorization
 
-[sessionCookie](../README.md#sessionCookie)
+[cliBearer](../README.md#cliBearer), [sessionCookie](../README.md#sessionCookie)
 
 ### HTTP request headers
 

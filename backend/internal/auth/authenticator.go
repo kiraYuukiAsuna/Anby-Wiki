@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"net/http"
+	"strings"
 
 	"github.com/google/uuid"
 )
@@ -32,6 +33,18 @@ func NewAuthenticator(service *Service, sessionCookie string, allowDevHeader boo
 func (a *Authenticator) Authenticate(ctx context.Context, request *http.Request) (principal Principal, ok bool, err error) {
 	if cookie, cookieErr := request.Cookie(a.sessionCookie); cookieErr == nil {
 		principal, err = a.service.ResolveSession(ctx, cookie.Value)
+		if errors.Is(err, ErrUnauthenticated) {
+			return Principal{}, false, nil
+		}
+		return principal, err == nil, err
+	}
+	if authorization := strings.TrimSpace(request.Header.Get("Authorization")); authorization != "" {
+		scheme, token, found := strings.Cut(authorization, " ")
+		if !found || !strings.EqualFold(scheme, "Bearer") ||
+			strings.TrimSpace(token) == "" {
+			return Principal{}, false, nil
+		}
+		principal, err = a.service.ResolveCLIToken(ctx, strings.TrimSpace(token))
 		if errors.Is(err, ErrUnauthenticated) {
 			return Principal{}, false, nil
 		}

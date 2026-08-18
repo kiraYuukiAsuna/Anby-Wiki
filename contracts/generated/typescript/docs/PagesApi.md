@@ -36,6 +36,8 @@ import type { CreatePageOperationRequest } from '';
 async function example() {
   console.log("🚀 Testing  SDK...");
   const config = new Configuration({
+    // Configure HTTP bearer authorization: cliBearer
+    accessToken: "YOUR BEARER TOKEN",
     // To configure API key authorization: sessionCookie
     apiKey: "YOUR API KEY",
   });
@@ -71,7 +73,7 @@ example().catch(console.error);
 
 ### Authorization
 
-[sessionCookie](../README.md#sessionCookie)
+[cliBearer](../README.md#cliBearer), [sessionCookie](../README.md#sessionCookie)
 
 ### HTTP request headers
 
@@ -113,6 +115,8 @@ import type { CreatePageRedirectOperationRequest } from '';
 async function example() {
   console.log("🚀 Testing  SDK...");
   const config = new Configuration({
+    // Configure HTTP bearer authorization: cliBearer
+    accessToken: "YOUR BEARER TOKEN",
     // To configure API key authorization: sessionCookie
     apiKey: "YOUR API KEY",
   });
@@ -151,7 +155,7 @@ example().catch(console.error);
 
 ### Authorization
 
-[sessionCookie](../README.md#sessionCookie)
+[cliBearer](../README.md#cliBearer), [sessionCookie](../README.md#sessionCookie)
 
 ### HTTP request headers
 
@@ -192,6 +196,8 @@ import type { DeleteBlockRedirectRequest } from '';
 async function example() {
   console.log("🚀 Testing  SDK...");
   const config = new Configuration({
+    // Configure HTTP bearer authorization: cliBearer
+    accessToken: "YOUR BEARER TOKEN",
     // To configure API key authorization: sessionCookie
     apiKey: "YOUR API KEY",
   });
@@ -230,7 +236,7 @@ example().catch(console.error);
 
 ### Authorization
 
-[sessionCookie](../README.md#sessionCookie)
+[cliBearer](../README.md#cliBearer), [sessionCookie](../README.md#sessionCookie)
 
 ### HTTP request headers
 
@@ -268,6 +274,8 @@ import type { DeletePageRedirectRequest } from '';
 async function example() {
   console.log("🚀 Testing  SDK...");
   const config = new Configuration({
+    // Configure HTTP bearer authorization: cliBearer
+    accessToken: "YOUR BEARER TOKEN",
     // To configure API key authorization: sessionCookie
     apiKey: "YOUR API KEY",
   });
@@ -303,7 +311,7 @@ example().catch(console.error);
 
 ### Authorization
 
-[sessionCookie](../README.md#sessionCookie)
+[cliBearer](../README.md#cliBearer), [sessionCookie](../README.md#sessionCookie)
 
 ### HTTP request headers
 
@@ -479,6 +487,8 @@ import type { PublishRevisionOperationRequest } from '';
 async function example() {
   console.log("🚀 Testing  SDK...");
   const config = new Configuration({
+    // Configure HTTP bearer authorization: cliBearer
+    accessToken: "YOUR BEARER TOKEN",
     // To configure API key authorization: sessionCookie
     apiKey: "YOUR API KEY",
   });
@@ -517,7 +527,7 @@ example().catch(console.error);
 
 ### Authorization
 
-[sessionCookie](../README.md#sessionCookie)
+[cliBearer](../README.md#cliBearer), [sessionCookie](../README.md#sessionCookie)
 
 ### HTTP request headers
 
@@ -559,6 +569,8 @@ import type { RenamePageOperationRequest } from '';
 async function example() {
   console.log("🚀 Testing  SDK...");
   const config = new Configuration({
+    // Configure HTTP bearer authorization: cliBearer
+    accessToken: "YOUR BEARER TOKEN",
     // To configure API key authorization: sessionCookie
     apiKey: "YOUR API KEY",
   });
@@ -597,7 +609,7 @@ example().catch(console.error);
 
 ### Authorization
 
-[sessionCookie](../README.md#sessionCookie)
+[cliBearer](../README.md#cliBearer), [sessionCookie](../README.md#sessionCookie)
 
 ### HTTP request headers
 
@@ -639,6 +651,8 @@ import type { UpsertBlockRedirectOperationRequest } from '';
 async function example() {
   console.log("🚀 Testing  SDK...");
   const config = new Configuration({
+    // Configure HTTP bearer authorization: cliBearer
+    accessToken: "YOUR BEARER TOKEN",
     // To configure API key authorization: sessionCookie
     apiKey: "YOUR API KEY",
   });
@@ -680,7 +694,7 @@ example().catch(console.error);
 
 ### Authorization
 
-[sessionCookie](../README.md#sessionCookie)
+[cliBearer](../README.md#cliBearer), [sessionCookie](../README.md#sessionCookie)
 
 ### HTTP request headers
 

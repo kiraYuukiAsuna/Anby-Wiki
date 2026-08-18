@@ -46,6 +46,97 @@ func TestAPICoreWorkflowsE2E(t *testing.T) {
 	})
 }
 
+func TestAPICLIAuthE2E(t *testing.T) {
+	baseURL := strings.TrimRight(os.Getenv("API_E2E_BASE_URL"), "/")
+	password := os.Getenv("API_E2E_PASSWORD")
+	if baseURL == "" || password == "" {
+		t.Skip("set API_E2E_BASE_URL and API_E2E_PASSWORD")
+	}
+	admin, adminActor := apiE2EAdmin(t, baseURL, password)
+	codeResponse := requestE2EMap(t, admin, http.MethodPost,
+		baseURL+"/api/v1/auth/cli/codes", map[string]any{
+			"name": "API E2E Agent", "token_ttl_days": 30,
+		}, http.StatusCreated)
+	code, ok := codeResponse["code"].(string)
+	if !ok || !strings.HasPrefix(code, "anby_code_") {
+		t.Fatalf("invalid CLI authorization code response: %#v", codeResponse)
+	}
+
+	anonymous := &http.Client{Timeout: collaborationE2ETimeout}
+	exchange := requestE2EMap(t, anonymous, http.MethodPost,
+		baseURL+"/api/v1/auth/cli/exchange",
+		map[string]any{"code": code}, http.StatusOK)
+	token, ok := exchange["token"].(string)
+	if !ok || !strings.HasPrefix(token, "anby_token_") {
+		t.Fatalf("invalid CLI token response: %#v", exchange)
+	}
+	if e2eUUID(t, exchange, "actor_id") != adminActor {
+		t.Fatalf("CLI token actor=%v want=%s", exchange["actor_id"], adminActor)
+	}
+	tokenInfo, ok := exchange["token_info"].(map[string]any)
+	if !ok {
+		t.Fatalf("CLI exchange has no token_info: %#v", exchange)
+	}
+	tokenID := e2eUUID(t, tokenInfo, "id")
+
+	bearer := &http.Client{Timeout: collaborationE2ETimeout}
+	sessionRequest, err := http.NewRequest(
+		http.MethodGet, baseURL+"/api/v1/auth/session", nil,
+	)
+	if err != nil {
+		t.Fatal(err)
+	}
+	sessionRequest.Header.Set("Authorization", "Bearer "+token)
+	sessionResponse, err := bearer.Do(sessionRequest)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer sessionResponse.Body.Close()
+	if sessionResponse.StatusCode != http.StatusOK {
+		t.Fatalf("CLI session status=%d: %s",
+			sessionResponse.StatusCode, readE2EBody(sessionResponse.Body))
+	}
+	var session map[string]any
+	if err := json.NewDecoder(sessionResponse.Body).Decode(&session); err != nil {
+		t.Fatal(err)
+	}
+	if session["method"] != "cli_token" {
+		t.Fatalf("CLI auth method=%v want=cli_token", session["method"])
+	}
+
+	codeRequest := doE2ERequest(t, bearer, http.MethodPost,
+		baseURL+"/api/v1/auth/cli/codes",
+		map[string]any{"name": "nested", "token_ttl_days": 30},
+		http.Header{"Authorization": []string{"Bearer " + token}})
+	assertE2EStatus(t, codeRequest, http.StatusForbidden)
+
+	tokens := requestE2EMap(t, admin, http.MethodGet,
+		baseURL+"/api/v1/auth/cli/tokens", nil, http.StatusOK)
+	items, ok := tokens["items"].([]any)
+	if !ok || len(items) == 0 {
+		t.Fatalf("CLI token list is empty: %#v", tokens)
+	}
+	requestE2ENoBody(t, admin, http.MethodDelete,
+		fmt.Sprintf("%s/api/v1/auth/cli/tokens/%s", baseURL, tokenID),
+		http.StatusNoContent)
+
+	revokedRequest, err := http.NewRequest(
+		http.MethodGet, baseURL+"/api/v1/auth/session", nil,
+	)
+	if err != nil {
+		t.Fatal(err)
+	}
+	revokedRequest.Header.Set("Authorization", "Bearer "+token)
+	revokedResponse, err := bearer.Do(revokedRequest)
+	if err != nil {
+		t.Fatal(err)
+	}
+	assertE2EStatus(t, revokedResponse, http.StatusUnauthorized)
+	requestE2EMap(t, anonymous, http.MethodPost,
+		baseURL+"/api/v1/auth/cli/exchange",
+		map[string]any{"code": code}, http.StatusUnauthorized)
+}
+
 func TestAPIGovernanceKnowledgeE2E(t *testing.T) {
 	baseURL := strings.TrimRight(os.Getenv("API_E2E_BASE_URL"), "/")
 	password := os.Getenv("API_E2E_PASSWORD")

@@ -349,6 +349,27 @@ services:
 
   # ---- 运维工具（一次性任务） ----
 
+  cli:
+    <<: *runtime-security
+    profiles: ["tools"]
+    image: anby-wiki-cli:${RELEASE_ID:?set RELEASE_ID}
+    pull_policy: never
+    build:
+      context: ../..
+      dockerfile: Dockerfile
+      target: cli
+      args:
+        VERSION: ${RELEASE_ID}
+        VCS_REF: ${VCS_REF:-local}
+        BUILD_DATE: ${BUILD_DATE:-unknown}
+    user: "10001:10001"
+    environment:
+      ANBY_WIKI_BASE_URL: http://api:${API_PORT:-8080}
+    depends_on:
+      api:
+        condition: service_healthy
+    restart: "no"
+
   migrate:
     <<: *runtime-security
     profiles: ["tools"]

@@ -93,6 +93,8 @@ DROP TABLE working_document;
 COMMIT;
 
 BEGIN;
+DROP TABLE cli_access_token;
+DROP TABLE cli_authorization_code;
 DROP TABLE auth_session;
 ALTER TABLE actor DROP CONSTRAINT actor_user_id_fk;
 DROP TABLE local_account;
@@ -252,14 +254,6 @@ DROP TABLE IF EXISTS entity;
 DROP TABLE IF EXISTS entity_type;
 
 DROP FUNCTION IF EXISTS reject_knowledge_delete();
-
-COMMIT;
-
-BEGIN;
-
-DELETE FROM actor      WHERE id = '00000000-0000-7000-8000-000000000201';
-DELETE FROM namespace  WHERE wiki_id = '00000000-0000-7000-8000-000000000001';
-DELETE FROM wiki_site  WHERE id = '00000000-0000-7000-8000-000000000001';
 
 COMMIT;
 

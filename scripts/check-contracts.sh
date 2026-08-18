@@ -41,4 +41,9 @@ check_copy \
   "$ROOT/contracts/schemas/extraction/v1/candidates.schema.json" \
   "$ROOT/backend/internal/importer/schema/candidates.schema.json"
 
+check_copy \
+  "Agent CLI OpenAPI" \
+  "$ROOT/contracts/openapi/openapi.yaml" \
+  "$ROOT/backend/internal/clicontract/openapi.yaml"
+
 echo "contracts: all embedded schema copies are in sync"

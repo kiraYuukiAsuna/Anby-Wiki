@@ -45,6 +45,7 @@ const (
 	CodeOutboxClaimStuck             = "OUTBOX_CLAIM_STUCK"
 	CodeOutboxDead                   = "OUTBOX_DEAD"
 	CodeSessionExpired               = "AUTH_SESSION_EXPIRED"
+	CodeCLIAuthorizationCodeExpired  = "AUTH_CLI_CODE_EXPIRED"
 )
 
 type Options struct {
@@ -557,6 +558,21 @@ func (c *Checker) checkExpiredAuth(ctx context.Context, issues *[]Issue) error {
 			"table", "auth_session", "运行 doctor --repair-expired-sessions 显式清理；该操作不修改权威百科数据",
 			map[string]string{"count": strconv.FormatInt(count, 10)})
 	}
+	if err := c.pool.QueryRow(ctx,
+		`SELECT count(*) FROM cli_authorization_code
+		 WHERE expires_at < $1 OR used_at IS NOT NULL`, c.opts.Now,
+	).Scan(&count); err != nil {
+		return fmt.Errorf("doctor: 检查过期 CLI 授权码失败: %w", err)
+	}
+	if count > 0 {
+		appendIssue(
+			issues, CodeCLIAuthorizationCodeExpired, SeverityWarning, "auth",
+			"存在已使用或过期的一次性 CLI 授权码",
+			"table", "cli_authorization_code",
+			"运行 doctor --repair-expired-sessions 显式清理；不会删除 CLI Token 或权威百科数据",
+			map[string]string{"count": strconv.FormatInt(count, 10)},
+		)
+	}
 	return nil
 }
 
@@ -570,10 +586,16 @@ func CleanupExpiredSessions(ctx context.Context, pool *pgxpool.Pool, now time.Ti
 	if err != nil {
 		return RepairSummary{}, fmt.Errorf("doctor: 清理过期会话失败: %w", err)
 	}
+	codeTag, err := tx.Exec(ctx, `DELETE FROM cli_authorization_code
+		WHERE expires_at < $1 OR used_at IS NOT NULL`, now)
+	if err != nil {
+		return RepairSummary{}, fmt.Errorf("doctor: 清理 CLI 授权码失败: %w", err)
+	}
 	if err := tx.Commit(ctx); err != nil {
 		return RepairSummary{}, err
 	}
 	return RepairSummary{
-		ExpiredSessions: sessionTag.RowsAffected(),
+		ExpiredSessions:       sessionTag.RowsAffected(),
+		CLIAuthorizationCodes: codeTag.RowsAffected(),
 	}, nil
 }

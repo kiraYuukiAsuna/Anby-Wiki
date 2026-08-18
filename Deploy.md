@@ -87,7 +87,18 @@ sh scripts/dev.sh web            # 只起前端
 调试也可用 `AUTH_DEV_HEADER_ENABLED=true` + 请求头 `X-Actor-ID: <actor uuid>`，
 该开关在 `production` 下被配置校验强制拒绝。
 
-### 1.5 质量门禁
+### 1.5 Agent CLI
+
+```sh
+make cli-build
+printf '%s\n' '{"action":"operations.list"}' | bin/anby-wiki
+```
+
+浏览器登录后从 `/settings/cli` 生成一次性授权码，再由 CLI 的 `auth.exchange`
+兑换 Bearer Token。安装、JSON 协议、OpenAPI 校验、文件上传和协作 WebSocket 用法见
+[Agent CLI](Docs/AgentCLI.md)。
+
+### 1.6 质量门禁
 
 ```sh
 make check              # 提交前质量门禁
@@ -166,12 +177,13 @@ export DEPLOY_ENV_FILE=/etc/anby-wiki/.env
 sh scripts/deploy.sh build
 ```
 
-生成五个带版本的本地镜像：
+生成六个带版本的本地镜像：
 
 - `anby-wiki-api:$RELEASE_ID`
 - `anby-wiki-worker:$RELEASE_ID`
 - `anby-wiki-ai-kernel:$RELEASE_ID`
 - `anby-wiki-web:$RELEASE_ID`
+- `anby-wiki-cli:$RELEASE_ID`
 - `anby-wiki-migrate:$RELEASE_ID`
 
 `deploy` 会自动再次执行本地增量构建，因此单独运行 `build` 只用于提前确认构建过程。
@@ -191,7 +203,7 @@ sh scripts/deploy.sh deploy     # 本地构建并正式发布
 `deploy` 的执行顺序：
 
 1. 校验 `ENV=production`、`RELEASE_ID`、机密变量和环境文件权限；
-2. 从当前源码本地构建五个带 `RELEASE_ID` 标签的业务镜像；
+2. 从当前源码本地构建六个带 `RELEASE_ID` 标签的业务镜像；
 3. 运行 `storage-init` 修正命名卷根目录属主；
 4. 启动数据层 postgres / redis / minio 并等待健康；
 5. 运行 `minio-init` 创建 bucket 并关闭匿名访问；
@@ -255,13 +267,13 @@ curl -fsS https://anbywiki.example.com/ | grep '<title>Anby Wiki</title>'
 ### 2.5 其他命令
 
 ```sh
-sh scripts/deploy.sh build      # 只在本机构建五个业务镜像
+sh scripts/deploy.sh build      # 只在本机构建六个业务镜像
 sh scripts/deploy.sh migrate    # 只跑迁移与闸门
 sh scripts/deploy.sh doctor     # 只跑自检
 sh scripts/deploy.sh rollback   # 切回 RELEASE_ID 对应的已有本地镜像
 ```
 
-回滚前把环境文件中的 `RELEASE_ID` 改为旧版本，并确认部署机仍保留对应的五个
+回滚前把环境文件中的 `RELEASE_ID` 改为旧版本，并确认部署机仍保留对应的六个
 本地镜像。回滚不会重新构建、不会 pull，也**从不**执行 down 迁移；旧镜像必须
 显式兼容线上数据库版本。需要缩表时，先发布一个兼容新旧两版的中间版本。
 

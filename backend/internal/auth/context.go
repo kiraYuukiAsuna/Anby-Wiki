@@ -13,10 +13,11 @@ type principalKey struct{}
 // Principal is the authenticated identity for one request. Authorization data
 // is deliberately absent so role and protection changes take effect immediately.
 type Principal struct {
-	ActorID     uuid.UUID
-	ActorType   string
-	DisplayName string
-	Method      string
+	CredentialID uuid.UUID
+	ActorID      uuid.UUID
+	ActorType    string
+	DisplayName  string
+	Method       string
 }
 
 // WithPrincipal attaches an authenticated principal to a request context.

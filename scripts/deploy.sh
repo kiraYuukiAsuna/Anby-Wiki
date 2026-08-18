@@ -87,7 +87,7 @@ confirm_production() {
 build_local_images() {
   # Build sequentially: the production VPS does not have enough memory for
   # concurrent Go, Node and Python dependency resolution.
-  for service in ai-kernel api worker web migrate
+  for service in ai-kernel api worker web cli migrate
   do
     compose build "$service"
   done
@@ -99,6 +99,7 @@ require_local_images() {
     "anby-wiki-ai-kernel:$RELEASE_ID" \
     "anby-wiki-worker:$RELEASE_ID" \
     "anby-wiki-web:$RELEASE_ID" \
+    "anby-wiki-cli:$RELEASE_ID" \
     "anby-wiki-migrate:$RELEASE_ID"
   do
     docker image inspect "$image" >/dev/null 2>&1 ||

@@ -3097,14 +3097,18 @@ Claim 独立后：
   断线恢复、陈旧 sequence 409、最新 sequence 发布及 snapshot/compact 恢复。
 - 正式域名由宿主机 Nginx 终结 HTTPS，并代理到仅绑定 `127.0.0.1:4444` 的 Web；
   HTTPS 首页/API 与 WSS 协作 E2E 已通过。
-- 144/144 个 OpenAPI operation 均有生成客户端调用和可达页面/global layout owner；
-  69 个写操作均落在实际表单、按钮或命令入口，并由 `make web-api-coverage` 持续检查。
-- 独立数据库、对象存储 bucket、Meilisearch index 和 Redis DB 上动态命中 144/144
+- 149/149 个 OpenAPI operation 均有明确 Web 或 CLI owner；147 个 Web-owned
+  operation 可追踪到页面/global layout，2 个授权兑换/自撤销 operation 属于 CLI transport，
+  并由 `make web-api-coverage` 持续检查。
+- 独立数据库、对象存储 bucket、Meilisearch index 和 Redis DB 上动态命中 149/149
   个 OpenAPI handler；核心、治理、BulkReview、Import/AI 配置和协作成功工作流通过。
 - 测试发现并修复两处真实问题：`create_entity` 的严格 payload 解码与 Schema 漂移；
   Parse 成功但后续模型失败时 ImportJob 不暴露已持久化 SourceVersion 恢复点。
 - 修复提交 `2e14c32` 已部署到正式域名；Migration gate、Doctor、全服务健康检查、
   API 版本、首页和 Worker 投影指标均通过。
+- Go Agent CLI 以统一 JSON envelope 暴露全部 OpenAPI operation，并覆盖 Yjs
+  WebSocket；网页后台通过一次性授权码签发可撤销 Bearer Token，权限仍由现有
+  Actor/RBAC/治理边界实时决定。
 
 ### 18.3 第一版修复后的协作实现边界
 

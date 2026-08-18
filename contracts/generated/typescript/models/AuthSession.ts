@@ -39,11 +39,24 @@ export interface AuthSession {
     displayName: string;
     /**
      *
-     * @type {string}
+     * @type {AuthSessionMethodEnum}
      * @memberof AuthSession
      */
-    method: string;
+    method: AuthSessionMethodEnum;
 }
+
+
+/**
+ * @export
+ */
+export const AuthSessionMethodEnum = {
+    Session: 'session',
+    CliToken: 'cli_token',
+    DevelopmentHeader: 'development_header',
+    TestHeader: 'test_header'
+} as const;
+export type AuthSessionMethodEnum = typeof AuthSessionMethodEnum[keyof typeof AuthSessionMethodEnum];
+
 
 /**
  * Check if a given object implements the AuthSession interface.

@@ -9,6 +9,7 @@ Source/Citation + Proposal/Review + Projection/Search。
 - [实施方案](Docs/WikiImplementationPlan.md)
 - [当前实现状态](Docs/CurrentImplementationStatus.md)
 - [待解决问题](Docs/OutstandingIssues.md)
+- [Agent JSON CLI](Docs/AgentCLI.md)
 - [开发与部署指南](Deploy.md)
 - [ADR 索引](Docs/adr/README.md)
 
@@ -30,6 +31,7 @@ make dev                       # 迁移并启动 API / Worker / Web
 ```text
 apps/web/        Next.js 前端
 backend/         Go API + Worker（模块化单体）
+backend/cmd/anby-wiki/  Agent JSON CLI
 contracts/       OpenAPI 3.1 契约、JSON Schema、生成客户端
 infra/deploy/    生产 Compose 清单与部署模板
 Docs/            设计、当前状态、ADR、运维与安全文档

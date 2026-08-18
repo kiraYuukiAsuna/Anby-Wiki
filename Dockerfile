@@ -1,6 +1,6 @@
 # syntax=docker/dockerfile:1.7
 
-ARG GO_IMAGE=golang:1.26.5-alpine
+ARG GO_IMAGE=golang:1.26.6-alpine
 ARG NODE_IMAGE=node:22-alpine3.22
 ARG RUNTIME_IMAGE=alpine:3.22
 ARG PYTHON_IMAGE=python:3.12.11-slim-bookworm
@@ -18,6 +18,8 @@ RUN CGO_ENABLED=0 GOOS=${TARGETOS:-linux} GOARCH=${TARGETARCH:-amd64} \
     CGO_ENABLED=0 GOOS=${TARGETOS:-linux} GOARCH=${TARGETARCH:-amd64} \
     go build -trimpath -ldflags="-s -w -X main.version=${VERSION}" -o /out/wiki-worker ./cmd/worker && \
     CGO_ENABLED=0 GOOS=${TARGETOS:-linux} GOARCH=${TARGETARCH:-amd64} \
+  go build -trimpath -ldflags="-s -w -X main.version=${VERSION}" -o /out/anby-wiki ./cmd/anby-wiki && \
+  CGO_ENABLED=0 GOOS=${TARGETOS:-linux} GOARCH=${TARGETARCH:-amd64} \
     go build -trimpath -ldflags="-s -w" -o /out/wiki-migrate ./cmd/migrate && \
     CGO_ENABLED=0 GOOS=${TARGETOS:-linux} GOARCH=${TARGETARCH:-amd64} \
     go build -trimpath -ldflags="-s -w" -o /out/wiki-doctor ./cmd/doctor && \
@@ -79,6 +81,17 @@ EXPOSE 9091
 HEALTHCHECK --interval=10s --timeout=3s --start-period=15s --retries=6 \
   CMD wget -q -O /dev/null http://127.0.0.1:9091/metrics || exit 1
 CMD ["wiki-worker"]
+
+FROM go-runtime AS cli
+ARG VERSION=dev
+ARG VCS_REF=unknown
+ARG BUILD_DATE=unknown
+LABEL org.opencontainers.image.title="Anby Wiki Agent CLI" \
+  org.opencontainers.image.version="${VERSION}" \
+  org.opencontainers.image.revision="${VCS_REF}" \
+  org.opencontainers.image.created="${BUILD_DATE}"
+COPY --from=go-builder /out/anby-wiki /usr/local/bin/anby-wiki
+ENTRYPOINT ["anby-wiki"]
 
 FROM go-runtime AS migrate
 ARG VERSION=dev

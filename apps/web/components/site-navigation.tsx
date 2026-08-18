@@ -23,6 +23,7 @@ import {
   ShieldAlert,
   Settings2,
   SquarePen,
+  TerminalSquare,
   Waypoints,
 } from "lucide-react";
 import { usePathname } from "next/navigation";
@@ -106,6 +107,11 @@ const GROUPS = [
   {
     label: "管理",
     items: [
+      {
+        href: "/settings/cli",
+        label: "Agent CLI 授权",
+        icon: TerminalSquare,
+      },
       {
         href: "/admin/ai",
         label: "AI 模型配置",

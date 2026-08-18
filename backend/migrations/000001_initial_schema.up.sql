@@ -1417,6 +1417,47 @@ CREATE INDEX auth_session_actor_active_idx
     WHERE revoked_at IS NULL;
 CREATE INDEX auth_session_expires_idx ON auth_session (expires_at);
 
+CREATE TABLE cli_authorization_code (
+    id               uuid        PRIMARY KEY,
+    code_hash        bytea       NOT NULL UNIQUE,
+    actor_id         uuid        NOT NULL REFERENCES actor (id),
+    token_name       text        NOT NULL CHECK (char_length(token_name) BETWEEN 1 AND 120),
+    token_expires_at timestamptz NOT NULL,
+    expires_at       timestamptz NOT NULL,
+    used_at          timestamptz,
+    created_at       timestamptz NOT NULL DEFAULT now(),
+    CONSTRAINT cli_authorization_code_expiry_check CHECK (
+        expires_at > created_at AND token_expires_at > expires_at
+    )
+);
+
+CREATE INDEX cli_authorization_code_actor_active_idx
+    ON cli_authorization_code (actor_id, expires_at)
+    WHERE used_at IS NULL;
+CREATE INDEX cli_authorization_code_expires_idx
+    ON cli_authorization_code (expires_at);
+
+CREATE TABLE cli_access_token (
+    id           uuid        PRIMARY KEY,
+    token_hash   bytea       NOT NULL UNIQUE,
+    token_prefix text        NOT NULL,
+    actor_id     uuid        NOT NULL REFERENCES actor (id),
+    name         text        NOT NULL CHECK (char_length(name) BETWEEN 1 AND 120),
+    expires_at   timestamptz NOT NULL,
+    last_used_at timestamptz,
+    revoked_at   timestamptz,
+    created_at   timestamptz NOT NULL DEFAULT now(),
+    CONSTRAINT cli_access_token_expiry_check CHECK (expires_at > created_at)
+);
+
+CREATE INDEX cli_access_token_actor_created_idx
+    ON cli_access_token (actor_id, created_at DESC, id DESC);
+CREATE INDEX cli_access_token_active_idx
+    ON cli_access_token (actor_id, expires_at)
+    WHERE revoked_at IS NULL;
+CREATE INDEX cli_access_token_expires_idx
+    ON cli_access_token (expires_at);
+
 COMMIT;
 
 BEGIN;

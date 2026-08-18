@@ -48,6 +48,10 @@ docs/BulkReviewBatchSummary.md
 docs/BulkReviewDecisionRequest.md
 docs/BulkReviewItem.md
 docs/BulkReviewWaveResult.md
+docs/CLIAuthCode.md
+docs/CLIAuthExchangeResult.md
+docs/CLIToken.md
+docs/CLITokenList.md
 docs/ChangeTag.md
 docs/ChangeTagAssignmentResult.md
 docs/ChangeTagList.md
@@ -67,6 +71,7 @@ docs/ComponentUsage.md
 docs/ComponentUsageListPage.md
 docs/ComponentsApi.md
 docs/CreateBulkReviewBatchRequest.md
+docs/CreateCLIAuthCodeRequest.md
 docs/CreateChangeTagRequest.md
 docs/CreateCitationRequest.md
 docs/CreateCollectionRequest.md
@@ -120,6 +125,7 @@ docs/EvidenceSourceDetail.md
 docs/EvidenceSourceListPage.md
 docs/EvidenceSourceVersion.md
 docs/EvidenceSourceVersionListPage.md
+docs/ExchangeCLIAuthCodeRequest.md
 docs/ExternalResourceDetail.md
 docs/ExternalResourceSummary.md
 docs/FactConsistencyIssue.md
@@ -317,6 +323,10 @@ models/BulkReviewBatchSummary.ts
 models/BulkReviewDecisionRequest.ts
 models/BulkReviewItem.ts
 models/BulkReviewWaveResult.ts
+models/CLIAuthCode.ts
+models/CLIAuthExchangeResult.ts
+models/CLIToken.ts
+models/CLITokenList.ts
 models/ChangeTag.ts
 models/ChangeTagAssignmentResult.ts
 models/ChangeTagList.ts
@@ -334,6 +344,7 @@ models/CollectionRule.ts
 models/ComponentUsage.ts
 models/ComponentUsageListPage.ts
 models/CreateBulkReviewBatchRequest.ts
+models/CreateCLIAuthCodeRequest.ts
 models/CreateChangeTagRequest.ts
 models/CreateCitationRequest.ts
 models/CreateCollectionRequest.ts
@@ -386,6 +397,7 @@ models/EvidenceSourceDetail.ts
 models/EvidenceSourceListPage.ts
 models/EvidenceSourceVersion.ts
 models/EvidenceSourceVersionListPage.ts
+models/ExchangeCLIAuthCodeRequest.ts
 models/ExternalResourceDetail.ts
 models/ExternalResourceSummary.ts
 models/FactConsistencyIssue.ts
