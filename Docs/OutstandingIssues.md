@@ -10,11 +10,14 @@
 - 本轮已在隔离环境启动 PostgreSQL、Redis、MinIO、Meilisearch、API、Linux Worker
   与 Web，并完成最新 Schema `up → down → up`、Doctor、真实数据联调、投影重建、
   dead 回放、Revision 冷归档回源和桌面/移动端浏览器回归。
-- 远端生产机已对提交 `c84233c` 完成 Compose config、五个 OCI target 顺序构建、
+- 远端生产机已对提交 `f56876a` 完成 Compose config、六个 OCI target 顺序构建、
   Migration gate、Doctor 和完整拓扑滚动替换；全部数据/应用容器及 Web/API 探针健康。
 - Chrome headless 已覆盖 34 个真实数据路由、导入持久队列、治理流程、斜杠标题和
   390×844 移动端退化；完整键盘顺序、读屏器语义、对比度和正式网络失败态仍需要
   人工验收。
+- Agent CLI 已部署到正式域名和生产 tools image；未登录页面、149 operation 枚举、
+  通用公开调用、请求校验和无效 Bearer 拒绝均已通过。浏览器自动化环境没有生产
+  登录态，正式域名的授权码创建、兑换、调用和撤销仍需管理员人工登录完成一次冒烟。
 - 新增的 References/Related topics/Related outlines/信息框阅读结构已通过本地构建与
   隔离迁移验证，但尚未在生产现有数据上完成投影全量重建、真实导入和浏览器验收。
 
@@ -26,6 +29,8 @@
    对比度，以及断网、超时和 5xx 状态。
 3. 部署后全量重建 Projection，确认 References 编号/多回链、Related topics 原因、
    Collection 归属形成的 Related outlines 和信息框在新旧页面及章节懒加载路径上一致。
+4. 管理员从正式 `/settings/cli` 创建一次性授权码，完成生产 CLI 兑换、受保护读调用、
+   后台撤销与撤销后 401 验证。
 
 ## 2. 账号恢复与二次验证未完成
 
@@ -153,6 +158,8 @@
 - Agent CLI：Go CLI 已通过嵌入 OpenAPI 覆盖全部 HTTP operation，并单独覆盖 Yjs
   WebSocket；输入输出统一 JSON，path/query/header/body/response 有契约校验。浏览器
   后台可签发一次性授权码、查看和撤销 SHA-256 存储的 Bearer Token，权限实时继承账号。
+  `f56876a` 六镜像已部署，生产 CLI 的版本、149 operation、公开调用和校验已通过；
+  登录态授权闭环保留为上述人工冒烟项。
 - Go `1.26.5` 新披露的 7 个标准库可达漏洞：构建与模块基线已升级到 `1.26.6`；
   Nano ID 同期升级到 `3.3.18`，Go/Web 依赖审计和 gitleaks 均恢复为 0。
 - 初始化 down 在已有 Page 时会提前删除 Namespace 种子并触发 FK：已移除冗余的提前
@@ -160,7 +167,7 @@
 - 全 API 修复生产部署：`2e14c32` 已完成五镜像构建、Migration gate、Doctor 与
   API/Worker/Web/AI Kernel 滚动替换；缺失的 `WEB_BIND/WEB_PORT` 已持久化回部署
   环境文件，正式域名和 `127.0.0.1:4444` 绑定验证通过。
-- 144 个 OpenAPI operation 的动态审计：隔离全栈已逐个命中 handler，并完成核心、
+- 149 个 OpenAPI operation 的动态审计：隔离全栈已逐个命中 handler，并完成核心、
   治理、BulkReview、Import/AI 配置与双用户协作成功工作流；故意不可达模型地址按
   契约返回 502，其余没有非预期 5xx。
 - `create_entity` Schema 合法 payload 曾因严格解码结构缺少 `language/description`
@@ -175,7 +182,7 @@
   服务端保存 snapshot 并原子 compact covered update；远端恢复 E2E 已通过。
 - 首版协作范围已冻结：跨浏览器重启离线 CRDT 与多 API 实时广播不属于当前
   Internal Beta 承诺，分别降级为 AST 草稿/人工冲突和单 API 部署约束。
-- 生产 Compose/OCI 验收：远端生产机已完成 `c84233c` 五个本地业务镜像构建、迁移
+- 生产 Compose/OCI 验收：远端生产机已完成 `f56876a` 六个本地业务镜像构建、迁移
   gate、Doctor、滚动替换和全服务 healthcheck；仅保留备份恢复与人工可访问性验收。
 - BlockEditor 的 Client Component 预渲染曾因 BlockNote 访问 `window` 返回 500；
   真实编辑会话与开发验证页现均通过 `next/dynamic({ssr:false})` 加载，浏览器冒烟已

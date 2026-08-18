@@ -15,9 +15,9 @@ Yjs update、持久恢复、普通发布与 AI 合并的 sequence CAS、同标�
 
 当前代码已通过编译、契约、依赖安全和部署静态门禁，并在本机隔离环境完成
 PostgreSQL、Redis、MinIO、Meilisearch、API、Linux Worker 与 Next.js Web 的真实
-联调。提交 `2e14c32` 已在远端生产拓扑完成五个 OCI target 构建、迁移 gate、Doctor、
+联调。提交 `f56876a` 已在远端生产拓扑完成六个 OCI target 构建、迁移 gate、Doctor、
 滚动替换和健康检查。另一个完全隔离的远端数据库/bucket/index/Redis DB 已执行
-144/144 OpenAPI operation handler 探针、核心成功工作流、治理、批量审核、导入、
+149/149 OpenAPI operation handler 探针、核心成功工作流、治理、批量审核、导入、
 AI 配置和双用户协作 E2E。“实现完成”仍不等于“生产发布就绪”：目标规模容量、正式域名
 安全边界、账号恢复、备份恢复与人工可访问性等仍须验收。详见
 [待解决问题](OutstandingIssues.md)。
@@ -121,6 +121,23 @@ AI 配置和双用户协作 E2E。“实现完成”仍不等于“生产发布�
   正式域名 `/healthz` 返回版本 `2e14c32`，`/readyz`、首页和标题探针通过。
 - API/Worker/Web/AI Kernel 均使用 `2e14c32` 镜像；Outbox backlog/dead、
   Projection error/stale 均为 0，启动后没有 error、panic 或 fatal 日志。
+
+## 2026-08-18 Agent CLI 生产部署
+
+- 部署前短暂停止 Web/API/Worker 写入，生成 PostgreSQL custom-format 备份、31 张
+  权威表的确定性快照及 SHA-256 清单；备份耗时 5 秒，包内校验全部通过。完整恢复
+  演练和对象存储恢复验收仍按 `OutstandingIssues.md` 保留。
+- 生产数据库已处于 migration version 1，初始化迁移不会重放。本次在备份后以单事务
+  additive DDL 补充 `cli_authorization_code`、`cli_access_token` 及其索引/约束；
+  migration 保持 `current=1 dirty=false`，变更前后 31 张权威表逐行哈希完全一致。
+- 远端源码和 `ai-kernel/api/worker/web/cli/migrate` 六个镜像均为 `f56876a`。
+  Migration gate 通过，发布前后 Doctor 均为 0 issue，四个常驻业务容器全部 healthy。
+- 正式 HTTPS 域名首页和 `/settings/cli` 返回 200，页面包含 Agent CLI 管理界面；
+  匿名和无效 Bearer 均返回带 request ID 的结构化 401。生产 CLI 镜像报告版本
+  `f56876a`，列出 149 个 operation，通用 `getHealthz` 调用及缺失 body 的请求校验通过。
+- 发布后 Worker 指标可读，API/Worker/Web/AI Kernel 没有 error、panic 或 fatal
+  日志。正式域名的登录态授权码创建、兑换和撤销仍需管理员人工登录完成一次冒烟；
+  同一闭环已在隔离生产等价拓扑完成自动化 E2E。
 
 ## Web 信息架构
 
