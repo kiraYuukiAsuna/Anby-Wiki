@@ -17,7 +17,7 @@ BACKUP_DIR=${BACKUP_DIR:-}
 [ -n "$SOURCE_DB_NAME" ] || die "postgres-backup: SOURCE_DB_NAME or PGDATABASE is required"
 [ -n "$BACKUP_DIR" ] || die "postgres-backup: BACKUP_DIR is required"
 case "$SOURCE_DB_NAME" in
-  *[!a-zA-Z0-9_]*)
+  *[!a-zA-Z0-9._-]*)
     die "postgres-backup: source database name contains unsupported characters"
     ;;
 esac
