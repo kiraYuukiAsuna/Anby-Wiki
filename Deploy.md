@@ -18,7 +18,7 @@
 宿主机需要：
 
 | 组件 | 说明 |
-|---|---|
+| --- | --- |
 | Go | 版本见 `backend/go.mod` 的 `go` 指令 |
 | Node.js + npm | 版本见 `apps/web/package.json` |
 | PostgreSQL | 权威数据 + Outbox，需可连接 |
@@ -103,7 +103,7 @@ make ci                 # check + 生成物漂移 + 安全扫描
 
 ### 2.1 拓扑
 
-```
+```text
                     ┌───────────────────────────── docker network: app ─┐
   外部访问 ─────────►│  web:3000 ──/api/*──► api:8080                    │
   (仅 web 发布端口)  │                         │                        │
@@ -136,7 +136,7 @@ Compose 会把机密注入容器环境，因此具有 Docker 管理权限的人�
 必须修改的项：
 
 | 变量 | 说明 |
-|---|---|
+| --- | --- |
 | `RELEASE_ID` | 本地镜像版本标签，只允许字母、数字、点、下划线和连字符 |
 | `POSTGRES_DB` `POSTGRES_USER` | PostgreSQL 数据库名和用户 |
 | `POSTGRES_PASSWORD` | PostgreSQL 密码；只允许字母、数字、点、下划线和连字符，建议使用 `openssl rand -hex 32` 生成 |
@@ -200,6 +200,53 @@ sh scripts/deploy.sh deploy     # 本地构建并正式发布
 8. 按 `ai-kernel` → `api` → `worker` → `web` 顺序滚动替换。
 
 任一步失败即中止，不会继续替换应用容器。
+
+#### 2.4.1 外层 HTTPS 代理
+
+外层代理必须指向环境文件中实际的 `WEB_BIND:WEB_PORT`，不能假定端口始终为
+3000。宿主机 Nginx 的最小站点配置示例：
+
+```nginx
+map $http_upgrade $anbywiki_connection_upgrade {
+    default upgrade;
+    '' close;
+}
+
+server {
+    listen 443 ssl;
+    server_name anbywiki.example.com;
+
+    location / {
+        proxy_pass http://127.0.0.1:4444;
+        proxy_http_version 1.1;
+        proxy_set_header Host $host;
+        proxy_set_header X-Forwarded-Proto $scheme;
+        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+        proxy_set_header Upgrade $http_upgrade;
+        proxy_set_header Connection $anbywiki_connection_upgrade;
+    }
+}
+```
+
+对应部署环境应设置：
+
+```sh
+WEB_BIND=127.0.0.1
+WEB_PORT=4444
+SESSION_COOKIE_SECURE=true
+COLLABORATION_ORIGIN_PATTERNS=https://anbywiki.example.com
+```
+
+修改代理后必须先运行 `nginx -t`，再平滑 reload。部署完成后同时验证：
+
+```sh
+curl -fsS https://anbywiki.example.com/healthz
+curl -fsS https://anbywiki.example.com/readyz
+curl -fsS https://anbywiki.example.com/ | grep '<title>Anby Wiki</title>'
+```
+
+容器 healthy 只能证明内部服务正常，不能证明域名没有误指向宿主机上的其他端口或
+容器。协作发布还应通过 `COLLABORATION_E2E_BASE_URL=https://...` 的 WSS E2E。
 
 ### 2.5 其他命令
 

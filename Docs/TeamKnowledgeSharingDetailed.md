@@ -3095,6 +3095,8 @@ Claim 独立后：
   全部 healthy，Web/API 探针通过；
 - 双用户正式 Session + WebSocket E2E，覆盖 Presence、update 广播、幂等重放、
   断线恢复、陈旧 sequence 409、最新 sequence 发布及 snapshot/compact 恢复。
+- 正式域名由宿主机 Nginx 终结 HTTPS，并代理到仅绑定 `127.0.0.1:4444` 的 Web；
+  HTTPS 首页/API 与 WSS 协作 E2E 已通过。
 
 ### 18.3 第一版修复后的协作实现边界
 
@@ -3115,9 +3117,9 @@ Claim 独立后：
 1. PostgreSQL 与对象存储备份恢复演练及 RPO/RTO；
 2. 完整键盘、读屏、对比度和网络失败态人工验收；
 3. 邮箱验证、账号恢复、MFA 和会话管理；
-4. 正式 TLS、Cookie Secure 与完整 CSRF 防护；
+4. HSTS、证书续期告警与完整 CSRF 防护；
 5. 目标硬件上的 10 万页面容量与中文语义召回；
-6. 正式域名、Beta 用户、观察期、SLO 和负责人。
+6. Beta 用户、观察期、SLO 和负责人。
 
 因此分享中应使用：
 
@@ -3468,7 +3470,7 @@ AST 适合保存一份不可变文档快照，但不适合高频关系查询。
 核心链路已实现，并完成本地联调及远端生产拓扑部署/E2E，但仍有明确的发布阻塞：
 
 - 备份恢复演练；
-- TLS/CSRF；
+- HSTS/CSRF；
 - 账号恢复/MFA；
 - 目标容量；
 - 正式 Beta 范围和 SLO；

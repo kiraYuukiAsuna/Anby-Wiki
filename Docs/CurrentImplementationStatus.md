@@ -96,6 +96,18 @@ PostgreSQL、Redis、MinIO、Meilisearch、API、Linux Worker 与 Next.js Web �
 - 部署环境文件原先缺少 AI 基础设施密钥且数据库密码与持久卷不一致；本次从仍健康的
   旧容器恢复相同值到权限 `0600` 的部署环境文件，全程未输出密钥。该环境文件已备份。
 
+## 2026-08-18 正式域名路由恢复
+
+- `anbywiki.kirayuukiasuna.cloud` 的宿主机 Nginx upstream 曾误指向
+  `127.0.0.1:3000`，该端口属于 `homepage-web-1`；Anby Wiki 容器始终 healthy，
+  正确端口为 4444。
+- 站点配置已备份并改为 `proxy_pass http://127.0.0.1:4444`，`nginx -t` 通过后
+  平滑 reload。Web 端口进一步收紧为 `127.0.0.1:4444`，不再直接绑定公网。
+- 部署环境现设置 `SESSION_COOKIE_SECURE=true` 和正式
+  `COLLABORATION_ORIGIN_PATTERNS`；API/Web 重建后保持 healthy。
+- 正式 HTTPS 域名的首页、`/healthz`、`/readyz` 均为 200，未登录 Session 为 401；
+  HTTPS/WSS 双用户 E2E 再次覆盖 Presence、更新、发布 CAS 和 snapshot/compact。
+
 ## Web 信息架构
 
 Web 使用桌面优先的现代百科 Shell：可浏览最近发布条目、专题与实体的百科首页、全部页面目录、固定全局导航、视口内滚动的命令面板、搜索、上下文侧栏、

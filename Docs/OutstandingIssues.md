@@ -43,21 +43,23 @@
 3. 提供 TOTP 或 WebAuthn MFA、恢复码和登录设备/会话管理。
 4. 在正式域名验证注册关闭、登录、退出、账号停用和角色撤销。
 
-## 3. 默认无 TLS，显式 CSRF 防护未恢复
+## 3. TLS 已终结，显式 CSRF 与 HSTS 尚未恢复
 
 ### 3.1 现状
 
-- 生产 Compose 不终结 TLS；`web` 是唯一发布端口的服务。
-- 明文公网暴露时，登录凭据和 Session Cookie 可被网络观察者读取。
-- Session Cookie 使用 HttpOnly 与 `SameSite=Lax`，但 ADR-0020 已移除
+- 生产 Compose 不终结 TLS；宿主机 Nginx 已为
+  `anbywiki.kirayuukiasuna.cloud` 终结 HTTPS，并代理到仅绑定
+  `127.0.0.1:4444` 的 Web。
+- `SESSION_COOKIE_SECURE=true`，正式 HTTPS/WSS 域名的登录和协作 E2E 已通过；
+  当前响应尚未提供 HSTS。
+- Session Cookie 使用 HttpOnly、Secure 与 `SameSite=Lax`，但 ADR-0020 已移除
   Origin/Referer 门禁；`SameSite=Lax` 不是完整 CSRF 防护。
 
 ### 3.2 关闭条件
 
-1. 在云 LB、Cloudflare 或独立代理终结 HTTPS，并启用 HSTS。
-2. 设置 `SESSION_COOKIE_SECURE=true`。
-3. 采用同步 CSRF Token、Fetch Metadata 或等价可信来源校验，并完成浏览器验证。
-4. 若按最终客户端 IP 限流，先由外层清洗 `X-Forwarded-For`，再只把 API 的可信
+1. 为正式域名启用 HSTS，并验证证书自动续期、失败告警和代理配置备份恢复。
+2. 采用同步 CSRF Token、Fetch Metadata 或等价可信来源校验，并完成浏览器验证。
+3. 若按最终客户端 IP 限流，先由外层清洗 `X-Forwarded-For`，再只把 API 的可信
    直连对端加入 `TRUSTED_PROXY_IPS`。
 
 ## 4. Meilisearch 容量与语义质量尚未在目标环境验收
@@ -70,6 +72,8 @@
   混合查询、远端索引任务等待和全量投影重建；功能链路已闭环。
 - 尚未按 ADR-0012 的 10 万页面同口径复测吞吐、P95/P99、索引任务延迟和重建
   时间；中文召回质量、内存占用和无外网模型预置策略也尚未在目标硬件确认。
+- 远端 API 重建时曾有一次 Meilisearch 索引配置任务在单次 15 秒 HTTP 超时内未返回，
+  进程由 restart policy 重启后恢复 healthy；常驻 Worker 指标和后续日志正常。
 
 ### 4.2 关闭条件
 
@@ -77,12 +81,13 @@
 2. 记录吞吐、P50/P95/P99、索引积压、全量重建时间、内存和磁盘水位。
 3. 用固定中文查询集评估语义召回，并定义无模型或模型下载失败时的显式降级策略。
 4. 验证旧 Revision 重试不能覆盖新索引，删除 Page 会同步移除远端文档。
+5. 调整索引配置启动重试与单次请求超时，避免健康服务因慢 task 轮询产生一次性退出。
 
 ## 5. 正式发布输入与 Beta 验收未确定
 
 ### 5.1 缺少输入
 
-- 正式域名、TLS/DNS 边界和最终网络拓扑。
+- 正式域名证书续期负责人、Nginx 配置恢复责任和最终网络拓扑变更流程。
 - Internal Beta 用户范围、角色分配和数据范围。
 - Beta 观察期、SLO 判定窗口、告警接收人和发布负责人。
 
