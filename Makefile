@@ -18,7 +18,7 @@ endif
 	pg-start pg-stop pg-reset migrate-up migrate-down migrate-version migration-check \
 	format-check typecheck lint lint-go lint-web shell-check \
 	build build-go build-web check \
-	gen-client contracts-check gen-check \
+	gen-client contracts-check web-api-coverage gen-check \
 	deploy-check \
 	security security-go security-web security-secrets \
 	perf-db perf-smoke perf-full \
@@ -101,7 +101,7 @@ build-go: ## 构建全部 Go 命令与包
 build-web: ## 构建 Next.js Web
 	cd $(WEB_DIR) && npm run build
 
-check: lint build contracts-check migration-check deploy-check ## 执行提交前静态与构建门禁
+check: lint build contracts-check web-api-coverage migration-check deploy-check ## 执行提交前静态与构建门禁
 
 ##@ 契约与生成物
 
@@ -110,6 +110,9 @@ gen-client: ## 从 OpenAPI 重新生成 TypeScript 客户端
 
 contracts-check: ## 校验权威 Schema 与嵌入副本一致
 	$(SH) scripts/check-contracts.sh
+
+web-api-coverage: ## 校验每个 OpenAPI operation 都有可达的 Web 页面或全局操作
+	node scripts/check-web-api-coverage.mjs
 
 gen-check: contracts-check gen-client ## 校验生成客户端没有漂移
 	git diff --exit-code -- contracts/generated/typescript

@@ -232,7 +232,8 @@ outlines。References/Related 是 Current Revision
   回放成功；修复后的新 Claim Proposal Apply 两条事件均首轮完成；
 - 非当前 Revision 经领域服务真实归档到 MinIO，API 从 cold tier 校验哈希后透明
   回源，AST 内容保持一致；
-- 135/135 个 OpenAPI operationId 均由 Web 生成客户端调用路径引用；Chrome
+- 144/144 个 OpenAPI operationId 均由 Web 生成客户端调用路径引用，并由
+  `make web-api-coverage` 验证调用文件可反向追踪到页面或全局 layout；Chrome
   headless 覆盖 34 个桌面路由、关键成功/空状态，以及真实 390×844 设备度量；
   窄屏 `html/body scrollWidth === clientWidth === 390`，斜杠标题的分段与编码
   URL 均可访问；
@@ -242,13 +243,27 @@ outlines。References/Related 是 Current Revision
 
 仍须在发布/目标环境补充：
 
-- Docker Compose 展开、四个 OCI target 构建、容器 healthcheck 与非 root 元数据
-  验证（本机 Docker daemon 不可用）；
+- PostgreSQL/对象存储备份恢复演练和 RPO/RTO 记录；
 - 10 万页面目标硬件容量、搜索语义质量和长时间队列/SLO 观察；
-- 正式域名下的 TLS、CSRF、账号恢复/MFA 与完整键盘、读屏、对比度人工验收。
+- 正式域名下的 HSTS、CSRF、账号恢复/MFA 与完整键盘、读屏、对比度人工验收。
 
 仓库仍没有覆盖全部领域的完整自动化测试套件；现有 Go 单元/适配器/OCR 运行测试
 与本轮真实系统演练不能替代发布环境的容量、安全和人工可访问性验收。
+
+## 2026-08-18 Web API 可操作性审计
+
+- 权威 OpenAPI 当前共有 144 个 operation：75 个 GET、69 个写操作。全部通过生成
+  客户端调用，调用文件均可沿 TypeScript import 图反向到达 46 个页面/global layout
+  owner；不存在未挂路由的 API 组件。
+- 69 个写操作分别落在注册/登录、页面编辑与工具、导入、资产、来源、Dataset、
+  Component、Collection、Entity、联邦和治理工作区，均有表单、按钮或明确命令入口。
+  动态详情页都有上游列表、搜索、审计、引用或关联对象链接。
+- 正式域名批量验证 26 个非动态页面和 10 个真实数据动态页面，均返回 200；全局命令
+  面板可发现主要知识、共建、治理和管理工作区。
+- `/metrics` 是 Prometheus 抓取端点，不属于用户操作；协作 WebSocket 是编辑器内部
+  传输协议，由 `/pages/[id]/edit` 使用并经 HTTPS/WSS E2E 覆盖。
+- 新增 `scripts/check-web-api-coverage.mjs` 并纳入 `make check`。以后新增 operation
+  没有前端调用，或调用只存在于未挂载组件中，提交门禁会失败。
 
 ## 数据库状态
 

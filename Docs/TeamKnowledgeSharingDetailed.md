@@ -3097,6 +3097,8 @@ Claim 独立后：
   断线恢复、陈旧 sequence 409、最新 sequence 发布及 snapshot/compact 恢复。
 - 正式域名由宿主机 Nginx 终结 HTTPS，并代理到仅绑定 `127.0.0.1:4444` 的 Web；
   HTTPS 首页/API 与 WSS 协作 E2E 已通过。
+- 144/144 个 OpenAPI operation 均有生成客户端调用和可达页面/global layout owner；
+  69 个写操作均落在实际表单、按钮或命令入口，并由 `make web-api-coverage` 持续检查。
 
 ### 18.3 第一版修复后的协作实现边界
 
