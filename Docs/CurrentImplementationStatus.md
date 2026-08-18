@@ -15,7 +15,7 @@ Yjs update、持久恢复、普通发布与 AI 合并的 sequence CAS、同标�
 
 当前代码已通过编译、契约、依赖安全和部署静态门禁，并在本机隔离环境完成
 PostgreSQL、Redis、MinIO、Meilisearch、API、Linux Worker 与 Next.js Web 的真实
-联调。提交 `c84233c` 又在远端生产拓扑完成五个 OCI target 构建、迁移 gate、Doctor、
+联调。提交 `2e14c32` 已在远端生产拓扑完成五个 OCI target 构建、迁移 gate、Doctor、
 滚动替换和健康检查。另一个完全隔离的远端数据库/bucket/index/Redis DB 已执行
 144/144 OpenAPI operation handler 探针、核心成功工作流、治理、批量审核、导入、
 AI 配置和双用户协作 E2E。“实现完成”仍不等于“生产发布就绪”：目标规模容量、正式域名
@@ -109,6 +109,18 @@ AI 配置和双用户协作 E2E。“实现完成”仍不等于“生产发布�
   `COLLABORATION_ORIGIN_PATTERNS`；API/Web 重建后保持 healthy。
 - 正式 HTTPS 域名的首页、`/healthz`、`/readyz` 均为 200，未登录 Session 为 401；
   HTTPS/WSS 双用户 E2E 再次覆盖 Presence、更新、发布 CAS 和 snapshot/compact。
+
+## 2026-08-18 全 API 修复生产部署
+
+- 远端仓库快进到 `2e14c32`，五个业务镜像顺序构建成功；Migration gate 为
+  `current=1 expected=1 compatible=1..1 dirty=false`，部署前后 Doctor 均为 0 issues。
+- AI Kernel、API、Worker 已按顺序切换并健康。首次 Web 切换发现部署环境文件没有
+  持久化 `WEB_BIND/WEB_PORT`，Compose 回退到已被其他站点占用的 `0.0.0.0:3000`，
+  因端口冲突停止；没有回滚或修改权威数据。
+- 环境文件备份后补回 `WEB_BIND=127.0.0.1`、`WEB_PORT=4444`，Web 单独重建并健康。
+  正式域名 `/healthz` 返回版本 `2e14c32`，`/readyz`、首页和标题探针通过。
+- API/Worker/Web/AI Kernel 均使用 `2e14c32` 镜像；Outbox backlog/dead、
+  Projection error/stale 均为 0，启动后没有 error、panic 或 fatal 日志。
 
 ## Web 信息架构
 

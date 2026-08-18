@@ -94,8 +94,8 @@ make check              # 提交前质量门禁
 make ci                 # check + 生成物漂移 + 安全扫描
 ```
 
-仓库当前不维护自动化测试套件；上述门禁执行格式化、静态分析、类型检查、构建、
-契约漂移、迁移规范、部署静态检查和安全扫描。
+上述门禁执行格式化、静态分析、类型检查、构建、契约漂移、迁移规范、部署静态检查
+和安全扫描；Go 单元测试及需要隔离全栈的 API/协作 E2E 另按下文执行。
 
 ---
 
@@ -236,6 +236,10 @@ WEB_PORT=4444
 SESSION_COOKIE_SECURE=true
 COLLABORATION_ORIGIN_PATTERNS=https://anbywiki.example.com
 ```
+
+不要只在一次 `docker compose` 命令中临时覆盖 `WEB_BIND/WEB_PORT`。后续 release
+重建 Web 容器时仍会读取部署环境文件；缺失时会回退到 Compose 默认端口，可能与宿主机
+其他站点冲突并使滚动部署停在 Web 切换阶段。
 
 修改代理后必须先运行 `nginx -t`，再平滑 reload。部署完成后同时验证：
 

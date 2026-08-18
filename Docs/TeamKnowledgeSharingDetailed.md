@@ -3103,6 +3103,8 @@ Claim 独立后：
   个 OpenAPI handler；核心、治理、BulkReview、Import/AI 配置和协作成功工作流通过。
 - 测试发现并修复两处真实问题：`create_entity` 的严格 payload 解码与 Schema 漂移；
   Parse 成功但后续模型失败时 ImportJob 不暴露已持久化 SourceVersion 恢复点。
+- 修复提交 `2e14c32` 已部署到正式域名；Migration gate、Doctor、全服务健康检查、
+  API 版本、首页和 Worker 投影指标均通过。
 
 ### 18.3 第一版修复后的协作实现边界
 

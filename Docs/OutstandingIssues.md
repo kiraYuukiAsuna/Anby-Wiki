@@ -150,6 +150,9 @@
 
 ## 本轮已关闭
 
+- 全 API 修复生产部署：`2e14c32` 已完成五镜像构建、Migration gate、Doctor 与
+  API/Worker/Web/AI Kernel 滚动替换；缺失的 `WEB_BIND/WEB_PORT` 已持久化回部署
+  环境文件，正式域名和 `127.0.0.1:4444` 绑定验证通过。
 - 144 个 OpenAPI operation 的动态审计：隔离全栈已逐个命中 handler，并完成核心、
   治理、BulkReview、Import/AI 配置与双用户协作成功工作流；故意不可达模型地址按
   契约返回 502，其余没有非预期 5xx。
