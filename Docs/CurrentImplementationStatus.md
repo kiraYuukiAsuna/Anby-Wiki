@@ -15,7 +15,7 @@ Yjs update、持久恢复、普通发布与 AI 合并的 sequence CAS、同标�
 
 当前代码已通过编译、契约、依赖安全和部署静态门禁，并在本机隔离环境完成
 PostgreSQL、Redis、MinIO、Meilisearch、API、Linux Worker 与 Next.js Web 的真实
-联调。提交 `f56876a` 已在远端生产拓扑完成六个 OCI target 构建、迁移 gate、Doctor、
+联调。提交 `0196ec6` 已在远端生产拓扑完成六个 OCI target 构建、迁移 gate、Doctor、
 滚动替换和健康检查。另一个完全隔离的远端数据库/bucket/index/Redis DB 已执行
 149/149 OpenAPI operation handler 探针、核心成功工作流、治理、批量审核、导入、
 AI 配置和双用户协作 E2E。“实现完成”仍不等于“生产发布就绪”：目标规模容量、正式域名
@@ -161,6 +161,11 @@ AI 配置和双用户协作 E2E。“实现完成”仍不等于“生产发布�
   Meilisearch 恢复 72 文档/72 embedding，Projection consistency 为 792/792、
   0 issue，正式搜索 API 为 200，Doctor 为 0 error/critical。两套隔离 database、
   bucket、index、Redis DB、container 和 SSH tunnel 均已清理。
+- 修复提交 `0196ec6` 已完成六镜像构建和滚动发布；Migration gate 为
+  `current=1 expected=1 compatible=1..1 dirty=false`，发布 Doctor 为 0
+  error/critical。API/Worker/Web/AI Kernel 全部 healthy，生产 CLI 报告
+  `version=0196ec6`、149 operation，缺少必填 body 返回 exit 2；发布后四个服务无
+  error/panic/fatal 日志，正式健康与搜索调用均为 200。
 
 ## Web 信息架构
 

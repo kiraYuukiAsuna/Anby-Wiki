@@ -3104,7 +3104,7 @@ Claim 独立后：
   个 OpenAPI handler；核心、治理、BulkReview、Import/AI 配置和协作成功工作流通过。
 - 测试发现并修复两处真实问题：`create_entity` 的严格 payload 解码与 Schema 漂移；
   Parse 成功但后续模型失败时 ImportJob 不暴露已持久化 SourceVersion 恢复点。
-- CLI 发布提交 `f56876a` 已部署到正式域名；Migration gate、Doctor、全服务健康检查、
+- CLI 验收修复提交 `0196ec6` 已部署到正式域名；Migration gate、Doctor、全服务健康检查、
   API/CLI 版本、首页、`/settings/cli` 和 Worker 指标均通过。既有 version-1 数据库在
   自校验备份后以单事务补充两张 CLI 授权表，变更前后权威表哈希一致。
 - Go Agent CLI 以统一 JSON envelope 暴露全部 OpenAPI operation，并覆盖 Yjs

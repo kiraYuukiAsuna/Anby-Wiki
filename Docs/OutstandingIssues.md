@@ -10,7 +10,7 @@
 - 本轮已在隔离环境启动 PostgreSQL、Redis、MinIO、Meilisearch、API、Linux Worker
   与 Web，并完成最新 Schema `up → down → up`、Doctor、真实数据联调、投影重建、
   dead 回放、Revision 冷归档回源和桌面/移动端浏览器回归。
-- 远端生产机已对提交 `f56876a` 完成 Compose config、六个 OCI target 顺序构建、
+- 远端生产机已对提交 `0196ec6` 完成 Compose config、六个 OCI target 顺序构建、
   Migration gate、Doctor 和完整拓扑滚动替换；全部数据/应用容器及 Web/API 探针健康。
 - Chrome headless 已覆盖 34 个真实数据路由、导入持久队列、治理流程、斜杠标题和
   390×844 移动端退化；完整键盘顺序、读屏器语义、对比度和正式网络失败态仍需要
@@ -158,7 +158,7 @@
 - Agent CLI：Go CLI 已通过嵌入 OpenAPI 覆盖全部 HTTP operation，并单独覆盖 Yjs
   WebSocket；输入输出统一 JSON，path/query/header/body/response 有契约校验。浏览器
   后台可签发一次性授权码、查看和撤销 SHA-256 存储的 Bearer Token，权限实时继承账号。
-  `f56876a` 六镜像已部署，生产 CLI 的版本、149 operation、公开调用和校验已通过；
+  `0196ec6` 六镜像已部署，生产 CLI 的版本、149 operation、公开调用和校验已通过；
   登录态授权闭环保留为上述人工冒烟项。
 - CLI 本地输入错误分类：缺失必填 body、非法 timeout、未知 operation 曾被包装成
   `request_failed`/exit 1；现按协议返回 `validation_failed` 或
@@ -188,7 +188,7 @@
   服务端保存 snapshot 并原子 compact covered update；远端恢复 E2E 已通过。
 - 首版协作范围已冻结：跨浏览器重启离线 CRDT 与多 API 实时广播不属于当前
   Internal Beta 承诺，分别降级为 AST 草稿/人工冲突和单 API 部署约束。
-- 生产 Compose/OCI 验收：远端生产机已完成 `f56876a` 六个本地业务镜像构建、迁移
+- 生产 Compose/OCI 验收：远端生产机已完成 `0196ec6` 六个本地业务镜像构建、迁移
   gate、Doctor、滚动替换和全服务 healthcheck；仅保留备份恢复与人工可访问性验收。
 - BlockEditor 的 Client Component 预渲染曾因 BlockNote 访问 `window` 返回 500；
   真实编辑会话与开发验证页现均通过 `next/dynamic({ssr:false})` 加载，浏览器冒烟已
