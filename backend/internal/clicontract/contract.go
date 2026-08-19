@@ -539,6 +539,18 @@ func normalizeSchema(raw any) any {
 		if boolValue(value["nullable"]) {
 			if currentType, ok := result["type"].(string); ok {
 				result["type"] = []any{currentType, "null"}
+				if enum, ok := result["enum"].([]any); ok {
+					hasNull := false
+					for _, item := range enum {
+						if item == nil {
+							hasNull = true
+							break
+						}
+					}
+					if !hasNull {
+						result["enum"] = append(enum, nil)
+					}
+				}
 			} else {
 				copy := make(map[string]any, len(result))
 				for key, child := range result {

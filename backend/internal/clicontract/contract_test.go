@@ -70,3 +70,26 @@ func TestAllOperationSchemasCompile(t *testing.T) {
 		}
 	}
 }
+
+func TestNullableEnumAcceptsNull(t *testing.T) {
+	schema, err := compileJSONSchema(
+		map[string]any{},
+		normalizeSchema(map[string]any{
+			"type": "string", "enum": []any{"active", "revoked"},
+			"nullable": true,
+		}),
+		"nullable-enum",
+	)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := validateValue(schema, nil); err != nil {
+		t.Fatalf("nullable enum rejected null: %v", err)
+	}
+	if err := validateValue(schema, "active"); err != nil {
+		t.Fatalf("nullable enum rejected declared value: %v", err)
+	}
+	if err := validateValue(schema, "missing"); err == nil {
+		t.Fatal("nullable enum accepted undeclared string")
+	}
+}

@@ -49,6 +49,31 @@ bin/anby-wiki --input request.json
 
 进程成功退出码为 `0`，输入/契约错误为 `2`，远端或运行错误为 `1`。
 
+## 测试
+
+CLI action、149 个 HTTP operation、multipart、二进制响应和协作 WebSocket 的本地
+回归：
+
+```sh
+cd backend
+go test ./internal/wikicli ./internal/clicontract -count=1
+go test -race ./internal/wikicli ./internal/clicontract -count=1
+```
+
+在独立 API 环境中，用一次性测试 Token 逐个经过 CLI transport 调用全部 operation：
+
+```sh
+cd backend
+CLI_E2E_BASE_URL=http://127.0.0.1:14545 \
+CLI_E2E_TOKEN='anby_token_...' \
+go test ./internal/wikicli \
+  -run '^TestAllOperationsAgainstAPI$' -count=1 -v
+```
+
+该测试会创建、修改和查询数据，并把 `revokeCurrentCLIToken` 放在最后调用，因此 Token
+执行后会被撤销。只能使用独立 database、bucket、Meilisearch index、Redis DB 和专用
+测试 Token，禁止指向生产数据。
+
 ## 授权
 
 1. 浏览器登录站点。

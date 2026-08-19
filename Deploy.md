@@ -299,6 +299,21 @@ go test ./cmd/api -run TestCollaborationE2E -count=1 -v
 契约内 502/504 外，任何 5xx 都失败。成功工作流另行验证权威写入、异步投影、治理状态机、
 Import 恢复点和双用户协作语义。
 
+同一隔离环境还应使用专用 CLI Token 验证全部 operation 确实经过 CLI 的参数、请求体
+与响应 Schema 校验：
+
+```sh
+cd backend
+CLI_E2E_BASE_URL=http://127.0.0.1:14545 \
+CLI_E2E_TOKEN='<isolated-cli-token>' \
+go test ./internal/wikicli \
+  -run '^TestAllOperationsAgainstAPI$' -count=1 -v
+```
+
+该测试会把 `revokeCurrentCLIToken` 排在最后，因此测试 Token 执行后立即失效。清理隔离
+资源时必须先把 database、bucket、index、container 名保存到独立的 `E2E_*` 变量，再加载
+生产环境；禁止让生产 `.env` 中的同名变量覆盖隔离资源名。
+
 ### 2.7 备份
 
 数据在命名卷 `pgdata` 与 `miniodata` 中，随 `docker compose down` 保留，

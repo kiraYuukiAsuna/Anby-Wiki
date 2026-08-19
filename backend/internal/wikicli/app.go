@@ -106,6 +106,18 @@ type remoteResponse struct {
 	Body        any
 }
 
+type cliInputError struct {
+	err error
+}
+
+func (e *cliInputError) Error() string {
+	return e.err.Error()
+}
+
+func (e *cliInputError) Unwrap() error {
+	return e.err
+}
+
 func New(version string) (*App, error) {
 	contract, err := clicontract.Load()
 	if err != nil {
@@ -219,7 +231,7 @@ func (a *App) callOperation(ctx context.Context, input Input) (Result, int) {
 	_ = configPath
 	response, err := a.invoke(ctx, input, config)
 	if err != nil {
-		return failure(input.Action, "request_failed", err.Error(), nil), 1
+		return invocationFailure(input.Action, err, nil)
 	}
 	return remoteResult(input.Action, input.OperationID, response)
 }
@@ -243,7 +255,7 @@ func (a *App) exchange(ctx context.Context, input Input) (Result, int) {
 	}
 	response, err := a.invoke(ctx, call, Config{BaseURL: config.BaseURL})
 	if err != nil {
-		return failure(input.Action, "request_failed", err.Error(), nil), 1
+		return invocationFailure(input.Action, err, nil)
 	}
 	if response.Status < 200 || response.Status >= 300 {
 		return remoteResult(input.Action, call.OperationID, response)
@@ -295,7 +307,7 @@ func (a *App) authStatus(ctx context.Context, input Input) (Result, int) {
 		BaseURL: config.BaseURL, TimeoutSeconds: input.TimeoutSeconds,
 	}, config)
 	if err != nil {
-		return failure(input.Action, "request_failed", err.Error(), nil), 1
+		return invocationFailure(input.Action, err, nil)
 	}
 	return remoteResult(input.Action, "getSession", response)
 }
@@ -312,6 +324,10 @@ func (a *App) logout(ctx context.Context, input Input) (Result, int) {
 		Action: "operation.call", OperationID: "revokeCurrentCLIToken",
 		BaseURL: config.BaseURL, TimeoutSeconds: input.TimeoutSeconds,
 	}, config)
+	var inputErr *cliInputError
+	if errors.As(invokeErr, &inputErr) {
+		return invocationFailure(input.Action, invokeErr, nil)
+	}
 	config.Token = ""
 	config.TokenPrefix = ""
 	config.ActorID = ""
@@ -321,9 +337,9 @@ func (a *App) logout(ctx context.Context, input Input) (Result, int) {
 		return failure(input.Action, "config_write_failed", err.Error(), nil), 1
 	}
 	if invokeErr != nil {
-		return failure(input.Action, "request_failed", invokeErr.Error(), map[string]any{
+		return invocationFailure(input.Action, invokeErr, map[string]any{
 			"local_credentials_removed": true,
-		}), 1
+		})
 	}
 	if response.Status != http.StatusNoContent &&
 		response.Status != http.StatusUnauthorized {
@@ -358,7 +374,7 @@ func (a *App) invoke(
 ) (remoteResponse, error) {
 	operation, err := a.contract.Describe(input.OperationID)
 	if err != nil {
-		return remoteResponse{}, err
+		return remoteResponse{}, asCLIInputError(err)
 	}
 	baseURL := strings.TrimSpace(input.BaseURL)
 	if baseURL == "" {
@@ -366,11 +382,11 @@ func (a *App) invoke(
 	}
 	baseURL, err = normalizeBaseURL(baseURL)
 	if err != nil {
-		return remoteResponse{}, err
+		return remoteResponse{}, asCLIInputError(err)
 	}
 	bodyValue, bodyPresent, err := decodeBody(input.Body)
 	if err != nil {
-		return remoteResponse{}, fmt.Errorf("body: %w", err)
+		return remoteResponse{}, asCLIInputError(fmt.Errorf("body: %w", err))
 	}
 	contentType := ""
 	validationBody := bodyValue
@@ -381,11 +397,15 @@ func (a *App) invoke(
 			object = map[string]any{}
 			bodyPresent = true
 		} else if !ok {
-			return remoteResponse{}, errors.New("body must be an object when files are present")
+			return remoteResponse{}, asCLIInputError(
+				errors.New("body must be an object when files are present"),
+			)
 		}
 		for field, path := range input.Files {
 			if strings.TrimSpace(field) == "" || strings.TrimSpace(path) == "" {
-				return remoteResponse{}, errors.New("file field and path must be non-empty")
+				return remoteResponse{}, asCLIInputError(
+					errors.New("file field and path must be non-empty"),
+				)
 			}
 			object[field] = path
 		}
@@ -397,19 +417,21 @@ func (a *App) invoke(
 		Path: input.Path, Query: input.Query, Headers: input.Headers,
 		Body: validationBody, BodyPresent: bodyPresent, ContentType: contentType,
 	}); err != nil {
-		return remoteResponse{}, fmt.Errorf("request validation failed: %w", err)
+		return remoteResponse{}, asCLIInputError(
+			fmt.Errorf("request validation failed: %w", err),
+		)
 	}
 
 	endpoint, err := operationURL(baseURL, operation, input.Path, input.Query)
 	if err != nil {
-		return remoteResponse{}, err
+		return remoteResponse{}, asCLIInputError(err)
 	}
 	var reader io.Reader
 	if len(input.Files) > 0 {
 		var actualType string
 		reader, actualType, err = multipartBody(bodyValue, input.Files)
 		if err != nil {
-			return remoteResponse{}, err
+			return remoteResponse{}, asCLIInputError(err)
 		}
 		contentType = actualType
 	} else if bodyPresent {
@@ -417,7 +439,7 @@ func (a *App) invoke(
 	}
 	request, err := http.NewRequestWithContext(ctx, operation.Method, endpoint, reader)
 	if err != nil {
-		return remoteResponse{}, err
+		return remoteResponse{}, asCLIInputError(err)
 	}
 	if contentType != "" {
 		request.Header.Set("Content-Type", contentType)
@@ -426,13 +448,13 @@ func (a *App) invoke(
 		request.Header.Set("Authorization", "Bearer "+config.Token)
 	}
 	if err := setRequestHeaders(request.Header, input.Headers); err != nil {
-		return remoteResponse{}, err
+		return remoteResponse{}, asCLIInputError(err)
 	}
 	request.Header.Set("Accept", "application/json, application/octet-stream;q=0.9")
 
 	timeout, err := requestTimeout(input.TimeoutSeconds)
 	if err != nil {
-		return remoteResponse{}, err
+		return remoteResponse{}, asCLIInputError(err)
 	}
 	client := *a.client
 	client.Timeout = timeout
@@ -506,6 +528,27 @@ func failure(action, code, message string, details any) Result {
 		OK: false, Action: action,
 		Error: &Error{Code: code, Message: message, Details: details},
 	}
+}
+
+func asCLIInputError(err error) error {
+	if err == nil {
+		return nil
+	}
+	return &cliInputError{err: err}
+}
+
+func invocationFailure(action string, err error, details any) (Result, int) {
+	var inputErr *cliInputError
+	if errors.As(err, &inputErr) {
+		code := "validation_failed"
+		message := err.Error()
+		if errors.Is(err, clicontract.ErrOperationNotFound) {
+			code = "operation_not_found"
+			message = "unknown operation_id"
+		}
+		return failure(action, code, message, details), 2
+	}
+	return failure(action, "request_failed", err.Error(), details), 1
 }
 
 func remoteResult(

@@ -1,6 +1,6 @@
 # 当前实现状态
 
-> 更新时间：2026-08-18
+> 更新时间：2026-08-19
 > 产品与能力审计依据：[整体设计方案](WikiDesignOnePage.md)
 
 ## 总体结论
@@ -138,6 +138,29 @@ AI 配置和双用户协作 E2E。“实现完成”仍不等于“生产发布�
 - 发布后 Worker 指标可读，API/Worker/Web/AI Kernel 没有 error、panic 或 fatal
   日志。正式域名的登录态授权码创建、兑换和撤销仍需管理员人工登录完成一次冒烟；
   同一闭环已在隔离生产等价拓扑完成自动化 E2E。
+
+## 2026-08-19 Agent CLI 全量接口验证
+
+- 新增 `TestAllOperationsReachHTTPTransport`：从嵌入 OpenAPI 自动生成满足必填约束的
+  path/query/header、JSON body 与 multipart fixture，149/149 个 operation 均通过
+  `App.Execute("operation.call")` 到达 HTTP transport；Bearer、方法、URL、文件字段和
+  响应 metadata 同时校验。
+- 新增隔离全栈 `TestAllOperationsAgainstAPI`。首个管理员签发的 CLI Token 对 149 个
+  operation 逐个真实调用，状态分布为 31×200、7×201、2×204、3×400、2×401、
+  4×403、94×404、2×409、4×422；所有 JSON 都通过对应响应 Schema，0 个 5xx。
+- CLI action 成功路径覆盖 `version`、operation 清单/过滤/描述/调用、
+  `auth.exchange/status/logout`、`config.show` 和 `collaboration.run`。真实协作覆盖
+  WorkingDocument recovery、opaque update、Presence、snapshot/compact；真实文件链路
+  覆盖 Asset multipart、二进制 base64 逐字节还原和 Import upload multipart。
+- 测试发现并修复两处协议问题：本地输入/契约错误曾被误分为 exit 1
+  `request_failed`，现统一为 exit 2 `validation_failed/operation_not_found`，且非法
+  logout 参数不会删除本地 Token；`nullable + enum` 的 OpenAPI 兼容转换曾遗漏
+  `null` 枚举值，现可正确校验 Proposal 的空 `change_batch_status`。
+- 隔离资源清理时曾因加载生产 `.env` 覆盖同名 `MEILI_INDEX`，误删可重建的生产搜索
+  index；PostgreSQL 权威数据与对象存储未受影响。已立即全量重建 72/72 页面，
+  Meilisearch 恢复 72 文档/72 embedding，Projection consistency 为 792/792、
+  0 issue，正式搜索 API 为 200，Doctor 为 0 error/critical。两套隔离 database、
+  bucket、index、Redis DB、container 和 SSH tunnel 均已清理。
 
 ## Web 信息架构
 

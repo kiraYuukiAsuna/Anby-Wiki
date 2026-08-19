@@ -160,6 +160,12 @@
   后台可签发一次性授权码、查看和撤销 SHA-256 存储的 Bearer Token，权限实时继承账号。
   `f56876a` 六镜像已部署，生产 CLI 的版本、149 operation、公开调用和校验已通过；
   登录态授权闭环保留为上述人工冒烟项。
+- CLI 本地输入错误分类：缺失必填 body、非法 timeout、未知 operation 曾被包装成
+  `request_failed`/exit 1；现按协议返回 `validation_failed` 或
+  `operation_not_found`/exit 2，非法 logout 输入也不会误删本地 Token。
+- CLI nullable enum 校验：OpenAPI `nullable: true` 与 `enum` 组合曾只扩展 type、
+  未把 `null` 纳入 enum，导致合法的空 `change_batch_status` 被响应校验拒绝；
+  规范化逻辑和回归测试已修复，隔离管理员 Token 的 149/149 operation 全量调用通过。
 - Go `1.26.5` 新披露的 7 个标准库可达漏洞：构建与模块基线已升级到 `1.26.6`；
   Nano ID 同期升级到 `3.3.18`，Go/Web 依赖审计和 gitleaks 均恢复为 0。
 - 初始化 down 在已有 Page 时会提前删除 Namespace 种子并触发 FK：已移除冗余的提前

@@ -3111,6 +3111,10 @@ Claim 独立后：
   WebSocket；网页后台通过一次性授权码签发可撤销 Bearer Token，权限仍由现有
   Actor/RBAC/治理边界实时决定。隔离生产等价 E2E 已覆盖授权闭环；正式域名仍保留
   一次管理员人工登录冒烟。
+- 后续全量 CLI 验收用隔离管理员 Token 逐个经过 CLI transport 调用 149/149
+  operation，并覆盖 multipart、二进制 base64 round-trip、WorkingDocument update、
+  Presence 与 snapshot/compact；测试同时修复了本地校验退出码和 nullable enum 两处
+  协议问题。
 
 ### 18.3 第一版修复后的协作实现边界
 
