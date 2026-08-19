@@ -14,9 +14,12 @@ make cli-install
 ```
 
 CLI 每次只读取一个 JSON 对象，只向 stdout 写一个 JSON 结果。可从 stdin 读取，
-也可用 `--input request.json`：
+也可用 `--input request.json`。手动查看帮助可用 `--help`，或保持 JSON 协议使用
+`{"action":"help"}`：
 
 ```sh
+bin/anby-wiki --help
+printf '%s\n' '{"action":"help"}' | bin/anby-wiki
 printf '%s\n' '{"action":"version"}' | bin/anby-wiki
 bin/anby-wiki --input request.json
 ```

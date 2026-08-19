@@ -38,6 +38,7 @@ func TestLocalActionSurface(t *testing.T) {
 		t.Fatal(err)
 	}
 	for _, input := range []Input{
+		{Action: "help"},
 		{Action: "version"},
 		{Action: "operations.list"},
 		{Action: "operations.list", Tag: "knowledge", Search: "entity"},

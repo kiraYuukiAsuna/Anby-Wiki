@@ -158,6 +158,8 @@ func EncodeResult(writer io.Writer, result Result) error {
 
 func (a *App) Execute(ctx context.Context, input Input) (Result, int) {
 	switch input.Action {
+	case "help":
+		return HelpResult(a.version), 0
 	case "version":
 		return success(input.Action, map[string]string{"version": a.version}), 0
 	case "operations.list":
@@ -179,10 +181,266 @@ func (a *App) Execute(ctx context.Context, input Input) (Result, int) {
 	default:
 		return failure(
 			input.Action, "unknown_action",
-			"unsupported action; use version, operations.list, operation.describe, operation.call, collaboration.run, auth.exchange, auth.status, auth.logout, or config.show",
+			"unsupported action; use help, version, operations.list, operation.describe, operation.call, collaboration.run, auth.exchange, auth.status, auth.logout, or config.show",
 			nil,
 		), 2
 	}
+}
+
+func HelpResult(version string) Result {
+	return success("help", map[string]any{
+		"version":     version,
+		"description": "JSON-only CLI for agents to operate Anby Wiki through the full OpenAPI contract plus collaboration WebSocket.",
+		"usage": []string{
+			"anby-wiki < request.json",
+			"anby-wiki --input request.json",
+			"anby-wiki --help",
+		},
+		"quick_start": []map[string]any{
+			{
+				"step":    1,
+				"title":   "Create an authorization code",
+				"command": "Open https://anbywiki.example.com/settings/cli in a browser, then create a one-time code.",
+			},
+			{
+				"step":    2,
+				"title":   "Exchange the code",
+				"command": `printf '%s\n' '{"action":"auth.exchange","base_url":"https://anbywiki.example.com","code":"anby_code_..."}' | anby-wiki`,
+			},
+			{
+				"step":    3,
+				"title":   "Inspect available APIs",
+				"command": `printf '%s\n' '{"action":"operations.list"}' | anby-wiki`,
+			},
+			{
+				"step":    4,
+				"title":   "Inspect one API schema",
+				"command": `printf '%s\n' '{"action":"operation.describe","operation_id":"createPage"}' | anby-wiki`,
+			},
+			{
+				"step":    5,
+				"title":   "Call an API",
+				"command": `printf '%s\n' '{"action":"operation.call","operation_id":"getSession"}' | anby-wiki`,
+			},
+		},
+		"input_envelope": map[string]any{
+			"required": []string{"action"},
+			"fields": []map[string]string{
+				{"name": "action", "type": "string", "description": "CLI action name."},
+				{"name": "base_url", "type": "string", "description": "Server base URL; overrides config and ANBY_WIKI_BASE_URL."},
+				{"name": "config_path", "type": "string", "description": "Local config path; overrides ANBY_WIKI_CONFIG."},
+				{"name": "code", "type": "string", "description": "One-time code for auth.exchange."},
+				{"name": "persist", "type": "boolean", "description": "Whether auth.exchange writes the token to config; defaults to true."},
+				{"name": "operation_id", "type": "string", "description": "OpenAPI operationId for operation.describe or operation.call."},
+				{"name": "tag", "type": "string", "description": "Filter operations.list by OpenAPI tag."},
+				{"name": "search", "type": "string", "description": "Filter operations.list by operation id, path, summary, method, or tag."},
+				{"name": "path", "type": "object", "description": "Path parameters for operation.call."},
+				{"name": "query", "type": "object", "description": "Query parameters for operation.call."},
+				{"name": "headers", "type": "object", "description": "Request headers for operation.call."},
+				{"name": "body", "type": "object", "description": "JSON body or multipart fields for operation.call."},
+				{"name": "files", "type": "object", "description": "Multipart file fields; values are local file paths."},
+				{"name": "timeout_seconds", "type": "integer", "description": "Request timeout; max 600."},
+				{"name": "page_id", "type": "string", "description": "Page UUID for collaboration.run."},
+				{"name": "client_id", "type": "string", "description": "Client UUID for collaboration.run."},
+				{"name": "last_sequence", "type": "integer", "description": "Collaboration recovery sequence, starting at 0."},
+				{"name": "messages", "type": "array", "description": "Collaboration messages to send after recovery."},
+			},
+		},
+		"output_envelope": map[string]any{
+			"success": map[string]any{
+				"ok":     true,
+				"action": "operation.call",
+				"data":   map[string]string{"example": "result payload"},
+				"meta": map[string]any{
+					"operation_id": "getSession",
+					"http_status":  200,
+					"request_id":   "request id when provided by server",
+					"content_type": "application/json",
+				},
+			},
+			"failure": map[string]any{
+				"ok":     false,
+				"action": "operation.call",
+				"error": map[string]string{
+					"code":    "validation_failed",
+					"message": "request validation failed: ...",
+				},
+			},
+		},
+		"actions": []map[string]any{
+			{
+				"name":        "help",
+				"description": "Show this help envelope.",
+				"example":     map[string]any{"action": "help"},
+			},
+			{
+				"name":        "version",
+				"description": "Show CLI version.",
+				"example":     map[string]any{"action": "version"},
+			},
+			{
+				"name":        "auth.exchange",
+				"description": "Exchange a one-time authorization code from /settings/cli for a stored CLI token.",
+				"example": map[string]any{
+					"action":   "auth.exchange",
+					"base_url": "https://anbywiki.example.com",
+					"code":     "anby_code_...",
+				},
+			},
+			{
+				"name":        "auth.status",
+				"description": "Call getSession with the configured CLI token.",
+				"example":     map[string]any{"action": "auth.status"},
+			},
+			{
+				"name":        "auth.logout",
+				"description": "Revoke the current CLI token and remove local credentials.",
+				"example":     map[string]any{"action": "auth.logout"},
+			},
+			{
+				"name":        "config.show",
+				"description": "Show local CLI configuration without exposing the full token.",
+				"example":     map[string]any{"action": "config.show"},
+			},
+			{
+				"name":        "operations.list",
+				"description": "List OpenAPI operations; optional tag and search filters are supported.",
+				"example": map[string]any{
+					"action": "operations.list",
+					"tag":    "knowledge",
+					"search": "page",
+				},
+			},
+			{
+				"name":        "operation.describe",
+				"description": "Show request and response schema details for one operation_id.",
+				"example": map[string]any{
+					"action":       "operation.describe",
+					"operation_id": "createPage",
+				},
+			},
+			{
+				"name":        "operation.call",
+				"description": "Call one OpenAPI operation with path, query, headers, body, and files.",
+				"example": map[string]any{
+					"action":       "operation.call",
+					"operation_id": "createPage",
+					"body": map[string]any{
+						"namespace":     "main",
+						"title":         "Agent page",
+						"language":      "zh-Hans",
+						"content_model": "block-v1",
+					},
+				},
+			},
+			{
+				"name":        "collaboration.run",
+				"description": "Recover and send Yjs collaboration WebSocket messages for a page.",
+				"example": map[string]any{
+					"action":        "collaboration.run",
+					"page_id":       "0198...",
+					"client_id":     "0198...",
+					"last_sequence": 0,
+				},
+			},
+		},
+		"operation_call": map[string]any{
+			"coverage": "All embedded OpenAPI operations are callable through operation.call.",
+			"discovery": []string{
+				`{"action":"operations.list"}`,
+				`{"action":"operations.list","tag":"pages"}`,
+				`{"action":"operations.list","search":"revision"}`,
+				`{"action":"operation.describe","operation_id":"createPage"}`,
+			},
+			"request_parts": []string{
+				"path: values for URL path parameters such as {id}",
+				"query: query string parameters",
+				"headers: extra HTTP headers such as Idempotency-Key",
+				"body: JSON request body or multipart form fields",
+				"files: multipart file fields, where each value is a local path",
+			},
+			"validation": []string{
+				"Unknown input fields are rejected before execution.",
+				"Path, query, header, body, and multipart fields are validated against OpenAPI before the request is sent.",
+				"JSON responses are validated against the response schema for the returned status code.",
+			},
+			"binary_response": "Non-JSON responses are returned as {\"encoding\":\"base64\",\"content\":\"...\",\"size_bytes\":123}.",
+		},
+		"collaboration": map[string]any{
+			"action":        "collaboration.run",
+			"purpose":       "Recover a page WorkingDocument and optionally send Yjs update, presence, or snapshot messages.",
+			"binary_fields": "Yjs update and snapshot bytes must be base64 strings.",
+			"message_types": []string{"update", "presence", "snapshot"},
+		},
+		"environment": []string{
+			"ANBY_WIKI_BASE_URL",
+			"ANBY_WIKI_TOKEN",
+			"ANBY_WIKI_CONFIG",
+		},
+		"config_paths": map[string]string{
+			"macos": "~/Library/Application Support/anby-wiki/cli.json",
+			"linux": "~/.config/anby-wiki/cli.json",
+		},
+		"exit_codes": map[string]int{
+			"success":               0,
+			"remote_or_runtime_err": 1,
+			"input_or_contract_err": 2,
+		},
+		"common_examples": []map[string]any{
+			{
+				"title": "Show version",
+				"json":  map[string]any{"action": "version"},
+			},
+			{
+				"title": "Show current session",
+				"json":  map[string]any{"action": "auth.status"},
+			},
+			{
+				"title": "List page APIs",
+				"json":  map[string]any{"action": "operations.list", "tag": "pages"},
+			},
+			{
+				"title": "Describe createPage",
+				"json":  map[string]any{"action": "operation.describe", "operation_id": "createPage"},
+			},
+			{
+				"title": "Create a page",
+				"json": map[string]any{
+					"action":       "operation.call",
+					"operation_id": "createPage",
+					"body": map[string]any{
+						"namespace":     "main",
+						"title":         "CLI Created Page",
+						"language":      "zh-Hans",
+						"content_model": "block-v1",
+					},
+				},
+			},
+			{
+				"title": "Call an API with path parameters",
+				"json": map[string]any{
+					"action":       "operation.call",
+					"operation_id": "getPage",
+					"path":         map[string]any{"id": "0198..."},
+				},
+			},
+			{
+				"title": "Upload a file",
+				"json": map[string]any{
+					"action":       "operation.call",
+					"operation_id": "createImportUploadJob",
+					"headers":      map[string]any{"Idempotency-Key": "0198..."},
+					"body": map[string]any{
+						"title":      "Import source",
+						"route_mode": "auto",
+					},
+					"files":           map[string]any{"file": "/absolute/path/source.pdf"},
+					"timeout_seconds": 600,
+				},
+			},
+		},
+		"docs": "Docs/AgentCLI.md",
+	})
 }
 
 func (a *App) listOperations(input Input) Result {

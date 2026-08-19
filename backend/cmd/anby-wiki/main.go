@@ -12,6 +12,10 @@ import (
 var version = "dev"
 
 func main() {
+	if isHelp(os.Args[1:]) {
+		_ = wikicli.EncodeResult(os.Stdout, wikicli.HelpResult(version))
+		os.Exit(0)
+	}
 	reader, closeInput, argumentError := inputReader(os.Args[1:])
 	if closeInput != nil {
 		defer closeInput()
@@ -50,6 +54,10 @@ func main() {
 		os.Exit(1)
 	}
 	os.Exit(exitCode)
+}
+
+func isHelp(arguments []string) bool {
+	return len(arguments) == 1 && (arguments[0] == "--help" || arguments[0] == "-h")
 }
 
 func inputReader(arguments []string) (io.Reader, func(), error) {

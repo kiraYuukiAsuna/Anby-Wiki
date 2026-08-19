@@ -26,6 +26,23 @@ make dev                       # 迁移并启动 API / Worker / Web
 
 详细说明（含生产 Docker 部署）见 [Deploy.md](Deploy.md)。
 
+## Agent CLI
+
+`backend/cmd/anby-wiki` 提供给 Agent 使用的 JSON CLI，覆盖后端 OpenAPI 中的全部
+operation，并额外支持 Yjs 协作 WebSocket。CLI 每次读取一个 JSON 对象，只输出一个
+JSON 结果。
+
+```bash
+make cli-build
+bin/anby-wiki --help
+printf '%s\n' '{"action":"operations.list"}' | bin/anby-wiki
+printf '%s\n' '{"action":"operation.describe","operation_id":"createPage"}' | bin/anby-wiki
+```
+
+`--help` 是总览帮助；具体某个后端 API 的参数、请求体和响应结构使用
+`operation.describe` 查看，实际调用统一走 `operation.call`。授权码在网站后台
+`/settings/cli` 创建。完整协议见 [Docs/AgentCLI.md](Docs/AgentCLI.md)。
+
 ## 目录
 
 ```text
