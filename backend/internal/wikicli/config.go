@@ -82,3 +82,31 @@ func saveConfig(path string, value Config) error {
 	}
 	return nil
 }
+
+func ensureConfigWritable(path string) error {
+	directory := filepath.Dir(path)
+	if err := os.MkdirAll(directory, 0o700); err != nil {
+		return fmt.Errorf("create config directory: %w", err)
+	}
+	if err := os.Chmod(directory, 0o700); err != nil {
+		return fmt.Errorf("secure config directory: %w", err)
+	}
+	file, err := os.CreateTemp(directory, ".cli-config-check-*")
+	if err != nil {
+		return fmt.Errorf("create temporary config: %w", err)
+	}
+	temporary := file.Name()
+	defer os.Remove(temporary)
+	if err := file.Chmod(0o600); err != nil {
+		file.Close()
+		return fmt.Errorf("secure temporary config: %w", err)
+	}
+	if _, err := file.Write([]byte("{}\n")); err != nil {
+		file.Close()
+		return fmt.Errorf("write config: %w", err)
+	}
+	if err := file.Close(); err != nil {
+		return fmt.Errorf("close config: %w", err)
+	}
+	return nil
+}

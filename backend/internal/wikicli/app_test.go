@@ -27,6 +27,33 @@ func TestDecodeInputRejectsUnknownFields(t *testing.T) {
 	}
 }
 
+func TestAuthExchangeChecksConfigPathBeforeRemoteCall(t *testing.T) {
+	var requests atomic.Int32
+	server := httptest.NewServer(http.HandlerFunc(func(
+		writer http.ResponseWriter,
+		request *http.Request,
+	) {
+		requests.Add(1)
+		http.NotFound(writer, request)
+	}))
+	defer server.Close()
+
+	app := testApp(t)
+	result, exitCode := app.Execute(context.Background(), Input{
+		Action:     "auth.exchange",
+		BaseURL:    server.URL,
+		ConfigPath: filepath.Join(os.TempDir(), "anby-wiki-cli-test.json"),
+		Code:       "anby_code_test",
+	})
+	if exitCode != 1 || result.OK || result.Error == nil ||
+		result.Error.Code != "config_write_failed" {
+		t.Fatalf("result=%#v exit=%d", result, exitCode)
+	}
+	if requests.Load() != 0 {
+		t.Fatalf("auth exchange called remote server %d times", requests.Load())
+	}
+}
+
 func TestLocalActionSurface(t *testing.T) {
 	app := testApp(t)
 	configPath := filepath.Join(t.TempDir(), "cli.json")

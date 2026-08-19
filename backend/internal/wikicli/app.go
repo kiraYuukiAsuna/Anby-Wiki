@@ -505,6 +505,12 @@ func (a *App) exchange(ctx context.Context, input Input) (Result, int) {
 	if config.BaseURL == "" {
 		return failure(input.Action, "validation_failed", "base_url is required", nil), 2
 	}
+	persist := input.Persist == nil || *input.Persist
+	if persist {
+		if err := ensureConfigWritable(configPath); err != nil {
+			return failure(input.Action, "config_write_failed", err.Error(), nil), 1
+		}
+	}
 	body, _ := json.Marshal(map[string]string{"code": strings.TrimSpace(input.Code)})
 	call := Input{
 		Action: "operation.call", OperationID: "exchangeCLIAuthCode",
@@ -531,7 +537,6 @@ func (a *App) exchange(ctx context.Context, input Input) (Result, int) {
 	if token == "" || actorID == "" || err != nil {
 		return failure(input.Action, "response_invalid", "exchange response lacks token metadata", nil), 1
 	}
-	persist := input.Persist == nil || *input.Persist
 	data := map[string]any{
 		"actor_id": actorID, "display_name": displayName,
 		"token_prefix": tokenPrefix, "expires_at": expiresAt,
