@@ -7,6 +7,8 @@ import {
   Search,
   ShieldAlert,
   ShieldCheck,
+  Trash2,
+  UserX,
   UserRound,
 } from "lucide-react";
 import Link from "next/link";
@@ -25,6 +27,14 @@ import {
 
 import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { adminApi } from "@/lib/api";
 import { isUnauthorized, LOGIN_PATH, useSession } from "@/lib/auth";
@@ -120,18 +130,22 @@ function UserRow({
   user,
   roles,
   busy,
+  deleting,
   currentActorID,
   activeAdminCount,
   onGrant,
   onRevoke,
+  onDelete,
 }: {
   user: AdminUser;
   roles: RoleSummary[];
   busy: string | null;
+    deleting: boolean;
   currentActorID: string | undefined;
   activeAdminCount: number;
   onGrant: (user: AdminUser, role: RoleKey) => Promise<void>;
   onRevoke: (user: AdminUser, role: RoleKey) => Promise<void>;
+    onDelete: (user: AdminUser) => void;
 }) {
   const roleKeys = new Set(roles.map((role) => role.key));
   const selfIsLastAdmin =
@@ -139,6 +153,8 @@ function UserRow({
     user.status === "active" &&
     hasRole(user, "admin") &&
     activeAdminCount <= 1;
+  const isCurrentUser = user.actorId === currentActorID;
+  const deleteBlocked = isCurrentUser || selfIsLastAdmin;
   return (
     <tr className="border-b last:border-b-0">
       <td className="px-4 py-4 align-top">
@@ -149,7 +165,7 @@ function UserRow({
           <div className="min-w-0">
             <div className="flex flex-wrap items-center gap-2">
               <span className="font-medium">{user.displayName}</span>
-              {user.actorId === currentActorID ? (
+              {isCurrentUser ? (
                 <span className="rounded border bg-muted px-1.5 py-0.5 text-[10px] text-muted-foreground">
                   当前账号
                 </span>
@@ -193,20 +209,44 @@ function UserRow({
         </div>
       </td>
       <td className="px-4 py-4 align-top">
-        <div className="flex flex-wrap gap-2">
-          {roleOrder
-            .filter((role) => roleKeys.has(role))
-            .map((role) => (
-              <RoleToggle
-                key={role}
-                user={user}
-                role={role}
-                busy={busy === `${user.actorId}:${role}`}
-                selfIsLastAdmin={selfIsLastAdmin}
-                onGrant={onGrant}
-                onRevoke={onRevoke}
-              />
-            ))}
+        <div className="flex flex-col gap-2">
+          <div className="flex flex-wrap gap-2">
+            {roleOrder
+              .filter((role) => roleKeys.has(role))
+              .map((role) => (
+                <RoleToggle
+                  key={role}
+                  user={user}
+                  role={role}
+                  busy={busy === `${user.actorId}:${role}`}
+                  selfIsLastAdmin={selfIsLastAdmin}
+                  onGrant={onGrant}
+                  onRevoke={onRevoke}
+                />
+              ))}
+          </div>
+          <Button
+            type="button"
+            size="sm"
+            variant="destructive"
+            disabled={Boolean(busy) || deleting || deleteBlocked}
+            title={
+              isCurrentUser
+                ? "不能删除当前账号"
+                : selfIsLastAdmin
+                  ? "不能删除最后一个管理员"
+                  : "删除注册用户"
+            }
+            onClick={() => onDelete(user)}
+            className="w-fit"
+          >
+            {deleting ? (
+              <LoaderCircle className="animate-spin" aria-hidden />
+            ) : (
+              <Trash2 aria-hidden />
+            )}
+            删除用户
+          </Button>
         </div>
       </td>
       <td className="whitespace-nowrap px-4 py-4 text-xs text-muted-foreground align-top">
@@ -221,6 +261,8 @@ export function UserManagementWorkspace() {
   const [search, setSearch] = useState("");
   const [includeDisabled, setIncludeDisabled] = useState(false);
   const [busy, setBusy] = useState<string | null>(null);
+  const [deletingID, setDeletingID] = useState<string | null>(null);
+  const [deleteTarget, setDeleteTarget] = useState<AdminUser | null>(null);
   const parsedSearch = searchSchema.safeParse(search);
   const normalizedSearch = parsedSearch.success ? parsedSearch.data : "";
 
@@ -307,6 +349,40 @@ export function UserManagementWorkspace() {
       }
     } finally {
       setBusy(null);
+    }
+  };
+
+  const deleteUser = async () => {
+    if (!deleteTarget) return;
+    setDeletingID(deleteTarget.actorId);
+    try {
+      const result = await adminApi().deleteAdminUser({
+        actorId: deleteTarget.actorId,
+      });
+      await users.mutate((current) => {
+        if (!current) return current;
+        return {
+          items: current.items.filter((item) => item.actorId !== result.actorId),
+        };
+      }, false);
+      toast.success("用户已删除", {
+        description: `${deleteTarget.username} 的登录会话和 CLI Token 已失效。`,
+      });
+      setDeleteTarget(null);
+    } catch (error) {
+      if (error instanceof ResponseError && error.response.status === 409) {
+        toast.error("用户不能删除", {
+          description: "不能删除当前账号或最后一个管理员。",
+        });
+      } else if (error instanceof ResponseError && error.response.status === 403) {
+        toast.error("需要管理员权限");
+      } else if (error instanceof ResponseError && error.response.status === 404) {
+        toast.error("用户不存在");
+      } else {
+        toast.error("用户删除失败");
+      }
+    } finally {
+      setDeletingID(null);
     }
   };
 
@@ -422,7 +498,7 @@ export function UserManagementWorkspace() {
           ) : null}
         </div>
         <div className="overflow-x-auto">
-          <table className="min-w-[920px] text-left text-sm">
+          <table className="min-w-[980px] text-left text-sm">
             <thead className="bg-muted/40 text-xs text-muted-foreground">
               <tr>
                 <th className="px-4 py-3 font-medium">用户</th>
@@ -439,10 +515,12 @@ export function UserManagementWorkspace() {
                     user={user}
                     roles={roleCatalog}
                     busy={busy}
+                    deleting={deletingID === user.actorId}
                     currentActorID={session.session?.actorId}
                     activeAdminCount={activeAdminCount}
                     onGrant={(target, role) => mutateRole(target, role, "grant")}
                     onRevoke={(target, role) => mutateRole(target, role, "revoke")}
+                    onDelete={setDeleteTarget}
                   />
                 ))
               ) : (
@@ -459,6 +537,52 @@ export function UserManagementWorkspace() {
           </table>
         </div>
       </div>
+      <Dialog
+        open={deleteTarget !== null}
+        onOpenChange={(open) => {
+          if (!open && deletingID === null) setDeleteTarget(null);
+        }}
+      >
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>删除注册用户</DialogTitle>
+            <DialogDescription>
+              {deleteTarget
+                ? `将删除 ${deleteTarget.username} 的本地登录账号，并使其现有 Session 与 CLI Token 失效。历史内容会保留原 Actor 归属。`
+                : ""}
+            </DialogDescription>
+          </DialogHeader>
+          <div className="rounded-lg border border-destructive/25 bg-destructive/5 p-4 text-sm text-destructive">
+            <div className="flex items-start gap-3">
+              <UserX className="mt-0.5 size-4 shrink-0" aria-hidden />
+              <p>此操作完成后，该账号会从用户列表中移除。</p>
+            </div>
+          </div>
+          <DialogFooter>
+            <Button
+              type="button"
+              variant="outline"
+              disabled={deletingID !== null}
+              onClick={() => setDeleteTarget(null)}
+            >
+              取消
+            </Button>
+            <Button
+              type="button"
+              variant="destructive"
+              disabled={deletingID !== null}
+              onClick={() => void deleteUser()}
+            >
+              {deletingID !== null ? (
+                <LoaderCircle className="animate-spin" aria-hidden />
+              ) : (
+                <Trash2 aria-hidden />
+              )}
+              删除用户
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }

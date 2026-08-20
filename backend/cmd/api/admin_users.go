@@ -80,6 +80,28 @@ func (a *GovernanceAPI) revokeAdminUserRole(w http.ResponseWriter, r *http.Reque
 	httpx.WriteJSON(w, http.StatusOK, result)
 }
 
+func (a *GovernanceAPI) deleteAdminUser(w http.ResponseWriter, r *http.Request) {
+	actorID, ok := actorIDFrom(w, r)
+	if !ok {
+		return
+	}
+	targetActorID, ok := governancePathID(w, r, "actor_id")
+	if !ok {
+		return
+	}
+	result, err := a.userAdmin.DeleteUser(
+		r.Context(),
+		a.wikiID,
+		actorID,
+		targetActorID,
+	)
+	if err != nil {
+		governanceError(w, r, err)
+		return
+	}
+	httpx.WriteJSON(w, http.StatusOK, result)
+}
+
 func isAdminUserNotFound(err error) bool {
 	return errors.Is(err, governance.ErrAdminUserNotFound) ||
 		errors.Is(err, governance.ErrAdminRoleNotFound)

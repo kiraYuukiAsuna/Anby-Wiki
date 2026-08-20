@@ -29,6 +29,11 @@ import {
     AdminRoleMutationResultToJSON,
 } from '../models/AdminRoleMutationResult';
 import {
+    type AdminUserDeletionResult,
+    AdminUserDeletionResultFromJSON,
+    AdminUserDeletionResultToJSON,
+} from '../models/AdminUserDeletionResult';
+import {
     type AdminUserList,
     AdminUserListFromJSON,
     AdminUserListToJSON,
@@ -38,6 +43,10 @@ import {
     UpdateAIConfigRequestFromJSON,
     UpdateAIConfigRequestToJSON,
 } from '../models/UpdateAIConfigRequest';
+
+export interface DeleteAdminUserRequest {
+    actorId: string;
+}
 
 export interface GrantAdminUserRoleRequest {
     actorId: string;
@@ -62,6 +71,61 @@ export interface UpdateAIConfigOperationRequest {
  *
  */
 export class AdminApi extends runtime.BaseAPI {
+
+    /**
+     * Creates request options for deleteAdminUser without sending the request
+     */
+    async deleteAdminUserRequestOpts(requestParameters: DeleteAdminUserRequest): Promise<runtime.RequestOpts> {
+        if (requestParameters['actorId'] == null) {
+            throw new runtime.RequiredError(
+                'actorId',
+                'Required parameter "actorId" was null or undefined when calling deleteAdminUser().'
+            );
+        }
+
+        const queryParameters: any = {};
+
+        const headerParameters: runtime.HTTPHeaders = {};
+
+        if (this.configuration && this.configuration.accessToken) {
+            const token = this.configuration.accessToken;
+            const tokenString = await token("cliBearer", []);
+
+            if (tokenString) {
+                headerParameters["Authorization"] = `Bearer ${tokenString}`;
+            }
+        }
+
+        let urlPath = `/api/v1/admin/users/{actor_id}`;
+        urlPath = urlPath.replace('{actor_id}', encodeURIComponent(String(requestParameters['actorId'])));
+
+        return {
+            path: urlPath,
+            method: 'DELETE',
+            headers: headerParameters,
+            query: queryParameters,
+        };
+    }
+
+    /**
+     * 删除本地登录账号并使其 Session 与 CLI Token 失效；历史内容保留 disabled actor 作为审计主体。不能删除当前账号或最后一个 active admin。
+     * 管理员删除本地注册用户
+     */
+    async deleteAdminUserRaw(requestParameters: DeleteAdminUserRequest, initOverrides?: RequestInit | runtime.InitOverrideFunction): Promise<runtime.ApiResponse<AdminUserDeletionResult>> {
+        const requestOptions = await this.deleteAdminUserRequestOpts(requestParameters);
+        const response = await this.request(requestOptions, initOverrides);
+
+        return new runtime.JSONApiResponse(response, (jsonValue) => AdminUserDeletionResultFromJSON(jsonValue));
+    }
+
+    /**
+     * 删除本地登录账号并使其 Session 与 CLI Token 失效；历史内容保留 disabled actor 作为审计主体。不能删除当前账号或最后一个 active admin。
+     * 管理员删除本地注册用户
+     */
+    async deleteAdminUser(requestParameters: DeleteAdminUserRequest, initOverrides?: RequestInit | runtime.InitOverrideFunction): Promise<AdminUserDeletionResult> {
+        const response = await this.deleteAdminUserRaw(requestParameters, initOverrides);
+        return await response.value();
+    }
 
     /**
      * Creates request options for getAIConfig without sending the request

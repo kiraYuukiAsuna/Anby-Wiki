@@ -24,6 +24,7 @@ docs/AddEntityLabelRequest.md
 docs/AdminApi.md
 docs/AdminRoleMutationResult.md
 docs/AdminUser.md
+docs/AdminUserDeletionResult.md
 docs/AdminUserList.md
 docs/AnchorTarget.md
 docs/ApplyProposalResult.md
@@ -305,6 +306,7 @@ models/AddEntityAliasRequest.ts
 models/AddEntityLabelRequest.ts
 models/AdminRoleMutationResult.ts
 models/AdminUser.ts
+models/AdminUserDeletionResult.ts
 models/AdminUserList.ts
 models/AnchorTarget.ts
 models/ApplyProposalResult.ts

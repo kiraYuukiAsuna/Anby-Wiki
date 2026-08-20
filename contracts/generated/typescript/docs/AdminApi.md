@@ -4,6 +4,7 @@ All URIs are relative to *http://localhost:3000*
 
 | Method | HTTP request | Description |
 |------------- | ------------- | -------------|
+| [**deleteAdminUser**](AdminApi.md#deleteadminuser) | **DELETE** /api/v1/admin/users/{actor_id} | 管理员删除本地注册用户 |
 | [**getAIConfig**](AdminApi.md#getaiconfig) | **GET** /api/v1/admin/ai-config | 读取站点 AI 运行时配置 |
 | [**grantAdminUserRole**](AdminApi.md#grantadminuserrole) | **PUT** /api/v1/admin/users/{actor_id}/roles/{role_key} | 管理员授予用户角色 |
 | [**listAdminUsers**](AdminApi.md#listadminusers) | **GET** /api/v1/admin/users | 管理员列出本地用户与角色 |
@@ -11,6 +12,84 @@ All URIs are relative to *http://localhost:3000*
 | [**testAIConfig**](AdminApi.md#testaiconfig) | **POST** /api/v1/admin/ai-config/test | 使用已保存配置执行最小结构化模型请求 |
 | [**updateAIConfig**](AdminApi.md#updateaiconfigoperation) | **PUT** /api/v1/admin/ai-config | 保存站点 AI 运行时配置 |
 
+
+
+## deleteAdminUser
+
+> AdminUserDeletionResult deleteAdminUser(actorId)
+
+管理员删除本地注册用户
+
+删除本地登录账号并使其 Session 与 CLI Token 失效；历史内容保留 disabled actor 作为审计主体。不能删除当前账号或最后一个 active admin。
+
+### Example
+
+```ts
+import {
+  Configuration,
+  AdminApi,
+} from '';
+import type { DeleteAdminUserRequest } from '';
+
+async function example() {
+  console.log("🚀 Testing  SDK...");
+  const config = new Configuration({
+    // Configure HTTP bearer authorization: cliBearer
+    accessToken: "YOUR BEARER TOKEN",
+    // To configure API key authorization: sessionCookie
+    apiKey: "YOUR API KEY",
+  });
+  const api = new AdminApi(config);
+
+  const body = {
+    // string
+    actorId: 38400000-8cf0-11bd-b23e-10b96e4ef00d,
+  } satisfies DeleteAdminUserRequest;
+
+  try {
+    const data = await api.deleteAdminUser(body);
+    console.log(data);
+  } catch (error) {
+    console.error(error);
+  }
+}
+
+// Run the test
+example().catch(console.error);
+```
+
+### Parameters
+
+
+| Name | Type | Description  | Notes |
+|------------- | ------------- | ------------- | -------------|
+| **actorId** | `string` |  | [Defaults to `undefined`] |
+
+### Return type
+
+[**AdminUserDeletionResult**](AdminUserDeletionResult.md)
+
+### Authorization
+
+[cliBearer](../README.md#cliBearer), [sessionCookie](../README.md#sessionCookie)
+
+### HTTP request headers
+
+- **Content-Type**: Not defined
+- **Accept**: `application/json`
+
+
+### HTTP response details
+| Status code | Description | Response headers |
+|-------------|-------------|------------------|
+| **200** | 删除结果 |  -  |
+| **400** | 请求格式错误 |  -  |
+| **401** | 未认证 |  -  |
+| **403** | 已认证但无权限 |  -  |
+| **404** | 资源不存在 |  -  |
+| **409** | 并发冲突（含陈旧基线、幂等键冲突） |  -  |
+
+[[Back to top]](#) [[Back to API list]](../README.md#api-endpoints) [[Back to Model list]](../README.md#models) [[Back to README]](../README.md)
 
 
 ## getAIConfig

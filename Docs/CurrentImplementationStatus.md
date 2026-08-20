@@ -35,7 +35,7 @@ AI 配置和双用户协作 E2E。“实现完成”仍不等于“生产发布�
 | 投影与搜索 | Outbox 租约/重试/死信、链接/目录/锚点/章节/渲染/知识使用/References/相关推荐/组件依赖/图谱投影、可解释的链接+Collection+Entity 相关度、PostgreSQL fallback、Meilisearch 关键词/混合/语义检索 |
 | 规模与归档 | 章节懒加载、服务端可信 HTML 渲染、Revision 热冷分层与 S3 回源、Projection/Search 重建、容量基准命令 |
 | 协作 | Yjs WorkingDocument、持久增量 update、重连游标、普通发布与 AI 合并的 sequence CAS、未确认 update 幂等重发、自动 snapshot/compact、Block 级 Presence、三方合并与人工冲突决议；跨标签页离线恢复和多 API 实例广播仍待实现 |
-| 平台 | 本地账号/Session/RBAC、管理员用户角色授予/撤销、一次性授权码与可撤销/可清理 Agent CLI Bearer Token、154 个 OpenAPI operation 和协作 WebSocket 的 JSON CLI、Redis 限流、安全头、OTel/Prometheus、备份恢复、Doctor、多 Wiki 读取隔离、生产部署清单 |
+| 平台 | 本地账号/Session/RBAC、管理员用户角色授予/撤销与注册账号删除、一次性授权码与可撤销/可清理 Agent CLI Bearer Token、155 个 OpenAPI operation 和协作 WebSocket 的 JSON CLI、Redis 限流、安全头、OTel/Prometheus、备份恢复、Doctor、多 Wiki 读取隔离、生产部署清单 |
 
 ## 关键不变量
 
@@ -142,7 +142,7 @@ AI 配置和双用户协作 E2E。“实现完成”仍不等于“生产发布�
 ## 2026-08-19 Agent CLI 全量接口验证
 
 - 新增 `TestAllOperationsReachHTTPTransport`：从嵌入 OpenAPI 自动生成满足必填约束的
-  path/query/header、JSON body 与 multipart fixture，154/154 个 operation 均通过
+  path/query/header、JSON body 与 multipart fixture，155/155 个 operation 均通过
   `App.Execute("operation.call")` 到达 HTTP transport；Bearer、方法、URL、文件字段和
   响应 metadata 同时校验。
 - 新增隔离全栈 `TestAllOperationsAgainstAPI`。首个管理员签发的 CLI Token 对 149 个
@@ -312,13 +312,13 @@ outlines。References/Related 是 Current Revision
 - 10 万页面目标硬件容量、搜索语义质量和长时间队列/SLO 观察；
 - 正式域名下的 HSTS、CSRF、账号恢复/MFA 与完整键盘、读屏、对比度人工验收。
 
-仓库现有 Go 单元测试、154-operation handler 探针和高风险成功工作流仍不能穷举
+仓库现有 Go 单元测试、155-operation handler 探针和高风险成功工作流仍不能穷举
 全部 ProposalOperation 组合、外部模型供应商行为或容量/安全/人工可访问性；本轮真实
 系统演练不能替代发布环境验收。
 
 ## 2026-08-18 Web/API/CLI 可操作性审计
 
-- 权威 OpenAPI 当前共有 154 个 operation。152 个 Web-owned operation 全部通过生成
+- 权威 OpenAPI 当前共有 155 个 operation。153 个 Web-owned operation 全部通过生成
   客户端调用，调用文件均可沿 TypeScript import 图反向到达 48 个页面/global layout
   owner；`exchangeCLIAuthCode` 与 `revokeCurrentCLIToken` 是明确的 CLI transport。
 - 69 个写操作分别落在注册/登录、页面编辑与工具、导入、资产、来源、Dataset、
@@ -333,7 +333,7 @@ outlines。References/Related 是 Current Revision
 
 ## 2026-08-18 API 语义与工作流审计
 
-- `TestAPIContractE2E` 从权威 OpenAPI 动态读取并命中 154/154 个 operation；所有
+- `TestAPIContractE2E` 从权威 OpenAPI 动态读取并命中 155/155 个 operation；所有
   handler 禁止非预期 5xx，只有配置为测试 `.invalid` 地址的 `testAIConfig`
   允许契约声明的 502/504 依赖失败。
 - 成功工作流覆盖 Page/Revision/Diff/rollback/rename/redirect/BlockRedirect、
@@ -356,7 +356,7 @@ outlines。References/Related 是 Current Revision
 
 - `backend/cmd/anby-wiki` 提供供 Agent 使用的 Go CLI；stdin/stdout 均为单一 JSON
   envelope，退出码区分成功、输入/契约错误和远端错误。
-- CLI 从嵌入的权威 OpenAPI 读取 154 个 operationId，支持清单、搜索、Schema 描述和
+- CLI 从嵌入的权威 OpenAPI 读取 155 个 operationId，支持清单、搜索、Schema 描述和
   通用调用；发送前校验 path/query/header、JSON/multipart body，收到 JSON 后按状态码
   校验响应。文件上传读取本地路径，二进制响应统一转为 base64 JSON。
 - Yjs 协作 WebSocket 不属于 OpenAPI，另由 `collaboration.run` 覆盖恢复、

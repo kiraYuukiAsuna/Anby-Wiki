@@ -177,6 +177,25 @@ func TestAPIGovernanceKnowledgeE2E(t *testing.T) {
 	if changed, _ := revoked["changed"].(bool); !changed {
 		t.Fatalf("revoke reviewer was not reported as changed: %#v", revoked)
 	}
+	deletedClient, deletedActor := registerE2EUser(
+		t, baseURL, "gov_deleted_"+runID,
+		"gov_deleted_"+runID+"@example.invalid", password,
+	)
+	deletion := requestE2EMap(t, admin, http.MethodDelete,
+		fmt.Sprintf("%s/api/v1/admin/users/%s", baseURL, deletedActor),
+		nil, http.StatusOK)
+	if deleted, _ := deletion["deleted"].(bool); !deleted {
+		t.Fatalf("delete user was not reported as deleted: %#v", deletion)
+	}
+	assertE2EStatus(t, doE2ERequest(t, deletedClient, http.MethodGet,
+		baseURL+"/api/v1/auth/session", nil, nil), http.StatusUnauthorized)
+	deletedUsers := requestE2EMap(t, admin, http.MethodGet,
+		baseURL+"/api/v1/admin/users?search=gov_deleted_"+runID,
+		nil, http.StatusOK)
+	deletedItems, ok := deletedUsers["items"].([]any)
+	if !ok || len(deletedItems) != 0 {
+		t.Fatalf("deleted user still appears in default admin user list: %#v", deletedUsers)
+	}
 
 	entityID, entityBatchID, entityProposalID := createEntityThroughProposalE2E(
 		t, editor, admin, baseURL, runID+"-primary",

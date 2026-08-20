@@ -930,6 +930,8 @@ func governanceError(w http.ResponseWriter, r *http.Request, err error) {
 		errors.Is(err, governance.ErrBulkReviewIncomplete), errors.Is(err, governance.ErrBulkReviewPaused),
 		errors.Is(err, governance.ErrMergedASTMismatch),
 		errors.Is(err, governance.ErrLastAdminRole),
+		errors.Is(err, governance.ErrLastAdminUser),
+		errors.Is(err, governance.ErrSelfAdminUserDeletion),
 		errors.Is(err, collaboration.ErrSequenceMismatch),
 		errors.Is(err, collaboration.ErrIdempotencyConflict),
 		errors.Is(err, collaboration.ErrDocumentInactive),

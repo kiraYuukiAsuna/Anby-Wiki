@@ -1569,6 +1569,31 @@ paths:
         "401": { $ref: "#/components/responses/Unauthorized" }
         "403": { $ref: "#/components/responses/Forbidden" }
         "422": { $ref: "#/components/responses/UnprocessableEntity" }
+  /api/v1/admin/users/{actor_id}:
+    delete:
+      operationId: deleteAdminUser
+      tags: [admin]
+      summary: 管理员删除本地注册用户
+      description: 删除本地登录账号并使其 Session 与 CLI Token 失效；历史内容保留 disabled actor 作为审计主体。不能删除当前账号或最后一个 active admin。
+      security:
+        - sessionCookie: []
+        - cliBearer: []
+      parameters:
+        - name: actor_id
+          in: path
+          required: true
+          schema: { type: string, format: uuid }
+      responses:
+        "200":
+          description: 删除结果
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/AdminUserDeletionResult" }
+        "400": { $ref: "#/components/responses/BadRequest" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "409": { $ref: "#/components/responses/Conflict" }
   /api/v1/admin/users/{actor_id}/roles/{role_key}:
     put:
       operationId: grantAdminUserRole
@@ -5330,6 +5355,15 @@ components:
         changed:
           type: boolean
           description: false 表示本次授予/撤销为幂等 no-op。
+    AdminUserDeletionResult:
+      type: object
+      additionalProperties: false
+      required: [actor_id, deleted]
+      properties:
+        actor_id: { type: string, format: uuid }
+        deleted:
+          type: boolean
+          description: true 表示本地注册账号已删除并清理认证凭据。
     PageProtection:
       type: object
       required:

@@ -8,6 +8,7 @@ export * from './AddEntityAliasRequest';
 export * from './AddEntityLabelRequest';
 export * from './AdminRoleMutationResult';
 export * from './AdminUser';
+export * from './AdminUserDeletionResult';
 export * from './AdminUserList';
 export * from './AnchorTarget';
 export * from './ApplyProposalResult';

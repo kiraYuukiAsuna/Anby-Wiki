@@ -20,6 +20,8 @@ var (
 	ErrAdminRoleNotFound      = errors.New("governance: 角色不存在")
 	ErrInvalidAdminUserFilter = errors.New("governance: 用户管理参数非法")
 	ErrLastAdminRole          = errors.New("governance: 不能撤销最后一个管理员角色")
+	ErrLastAdminUser          = errors.New("governance: 不能删除最后一个管理员用户")
+	ErrSelfAdminUserDeletion  = errors.New("governance: 不能删除当前登录用户")
 )
 
 type AdminUser struct {
@@ -39,6 +41,11 @@ type AdminUserList struct {
 type AdminRoleMutationResult struct {
 	User    AdminUser `json:"user"`
 	Changed bool      `json:"changed"`
+}
+
+type AdminUserDeletionResult struct {
+	ActorID uuid.UUID `json:"actor_id"`
+	Deleted bool      `json:"deleted"`
 }
 
 type AdminUserListFilter struct {
@@ -236,6 +243,93 @@ func (s *UserAdminService) RevokeRole(
 	return result, nil
 }
 
+func (s *UserAdminService) DeleteUser(
+	ctx context.Context,
+	wikiID, actorID, targetActorID uuid.UUID,
+) (*AdminUserDeletionResult, error) {
+	if wikiID == uuid.Nil || actorID == uuid.Nil || targetActorID == uuid.Nil {
+		return nil, ErrInvalidAdminUserFilter
+	}
+	var result *AdminUserDeletionResult
+	err := s.txm.InTx(ctx, func(tx pgx.Tx) error {
+		if err := s.auth.CheckTx(ctx, tx, actorID, wikiID, ActionManage, nil); err != nil {
+			return err
+		}
+		if actorID == targetActorID {
+			return ErrSelfAdminUserDeletion
+		}
+		if err := s.lockAdminRoleMutation(ctx, tx, "admin"); err != nil {
+			return err
+		}
+		targetStatus, err := s.lockLocalHumanUser(ctx, tx, targetActorID)
+		if err != nil {
+			return err
+		}
+		user, err := s.getUser(ctx, tx, wikiID, targetActorID)
+		if err != nil {
+			return err
+		}
+		adminRole, err := s.roleByKey(ctx, tx, "admin")
+		if err != nil {
+			return err
+		}
+		if targetStatus == "active" {
+			hasAdmin, err := s.hasRole(ctx, tx, wikiID, targetActorID, adminRole.ID)
+			if err != nil {
+				return err
+			}
+			if hasAdmin {
+				count, err := s.activeAdminCount(ctx, tx, wikiID)
+				if err != nil {
+					return err
+				}
+				if count <= 1 {
+					return ErrLastAdminUser
+				}
+			}
+		}
+		deleted := false
+		for _, statement := range []string{
+			`DELETE FROM cli_authorization_code WHERE actor_id=$1`,
+			`DELETE FROM cli_access_token WHERE actor_id=$1`,
+			`DELETE FROM auth_session WHERE actor_id=$1`,
+			`DELETE FROM actor_role WHERE actor_id=$1`,
+		} {
+			tag, err := tx.Exec(ctx, statement, targetActorID)
+			if err != nil {
+				return err
+			}
+			deleted = deleted || tag.RowsAffected() > 0
+		}
+		tag, err := tx.Exec(ctx, `UPDATE actor
+			SET status='disabled', user_id=NULL
+			WHERE id=$1 AND (status<>'disabled' OR user_id IS NOT NULL)`,
+			targetActorID)
+		if err != nil {
+			return err
+		}
+		deleted = deleted || tag.RowsAffected() > 0
+		tag, err = tx.Exec(ctx, `DELETE FROM local_account WHERE actor_id=$1`,
+			targetActorID)
+		if err != nil {
+			return err
+		}
+		if tag.RowsAffected() != 1 {
+			return ErrAdminUserNotFound
+		}
+		deleted = true
+		if err := s.insertUserDeletionAudit(ctx, tx, actorID, *user); err != nil {
+			return err
+		}
+		result = &AdminUserDeletionResult{ActorID: targetActorID, Deleted: deleted}
+		return nil
+	})
+	if err != nil {
+		return nil, err
+	}
+	return result, nil
+}
+
 func (s *UserAdminService) ensureLocalHumanUser(
 	ctx context.Context,
 	tx pgx.Tx,
@@ -245,6 +339,22 @@ func (s *UserAdminService) ensureLocalHumanUser(
 	err := tx.QueryRow(ctx, `SELECT a.status
 		FROM actor a JOIN local_account la ON la.actor_id=a.id
 		WHERE a.id=$1 AND a.actor_type='human'`, actorID).Scan(&status)
+	if errors.Is(err, pgx.ErrNoRows) {
+		return "", ErrAdminUserNotFound
+	}
+	return status, err
+}
+
+func (s *UserAdminService) lockLocalHumanUser(
+	ctx context.Context,
+	tx pgx.Tx,
+	actorID uuid.UUID,
+) (string, error) {
+	var status string
+	err := tx.QueryRow(ctx, `SELECT a.status
+		FROM actor a JOIN local_account la ON la.actor_id=a.id
+		WHERE a.id=$1 AND a.actor_type='human'
+		FOR UPDATE OF a, la`, actorID).Scan(&status)
 	if errors.Is(err, pgx.ErrNoRows) {
 		return "", ErrAdminUserNotFound
 	}
@@ -362,6 +472,35 @@ func (s *UserAdminService) insertRoleAudit(
 	}
 	return s.repo.InsertAuditWithoutBatch(
 		ctx, tx, auditID, actorID, eventType, "actor", targetActorID, payload,
+	)
+}
+
+func (s *UserAdminService) insertUserDeletionAudit(
+	ctx context.Context,
+	tx pgx.Tx,
+	actorID uuid.UUID,
+	user AdminUser,
+) error {
+	auditID, err := s.ids.New()
+	if err != nil {
+		return err
+	}
+	roles := make([]string, 0, len(user.Roles))
+	for _, role := range user.Roles {
+		roles = append(roles, role.Key)
+	}
+	payload, err := json.Marshal(map[string]any{
+		"actor_id":     user.ActorID,
+		"username":     user.Username,
+		"display_name": user.DisplayName,
+		"status":       user.Status,
+		"roles":        roles,
+	})
+	if err != nil {
+		return err
+	}
+	return s.repo.InsertAuditWithoutBatch(
+		ctx, tx, auditID, actorID, "actor.deleted", "actor", user.ActorID, payload,
 	)
 }
 

@@ -283,6 +283,10 @@ func NewRouter(logger *slog.Logger, deps Deps, writeAPI *WriteAPI, readAPI *Read
 				}
 				if governanceAPI.userAdmin != nil {
 					r.Get("/admin/users", governanceAPI.listAdminUsers)
+					r.Delete(
+						"/admin/users/{actor_id}",
+						governanceAPI.deleteAdminUser,
+					)
 					r.Put(
 						"/admin/users/{actor_id}/roles/{role_key}",
 						governanceAPI.grantAdminUserRole,
