@@ -59,8 +59,8 @@ func TestAllOperationsReachHTTPTransport(t *testing.T) {
 	}
 
 	operations := app.contract.List()
-	if len(operations) != 149 {
-		t.Fatalf("operation count=%d want=149", len(operations))
+	if len(operations) != 154 {
+		t.Fatalf("operation count=%d want=154", len(operations))
 	}
 	for _, operation := range operations {
 		t.Run(operation.ID, func(t *testing.T) {

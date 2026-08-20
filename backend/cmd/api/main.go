@@ -363,6 +363,10 @@ func assembleAPIs(pool *pgxpool.Pool, searchBackends ...wikisearch.SearchAdapter
 			governanceRepo, authorization, txm, ids,
 		),
 		wikiID,
+	).WithUserAdmin(
+		governance.NewUserAdminService(
+			governanceRepo, authorization, txm, ids,
+		),
 	)
 	searchBackend := wikisearch.SearchAdapter(wikisearch.NewPostgresAdapter(pool))
 	if len(searchBackends) > 0 && searchBackends[0] != nil {

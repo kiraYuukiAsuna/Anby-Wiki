@@ -3097,7 +3097,7 @@ Claim 独立后：
   断线恢复、陈旧 sequence 409、最新 sequence 发布及 snapshot/compact 恢复。
 - 正式域名由宿主机 Nginx 终结 HTTPS，并代理到仅绑定 `127.0.0.1:4444` 的 Web；
   HTTPS 首页/API 与 WSS 协作 E2E 已通过。
-- 149/149 个 OpenAPI operation 均有明确 Web 或 CLI owner；147 个 Web-owned
+- 154/154 个 OpenAPI operation 均有明确 Web 或 CLI owner；152 个 Web-owned
   operation 可追踪到页面/global layout，2 个授权兑换/自撤销 operation 属于 CLI transport，
   并由 `make web-api-coverage` 持续检查。
 - 独立数据库、对象存储 bucket、Meilisearch index 和 Redis DB 上动态命中 149/149

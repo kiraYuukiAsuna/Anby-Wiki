@@ -205,6 +205,45 @@ paths:
         "403": { $ref: "#/components/responses/Forbidden" }
         "404": { $ref: "#/components/responses/NotFound" }
         "500": { $ref: "#/components/responses/Internal" }
+  /api/v1/auth/cli/token-records:
+    delete:
+      operationId: deleteInactiveCLITokenRecords
+      tags: [auth]
+      summary: 删除当前账号的已失效 CLI Token 记录
+      description: 只删除已撤销或已过期的记录；不会影响仍有效的 Token。
+      security:
+        - sessionCookie: []
+      responses:
+        "200":
+          description: 已删除记录数
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/DeleteCLITokenRecordsResult" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "500": { $ref: "#/components/responses/Internal" }
+  /api/v1/auth/cli/token-records/{id}:
+    delete:
+      operationId: deleteCLITokenRecord
+      tags: [auth]
+      summary: 删除当前账号的单个已失效 CLI Token 记录
+      description: 只允许删除已撤销或已过期的记录；active Token 必须先撤销。
+      security:
+        - sessionCookie: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: string, format: uuid }
+      responses:
+        "204":
+          description: 记录已删除
+        "400": { $ref: "#/components/responses/BadRequest" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "409": { $ref: "#/components/responses/Conflict" }
+        "500": { $ref: "#/components/responses/Internal" }
   /api/v1/auth/cli/token:
     delete:
       operationId: revokeCurrentCLIToken
@@ -1504,6 +1543,92 @@ paths:
               schema: { $ref: "#/components/schemas/RoleList" }
         "401": { $ref: "#/components/responses/Unauthorized" }
         "403": { $ref: "#/components/responses/Forbidden" }
+  /api/v1/admin/users:
+    get:
+      operationId: listAdminUsers
+      tags: [admin]
+      summary: 管理员列出本地用户与角色
+      description: 仅 admin 可用；角色变更不会写入 session，下一次授权检查即时生效。
+      security:
+        - sessionCookie: []
+        - cliBearer: []
+      parameters:
+        - name: search
+          in: query
+          schema: { type: string, maxLength: 128 }
+          description: 按用户名、邮箱、显示名或 Actor ID 过滤。
+        - name: include_disabled
+          in: query
+          schema: { type: boolean, default: false }
+      responses:
+        "200":
+          description: 本地用户与当前 Wiki 角色
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/AdminUserList" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "422": { $ref: "#/components/responses/UnprocessableEntity" }
+  /api/v1/admin/users/{actor_id}/roles/{role_key}:
+    put:
+      operationId: grantAdminUserRole
+      tags: [admin]
+      summary: 管理员授予用户角色
+      description: 幂等操作；角色已存在时返回 changed=false。
+      security:
+        - sessionCookie: []
+        - cliBearer: []
+      parameters:
+        - name: actor_id
+          in: path
+          required: true
+          schema: { type: string, format: uuid }
+        - name: role_key
+          in: path
+          required: true
+          schema:
+            type: string
+            enum: [editor, reviewer, applier, admin]
+      responses:
+        "200":
+          description: 授权后的用户角色快照
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/AdminRoleMutationResult" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "422": { $ref: "#/components/responses/UnprocessableEntity" }
+    delete:
+      operationId: revokeAdminUserRole
+      tags: [admin]
+      summary: 管理员撤销用户角色
+      description: 幂等操作；角色不存在时返回 changed=false。最后一个 active human admin 不能被撤销。
+      security:
+        - sessionCookie: []
+        - cliBearer: []
+      parameters:
+        - name: actor_id
+          in: path
+          required: true
+          schema: { type: string, format: uuid }
+        - name: role_key
+          in: path
+          required: true
+          schema:
+            type: string
+            enum: [editor, reviewer, applier, admin]
+      responses:
+        "200":
+          description: 撤销后的用户角色快照
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/AdminRoleMutationResult" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "409": { $ref: "#/components/responses/Conflict" }
+        "422": { $ref: "#/components/responses/UnprocessableEntity" }
   /api/v1/page-protections:
     get:
       operationId: listPageProtections
@@ -4245,6 +4370,15 @@ components:
         items:
           type: array
           items: { $ref: "#/components/schemas/CLIToken" }
+    DeleteCLITokenRecordsResult:
+      type: object
+      additionalProperties: false
+      required: [deleted]
+      properties:
+        deleted:
+          type: integer
+          minimum: 0
+          description: 删除的已撤销或已过期 CLI Token 记录数量。
     CLIAuthExchangeResult:
       type: object
       additionalProperties: false
@@ -5166,6 +5300,36 @@ components:
         items:
           type: array
           items: { $ref: "#/components/schemas/RoleSummary" }
+    AdminUser:
+      type: object
+      required: [actor_id, username, email, display_name, status, roles, created_at]
+      properties:
+        actor_id: { type: string, format: uuid }
+        username: { type: string }
+        email: { type: string, format: email }
+        display_name: { type: string }
+        status:
+          type: string
+          enum: [active, disabled]
+        roles:
+          type: array
+          items: { $ref: "#/components/schemas/RoleSummary" }
+        created_at: { type: string, format: date-time }
+    AdminUserList:
+      type: object
+      required: [items]
+      properties:
+        items:
+          type: array
+          items: { $ref: "#/components/schemas/AdminUser" }
+    AdminRoleMutationResult:
+      type: object
+      required: [user, changed]
+      properties:
+        user: { $ref: "#/components/schemas/AdminUser" }
+        changed:
+          type: boolean
+          description: false 表示本次授予/撤销为幂等 no-op。
     PageProtection:
       type: object
       required:

@@ -106,6 +106,8 @@ func NewRouter(logger *slog.Logger, deps Deps, writeAPI *WriteAPI, readAPI *Read
 				r.Post("/auth/cli/exchange", authAPI.exchangeCLIAuthCode)
 				r.Get("/auth/cli/tokens", authAPI.listCLITokens)
 				r.Delete("/auth/cli/tokens/{id}", authAPI.revokeCLIToken)
+				r.Delete("/auth/cli/token-records", authAPI.deleteInactiveCLITokenRecords)
+				r.Delete("/auth/cli/token-records/{id}", authAPI.deleteCLITokenRecord)
 				r.Delete("/auth/cli/token", authAPI.revokeCurrentCLIToken)
 			}
 			if writeAPI != nil {
@@ -277,6 +279,17 @@ func NewRouter(logger *slog.Logger, deps Deps, writeAPI *WriteAPI, readAPI *Read
 					r.Post(
 						"/revision-storage/archive",
 						governanceAPI.archiveRevisionSnapshots,
+					)
+				}
+				if governanceAPI.userAdmin != nil {
+					r.Get("/admin/users", governanceAPI.listAdminUsers)
+					r.Put(
+						"/admin/users/{actor_id}/roles/{role_key}",
+						governanceAPI.grantAdminUserRole,
+					)
+					r.Delete(
+						"/admin/users/{actor_id}/roles/{role_key}",
+						governanceAPI.revokeAdminUserRole,
 					)
 				}
 			}

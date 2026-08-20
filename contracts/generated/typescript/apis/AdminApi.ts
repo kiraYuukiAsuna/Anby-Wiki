@@ -24,10 +24,35 @@ import {
     AIConfigTestResultToJSON,
 } from '../models/AIConfigTestResult';
 import {
+    type AdminRoleMutationResult,
+    AdminRoleMutationResultFromJSON,
+    AdminRoleMutationResultToJSON,
+} from '../models/AdminRoleMutationResult';
+import {
+    type AdminUserList,
+    AdminUserListFromJSON,
+    AdminUserListToJSON,
+} from '../models/AdminUserList';
+import {
     type UpdateAIConfigRequest,
     UpdateAIConfigRequestFromJSON,
     UpdateAIConfigRequestToJSON,
 } from '../models/UpdateAIConfigRequest';
+
+export interface GrantAdminUserRoleRequest {
+    actorId: string;
+    roleKey: GrantAdminUserRoleRoleKeyEnum;
+}
+
+export interface ListAdminUsersRequest {
+    search?: string;
+    includeDisabled?: boolean;
+}
+
+export interface RevokeAdminUserRoleRequest {
+    actorId: string;
+    roleKey: RevokeAdminUserRoleRoleKeyEnum;
+}
 
 export interface UpdateAIConfigOperationRequest {
     updateAIConfigRequest: UpdateAIConfigRequest;
@@ -82,6 +107,187 @@ export class AdminApi extends runtime.BaseAPI {
      */
     async getAIConfig(initOverrides?: RequestInit | runtime.InitOverrideFunction): Promise<AIConfig> {
         const response = await this.getAIConfigRaw(initOverrides);
+        return await response.value();
+    }
+
+    /**
+     * Creates request options for grantAdminUserRole without sending the request
+     */
+    async grantAdminUserRoleRequestOpts(requestParameters: GrantAdminUserRoleRequest): Promise<runtime.RequestOpts> {
+        if (requestParameters['actorId'] == null) {
+            throw new runtime.RequiredError(
+                'actorId',
+                'Required parameter "actorId" was null or undefined when calling grantAdminUserRole().'
+            );
+        }
+
+        if (requestParameters['roleKey'] == null) {
+            throw new runtime.RequiredError(
+                'roleKey',
+                'Required parameter "roleKey" was null or undefined when calling grantAdminUserRole().'
+            );
+        }
+
+        const queryParameters: any = {};
+
+        const headerParameters: runtime.HTTPHeaders = {};
+
+        if (this.configuration && this.configuration.accessToken) {
+            const token = this.configuration.accessToken;
+            const tokenString = await token("cliBearer", []);
+
+            if (tokenString) {
+                headerParameters["Authorization"] = `Bearer ${tokenString}`;
+            }
+        }
+
+        let urlPath = `/api/v1/admin/users/{actor_id}/roles/{role_key}`;
+        urlPath = urlPath.replace('{actor_id}', encodeURIComponent(String(requestParameters['actorId'])));
+        urlPath = urlPath.replace('{role_key}', encodeURIComponent(String(requestParameters['roleKey'])));
+
+        return {
+            path: urlPath,
+            method: 'PUT',
+            headers: headerParameters,
+            query: queryParameters,
+        };
+    }
+
+    /**
+     * 幂等操作；角色已存在时返回 changed=false。
+     * 管理员授予用户角色
+     */
+    async grantAdminUserRoleRaw(requestParameters: GrantAdminUserRoleRequest, initOverrides?: RequestInit | runtime.InitOverrideFunction): Promise<runtime.ApiResponse<AdminRoleMutationResult>> {
+        const requestOptions = await this.grantAdminUserRoleRequestOpts(requestParameters);
+        const response = await this.request(requestOptions, initOverrides);
+
+        return new runtime.JSONApiResponse(response, (jsonValue) => AdminRoleMutationResultFromJSON(jsonValue));
+    }
+
+    /**
+     * 幂等操作；角色已存在时返回 changed=false。
+     * 管理员授予用户角色
+     */
+    async grantAdminUserRole(requestParameters: GrantAdminUserRoleRequest, initOverrides?: RequestInit | runtime.InitOverrideFunction): Promise<AdminRoleMutationResult> {
+        const response = await this.grantAdminUserRoleRaw(requestParameters, initOverrides);
+        return await response.value();
+    }
+
+    /**
+     * Creates request options for listAdminUsers without sending the request
+     */
+    async listAdminUsersRequestOpts(requestParameters: ListAdminUsersRequest): Promise<runtime.RequestOpts> {
+        const queryParameters: any = {};
+
+        if (requestParameters['search'] != null) {
+            queryParameters['search'] = requestParameters['search'];
+        }
+
+        if (requestParameters['includeDisabled'] != null) {
+            queryParameters['include_disabled'] = requestParameters['includeDisabled'];
+        }
+
+        const headerParameters: runtime.HTTPHeaders = {};
+
+        if (this.configuration && this.configuration.accessToken) {
+            const token = this.configuration.accessToken;
+            const tokenString = await token("cliBearer", []);
+
+            if (tokenString) {
+                headerParameters["Authorization"] = `Bearer ${tokenString}`;
+            }
+        }
+
+        let urlPath = `/api/v1/admin/users`;
+
+        return {
+            path: urlPath,
+            method: 'GET',
+            headers: headerParameters,
+            query: queryParameters,
+        };
+    }
+
+    /**
+     * 仅 admin 可用；角色变更不会写入 session，下一次授权检查即时生效。
+     * 管理员列出本地用户与角色
+     */
+    async listAdminUsersRaw(requestParameters: ListAdminUsersRequest, initOverrides?: RequestInit | runtime.InitOverrideFunction): Promise<runtime.ApiResponse<AdminUserList>> {
+        const requestOptions = await this.listAdminUsersRequestOpts(requestParameters);
+        const response = await this.request(requestOptions, initOverrides);
+
+        return new runtime.JSONApiResponse(response, (jsonValue) => AdminUserListFromJSON(jsonValue));
+    }
+
+    /**
+     * 仅 admin 可用；角色变更不会写入 session，下一次授权检查即时生效。
+     * 管理员列出本地用户与角色
+     */
+    async listAdminUsers(requestParameters: ListAdminUsersRequest = {}, initOverrides?: RequestInit | runtime.InitOverrideFunction): Promise<AdminUserList> {
+        const response = await this.listAdminUsersRaw(requestParameters, initOverrides);
+        return await response.value();
+    }
+
+    /**
+     * Creates request options for revokeAdminUserRole without sending the request
+     */
+    async revokeAdminUserRoleRequestOpts(requestParameters: RevokeAdminUserRoleRequest): Promise<runtime.RequestOpts> {
+        if (requestParameters['actorId'] == null) {
+            throw new runtime.RequiredError(
+                'actorId',
+                'Required parameter "actorId" was null or undefined when calling revokeAdminUserRole().'
+            );
+        }
+
+        if (requestParameters['roleKey'] == null) {
+            throw new runtime.RequiredError(
+                'roleKey',
+                'Required parameter "roleKey" was null or undefined when calling revokeAdminUserRole().'
+            );
+        }
+
+        const queryParameters: any = {};
+
+        const headerParameters: runtime.HTTPHeaders = {};
+
+        if (this.configuration && this.configuration.accessToken) {
+            const token = this.configuration.accessToken;
+            const tokenString = await token("cliBearer", []);
+
+            if (tokenString) {
+                headerParameters["Authorization"] = `Bearer ${tokenString}`;
+            }
+        }
+
+        let urlPath = `/api/v1/admin/users/{actor_id}/roles/{role_key}`;
+        urlPath = urlPath.replace('{actor_id}', encodeURIComponent(String(requestParameters['actorId'])));
+        urlPath = urlPath.replace('{role_key}', encodeURIComponent(String(requestParameters['roleKey'])));
+
+        return {
+            path: urlPath,
+            method: 'DELETE',
+            headers: headerParameters,
+            query: queryParameters,
+        };
+    }
+
+    /**
+     * 幂等操作；角色不存在时返回 changed=false。最后一个 active human admin 不能被撤销。
+     * 管理员撤销用户角色
+     */
+    async revokeAdminUserRoleRaw(requestParameters: RevokeAdminUserRoleRequest, initOverrides?: RequestInit | runtime.InitOverrideFunction): Promise<runtime.ApiResponse<AdminRoleMutationResult>> {
+        const requestOptions = await this.revokeAdminUserRoleRequestOpts(requestParameters);
+        const response = await this.request(requestOptions, initOverrides);
+
+        return new runtime.JSONApiResponse(response, (jsonValue) => AdminRoleMutationResultFromJSON(jsonValue));
+    }
+
+    /**
+     * 幂等操作；角色不存在时返回 changed=false。最后一个 active human admin 不能被撤销。
+     * 管理员撤销用户角色
+     */
+    async revokeAdminUserRole(requestParameters: RevokeAdminUserRoleRequest, initOverrides?: RequestInit | runtime.InitOverrideFunction): Promise<AdminRoleMutationResult> {
+        const response = await this.revokeAdminUserRoleRaw(requestParameters, initOverrides);
         return await response.value();
     }
 
@@ -190,3 +396,24 @@ export class AdminApi extends runtime.BaseAPI {
     }
 
 }
+
+/**
+ * @export
+ */
+export const GrantAdminUserRoleRoleKeyEnum = {
+    Editor: 'editor',
+    Reviewer: 'reviewer',
+    Applier: 'applier',
+    Admin: 'admin'
+} as const;
+export type GrantAdminUserRoleRoleKeyEnum = typeof GrantAdminUserRoleRoleKeyEnum[keyof typeof GrantAdminUserRoleRoleKeyEnum];
+/**
+ * @export
+ */
+export const RevokeAdminUserRoleRoleKeyEnum = {
+    Editor: 'editor',
+    Reviewer: 'reviewer',
+    Applier: 'applier',
+    Admin: 'admin'
+} as const;
+export type RevokeAdminUserRoleRoleKeyEnum = typeof RevokeAdminUserRoleRoleKeyEnum[keyof typeof RevokeAdminUserRoleRoleKeyEnum];

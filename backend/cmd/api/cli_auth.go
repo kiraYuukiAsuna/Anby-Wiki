@@ -138,6 +138,49 @@ func (a *AuthAPI) revokeCLIToken(w http.ResponseWriter, r *http.Request) {
 	w.WriteHeader(http.StatusNoContent)
 }
 
+func (a *AuthAPI) deleteCLITokenRecord(w http.ResponseWriter, r *http.Request) {
+	principal, ok := browserSessionPrincipal(w, r)
+	if !ok {
+		return
+	}
+	tokenID, err := uuid.Parse(chi.URLParam(r, "id"))
+	if err != nil {
+		httpx.WriteError(w, r, http.StatusBadRequest, httpx.CodeBadRequest, "路径 id 不是合法 UUID")
+		return
+	}
+	err = a.service.DeleteCLITokenRecord(r.Context(), principal.ActorID, tokenID)
+	if errors.Is(err, authdomain.ErrCLITokenNotFound) {
+		httpx.WriteError(w, r, http.StatusNotFound, httpx.CodeNotFound, "CLI Token 不存在")
+		return
+	}
+	if errors.Is(err, authdomain.ErrActiveCLITokenDeletion) {
+		httpx.WriteError(w, r, http.StatusConflict, httpx.CodeConflict, "有效 CLI Token 必须先撤销")
+		return
+	}
+	if err != nil {
+		httpx.WriteError(w, r, http.StatusInternalServerError, httpx.CodeInternal, "无法删除 CLI Token 记录")
+		return
+	}
+	w.WriteHeader(http.StatusNoContent)
+}
+
+func (a *AuthAPI) deleteInactiveCLITokenRecords(w http.ResponseWriter, r *http.Request) {
+	principal, ok := browserSessionPrincipal(w, r)
+	if !ok {
+		return
+	}
+	deleted, err := a.service.DeleteInactiveCLITokenRecords(r.Context(), principal.ActorID)
+	if errors.Is(err, authdomain.ErrUnauthenticated) {
+		httpx.WriteError(w, r, http.StatusUnauthorized, httpx.CodeUnauthorized, "需要登录")
+		return
+	}
+	if err != nil {
+		httpx.WriteError(w, r, http.StatusInternalServerError, httpx.CodeInternal, "无法清理 CLI Token 记录")
+		return
+	}
+	httpx.WriteJSON(w, http.StatusOK, map[string]int64{"deleted": deleted})
+}
+
 func (a *AuthAPI) revokeCurrentCLIToken(w http.ResponseWriter, r *http.Request) {
 	principal, ok := authdomain.PrincipalFrom(r.Context())
 	if !ok {

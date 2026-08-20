@@ -34,6 +34,7 @@ type GovernanceAPI struct {
 	audit      *governance.AuditService
 	protection *governance.ProtectionService
 	aiTrust    *governance.AITrustService
+	userAdmin  *governance.UserAdminService
 	auth       *governance.AuthorizationService
 	revisions  *page.Service
 	wikiID     uuid.UUID
@@ -60,6 +61,13 @@ func (a *GovernanceAPI) WithAITrust(
 	service *governance.AITrustService,
 ) *GovernanceAPI {
 	a.aiTrust = service
+	return a
+}
+
+func (a *GovernanceAPI) WithUserAdmin(
+	service *governance.UserAdminService,
+) *GovernanceAPI {
+	a.userAdmin = service
 	return a
 }
 
@@ -885,7 +893,7 @@ func toProposalResponse(p *governance.Proposal, operations []operationRecordResp
 func governanceError(w http.ResponseWriter, r *http.Request, err error) {
 	switch {
 	case errors.Is(err, governance.ErrProposalNotFound), errors.Is(err, governance.ErrBulkReviewNotFound),
-		errors.Is(err, governance.ErrProtectionNotFound), isAuditNotFound(err):
+		errors.Is(err, governance.ErrProtectionNotFound), isAuditNotFound(err), isAdminUserNotFound(err):
 		httpx.WriteError(w, r, http.StatusNotFound, httpx.CodeNotFound, err.Error())
 	case errors.Is(err, governance.ErrInvalidActor), errors.Is(err, governance.ErrActorNotAllowed), errors.Is(err, governance.ErrPermissionDenied):
 		httpx.WriteError(w, r, http.StatusForbidden, httpx.CodeForbidden, err.Error())
@@ -912,6 +920,8 @@ func governanceError(w http.ResponseWriter, r *http.Request, err error) {
 		httpx.WriteError(w, r, http.StatusUnprocessableEntity, httpx.CodeValidationFailed, err.Error())
 	case errors.Is(err, governance.ErrInvalidAITrustProfile):
 		httpx.WriteError(w, r, http.StatusUnprocessableEntity, httpx.CodeValidationFailed, err.Error())
+	case errors.Is(err, governance.ErrInvalidAdminUserFilter):
+		httpx.WriteError(w, r, http.StatusUnprocessableEntity, httpx.CodeValidationFailed, err.Error())
 	case errors.Is(err, governance.ErrInvalidTransition), errors.Is(err, governance.ErrProposalNotDraft),
 		errors.Is(err, governance.ErrPatchTargetModified), errors.Is(err, governance.ErrMergeConflict),
 		errors.Is(err, governance.ErrIdentityConflict), errors.Is(err, page.ErrTitleConflict),
@@ -919,6 +929,7 @@ func governanceError(w http.ResponseWriter, r *http.Request, err error) {
 		errors.Is(err, governance.ErrRollbackStale), errors.Is(err, governance.ErrApprovalRequired),
 		errors.Is(err, governance.ErrBulkReviewIncomplete), errors.Is(err, governance.ErrBulkReviewPaused),
 		errors.Is(err, governance.ErrMergedASTMismatch),
+		errors.Is(err, governance.ErrLastAdminRole),
 		errors.Is(err, collaboration.ErrSequenceMismatch),
 		errors.Is(err, collaboration.ErrIdempotencyConflict),
 		errors.Is(err, collaboration.ErrDocumentInactive),

@@ -23,6 +23,7 @@ import {
   Settings2,
   ShieldAlert,
   TerminalSquare,
+  UsersRound,
   Waypoints,
 } from "lucide-react";
 import { useRouter } from "next/navigation";
@@ -72,6 +73,7 @@ const QUICK_LINKS = [
   { href: "/governance/fact-check", label: "事实一致性", detail: "冲突、证据与 Entity 引用检查", icon: ShieldAlert },
   { href: "/governance/ai-trust", label: "AI 信任策略", detail: "Actor 信任等级与人工抽样", icon: BrainCircuit },
   { href: "/governance/revision-storage", label: "历史版本存储", detail: "Revision 冷热分层与归档", icon: Archive },
+  { href: "/admin/users", label: "用户与角色", detail: "本地账号与 RBAC 角色", icon: UsersRound },
   { href: "/admin/ai", label: "AI 模型配置", detail: "供应商、密钥、超时与结构化输出", icon: Settings2 },
   { href: "/settings/cli", label: "Agent CLI 授权", detail: "一次性授权码与 Token 撤销", icon: TerminalSquare },
   { href: "/assets", label: "媒体与附件", detail: "不可变资产版本", icon: Images },

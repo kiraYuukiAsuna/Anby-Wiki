@@ -24,6 +24,7 @@ import {
   Settings2,
   SquarePen,
   TerminalSquare,
+  UsersRound,
   Waypoints,
 } from "lucide-react";
 import { usePathname } from "next/navigation";
@@ -111,6 +112,11 @@ const GROUPS = [
         href: "/settings/cli",
         label: "Agent CLI 授权",
         icon: TerminalSquare,
+      },
+      {
+        href: "/admin/users",
+        label: "用户与角色",
+        icon: UsersRound,
       },
       {
         href: "/admin/ai",

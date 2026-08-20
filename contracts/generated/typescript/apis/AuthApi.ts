@@ -44,6 +44,11 @@ import {
     CreateCLIAuthCodeRequestToJSON,
 } from '../models/CreateCLIAuthCodeRequest';
 import {
+    type DeleteCLITokenRecordsResult,
+    DeleteCLITokenRecordsResultFromJSON,
+    DeleteCLITokenRecordsResultToJSON,
+} from '../models/DeleteCLITokenRecordsResult';
+import {
     type ExchangeCLIAuthCodeRequest,
     ExchangeCLIAuthCodeRequestFromJSON,
     ExchangeCLIAuthCodeRequestToJSON,
@@ -61,6 +66,10 @@ import {
 
 export interface CreateCLIAuthCodeOperationRequest {
     createCLIAuthCodeRequest: CreateCLIAuthCodeRequest;
+}
+
+export interface DeleteCLITokenRecordRequest {
+    id: string;
 }
 
 export interface ExchangeCLIAuthCodeOperationRequest {
@@ -130,6 +139,91 @@ export class AuthApi extends runtime.BaseAPI {
      */
     async createCLIAuthCode(requestParameters: CreateCLIAuthCodeOperationRequest, initOverrides?: RequestInit | runtime.InitOverrideFunction): Promise<CLIAuthCode> {
         const response = await this.createCLIAuthCodeRaw(requestParameters, initOverrides);
+        return await response.value();
+    }
+
+    /**
+     * Creates request options for deleteCLITokenRecord without sending the request
+     */
+    async deleteCLITokenRecordRequestOpts(requestParameters: DeleteCLITokenRecordRequest): Promise<runtime.RequestOpts> {
+        if (requestParameters['id'] == null) {
+            throw new runtime.RequiredError(
+                'id',
+                'Required parameter "id" was null or undefined when calling deleteCLITokenRecord().'
+            );
+        }
+
+        const queryParameters: any = {};
+
+        const headerParameters: runtime.HTTPHeaders = {};
+
+
+        let urlPath = `/api/v1/auth/cli/token-records/{id}`;
+        urlPath = urlPath.replace('{id}', encodeURIComponent(String(requestParameters['id'])));
+
+        return {
+            path: urlPath,
+            method: 'DELETE',
+            headers: headerParameters,
+            query: queryParameters,
+        };
+    }
+
+    /**
+     * 只允许删除已撤销或已过期的记录；active Token 必须先撤销。
+     * 删除当前账号的单个已失效 CLI Token 记录
+     */
+    async deleteCLITokenRecordRaw(requestParameters: DeleteCLITokenRecordRequest, initOverrides?: RequestInit | runtime.InitOverrideFunction): Promise<runtime.ApiResponse<void>> {
+        const requestOptions = await this.deleteCLITokenRecordRequestOpts(requestParameters);
+        const response = await this.request(requestOptions, initOverrides);
+
+        return new runtime.VoidApiResponse(response);
+    }
+
+    /**
+     * 只允许删除已撤销或已过期的记录；active Token 必须先撤销。
+     * 删除当前账号的单个已失效 CLI Token 记录
+     */
+    async deleteCLITokenRecord(requestParameters: DeleteCLITokenRecordRequest, initOverrides?: RequestInit | runtime.InitOverrideFunction): Promise<void> {
+        await this.deleteCLITokenRecordRaw(requestParameters, initOverrides);
+    }
+
+    /**
+     * Creates request options for deleteInactiveCLITokenRecords without sending the request
+     */
+    async deleteInactiveCLITokenRecordsRequestOpts(): Promise<runtime.RequestOpts> {
+        const queryParameters: any = {};
+
+        const headerParameters: runtime.HTTPHeaders = {};
+
+
+        let urlPath = `/api/v1/auth/cli/token-records`;
+
+        return {
+            path: urlPath,
+            method: 'DELETE',
+            headers: headerParameters,
+            query: queryParameters,
+        };
+    }
+
+    /**
+     * 只删除已撤销或已过期的记录；不会影响仍有效的 Token。
+     * 删除当前账号的已失效 CLI Token 记录
+     */
+    async deleteInactiveCLITokenRecordsRaw(initOverrides?: RequestInit | runtime.InitOverrideFunction): Promise<runtime.ApiResponse<DeleteCLITokenRecordsResult>> {
+        const requestOptions = await this.deleteInactiveCLITokenRecordsRequestOpts();
+        const response = await this.request(requestOptions, initOverrides);
+
+        return new runtime.JSONApiResponse(response, (jsonValue) => DeleteCLITokenRecordsResultFromJSON(jsonValue));
+    }
+
+    /**
+     * 只删除已撤销或已过期的记录；不会影响仍有效的 Token。
+     * 删除当前账号的已失效 CLI Token 记录
+     */
+    async deleteInactiveCLITokenRecords(initOverrides?: RequestInit | runtime.InitOverrideFunction): Promise<DeleteCLITokenRecordsResult> {
+        const response = await this.deleteInactiveCLITokenRecordsRaw(initOverrides);
         return await response.value();
     }
 

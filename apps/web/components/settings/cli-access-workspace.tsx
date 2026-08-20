@@ -22,6 +22,7 @@ import {
 } from "../../../../contracts/generated/typescript";
 
 import { Button } from "@/components/ui/button";
+import { Checkbox } from "@/components/ui/checkbox";
 import {
   Dialog,
   DialogContent,
@@ -130,13 +131,18 @@ function AuthorizationCodeDialog({
 function TokenRow({
   token,
   revoking,
+  deleting,
   onRevoke,
+  onDelete,
 }: {
   token: CLIToken;
   revoking: boolean;
+  deleting: boolean;
   onRevoke: () => void;
+  onDelete: () => void;
 }) {
   const status = STATUS[token.status];
+  const inactive = token.status !== "active";
   return (
     <div className="grid gap-3 border-b px-4 py-4 last:border-b-0 md:grid-cols-[minmax(0,1fr)_10rem_10rem_auto] md:items-center">
       <div className="min-w-0">
@@ -172,16 +178,16 @@ function TokenRow({
       <Button
         type="button"
         size="sm"
-        variant="outline"
-        disabled={token.status === "revoked" || revoking}
-        onClick={onRevoke}
+        variant={inactive ? "destructive" : "outline"}
+        disabled={revoking || deleting}
+        onClick={inactive ? onDelete : onRevoke}
       >
-        {revoking ? (
+        {revoking || deleting ? (
           <LoaderCircle className="animate-spin" aria-hidden />
         ) : (
           <Trash2 aria-hidden />
         )}
-        {token.status === "revoked" ? "已撤销" : "撤销"}
+        {inactive ? "删除记录" : "撤销"}
       </Button>
     </div>
   );
@@ -194,6 +200,9 @@ export function CLIAccessWorkspace() {
   const [creating, setCreating] = useState(false);
   const [authorizationCode, setAuthorizationCode] = useState<CLIAuthCode>();
   const [revokingID, setRevokingID] = useState("");
+  const [deletingID, setDeletingID] = useState("");
+  const [cleaningInactive, setCleaningInactive] = useState(false);
+  const [showInactive, setShowInactive] = useState(false);
   const tokens = useSWR(
     session.isAuthenticated ? "settings:cli-tokens" : null,
     () => authApi().listCLITokens(),
@@ -243,6 +252,38 @@ export function CLIAccessWorkspace() {
     }
   };
 
+  const deleteRecord = async (token: CLIToken) => {
+    setDeletingID(token.id);
+    try {
+      await authApi().deleteCLITokenRecord({ id: token.id });
+      await tokens.mutate();
+      toast.success("CLI Token 记录已删除");
+    } catch (error) {
+      if (error instanceof ResponseError && error.response.status === 409) {
+        toast.error("有效 Token 需要先撤销");
+      } else {
+        toast.error("CLI Token 记录删除失败");
+      }
+    } finally {
+      setDeletingID("");
+    }
+  };
+
+  const deleteInactiveRecords = async () => {
+    setCleaningInactive(true);
+    try {
+      const result = await authApi().deleteInactiveCLITokenRecords();
+      await tokens.mutate();
+      toast.success("已清理失效 Token 记录", {
+        description: `删除 ${result.deleted} 条记录。`,
+      });
+    } catch {
+      toast.error("失效 Token 记录清理失败");
+    } finally {
+      setCleaningInactive(false);
+    }
+  };
+
   if (session.isLoading) {
     return (
       <div className="h-72 animate-pulse rounded-lg border bg-muted/25" />
@@ -259,6 +300,12 @@ export function CLIAccessWorkspace() {
       </div>
     );
   }
+
+  const allTokens = tokens.data?.items ?? [];
+  const inactiveCount = allTokens.filter((token) => token.status !== "active").length;
+  const visibleTokens = showInactive
+    ? allTokens
+    : allTokens.filter((token) => token.status === "active");
 
   return (
     <div className="space-y-10">
@@ -314,13 +361,38 @@ export function CLIAccessWorkspace() {
       </section>
 
       <section aria-labelledby="cli-token-list-title">
-        <div>
-          <h2 id="cli-token-list-title" className="text-lg font-semibold">
-            已授权 Agent
-          </h2>
-          <p className="mt-1 text-sm text-muted-foreground">
-            Token 明文不会返回；这里只保留前缀、生命周期和最近使用时间。
-          </p>
+        <div className="flex flex-wrap items-start justify-between gap-4">
+          <div>
+            <h2 id="cli-token-list-title" className="text-lg font-semibold">
+              已授权 Agent
+            </h2>
+            <p className="mt-1 text-sm text-muted-foreground">
+              Token 明文不会返回；这里只保留前缀、生命周期和最近使用时间。
+            </p>
+          </div>
+          <div className="flex flex-wrap items-center gap-3">
+            <label className="flex h-8 items-center gap-2 rounded-lg border px-3 text-xs">
+              <Checkbox
+                checked={showInactive}
+                onCheckedChange={(value) => setShowInactive(value === true)}
+              />
+              显示已失效
+            </label>
+            <Button
+              type="button"
+              size="sm"
+              variant="outline"
+              disabled={inactiveCount === 0 || cleaningInactive}
+              onClick={() => void deleteInactiveRecords()}
+            >
+              {cleaningInactive ? (
+                <LoaderCircle className="animate-spin" aria-hidden />
+              ) : (
+                <Trash2 aria-hidden />
+              )}
+              清理已失效
+            </Button>
+          </div>
         </div>
         <div className="mt-5 overflow-hidden rounded-lg border">
           {tokens.isLoading ? (
@@ -329,21 +401,25 @@ export function CLIAccessWorkspace() {
           {tokens.error ? (
             <p className="p-6 text-sm text-destructive">CLI Token 暂时不可用。</p>
           ) : null}
-          {!tokens.isLoading && !tokens.error && !tokens.data?.items.length ? (
+          {!tokens.isLoading && !tokens.error && visibleTokens.length === 0 ? (
             <div className="p-8 text-center">
               <TerminalSquare
                 className="mx-auto size-6 text-muted-foreground"
                 aria-hidden
               />
-              <p className="mt-3 text-sm font-semibold">还没有已授权 Agent</p>
+              <p className="mt-3 text-sm font-semibold">
+                {allTokens.length === 0 ? "还没有已授权 Agent" : "没有需要显示的 Token"}
+              </p>
             </div>
           ) : null}
-          {tokens.data?.items.map((token) => (
+          {visibleTokens.map((token) => (
             <TokenRow
               key={token.id}
               token={token}
               revoking={revokingID === token.id}
+              deleting={deletingID === token.id}
               onRevoke={() => void revoke(token)}
+              onDelete={() => void deleteRecord(token)}
             />
           ))}
         </div>

@@ -5,6 +5,8 @@ All URIs are relative to *http://localhost:3000*
 | Method | HTTP request | Description |
 |------------- | ------------- | -------------|
 | [**createCLIAuthCode**](AuthApi.md#createcliauthcodeoperation) | **POST** /api/v1/auth/cli/codes | 创建一次性 CLI 授权码 |
+| [**deleteCLITokenRecord**](AuthApi.md#deleteclitokenrecord) | **DELETE** /api/v1/auth/cli/token-records/{id} | 删除当前账号的单个已失效 CLI Token 记录 |
+| [**deleteInactiveCLITokenRecords**](AuthApi.md#deleteinactiveclitokenrecords) | **DELETE** /api/v1/auth/cli/token-records | 删除当前账号的已失效 CLI Token 记录 |
 | [**exchangeCLIAuthCode**](AuthApi.md#exchangecliauthcodeoperation) | **POST** /api/v1/auth/cli/exchange | 兑换一次性授权码 |
 | [**getSession**](AuthApi.md#getsession) | **GET** /api/v1/auth/session | 获取当前登录 Actor |
 | [**listCLITokens**](AuthApi.md#listclitokens) | **GET** /api/v1/auth/cli/tokens | 列出当前账号的 CLI Token |
@@ -84,6 +86,149 @@ example().catch(console.error);
 |-------------|-------------|------------------|
 | **201** | 一次性授权码 |  -  |
 | **400** | 请求格式错误 |  -  |
+| **401** | 未认证 |  -  |
+| **403** | 已认证但无权限 |  -  |
+| **500** | 服务端内部错误 |  -  |
+
+[[Back to top]](#) [[Back to API list]](../README.md#api-endpoints) [[Back to Model list]](../README.md#models) [[Back to README]](../README.md)
+
+
+## deleteCLITokenRecord
+
+> deleteCLITokenRecord(id)
+
+删除当前账号的单个已失效 CLI Token 记录
+
+只允许删除已撤销或已过期的记录；active Token 必须先撤销。
+
+### Example
+
+```ts
+import {
+  Configuration,
+  AuthApi,
+} from '';
+import type { DeleteCLITokenRecordRequest } from '';
+
+async function example() {
+  console.log("🚀 Testing  SDK...");
+  const config = new Configuration({
+    // To configure API key authorization: sessionCookie
+    apiKey: "YOUR API KEY",
+  });
+  const api = new AuthApi(config);
+
+  const body = {
+    // string
+    id: 38400000-8cf0-11bd-b23e-10b96e4ef00d,
+  } satisfies DeleteCLITokenRecordRequest;
+
+  try {
+    const data = await api.deleteCLITokenRecord(body);
+    console.log(data);
+  } catch (error) {
+    console.error(error);
+  }
+}
+
+// Run the test
+example().catch(console.error);
+```
+
+### Parameters
+
+
+| Name | Type | Description  | Notes |
+|------------- | ------------- | ------------- | -------------|
+| **id** | `string` |  | [Defaults to `undefined`] |
+
+### Return type
+
+`void` (Empty response body)
+
+### Authorization
+
+[sessionCookie](../README.md#sessionCookie)
+
+### HTTP request headers
+
+- **Content-Type**: Not defined
+- **Accept**: `application/json`
+
+
+### HTTP response details
+| Status code | Description | Response headers |
+|-------------|-------------|------------------|
+| **204** | 记录已删除 |  -  |
+| **400** | 请求格式错误 |  -  |
+| **401** | 未认证 |  -  |
+| **403** | 已认证但无权限 |  -  |
+| **404** | 资源不存在 |  -  |
+| **409** | 并发冲突（含陈旧基线、幂等键冲突） |  -  |
+| **500** | 服务端内部错误 |  -  |
+
+[[Back to top]](#) [[Back to API list]](../README.md#api-endpoints) [[Back to Model list]](../README.md#models) [[Back to README]](../README.md)
+
+
+## deleteInactiveCLITokenRecords
+
+> DeleteCLITokenRecordsResult deleteInactiveCLITokenRecords()
+
+删除当前账号的已失效 CLI Token 记录
+
+只删除已撤销或已过期的记录；不会影响仍有效的 Token。
+
+### Example
+
+```ts
+import {
+  Configuration,
+  AuthApi,
+} from '';
+import type { DeleteInactiveCLITokenRecordsRequest } from '';
+
+async function example() {
+  console.log("🚀 Testing  SDK...");
+  const config = new Configuration({
+    // To configure API key authorization: sessionCookie
+    apiKey: "YOUR API KEY",
+  });
+  const api = new AuthApi(config);
+
+  try {
+    const data = await api.deleteInactiveCLITokenRecords();
+    console.log(data);
+  } catch (error) {
+    console.error(error);
+  }
+}
+
+// Run the test
+example().catch(console.error);
+```
+
+### Parameters
+
+This endpoint does not need any parameter.
+
+### Return type
+
+[**DeleteCLITokenRecordsResult**](DeleteCLITokenRecordsResult.md)
+
+### Authorization
+
+[sessionCookie](../README.md#sessionCookie)
+
+### HTTP request headers
+
+- **Content-Type**: Not defined
+- **Accept**: `application/json`
+
+
+### HTTP response details
+| Status code | Description | Response headers |
+|-------------|-------------|------------------|
+| **200** | 已删除记录数 |  -  |
 | **401** | 未认证 |  -  |
 | **403** | 已认证但无权限 |  -  |
 | **500** | 服务端内部错误 |  -  |

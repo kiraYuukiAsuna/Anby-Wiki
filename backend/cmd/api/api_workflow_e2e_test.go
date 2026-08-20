@@ -135,6 +135,14 @@ func TestAPICLIAuthE2E(t *testing.T) {
 	requestE2EMap(t, anonymous, http.MethodPost,
 		baseURL+"/api/v1/auth/cli/exchange",
 		map[string]any{"code": code}, http.StatusUnauthorized)
+	requestE2ENoBody(t, admin, http.MethodDelete,
+		fmt.Sprintf("%s/api/v1/auth/cli/token-records/%s", baseURL, tokenID),
+		http.StatusNoContent)
+	deleted := requestE2EMap(t, admin, http.MethodDelete,
+		baseURL+"/api/v1/auth/cli/token-records", nil, http.StatusOK)
+	if _, ok := deleted["deleted"].(float64); !ok {
+		t.Fatalf("inactive token cleanup response lacks deleted count: %#v", deleted)
+	}
 }
 
 func TestAPIGovernanceKnowledgeE2E(t *testing.T) {
@@ -145,10 +153,30 @@ func TestAPIGovernanceKnowledgeE2E(t *testing.T) {
 	}
 	runID := strconv.FormatInt(time.Now().UnixNano(), 36)
 	admin, adminActor := apiE2EAdmin(t, baseURL, password)
-	editor, _ := registerE2EUser(
+	editor, editorActor := registerE2EUser(
 		t, baseURL, "gov_editor_"+runID,
 		"gov_editor_"+runID+"@example.invalid", password,
 	)
+
+	users := requestE2EMap(t, admin, http.MethodGet,
+		baseURL+"/api/v1/admin/users?search=gov_editor_"+runID,
+		nil, http.StatusOK)
+	items, ok := users["items"].([]any)
+	if !ok || len(items) != 1 {
+		t.Fatalf("admin user list did not find editor: %#v", users)
+	}
+	granted := requestE2EMap(t, admin, http.MethodPut,
+		fmt.Sprintf("%s/api/v1/admin/users/%s/roles/reviewer", baseURL, editorActor),
+		nil, http.StatusOK)
+	if changed, _ := granted["changed"].(bool); !changed {
+		t.Fatalf("grant reviewer was not reported as changed: %#v", granted)
+	}
+	revoked := requestE2EMap(t, admin, http.MethodDelete,
+		fmt.Sprintf("%s/api/v1/admin/users/%s/roles/reviewer", baseURL, editorActor),
+		nil, http.StatusOK)
+	if changed, _ := revoked["changed"].(bool); !changed {
+		t.Fatalf("revoke reviewer was not reported as changed: %#v", revoked)
+	}
 
 	entityID, entityBatchID, entityProposalID := createEntityThroughProposalE2E(
 		t, editor, admin, baseURL, runID+"-primary",

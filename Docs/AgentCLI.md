@@ -54,7 +54,7 @@ bin/anby-wiki --input request.json
 
 ## 测试
 
-CLI action、149 个 HTTP operation、multipart、二进制响应和协作 WebSocket 的本地
+CLI action、154 个 HTTP operation、multipart、二进制响应和协作 WebSocket 的本地
 回归：
 
 ```sh

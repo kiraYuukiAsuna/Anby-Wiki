@@ -22,6 +22,9 @@ docs/AITrustProfileList.md
 docs/AddEntityAliasRequest.md
 docs/AddEntityLabelRequest.md
 docs/AdminApi.md
+docs/AdminRoleMutationResult.md
+docs/AdminUser.md
+docs/AdminUserList.md
 docs/AnchorTarget.md
 docs/ApplyProposalResult.md
 docs/ArchiveRevisionSnapshotsRequest.md
@@ -98,6 +101,7 @@ docs/DatasetViewFilter.md
 docs/DatasetViewList.md
 docs/DatasetViewSort.md
 docs/DatasetsApi.md
+docs/DeleteCLITokenRecordsResult.md
 docs/DocumentDiff.md
 docs/DocumentOutline.md
 docs/EntityAlias.md
@@ -299,6 +303,9 @@ models/AITrustProfile.ts
 models/AITrustProfileList.ts
 models/AddEntityAliasRequest.ts
 models/AddEntityLabelRequest.ts
+models/AdminRoleMutationResult.ts
+models/AdminUser.ts
+models/AdminUserList.ts
 models/AnchorTarget.ts
 models/ApplyProposalResult.ts
 models/ArchiveRevisionSnapshotsRequest.ts
@@ -370,6 +377,7 @@ models/DatasetViewConfig.ts
 models/DatasetViewFilter.ts
 models/DatasetViewList.ts
 models/DatasetViewSort.ts
+models/DeleteCLITokenRecordsResult.ts
 models/DocumentDiff.ts
 models/DocumentOutline.ts
 models/EntityAlias.ts

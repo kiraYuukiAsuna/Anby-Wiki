@@ -204,6 +204,7 @@ func e2eOperationPath(operation apiE2EOperation) string {
 		"{conflict_id}": zero,
 		"{proposal_id}": zero,
 		"{actor_id}":    zero,
+		"{role_key}":    "editor",
 		"{entity_id}":   zero,
 		"{page_id}":     zero,
 		"{alias_id}":    zero,

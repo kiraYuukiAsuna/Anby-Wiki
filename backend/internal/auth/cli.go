@@ -16,6 +16,7 @@ var (
 	ErrInvalidCLIInput             = errors.New("auth: invalid CLI authorization input")
 	ErrInvalidCLIAuthorizationCode = errors.New("auth: invalid CLI authorization code")
 	ErrCLITokenNotFound            = errors.New("auth: CLI token not found")
+	ErrActiveCLITokenDeletion      = errors.New("auth: active CLI token cannot be deleted")
 )
 
 const (
@@ -251,6 +252,51 @@ func (s *Service) RevokeCLIToken(
 		return ErrCLITokenNotFound
 	}
 	return nil
+}
+
+func (s *Service) DeleteCLITokenRecord(
+	ctx context.Context,
+	actorID, tokenID uuid.UUID,
+) error {
+	if actorID == uuid.Nil || tokenID == uuid.Nil {
+		return ErrCLITokenNotFound
+	}
+	tag, err := s.pool.Exec(ctx, `DELETE FROM cli_access_token
+		WHERE id=$1 AND actor_id=$2
+		  AND (revoked_at IS NOT NULL OR expires_at<=now())`,
+		tokenID, actorID)
+	if err != nil {
+		return fmt.Errorf("auth: delete CLI token record: %w", err)
+	}
+	if tag.RowsAffected() == 1 {
+		return nil
+	}
+	var exists bool
+	if err := s.pool.QueryRow(ctx, `SELECT EXISTS (
+		SELECT 1 FROM cli_access_token WHERE id=$1 AND actor_id=$2
+	)`, tokenID, actorID).Scan(&exists); err != nil {
+		return fmt.Errorf("auth: inspect CLI token record: %w", err)
+	}
+	if !exists {
+		return ErrCLITokenNotFound
+	}
+	return ErrActiveCLITokenDeletion
+}
+
+func (s *Service) DeleteInactiveCLITokenRecords(
+	ctx context.Context,
+	actorID uuid.UUID,
+) (int64, error) {
+	if actorID == uuid.Nil {
+		return 0, ErrUnauthenticated
+	}
+	tag, err := s.pool.Exec(ctx, `DELETE FROM cli_access_token
+		WHERE actor_id=$1 AND (revoked_at IS NOT NULL OR expires_at<=now())`,
+		actorID)
+	if err != nil {
+		return 0, fmt.Errorf("auth: delete inactive CLI token records: %w", err)
+	}
+	return tag.RowsAffected(), nil
 }
 
 // ResolveCLIToken authenticates a Bearer token and rechecks account state.
