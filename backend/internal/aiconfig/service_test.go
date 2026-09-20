@@ -8,6 +8,19 @@ func TestDefaultConfigUsesThreeModelAttempts(t *testing.T) {
 	}
 }
 
+func TestDefaultConfigAutoApprovesImportPlans(t *testing.T) {
+	if !defaultConfig().AutoApproveImportPlans {
+		t.Fatal("default import plan approval must be automatic")
+	}
+	if !effectiveAutoApproveImportPlans(nil) {
+		t.Fatal("legacy configuration must default to automatic plan approval")
+	}
+	disabled := false
+	if effectiveAutoApproveImportPlans(&disabled) {
+		t.Fatal("explicitly disabled automatic plan approval must be preserved")
+	}
+}
+
 func TestDefaultConfigUsesCurrentContextAndChunkSizes(t *testing.T) {
 	config := defaultConfig()
 	if config.MaxInputTokens != 128000 {

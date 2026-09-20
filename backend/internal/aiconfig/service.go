@@ -71,10 +71,11 @@ func (s *Service) Runtime(ctx context.Context, wikiID uuid.UUID) (*RuntimeConfig
 	return &RuntimeConfig{
 		Enabled: true, Provider: stored.Provider, BaseURL: stored.BaseURL,
 		Model: stored.Model, ResponseFormat: stored.ResponseFormat,
-		MaxInputTokens:        effectiveMaxInputTokens(stored.MaxInputTokens),
-		ChunkCharacters:       effectiveChunkCharacters(stored.ChunkCharacters),
-		RequestTimeoutSeconds: stored.RequestTimeoutSeconds,
-		MaxAttempts:           effectiveMaxAttempts(stored.MaxInputTokens, stored.MaxAttempts), APIKey: key,
+		MaxInputTokens:         effectiveMaxInputTokens(stored.MaxInputTokens),
+		ChunkCharacters:        effectiveChunkCharacters(stored.ChunkCharacters),
+		AutoApproveImportPlans: effectiveAutoApproveImportPlans(stored.AutoApproveImportPlans),
+		RequestTimeoutSeconds:  stored.RequestTimeoutSeconds,
+		MaxAttempts:            effectiveMaxAttempts(stored.MaxInputTokens, stored.MaxAttempts), APIKey: key,
 	}, nil
 }
 
@@ -140,11 +141,12 @@ func (s *Service) Update(ctx context.Context, params UpdateParams) (*Config, err
 		result = &StoredConfig{
 			Version: 1, Enabled: params.Enabled, Provider: params.Provider,
 			BaseURL: params.BaseURL, Model: params.Model,
-			ResponseFormat:        params.ResponseFormat,
-			MaxInputTokens:        params.MaxInputTokens,
-			ChunkCharacters:       params.ChunkCharacters,
-			RequestTimeoutSeconds: params.RequestTimeoutSeconds,
-			MaxAttempts:           params.MaxAttempts, APIKeyCiphertext: ciphertext,
+			ResponseFormat:         params.ResponseFormat,
+			MaxInputTokens:         params.MaxInputTokens,
+			ChunkCharacters:        params.ChunkCharacters,
+			AutoApproveImportPlans: boolPointer(params.AutoApproveImportPlans),
+			RequestTimeoutSeconds:  params.RequestTimeoutSeconds,
+			MaxAttempts:            params.MaxAttempts, APIKeyCiphertext: ciphertext,
 			UpdatedBy: params.ActorID, UpdatedAt: now,
 		}
 		if err := s.repo.Put(ctx, tx, params.WikiID, result); err != nil {
@@ -157,12 +159,13 @@ func (s *Service) Update(ctx context.Context, params UpdateParams) (*Config, err
 		payload, err := json.Marshal(map[string]any{
 			"version": result.Version, "enabled": result.Enabled,
 			"provider": result.Provider, "model": result.Model,
-			"response_format":         result.ResponseFormat,
-			"max_input_tokens":        result.MaxInputTokens,
-			"chunk_characters":        result.ChunkCharacters,
-			"request_timeout_seconds": result.RequestTimeoutSeconds,
-			"max_attempts":            result.MaxAttempts,
-			"credential_changed":      credentialChanged,
+			"response_format":           result.ResponseFormat,
+			"max_input_tokens":          result.MaxInputTokens,
+			"chunk_characters":          result.ChunkCharacters,
+			"auto_approve_import_plans": effectiveAutoApproveImportPlans(result.AutoApproveImportPlans),
+			"request_timeout_seconds":   result.RequestTimeoutSeconds,
+			"max_attempts":              result.MaxAttempts,
+			"credential_changed":        credentialChanged,
 		})
 		if err != nil {
 			return err
@@ -179,9 +182,10 @@ func defaultConfig() *Config {
 	return &Config{
 		Version: 1, Provider: ProviderDeepSeek,
 		BaseURL: "https://api.deepseek.com", ResponseFormat: ResponseFormatJSONObject,
-		MaxInputTokens:        DefaultMaxInputTokens,
-		ChunkCharacters:       DefaultChunkCharacters,
-		RequestTimeoutSeconds: 180, MaxAttempts: 3,
+		MaxInputTokens:         DefaultMaxInputTokens,
+		ChunkCharacters:        DefaultChunkCharacters,
+		AutoApproveImportPlans: true,
+		RequestTimeoutSeconds:  180, MaxAttempts: 3,
 	}
 }
 
@@ -190,13 +194,14 @@ func redact(value *StoredConfig) *Config {
 	return &Config{
 		Version: value.Version, Enabled: value.Enabled, Provider: value.Provider,
 		BaseURL: value.BaseURL, Model: value.Model,
-		ResponseFormat:        value.ResponseFormat,
-		MaxInputTokens:        effectiveMaxInputTokens(value.MaxInputTokens),
-		ChunkCharacters:       effectiveChunkCharacters(value.ChunkCharacters),
-		RequestTimeoutSeconds: value.RequestTimeoutSeconds,
-		MaxAttempts:           effectiveMaxAttempts(value.MaxInputTokens, value.MaxAttempts),
-		APIKeyConfigured:      value.APIKeyCiphertext != "",
-		UpdatedBy:             &updatedBy, UpdatedAt: &updatedAt,
+		ResponseFormat:         value.ResponseFormat,
+		MaxInputTokens:         effectiveMaxInputTokens(value.MaxInputTokens),
+		ChunkCharacters:        effectiveChunkCharacters(value.ChunkCharacters),
+		AutoApproveImportPlans: effectiveAutoApproveImportPlans(value.AutoApproveImportPlans),
+		RequestTimeoutSeconds:  value.RequestTimeoutSeconds,
+		MaxAttempts:            effectiveMaxAttempts(value.MaxInputTokens, value.MaxAttempts),
+		APIKeyConfigured:       value.APIKeyCiphertext != "",
+		UpdatedBy:              &updatedBy, UpdatedAt: &updatedAt,
 	}
 }
 
@@ -221,6 +226,14 @@ func effectiveChunkCharacters(value int) int {
 		return DefaultChunkCharacters
 	}
 	return value
+}
+
+func effectiveAutoApproveImportPlans(value *bool) bool {
+	return value == nil || *value
+}
+
+func boolPointer(value bool) *bool {
+	return &value
 }
 
 func effectiveMaxAttempts(storedMaxInputTokens, value int) int {

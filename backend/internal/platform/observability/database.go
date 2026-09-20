@@ -10,8 +10,8 @@ import (
 )
 
 var (
-	importJobStatuses   = []string{"queued", "running", "succeeded", "failed", "cancelled"}
-	importStageNames    = []string{"fetch", "parse", "extract", "match", "compose", "review"}
+	importJobStatuses   = []string{"queued", "running", "action_required", "succeeded", "failed", "cancelled"}
+	importStageNames    = []string{"fetch", "parse", "extract", "plan", "match", "compose", "review"}
 	importStageStatuses = []string{"running", "succeeded", "failed", "skipped", "cancelled"}
 	aiUsageStatuses     = []string{"succeeded", "failed", "timeout", "invalid_output"}
 )

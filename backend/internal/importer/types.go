@@ -26,11 +26,15 @@ var (
 )
 
 const (
-	JobQueued    = "queued"
-	JobRunning   = "running"
-	JobSucceeded = "succeeded"
-	JobFailed    = "failed"
-	JobCancelled = "cancelled"
+	JobQueued         = "queued"
+	JobRunning        = "running"
+	JobActionRequired = "action_required"
+	JobSucceeded      = "succeeded"
+	JobFailed         = "failed"
+	JobCancelled      = "cancelled"
+
+	ActionConfirmPlan = "confirm_plan"
+	ActionQualityGate = "quality_gate"
 
 	StageQueued   = "queued"
 	StageFetch    = "fetch"
@@ -55,21 +59,27 @@ var stageProgress = map[string]int{
 }
 
 type Job struct {
-	ID              uuid.UUID       `json:"id"`
-	JobType         string          `json:"job_type"`
-	Status          string          `json:"status"`
-	InitiatedBy     uuid.UUID       `json:"initiated_by"`
-	IdempotencyKey  string          `json:"idempotency_key"`
-	Config          json.RawMessage `json:"config"`
-	SourceVersionID *uuid.UUID      `json:"source_version_id"`
-	ProposalID      *uuid.UUID      `json:"proposal_id"`
-	CurrentStage    string          `json:"current_stage"`
-	Progress        int             `json:"progress"`
-	Error           json.RawMessage `json:"error"`
-	CreatedAt       time.Time       `json:"created_at"`
-	StartedAt       *time.Time      `json:"started_at"`
-	FinishedAt      *time.Time      `json:"finished_at"`
-	UpdatedAt       time.Time       `json:"updated_at"`
+	ID                     uuid.UUID       `json:"id"`
+	JobType                string          `json:"job_type"`
+	Status                 string          `json:"status"`
+	InitiatedBy            uuid.UUID       `json:"initiated_by"`
+	IdempotencyKey         string          `json:"idempotency_key"`
+	Config                 json.RawMessage `json:"config"`
+	PlanningInput          json.RawMessage `json:"planning_input"`
+	PlanningIdempotencyKey *string         `json:"-"`
+	SourceVersionID        *uuid.UUID      `json:"source_version_id"`
+	ProposalID             *uuid.UUID      `json:"proposal_id"`
+	ActionRequired         *string         `json:"action_required"`
+	CurrentPlanID          *uuid.UUID      `json:"current_plan_id"`
+	ConfirmedPlanID        *uuid.UUID      `json:"confirmed_plan_id"`
+	PlanConfirmedAt        *time.Time      `json:"plan_confirmed_at"`
+	CurrentStage           string          `json:"current_stage"`
+	Progress               int             `json:"progress"`
+	Error                  json.RawMessage `json:"error"`
+	CreatedAt              time.Time       `json:"created_at"`
+	StartedAt              *time.Time      `json:"started_at"`
+	FinishedAt             *time.Time      `json:"finished_at"`
+	UpdatedAt              time.Time       `json:"updated_at"`
 }
 
 type Run struct {
@@ -96,13 +106,29 @@ type StageRun struct {
 }
 
 type JobDetail struct {
-	Job    *Job        `json:"job"`
-	Runs   []Run       `json:"runs"`
-	Stages []StageRun  `json:"stages"`
-	Plan   *ImportPlan `json:"plan"`
+	Job    *Job          `json:"job"`
+	Runs   []Run         `json:"runs"`
+	Stages []StageRun    `json:"stages"`
+	Plan   *ImportPlan   `json:"plan"`
+	Plans  []PlanVersion `json:"plans"`
 }
 
 type JobPage struct {
 	Items      []Job   `json:"items"`
 	NextCursor *string `json:"next_cursor"`
+}
+
+type ReplanInput struct {
+	Title        string
+	Instructions string
+	RouteMode    string
+	PageID       *uuid.UUID
+}
+
+type PlanningInput struct {
+	Title            string     `json:"title,omitempty"`
+	Instructions     string     `json:"instructions,omitempty"`
+	RouteMode        string     `json:"route_mode"`
+	PageID           *uuid.UUID `json:"page_id,omitempty"`
+	QualityThreshold float64    `json:"quality_threshold,omitempty"`
 }

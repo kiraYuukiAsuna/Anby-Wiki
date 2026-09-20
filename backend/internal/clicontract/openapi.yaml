@@ -274,7 +274,7 @@ paths:
           required: false
           schema:
             type: string
-            enum: [queued, running, succeeded, failed, cancelled]
+            enum: [queued, running, action_required, succeeded, failed, cancelled]
       responses:
         "200":
           description: 当前账号的导入任务
@@ -947,8 +947,11 @@ paths:
                   maxLength: 4000
                 route_mode:
                   type: string
-                  enum: [auto, force_create]
+                  enum: [auto, force_create, force_update]
                   default: auto
+                page_id:
+                  type: string
+                  format: uuid
       responses:
         "201":
           description: 已暂存来源并排队的导入任务
@@ -1021,6 +1024,61 @@ paths:
         "403": { $ref: "#/components/responses/Forbidden" }
         "404": { $ref: "#/components/responses/NotFound" }
         "409": { $ref: "#/components/responses/Conflict" }
+  /api/v1/import-jobs/{id}/confirm-plan:
+    post:
+      operationId: confirmImportPlan
+      tags: [imports]
+      summary: 确认当前导入计划并继续生成审核提案
+      security:
+        - sessionCookie: []
+        - cliBearer: []
+      parameters:
+        - $ref: "#/components/parameters/GovernanceId"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/ConfirmImportPlanRequest" }
+      responses:
+        "200":
+          description: 已重新排队并锁定当前计划的任务详情
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/ImportJobDetail" }
+        "400": { $ref: "#/components/responses/BadRequest" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "409": { $ref: "#/components/responses/Conflict" }
+        "422": { $ref: "#/components/responses/UnprocessableEntity" }
+  /api/v1/import-jobs/{id}/replan:
+    post:
+      operationId: replanImportJob
+      tags: [imports]
+      summary: 在同一任务内追加新的导入计划版本
+      security:
+        - sessionCookie: []
+        - cliBearer: []
+      parameters:
+        - $ref: "#/components/parameters/GovernanceId"
+        - $ref: "#/components/parameters/Idempotency-Key"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/ReplanImportJobRequest" }
+      responses:
+        "200":
+          description: 已使用新规划输入重新排队的原任务
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/ImportJobDetail" }
+        "400": { $ref: "#/components/responses/BadRequest" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "409": { $ref: "#/components/responses/Conflict" }
+        "422": { $ref: "#/components/responses/UnprocessableEntity" }
   /api/v1/proposals:
     get:
       operationId: listProposals
@@ -4825,7 +4883,7 @@ components:
         source: { $ref: "#/components/schemas/SourceImportSource" }
         title: { type: string, maxLength: 255 }
         instructions: { type: string, maxLength: 4000 }
-        route_mode: { type: string, enum: [auto, force_create], default: auto }
+        route_mode: { type: string, enum: [auto, force_create, force_update], default: auto }
         page_id: { type: string, format: uuid }
         source_id: { type: string, format: uuid }
         quality_threshold: { type: number, minimum: 0, maximum: 1 }
@@ -4837,18 +4895,51 @@ components:
           type: string
           default: source_import
         config: { $ref: "#/components/schemas/SourceImportConfig" }
+    ReplanImportJobRequest:
+      type: object
+      additionalProperties: false
+      required: [title, instructions, route_mode]
+      properties:
+        title: { type: string, maxLength: 255 }
+        instructions: { type: string, maxLength: 4000 }
+        route_mode: { type: string, enum: [auto, force_create, force_update] }
+        page_id: { type: string, format: uuid, nullable: true }
+    ConfirmImportPlanRequest:
+      type: object
+      additionalProperties: false
+      required: [plan_id]
+      properties:
+        plan_id: { type: string, format: uuid }
+    ImportPlanningInput:
+      type: object
+      additionalProperties: false
+      required: [route_mode]
+      properties:
+        title: { type: string, maxLength: 255 }
+        instructions: { type: string, maxLength: 4000 }
+        route_mode: { type: string, enum: [auto, force_create, force_update] }
+        page_id: { type: string, format: uuid, nullable: true }
+        quality_threshold: { type: number, minimum: 0, maximum: 1 }
     ImportJob:
       type: object
-      required: [id, job_type, status, initiated_by, idempotency_key, config, current_stage, progress, created_at, updated_at]
+      required: [id, job_type, status, initiated_by, idempotency_key, config, planning_input, current_stage, progress, created_at, updated_at]
       properties:
         id: { type: string, format: uuid }
         job_type: { type: string }
-        status: { type: string, enum: [queued, running, succeeded, failed, cancelled] }
+        status: { type: string, enum: [queued, running, action_required, succeeded, failed, cancelled] }
         initiated_by: { type: string, format: uuid }
         idempotency_key: { type: string }
         config: { type: object, additionalProperties: true }
+        planning_input: { $ref: "#/components/schemas/ImportPlanningInput" }
         source_version_id: { type: string, format: uuid, nullable: true }
         proposal_id: { type: string, format: uuid, nullable: true }
+        action_required:
+          type: string
+          enum: [confirm_plan, quality_gate]
+          nullable: true
+        current_plan_id: { type: string, format: uuid, nullable: true }
+        confirmed_plan_id: { type: string, format: uuid, nullable: true }
+        plan_confirmed_at: { type: string, format: date-time, nullable: true }
         current_stage: { type: string, enum: [queued, fetch, parse, extract, plan, match, compose, review, complete] }
         progress: { type: integer, minimum: 0, maximum: 100 }
         error: { type: object, additionalProperties: true, nullable: true }
@@ -4970,10 +5061,36 @@ components:
           type: array
           items: { $ref: "#/components/schemas/ImportPageRoute" }
         quality_score: { type: number, minimum: 0, maximum: 1 }
+        quality: { $ref: "#/components/schemas/ImportPlanQuality" }
         prompt_injection_detected: { type: boolean }
+    ImportPlanQuality:
+      type: object
+      additionalProperties: false
+      required: [fidelity, grounding, structure, concision, routing, overall, threshold, passed]
+      properties:
+        fidelity: { type: number, minimum: 0, maximum: 1 }
+        grounding: { type: number, minimum: 0, maximum: 1 }
+        structure: { type: number, minimum: 0, maximum: 1 }
+        concision: { type: number, minimum: 0, maximum: 1 }
+        routing: { type: number, minimum: 0, maximum: 1 }
+        overall: { type: number, minimum: 0, maximum: 1 }
+        threshold: { type: number, minimum: 0, maximum: 1 }
+        passed: { type: boolean }
+    ImportPlanVersion:
+      type: object
+      additionalProperties: false
+      required: [id, revision, planning_input, quality_score, created_by, created_at]
+      properties:
+        id: { type: string, format: uuid }
+        revision: { type: integer, minimum: 1 }
+        parent_plan_id: { type: string, format: uuid, nullable: true }
+        planning_input: { $ref: "#/components/schemas/ImportPlanningInput" }
+        quality_score: { type: number, minimum: 0, maximum: 1 }
+        created_by: { type: string, format: uuid }
+        created_at: { type: string, format: date-time }
     ImportJobDetail:
       type: object
-      required: [job, runs, stages, plan]
+      required: [job, runs, stages, plan, plans]
       properties:
         job: { $ref: "#/components/schemas/ImportJob" }
         runs: { type: array, items: { $ref: "#/components/schemas/ImportRun" } }
@@ -4982,6 +5099,9 @@ components:
           allOf:
             - $ref: "#/components/schemas/ImportPlan"
           nullable: true
+        plans:
+          type: array
+          items: { $ref: "#/components/schemas/ImportPlanVersion" }
     CreateProposalRequest:
       type: object
       required: [target_type]
@@ -5480,6 +5600,7 @@ components:
         - response_format
         - max_input_tokens
         - chunk_characters
+        - auto_approve_import_plans
         - request_timeout_seconds
         - max_attempts
         - api_key_configured
@@ -5506,6 +5627,10 @@ components:
           maximum: 128000
           default: 32000
           description: 来源持久化分片的最大 Unicode 字符数；新解析的来源版本使用此值。
+        auto_approve_import_plans:
+          type: boolean
+          default: true
+          description: 自动确认通过质量门禁的中间导入计划；最终 Proposal 仍必须经过治理审核。
         request_timeout_seconds:
           type: integer
           minimum: 5
@@ -5528,6 +5653,7 @@ components:
         - response_format
         - max_input_tokens
         - chunk_characters
+        - auto_approve_import_plans
         - request_timeout_seconds
         - max_attempts
       properties:
@@ -5550,6 +5676,9 @@ components:
           minimum: 1000
           maximum: 128000
           default: 32000
+        auto_approve_import_plans:
+          type: boolean
+          default: true
         request_timeout_seconds:
           type: integer
           minimum: 5

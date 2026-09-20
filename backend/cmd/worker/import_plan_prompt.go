@@ -11,6 +11,7 @@ Routing rules:
 - update and link may use only page_id values present in candidate_pages. Never invent a page_id or block ID.
 - Omit page_id for create/ignore routes. Do not create a page when a candidate is clearly the same subject.
 - route_mode=force_create requires one create route whose title exactly matches preferred_title; do not update an existing page instead.
+- route_mode=force_update requires one update route for the single explicit candidate page; do not create or route content to another page.
 - A weak keyword overlap is not enough to update a page. Prefer create when the subject is distinct, and ignore incidental mentions.
 - Multiple create/update routes are allowed, but each must cover a genuinely independent subject with enough source content.
 - Authors, editors, contributors, publishers, and issuing organizations named only by the document header, byline, author-address section, or metadata are contextual attributes of the main work. Do not create or update standalone pages for them unless the source contains independent biographical or organizational coverage beyond their role in this work.

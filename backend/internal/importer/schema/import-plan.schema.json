@@ -22,12 +22,37 @@
       "items": { "$ref": "#/$defs/route" }
     },
     "quality_score": { "type": "number", "minimum": 0, "maximum": 1 },
+    "quality": { "$ref": "#/$defs/quality" },
     "prompt_injection_detected": { "type": "boolean" }
   },
   "$defs": {
     "uuid": {
       "type": "string",
       "format": "uuid"
+    },
+    "quality": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "fidelity",
+        "grounding",
+        "structure",
+        "concision",
+        "routing",
+        "overall",
+        "threshold",
+        "passed"
+      ],
+      "properties": {
+        "fidelity": { "type": "number", "minimum": 0, "maximum": 1 },
+        "grounding": { "type": "number", "minimum": 0, "maximum": 1 },
+        "structure": { "type": "number", "minimum": 0, "maximum": 1 },
+        "concision": { "type": "number", "minimum": 0, "maximum": 1 },
+        "routing": { "type": "number", "minimum": 0, "maximum": 1 },
+        "overall": { "type": "number", "minimum": 0, "maximum": 1 },
+        "threshold": { "type": "number", "minimum": 0, "maximum": 1 },
+        "passed": { "type": "boolean" }
+      }
     },
     "profile": {
       "type": "object",

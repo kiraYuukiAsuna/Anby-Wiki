@@ -28,15 +28,18 @@ func (r *Repository) q(tx pgx.Tx) db.Querier {
 }
 
 const jobColumns = `id,job_type,status,initiated_by,idempotency_key,config_json,
-	source_version_id,proposal_id,current_stage,progress,error_json,created_at,
-	started_at,finished_at,updated_at`
+	planning_input_json,planning_idempotency_key,source_version_id,proposal_id,
+	action_required,current_plan_id,confirmed_plan_id,plan_confirmed_at,
+	current_stage,progress,error_json,created_at,started_at,finished_at,updated_at`
 
 func scanJob(row pgx.Row) (*Job, error) {
 	var job Job
 	err := row.Scan(&job.ID, &job.JobType, &job.Status, &job.InitiatedBy,
-		&job.IdempotencyKey, &job.Config, &job.SourceVersionID, &job.ProposalID,
-		&job.CurrentStage, &job.Progress, &job.Error, &job.CreatedAt, &job.StartedAt,
-		&job.FinishedAt, &job.UpdatedAt)
+		&job.IdempotencyKey, &job.Config, &job.PlanningInput,
+		&job.PlanningIdempotencyKey, &job.SourceVersionID, &job.ProposalID,
+		&job.ActionRequired, &job.CurrentPlanID, &job.ConfirmedPlanID,
+		&job.PlanConfirmedAt, &job.CurrentStage, &job.Progress, &job.Error,
+		&job.CreatedAt, &job.StartedAt, &job.FinishedAt, &job.UpdatedAt)
 	return &job, err
 }
 
@@ -85,6 +88,15 @@ func (r *Repository) GetJobByKey(ctx context.Context, actorID uuid.UUID, key str
 		return nil, ErrJobNotFound
 	}
 	return job, err
+}
+
+func (r *Repository) HasProposal(ctx context.Context, tx pgx.Tx, jobID uuid.UUID) (bool, error) {
+	var exists bool
+	err := r.q(tx).QueryRow(ctx,
+		`SELECT EXISTS (SELECT 1 FROM proposal WHERE import_job_id=$1)`,
+		jobID,
+	).Scan(&exists)
+	return exists, err
 }
 
 type jobListCursor struct {
@@ -154,11 +166,11 @@ func (r *Repository) ListOwnedJobs(
 
 func (r *Repository) InsertJobIfAbsent(ctx context.Context, job *Job) (bool, error) {
 	err := r.pool.QueryRow(ctx, `INSERT INTO import_job
-		(id,job_type,status,initiated_by,idempotency_key,config_json,current_stage,progress)
-		VALUES ($1,$2,'queued',$3,$4,$5::jsonb,'queued',0)
+		(id,job_type,status,initiated_by,idempotency_key,config_json,planning_input_json,current_stage,progress)
+		VALUES ($1,$2,'queued',$3,$4,$5::jsonb,$6::jsonb,'queued',0)
 		ON CONFLICT (initiated_by,idempotency_key) DO NOTHING
 		RETURNING created_at,updated_at`, job.ID, job.JobType, job.InitiatedBy,
-		job.IdempotencyKey, job.Config).Scan(&job.CreatedAt, &job.UpdatedAt)
+		job.IdempotencyKey, job.Config, job.PlanningInput).Scan(&job.CreatedAt, &job.UpdatedAt)
 	if errors.Is(err, pgx.ErrNoRows) {
 		return false, nil
 	}
@@ -226,7 +238,8 @@ func (r *Repository) InsertRun(ctx context.Context, tx pgx.Tx, run *Run) error {
 
 func (r *Repository) StartJob(ctx context.Context, tx pgx.Tx, jobID uuid.UUID) error {
 	command, err := r.q(tx).Exec(ctx, `UPDATE import_job SET status='running',started_at=COALESCE(started_at,now()),
-		finished_at=NULL,error_json=NULL,updated_at=now() WHERE id=$1 AND status IN ('queued','failed','cancelled')`, jobID)
+		finished_at=NULL,error_json=NULL,action_required=NULL,updated_at=now()
+		WHERE id=$1 AND status IN ('queued','failed','cancelled')`, jobID)
 	if err != nil {
 		return err
 	}
@@ -294,9 +307,104 @@ func (r *Repository) FinishJob(ctx context.Context, tx pgx.Tx, jobID uuid.UUID, 
 	progress int, sourceVersionID, proposalID *uuid.UUID, errorJSON []byte) error {
 	_, err := r.q(tx).Exec(ctx, `UPDATE import_job SET status=$2,current_stage=$3,progress=$4,
 		source_version_id=COALESCE($5,source_version_id),proposal_id=COALESCE($6,proposal_id),
-		error_json=$7::jsonb,finished_at=now(),updated_at=now() WHERE id=$1`,
+		action_required=NULL,error_json=$7::jsonb,finished_at=now(),updated_at=now() WHERE id=$1`,
 		jobID, status, stage, progress, sourceVersionID, proposalID, errorJSON)
 	return err
+}
+
+func (r *Repository) RequireAction(
+	ctx context.Context,
+	tx pgx.Tx,
+	jobID, sourceVersionID uuid.UUID,
+	action string,
+) error {
+	command, err := r.q(tx).Exec(ctx, `UPDATE import_job
+		SET status=$2,source_version_id=$3,action_required=$4,current_stage=$5,
+			progress=$6,error_json=NULL,finished_at=NULL,updated_at=now()
+		WHERE id=$1 AND status='running'`,
+		jobID, JobActionRequired, sourceVersionID, action, StagePlan,
+		stageProgress[StagePlan])
+	if err != nil {
+		return err
+	}
+	if command.RowsAffected() != 1 {
+		return ErrInvalidTransition
+	}
+	return nil
+}
+
+func (r *Repository) ConfirmPlan(
+	ctx context.Context,
+	tx pgx.Tx,
+	jobID, planID uuid.UUID,
+) error {
+	command, err := r.q(tx).Exec(ctx, `UPDATE import_job
+		SET status='queued',confirmed_plan_id=$2,plan_confirmed_at=now(),
+			action_required=NULL,current_stage='queued',progress=0,error_json=NULL,
+			finished_at=NULL,updated_at=now()
+		WHERE id=$1 AND status='action_required' AND action_required='confirm_plan'
+			AND current_plan_id=$2`,
+		jobID, planID)
+	if err != nil {
+		return err
+	}
+	if command.RowsAffected() != 1 {
+		return ErrInvalidTransition
+	}
+	return nil
+}
+
+func (r *Repository) CompletePlanStage(
+	ctx context.Context,
+	tx pgx.Tx,
+	jobID uuid.UUID,
+	stageID uuid.UUID,
+	planID uuid.UUID,
+	autoConfirm bool,
+) error {
+	output := planID.String()
+	if err := r.CompleteStage(ctx, tx, stageID, StageSucceeded, &output, nil); err != nil {
+		return err
+	}
+	command, err := r.q(tx).Exec(ctx, `UPDATE import_job
+		SET current_plan_id=$2,
+			confirmed_plan_id=CASE WHEN $3 THEN $2 ELSE confirmed_plan_id END,
+			plan_confirmed_at=CASE WHEN $3 THEN now() ELSE plan_confirmed_at END,
+			current_stage=$4,progress=$5,updated_at=now()
+		WHERE id=$1 AND status='running'`,
+		jobID, planID, autoConfirm, StagePlan, stageProgress[StagePlan])
+	if err != nil {
+		return err
+	}
+	if command.RowsAffected() != 1 {
+		return ErrInvalidTransition
+	}
+	return nil
+}
+
+func (r *Repository) RequeueForPlanning(
+	ctx context.Context,
+	tx pgx.Tx,
+	jobID uuid.UUID,
+	input json.RawMessage,
+	idempotencyKey string,
+) error {
+	command, err := r.q(tx).Exec(ctx, `UPDATE import_job
+		SET status='queued',planning_input_json=$2::jsonb,
+			planning_idempotency_key=$3,action_required=NULL,
+			confirmed_plan_id=NULL,plan_confirmed_at=NULL,
+			current_stage='queued',progress=0,error_json=NULL,
+			finished_at=NULL,updated_at=now()
+		WHERE id=$1 AND proposal_id IS NULL
+			AND status IN ('action_required','failed','cancelled','succeeded')`,
+		jobID, input, idempotencyKey)
+	if err != nil {
+		return err
+	}
+	if command.RowsAffected() != 1 {
+		return ErrInvalidTransition
+	}
+	return nil
 }
 
 func (r *Repository) RunningRun(ctx context.Context, tx pgx.Tx, jobID uuid.UUID) (*Run, error) {
@@ -402,16 +510,31 @@ func (r *Repository) GetImportPlan(
 	importJobID uuid.UUID,
 	inputHash string,
 ) (*ImportPlanRecord, error) {
-	var plan ImportPlanRecord
-	err := r.pool.QueryRow(ctx, `SELECT id,import_job_id,source_version_id,input_hash,schema_version,
-		prompt_key,prompt_version,model,plan_json,quality_score,created_at
+	return scanImportPlan(r.pool.QueryRow(ctx, `SELECT id,import_job_id,source_version_id,
+		revision,parent_plan_id,planning_input_json,input_hash,schema_version,
+		prompt_key,prompt_version,model,plan_json,quality_score,created_by,created_at
 		FROM import_plan WHERE import_job_id=$1 AND input_hash=$2 AND schema_version=1`,
-		importJobID, inputHash,
-	).Scan(
-		&plan.ID, &plan.ImportJobID, &plan.SourceVersionID, &plan.InputHash, &plan.SchemaVersion,
-		&plan.PromptKey, &plan.PromptVersion, &plan.Model, &plan.PlanJSON,
-		&plan.QualityScore, &plan.CreatedAt,
-	)
+		importJobID, inputHash))
+}
+
+func (r *Repository) GetImportPlanByID(
+	ctx context.Context,
+	importJobID, planID uuid.UUID,
+) (*ImportPlanRecord, error) {
+	return scanImportPlan(r.pool.QueryRow(ctx, `SELECT id,import_job_id,source_version_id,
+		revision,parent_plan_id,planning_input_json,input_hash,schema_version,
+		prompt_key,prompt_version,model,plan_json,quality_score,created_by,created_at
+		FROM import_plan WHERE import_job_id=$1 AND id=$2`,
+		importJobID, planID))
+}
+
+func scanImportPlan(row pgx.Row) (*ImportPlanRecord, error) {
+	var plan ImportPlanRecord
+	err := row.Scan(
+		&plan.ID, &plan.ImportJobID, &plan.SourceVersionID, &plan.Revision,
+		&plan.ParentPlanID, &plan.PlanningInput, &plan.InputHash,
+		&plan.SchemaVersion, &plan.PromptKey, &plan.PromptVersion, &plan.Model,
+		&plan.PlanJSON, &plan.QualityScore, &plan.CreatedBy, &plan.CreatedAt)
 	if errors.Is(err, pgx.ErrNoRows) {
 		return nil, ErrImportPlanNotFound
 	}
@@ -419,19 +542,35 @@ func (r *Repository) GetImportPlan(
 }
 
 func (r *Repository) GetLatestImportPlan(ctx context.Context, importJobID uuid.UUID) (*ImportPlanRecord, error) {
-	var plan ImportPlanRecord
-	err := r.pool.QueryRow(ctx, `SELECT id,import_job_id,source_version_id,input_hash,schema_version,
-		prompt_key,prompt_version,model,plan_json,quality_score,created_at
+	return scanImportPlan(r.pool.QueryRow(ctx, `SELECT id,import_job_id,source_version_id,
+		revision,parent_plan_id,planning_input_json,input_hash,schema_version,
+		prompt_key,prompt_version,model,plan_json,quality_score,created_by,created_at
 		FROM import_plan WHERE import_job_id=$1 AND schema_version=1
-		ORDER BY created_at DESC,id DESC LIMIT 1`, importJobID).Scan(
-		&plan.ID, &plan.ImportJobID, &plan.SourceVersionID, &plan.InputHash, &plan.SchemaVersion,
-		&plan.PromptKey, &plan.PromptVersion, &plan.Model, &plan.PlanJSON,
-		&plan.QualityScore, &plan.CreatedAt,
-	)
-	if errors.Is(err, pgx.ErrNoRows) {
-		return nil, ErrImportPlanNotFound
+		ORDER BY revision DESC LIMIT 1`, importJobID))
+}
+
+func (r *Repository) ListImportPlans(
+	ctx context.Context,
+	importJobID uuid.UUID,
+) ([]ImportPlanRecord, error) {
+	rows, err := r.pool.Query(ctx, `SELECT id,import_job_id,source_version_id,
+		revision,parent_plan_id,planning_input_json,input_hash,schema_version,
+		prompt_key,prompt_version,model,plan_json,quality_score,created_by,created_at
+		FROM import_plan WHERE import_job_id=$1 AND schema_version=1
+		ORDER BY revision`, importJobID)
+	if err != nil {
+		return nil, err
 	}
-	return &plan, err
+	defer rows.Close()
+	result := []ImportPlanRecord{}
+	for rows.Next() {
+		plan, err := scanImportPlan(rows)
+		if err != nil {
+			return nil, err
+		}
+		result = append(result, *plan)
+	}
+	return result, rows.Err()
 }
 
 func (r *Repository) InsertImportPlanIfAbsent(ctx context.Context, plan *ImportPlanRecord) (bool, error) {
@@ -439,14 +578,20 @@ func (r *Repository) InsertImportPlanIfAbsent(ctx context.Context, plan *ImportP
 		return false, ErrInvalidJob
 	}
 	err := r.pool.QueryRow(ctx, `INSERT INTO import_plan
-		(id,import_job_id,source_version_id,input_hash,schema_version,prompt_key,prompt_version,model,plan_json,quality_score)
-		VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9::jsonb,$10)
+		(id,import_job_id,source_version_id,revision,parent_plan_id,
+		 planning_input_json,input_hash,schema_version,prompt_key,prompt_version,
+		 model,plan_json,quality_score,created_by)
+		VALUES ($1,$2,$3,
+			(SELECT COALESCE(max(revision),0)+1 FROM import_plan WHERE import_job_id=$2),
+			(SELECT id FROM import_plan WHERE import_job_id=$2 ORDER BY revision DESC LIMIT 1),
+			$4::jsonb,$5,$6,$7,$8,$9,$10::jsonb,$11,$12)
 		ON CONFLICT (import_job_id,input_hash,schema_version) DO NOTHING
-		RETURNING created_at`,
-		plan.ID, plan.ImportJobID, plan.SourceVersionID, plan.InputHash, plan.SchemaVersion,
-		plan.PromptKey, plan.PromptVersion, plan.Model, plan.PlanJSON,
-		plan.QualityScore,
-	).Scan(&plan.CreatedAt)
+		RETURNING revision,parent_plan_id,created_at`,
+		plan.ID, plan.ImportJobID, plan.SourceVersionID,
+		plan.PlanningInput, plan.InputHash, plan.SchemaVersion, plan.PromptKey,
+		plan.PromptVersion, plan.Model, plan.PlanJSON, plan.QualityScore,
+		plan.CreatedBy,
+	).Scan(&plan.Revision, &plan.ParentPlanID, &plan.CreatedAt)
 	if errors.Is(err, pgx.ErrNoRows) {
 		return false, nil
 	}

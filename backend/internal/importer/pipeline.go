@@ -74,11 +74,14 @@ type PipelineRequest struct {
 	Title            string
 	Instructions     string
 	RouteMode        string
+	PlanningInput    json.RawMessage
+	AutoApprovePlan  bool
 	Provider         string
 	Model            string
 	MaxInputTokens   int
 	ChunkCharacters  int
 	QualityThreshold float64
+	ConfirmedPlanID  *uuid.UUID
 	// ExpectedContentHash binds an upload retry to the immutable content that
 	// was accepted by the API. URL jobs leave it empty because their config is
 	// already immutable within a job.
@@ -163,7 +166,8 @@ func (p *Pipeline) run(ctx context.Context, request PipelineRequest, acquire acq
 	if err := p.validate(); err != nil {
 		return nil, err
 	}
-	if acquire == nil || request.JobID == uuid.Nil || request.WikiID == uuid.Nil || request.ActorID == uuid.Nil || strings.TrimSpace(request.RunKey) == "" {
+	if acquire == nil || request.JobID == uuid.Nil || request.WikiID == uuid.Nil ||
+		request.ActorID == uuid.Nil || strings.TrimSpace(request.RunKey) == "" {
 		return nil, ErrInvalidJob
 	}
 	run, err := p.jobs.BeginRun(ctx, request.JobID, request.RunKey)
@@ -198,7 +202,7 @@ func (p *Pipeline) run(ctx context.Context, request PipelineRequest, acquire acq
 		return fail(current, extractionErrorCode(err), err)
 	}
 	threshold := request.QualityThreshold
-	if threshold <= 0 {
+	if threshold < DefaultQualityThreshold {
 		threshold = DefaultQualityThreshold
 	}
 	if !passesExtractionQualityGate(extracted.Candidates, threshold) {
@@ -213,30 +217,47 @@ func (p *Pipeline) run(ctx context.Context, request PipelineRequest, acquire acq
 	if err != nil {
 		return nil, err
 	}
-	planInput := HashBytes([]byte(strings.Join([]string{
-		extractOutput,
-		strings.TrimSpace(request.Title),
-		strings.TrimSpace(request.Instructions),
-		strings.TrimSpace(request.RouteMode),
-		optionalUUIDString(request.PageID),
-	}, "\x00")))
+	planInput := HashBytes([]byte(extractOutput + "\x00" + string(request.PlanningInput)))
 	planned, err := p.planner.Plan(ctx, PlanParams{
 		SourceVersionID: version.Version.ID, SourceLabel: sourceLabel,
 		PreferredTitle: request.Title, Instructions: request.Instructions,
 		RouteMode: request.RouteMode, TargetPageID: request.PageID,
 		WikiID: request.WikiID, Chunks: version.Chunks, Candidates: extracted.Candidates,
 		Provider: request.Provider, Model: request.Model, MaxInputTokens: request.MaxInputTokens,
+		QualityThreshold: threshold,
+		PlanningInput:    request.PlanningInput, ActorID: request.ActorID,
 		InputHash: planInput, ImportJobID: &request.JobID, ImportRunID: &run.ID,
 	})
 	if err != nil {
 		return fail(current, planErrorCode(err), err)
 	}
-	if planned.Plan.QualityScore < threshold {
-		return fail(current, "page_plan_quality_gate", ErrQualityGate)
-	}
 	planOutput := planned.Record.ID.String()
-	if err := p.jobs.CompleteStage(ctx, request.JobID, current, &planOutput); err != nil {
+	autoConfirm := request.AutoApprovePlan &&
+		planned.Plan.Quality != nil && planned.Plan.Quality.Passed
+	if err := p.jobs.CompletePlanStage(
+		ctx, request.JobID, current, planned.Record.ID, autoConfirm,
+	); err != nil {
 		return nil, err
+	}
+	if planned.Plan.Quality == nil || !planned.Plan.Quality.Passed {
+		if err := p.jobs.RequireAction(
+			ctx, request.JobID, run.ID, version.Version.ID, ActionQualityGate,
+		); err != nil {
+			return nil, err
+		}
+		result.Job, _ = p.jobs.DetailJob(ctx, request.JobID)
+		return result, nil
+	}
+	planConfirmed := request.ConfirmedPlanID != nil &&
+		*request.ConfirmedPlanID == planned.Record.ID
+	if !request.AutoApprovePlan && !planConfirmed {
+		if err := p.jobs.RequireAction(
+			ctx, request.JobID, run.ID, version.Version.ID, ActionConfirmPlan,
+		); err != nil {
+			return nil, err
+		}
+		result.Job, _ = p.jobs.DetailJob(ctx, request.JobID)
+		return result, nil
 	}
 	selectedCandidates := selectCandidatesForPlan(extracted.Candidates, planned.Plan)
 
@@ -576,13 +597,6 @@ func (p *Pipeline) validate() error {
 		return fmt.Errorf("%w: pipeline dependencies", ErrInvalidJob)
 	}
 	return nil
-}
-
-func optionalUUIDString(value *uuid.UUID) string {
-	if value == nil {
-		return ""
-	}
-	return value.String()
 }
 
 func planErrorCode(err error) string {

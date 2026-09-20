@@ -1,28 +1,44 @@
 "use client";
 
 import {
+  AlertTriangle,
   Ban,
   CheckCircle2,
   CircleDashed,
   CircleX,
   FilePlus2,
   FilePenLine,
+  Gauge,
   Link2,
   LoaderCircle,
   MinusCircle,
+  RotateCcw,
+  ShieldCheck,
   SkipForward,
 } from "lucide-react";
 import Link from "next/link";
+import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { toast } from "sonner";
 import useSWR from "swr";
 import useSWRMutation from "swr/mutation";
 
-import { ResponseError } from "../../../../contracts/generated/typescript";
+import {
+  ResponseError,
+  type ImportPlanningInput,
+} from "../../../../contracts/generated/typescript";
 
+import {
+  ImportPageTargetPicker,
+  type ImportPageTarget,
+} from "@/components/imports/import-job-form";
 import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import { Textarea } from "@/components/ui/textarea";
 import { importsApi } from "@/lib/api";
 import { isUnauthorized, LOGIN_PATH } from "@/lib/auth";
+import { clientUUID } from "@/lib/client-uuid";
 import { cn } from "@/lib/utils";
 
 const STAGES = ["fetch", "parse", "extract", "plan", "match", "compose", "review"] as const;
@@ -123,6 +139,139 @@ const ERROR_MESSAGES: Record<string, string> = {
   no_reviewable_proposal: "候选已完成匹配，但没有形成可写入的审核操作。",
 };
 
+const JOB_STATUS_LABEL = {
+  queued: "排队中",
+  running: "处理中",
+  action_required: "等待你的确认",
+  succeeded: "已完成",
+  failed: "失败",
+  cancelled: "已取消",
+} as const;
+
+const QUALITY_DIMENSIONS = [
+  ["fidelity", "原文保真"],
+  ["grounding", "证据支撑"],
+  ["structure", "文章结构"],
+  ["concision", "去重精炼"],
+  ["routing", "路由置信"],
+] as const;
+
+type RouteMode = "auto" | "force_create" | "force_update";
+
+function ReplanPanel({
+  id,
+  planningInput,
+  onReplanned,
+}: {
+  id: string;
+  planningInput: ImportPlanningInput;
+  onReplanned: () => Promise<void>;
+}) {
+  const router = useRouter();
+  const initialRouteMode = planningInput.routeMode;
+  const [title, setTitle] = useState(planningInput.title ?? "");
+  const [instructions, setInstructions] = useState(planningInput.instructions ?? "");
+  const [routeMode, setRouteMode] = useState<RouteMode>(
+    initialRouteMode === "force_create" || initialRouteMode === "force_update"
+      ? initialRouteMode
+      : "auto",
+  );
+  const [targetPage, setTargetPage] = useState<ImportPageTarget | null>(
+    planningInput.pageId
+      ? {
+        id: planningInput.pageId,
+        displayTitle: planningInput.title?.trim() || planningInput.pageId,
+      }
+      : null,
+  );
+  const [submitting, setSubmitting] = useState(false);
+
+  const submit = async () => {
+    if (routeMode === "force_create" && !title.trim()) {
+      toast.error("强制创建单页时必须填写页面标题");
+      return;
+    }
+    if (routeMode === "force_update" && !targetPage) {
+      toast.error("更新指定页面时必须选择目标页面");
+      return;
+    }
+    const pageId = routeMode === "force_update" ? targetPage?.id : undefined;
+    setSubmitting(true);
+    try {
+      await importsApi().replanImportJob({
+        id,
+        idempotencyKey: clientUUID(),
+        replanImportJobRequest: {
+          title: title.trim(),
+          instructions: instructions.trim(),
+          routeMode,
+          pageId,
+        },
+      });
+      await onReplanned();
+      toast.success("当前任务已重新排队");
+    } catch (replanError) {
+      if (isUnauthorized(replanError)) {
+        router.push(LOGIN_PATH);
+      } else {
+        toast.error("重新规划失败");
+      }
+    } finally {
+      setSubmitting(false);
+    }
+  };
+
+  return (
+    <section className="space-y-4 border-t border-border pt-5">
+      <div>
+        <h3 className="text-sm font-semibold">调整导入意图</h3>
+        <p className="mt-1 text-xs leading-5 text-muted-foreground">
+          保留已校验的来源和抽取结果，在当前任务内追加新的计划版本。
+        </p>
+      </div>
+      <div className="grid gap-2 sm:grid-cols-3">
+        {([
+          ["auto", "智能多页面"],
+          ["force_create", "创建单页"],
+          ["force_update", "更新指定页"],
+        ] as const).map(([value, label]) => (
+          <button
+            key={value}
+            type="button"
+            aria-pressed={routeMode === value}
+            onClick={() => setRouteMode(value)}
+            className={cn(
+              "rounded-lg border px-3 py-2 text-sm",
+              routeMode === value ? "border-primary bg-primary/5 font-medium" : "border-border",
+            )}
+          >
+            {label}
+          </button>
+        ))}
+      </div>
+      {routeMode === "force_update" ? (
+        <div className="space-y-2">
+          <Label>目标页面</Label>
+          <ImportPageTargetPicker selected={targetPage} onSelect={setTargetPage} />
+        </div>
+      ) : null}
+      <div className="space-y-2">
+        <Label htmlFor="replan-title">{routeMode === "force_create" ? "新页面标题" : "建议标题"}</Label>
+        <Input id="replan-title" value={title} maxLength={255} onChange={(event) => setTitle(event.target.value)} />
+      </div>
+      <div className="space-y-2">
+        <Label htmlFor="replan-instructions">导入要求</Label>
+        <Textarea id="replan-instructions" value={instructions} maxLength={4000} rows={4}
+          onChange={(event) => setInstructions(event.target.value)} />
+      </div>
+      <Button type="button" variant="outline" disabled={submitting} onClick={() => void submit()}>
+        <RotateCcw aria-hidden />
+        {submitting ? "正在创建…" : "重新规划"}
+      </Button>
+    </section>
+  );
+}
+
 function importErrorMessage(error: unknown) {
   if (!error || typeof error !== "object" || !("code" in error)) return null;
   const code = (error as { code?: unknown }).code;
@@ -138,16 +287,31 @@ export function ImportJobProgress({ id }: { id: string }) {
   );
   const { trigger, isMutating } = useSWRMutation(
     ["import-job-action", id],
-    (_key, { arg }: { arg: "cancel" | "retry" }) =>
-      arg === "cancel"
-        ? importsApi().cancelImportJob({ id })
-        : importsApi().retryImportJob({ id }),
+    (_key, { arg }: { arg: "cancel" | "retry" | "confirm" }) => {
+      if (arg === "cancel") return importsApi().cancelImportJob({ id });
+      if (arg === "confirm") {
+        if (!data?.job.currentPlanId) {
+          throw new Error("missing current plan");
+        }
+        return importsApi().confirmImportPlan({
+          id,
+          confirmImportPlanRequest: { planId: data.job.currentPlanId },
+        });
+      }
+      return importsApi().retryImportJob({ id });
+    },
   );
-  const act = async (action: "cancel" | "retry") => {
+  const act = async (action: "cancel" | "retry" | "confirm") => {
     try {
       await trigger(action);
       await mutate();
-      toast.success(action === "cancel" ? "任务已取消" : "任务已重新排队");
+      toast.success(
+        action === "cancel"
+          ? "任务已取消"
+          : action === "confirm"
+            ? "计划已确认，正在生成审核提案"
+            : "任务已重新排队",
+      );
     } catch (actionError) {
       if (isUnauthorized(actionError)) {
         toast.error("请先登录后再操作导入任务");
@@ -172,17 +336,22 @@ export function ImportJobProgress({ id }: { id: string }) {
   if (!data) return <p className="text-sm text-muted-foreground">正在加载导入进度…</p>;
   const latestByStage = new Map(data.stages.map((stage) => [stage.stage, stage]));
   const errorMessage = importErrorMessage(data.job.error);
+  const planningInput = data.job.planningInput;
+  const canReplan = Boolean(data.job.sourceVersionId) &&
+    !data.job.proposalId && !["queued", "running"].includes(data.job.status);
+  const currentPlanVersion = data.plans.find((item) => item.id === data.job.currentPlanId)
+    ?? data.plans.at(-1);
 
   return (
     <div className="space-y-6">
       <section className="rounded-xl border border-border p-5">
         <div className="flex flex-wrap items-start justify-between gap-3">
           <div>
-            <p className="text-sm font-semibold">{data.job.status} · {data.job.progress}%</p>
+            <p className="text-sm font-semibold">{JOB_STATUS_LABEL[data.job.status]} · {data.job.progress}%</p>
             <p className="mt-1 font-mono text-xs text-muted-foreground">{data.job.id}</p>
           </div>
           <div className="flex gap-2">
-            {(data.job.status === "queued" || data.job.status === "running") &&
+            {(data.job.status === "queued" || data.job.status === "running" || data.job.status === "action_required") &&
               <Button variant="destructive" disabled={isMutating} onClick={() => void act("cancel")}>取消</Button>}
             {(data.job.status === "failed" || data.job.status === "cancelled") &&
               <Button disabled={isMutating} onClick={() => void act("retry")}>重试</Button>}
@@ -194,6 +363,32 @@ export function ImportJobProgress({ id }: { id: string }) {
         {errorMessage ? <p className="mt-4 rounded-lg bg-destructive/10 p-3 text-sm text-destructive">{errorMessage}</p> : null}
         {data.job.error ? <pre className="mt-2 rounded-lg bg-muted p-3 text-xs text-destructive">{JSON.stringify(data.job.error, null, 2)}</pre> : null}
       </section>
+
+      {data.job.status === "action_required" ? (
+        <section className="rounded-lg border border-primary/40 p-5">
+          <div className="flex items-start gap-3">
+            {data.job.actionRequired === "quality_gate"
+              ? <AlertTriangle className="mt-0.5 size-5 shrink-0 text-amber-600" aria-hidden />
+              : <ShieldCheck className="mt-0.5 size-5 shrink-0 text-primary" aria-hidden />}
+            <div className="min-w-0 flex-1">
+              <h2 className="font-semibold">
+                {data.job.actionRequired === "quality_gate" ? "计划未通过质量门禁" : "计划等待确认"}
+              </h2>
+              <p className="mt-1 text-sm leading-6 text-muted-foreground">
+                {data.job.actionRequired === "quality_gate"
+                  ? "查看下方质量分项并调整标题、目标页面或导入要求；低质量计划不能直接进入治理。"
+                  : "确认后将复用当前不可变计划执行实体匹配、Proposal 合成并提交审核。"}
+              </p>
+              {data.job.actionRequired === "confirm_plan" ? (
+                <Button className="mt-4" disabled={isMutating} onClick={() => void act("confirm")}>
+                  <CheckCircle2 aria-hidden />
+                  确认并生成 Proposal
+                </Button>
+              ) : null}
+            </div>
+          </div>
+        </section>
+      ) : null}
 
       <ol className="grid gap-3 sm:grid-cols-2">
         {STAGES.map((name) => {
@@ -209,6 +404,24 @@ export function ImportJobProgress({ id }: { id: string }) {
         })}
       </ol>
 
+      {data.runs.length > 1 ? (
+        <details className="rounded-lg border border-border p-4">
+          <summary className="cursor-pointer text-sm font-medium">
+            运行记录（{data.runs.length} 次）
+          </summary>
+          <ol className="mt-3 divide-y divide-border">
+            {data.runs.map((run) => (
+              <li key={run.id} className="flex items-center justify-between gap-3 py-2 text-xs">
+                <span>第 {run.attempt} 次 · {JOB_STATUS_LABEL[run.status]}</span>
+                <time className="text-muted-foreground" dateTime={run.startedAt.toISOString()}>
+                  {run.startedAt.toLocaleString()}
+                </time>
+              </li>
+            ))}
+          </ol>
+        </details>
+      ) : null}
+
       {data.plan ? (
         <section className="space-y-4 rounded-xl border border-border p-5">
           <div className="flex flex-wrap items-start justify-between gap-3">
@@ -217,9 +430,35 @@ export function ImportJobProgress({ id }: { id: string }) {
               <p className="mt-1 text-sm text-muted-foreground">{data.plan.profile.summary || data.plan.profile.title}</p>
             </div>
             <span className="rounded-full bg-muted px-2.5 py-1 text-xs text-muted-foreground">
+              {currentPlanVersion ? `v${currentPlanVersion.revision} · ` : ""}
               质量 {Math.round(data.plan.qualityScore * 100)}% · {data.plan.routes.length} 条路由
             </span>
           </div>
+          {data.plan.quality ? (
+            <div className="space-y-3 border-y border-border py-4">
+              <div className="flex items-center gap-2 text-sm font-medium">
+                <Gauge className="size-4 text-muted-foreground" aria-hidden />
+                五维质量
+              </div>
+              <dl className="grid gap-3 sm:grid-cols-2">
+                {QUALITY_DIMENSIONS.map(([key, label]) => {
+                  const score = data.plan!.quality![key];
+                  return (
+                    <div key={key} className="grid grid-cols-[5rem_1fr_3rem] items-center gap-2">
+                      <dt className="text-xs text-muted-foreground">{label}</dt>
+                      <dd className="h-1.5 overflow-hidden rounded-full bg-muted">
+                        <span className="block h-full bg-primary" style={{ width: `${Math.round(score * 100)}%` }} />
+                      </dd>
+                      <dd className="text-right font-mono text-xs">{Math.round(score * 100)}%</dd>
+                    </div>
+                  );
+                })}
+              </dl>
+              <p className="text-xs text-muted-foreground">
+                综合 {Math.round(data.plan.quality.overall * 100)}%，门槛 {Math.round(data.plan.quality.threshold * 100)}%。
+              </p>
+            </div>
+          ) : null}
           <ol className="grid gap-3 lg:grid-cols-2">
             {data.plan.routes.map((route, index) => {
               const meta = ROUTE_META[route.action];
@@ -241,11 +480,58 @@ export function ImportJobProgress({ id }: { id: string }) {
                     {route.relatedTo.length > 0 ? <span>关联到 {route.relatedTo.join("、")}</span> : null}
                     {route.pageId ? <Link className="underline" href={`/pages/${route.pageId}`}>查看目标页</Link> : null}
                   </div>
+                  {route.blocks.length > 0 ? (
+                    <div className="mt-3 space-y-2 border-t border-border pt-3">
+                      {route.blocks.slice(0, 3).map((block, blockIndex) => (
+                        <div key={`${block.type}:${block.targetBlockId ?? blockIndex}`} className="text-xs leading-5">
+                          <p className="line-clamp-3 text-foreground">
+                            {block.text || block.items?.join("；")}
+                          </p>
+                          {block.evidence[0] ? (
+                            <blockquote className="mt-1 border-l-2 border-border pl-2 text-muted-foreground">
+                              {block.evidence[0].quotation}
+                            </blockquote>
+                          ) : null}
+                        </div>
+                      ))}
+                    </div>
+                  ) : null}
                 </li>
               );
             })}
           </ol>
         </section>
+      ) : null}
+
+      {data.plans.length > 1 ? (
+        <details className="rounded-lg border border-border p-4">
+          <summary className="cursor-pointer text-sm font-medium">
+            计划版本（{data.plans.length} 个）
+          </summary>
+          <ol className="mt-3 divide-y divide-border">
+            {[...data.plans].reverse().map((version) => (
+              <li key={version.id} className="flex flex-wrap items-center gap-x-3 gap-y-1 py-2 text-xs">
+                <span className="font-medium">v{version.revision}</span>
+                <span>质量 {Math.round(version.qualityScore * 100)}%</span>
+                {version.id === data.job.currentPlanId ? <span className="text-primary">当前</span> : null}
+                {version.id === data.job.confirmedPlanId ? <span className="text-primary">已确认</span> : null}
+                <time className="ml-auto text-muted-foreground" dateTime={version.createdAt.toISOString()}>
+                  {version.createdAt.toLocaleString()}
+                </time>
+              </li>
+            ))}
+          </ol>
+        </details>
+      ) : null}
+
+      {canReplan ? (
+        <ReplanPanel
+          id={id}
+          planningInput={planningInput}
+          onReplanned={async () => {
+            await mutate();
+          }}
+        />
       ) : null}
 
       {data.job.proposalId ? <Button asChild><Link href={`/governance/proposals/${data.job.proposalId}`}>查看待审核 Proposal</Link></Button> : null}

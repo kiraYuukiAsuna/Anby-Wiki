@@ -20,6 +20,13 @@ import {
     ImportPageRouteToJSON,
     ImportPageRouteToJSONTyped,
 } from './ImportPageRoute';
+import type { ImportPlanQuality } from './ImportPlanQuality';
+import {
+    ImportPlanQualityFromJSON,
+    ImportPlanQualityFromJSONTyped,
+    ImportPlanQualityToJSON,
+    ImportPlanQualityToJSONTyped,
+} from './ImportPlanQuality';
 import type { ImportPlanProfile } from './ImportPlanProfile';
 import {
     ImportPlanProfileFromJSON,
@@ -64,6 +71,12 @@ export interface ImportPlan {
      * @memberof ImportPlan
      */
     qualityScore: number;
+    /**
+     *
+     * @type {ImportPlanQuality}
+     * @memberof ImportPlan
+     */
+    quality?: ImportPlanQuality;
     /**
      *
      * @type {boolean}
@@ -112,6 +125,7 @@ export function ImportPlanFromJSONTyped(json: any, ignoreDiscriminator: boolean)
         'profile': ImportPlanProfileFromJSON(json['profile']),
         'routes': ((json['routes'] as Array<any>).map(ImportPageRouteFromJSON)),
         'qualityScore': json['quality_score'],
+        'quality': json['quality'] == null ? undefined : ImportPlanQualityFromJSON(json['quality']),
         'promptInjectionDetected': json['prompt_injection_detected'],
     };
 }
@@ -132,6 +146,7 @@ export function ImportPlanToJSONTyped(value?: ImportPlan | null, ignoreDiscrimin
         'profile': ImportPlanProfileToJSON(value['profile']),
         'routes': ((value['routes'] as Array<any>).map(ImportPageRouteToJSON)),
         'quality_score': value['qualityScore'],
+        'quality': ImportPlanQualityToJSON(value['quality']),
         'prompt_injection_detected': value['promptInjectionDetected'],
     };
 }

@@ -13,6 +13,14 @@
  */
 
 import { mapValues } from '../runtime';
+import type { ImportPlanningInput } from './ImportPlanningInput';
+import {
+    ImportPlanningInputFromJSON,
+    ImportPlanningInputFromJSONTyped,
+    ImportPlanningInputToJSON,
+    ImportPlanningInputToJSONTyped,
+} from './ImportPlanningInput';
+
 /**
  *
  * @export
@@ -57,6 +65,12 @@ export interface ImportJob {
     config: { [key: string]: any; };
     /**
      *
+     * @type {ImportPlanningInput}
+     * @memberof ImportJob
+     */
+    planningInput: ImportPlanningInput;
+    /**
+     *
      * @type {string}
      * @memberof ImportJob
      */
@@ -67,6 +81,30 @@ export interface ImportJob {
      * @memberof ImportJob
      */
     proposalId?: string;
+    /**
+     *
+     * @type {ImportJobActionRequiredEnum}
+     * @memberof ImportJob
+     */
+    actionRequired?: ImportJobActionRequiredEnum;
+    /**
+     *
+     * @type {string}
+     * @memberof ImportJob
+     */
+    currentPlanId?: string;
+    /**
+     *
+     * @type {string}
+     * @memberof ImportJob
+     */
+    confirmedPlanId?: string;
+    /**
+     *
+     * @type {Date}
+     * @memberof ImportJob
+     */
+    planConfirmedAt?: Date;
     /**
      *
      * @type {ImportJobCurrentStageEnum}
@@ -118,11 +156,21 @@ export interface ImportJob {
 export const ImportJobStatusEnum = {
     Queued: 'queued',
     Running: 'running',
+    ActionRequired: 'action_required',
     Succeeded: 'succeeded',
     Failed: 'failed',
     Cancelled: 'cancelled'
 } as const;
 export type ImportJobStatusEnum = typeof ImportJobStatusEnum[keyof typeof ImportJobStatusEnum];
+
+/**
+ * @export
+ */
+export const ImportJobActionRequiredEnum = {
+    ConfirmPlan: 'confirm_plan',
+    QualityGate: 'quality_gate'
+} as const;
+export type ImportJobActionRequiredEnum = typeof ImportJobActionRequiredEnum[keyof typeof ImportJobActionRequiredEnum];
 
 /**
  * @export
@@ -151,6 +199,7 @@ export function instanceOfImportJob(value: object): value is ImportJob {
     if ((!('initiatedBy' in (value as Record<string, any>)) && !('initiated_by' in (value as Record<string, any>))) || ((value as Record<string, any>)['initiatedBy'] === undefined && (value as Record<string, any>)['initiated_by'] === undefined)) return false;
     if ((!('idempotencyKey' in (value as Record<string, any>)) && !('idempotency_key' in (value as Record<string, any>))) || ((value as Record<string, any>)['idempotencyKey'] === undefined && (value as Record<string, any>)['idempotency_key'] === undefined)) return false;
     if (!('config' in value) || value['config'] === undefined) return false;
+    if ((!('planningInput' in (value as Record<string, any>)) && !('planning_input' in (value as Record<string, any>))) || ((value as Record<string, any>)['planningInput'] === undefined && (value as Record<string, any>)['planning_input'] === undefined)) return false;
     if ((!('currentStage' in (value as Record<string, any>)) && !('current_stage' in (value as Record<string, any>))) || ((value as Record<string, any>)['currentStage'] === undefined && (value as Record<string, any>)['current_stage'] === undefined)) return false;
     if (!('progress' in value) || value['progress'] === undefined) return false;
     if ((!('createdAt' in (value as Record<string, any>)) && !('created_at' in (value as Record<string, any>))) || ((value as Record<string, any>)['createdAt'] === undefined && (value as Record<string, any>)['created_at'] === undefined)) return false;
@@ -174,8 +223,13 @@ export function ImportJobFromJSONTyped(json: any, ignoreDiscriminator: boolean):
         'initiatedBy': json['initiated_by'],
         'idempotencyKey': json['idempotency_key'],
         'config': json['config'],
+        'planningInput': ImportPlanningInputFromJSON(json['planning_input']),
         'sourceVersionId': json['source_version_id'] == null ? undefined : json['source_version_id'],
         'proposalId': json['proposal_id'] == null ? undefined : json['proposal_id'],
+        'actionRequired': json['action_required'] == null ? undefined : json['action_required'],
+        'currentPlanId': json['current_plan_id'] == null ? undefined : json['current_plan_id'],
+        'confirmedPlanId': json['confirmed_plan_id'] == null ? undefined : json['confirmed_plan_id'],
+        'planConfirmedAt': json['plan_confirmed_at'] == null ? undefined : (new Date(json['plan_confirmed_at'])),
         'currentStage': json['current_stage'],
         'progress': json['progress'],
         'error': json['error'] == null ? undefined : json['error'],
@@ -203,8 +257,13 @@ export function ImportJobToJSONTyped(value?: ImportJob | null, ignoreDiscriminat
         'initiated_by': value['initiatedBy'],
         'idempotency_key': value['idempotencyKey'],
         'config': value['config'],
+        'planning_input': ImportPlanningInputToJSON(value['planningInput']),
         'source_version_id': value['sourceVersionId'],
         'proposal_id': value['proposalId'],
+        'action_required': value['actionRequired'],
+        'current_plan_id': value['currentPlanId'],
+        'confirmed_plan_id': value['confirmedPlanId'],
+        'plan_confirmed_at': value['planConfirmedAt'] == null ? value['planConfirmedAt'] : value['planConfirmedAt'].toISOString(),
         'current_stage': value['currentStage'],
         'progress': value['progress'],
         'error': value['error'],

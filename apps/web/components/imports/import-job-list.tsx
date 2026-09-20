@@ -8,6 +8,7 @@ import {
   Clock3,
   FileText,
   Inbox,
+  ListChecks,
   LoaderCircle,
   RefreshCw,
   XCircle,
@@ -34,6 +35,7 @@ const FILTERS: Array<{ value: Filter; label: string }> = [
   { value: "all", label: "全部" },
   { value: "running", label: "进行中" },
   { value: "queued", label: "排队中" },
+  { value: "action_required", label: "待确认" },
   { value: "succeeded", label: "已完成" },
   { value: "failed", label: "失败" },
   { value: "cancelled", label: "已取消" },
@@ -56,6 +58,11 @@ const STATUS_META: Record<
     label: "处理中",
     className: "bg-sky-50 text-sky-700 ring-sky-200",
     icon: LoaderCircle,
+  },
+  action_required: {
+    label: "待确认",
+    className: "bg-primary/10 text-primary ring-primary/20",
+    icon: ListChecks,
   },
   succeeded: {
     label: "已完成",
@@ -102,9 +109,14 @@ function recordValue(value: unknown): Record<string, unknown> | null {
 
 function sourceSummary(job: ImportJob): { title: string; detail: string } {
   const config = recordValue(job.config);
+  const planningInput = recordValue(job.planningInput);
   const source = recordValue(config?.source);
   const configuredTitle =
-    typeof config?.title === "string" ? config.title.trim() : "";
+    typeof planningInput?.title === "string"
+      ? planningInput.title.trim()
+      : typeof config?.title === "string"
+        ? config.title.trim()
+        : "";
   const filename =
     typeof source?.filename === "string" ? source.filename.trim() : "";
   const url = typeof source?.url === "string" ? source.url : "";

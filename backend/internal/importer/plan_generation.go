@@ -100,6 +100,9 @@ func DecodeGeneratedImportPlan(raw []byte, sourceVersionID uuid.UUID, chunks []e
 		if routeMode == RouteModeForceCreate && route.Action != RouteCreate && route.Action != RouteIgnore {
 			continue
 		}
+		if routeMode == RouteModeForceUpdate && route.Action != RouteUpdate && route.Action != RouteIgnore {
+			continue
+		}
 		switch route.Action {
 		case RouteCreate:
 			route.PageID = nil
@@ -223,6 +226,19 @@ func hasForcedCreateRoute(routes []PageRoute, preferredTitle string) bool {
 		got, err := page.NormalizeTitle(routes[index].Title)
 		if err == nil && got == wanted {
 			routes[index].Title = strings.TrimSpace(preferredTitle)
+			return true
+		}
+	}
+	return false
+}
+
+func hasForcedUpdateRoute(routes []PageRoute, targetPageID uuid.UUID) bool {
+	if targetPageID == uuid.Nil {
+		return false
+	}
+	for index := range routes {
+		if routes[index].Action == RouteUpdate && routes[index].PageID != nil &&
+			*routes[index].PageID == targetPageID {
 			return true
 		}
 	}

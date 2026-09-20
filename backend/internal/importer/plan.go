@@ -39,6 +39,7 @@ const (
 
 	RouteModeAuto        = "auto"
 	RouteModeForceCreate = "force_create"
+	RouteModeForceUpdate = "force_update"
 )
 
 var (
@@ -115,13 +116,28 @@ type ImportPlan struct {
 	Profile                 SourceProfile `json:"profile"`
 	Routes                  []PageRoute   `json:"routes"`
 	QualityScore            float64       `json:"quality_score"`
+	Quality                 *PlanQuality  `json:"quality,omitempty"`
 	PromptInjectionDetected bool          `json:"prompt_injection_detected"`
+}
+
+type PlanQuality struct {
+	Fidelity  float64 `json:"fidelity"`
+	Grounding float64 `json:"grounding"`
+	Structure float64 `json:"structure"`
+	Concision float64 `json:"concision"`
+	Routing   float64 `json:"routing"`
+	Overall   float64 `json:"overall"`
+	Threshold float64 `json:"threshold"`
+	Passed    bool    `json:"passed"`
 }
 
 type ImportPlanRecord struct {
 	ID              uuid.UUID
 	ImportJobID     uuid.UUID
 	SourceVersionID uuid.UUID
+	Revision        int
+	ParentPlanID    *uuid.UUID
+	PlanningInput   json.RawMessage
 	InputHash       string
 	SchemaVersion   int
 	PromptKey       string
@@ -129,7 +145,18 @@ type ImportPlanRecord struct {
 	Model           string
 	PlanJSON        json.RawMessage
 	QualityScore    float64
+	CreatedBy       uuid.UUID
 	CreatedAt       time.Time
+}
+
+type PlanVersion struct {
+	ID            uuid.UUID       `json:"id"`
+	Revision      int             `json:"revision"`
+	ParentPlanID  *uuid.UUID      `json:"parent_plan_id"`
+	PlanningInput json.RawMessage `json:"planning_input"`
+	QualityScore  float64         `json:"quality_score"`
+	CreatedBy     uuid.UUID       `json:"created_by"`
+	CreatedAt     time.Time       `json:"created_at"`
 }
 
 type PageCandidateBlock struct {
@@ -166,21 +193,24 @@ func NewPagePlanner(repo *Repository, pages PagePlanningCatalog, gateway Structu
 }
 
 type PlanParams struct {
-	SourceVersionID uuid.UUID
-	SourceLabel     string
-	PreferredTitle  string
-	Instructions    string
-	RouteMode       string
-	TargetPageID    *uuid.UUID
-	WikiID          uuid.UUID
-	Chunks          []evidence.SourceChunk
-	Candidates      *Candidates
-	Provider        string
-	Model           string
-	MaxInputTokens  int
-	InputHash       string
-	ImportJobID     *uuid.UUID
-	ImportRunID     *uuid.UUID
+	SourceVersionID  uuid.UUID
+	SourceLabel      string
+	PreferredTitle   string
+	Instructions     string
+	RouteMode        string
+	TargetPageID     *uuid.UUID
+	WikiID           uuid.UUID
+	Chunks           []evidence.SourceChunk
+	Candidates       *Candidates
+	Provider         string
+	Model            string
+	MaxInputTokens   int
+	QualityThreshold float64
+	PlanningInput    json.RawMessage
+	ActorID          uuid.UUID
+	InputHash        string
+	ImportJobID      *uuid.UUID
+	ImportRunID      *uuid.UUID
 }
 
 type PlanResult struct {
@@ -191,18 +221,35 @@ type PlanResult struct {
 
 func (p *PagePlanner) Plan(ctx context.Context, params PlanParams) (*PlanResult, error) {
 	if p == nil || p.repo == nil || p.pages == nil || p.ai == nil || p.ids == nil ||
-		params.SourceVersionID == uuid.Nil || params.WikiID == uuid.Nil || params.ImportJobID == nil ||
+		params.SourceVersionID == uuid.Nil || params.WikiID == uuid.Nil ||
+		params.ActorID == uuid.Nil || params.ImportJobID == nil ||
 		*params.ImportJobID == uuid.Nil || !validSHA256(params.InputHash) {
 		return nil, ErrInvalidJob
 	}
 	if params.RouteMode == "" {
 		params.RouteMode = RouteModeAuto
 	}
-	if params.RouteMode != RouteModeAuto && params.RouteMode != RouteModeForceCreate {
+	if params.RouteMode != RouteModeAuto && params.RouteMode != RouteModeForceCreate &&
+		params.RouteMode != RouteModeForceUpdate {
 		return nil, ErrInvalidJob
 	}
 	if params.RouteMode == RouteModeForceCreate && strings.TrimSpace(params.PreferredTitle) == "" {
 		return nil, ErrInvalidJob
+	}
+	if params.RouteMode == RouteModeForceUpdate &&
+		(params.TargetPageID == nil || *params.TargetPageID == uuid.Nil) {
+		return nil, ErrInvalidJob
+	}
+	if len(params.PlanningInput) == 0 {
+		var err error
+		params.PlanningInput, err = planningInputJSON(PlanningInput{
+			Title: params.PreferredTitle, Instructions: params.Instructions,
+			RouteMode: params.RouteMode, PageID: params.TargetPageID,
+			QualityThreshold: params.QualityThreshold,
+		})
+		if err != nil {
+			return nil, err
+		}
 	}
 	if existing, err := p.repo.GetImportPlan(ctx, *params.ImportJobID, params.InputHash); err == nil {
 		var plan ImportPlan
@@ -242,13 +289,16 @@ func (p *PagePlanner) Plan(ctx context.Context, params PlanParams) (*PlanResult,
 		return nil, ErrNoPagePlan
 	}
 	fidelity, err := p.ensurePlanFidelity(ctx, params, plan)
-	if err != nil {
+	if err != nil && !errors.Is(err, ErrQualityGate) {
 		return nil, err
 	}
-	plan.QualityScore = assessImportPlanQuality(plan, params.Chunks, fidelity*planCoverage)
-	if plan.QualityScore < DefaultQualityThreshold {
-		return nil, ErrQualityGate
+	threshold := params.QualityThreshold
+	if threshold < DefaultQualityThreshold {
+		threshold = DefaultQualityThreshold
 	}
+	quality := assessImportPlanQuality(plan, params.Chunks, fidelity*planCoverage, threshold)
+	plan.Quality = &quality
+	plan.QualityScore = quality.Overall
 	normalizeImportPlanCollections(plan)
 	canonical, err := json.Marshal(plan)
 	if err != nil {
@@ -260,6 +310,7 @@ func (p *PagePlanner) Plan(ctx context.Context, params PlanParams) (*PlanResult,
 	}
 	record := &ImportPlanRecord{
 		ID: recordID, ImportJobID: *params.ImportJobID, SourceVersionID: params.SourceVersionID, InputHash: params.InputHash,
+		PlanningInput: params.PlanningInput, CreatedBy: params.ActorID,
 		SchemaVersion: 1, PromptKey: generated.PromptKey, PromptVersion: generated.PromptVersion,
 		Model: generated.Model, PlanJSON: canonical, QualityScore: plan.QualityScore,
 	}
@@ -361,6 +412,10 @@ func (p *PagePlanner) generatePlan(ctx context.Context, params PlanParams, candi
 	merged := mergeImportPlanParts(params.SourceVersionID, parts)
 	refineImportPlan(merged)
 	if params.RouteMode == RouteModeForceCreate && !hasForcedCreateRoute(merged.Routes, params.PreferredTitle) {
+		return nil, ErrNoPagePlan
+	}
+	if params.RouteMode == RouteModeForceUpdate &&
+		!hasForcedUpdateRoute(merged.Routes, *params.TargetPageID) {
 		return nil, ErrNoPagePlan
 	}
 	coverage := 1.0
@@ -563,6 +618,9 @@ func ValidateImportPlan(raw []byte, sourceVersionID uuid.UUID, chunks []evidence
 		if routeMode == RouteModeForceCreate && route.Action != RouteCreate && route.Action != RouteIgnore {
 			continue
 		}
+		if routeMode == RouteModeForceUpdate && route.Action != RouteUpdate && route.Action != RouteIgnore {
+			continue
+		}
 		blocks := make([]PlannedBlock, 0, len(route.Blocks))
 		for _, block := range route.Blocks {
 			originalBlocks++
@@ -696,6 +754,13 @@ func (p *PagePlanner) recallPages(ctx context.Context, params PlanParams) ([]Pag
 		}
 		hits[target.ID] = page.PageSearchHit{ID: target.ID, DisplayTitle: target.DisplayTitle,
 			NamespaceKey: "main", MatchedOn: "explicit"}
+		if params.RouteMode == RouteModeForceUpdate {
+			candidate, err := p.loadPageCandidate(ctx, hits[target.ID])
+			if err != nil {
+				return nil, err
+			}
+			return []PageCandidate{candidate}, nil
+		}
 	}
 	for _, rawTerm := range terms {
 		term := strings.TrimSpace(rawTerm)

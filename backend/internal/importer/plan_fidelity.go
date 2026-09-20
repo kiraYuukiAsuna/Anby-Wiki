@@ -554,22 +554,44 @@ func planTokenSet(value string) map[string]bool {
 // assessImportPlanQuality deliberately ignores the model-authored score. The
 // persisted score is derived from independently checked fidelity, exact
 // evidence support, article structure, duplication, and route confidence.
-func assessImportPlanQuality(plan *ImportPlan, chunks []evidence.SourceChunk, fidelity float64) float64 {
+func assessImportPlanQuality(
+	plan *ImportPlan,
+	chunks []evidence.SourceChunk,
+	fidelity, threshold float64,
+) PlanQuality {
+	if threshold < DefaultQualityThreshold {
+		threshold = DefaultQualityThreshold
+	}
 	if plan == nil {
-		return 0
+		return PlanQuality{Threshold: threshold}
 	}
 	if !plan.Profile.Useful && actionablePageRouteCount(plan.Routes) == 0 {
-		return 1
+		return PlanQuality{
+			Fidelity: 1, Grounding: 1, Structure: 1, Concision: 1, Routing: 1,
+			Overall: 1, Threshold: threshold, Passed: true,
+		}
 	}
-	grounding := planGroundingScore(plan)
-	structure := planStructureScore(plan, sourceChunkRuneCount(chunks))
-	concision := planConcisionScore(plan)
-	routing := planRoutingScore(plan)
-	score := clampUnit(fidelity)*0.35 + grounding*0.25 + structure*0.20 + concision*0.10 + routing*0.10
-	if fidelity < DefaultQualityThreshold || grounding < 0.65 || structure < 0.78 {
+	quality := PlanQuality{
+		Fidelity:  roundQuality(clampUnit(fidelity)),
+		Grounding: roundQuality(planGroundingScore(plan)),
+		Structure: roundQuality(planStructureScore(plan, sourceChunkRuneCount(chunks))),
+		Concision: roundQuality(planConcisionScore(plan)),
+		Routing:   roundQuality(planRoutingScore(plan)),
+		Threshold: threshold,
+	}
+	score := quality.Fidelity*0.35 + quality.Grounding*0.25 +
+		quality.Structure*0.20 + quality.Concision*0.10 + quality.Routing*0.10
+	if quality.Fidelity < DefaultQualityThreshold || quality.Grounding < 0.65 ||
+		quality.Structure < 0.78 {
 		score = min(score, DefaultQualityThreshold-0.01)
 	}
-	return math.Round(clampUnit(score)*1000) / 1000
+	quality.Overall = roundQuality(clampUnit(score))
+	quality.Passed = quality.Overall >= threshold
+	return quality
+}
+
+func roundQuality(value float64) float64 {
+	return math.Round(value*1000) / 1000
 }
 
 func planGroundingScore(plan *ImportPlan) float64 {

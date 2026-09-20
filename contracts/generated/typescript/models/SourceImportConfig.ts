@@ -77,7 +77,8 @@ export interface SourceImportConfig {
  */
 export const SourceImportConfigRouteModeEnum = {
     Auto: 'auto',
-    ForceCreate: 'force_create'
+    ForceCreate: 'force_create',
+    ForceUpdate: 'force_update'
 } as const;
 export type SourceImportConfigRouteModeEnum = typeof SourceImportConfigRouteModeEnum[keyof typeof SourceImportConfigRouteModeEnum];
 

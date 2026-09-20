@@ -37,66 +37,70 @@ const (
 // APIKeyCiphertext contains nonce+ciphertext encoded as base64; plaintext is
 // deliberately absent from this type.
 type StoredConfig struct {
-	Version               int       `json:"version"`
-	Enabled               bool      `json:"enabled"`
-	Provider              string    `json:"provider"`
-	BaseURL               string    `json:"base_url"`
-	Model                 string    `json:"model"`
-	ResponseFormat        string    `json:"response_format"`
-	MaxInputTokens        int       `json:"max_input_tokens"`
-	ChunkCharacters       int       `json:"chunk_characters"`
-	RequestTimeoutSeconds int       `json:"request_timeout_seconds"`
-	MaxAttempts           int       `json:"max_attempts"`
-	APIKeyCiphertext      string    `json:"api_key_ciphertext"`
-	UpdatedBy             uuid.UUID `json:"updated_by"`
-	UpdatedAt             time.Time `json:"updated_at"`
+	Version                int       `json:"version"`
+	Enabled                bool      `json:"enabled"`
+	Provider               string    `json:"provider"`
+	BaseURL                string    `json:"base_url"`
+	Model                  string    `json:"model"`
+	ResponseFormat         string    `json:"response_format"`
+	MaxInputTokens         int       `json:"max_input_tokens"`
+	ChunkCharacters        int       `json:"chunk_characters"`
+	AutoApproveImportPlans *bool     `json:"auto_approve_import_plans,omitempty"`
+	RequestTimeoutSeconds  int       `json:"request_timeout_seconds"`
+	MaxAttempts            int       `json:"max_attempts"`
+	APIKeyCiphertext       string    `json:"api_key_ciphertext"`
+	UpdatedBy              uuid.UUID `json:"updated_by"`
+	UpdatedAt              time.Time `json:"updated_at"`
 }
 
 // Config is the redacted shape returned to administrators.
 type Config struct {
-	Version               int        `json:"version"`
-	Enabled               bool       `json:"enabled"`
-	Provider              string     `json:"provider"`
-	BaseURL               string     `json:"base_url"`
-	Model                 string     `json:"model"`
-	ResponseFormat        string     `json:"response_format"`
-	MaxInputTokens        int        `json:"max_input_tokens"`
-	ChunkCharacters       int        `json:"chunk_characters"`
-	RequestTimeoutSeconds int        `json:"request_timeout_seconds"`
-	MaxAttempts           int        `json:"max_attempts"`
-	APIKeyConfigured      bool       `json:"api_key_configured"`
-	UpdatedBy             *uuid.UUID `json:"updated_by,omitempty"`
-	UpdatedAt             *time.Time `json:"updated_at,omitempty"`
+	Version                int        `json:"version"`
+	Enabled                bool       `json:"enabled"`
+	Provider               string     `json:"provider"`
+	BaseURL                string     `json:"base_url"`
+	Model                  string     `json:"model"`
+	ResponseFormat         string     `json:"response_format"`
+	MaxInputTokens         int        `json:"max_input_tokens"`
+	ChunkCharacters        int        `json:"chunk_characters"`
+	AutoApproveImportPlans bool       `json:"auto_approve_import_plans"`
+	RequestTimeoutSeconds  int        `json:"request_timeout_seconds"`
+	MaxAttempts            int        `json:"max_attempts"`
+	APIKeyConfigured       bool       `json:"api_key_configured"`
+	UpdatedBy              *uuid.UUID `json:"updated_by,omitempty"`
+	UpdatedAt              *time.Time `json:"updated_at,omitempty"`
 }
 
 // UpdateParams accepts a replacement configuration. A blank APIKey preserves
 // an existing credential; the first save requires a non-blank value.
 type UpdateParams struct {
-	WikiID                uuid.UUID
-	ActorID               uuid.UUID
-	Enabled               bool
-	Provider              string
-	BaseURL               string
-	Model                 string
-	ResponseFormat        string
-	MaxInputTokens        int
-	ChunkCharacters       int
-	RequestTimeoutSeconds int
-	MaxAttempts           int
-	APIKey                string
+	WikiID                 uuid.UUID
+	ActorID                uuid.UUID
+	Enabled                bool
+	Provider               string
+	BaseURL                string
+	Model                  string
+	ResponseFormat         string
+	MaxInputTokens         int
+	ChunkCharacters        int
+	AutoApproveImportPlans bool
+	RequestTimeoutSeconds  int
+	MaxAttempts            int
+	APIKey                 string
 }
 
 // RuntimeConfig is decrypted only at the Worker/API-to-kernel boundary. It
 // must never be logged, serialized to a public response, or retained in a job.
 type RuntimeConfig struct {
-	Enabled               bool
-	Provider              string
-	BaseURL               string
-	Model                 string
-	ResponseFormat        string
-	MaxInputTokens        int
-	ChunkCharacters       int
-	RequestTimeoutSeconds int
-	MaxAttempts           int
-	APIKey                string
+	Enabled                bool
+	Provider               string
+	BaseURL                string
+	Model                  string
+	ResponseFormat         string
+	MaxInputTokens         int
+	ChunkCharacters        int
+	AutoApproveImportPlans bool
+	RequestTimeoutSeconds  int
+	MaxAttempts            int
+	APIKey                 string
 }

@@ -26,32 +26,34 @@ func NewAIConfigAPI(service *aiconfig.Service, provider ai.Provider, wikiID uuid
 }
 
 type updateAIConfigRequest struct {
-	Enabled               bool   `json:"enabled"`
-	Provider              string `json:"provider"`
-	BaseURL               string `json:"base_url"`
-	Model                 string `json:"model"`
-	ResponseFormat        string `json:"response_format"`
-	MaxInputTokens        int    `json:"max_input_tokens"`
-	ChunkCharacters       int    `json:"chunk_characters"`
-	RequestTimeoutSeconds int    `json:"request_timeout_seconds"`
-	MaxAttempts           int    `json:"max_attempts"`
-	APIKey                string `json:"api_key"`
+	Enabled                bool   `json:"enabled"`
+	Provider               string `json:"provider"`
+	BaseURL                string `json:"base_url"`
+	Model                  string `json:"model"`
+	ResponseFormat         string `json:"response_format"`
+	MaxInputTokens         int    `json:"max_input_tokens"`
+	ChunkCharacters        int    `json:"chunk_characters"`
+	AutoApproveImportPlans bool   `json:"auto_approve_import_plans"`
+	RequestTimeoutSeconds  int    `json:"request_timeout_seconds"`
+	MaxAttempts            int    `json:"max_attempts"`
+	APIKey                 string `json:"api_key"`
 }
 
 type aiConfigResponse struct {
-	Version               int        `json:"version"`
-	Enabled               bool       `json:"enabled"`
-	Provider              string     `json:"provider"`
-	BaseURL               string     `json:"base_url"`
-	Model                 string     `json:"model"`
-	ResponseFormat        string     `json:"response_format"`
-	MaxInputTokens        int        `json:"max_input_tokens"`
-	ChunkCharacters       int        `json:"chunk_characters"`
-	RequestTimeoutSeconds int        `json:"request_timeout_seconds"`
-	MaxAttempts           int        `json:"max_attempts"`
-	APIKeyConfigured      bool       `json:"api_key_configured"`
-	UpdatedBy             *uuid.UUID `json:"updated_by,omitempty"`
-	UpdatedAt             *time.Time `json:"updated_at,omitempty"`
+	Version                int        `json:"version"`
+	Enabled                bool       `json:"enabled"`
+	Provider               string     `json:"provider"`
+	BaseURL                string     `json:"base_url"`
+	Model                  string     `json:"model"`
+	ResponseFormat         string     `json:"response_format"`
+	MaxInputTokens         int        `json:"max_input_tokens"`
+	ChunkCharacters        int        `json:"chunk_characters"`
+	AutoApproveImportPlans bool       `json:"auto_approve_import_plans"`
+	RequestTimeoutSeconds  int        `json:"request_timeout_seconds"`
+	MaxAttempts            int        `json:"max_attempts"`
+	APIKeyConfigured       bool       `json:"api_key_configured"`
+	UpdatedBy              *uuid.UUID `json:"updated_by,omitempty"`
+	UpdatedAt              *time.Time `json:"updated_at,omitempty"`
 }
 
 type aiConfigTestResponse struct {
@@ -86,11 +88,12 @@ func (a *AIConfigAPI) update(w http.ResponseWriter, r *http.Request) {
 	value, err := a.service.Update(r.Context(), aiconfig.UpdateParams{
 		WikiID: a.wikiID, ActorID: actorID, Enabled: request.Enabled,
 		Provider: request.Provider, BaseURL: request.BaseURL, Model: request.Model,
-		ResponseFormat:        request.ResponseFormat,
-		MaxInputTokens:        request.MaxInputTokens,
-		ChunkCharacters:       request.ChunkCharacters,
-		RequestTimeoutSeconds: request.RequestTimeoutSeconds,
-		MaxAttempts:           request.MaxAttempts, APIKey: request.APIKey,
+		ResponseFormat:         request.ResponseFormat,
+		MaxInputTokens:         request.MaxInputTokens,
+		ChunkCharacters:        request.ChunkCharacters,
+		AutoApproveImportPlans: request.AutoApproveImportPlans,
+		RequestTimeoutSeconds:  request.RequestTimeoutSeconds,
+		MaxAttempts:            request.MaxAttempts, APIKey: request.APIKey,
 	})
 	if err != nil {
 		aiConfigError(w, r, err)
@@ -148,9 +151,10 @@ func toAIConfigResponse(value *aiconfig.Config) aiConfigResponse {
 	return aiConfigResponse{
 		Version: value.Version, Enabled: value.Enabled, Provider: value.Provider,
 		BaseURL: value.BaseURL, Model: value.Model, ResponseFormat: value.ResponseFormat,
-		MaxInputTokens:        value.MaxInputTokens,
-		ChunkCharacters:       value.ChunkCharacters,
-		RequestTimeoutSeconds: value.RequestTimeoutSeconds, MaxAttempts: value.MaxAttempts,
+		MaxInputTokens:         value.MaxInputTokens,
+		ChunkCharacters:        value.ChunkCharacters,
+		AutoApproveImportPlans: value.AutoApproveImportPlans,
+		RequestTimeoutSeconds:  value.RequestTimeoutSeconds, MaxAttempts: value.MaxAttempts,
 		APIKeyConfigured: value.APIKeyConfigured,
 		UpdatedBy:        value.UpdatedBy, UpdatedAt: value.UpdatedAt,
 	}

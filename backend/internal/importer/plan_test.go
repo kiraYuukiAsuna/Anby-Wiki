@@ -646,12 +646,12 @@ func TestAssessImportPlanQualityUsesServerMetrics(t *testing.T) {
 			{Type: string(ast.BlockParagraph), Mode: BlockAppend, Text: "Clients validate JWT assertions before accepting them.", Evidence: evidenceItem},
 		}}}}
 	chunks := []evidence.SourceChunk{{TextContent: strings.Repeat("source material ", 20)}}
-	good := assessImportPlanQuality(plan, chunks, 0.9)
-	if good < DefaultQualityThreshold {
-		t.Fatalf("good score=%f, want >= threshold", good)
+	good := assessImportPlanQuality(plan, chunks, 0.9, DefaultQualityThreshold)
+	if !good.Passed {
+		t.Fatalf("good score=%f, want >= threshold", good.Overall)
 	}
-	if bad := assessImportPlanQuality(plan, chunks, 0.5); bad >= DefaultQualityThreshold {
-		t.Fatalf("bad score=%f, want below threshold", bad)
+	if bad := assessImportPlanQuality(plan, chunks, 0.5, DefaultQualityThreshold); bad.Passed {
+		t.Fatalf("bad score=%f, want below threshold", bad.Overall)
 	}
 	headingHeavy := *plan
 	headingHeavy.Routes = append([]PageRoute(nil), plan.Routes...)
@@ -661,8 +661,10 @@ func TestAssessImportPlanQualityUsesServerMetrics(t *testing.T) {
 			PlannedBlock{Type: string(ast.BlockHeading), Text: "Thin section " + string(rune('A'+index)), Level: 2, Evidence: evidenceItem},
 			PlannedBlock{Type: string(ast.BlockParagraph), Text: "One short sentence.", Evidence: evidenceItem})
 	}
-	if score := assessImportPlanQuality(&headingHeavy, chunks, 0.9); score >= DefaultQualityThreshold {
-		t.Fatalf("heading-heavy score=%f, want below threshold", score)
+	if quality := assessImportPlanQuality(
+		&headingHeavy, chunks, 0.9, DefaultQualityThreshold,
+	); quality.Passed {
+		t.Fatalf("heading-heavy score=%f, want below threshold", quality.Overall)
 	}
 }
 
@@ -958,5 +960,35 @@ func TestNormalizeImportPlanCollectionsProducesContractArrays(t *testing.T) {
 		if _, ok := value.([]any); !ok {
 			t.Fatalf("%s encoded as %T (%v), want JSON array", name, value, value)
 		}
+	}
+}
+
+func TestPlanningInputJSONPreservesSameJobReplanInputs(t *testing.T) {
+	pageID := uuid.New()
+	raw, err := planningInputJSON(PlanningInput{
+		Title: "  Target page  ", Instructions: "  Focus on verified changes.  ",
+		RouteMode: RouteModeForceUpdate, PageID: &pageID, QualityThreshold: 0.82,
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	decoded, err := decodePlanningInput(raw)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if decoded.Title != "Target page" ||
+		decoded.Instructions != "Focus on verified changes." ||
+		decoded.RouteMode != RouteModeForceUpdate ||
+		decoded.PageID == nil || *decoded.PageID != pageID ||
+		decoded.QualityThreshold != 0.82 {
+		t.Fatalf("unexpected planning input: %#v", decoded)
+	}
+}
+
+func TestPlanningInputForceUpdateRequiresTargetPage(t *testing.T) {
+	if _, err := planningInputJSON(PlanningInput{
+		RouteMode: RouteModeForceUpdate,
+	}); !errors.Is(err, ErrInvalidJob) {
+		t.Fatalf("error=%v, want ErrInvalidJob", err)
 	}
 }

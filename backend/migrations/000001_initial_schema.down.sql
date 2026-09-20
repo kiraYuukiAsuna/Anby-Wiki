@@ -109,6 +109,9 @@ DROP FUNCTION IF EXISTS search_document_update_vector();
 COMMIT;
 
 BEGIN;
+ALTER TABLE import_job
+    DROP COLUMN confirmed_plan_id,
+    DROP COLUMN current_plan_id;
 DROP TRIGGER import_plan_immutable ON import_plan;
 DROP TABLE import_plan;
 DROP TRIGGER import_extraction_immutable ON import_extraction;
@@ -121,6 +124,10 @@ ALTER TABLE import_job
     DROP COLUMN updated_at,
     DROP COLUMN progress,
     DROP COLUMN current_stage,
+    DROP COLUMN plan_confirmed_at,
+    DROP COLUMN action_required,
+    DROP COLUMN planning_idempotency_key,
+    DROP COLUMN planning_input_json,
     DROP COLUMN proposal_id,
     DROP COLUMN source_version_id;
 COMMIT;

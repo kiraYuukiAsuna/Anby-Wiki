@@ -47,10 +47,11 @@ type RunnerConfig struct {
 }
 
 type RunnerRuntime struct {
-	Available       bool
-	Model           string
-	MaxInputTokens  int
-	ChunkCharacters int
+	Available        bool
+	Model            string
+	MaxInputTokens   int
+	ChunkCharacters  int
+	AutoApprovePlans bool
 }
 
 type Runner struct {
@@ -104,6 +105,7 @@ func (r *Runner) ProcessOne(ctx context.Context) (bool, error) {
 	defer span.End()
 	maxInputTokens := DefaultModelMaxInputTokens
 	chunkCharacters := 0
+	autoApprovePlans := true
 	model := r.config.Model
 	if r.config.Runtime != nil {
 		runtime, err := r.config.Runtime(ctx)
@@ -125,6 +127,7 @@ func (r *Runner) ProcessOne(ctx context.Context) (bool, error) {
 		if runtime.ChunkCharacters > 0 {
 			chunkCharacters = runtime.ChunkCharacters
 		}
+		autoApprovePlans = runtime.AutoApprovePlans
 	} else if r.config.Availability != nil {
 		available, err := r.config.Availability(ctx)
 		if err != nil {
@@ -160,15 +163,22 @@ func (r *Runner) ProcessOne(ctx context.Context) (bool, error) {
 		span.SetStatus(codes.Error, "invalid_config")
 		return true, r.failInvalidConfig(ctx, job, run)
 	}
+	planning, err := decodePlanningInput(job.PlanningInput)
+	if err != nil {
+		span.SetStatus(codes.Error, "invalid_planning_input")
+		return true, r.failInvalidConfig(ctx, job, run)
+	}
 	span.SetAttributes(attribute.String("import.source_kind", config.Source.Kind))
 	request := PipelineRequest{
 		JobID: job.ID, RunKey: run.IdempotencyKey, WikiID: r.config.WikiID,
-		ActorID: job.InitiatedBy, PageID: config.PageID, SourceID: config.SourceID,
-		Title: config.Title, Instructions: config.Instructions, RouteMode: config.RouteMode,
+		ActorID: job.InitiatedBy, PageID: planning.PageID, SourceID: config.SourceID,
+		Title: planning.Title, Instructions: planning.Instructions,
+		RouteMode: planning.RouteMode, PlanningInput: job.PlanningInput,
+		AutoApprovePlan: autoApprovePlans, ConfirmedPlanID: job.ConfirmedPlanID,
 		Provider: r.config.Provider, Model: model,
 		MaxInputTokens:   maxInputTokens,
 		ChunkCharacters:  chunkCharacters,
-		QualityThreshold: config.QualityThreshold,
+		QualityThreshold: planning.QualityThreshold,
 	}
 	switch config.Source.Kind {
 	case "url":
@@ -203,9 +213,12 @@ func decodeSourceImportConfig(raw json.RawMessage) (*SourceImportConfig, error) 
 		config.RouteMode = RouteModeAuto
 	}
 	if !validSource || config.QualityThreshold < 0 || config.QualityThreshold > 1 ||
-		(config.RouteMode != RouteModeAuto && config.RouteMode != RouteModeForceCreate) ||
+		(config.RouteMode != RouteModeAuto && config.RouteMode != RouteModeForceCreate &&
+			config.RouteMode != RouteModeForceUpdate) ||
 		len([]rune(config.Title)) > 255 || len([]rune(config.Instructions)) > 4000 ||
-		(config.RouteMode == RouteModeForceCreate && strings.TrimSpace(config.Title) == "") {
+		(config.RouteMode == RouteModeForceCreate && strings.TrimSpace(config.Title) == "") ||
+		(config.RouteMode == RouteModeForceUpdate &&
+			(config.PageID == nil || *config.PageID == uuid.Nil)) {
 		return nil, ErrInvalidJob
 	}
 	return &config, nil

@@ -12,8 +12,13 @@ Name | Type
 `initiatedBy` | string
 `idempotencyKey` | string
 `config` | { [key: string]: any; }
+`planningInput` | [ImportPlanningInput](ImportPlanningInput.md)
 `sourceVersionId` | string
 `proposalId` | string
+`actionRequired` | string
+`currentPlanId` | string
+`confirmedPlanId` | string
+`planConfirmedAt` | Date
 `currentStage` | string
 `progress` | number
 `error` | { [key: string]: any; }
@@ -35,8 +40,13 @@ const example = {
   "initiatedBy": null,
   "idempotencyKey": null,
   "config": null,
+  "planningInput": null,
   "sourceVersionId": null,
   "proposalId": null,
+  "actionRequired": null,
+  "currentPlanId": null,
+  "confirmedPlanId": null,
+  "planConfirmedAt": null,
   "currentStage": null,
   "progress": null,
   "error": null,

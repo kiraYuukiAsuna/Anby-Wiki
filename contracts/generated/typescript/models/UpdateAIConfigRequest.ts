@@ -63,6 +63,12 @@ export interface UpdateAIConfigRequest {
     chunkCharacters: number;
     /**
      *
+     * @type {boolean}
+     * @memberof UpdateAIConfigRequest
+     */
+    autoApproveImportPlans: boolean;
+    /**
+     *
      * @type {number}
      * @memberof UpdateAIConfigRequest
      */
@@ -112,6 +118,7 @@ export function instanceOfUpdateAIConfigRequest(value: object): value is UpdateA
     if ((!('responseFormat' in (value as Record<string, any>)) && !('response_format' in (value as Record<string, any>))) || ((value as Record<string, any>)['responseFormat'] === undefined && (value as Record<string, any>)['response_format'] === undefined)) return false;
     if ((!('maxInputTokens' in (value as Record<string, any>)) && !('max_input_tokens' in (value as Record<string, any>))) || ((value as Record<string, any>)['maxInputTokens'] === undefined && (value as Record<string, any>)['max_input_tokens'] === undefined)) return false;
     if ((!('chunkCharacters' in (value as Record<string, any>)) && !('chunk_characters' in (value as Record<string, any>))) || ((value as Record<string, any>)['chunkCharacters'] === undefined && (value as Record<string, any>)['chunk_characters'] === undefined)) return false;
+    if ((!('autoApproveImportPlans' in (value as Record<string, any>)) && !('auto_approve_import_plans' in (value as Record<string, any>))) || ((value as Record<string, any>)['autoApproveImportPlans'] === undefined && (value as Record<string, any>)['auto_approve_import_plans'] === undefined)) return false;
     if ((!('requestTimeoutSeconds' in (value as Record<string, any>)) && !('request_timeout_seconds' in (value as Record<string, any>))) || ((value as Record<string, any>)['requestTimeoutSeconds'] === undefined && (value as Record<string, any>)['request_timeout_seconds'] === undefined)) return false;
     if ((!('maxAttempts' in (value as Record<string, any>)) && !('max_attempts' in (value as Record<string, any>))) || ((value as Record<string, any>)['maxAttempts'] === undefined && (value as Record<string, any>)['max_attempts'] === undefined)) return false;
     return true;
@@ -134,6 +141,7 @@ export function UpdateAIConfigRequestFromJSONTyped(json: any, ignoreDiscriminato
         'responseFormat': json['response_format'],
         'maxInputTokens': json['max_input_tokens'],
         'chunkCharacters': json['chunk_characters'],
+        'autoApproveImportPlans': json['auto_approve_import_plans'],
         'requestTimeoutSeconds': json['request_timeout_seconds'],
         'maxAttempts': json['max_attempts'],
         'apiKey': json['api_key'] == null ? undefined : json['api_key'],
@@ -158,6 +166,7 @@ export function UpdateAIConfigRequestToJSONTyped(value?: UpdateAIConfigRequest |
         'response_format': value['responseFormat'],
         'max_input_tokens': value['maxInputTokens'],
         'chunk_characters': value['chunkCharacters'],
+        'auto_approve_import_plans': value['autoApproveImportPlans'],
         'request_timeout_seconds': value['requestTimeoutSeconds'],
         'max_attempts': value['maxAttempts'],
         'api_key': value['apiKey'],

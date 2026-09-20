@@ -44,7 +44,12 @@ func canonicalObject(value json.RawMessage) (json.RawMessage, error) {
 	return json.Marshal(object)
 }
 
-func (s *Service) Create(ctx context.Context, actorID uuid.UUID, jobType, key string, config json.RawMessage) (*Job, error) {
+func (s *Service) Create(
+	ctx context.Context,
+	actorID uuid.UUID,
+	jobType, key string,
+	config json.RawMessage,
+) (*Job, error) {
 	actorType, status, err := s.repo.Actor(ctx, actorID)
 	if err != nil || status != "active" || (actorType != "human" && actorType != "system") {
 		return nil, ErrInvalidJob
@@ -57,12 +62,31 @@ func (s *Service) Create(ctx context.Context, actorID uuid.UUID, jobType, key st
 	if err != nil {
 		return nil, err
 	}
+	planningInput, err := planningInputJSON(PlanningInput{})
+	if err != nil {
+		return nil, err
+	}
+	if jobType == "source_import" {
+		decoded, decodeErr := decodeSourceImportConfig(canonical)
+		if decodeErr != nil {
+			return nil, decodeErr
+		}
+		planningInput, err = planningInputJSON(PlanningInput{
+			Title: decoded.Title, Instructions: decoded.Instructions,
+			RouteMode: decoded.RouteMode, PageID: decoded.PageID,
+			QualityThreshold: decoded.QualityThreshold,
+		})
+		if err != nil {
+			return nil, err
+		}
+	}
 	jobID, err := s.ids.New()
 	if err != nil {
 		return nil, err
 	}
 	job := &Job{ID: jobID, JobType: jobType, Status: JobQueued, InitiatedBy: actorID,
-		IdempotencyKey: key, Config: canonical, CurrentStage: StageQueued}
+		IdempotencyKey: key, Config: canonical, PlanningInput: planningInput,
+		CurrentStage: StageQueued}
 	inserted, err := s.repo.InsertJobIfAbsent(ctx, job)
 	if err != nil {
 		return nil, err
@@ -89,7 +113,8 @@ func (s *Service) ListOwned(
 	}
 	status = strings.TrimSpace(status)
 	if status != "" && status != JobQueued && status != JobRunning &&
-		status != JobSucceeded && status != JobFailed && status != JobCancelled {
+		status != JobActionRequired && status != JobSucceeded && status != JobFailed &&
+		status != JobCancelled {
 		return nil, ErrInvalidStatus
 	}
 	if limit <= 0 {
@@ -263,6 +288,23 @@ func (s *Service) CompleteStage(ctx context.Context, jobID uuid.UUID, stageRun *
 	})
 }
 
+func (s *Service) CompletePlanStage(
+	ctx context.Context,
+	jobID uuid.UUID,
+	stageRun *StageRun,
+	planID uuid.UUID,
+	autoConfirm bool,
+) error {
+	if stageRun == nil || stageRun.Stage != StagePlan || planID == uuid.Nil {
+		return ErrInvalidJob
+	}
+	return s.txm.InTx(ctx, func(tx pgx.Tx) error {
+		return s.repo.CompletePlanStage(
+			ctx, tx, jobID, stageRun.ID, planID, autoConfirm,
+		)
+	})
+}
+
 // SkipStage records an intentional idempotency short-circuit while preserving
 // a complete progress trail for the UI.
 func (s *Service) SkipStage(ctx context.Context, jobID uuid.UUID, stageRun *StageRun, outputHash *string) error {
@@ -359,6 +401,138 @@ func (s *Service) SucceedReused(ctx context.Context, jobID, runID uuid.UUID, pro
 	})
 }
 
+func (s *Service) RequireAction(
+	ctx context.Context,
+	jobID, runID, sourceVersionID uuid.UUID,
+	action string,
+) error {
+	if action != ActionConfirmPlan && action != ActionQualityGate {
+		return ErrInvalidJob
+	}
+	return s.txm.InTx(ctx, func(tx pgx.Tx) error {
+		job, err := s.repo.GetJobForUpdate(ctx, tx, jobID)
+		if err != nil {
+			return err
+		}
+		if job.Status != JobRunning {
+			return ErrInvalidTransition
+		}
+		if job.CurrentPlanID == nil {
+			return ErrImportPlanNotFound
+		}
+		if _, err := s.repo.GetImportPlanByID(ctx, jobID, *job.CurrentPlanID); err != nil {
+			return err
+		}
+		if err := s.repo.FinishRun(ctx, tx, runID, JobSucceeded, nil); err != nil {
+			return err
+		}
+		return s.repo.RequireAction(ctx, tx, jobID, sourceVersionID, action)
+	})
+}
+
+func (s *Service) ConfirmPlan(ctx context.Context, jobID, planID uuid.UUID) error {
+	plan, err := s.repo.GetImportPlanByID(ctx, jobID, planID)
+	if err != nil {
+		return err
+	}
+	var document ImportPlan
+	if err := json.Unmarshal(plan.PlanJSON, &document); err != nil {
+		return err
+	}
+	if document.Quality == nil || !document.Quality.Passed {
+		return ErrQualityGate
+	}
+	return s.txm.InTx(ctx, func(tx pgx.Tx) error {
+		job, err := s.repo.GetJobForUpdate(ctx, tx, jobID)
+		if err != nil {
+			return err
+		}
+		if job.CurrentPlanID == nil || *job.CurrentPlanID != planID {
+			return ErrInvalidTransition
+		}
+		if job.ConfirmedPlanID != nil && *job.ConfirmedPlanID == planID {
+			return nil
+		}
+		if job.Status != JobActionRequired ||
+			job.ActionRequired == nil || *job.ActionRequired != ActionConfirmPlan {
+			return ErrInvalidTransition
+		}
+		return s.repo.ConfirmPlan(ctx, tx, jobID, plan.ID)
+	})
+}
+
+func (s *Service) Replan(
+	ctx context.Context,
+	actorID, jobID uuid.UUID,
+	key string,
+	input ReplanInput,
+) (*Job, error) {
+	key = strings.TrimSpace(key)
+	if key == "" {
+		return nil, ErrInvalidJob
+	}
+	var result *Job
+	err := s.txm.InTx(ctx, func(tx pgx.Tx) error {
+		job, err := s.repo.GetJobForUpdate(ctx, tx, jobID)
+		if err != nil {
+			return err
+		}
+		if job.InitiatedBy != actorID {
+			return ErrInvalidJob
+		}
+		previous, err := decodePlanningInput(job.PlanningInput)
+		if err != nil {
+			return err
+		}
+		next := PlanningInput{
+			Title:        strings.TrimSpace(input.Title),
+			Instructions: strings.TrimSpace(input.Instructions),
+			RouteMode:    strings.TrimSpace(input.RouteMode),
+			PageID:       input.PageID, QualityThreshold: previous.QualityThreshold,
+		}
+		raw, err := planningInputJSON(next)
+		if err != nil {
+			return err
+		}
+		if job.PlanningIdempotencyKey != nil && *job.PlanningIdempotencyKey == key {
+			if !jsonEqual(job.PlanningInput, raw) {
+				return ErrIdempotencyMismatch
+			}
+			result = job
+			return nil
+		}
+		hasProposal, err := s.repo.HasProposal(ctx, tx, job.ID)
+		if err != nil {
+			return err
+		}
+		if job.SourceVersionID == nil || job.ProposalID != nil || hasProposal {
+			return ErrInvalidTransition
+		}
+		if job.Status == JobQueued || job.Status == JobRunning {
+			return ErrInvalidTransition
+		}
+		if err := s.repo.RequeueForPlanning(ctx, tx, job.ID, raw, key); err != nil {
+			return err
+		}
+		job.Status = JobQueued
+		job.PlanningInput = raw
+		job.PlanningIdempotencyKey = &key
+		job.ActionRequired = nil
+		job.ConfirmedPlanID = nil
+		job.PlanConfirmedAt = nil
+		job.CurrentStage = StageQueued
+		job.Progress = 0
+		job.Error = nil
+		job.FinishedAt = nil
+		result = job
+		return nil
+	})
+	if err != nil {
+		return nil, err
+	}
+	return result, nil
+}
+
 func (s *Service) Cancel(ctx context.Context, jobID uuid.UUID) error {
 	return s.txm.InTx(ctx, func(tx pgx.Tx) error {
 		job, err := s.repo.GetJobForUpdate(ctx, tx, jobID)
@@ -368,7 +542,8 @@ func (s *Service) Cancel(ctx context.Context, jobID uuid.UUID) error {
 		if job.Status == JobCancelled {
 			return nil
 		}
-		if job.Status != JobQueued && job.Status != JobRunning {
+		if job.Status != JobQueued && job.Status != JobRunning &&
+			job.Status != JobActionRequired {
 			return ErrInvalidTransition
 		}
 		if job.Status == JobRunning {
@@ -409,17 +584,39 @@ func (s *Service) Detail(ctx context.Context, jobID uuid.UUID) (*JobDetail, erro
 	if err != nil {
 		return nil, err
 	}
-	var plan *ImportPlan
-	if record, planErr := s.repo.GetLatestImportPlan(ctx, jobID); planErr == nil {
-		plan = &ImportPlan{}
-		if err := json.Unmarshal(record.PlanJSON, plan); err != nil {
+	records, err := s.repo.ListImportPlans(ctx, jobID)
+	if err != nil {
+		return nil, err
+	}
+	plans := make([]PlanVersion, 0, len(records))
+	var current *ImportPlan
+	for index := range records {
+		record := records[index]
+		plans = append(plans, PlanVersion{
+			ID: record.ID, Revision: record.Revision,
+			ParentPlanID:  record.ParentPlanID,
+			PlanningInput: record.PlanningInput, QualityScore: record.QualityScore,
+			CreatedBy: record.CreatedBy, CreatedAt: record.CreatedAt,
+		})
+		if job.CurrentPlanID != nil && record.ID == *job.CurrentPlanID {
+			document := &ImportPlan{}
+			if err := json.Unmarshal(record.PlanJSON, document); err != nil {
+				return nil, err
+			}
+			normalizeImportPlanCollections(document)
+			current = document
+		}
+	}
+	if current == nil && len(plans) > 0 {
+		current = &ImportPlan{}
+		if err := json.Unmarshal(records[len(records)-1].PlanJSON, current); err != nil {
 			return nil, err
 		}
-		normalizeImportPlanCollections(plan)
-	} else if !errors.Is(planErr, ErrImportPlanNotFound) {
-		return nil, planErr
+		normalizeImportPlanCollections(current)
 	}
-	return &JobDetail{Job: job, Runs: runs, Stages: stages, Plan: plan}, nil
+	return &JobDetail{
+		Job: job, Runs: runs, Stages: stages, Plan: current, Plans: plans,
+	}, nil
 }
 
 func HashBytes(value []byte) string {
@@ -429,4 +626,41 @@ func HashBytes(value []byte) string {
 
 func WrapStageError(stage string, err error) error {
 	return fmt.Errorf("importer: %s: %w", stage, err)
+}
+
+func planningInputJSON(input PlanningInput) (json.RawMessage, error) {
+	if input.RouteMode == "" {
+		input.RouteMode = RouteModeAuto
+	}
+	if input.RouteMode != RouteModeAuto && input.RouteMode != RouteModeForceCreate &&
+		input.RouteMode != RouteModeForceUpdate {
+		return nil, ErrInvalidJob
+	}
+	input.Title = strings.TrimSpace(input.Title)
+	input.Instructions = strings.TrimSpace(input.Instructions)
+	if len([]rune(input.Title)) > 255 || len([]rune(input.Instructions)) > 4000 ||
+		input.QualityThreshold < 0 || input.QualityThreshold > 1 ||
+		(input.RouteMode == RouteModeForceCreate && input.Title == "") ||
+		(input.RouteMode == RouteModeForceUpdate &&
+			(input.PageID == nil || *input.PageID == uuid.Nil)) {
+		return nil, ErrInvalidJob
+	}
+	return json.Marshal(input)
+}
+
+func decodePlanningInput(raw json.RawMessage) (*PlanningInput, error) {
+	var input PlanningInput
+	decoder := json.NewDecoder(bytes.NewReader(raw))
+	decoder.DisallowUnknownFields()
+	if err := decoder.Decode(&input); err != nil {
+		return nil, ErrInvalidJob
+	}
+	canonical, err := planningInputJSON(input)
+	if err != nil {
+		return nil, err
+	}
+	if err := json.Unmarshal(canonical, &input); err != nil {
+		return nil, err
+	}
+	return &input, nil
 }

@@ -1,30 +1,28 @@
 
-# ImportJobDetail
+# ReplanImportJobRequest
 
 
 ## Properties
 
 Name | Type
 ------------ | -------------
-`job` | [ImportJob](ImportJob.md)
-`runs` | [Array&lt;ImportRun&gt;](ImportRun.md)
-`stages` | [Array&lt;ImportStageRun&gt;](ImportStageRun.md)
-`plan` | [ImportPlan](ImportPlan.md)
-`plans` | [Array&lt;ImportPlanVersion&gt;](ImportPlanVersion.md)
+`title` | string
+`instructions` | string
+`routeMode` | string
+`pageId` | string
 
 ## Example
 
 ```typescript
-import type { ImportJobDetail } from ''
+import type { ReplanImportJobRequest } from ''
 
 // TODO: Update the object below with actual values
 const example = {
-  "job": null,
-  "runs": null,
-  "stages": null,
-  "plan": null,
-  "plans": null,
-} satisfies ImportJobDetail
+  "title": null,
+  "instructions": null,
+  "routeMode": null,
+  "pageId": null,
+} satisfies ReplanImportJobRequest
 
 console.log(example)
 
@@ -33,7 +31,7 @@ const exampleJSON: string = JSON.stringify(example)
 console.log(exampleJSON)
 
 // Parse the JSON string back to an object
-const exampleParsed = JSON.parse(exampleJSON) as ImportJobDetail
+const exampleParsed = JSON.parse(exampleJSON) as ReplanImportJobRequest
 console.log(exampleParsed)
 ```
 

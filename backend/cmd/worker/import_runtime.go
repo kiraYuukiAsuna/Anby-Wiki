@@ -154,7 +154,8 @@ func assembleImportRunner(ctx context.Context, pool *pgxpool.Pool, cfg config.Co
 				return importer.RunnerRuntime{}, err
 			}
 			return importer.RunnerRuntime{Available: true, Model: runtime.Model, MaxInputTokens: runtime.MaxInputTokens,
-				ChunkCharacters: runtime.ChunkCharacters}, nil
+				ChunkCharacters:  runtime.ChunkCharacters,
+				AutoApprovePlans: runtime.AutoApproveImportPlans}, nil
 		},
 	}), nil
 }

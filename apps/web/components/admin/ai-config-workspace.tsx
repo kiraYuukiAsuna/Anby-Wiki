@@ -42,6 +42,7 @@ const configSchema = z
     responseFormat: z.enum(["json_object", "json_schema"]),
     maxInputTokens: z.coerce.number().int().min(4096).max(2_000_000),
     chunkCharacters: z.coerce.number().int().min(1000).max(128_000),
+    autoApproveImportPlans: z.boolean(),
     requestTimeoutSeconds: z.coerce.number().int().min(5).max(300),
     maxAttempts: z.coerce.number().int().min(1).max(5),
     apiKey: z.string(),
@@ -71,6 +72,9 @@ function ConfigForm({
   const [responseFormat, setResponseFormat] = useState(config.responseFormat);
   const [maxInputTokens, setMaxInputTokens] = useState(String(config.maxInputTokens));
   const [chunkCharacters, setChunkCharacters] = useState(String(config.chunkCharacters));
+  const [autoApproveImportPlans, setAutoApproveImportPlans] = useState(
+    config.autoApproveImportPlans,
+  );
   const [requestTimeoutSeconds, setRequestTimeoutSeconds] = useState(
     String(config.requestTimeoutSeconds),
   );
@@ -88,6 +92,7 @@ function ConfigForm({
       responseFormat,
       maxInputTokens,
       chunkCharacters,
+      autoApproveImportPlans,
       requestTimeoutSeconds,
       maxAttempts,
       apiKey,
@@ -105,6 +110,7 @@ function ConfigForm({
       responseFormat: parsed.data.responseFormat,
       maxInputTokens: parsed.data.maxInputTokens,
       chunkCharacters: parsed.data.chunkCharacters,
+      autoApproveImportPlans: parsed.data.autoApproveImportPlans,
       requestTimeoutSeconds: parsed.data.requestTimeoutSeconds,
       maxAttempts: parsed.data.maxAttempts,
       ...(parsed.data.apiKey.trim()
@@ -311,6 +317,19 @@ function ConfigForm({
               />
             </div>
           </div>
+          <label className="flex cursor-pointer items-start gap-3 rounded-lg border border-border p-4 sm:col-span-2">
+            <Checkbox
+              className="mt-0.5"
+              checked={autoApproveImportPlans}
+              onCheckedChange={(value) => setAutoApproveImportPlans(value === true)}
+            />
+            <span>
+              <span className="block text-sm font-medium">自动确认导入计划</span>
+              <span className="mt-1 block text-xs leading-5 text-muted-foreground">
+                通过质量门禁后直接生成 Proposal；最终审核和应用仍由治理流程控制。
+              </span>
+            </span>
+          </label>
         </div>
 
         <div className="mt-7 flex flex-wrap justify-end gap-3 border-t pt-5">

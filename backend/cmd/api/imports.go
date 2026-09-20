@@ -138,12 +138,26 @@ func (a *ImportAPI) createUploadJob(w http.ResponseWriter, r *http.Request) {
 	if routeMode == "" {
 		routeMode = importer.RouteModeAuto
 	}
-	if routeMode != importer.RouteModeAuto && routeMode != importer.RouteModeForceCreate {
+	if routeMode != importer.RouteModeAuto && routeMode != importer.RouteModeForceCreate &&
+		routeMode != importer.RouteModeForceUpdate {
 		httpx.WriteError(w, r, http.StatusUnprocessableEntity, httpx.CodeValidationFailed, "页面路由模式不合法")
 		return
 	}
 	if routeMode == importer.RouteModeForceCreate && title == "" {
 		httpx.WriteError(w, r, http.StatusUnprocessableEntity, httpx.CodeValidationFailed, "强制创建页面时必须填写标题")
+		return
+	}
+	var pageID *uuid.UUID
+	if rawPageID := strings.TrimSpace(r.FormValue("page_id")); rawPageID != "" {
+		parsedPageID, err := uuid.Parse(rawPageID)
+		if err != nil {
+			httpx.WriteError(w, r, http.StatusUnprocessableEntity, httpx.CodeValidationFailed, "目标页面 ID 不合法")
+			return
+		}
+		pageID = &parsedPageID
+	}
+	if routeMode == importer.RouteModeForceUpdate && pageID == nil {
+		httpx.WriteError(w, r, http.StatusUnprocessableEntity, httpx.CodeValidationFailed, "更新指定页面时必须选择目标页面")
 		return
 	}
 	asset, err := a.evidence.StoreAsset(r.Context(), evidence.StoreAssetParams{WikiID: a.wikiID,
@@ -155,7 +169,8 @@ func (a *ImportAPI) createUploadJob(w http.ResponseWriter, r *http.Request) {
 	config, _ := json.Marshal(map[string]any{"source": map[string]any{
 		"kind": "upload", "storage_key": asset.Revision.StorageKey, "filename": acquired.Filename,
 		"mime_type": acquired.MIMEType, "content_hash": acquired.ContentHash,
-	}, "title": title, "instructions": instructions, "route_mode": routeMode})
+	}, "title": title, "instructions": instructions, "route_mode": routeMode,
+		"page_id": pageID})
 	job, err := a.jobs.Create(r.Context(), actorID, "source_import", key, config)
 	if err != nil {
 		importError(w, r, err)
@@ -187,6 +202,90 @@ func (a *ImportAPI) cancelJob(w http.ResponseWriter, r *http.Request) {
 
 func (a *ImportAPI) retryJob(w http.ResponseWriter, r *http.Request) {
 	a.mutateOwnedJob(w, r, a.jobs.Retry)
+}
+
+type confirmImportPlanRequest struct {
+	PlanID uuid.UUID `json:"plan_id"`
+}
+
+func (a *ImportAPI) confirmPlan(w http.ResponseWriter, r *http.Request) {
+	actorID, id, ok := importActorAndID(w, r)
+	if !ok {
+		return
+	}
+	job, err := a.jobs.DetailJob(r.Context(), id)
+	if err != nil {
+		importError(w, r, err)
+		return
+	}
+	if job.InitiatedBy != actorID {
+		httpx.WriteError(w, r, http.StatusForbidden, httpx.CodeForbidden, "只能操作自己创建的导入任务")
+		return
+	}
+	var request confirmImportPlanRequest
+	if !decodeJSON(w, r, &request) {
+		return
+	}
+	if request.PlanID == uuid.Nil {
+		httpx.WriteError(w, r, http.StatusUnprocessableEntity, httpx.CodeValidationFailed, "plan_id 不能为空")
+		return
+	}
+	if err := a.jobs.ConfirmPlan(r.Context(), id, request.PlanID); err != nil {
+		importError(w, r, err)
+		return
+	}
+	detail, err := a.jobs.Detail(r.Context(), id)
+	if err != nil {
+		importError(w, r, err)
+		return
+	}
+	httpx.WriteJSON(w, http.StatusOK, detail)
+}
+
+type replanImportJobRequest struct {
+	Title        string     `json:"title"`
+	Instructions string     `json:"instructions"`
+	RouteMode    string     `json:"route_mode"`
+	PageID       *uuid.UUID `json:"page_id"`
+}
+
+func (a *ImportAPI) replanJob(w http.ResponseWriter, r *http.Request) {
+	actorID, id, ok := importActorAndID(w, r)
+	if !ok {
+		return
+	}
+	key := strings.TrimSpace(r.Header.Get("Idempotency-Key"))
+	if key == "" {
+		httpx.WriteError(w, r, http.StatusBadRequest, httpx.CodeBadRequest, "缺少 Idempotency-Key 请求头")
+		return
+	}
+	parent, err := a.jobs.DetailJob(r.Context(), id)
+	if err != nil {
+		importError(w, r, err)
+		return
+	}
+	if parent.InitiatedBy != actorID {
+		httpx.WriteError(w, r, http.StatusForbidden, httpx.CodeForbidden, "只能基于自己创建的导入任务重新规划")
+		return
+	}
+	var request replanImportJobRequest
+	if !decodeJSON(w, r, &request) {
+		return
+	}
+	job, err := a.jobs.Replan(r.Context(), actorID, id, key, importer.ReplanInput{
+		Title: request.Title, Instructions: request.Instructions,
+		RouteMode: request.RouteMode, PageID: request.PageID,
+	})
+	if err != nil {
+		importError(w, r, err)
+		return
+	}
+	detail, err := a.jobs.Detail(r.Context(), job.ID)
+	if err != nil {
+		importError(w, r, err)
+		return
+	}
+	httpx.WriteJSON(w, http.StatusOK, detail)
 }
 
 func (a *ImportAPI) mutateOwnedJob(w http.ResponseWriter, r *http.Request, mutate func(context.Context, uuid.UUID) error) {
@@ -230,11 +329,12 @@ func importActorAndID(w http.ResponseWriter, r *http.Request) (uuid.UUID, uuid.U
 
 func importError(w http.ResponseWriter, r *http.Request, err error) {
 	switch {
-	case errors.Is(err, importer.ErrJobNotFound):
+	case errors.Is(err, importer.ErrJobNotFound), errors.Is(err, importer.ErrImportPlanNotFound):
 		httpx.WriteError(w, r, http.StatusNotFound, httpx.CodeNotFound, err.Error())
 	case errors.Is(err, importer.ErrInvalidCursor), errors.Is(err, importer.ErrInvalidStatus):
 		httpx.WriteError(w, r, http.StatusBadRequest, httpx.CodeBadRequest, err.Error())
-	case errors.Is(err, importer.ErrIdempotencyMismatch), errors.Is(err, importer.ErrInvalidTransition), errors.Is(err, importer.ErrCancelled):
+	case errors.Is(err, importer.ErrIdempotencyMismatch), errors.Is(err, importer.ErrInvalidTransition),
+		errors.Is(err, importer.ErrCancelled), errors.Is(err, importer.ErrQualityGate):
 		httpx.WriteError(w, r, http.StatusConflict, httpx.CodeConflict, err.Error())
 	case errors.Is(err, importer.ErrInvalidJob):
 		httpx.WriteError(w, r, http.StatusUnprocessableEntity, httpx.CodeValidationFailed, err.Error())

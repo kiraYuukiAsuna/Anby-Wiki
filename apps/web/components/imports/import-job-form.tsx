@@ -1,34 +1,53 @@
 "use client";
 
-import { useState } from "react";
-import { FilePlus2, Network } from "lucide-react";
+import { useEffect, useState } from "react";
+import { Command } from "cmdk";
+import { FilePenLine, FilePlus2, FileText, Network, Search, X } from "lucide-react";
 import { useRouter } from "next/navigation";
 import { toast } from "sonner";
+import useSWR from "swr";
 import { z } from "zod";
+
+import type { PageSearchHit } from "../../../../contracts/generated/typescript";
 
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
-import { importsApi } from "@/lib/api";
+import { importsApi, searchApi } from "@/lib/api";
 import { isUnauthorized, LOGIN_PATH } from "@/lib/auth";
 import { clientUUID } from "@/lib/client-uuid";
 import { httpUrlSchema, safeHttpUrl } from "@/lib/http-url";
 
+export type ImportPageTarget = Pick<PageSearchHit, "id" | "displayTitle">;
+
 const planningFields = {
   title: z.string().trim().max(255).optional(),
   instructions: z.string().trim().max(4000).optional(),
-  routeMode: z.enum(["auto", "force_create"]),
+  routeMode: z.enum(["auto", "force_create", "force_update"]),
+  pageId: z.string().uuid().optional(),
 };
+
+function validatePlanning(
+  value: {
+    title?: string;
+    routeMode: "auto" | "force_create" | "force_update";
+    pageId?: string;
+  },
+  context: z.RefinementCtx,
+) {
+  if (value.routeMode === "force_create" && !value.title) {
+    context.addIssue({ code: "custom", path: ["title"], message: "强制创建单页时必须填写页面标题" });
+  }
+  if (value.routeMode === "force_update" && !value.pageId) {
+    context.addIssue({ code: "custom", path: ["pageId"], message: "更新指定页面时必须选择目标页面" });
+  }
+}
 
 const sourceSchema = z.object({
   url: httpUrlSchema,
   ...planningFields,
-}).superRefine((value, context) => {
-  if (value.routeMode === "force_create" && !value.title) {
-    context.addIssue({ code: "custom", path: ["title"], message: "强制创建单页时必须填写页面标题" });
-  }
-});
+}).superRefine(validatePlanning);
 
 const uploadSchema = z.object({
   file: z
@@ -53,11 +72,89 @@ const uploadSchema = z.object({
       "仅支持 HTML、文本、JSON、CSV、PDF、PNG 或 JPEG",
     ),
   ...planningFields,
-}).superRefine((value, context) => {
-  if (value.routeMode === "force_create" && !value.title) {
-    context.addIssue({ code: "custom", path: ["title"], message: "强制创建单页时必须填写页面标题" });
+}).superRefine(validatePlanning);
+
+const SEARCH_DEBOUNCE_MS = 200;
+
+function useDebouncedValue(value: string) {
+  const [debounced, setDebounced] = useState(value);
+  useEffect(() => {
+    const timer = setTimeout(() => setDebounced(value), SEARCH_DEBOUNCE_MS);
+    return () => clearTimeout(timer);
+  }, [value]);
+  return debounced;
+}
+
+export function ImportPageTargetPicker({
+  selected,
+  onSelect,
+}: {
+  selected: ImportPageTarget | null;
+  onSelect: (page: ImportPageTarget | null) => void;
+}) {
+  const [query, setQuery] = useState("");
+  const debouncedQuery = useDebouncedValue(query);
+  const { data, isLoading } = useSWR(
+    debouncedQuery.trim() ? ["import-page-target", debouncedQuery] : null,
+    ([, q]) => searchApi().searchPages({
+      q,
+      namespace: "main",
+      fields: ["title", "alias"],
+      limit: 8,
+    }),
+    { keepPreviousData: true },
+  );
+
+  if (selected) {
+    return (
+      <div className="flex items-center justify-between gap-3 rounded-lg border border-border p-3">
+        <span className="min-w-0">
+          <span className="block truncate text-sm font-medium">{selected.displayTitle}</span>
+          <span className="block text-xs text-muted-foreground">将只为这个页面生成更新计划</span>
+        </span>
+        <Button type="button" size="icon" variant="ghost" title="清除目标页面" onClick={() => onSelect(null)}>
+          <X aria-hidden />
+        </Button>
+      </div>
+    );
   }
-});
+
+  return (
+    <Command shouldFilter={false} label="搜索目标页面" className="rounded-lg border border-border p-2">
+      <div className="flex items-center gap-2 px-2">
+        <Search className="size-4 text-muted-foreground" aria-hidden />
+        <Command.Input
+          value={query}
+          onValueChange={setQuery}
+          placeholder="搜索要更新的页面"
+          className="h-9 min-w-0 flex-1 bg-transparent text-sm outline-none placeholder:text-muted-foreground"
+        />
+      </div>
+      {query.trim() ? (
+        <Command.List className="mt-2 max-h-52 overflow-y-auto border-t border-border pt-2">
+          {isLoading && !data ? <Command.Loading className="px-2 py-2 text-sm text-muted-foreground">搜索中…</Command.Loading> : null}
+          {!isLoading && data?.items.length === 0 ? (
+            <Command.Empty className="px-2 py-2 text-sm text-muted-foreground">没有匹配页面</Command.Empty>
+          ) : null}
+          {data?.items.map((hit) => (
+            <Command.Item
+              key={hit.id}
+              value={hit.id}
+              onSelect={() => {
+                onSelect(hit);
+                setQuery("");
+              }}
+              className="flex cursor-pointer items-center gap-2 rounded-md px-2 py-2 text-sm data-[selected=true]:bg-accent"
+            >
+              <FileText className="size-4 shrink-0 text-muted-foreground" aria-hidden />
+              <span className="truncate">{hit.displayTitle}</span>
+            </Command.Item>
+          ))}
+        </Command.List>
+      ) : null}
+    </Command>
+  );
+}
 
 export function ImportJobForm() {
   const router = useRouter();
@@ -66,14 +163,22 @@ export function ImportJobForm() {
   const [file, setFile] = useState<File | null>(null);
   const [title, setTitle] = useState("");
   const [instructions, setInstructions] = useState("");
-  const [routeMode, setRouteMode] = useState<"auto" | "force_create">("auto");
+  const [routeMode, setRouteMode] = useState<"auto" | "force_create" | "force_update">("auto");
+  const [targetPage, setTargetPage] = useState<ImportPageTarget | null>(null);
   const [submitting, setSubmitting] = useState(false);
 
   const submit = async (event: React.FormEvent) => {
     event.preventDefault();
+    const pageId = routeMode === "force_update" ? targetPage?.id : undefined;
     const parsed = sourceKind === "url"
-      ? sourceSchema.safeParse({ url, title: title || undefined, instructions: instructions || undefined, routeMode })
-      : uploadSchema.safeParse({ file, title: title || undefined, instructions: instructions || undefined, routeMode });
+      ? sourceSchema.safeParse({
+        url, title: title || undefined, instructions: instructions || undefined,
+        routeMode, pageId,
+      })
+      : uploadSchema.safeParse({
+        file, title: title || undefined, instructions: instructions || undefined,
+        routeMode, pageId,
+      });
     if (!parsed.success) {
       toast.error(parsed.error.issues[0]?.message ?? "来源参数不合法");
       return;
@@ -91,6 +196,7 @@ export function ImportJobForm() {
                 title: title || undefined,
                 instructions: instructions || undefined,
                 routeMode,
+                pageId,
               },
             },
           })
@@ -100,6 +206,7 @@ export function ImportJobForm() {
             title: title || undefined,
             instructions: instructions || undefined,
             routeMode,
+          pageId,
           });
       toast.success("导入任务已排队");
       router.push(`/imports/${job.id}`);
@@ -140,7 +247,7 @@ export function ImportJobForm() {
       )}
       <fieldset className="space-y-2">
         <legend className="text-sm font-medium">页面路由方式</legend>
-        <div className="grid gap-3 sm:grid-cols-2">
+        <div className="grid gap-3 sm:grid-cols-3">
           <button
             type="button"
             aria-pressed={routeMode === "auto"}
@@ -159,8 +266,23 @@ export function ImportJobForm() {
             <span className="flex items-center gap-2 text-sm font-semibold"><FilePlus2 className="size-4" aria-hidden />强制创建单页</span>
             <span className="mt-1 block text-xs leading-5 text-muted-foreground">不拆分到已有页面，以指定标题生成一个新页面；标题冲突时停止并交由人工处理。</span>
           </button>
+          <button
+            type="button"
+            aria-pressed={routeMode === "force_update"}
+            onClick={() => setRouteMode("force_update")}
+            className={`rounded-lg border p-4 text-left transition ${routeMode === "force_update" ? "border-primary bg-primary/5 ring-1 ring-primary" : "border-border hover:bg-muted/50"}`}
+          >
+            <span className="flex items-center gap-2 text-sm font-semibold"><FilePenLine className="size-4" aria-hidden />更新指定页面</span>
+            <span className="mt-1 block text-xs leading-5 text-muted-foreground">仅为选定页面规划新增或替换内容，不创建其他页面。</span>
+          </button>
         </div>
       </fieldset>
+      {routeMode === "force_update" ? (
+        <div className="space-y-2">
+          <Label>目标页面</Label>
+          <ImportPageTargetPicker selected={targetPage} onSelect={setTargetPage} />
+        </div>
+      ) : null}
       <div className="space-y-2">
         <Label htmlFor="source-title">{routeMode === "force_create" ? "新页面标题" : "建议页面标题（可选）"}</Label>
         <Input id="source-title" value={title} onChange={(event) => setTitle(event.target.value)} maxLength={255}

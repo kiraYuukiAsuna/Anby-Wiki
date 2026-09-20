@@ -1,34 +1,34 @@
 
-# ImportPlan
+# ImportPlanVersion
 
 
 ## Properties
 
 Name | Type
 ------------ | -------------
-`schemaVersion` | number
-`sourceVersionId` | string
-`profile` | [ImportPlanProfile](ImportPlanProfile.md)
-`routes` | [Array&lt;ImportPageRoute&gt;](ImportPageRoute.md)
+`id` | string
+`revision` | number
+`parentPlanId` | string
+`planningInput` | [ImportPlanningInput](ImportPlanningInput.md)
 `qualityScore` | number
-`quality` | [ImportPlanQuality](ImportPlanQuality.md)
-`promptInjectionDetected` | boolean
+`createdBy` | string
+`createdAt` | Date
 
 ## Example
 
 ```typescript
-import type { ImportPlan } from ''
+import type { ImportPlanVersion } from ''
 
 // TODO: Update the object below with actual values
 const example = {
-  "schemaVersion": null,
-  "sourceVersionId": null,
-  "profile": null,
-  "routes": null,
+  "id": null,
+  "revision": null,
+  "parentPlanId": null,
+  "planningInput": null,
   "qualityScore": null,
-  "quality": null,
-  "promptInjectionDetected": null,
-} satisfies ImportPlan
+  "createdBy": null,
+  "createdAt": null,
+} satisfies ImportPlanVersion
 
 console.log(example)
 
@@ -37,7 +37,7 @@ const exampleJSON: string = JSON.stringify(example)
 console.log(exampleJSON)
 
 // Parse the JSON string back to an object
-const exampleParsed = JSON.parse(exampleJSON) as ImportPlan
+const exampleParsed = JSON.parse(exampleJSON) as ImportPlanVersion
 console.log(exampleParsed)
 ```
 

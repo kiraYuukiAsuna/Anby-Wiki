@@ -946,7 +946,7 @@ CREATE TABLE import_job (
     id              uuid        PRIMARY KEY,
     job_type        text        NOT NULL,
     status          text        NOT NULL DEFAULT 'queued'
-                                CHECK (status IN ('queued', 'running', 'succeeded', 'failed', 'cancelled')),
+                                CHECK (status IN ('queued', 'running', 'action_required', 'succeeded', 'failed', 'cancelled')),
     initiated_by    uuid        NOT NULL REFERENCES actor (id),
     idempotency_key text        NOT NULL,
     config_json     jsonb       NOT NULL DEFAULT '{}'::jsonb,
@@ -1200,6 +1200,12 @@ BEGIN;
 ALTER TABLE import_job
     ADD COLUMN source_version_id uuid REFERENCES source_version (id),
     ADD COLUMN proposal_id uuid REFERENCES proposal (id),
+    ADD COLUMN planning_input_json jsonb NOT NULL DEFAULT '{}'::jsonb
+        CHECK (jsonb_typeof(planning_input_json) = 'object'),
+    ADD COLUMN planning_idempotency_key text,
+    ADD COLUMN action_required text
+        CHECK (action_required IN ('confirm_plan','quality_gate')),
+    ADD COLUMN plan_confirmed_at timestamptz,
     ADD COLUMN current_stage text NOT NULL DEFAULT 'queued'
         CHECK (current_stage IN ('queued','fetch','parse','extract','plan','match','compose','review','complete')),
     ADD COLUMN progress integer NOT NULL DEFAULT 0 CHECK (progress BETWEEN 0 AND 100),
@@ -1303,6 +1309,9 @@ CREATE TABLE import_plan (
     id                  uuid        PRIMARY KEY,
     import_job_id       uuid        NOT NULL REFERENCES import_job (id),
     source_version_id   uuid        NOT NULL REFERENCES source_version (id),
+    revision            integer     NOT NULL CHECK (revision > 0),
+    parent_plan_id      uuid        REFERENCES import_plan (id),
+    planning_input_json jsonb       NOT NULL,
     input_hash          text        NOT NULL CHECK (input_hash ~ '^[0-9a-f]{64}$'),
     schema_version      integer     NOT NULL DEFAULT 1 CHECK (schema_version = 1),
     prompt_key          text        NOT NULL,
@@ -1310,14 +1319,21 @@ CREATE TABLE import_plan (
     model               text        NOT NULL,
     plan_json           jsonb       NOT NULL,
     quality_score       double precision NOT NULL CHECK (quality_score BETWEEN 0 AND 1),
+    created_by          uuid        NOT NULL REFERENCES actor (id),
     created_at          timestamptz NOT NULL DEFAULT now(),
+    UNIQUE (import_job_id, revision),
     UNIQUE (import_job_id, input_hash, schema_version),
+    CONSTRAINT import_plan_input_object CHECK (jsonb_typeof(planning_input_json) = 'object'),
     CONSTRAINT import_plan_document_object CHECK (jsonb_typeof(plan_json) = 'object')
 );
 
 CREATE TRIGGER import_plan_immutable
     BEFORE UPDATE OR DELETE ON import_plan
     FOR EACH ROW EXECUTE FUNCTION reject_immutable_mutation();
+
+ALTER TABLE import_job
+    ADD COLUMN current_plan_id uuid REFERENCES import_plan (id),
+    ADD COLUMN confirmed_plan_id uuid REFERENCES import_plan (id);
 
 COMMIT;
 

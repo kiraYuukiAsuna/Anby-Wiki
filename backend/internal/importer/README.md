@@ -33,6 +33,10 @@ Worker 通过 `FOR UPDATE SKIP LOCKED` 原子领取任务；每次运行有独�
 停止领取新任务，并给已领取任务一个有界完成窗口。相同 SourceVersion 的事实抽取可复用
 不可变 Extraction；页面规划按 ImportJob 与导入要求独立生成，不能因为
 来源相同而复用另一任务的 Proposal。
+同一 ImportJob 可以追加多个不可变 ImportPlan 版本；每个版本保存顺序号、父版本和
+规划输入快照。调整标题、导入要求或页面路由只新增 Run 与 Plan，不创建新的 Job，
+也不覆盖旧计划。只有来源内容变化，或原 Job 已生成冻结 Proposal 后重新导入，
+才建立新的 ImportJob。
 Worker 被强制终止或部署替换后，超过完整任务超时仍处于 running 的遗留 Run 会标记为
 `worker_interrupted` 并自动重新排队，防止任务永久卡死。
 同一任务在解析成功后会把不可变 SourceVersion 作为恢复点；后续失败重试复用已通过
@@ -130,7 +134,9 @@ Page/Block ID。模型只输出页面语义、正文和 `chunk_id + quotation`�
 回退后的覆盖率仍必须通过质量门槛。最终 `quality_score` 不再采用模型自评分，而由服务端按原文保真度 35%、证据支撑 25%、
 文章结构 20%、去重精炼 10% 和路由置信度 10% 计算。保真度低于 0.70、证据或结构存在硬伤，
 或综合分低于管理员阈值（默认 0.70）时，计划停在 Plan 阶段，不生成 Proposal；达到门槛才进入
-匹配和审核。这借鉴了 VeronicaWIKI 的生成后保真审计，但修复仍遵守 Anby 的不可变证据模型，
+匹配和审核。站点 AI 设置默认自动确认通过门槛的中间计划；管理员可以关闭自动确认，
+让任务停在 Plan 阶段等待发起者确认精确的 Plan 版本。该设置不会自动批准或应用最终
+Proposal，最终内容仍由治理审核控制。这借鉴了 VeronicaWIKI 的生成后保真审计，但修复仍遵守 Anby 的不可变证据模型，
 不会把无法定位的“遗漏原句”作为兜底正文堆入页面。
 
 Composer 把页面路由与 Entity/Claim 决策合成为一个以 Wiki 为目标的复合 Proposal；正文中

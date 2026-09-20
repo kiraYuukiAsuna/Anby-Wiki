@@ -1,30 +1,36 @@
 
-# ImportJobDetail
+# ImportPlanQuality
 
 
 ## Properties
 
 Name | Type
 ------------ | -------------
-`job` | [ImportJob](ImportJob.md)
-`runs` | [Array&lt;ImportRun&gt;](ImportRun.md)
-`stages` | [Array&lt;ImportStageRun&gt;](ImportStageRun.md)
-`plan` | [ImportPlan](ImportPlan.md)
-`plans` | [Array&lt;ImportPlanVersion&gt;](ImportPlanVersion.md)
+`fidelity` | number
+`grounding` | number
+`structure` | number
+`concision` | number
+`routing` | number
+`overall` | number
+`threshold` | number
+`passed` | boolean
 
 ## Example
 
 ```typescript
-import type { ImportJobDetail } from ''
+import type { ImportPlanQuality } from ''
 
 // TODO: Update the object below with actual values
 const example = {
-  "job": null,
-  "runs": null,
-  "stages": null,
-  "plan": null,
-  "plans": null,
-} satisfies ImportJobDetail
+  "fidelity": null,
+  "grounding": null,
+  "structure": null,
+  "concision": null,
+  "routing": null,
+  "overall": null,
+  "threshold": null,
+  "passed": null,
+} satisfies ImportPlanQuality
 
 console.log(example)
 
@@ -33,7 +39,7 @@ const exampleJSON: string = JSON.stringify(example)
 console.log(exampleJSON)
 
 // Parse the JSON string back to an object
-const exampleParsed = JSON.parse(exampleJSON) as ImportJobDetail
+const exampleParsed = JSON.parse(exampleJSON) as ImportPlanQuality
 console.log(exampleParsed)
 ```
 

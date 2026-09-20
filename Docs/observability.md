@@ -26,7 +26,7 @@ API 与 Worker 各自创建独立 Prometheus registry，不使用进程全局 re
 | `wiki_projection_states` | `service,state` | error/stale 投影数量 |
 | `wiki_importer_jobs` | `service,status` | 导入任务当前状态数量 |
 | `wiki_importer_job_duration_seconds_sum/count` | `service,status` | 已结束任务累计耗时与样本数 |
-| `wiki_importer_stages` | `service,stage,status` | 固定六阶段状态数量 |
+| `wiki_importer_stages` | `service,stage,status` | 固定七阶段状态数量 |
 | `wiki_importer_stage_duration_seconds_sum/count` | `service,stage,status` | 已结束阶段累计耗时与样本数 |
 | `wiki_ai_requests` | `service,status` | 持久化 AI usage 请求数 |
 | `wiki_ai_tokens` | `service,direction,status` | input/output token 累计量 |

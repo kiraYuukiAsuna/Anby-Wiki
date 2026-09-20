@@ -14,6 +14,11 @@
 
 import * as runtime from '../runtime';
 import {
+    type ConfirmImportPlanRequest,
+    ConfirmImportPlanRequestFromJSON,
+    ConfirmImportPlanRequestToJSON,
+} from '../models/ConfirmImportPlanRequest';
+import {
     type CreateImportJobRequest,
     CreateImportJobRequestFromJSON,
     CreateImportJobRequestToJSON,
@@ -33,9 +38,19 @@ import {
     ImportJobListPageFromJSON,
     ImportJobListPageToJSON,
 } from '../models/ImportJobListPage';
+import {
+    type ReplanImportJobRequest,
+    ReplanImportJobRequestFromJSON,
+    ReplanImportJobRequestToJSON,
+} from '../models/ReplanImportJobRequest';
 
 export interface CancelImportJobRequest {
     id: string;
+}
+
+export interface ConfirmImportPlanOperationRequest {
+    id: string;
+    confirmImportPlanRequest: ConfirmImportPlanRequest;
 }
 
 export interface CreateImportJobOperationRequest {
@@ -49,6 +64,7 @@ export interface CreateImportUploadJobRequest {
     title?: string;
     instructions?: string;
     routeMode?: CreateImportUploadJobRouteModeEnum;
+    pageId?: string;
 }
 
 export interface GetImportJobRequest {
@@ -59,6 +75,12 @@ export interface ListImportJobsRequest {
     cursor?: string;
     pageSize?: number;
     status?: ListImportJobsStatusEnum;
+}
+
+export interface ReplanImportJobOperationRequest {
+    id: string;
+    idempotencyKey: string;
+    replanImportJobRequest: ReplanImportJobRequest;
 }
 
 export interface RetryImportJobRequest {
@@ -120,6 +142,69 @@ export class ImportsApi extends runtime.BaseAPI {
      */
     async cancelImportJob(requestParameters: CancelImportJobRequest, initOverrides?: RequestInit | runtime.InitOverrideFunction): Promise<ImportJobDetail> {
         const response = await this.cancelImportJobRaw(requestParameters, initOverrides);
+        return await response.value();
+    }
+
+    /**
+     * Creates request options for confirmImportPlan without sending the request
+     */
+    async confirmImportPlanRequestOpts(requestParameters: ConfirmImportPlanOperationRequest): Promise<runtime.RequestOpts> {
+        if (requestParameters['id'] == null) {
+            throw new runtime.RequiredError(
+                'id',
+                'Required parameter "id" was null or undefined when calling confirmImportPlan().'
+            );
+        }
+
+        if (requestParameters['confirmImportPlanRequest'] == null) {
+            throw new runtime.RequiredError(
+                'confirmImportPlanRequest',
+                'Required parameter "confirmImportPlanRequest" was null or undefined when calling confirmImportPlan().'
+            );
+        }
+
+        const queryParameters: any = {};
+
+        const headerParameters: runtime.HTTPHeaders = {};
+
+        headerParameters['Content-Type'] = 'application/json';
+
+        if (this.configuration && this.configuration.accessToken) {
+            const token = this.configuration.accessToken;
+            const tokenString = await token("cliBearer", []);
+
+            if (tokenString) {
+                headerParameters["Authorization"] = `Bearer ${tokenString}`;
+            }
+        }
+
+        let urlPath = `/api/v1/import-jobs/{id}/confirm-plan`;
+        urlPath = urlPath.replace('{id}', encodeURIComponent(String(requestParameters['id'])));
+
+        return {
+            path: urlPath,
+            method: 'POST',
+            headers: headerParameters,
+            query: queryParameters,
+            body: ConfirmImportPlanRequestToJSON(requestParameters['confirmImportPlanRequest']),
+        };
+    }
+
+    /**
+     * 确认当前导入计划并继续生成审核提案
+     */
+    async confirmImportPlanRaw(requestParameters: ConfirmImportPlanOperationRequest, initOverrides?: RequestInit | runtime.InitOverrideFunction): Promise<runtime.ApiResponse<ImportJobDetail>> {
+        const requestOptions = await this.confirmImportPlanRequestOpts(requestParameters);
+        const response = await this.request(requestOptions, initOverrides);
+
+        return new runtime.JSONApiResponse(response, (jsonValue) => ImportJobDetailFromJSON(jsonValue));
+    }
+
+    /**
+     * 确认当前导入计划并继续生成审核提案
+     */
+    async confirmImportPlan(requestParameters: ConfirmImportPlanOperationRequest, initOverrides?: RequestInit | runtime.InitOverrideFunction): Promise<ImportJobDetail> {
+        const response = await this.confirmImportPlanRaw(requestParameters, initOverrides);
         return await response.value();
     }
 
@@ -253,6 +338,10 @@ export class ImportsApi extends runtime.BaseAPI {
 
         if (requestParameters['routeMode'] != null) {
             formParams.append('route_mode', requestParameters['routeMode'] as any);
+        }
+
+        if (requestParameters['pageId'] != null) {
+            formParams.append('page_id', requestParameters['pageId'] as any);
         }
 
 
@@ -400,6 +489,80 @@ export class ImportsApi extends runtime.BaseAPI {
     }
 
     /**
+     * Creates request options for replanImportJob without sending the request
+     */
+    async replanImportJobRequestOpts(requestParameters: ReplanImportJobOperationRequest): Promise<runtime.RequestOpts> {
+        if (requestParameters['id'] == null) {
+            throw new runtime.RequiredError(
+                'id',
+                'Required parameter "id" was null or undefined when calling replanImportJob().'
+            );
+        }
+
+        if (requestParameters['idempotencyKey'] == null) {
+            throw new runtime.RequiredError(
+                'idempotencyKey',
+                'Required parameter "idempotencyKey" was null or undefined when calling replanImportJob().'
+            );
+        }
+
+        if (requestParameters['replanImportJobRequest'] == null) {
+            throw new runtime.RequiredError(
+                'replanImportJobRequest',
+                'Required parameter "replanImportJobRequest" was null or undefined when calling replanImportJob().'
+            );
+        }
+
+        const queryParameters: any = {};
+
+        const headerParameters: runtime.HTTPHeaders = {};
+
+        headerParameters['Content-Type'] = 'application/json';
+
+        if (requestParameters['idempotencyKey'] != null) {
+            headerParameters['Idempotency-Key'] = String(requestParameters['idempotencyKey']);
+        }
+
+        if (this.configuration && this.configuration.accessToken) {
+            const token = this.configuration.accessToken;
+            const tokenString = await token("cliBearer", []);
+
+            if (tokenString) {
+                headerParameters["Authorization"] = `Bearer ${tokenString}`;
+            }
+        }
+
+        let urlPath = `/api/v1/import-jobs/{id}/replan`;
+        urlPath = urlPath.replace('{id}', encodeURIComponent(String(requestParameters['id'])));
+
+        return {
+            path: urlPath,
+            method: 'POST',
+            headers: headerParameters,
+            query: queryParameters,
+            body: ReplanImportJobRequestToJSON(requestParameters['replanImportJobRequest']),
+        };
+    }
+
+    /**
+     * 在同一任务内追加新的导入计划版本
+     */
+    async replanImportJobRaw(requestParameters: ReplanImportJobOperationRequest, initOverrides?: RequestInit | runtime.InitOverrideFunction): Promise<runtime.ApiResponse<ImportJobDetail>> {
+        const requestOptions = await this.replanImportJobRequestOpts(requestParameters);
+        const response = await this.request(requestOptions, initOverrides);
+
+        return new runtime.JSONApiResponse(response, (jsonValue) => ImportJobDetailFromJSON(jsonValue));
+    }
+
+    /**
+     * 在同一任务内追加新的导入计划版本
+     */
+    async replanImportJob(requestParameters: ReplanImportJobOperationRequest, initOverrides?: RequestInit | runtime.InitOverrideFunction): Promise<ImportJobDetail> {
+        const response = await this.replanImportJobRaw(requestParameters, initOverrides);
+        return await response.value();
+    }
+
+    /**
      * Creates request options for retryImportJob without sending the request
      */
     async retryImportJobRequestOpts(requestParameters: RetryImportJobRequest): Promise<runtime.RequestOpts> {
@@ -459,7 +622,8 @@ export class ImportsApi extends runtime.BaseAPI {
  */
 export const CreateImportUploadJobRouteModeEnum = {
     Auto: 'auto',
-    ForceCreate: 'force_create'
+    ForceCreate: 'force_create',
+    ForceUpdate: 'force_update'
 } as const;
 export type CreateImportUploadJobRouteModeEnum = typeof CreateImportUploadJobRouteModeEnum[keyof typeof CreateImportUploadJobRouteModeEnum];
 /**
@@ -468,6 +632,7 @@ export type CreateImportUploadJobRouteModeEnum = typeof CreateImportUploadJobRou
 export const ListImportJobsStatusEnum = {
     Queued: 'queued',
     Running: 'running',
+    ActionRequired: 'action_required',
     Succeeded: 'succeeded',
     Failed: 'failed',
     Cancelled: 'cancelled'

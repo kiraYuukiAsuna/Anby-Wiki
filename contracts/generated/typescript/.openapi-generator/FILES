@@ -74,6 +74,7 @@ docs/CollectionsApi.md
 docs/ComponentUsage.md
 docs/ComponentUsageListPage.md
 docs/ComponentsApi.md
+docs/ConfirmImportPlanRequest.md
 docs/CreateBulkReviewBatchRequest.md
 docs/CreateCLIAuthCodeRequest.md
 docs/CreateChangeTagRequest.md
@@ -149,8 +150,11 @@ docs/ImportPageRoute.md
 docs/ImportPlan.md
 docs/ImportPlanEvidence.md
 docs/ImportPlanProfile.md
+docs/ImportPlanQuality.md
 docs/ImportPlanSubject.md
+docs/ImportPlanVersion.md
 docs/ImportPlannedBlock.md
+docs/ImportPlanningInput.md
 docs/ImportRun.md
 docs/ImportStageRun.md
 docs/ImportsApi.md
@@ -251,6 +255,7 @@ docs/RelatedReason.md
 docs/RenamePageRequest.md
 docs/RenderedPageSection.md
 docs/ReplaceCollectionMembersRequest.md
+docs/ReplanImportJobRequest.md
 docs/ResolveMergeConflictRequest.md
 docs/ReviewDecisionRequest.md
 docs/ReviewTask.md
@@ -352,6 +357,7 @@ models/CollectionQuery.ts
 models/CollectionRule.ts
 models/ComponentUsage.ts
 models/ComponentUsageListPage.ts
+models/ConfirmImportPlanRequest.ts
 models/CreateBulkReviewBatchRequest.ts
 models/CreateCLIAuthCodeRequest.ts
 models/CreateChangeTagRequest.ts
@@ -424,8 +430,11 @@ models/ImportPageRoute.ts
 models/ImportPlan.ts
 models/ImportPlanEvidence.ts
 models/ImportPlanProfile.ts
+models/ImportPlanQuality.ts
 models/ImportPlanSubject.ts
+models/ImportPlanVersion.ts
 models/ImportPlannedBlock.ts
+models/ImportPlanningInput.ts
 models/ImportRun.ts
 models/ImportStageRun.ts
 models/LoginRequest.ts
@@ -520,6 +529,7 @@ models/RelatedReason.ts
 models/RenamePageRequest.ts
 models/RenderedPageSection.ts
 models/ReplaceCollectionMembersRequest.ts
+models/ReplanImportJobRequest.ts
 models/ResolveMergeConflictRequest.ts
 models/ReviewDecisionRequest.ts
 models/ReviewTask.ts
