@@ -275,9 +275,9 @@ func TestValidateImportPlanRepairsEvidenceAndRejectsInventedTargets(t *testing.T
 	}
 }
 
-func TestGeneratePlanDeterministicallyMergesParallelSourceWindows(t *testing.T) {
+func TestGeneratePlanKeepsSmallSourceInOneGlobalWindow(t *testing.T) {
 	sourceVersionID := uuid.New()
-	chunks := make([]evidence.SourceChunk, 7)
+	chunks := make([]evidence.SourceChunk, 18)
 	for index := range chunks {
 		text := "Evidence window " + string(rune('A'+index)) + "."
 		chunks[index] = evidence.SourceChunk{ID: uuid.New(), SourceVersionID: sourceVersionID,
@@ -297,8 +297,8 @@ func TestGeneratePlanDeterministicallyMergesParallelSourceWindows(t *testing.T) 
 	generator.mu.Lock()
 	mapCalls, fidelityCalls := generator.mapCalls, generator.fidelityCalls
 	generator.mu.Unlock()
-	if mapCalls != 2 || fidelityCalls != 0 {
-		t.Fatalf("map calls=%d fidelity calls=%d, want 2/0", mapCalls, fidelityCalls)
+	if mapCalls != 1 || fidelityCalls != 0 {
+		t.Fatalf("map calls=%d fidelity calls=%d, want 1/0", mapCalls, fidelityCalls)
 	}
 	if generated.PromptKey != ImportPlanPromptKey || len(generated.Plan.Routes) != 1 ||
 		len(generated.Plan.Routes[0].Blocks) != len(chunks) {

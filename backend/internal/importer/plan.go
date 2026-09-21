@@ -356,7 +356,7 @@ type generatedPlanBatch struct {
 }
 
 func (p *PagePlanner) generatePlan(ctx context.Context, params PlanParams, candidates []PageCandidate) (*generatedImportPlan, error) {
-	batches := batchModelSourceChunks(initialModelSourceChunks(params.Chunks), params.MaxInputTokens)
+	batches := batchPlanSourceChunks(initialModelSourceChunks(params.Chunks), params.MaxInputTokens)
 	type planBatchOutcome struct {
 		batch generatedPlanBatch
 		err   error
