@@ -18,6 +18,7 @@ import { importsApi, searchApi } from "@/lib/api";
 import { isUnauthorized, LOGIN_PATH } from "@/lib/auth";
 import { clientUUID } from "@/lib/client-uuid";
 import { httpUrlSchema, safeHttpUrl } from "@/lib/http-url";
+import { cn } from "@/lib/utils";
 
 export type ImportPageTarget = Pick<PageSearchHit, "id" | "displayTitle">;
 
@@ -75,6 +76,27 @@ const uploadSchema = z.object({
 }).superRefine(validatePlanning);
 
 const SEARCH_DEBOUNCE_MS = 200;
+
+const ROUTE_MODE_OPTIONS = [
+  {
+    value: "auto",
+    label: "智能多页面",
+    description: "理解来源主题，检索已有页面，并分别决定创建、更新、仅关联或忽略。",
+    icon: Network,
+  },
+  {
+    value: "force_create",
+    label: "强制创建单页",
+    description: "不拆分到已有页面，以指定标题生成一个新页面；标题冲突时停止并交由人工处理。",
+    icon: FilePlus2,
+  },
+  {
+    value: "force_update",
+    label: "更新指定页面",
+    description: "仅为选定页面规划新增或替换内容，不创建其他页面。",
+    icon: FilePenLine,
+  },
+] as const;
 
 function useDebouncedValue(value: string) {
   const [debounced, setDebounced] = useState(value);
@@ -247,34 +269,49 @@ export function ImportJobForm() {
       )}
       <fieldset className="space-y-2">
         <legend className="text-sm font-medium">页面路由方式</legend>
-        <div className="grid gap-3 sm:grid-cols-3">
-          <button
-            type="button"
-            aria-pressed={routeMode === "auto"}
-            onClick={() => setRouteMode("auto")}
-            className={`rounded-xl border p-4 text-left transition ${routeMode === "auto" ? "border-primary bg-primary/5 ring-1 ring-primary" : "border-border hover:bg-muted/50"}`}
-          >
-            <span className="flex items-center gap-2 text-sm font-semibold"><Network className="size-4" aria-hidden />智能多页面</span>
-            <span className="mt-1 block text-xs leading-5 text-muted-foreground">理解来源主题，检索已有页面，并分别决定创建、更新、仅关联或忽略。</span>
-          </button>
-          <button
-            type="button"
-            aria-pressed={routeMode === "force_create"}
-            onClick={() => setRouteMode("force_create")}
-            className={`rounded-xl border p-4 text-left transition ${routeMode === "force_create" ? "border-primary bg-primary/5 ring-1 ring-primary" : "border-border hover:bg-muted/50"}`}
-          >
-            <span className="flex items-center gap-2 text-sm font-semibold"><FilePlus2 className="size-4" aria-hidden />强制创建单页</span>
-            <span className="mt-1 block text-xs leading-5 text-muted-foreground">不拆分到已有页面，以指定标题生成一个新页面；标题冲突时停止并交由人工处理。</span>
-          </button>
-          <button
-            type="button"
-            aria-pressed={routeMode === "force_update"}
-            onClick={() => setRouteMode("force_update")}
-            className={`rounded-lg border p-4 text-left transition ${routeMode === "force_update" ? "border-primary bg-primary/5 ring-1 ring-primary" : "border-border hover:bg-muted/50"}`}
-          >
-            <span className="flex items-center gap-2 text-sm font-semibold"><FilePenLine className="size-4" aria-hidden />更新指定页面</span>
-            <span className="mt-1 block text-xs leading-5 text-muted-foreground">仅为选定页面规划新增或替换内容，不创建其他页面。</span>
-          </button>
+        <div className="grid gap-2">
+          {ROUTE_MODE_OPTIONS.map((option) => {
+            const selected = routeMode === option.value;
+            const Icon = option.icon;
+            return (
+              <button
+                key={option.value}
+                type="button"
+                aria-pressed={selected}
+                onClick={() => setRouteMode(option.value)}
+                className={cn(
+                  "grid min-h-20 w-full grid-cols-[1.25rem_minmax(0,1fr)_1rem] items-start gap-3 rounded-lg border px-3 py-3 text-left transition-colors",
+                  "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2",
+                  selected
+                    ? "border-primary bg-primary/5"
+                    : "border-border hover:border-foreground/20 hover:bg-muted/50",
+                )}
+              >
+                <Icon
+                  className={cn(
+                    "mt-0.5 size-5",
+                    selected ? "text-primary" : "text-muted-foreground",
+                  )}
+                  aria-hidden
+                />
+                <span className="min-w-0">
+                  <span className="block text-sm font-semibold">{option.label}</span>
+                  <span className="mt-0.5 block text-xs leading-5 text-muted-foreground">
+                    {option.description}
+                  </span>
+                </span>
+                <span
+                  className={cn(
+                    "mt-0.5 flex size-4 items-center justify-center rounded-full border",
+                    selected ? "border-primary" : "border-muted-foreground/40",
+                  )}
+                  aria-hidden
+                >
+                  {selected ? <span className="size-2 rounded-full bg-primary" /> : null}
+                </span>
+              </button>
+            );
+          })}
         </div>
       </fieldset>
       {routeMode === "force_update" ? (
