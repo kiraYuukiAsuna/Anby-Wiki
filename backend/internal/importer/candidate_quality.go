@@ -431,22 +431,38 @@ func selectCandidatesForPlan(candidates *Candidates, plan *ImportPlan) *Candidat
 	if plan == nil {
 		return result
 	}
-	wanted := map[string]bool{}
+	selected := map[uuid.UUID]bool{}
 	for _, route := range plan.Routes {
-		if route.Action == RouteCreate || route.Action == RouteUpdate {
-			addPlanIdentityKeys(wanted, route.Title)
+		if route.Action != RouteCreate && route.Action != RouteUpdate {
+			continue
+		}
+		title := normalizedIdentityText(route.Title)
+		exact := make([]uuid.UUID, 0, 1)
+		for _, candidate := range candidates.Entities {
+			if normalizedIdentityText(candidate.Label) == title {
+				exact = append(exact, candidate.CandidateID)
+			}
+		}
+		if len(exact) > 0 {
+			for _, candidateID := range exact {
+				selected[candidateID] = true
+			}
+			continue
+		}
+		wanted := map[string]bool{}
+		addPlanIdentityKeys(wanted, route.Title)
+		for _, candidate := range candidates.Entities {
+			for name := range entityCandidateNames(candidate) {
+				if wanted[name] {
+					selected[candidate.CandidateID] = true
+					break
+				}
+			}
 		}
 	}
-	selected := map[uuid.UUID]bool{}
 	byID := make(map[uuid.UUID]EntityCandidate, len(candidates.Entities))
 	for _, candidate := range candidates.Entities {
 		byID[candidate.CandidateID] = candidate
-		for name := range entityCandidateNames(candidate) {
-			if wanted[name] {
-				selected[candidate.CandidateID] = true
-				break
-			}
-		}
 	}
 	for _, candidate := range candidates.Claims {
 		if candidate.Subject.CandidateID == nil || !selected[*candidate.Subject.CandidateID] {

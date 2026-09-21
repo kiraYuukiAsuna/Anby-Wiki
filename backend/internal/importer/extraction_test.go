@@ -765,6 +765,35 @@ func TestNormalizeCandidatesDeduplicatesNamesAndRejectsWrongRelationDirection(t 
 	}
 }
 
+func TestSelectCandidatesForPlanPrefersExactLabelOverAlias(t *testing.T) {
+	conceptID, workID, authorID := uuid.New(), uuid.New(), uuid.New()
+	value, _ := json.Marshal(map[string]uuid.UUID{"entity_candidate_id": authorID})
+	candidates := &Candidates{SchemaVersion: 1, SourceVersionID: uuid.New(), QualityScore: 0.9,
+		Entities: []EntityCandidate{
+			{CandidateID: workID, TypeKey: "work", Label: "RFC 6901", Aliases: []string{"JSON Pointer"}},
+			{CandidateID: conceptID, TypeKey: "concept", Label: "JSON Pointer", Aliases: []string{}},
+			{CandidateID: authorID, TypeKey: "person", Label: "Example Author", Aliases: []string{}},
+		},
+		Claims: []ClaimCandidate{{
+			CandidateID: uuid.New(), Subject: CandidateSubject{CandidateID: &workID},
+			PropertyKey: "author", Value: value,
+		}},
+	}
+	plan := &ImportPlan{Routes: []PageRoute{{Action: RouteCreate, Title: "JSON Pointer"}}}
+
+	selected := selectCandidatesForPlan(candidates, plan)
+	if len(selected.Entities) != 1 || selected.Entities[0].CandidateID != conceptID ||
+		len(selected.Claims) != 0 {
+		t.Fatalf("alias match competed with exact page subject: %#v", selected)
+	}
+
+	candidates.Entities = []EntityCandidate{candidates.Entities[0], candidates.Entities[2]}
+	selected = selectCandidatesForPlan(candidates, plan)
+	if len(selected.Entities) != 2 || len(selected.Claims) != 1 {
+		t.Fatalf("alias-only page subject did not retain its claim dependency: %#v", selected)
+	}
+}
+
 func TestNormalizeCandidatesDropsSelfReferenceCreatedByIdentityMerge(t *testing.T) {
 	shortID, fullID := uuid.New(), uuid.New()
 	value, _ := json.Marshal(map[string]uuid.UUID{"entity_candidate_id": fullID})
