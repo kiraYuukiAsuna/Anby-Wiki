@@ -577,19 +577,41 @@ func TestClassifyKeepsBestSingleValueClaimWithinPlannedBatch(t *testing.T) {
 }
 
 func TestInstanceOfRequiresExplicitClassificationEvidence(t *testing.T) {
-	explicit := ClaimCandidate{PropertyKey: "instance_of", Evidence: []CandidateEvidence{{
-		Quotation: "A DPoP proof is a JWT signed by the client.",
-	}}}
-	if !claimCandidateRelationExplicit(explicit) {
+	proofID, jwtID := uuid.New(), uuid.New()
+	entities := map[uuid.UUID]EntityCandidate{
+		proofID: {CandidateID: proofID, TypeKey: "concept", Label: "DPoP proof"},
+		jwtID:   {CandidateID: jwtID, TypeKey: "concept", Label: "JWT"},
+	}
+	value, _ := json.Marshal(map[string]uuid.UUID{"entity_candidate_id": jwtID})
+	explicit := ClaimCandidate{
+		Subject: CandidateSubject{CandidateID: &proofID}, PropertyKey: "instance_of", Value: value,
+		Evidence: []CandidateEvidence{{
+			Quotation: "A DPoP proof is a JWT signed by the client.",
+		}}}
+	if !claimCandidateRelationExplicit(explicit, entities) {
 		t.Fatal("explicit classification was rejected")
 	}
-	implicit := ClaimCandidate{PropertyKey: "instance_of", Evidence: []CandidateEvidence{{
+	implicit := explicit
+	implicit.Evidence = []CandidateEvidence{{
 		Quotation: "The DPoP mechanism uses a JWT and a JWK.",
-	}}}
-	if claimCandidateRelationExplicit(implicit) {
+	}}
+	if claimCandidateRelationExplicit(implicit, entities) {
 		t.Fatal("associative mention was accepted as instance_of")
 	}
-	if !claimCandidateRelationExplicit(ClaimCandidate{PropertyKey: "author"}) {
+	jsonID, javascriptID := uuid.New(), uuid.New()
+	jsonValue, _ := json.Marshal(map[string]uuid.UUID{"entity_candidate_id": javascriptID})
+	if claimCandidateRelationExplicit(ClaimCandidate{
+		Subject: CandidateSubject{CandidateID: &jsonID}, PropertyKey: "instance_of", Value: jsonValue,
+		Evidence: []CandidateEvidence{{
+			Quotation: "JSON is a standard text-based format based on JavaScript object syntax.",
+		}},
+	}, map[uuid.UUID]EntityCandidate{
+		jsonID:       {CandidateID: jsonID, TypeKey: "concept", Label: "JSON"},
+		javascriptID: {CandidateID: javascriptID, TypeKey: "concept", Label: "JavaScript"},
+	}) {
+		t.Fatal("a later associative mention was accepted as the classification value")
+	}
+	if !claimCandidateRelationExplicit(ClaimCandidate{PropertyKey: "author"}, nil) {
 		t.Fatal("non-taxonomic properties must not use the instance_of guard")
 	}
 }

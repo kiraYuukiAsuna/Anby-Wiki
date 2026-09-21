@@ -58,6 +58,54 @@ func TestParserPrefersSemanticBoundaryWithinLimit(t *testing.T) {
 	}
 }
 
+func TestParseHTMLUsesMainContentAndSkipsNavigation(t *testing.T) {
+	blocks, err := parseHTML([]byte(`<!doctype html>
+<html>
+  <body>
+    <header><nav><a href="/">Documentation home</a></nav></header>
+    <main>
+      <aside class="reference-toc"><a href="#syntax">On this page</a></aside>
+      <h1>JSON</h1>
+      <p>JSON is a text-based data format.</p>
+      <section>
+        <h2>Converting objects and text</h2>
+        <p>Use <code>JSON.parse()</code> and <code>JSON.stringify()</code>.</p>
+      </section>
+    </main>
+    <footer>Site legal links</footer>
+  </body>
+</html>`))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(blocks) != 2 {
+		t.Fatalf("blocks=%d, want 2: %#v", len(blocks), blocks)
+	}
+	if blocks[0].Text != "JSON is a text-based data format." ||
+		blocks[0].Section == nil || *blocks[0].Section != "JSON" {
+		t.Fatalf("unexpected lead block: %#v", blocks[0])
+	}
+	if blocks[1].Text != "Use JSON.parse() and JSON.stringify()." ||
+		blocks[1].Section == nil || *blocks[1].Section != "Converting objects and text" {
+		t.Fatalf("unexpected section block: %#v", blocks[1])
+	}
+	combined := blocks[0].Text + blocks[1].Text
+	if strings.Contains(combined, "Documentation home") || strings.Contains(combined, "On this page") ||
+		strings.Contains(combined, "Site legal links") {
+		t.Fatalf("navigation leaked into article text: %q", combined)
+	}
+}
+
+func TestParseHTMLFallsBackToBodyContent(t *testing.T) {
+	blocks, err := parseHTML([]byte(`<html><body><h1>Topic</h1><div>Loose body text.</div></body></html>`))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(blocks) != 1 || blocks[0].Text != "Loose body text." {
+		t.Fatalf("unexpected fallback blocks: %#v", blocks)
+	}
+}
+
 func TestParseTesseractTSVPreservesImageLocator(t *testing.T) {
 	content := strings.Join([]string{
 		"level\tpage_num\tblock_num\tpar_num\tline_num\tword_num\tleft\ttop\twidth\theight\tconf\ttext",

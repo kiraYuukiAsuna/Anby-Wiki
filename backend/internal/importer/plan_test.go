@@ -439,6 +439,13 @@ func TestValidatePlanFidelityAuditRejectsContradictoryCompleteState(t *testing.T
 	if _, err := ValidatePlanFidelityAudit(raw, uuid.New(), nil, plan); !errors.Is(err, ai.ErrInvalidOutput) {
 		t.Fatalf("error=%v, want ai.ErrInvalidOutput", err)
 	}
+	salvaged, corrected, err := salvagePlanFidelityAudit(raw, uuid.New(), nil, plan)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if corrected != 1 || salvaged.Complete || salvaged.CoverageAfter != salvaged.CoverageBefore {
+		t.Fatalf("unexpected salvaged metadata: corrected=%d audit=%#v", corrected, salvaged)
+	}
 }
 
 func TestSalvagePlanFidelityAuditDropsUnverifiableRepairAndRevokesCoverage(t *testing.T) {
@@ -547,7 +554,7 @@ func TestAuditPlanFidelityBatchRetriesSemanticValidationWithFeedback(t *testing.
 	}
 }
 
-func TestAuditPlanFidelityBatchStopsAfterValidationAttemptLimit(t *testing.T) {
+func TestAuditPlanFidelityBatchSalvagesMetadataAfterValidationAttemptLimit(t *testing.T) {
 	sourceVersionID := uuid.New()
 	chunks := []evidence.SourceChunk{{
 		ID: uuid.New(), SourceVersionID: sourceVersionID,
@@ -557,11 +564,14 @@ func TestAuditPlanFidelityBatchStopsAfterValidationAttemptLimit(t *testing.T) {
 	planner := &PagePlanner{ai: generator}
 	plan := &ImportPlan{Routes: []PageRoute{{Action: RouteCreate, Title: "Subject"}}}
 
-	_, err := planner.auditPlanFidelityBatch(context.Background(), PlanParams{
+	audit, err := planner.auditPlanFidelityBatch(context.Background(), PlanParams{
 		SourceVersionID: sourceVersionID, Provider: "test", Model: "test",
 	}, json.RawMessage(`[]`), plan, initialModelSourceChunks(chunks))
-	if !errors.Is(err, ai.ErrInvalidOutput) {
-		t.Fatalf("error=%v, want ai.ErrInvalidOutput", err)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if audit == nil || audit.CoverageBefore != 0.9 || audit.CoverageAfter != 0.9 || !audit.Complete {
+		t.Fatalf("unexpected salvaged audit: %#v", audit)
 	}
 	generator.mu.Lock()
 	calls := generator.calls
@@ -639,19 +649,45 @@ func TestApplyPlanFidelityAuditsRepairsSectionWithoutDuplicating(t *testing.T) {
 
 func TestAssessImportPlanQualityUsesServerMetrics(t *testing.T) {
 	evidenceItem := []CandidateEvidence{{ChunkID: uuid.New(), Quotation: "The profile defines JWT assertions and validation requirements.", CharStart: 0, CharEnd: 63}}
+	processingEvidence := []CandidateEvidence{{ChunkID: uuid.New(), Quotation: "Clients validate JWT assertions before accepting them.", CharStart: 0, CharEnd: 54}}
 	plan := &ImportPlan{Profile: SourceProfile{Useful: true}, QualityScore: 0.99,
 		Routes: []PageRoute{{Action: RouteCreate, Title: "JWT profile", Confidence: 0.9, Blocks: []PlannedBlock{
 			{Type: string(ast.BlockParagraph), Mode: BlockAppend, Text: "The profile defines JWT assertions and validation requirements.", Evidence: evidenceItem},
 			{Type: string(ast.BlockHeading), Mode: BlockAppend, Text: "Processing", Level: 2, Evidence: evidenceItem},
-			{Type: string(ast.BlockParagraph), Mode: BlockAppend, Text: "Clients validate JWT assertions before accepting them.", Evidence: evidenceItem},
+			{Type: string(ast.BlockParagraph), Mode: BlockAppend, Text: "Clients validate JWT assertions before accepting them.", Evidence: processingEvidence},
 		}}}}
 	chunks := []evidence.SourceChunk{{TextContent: strings.Repeat("source material ", 20)}}
-	good := assessImportPlanQuality(plan, chunks, 0.9, DefaultQualityThreshold)
+	good := assessImportPlanQuality(plan, chunks, 0.9, true, DefaultQualityThreshold)
 	if !good.Passed {
 		t.Fatalf("good score=%f, want >= threshold", good.Overall)
 	}
-	if bad := assessImportPlanQuality(plan, chunks, 0.5, DefaultQualityThreshold); bad.Passed {
+	if bad := assessImportPlanQuality(plan, chunks, 0.5, true, DefaultQualityThreshold); bad.Passed {
 		t.Fatalf("bad score=%f, want below threshold", bad.Overall)
+	}
+	unsupported := *plan
+	unsupported.Routes = append([]PageRoute(nil), plan.Routes...)
+	unsupported.Routes[0].Blocks = append([]PlannedBlock(nil), plan.Routes[0].Blocks...)
+	for index := range unsupported.Routes[0].Blocks {
+		unsupported.Routes[0].Blocks[index].Evidence = []CandidateEvidence{{
+			ChunkID: uuid.New(), Quotation: "Working with JSON", CharStart: 0, CharEnd: 17,
+		}}
+	}
+	if quality := assessImportPlanQuality(
+		&unsupported, chunks, 0.9, true, DefaultQualityThreshold,
+	); quality.Passed || quality.Grounding >= 0.65 {
+		t.Fatalf("unsupported prose quality=%#v, want grounding failure", quality)
+	}
+	partiallyUnsupported := *plan
+	partiallyUnsupported.Routes = append([]PageRoute(nil), plan.Routes...)
+	partiallyUnsupported.Routes[0].Blocks = []PlannedBlock{{
+		Type: string(ast.BlockParagraph), Mode: BlockAppend,
+		Text:     "Clients validate JWT assertions before accepting them. Servers also publish unrelated deployment metadata.",
+		Evidence: processingEvidence,
+	}}
+	if quality := assessImportPlanQuality(
+		&partiallyUnsupported, chunks, 0.9, true, DefaultQualityThreshold,
+	); quality.Passed {
+		t.Fatalf("partially unsupported paragraph quality=%#v, want failure", quality)
 	}
 	headingHeavy := *plan
 	headingHeavy.Routes = append([]PageRoute(nil), plan.Routes...)
@@ -662,9 +698,28 @@ func TestAssessImportPlanQualityUsesServerMetrics(t *testing.T) {
 			PlannedBlock{Type: string(ast.BlockParagraph), Text: "One short sentence.", Evidence: evidenceItem})
 	}
 	if quality := assessImportPlanQuality(
-		&headingHeavy, chunks, 0.9, DefaultQualityThreshold,
+		&headingHeavy, chunks, 0.9, true, DefaultQualityThreshold,
 	); quality.Passed {
 		t.Fatalf("heading-heavy score=%f, want below threshold", quality.Overall)
+	}
+}
+
+func TestPlanSimilarityPreservesNormativeDifferencesAndSupportsCJK(t *testing.T) {
+	if proseEquivalent(
+		"Clients must accept valid tokens after signature verification.",
+		"Clients must not accept valid tokens before signature verification.",
+	) {
+		t.Fatal("opposite normative statements must not be merged")
+	}
+	support := planEvidenceTokenSupport(
+		"JSON 文本在使用前必须解析为 JavaScript 对象。",
+		[]CandidateEvidence{{
+			ChunkID:   uuid.New(),
+			Quotation: "JSON 文本必须先经过解析，然后才能作为 JavaScript 对象使用。",
+		}},
+	)
+	if support < 0.65 {
+		t.Fatalf("CJK evidence support=%f, want >= 0.65", support)
 	}
 }
 
@@ -760,6 +815,146 @@ func TestRefineImportPlanRemovesBatchStitchingArtifacts(t *testing.T) {
 	if strings.Count(combined, "RFC 7523 defines JWT use.") != 1 ||
 		strings.Count(combined, "Michael B. Jones authored the work.") != 1 {
 		t.Fatalf("duplicate sentences survived: %q", combined)
+	}
+}
+
+func TestExplicitPlanBlockLimitsConsolidateCrossWindowJSONUpdate(t *testing.T) {
+	pageID := uuid.New()
+	evidenceItem := func(quotation string) []CandidateEvidence {
+		return []CandidateEvidence{{
+			ChunkID: uuid.New(), Quotation: quotation, CharStart: 0, CharEnd: len([]rune(quotation)),
+		}}
+	}
+	blocks := []PlannedBlock{{
+		Type: string(ast.BlockHeading), Mode: BlockAppend, Text: "Use in web applications", Level: 2,
+		Evidence: evidenceItem("Working with JSON"),
+	}}
+	for index := 0; index < 36; index++ {
+		blocks = append(blocks, PlannedBlock{
+			Type: string(ast.BlockParagraph), Mode: BlockAppend,
+			Text: fmt.Sprintf(
+				"JSON is widely used by web application example %d to exchange structured data between a browser and a server.",
+				index,
+			),
+			Evidence: evidenceItem(fmt.Sprintf("Navigation example %d", index)),
+		})
+	}
+	blocks = append(blocks,
+		PlannedBlock{
+			Type: string(ast.BlockParagraph), Mode: BlockAppend,
+			Text: "JSON grammar requires double-quoted property names, disallows methods and comments, and rejects trailing commas.",
+			Evidence: evidenceItem(
+				`Property names must be string literals enclosed in double quotes. Comments and trailing commas are not allowed in JSON.`,
+			),
+		},
+		PlannedBlock{
+			Type: string(ast.BlockParagraph), Mode: BlockAppend,
+			Text: "JSON.parse() deserializes JSON text into a JavaScript value, while JSON.stringify() serializes a JavaScript value into JSON text.",
+			Evidence: evidenceItem(
+				"Converting between objects and text using JSON.parse() and JSON.stringify().",
+			),
+		},
+		PlannedBlock{
+			Type: string(ast.BlockParagraph), Mode: BlockAppend,
+			Text: "The fetch() API is asynchronous, so callers use async and await.",
+			Evidence: evidenceItem(
+				"The fetch() API is asynchronous. Use async and await with asynchronous functions.",
+			),
+		},
+		PlannedBlock{
+			Type: string(ast.BlockParagraph), Mode: BlockAppend,
+			Text: "Web applications commonly retrieve JSON over the network by calling fetch(), then use Response.json() to obtain a JavaScript value.",
+			Evidence: evidenceItem(
+				"To obtain JSON, use the Fetch API: const response = await fetch(request); const value = await response.json().",
+			),
+		},
+		PlannedBlock{
+			Type: string(ast.BlockParagraph), Mode: BlockAppend,
+			Text: "JSON text is a serialized string representation, whereas a JavaScript object is an in-memory value produced after parsing.",
+			Evidence: evidenceItem(
+				"JSON is a string whose format very much resembles JavaScript object literal format.",
+			),
+		},
+	)
+	instructions := "Update only the existing JSON page with one concise section about using JSON in web applications. The content must cover the distinction between JSON text and JavaScript values, serialization and deserialization with JSON.stringify() and JSON.parse(), and network retrieval with fetch() and Response.json(). Do not include JSON grammar, syntax restrictions, RFC history, media types, interoperability, security, tutorial setup, DOM rendering steps, async/await mechanics, or superhero example details. Use at most one heading and at most three focused content blocks, each directly supported by exact MDN evidence."
+	plan := &ImportPlan{Profile: SourceProfile{Useful: true}, Routes: []PageRoute{{
+		Action: RouteUpdate, Title: "JSON", PageID: &pageID, Blocks: blocks,
+	}}}
+
+	refineImportPlan(plan)
+	if dropped := applyExplicitPlanBlockLimits(plan, instructions); dropped < 1 {
+		t.Fatal("expected duplicate cross-window blocks to be consolidated")
+	}
+	got := plan.Routes[0].Blocks
+	headings, content := 0, 0
+	var combined strings.Builder
+	for _, block := range got {
+		if block.Type == string(ast.BlockHeading) {
+			headings++
+		} else {
+			content++
+		}
+		combined.WriteString(" ")
+		combined.WriteString(plannedBlockText(block))
+	}
+	if headings != 1 || content < 2 || content > 3 {
+		t.Fatalf("headings/content=%d/%d, want 1/2..3: %#v", headings, content, got)
+	}
+	for _, required := range []string{"JSON.parse()", "JSON.stringify()", "fetch()", "Response.json()", "JSON text"} {
+		if !strings.Contains(combined.String(), required) {
+			t.Fatalf("consolidated update lost %q: %q", required, combined.String())
+		}
+	}
+	if strings.Contains(combined.String(), "trailing commas") {
+		t.Fatalf("consolidated update retained excluded grammar content: %q", combined.String())
+	}
+	if strings.Contains(combined.String(), "callers use async") {
+		t.Fatalf("narrow fetch mechanics displaced requested network retrieval: %q", combined.String())
+	}
+	if grounding := planMinimumGroundingScore(plan); grounding < minimumPlanBlockGrounding {
+		t.Fatalf("minimum grounding=%f, want >= %f", grounding, minimumPlanBlockGrounding)
+	}
+	if coverage := constrainedPlanInstructionCoverage(plan, instructions); coverage < DefaultQualityThreshold {
+		t.Fatalf("instruction coverage=%f, want >= %f", coverage, DefaultQualityThreshold)
+	}
+	if !importPlanExpansionWithinBudget(plan, []PageCandidate{{
+		PageID: pageID, Title: "JSON", Blocks: []PageCandidateBlock{
+			{Type: string(ast.BlockParagraph), Text: strings.Repeat("existing article ", 100)},
+		},
+	}}, instructions) {
+		t.Fatal("explicitly constrained update should fit the expansion budget")
+	}
+}
+
+func TestImportPlanExpansionBudgetRejectsUnboundedUpdate(t *testing.T) {
+	pageID := uuid.New()
+	blocks := make([]PlannedBlock, 30)
+	for index := range blocks {
+		blocks[index] = PlannedBlock{
+			Type: string(ast.BlockParagraph), Mode: BlockAppend,
+			Text: strings.Repeat(fmt.Sprintf("distinct update %d ", index), 30),
+		}
+	}
+	plan := &ImportPlan{Routes: []PageRoute{{
+		Action: RouteUpdate, Title: "JSON", PageID: &pageID, Blocks: blocks,
+	}}}
+	candidates := []PageCandidate{{
+		PageID: pageID, Title: "JSON", Blocks: []PageCandidateBlock{
+			{Type: string(ast.BlockParagraph), Text: strings.Repeat("existing article ", 100)},
+		},
+	}}
+	if importPlanExpansionWithinBudget(plan, candidates, "") {
+		t.Fatal("unbounded update expansion should fail the quality budget")
+	}
+	quality := assessImportPlanQuality(
+		plan,
+		[]evidence.SourceChunk{{TextContent: strings.Repeat("source material ", 500)}},
+		1,
+		false,
+		DefaultQualityThreshold,
+	)
+	if quality.Passed || quality.Concision != 0 || quality.Overall >= DefaultQualityThreshold {
+		t.Fatalf("unexpected expansion quality: %#v", quality)
 	}
 }
 

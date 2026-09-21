@@ -5,14 +5,13 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"html"
 	"io"
 	"os/exec"
-	"regexp"
 	"strings"
 	"unicode/utf8"
 
 	"github.com/anby/wiki/backend/internal/evidence"
+	"golang.org/x/net/html"
 )
 
 var (
@@ -51,16 +50,6 @@ func NewParser(maxChunkRunes int) *Parser {
 	return &Parser{MaxChunkRunes: maxChunkRunes}
 }
 
-var (
-	scriptPattern   = regexp.MustCompile(`(?is)<script[^>]*>.*?</script>`)
-	stylePattern    = regexp.MustCompile(`(?is)<style[^>]*>.*?</style>`)
-	noscriptPattern = regexp.MustCompile(`(?is)<noscript[^>]*>.*?</noscript>`)
-	commentPattern  = regexp.MustCompile(`(?s)<!--.*?-->`)
-	headingPattern  = regexp.MustCompile(`(?is)<h[1-6][^>]*>(.*?)</h[1-6]>`)
-	breakPattern    = regexp.MustCompile(`(?is)</?(p|div|li|tr|br|section|article)[^>]*>`)
-	tagPattern      = regexp.MustCompile(`(?s)<[^>]+>`)
-)
-
 func (p *Parser) Parse(ctx context.Context, mimeType string, content []byte) ([]evidence.ChunkInput, error) {
 	var blocks []TextBlock
 	var err error
@@ -90,39 +79,137 @@ func parseHTML(content []byte) ([]TextBlock, error) {
 	if !utf8.Valid(content) {
 		return nil, ErrParseFailed
 	}
-	source := scriptPattern.ReplaceAllString(string(content), " ")
-	source = stylePattern.ReplaceAllString(source, " ")
-	source = noscriptPattern.ReplaceAllString(source, " ")
-	source = commentPattern.ReplaceAllString(source, " ")
-	source = headingPattern.ReplaceAllStringFunc(source, func(match string) string {
-		inner := headingPattern.FindStringSubmatch(match)
-		if len(inner) != 2 {
-			return "\n"
-		}
-		return "\n§§" + strings.TrimSpace(tagPattern.ReplaceAllString(inner[1], " ")) + "\n"
-	})
-	source = breakPattern.ReplaceAllString(source, "\n")
-	source = html.UnescapeString(tagPattern.ReplaceAllString(source, " "))
-	lines := strings.Split(source, "\n")
-	blocks := []TextBlock{}
+	document, err := html.Parse(bytes.NewReader(content))
+	if err != nil {
+		return nil, ErrParseFailed
+	}
+	root := firstHTMLElement(document, "main")
+	if root == nil {
+		root = firstHTMLElement(document, "body")
+	}
+	if root == nil {
+		return nil, ErrParseFailed
+	}
+	blocks := make([]TextBlock, 0)
 	var section *string
-	for _, line := range lines {
-		line = strings.Join(strings.Fields(line), " ")
-		if strings.HasPrefix(line, "§§") {
-			value := strings.TrimSpace(strings.TrimPrefix(line, "§§"))
-			if value != "" {
-				section = &value
-			}
-			continue
-		}
-		if line != "" {
-			blocks = append(blocks, TextBlock{Text: line, Section: section})
+	collectHTMLBlocks(root, &section, &blocks)
+	if len(blocks) == 0 {
+		if text := htmlNodeTextWithoutHeadings(root); text != "" {
+			blocks = append(blocks, TextBlock{Text: text})
 		}
 	}
 	if len(blocks) == 0 {
 		return nil, ErrParseFailed
 	}
 	return blocks, nil
+}
+
+func firstHTMLElement(node *html.Node, name string) *html.Node {
+	if node.Type == html.ElementNode && node.Data == name {
+		return node
+	}
+	for child := node.FirstChild; child != nil; child = child.NextSibling {
+		if found := firstHTMLElement(child, name); found != nil {
+			return found
+		}
+	}
+	return nil
+}
+
+func collectHTMLBlocks(node *html.Node, section **string, blocks *[]TextBlock) {
+	if node.Type == html.ElementNode {
+		if ignoredHTMLElement(node) {
+			return
+		}
+		switch node.Data {
+		case "h1", "h2", "h3", "h4", "h5", "h6":
+			if value := htmlNodeText(node); value != "" {
+				*section = &value
+			}
+			return
+		case "p", "pre", "blockquote", "li", "dt", "dd", "figcaption", "td", "th":
+			if value := htmlNodeText(node); value != "" {
+				*blocks = append(*blocks, TextBlock{Text: value, Section: *section})
+			}
+			return
+		}
+	}
+	for child := node.FirstChild; child != nil; child = child.NextSibling {
+		collectHTMLBlocks(child, section, blocks)
+	}
+}
+
+func ignoredHTMLElement(node *html.Node) bool {
+	switch node.Data {
+	case "script", "style", "noscript", "template", "svg", "nav", "aside", "header", "footer",
+		"form", "button":
+		return true
+	}
+	for _, attribute := range node.Attr {
+		key := strings.ToLower(attribute.Key)
+		value := strings.ToLower(strings.TrimSpace(attribute.Val))
+		if key == "hidden" || key == "aria-hidden" && value == "true" ||
+			key == "role" && (value == "navigation" || value == "contentinfo") {
+			return true
+		}
+		if key == "class" {
+			for _, token := range strings.Fields(value) {
+				if strings.Contains(token, "sidebar") || strings.Contains(token, "breadcrumb") ||
+					token == "toc" || strings.HasSuffix(token, "-toc") || strings.Contains(token, "pagination") {
+					return true
+				}
+			}
+		}
+	}
+	return false
+}
+
+func htmlNodeText(node *html.Node) string {
+	return collectHTMLNodeText(node, false)
+}
+
+func htmlNodeTextWithoutHeadings(node *html.Node) string {
+	return collectHTMLNodeText(node, true)
+}
+
+func collectHTMLNodeText(node *html.Node, skipHeadings bool) string {
+	var builder strings.Builder
+	var visit func(*html.Node)
+	visit = func(current *html.Node) {
+		if current.Type == html.ElementNode && ignoredHTMLElement(current) {
+			return
+		}
+		if skipHeadings && current.Type == html.ElementNode && len(current.Data) == 2 &&
+			current.Data[0] == 'h' && current.Data[1] >= '1' && current.Data[1] <= '6' {
+			return
+		}
+		if current.Type == html.TextNode {
+			if text := strings.TrimSpace(current.Data); text != "" {
+				if builder.Len() > 0 && !startsWithClosingPunctuation(text) {
+					builder.WriteByte(' ')
+				}
+				builder.WriteString(text)
+			}
+			return
+		}
+		for child := current.FirstChild; child != nil; child = child.NextSibling {
+			visit(child)
+		}
+	}
+	visit(node)
+	return strings.Join(strings.Fields(builder.String()), " ")
+}
+
+func startsWithClosingPunctuation(value string) bool {
+	for _, character := range value {
+		switch character {
+		case '.', ',', ';', ':', '!', '?', ')', ']', '}', '。', '，', '；', '：', '！', '？', '）', '】', '》':
+			return true
+		default:
+			return false
+		}
+	}
+	return false
 }
 
 func parsePDF(ctx context.Context, content []byte) ([]TextBlock, error) {

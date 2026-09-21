@@ -25,7 +25,7 @@ import (
 const (
 	ImportPlanSchemaURL           = "https://anby.wiki/schemas/import-plan/v1/plan.schema.json"
 	ImportPlanGenerationSchemaURL = "https://anby.wiki/schemas/import-plan-generation/v1/plan.schema.json"
-	ImportPlanPromptKey           = "source-import-plan-v6"
+	ImportPlanPromptKey           = "source-import-plan-v7"
 	planBatchConcurrency          = 3
 	planLeafValidationAttempts    = 3
 
@@ -285,6 +285,7 @@ func (p *PagePlanner) Plan(ctx context.Context, params PlanParams) (*PlanResult,
 	plan.Routes = mergePageRoutes(plan.Routes)
 	plan.Routes = normalizePlanLinks(plan.Routes)
 	refineImportPlan(plan)
+	applyExplicitPlanBlockLimits(plan, params.Instructions)
 	if plan.Profile.Useful && actionablePageRouteCount(plan.Routes) == 0 {
 		return nil, ErrNoPagePlan
 	}
@@ -292,11 +293,19 @@ func (p *PagePlanner) Plan(ctx context.Context, params PlanParams) (*PlanResult,
 	if err != nil && !errors.Is(err, ErrQualityGate) {
 		return nil, err
 	}
+	applyExplicitPlanBlockLimits(plan, params.Instructions)
+	fidelity = min(fidelity, constrainedPlanInstructionCoverage(plan, params.Instructions))
 	threshold := params.QualityThreshold
 	if threshold < DefaultQualityThreshold {
 		threshold = DefaultQualityThreshold
 	}
-	quality := assessImportPlanQuality(plan, params.Chunks, fidelity*planCoverage, threshold)
+	quality := assessImportPlanQuality(
+		plan,
+		params.Chunks,
+		fidelity*planCoverage,
+		importPlanExpansionWithinBudget(plan, candidatePages, params.Instructions),
+		threshold,
+	)
 	plan.Quality = &quality
 	plan.QualityScore = quality.Overall
 	normalizeImportPlanCollections(plan)

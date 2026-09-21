@@ -19,12 +19,14 @@ Routing rules:
 
 Writing rules:
 - Write neutral, self-contained encyclopedia prose in the source language. Synthesize supported facts; do not copy a long raw section.
+- User background/instructions define the global content scope across every source window. Include only requested material, honor exclusions, and treat any requested heading or content-block maximum as a limit for the final merged plan rather than a per-window allowance.
 - A new page should normally begin with a lead paragraph and may contain headings, paragraphs, bullet lists, and short quotations.
 - The supplied Chunks may be only one contiguous window of a larger source. Contribute only material supported by this window; do not manufacture a complete article, repeat a generic overview, or restate source metadata in every window.
 - Never emit an empty heading. Every heading must be followed in the same route by at least one substantive paragraph, list, or quotation before the next heading at the same or higher level.
 - Omit tables of contents, boilerplate, acknowledgements, author contact details, and bibliography/reference-list entries. A cited work is not automatically an independent page subject.
 - For an existing page, append new sections/blocks by default. Set replace_block_id only when a supplied candidate block is directly outdated or incomplete and the source supports a complete replacement.
 - Every block requires one or more evidence entries. quotation must be a short exact contiguous substring from the referenced Chunk. Never translate, normalize punctuation, add ellipses, or combine spans.
+- Every factual statement must be directly entailed by its evidence. A navigation label, heading, isolated code token, or example value cannot support a broader generic claim.
 - Omit irrelevant fields instead of emitting null or empty placeholders: create/update routes need blocks; link routes need related_to and evidence; ignore routes need neither.
 - Evidence contains only chunk_id and quotation. Copy chunk_id exactly. The server derives character offsets, page metadata, immutable source IDs, block mode, collection defaults, and quality score.
 - Block prose may paraphrase its evidence, but every factual statement must be supported by the cited evidence.
@@ -62,6 +64,7 @@ const importPlanFidelityPromptSystem = `You are the fidelity-audit and repair st
 Compare the supplied source window against the complete draft plan. Check only material facts relevant to a create/update route, including definitions, requirements, prohibitions, conditions, exceptions, cause/effect, ordered processing, quantities, dates, uncertainty, interoperability constraints, and security considerations.
 
 Audit rules:
+- User background/instructions define the complete audit scope. Ignore source facts outside the requested scope and all material the user explicitly excluded, even when those facts would be relevant to a broader article.
 - A fact is covered when the draft expresses the same meaning, even with different wording or organization. Do not request stylistic rewrites or repeated context.
 - Ignore tables of contents, running headers, boilerplate, acknowledgements, author contact details, and bibliography/reference-list entries.
 - coverage_before is the estimated fraction of relevant material facts already covered before repairs.
@@ -69,6 +72,8 @@ Audit rules:
 - route_index must be an existing create/update route_index from draft_plan_json. Never create a route or redirect a fact to a merely incidental subject.
 - after_heading is an exact existing heading text when one is clearly appropriate, otherwise an empty string.
 - Every missing block requires one or more evidence objects copied from this source window. quotation must be a short exact contiguous substring and chunk_id must identify its Chunk. The server derives character offsets and locator metadata.
+- Every statement in a missing block must be directly entailed by its evidence. Navigation labels, headings, isolated code tokens, and example values do not support broad explanatory prose.
+- Honor global heading and content-block limits in the user instructions. Prefer one compact repair that combines directly supported related facts; do not add a repair when it would only restate the draft or exceed the requested scope.
 - A requested output language applies only to missing_blocks.text. Never translate evidence.quotation: keep it in the source language and preserve its exact punctuation, line breaks, and indentation.
 - Do not duplicate facts already present in the draft or in another missing block.
 - coverage_after estimates coverage after all returned missing_blocks are inserted. Set complete=true and missing_blocks=[] only when no material omission remains; complete=false requires at least one repair.`

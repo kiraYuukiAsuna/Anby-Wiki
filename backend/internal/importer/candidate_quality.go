@@ -63,14 +63,16 @@ func normalizeCandidatesForUse(input *Candidates) *Candidates {
 	}
 
 	types := make(map[uuid.UUID]string, len(result.Entities))
+	entities := make(map[uuid.UUID]EntityCandidate, len(result.Entities))
 	for _, candidate := range result.Entities {
 		types[candidate.CandidateID] = normalizedPlanText(candidate.TypeKey)
+		entities[candidate.CandidateID] = candidate
 	}
 	claimKeys := map[string]bool{}
 	for _, raw := range input.Claims {
 		candidate := raw
 		if !remapClaimCandidate(&candidate, remappedIDs) || claimCandidateSelfReferential(candidate) ||
-			!claimCandidateTypeSafe(candidate, types) || !claimCandidateRelationExplicit(candidate) {
+			!claimCandidateTypeSafe(candidate, types) || !claimCandidateRelationExplicit(candidate, entities) {
 			continue
 		}
 		candidate.Evidence = mergeCandidateEvidence(nil, candidate.Evidence)
@@ -90,9 +92,23 @@ func normalizeCandidatesForUse(input *Candidates) *Candidates {
 // still retained when this guard drops a Claim, so requiring an explicit
 // classification phrase improves graph precision without losing source
 // content. Other properties already have stronger direction/type guards.
-func claimCandidateRelationExplicit(candidate ClaimCandidate) bool {
+func claimCandidateRelationExplicit(candidate ClaimCandidate, entities map[uuid.UUID]EntityCandidate) bool {
 	if candidate.PropertyKey != "instance_of" {
 		return true
+	}
+	if candidate.Subject.CandidateID != nil {
+		valueID, referencesCandidate, valid := claimValueCandidateReference(candidate.Value)
+		subject, subjectFound := entities[*candidate.Subject.CandidateID]
+		value, valueFound := entities[valueID]
+		if !valid || !referencesCandidate || !subjectFound || !valueFound {
+			return false
+		}
+		for _, item := range candidate.Evidence {
+			if evidenceExplicitlyClassifies(item.Quotation, subject, value) {
+				return true
+			}
+		}
+		return false
 	}
 	for _, item := range candidate.Evidence {
 		text := " " + strings.ToLower(strings.Join(strings.Fields(item.Quotation), " ")) + " "
@@ -103,6 +119,30 @@ func claimCandidateRelationExplicit(candidate ClaimCandidate) bool {
 		} {
 			if strings.Contains(text, marker) {
 				return true
+			}
+		}
+	}
+	return false
+}
+
+func evidenceExplicitlyClassifies(quotation string, subject, value EntityCandidate) bool {
+	text := " " + normalizedIdentityText(quotation) + " "
+	for subjectName := range entityCandidateNames(subject) {
+		for valueName := range entityCandidateNames(value) {
+			for _, marker := range []string{
+				" is a type of ", " is a kind of ", " is an instance of ",
+				" is a ", " is an ", " is the ", " are a ", " are an ",
+			} {
+				if strings.Contains(text, " "+subjectName+marker+valueName+" ") {
+					return true
+				}
+			}
+			compact := strings.ReplaceAll(text, " ", "")
+			for _, marker := range []string{"是一种", "是一个", "是一类", "属于一种", "属于一类", "为一种"} {
+				if strings.Contains(compact, strings.ReplaceAll(subjectName, " ", "")+
+					marker+strings.ReplaceAll(valueName, " ", "")) {
+					return true
+				}
 			}
 		}
 	}

@@ -1,11 +1,25 @@
 package importer
 
 import (
+	"regexp"
+	"strconv"
 	"strings"
 	"unicode"
 	"unicode/utf8"
 
 	"github.com/anby/wiki/backend/internal/ast"
+	"github.com/google/uuid"
+)
+
+type planBlockLimits struct {
+	heading    int
+	content    int
+	hasHeading bool
+	hasContent bool
+}
+
+var instructionIdentifierPattern = regexp.MustCompile(
+	`(?i)\b[a-z_$][a-z0-9_$]*(?:\.[a-z_$][a-z0-9_$]*)*\(\)`,
 )
 
 // refineImportPlan deterministically merges model-authored windows and
@@ -129,10 +143,464 @@ func refinePlannedBlocks(blocks []PlannedBlock) []PlannedBlock {
 			if block.Text == "" {
 				continue
 			}
+			if index := equivalentPlannedBlockIndex(result, block); index >= 0 {
+				evidence := mergeCandidateEvidence(result[index].Evidence, block.Evidence)
+				result[index].Evidence = evidence[:min(len(evidence), 8)]
+				continue
+			}
 		}
 		result = append(result, block)
 	}
 	return normalizeArticleHeadingLevels(removeOrphanHeadings(result))
+}
+
+func equivalentPlannedBlockIndex(blocks []PlannedBlock, incoming PlannedBlock) int {
+	for index := range blocks {
+		existing := blocks[index]
+		if existing.Type != incoming.Type || existing.Mode != incoming.Mode ||
+			!sameOptionalString(existing.TargetBlockID, incoming.TargetBlockID) {
+			continue
+		}
+		if proseEquivalent(existing.Text, incoming.Text) {
+			return index
+		}
+	}
+	return -1
+}
+
+func sameOptionalString(left, right *string) bool {
+	if left == nil || right == nil {
+		return left == right
+	}
+	return *left == *right
+}
+
+func applyExplicitPlanBlockLimits(plan *ImportPlan, instructions string) int {
+	if plan == nil {
+		return 0
+	}
+	limits := explicitPlanBlockLimits(instructions)
+	if !limits.hasHeading && !limits.hasContent {
+		return 0
+	}
+	actionable := actionablePageRouteCount(plan.Routes)
+	if actionable != 1 {
+		return 0
+	}
+	for index := range plan.Routes {
+		route := &plan.Routes[index]
+		if route.Action != RouteCreate && route.Action != RouteUpdate {
+			continue
+		}
+		before := len(route.Blocks)
+		route.Blocks = selectPlannedBlocksWithinLimits(route.Blocks, limits, instructions)
+		return before - len(route.Blocks)
+	}
+	return 0
+}
+
+func explicitPlanBlockLimits(instructions string) planBlockLimits {
+	var result planBlockLimits
+	for _, sentence := range splitPlanSentences(instructions) {
+		lower := strings.ToLower(sentence)
+		if !containsAnyPlanPhrase(lower, "at most", "no more than", "maximum", "最多", "不超过") {
+			continue
+		}
+		words := strings.FieldsFunc(lower, func(character rune) bool {
+			return !unicode.IsLetter(character) && !unicode.IsDigit(character)
+		})
+		for index, word := range words {
+			switch word {
+			case "heading", "headings":
+				if value, ok := maximumPlanNumber(words[max(0, index-8):index]); ok {
+					result.heading, result.hasHeading = value, true
+				}
+			case "block", "blocks", "paragraph", "paragraphs":
+				if value, ok := maximumPlanNumber(words[max(0, index-8):index]); ok {
+					result.content, result.hasContent = value, true
+				}
+			}
+		}
+		if value, ok := chinesePlanLimit(lower, []string{"个内容块", "个段落", "内容块", "段落"}); ok {
+			result.content, result.hasContent = value, true
+		}
+		if value, ok := chinesePlanLimit(lower, []string{"个小标题", "个标题", "小标题", "标题"}); ok {
+			result.heading, result.hasHeading = value, true
+		}
+	}
+	return result
+}
+
+func containsAnyPlanPhrase(value string, phrases ...string) bool {
+	for _, phrase := range phrases {
+		if strings.Contains(value, phrase) {
+			return true
+		}
+	}
+	return false
+}
+
+func maximumPlanNumber(words []string) (int, bool) {
+	result, found := 0, false
+	for _, word := range words {
+		value, ok := planNumber(word)
+		if ok && (!found || value > result) {
+			result, found = value, true
+		}
+	}
+	return result, found
+}
+
+func planNumber(value string) (int, bool) {
+	if number, err := strconv.Atoi(value); err == nil && number >= 0 && number <= 10 {
+		return number, true
+	}
+	switch value {
+	case "zero":
+		return 0, true
+	case "one":
+		return 1, true
+	case "two":
+		return 2, true
+	case "three":
+		return 3, true
+	case "four":
+		return 4, true
+	case "five":
+		return 5, true
+	case "six":
+		return 6, true
+	case "seven":
+		return 7, true
+	case "eight":
+		return 8, true
+	case "nine":
+		return 9, true
+	case "ten":
+		return 10, true
+	default:
+		return 0, false
+	}
+}
+
+func chinesePlanLimit(value string, suffixes []string) (int, bool) {
+	numerals := []struct {
+		text  string
+		value int
+	}{
+		{"十", 10}, {"九", 9}, {"八", 8}, {"七", 7}, {"六", 6}, {"五", 5},
+		{"四", 4}, {"三", 3}, {"二", 2}, {"两", 2}, {"一", 1}, {"零", 0},
+	}
+	for _, suffix := range suffixes {
+		position := strings.Index(value, suffix)
+		if position < 0 {
+			continue
+		}
+		prefix := strings.TrimSpace(value[:position])
+		for _, numeral := range numerals {
+			if strings.HasSuffix(prefix, numeral.text) {
+				return numeral.value, true
+			}
+		}
+		for number := 10; number >= 0; number-- {
+			if strings.HasSuffix(prefix, strconv.Itoa(number)) {
+				return number, true
+			}
+		}
+	}
+	return 0, false
+}
+
+func selectPlannedBlocksWithinLimits(
+	blocks []PlannedBlock,
+	limits planBlockLimits,
+	instructions string,
+) []PlannedBlock {
+	contentLimit := len(blocks)
+	if limits.hasContent {
+		contentLimit = limits.content
+	}
+	contentIndexes := make([]int, 0, len(blocks))
+	for index := range blocks {
+		if blocks[index].Type != string(ast.BlockHeading) {
+			contentIndexes = append(contentIndexes, index)
+		}
+	}
+	selectedContent := map[int]bool{}
+	if len(contentIndexes) <= contentLimit {
+		for _, index := range contentIndexes {
+			selectedContent[index] = true
+		}
+	} else {
+		selectRelevantContentBlocks(blocks, contentIndexes, contentLimit, instructions, selectedContent)
+	}
+
+	selectedHeadings := map[int]bool{}
+	headingLimit := len(blocks)
+	if limits.hasHeading {
+		headingLimit = limits.heading
+	}
+	for _, contentIndex := range contentIndexes {
+		if !selectedContent[contentIndex] {
+			continue
+		}
+		for headingIndex := contentIndex - 1; headingIndex >= 0; headingIndex-- {
+			if blocks[headingIndex].Type != string(ast.BlockHeading) {
+				continue
+			}
+			if len(selectedHeadings) < headingLimit {
+				selectedHeadings[headingIndex] = true
+			}
+			break
+		}
+	}
+
+	result := make([]PlannedBlock, 0, len(selectedContent)+len(selectedHeadings))
+	for index, block := range blocks {
+		if selectedContent[index] || selectedHeadings[index] {
+			result = append(result, block)
+		}
+	}
+	return normalizeArticleHeadingLevels(removeOrphanHeadings(result))
+}
+
+func selectRelevantContentBlocks(
+	blocks []PlannedBlock,
+	contentIndexes []int,
+	limit int,
+	instructions string,
+	selected map[int]bool,
+) {
+	if limit <= 0 {
+		return
+	}
+	instructionTokens, excludedTokens := instructionSelectionTokens(instructions)
+	requiredIdentifiers := explicitInstructionIdentifiers(instructions)
+	coveredInstruction := map[string]bool{}
+	coveredContent := map[string]bool{}
+	coveredIdentifiers := map[string]bool{}
+	for len(selected) < limit {
+		bestIndex, bestScore := -1, -1
+		for _, index := range contentIndexes {
+			if selected[index] {
+				continue
+			}
+			score := plannedBlockSelectionScore(
+				blocks[index], instructionTokens, excludedTokens, requiredIdentifiers,
+				coveredInstruction, coveredContent, coveredIdentifiers,
+			)
+			if score > bestScore {
+				bestIndex, bestScore = index, score
+			}
+		}
+		if bestIndex < 0 {
+			break
+		}
+		selected[bestIndex] = true
+		for token := range planTokenSet(plannedBlockText(blocks[bestIndex])) {
+			coveredContent[token] = true
+			if instructionTokens[token] {
+				coveredInstruction[token] = true
+			}
+		}
+		text := strings.ToLower(plannedBlockText(blocks[bestIndex]))
+		for _, identifier := range requiredIdentifiers {
+			if strings.Contains(text, identifier) {
+				coveredIdentifiers[identifier] = true
+			}
+		}
+	}
+}
+
+func plannedBlockSelectionScore(
+	block PlannedBlock,
+	instructionTokens, excludedTokens map[string]bool,
+	requiredIdentifiers []string,
+	coveredInstruction, coveredContent, coveredIdentifiers map[string]bool,
+) int {
+	text := strings.ToLower(plannedBlockText(block))
+	blockTokens := planTokenSet(text)
+	newInstruction, instructionMatches, excludedMatches, novelContent := 0, 0, 0, 0
+	for token := range blockTokens {
+		if instructionTokens[token] {
+			instructionMatches++
+			if !coveredInstruction[token] {
+				newInstruction++
+			}
+		}
+		if excludedTokens[token] {
+			excludedMatches++
+		}
+		if !coveredContent[token] {
+			novelContent++
+		}
+	}
+	tokenCount := max(1, len(blockTokens))
+	relevance := instructionMatches * 100 / tokenCount
+	grounding := int(plannedBlockGroundingScore(block) * 100)
+	newIdentifiers := 0
+	for _, identifier := range requiredIdentifiers {
+		if strings.Contains(text, identifier) && !coveredIdentifiers[identifier] {
+			newIdentifiers++
+		}
+	}
+	score := newIdentifiers*10_000_000 + newInstruction*1_000_000 + instructionMatches*10_000 +
+		grounding*100 + relevance + min(novelContent, 20)
+	if grounding < int(minimumPlanBlockGrounding*100) {
+		score -= 100_000_000
+	}
+	return score - excludedMatches*100_000_000
+}
+
+func instructionSelectionTokens(instructions string) (map[string]bool, map[string]bool) {
+	var positive strings.Builder
+	var excluded strings.Builder
+	for _, sentence := range splitPlanSentences(instructions) {
+		lower := strings.ToLower(sentence)
+		if containsAnyPlanPhrase(lower, "do not", "don't", "avoid", "exclude", "不要", "避免") {
+			if excluded.Len() > 0 {
+				excluded.WriteByte(' ')
+			}
+			excluded.WriteString(sentence)
+			continue
+		}
+		if containsAnyPlanPhrase(lower, "at most", "no more than", "maximum", "最多", "不超过") {
+			continue
+		}
+		if positive.Len() > 0 {
+			positive.WriteByte(' ')
+		}
+		positive.WriteString(sentence)
+	}
+	result := planTokenSet(positive.String())
+	for _, token := range []string{
+		"update", "only", "existing", "page", "add", "concise", "section", "common", "use",
+		"focused", "content", "block", "blocks", "exact", "evidence",
+	} {
+		delete(result, token)
+	}
+	excludedTokens := planTokenSet(excluded.String())
+	for _, token := range []string{
+		"do", "not", "include", "repeat", "existing", "section", "sections", "avoid", "exclude",
+		"type", "types", "detail", "details",
+	} {
+		delete(excludedTokens, token)
+	}
+	for token := range result {
+		delete(excludedTokens, token)
+	}
+	return result, excludedTokens
+}
+
+func explicitInstructionIdentifiers(instructions string) []string {
+	matches := instructionIdentifierPattern.FindAllString(strings.ToLower(instructions), -1)
+	result := make([]string, 0, len(matches))
+	seen := map[string]bool{}
+	for _, match := range matches {
+		if !seen[match] {
+			seen[match] = true
+			result = append(result, match)
+		}
+	}
+	return result
+}
+
+func constrainedPlanInstructionCoverage(plan *ImportPlan, instructions string) float64 {
+	limits := explicitPlanBlockLimits(instructions)
+	if plan == nil || actionablePageRouteCount(plan.Routes) != 1 ||
+		!limits.hasHeading && !limits.hasContent {
+		return 1
+	}
+	instructionTokens, _ := instructionSelectionTokens(instructions)
+	if len(instructionTokens) == 0 {
+		return 1
+	}
+	requiredIdentifiers := explicitInstructionIdentifiers(instructions)
+	contentTokens := map[string]bool{}
+	var content strings.Builder
+	for _, route := range plan.Routes {
+		if route.Action != RouteCreate && route.Action != RouteUpdate {
+			continue
+		}
+		for _, block := range route.Blocks {
+			text := plannedBlockText(block)
+			for token := range planTokenSet(text) {
+				contentTokens[token] = true
+			}
+			content.WriteByte(' ')
+			content.WriteString(strings.ToLower(text))
+		}
+	}
+	for _, identifier := range requiredIdentifiers {
+		if !strings.Contains(content.String(), identifier) {
+			return 0
+		}
+	}
+	covered := 0
+	for token := range instructionTokens {
+		if contentTokens[token] {
+			covered++
+		}
+	}
+	return float64(covered) / float64(len(instructionTokens))
+}
+
+func importPlanExpansionWithinBudget(
+	plan *ImportPlan,
+	candidates []PageCandidate,
+	instructions string,
+) bool {
+	if plan == nil {
+		return false
+	}
+	candidateByID := make(map[uuid.UUID]PageCandidate, len(candidates))
+	for _, candidate := range candidates {
+		candidateByID[candidate.PageID] = candidate
+	}
+	limits := explicitPlanBlockLimits(instructions)
+	singleActionable := actionablePageRouteCount(plan.Routes) == 1
+	for _, route := range plan.Routes {
+		if route.Action != RouteUpdate || route.PageID == nil {
+			continue
+		}
+		if len(route.Blocks) > 100 {
+			return false
+		}
+		currentContent, currentRunes := 0, 0
+		if candidate, ok := candidateByID[*route.PageID]; ok {
+			for _, block := range candidate.Blocks {
+				if block.Type != string(ast.BlockHeading) {
+					currentContent++
+					currentRunes += utf8.RuneCountInString(block.Text)
+				}
+			}
+		}
+		contentLimit := max(12, min(32, currentContent/2+4))
+		headingLimit := 8
+		if singleActionable && limits.hasContent {
+			contentLimit = limits.content
+		}
+		if singleActionable && limits.hasHeading {
+			headingLimit = limits.heading
+		}
+		appendContent, appendHeadings, appendRunes := 0, 0, 0
+		for _, block := range route.Blocks {
+			if block.Mode != BlockAppend {
+				continue
+			}
+			if block.Type == string(ast.BlockHeading) {
+				appendHeadings++
+				continue
+			}
+			appendContent++
+			appendRunes += utf8.RuneCountInString(plannedBlockText(block))
+		}
+		runeLimit := max(6000, min(24000, currentRunes/2+4000))
+		if appendContent > contentLimit || appendHeadings > headingLimit || appendRunes > runeLimit {
+			return false
+		}
+	}
+	return true
 }
 
 func normalizeArticleHeadingLevels(blocks []PlannedBlock) []PlannedBlock {

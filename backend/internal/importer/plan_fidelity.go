@@ -23,9 +23,10 @@ import (
 
 const (
 	ImportPlanFidelitySchemaURL = "https://anby.wiki/schemas/import-plan-fidelity/v1/audit.schema.json"
-	ImportPlanFidelityPromptKey = "source-import-plan-fidelity-v4"
+	ImportPlanFidelityPromptKey = "source-import-plan-fidelity-v5"
 
 	planFidelityValidationAttempts = 3
+	minimumPlanBlockGrounding      = 0.90
 )
 
 //go:embed schema/import-plan-fidelity.schema.json
@@ -318,21 +319,38 @@ func validatePlanFidelityAudit(raw []byte, sourceVersionID uuid.UUID, chunks []e
 			Evidence: generatedEvidenceCandidates(block.Evidence),
 		})
 	}
-	if plan == nil || audit.CoverageAfter < audit.CoverageBefore ||
-		audit.Complete != (len(audit.MissingBlocks) == 0) {
+	if plan == nil {
 		return nil, 0, fmt.Errorf("%w: import plan fidelity metadata", ai.ErrInvalidOutput)
+	}
+	metadataCorrections := 0
+	if audit.CoverageAfter < audit.CoverageBefore {
+		if !discardInvalidRepairs {
+			return nil, 0, fmt.Errorf("%w: import plan fidelity metadata", ai.ErrInvalidOutput)
+		}
+		audit.CoverageAfter = audit.CoverageBefore
+		metadataCorrections++
+	}
+	if audit.Complete != (len(audit.MissingBlocks) == 0) {
+		if !discardInvalidRepairs {
+			return nil, 0, fmt.Errorf("%w: import plan fidelity metadata", ai.ErrInvalidOutput)
+		}
+		audit.Complete = false
+		if len(audit.MissingBlocks) == 0 {
+			audit.CoverageAfter = audit.CoverageBefore
+		}
+		metadataCorrections++
 	}
 	catalog := newEvidenceCatalog(sourceVersionID, chunks)
 	originalBlockCount := len(audit.MissingBlocks)
 	retained := make([]PlanFidelityMissingBlock, 0, originalBlockCount)
-	rejected := 0
+	rejectedRepairs := 0
 	for index := range audit.MissingBlocks {
 		block := audit.MissingBlocks[index]
 		block.Text = strings.TrimSpace(block.Text)
 		block.AfterHeading = strings.TrimSpace(block.AfterHeading)
 		if block.RouteIndex < 0 || block.RouteIndex >= len(plan.Routes) || block.Text == "" {
 			if discardInvalidRepairs {
-				rejected++
+				rejectedRepairs++
 				continue
 			}
 			return nil, 0, fmt.Errorf("%w: import plan fidelity route", ai.ErrInvalidOutput)
@@ -340,7 +358,7 @@ func validatePlanFidelityAudit(raw []byte, sourceVersionID uuid.UUID, chunks []e
 		route := plan.Routes[block.RouteIndex]
 		if route.Action != RouteCreate && route.Action != RouteUpdate {
 			if discardInvalidRepairs {
-				rejected++
+				rejectedRepairs++
 				continue
 			}
 			return nil, 0, fmt.Errorf("%w: import plan fidelity action", ai.ErrInvalidOutput)
@@ -348,7 +366,7 @@ func validatePlanFidelityAudit(raw []byte, sourceVersionID uuid.UUID, chunks []e
 		block.Evidence = catalog.normalize(block.Evidence)
 		if len(block.Evidence) == 0 {
 			if discardInvalidRepairs {
-				rejected++
+				rejectedRepairs++
 				continue
 			}
 			return nil, 0, ErrEvidenceRequired
@@ -361,7 +379,7 @@ func validatePlanFidelityAudit(raw []byte, sourceVersionID uuid.UUID, chunks []e
 		retained = append(retained, block)
 	}
 	audit.MissingBlocks = retained
-	if rejected > 0 && originalBlockCount > 0 {
+	if rejectedRepairs > 0 && originalBlockCount > 0 {
 		// Only verified repairs may earn coverage improvement. Rejected repairs
 		// contribute zero; accepted repairs receive their proportional share.
 		improvement := max(0.0, audit.CoverageAfter-audit.CoverageBefore)
@@ -369,7 +387,7 @@ func validatePlanFidelityAudit(raw []byte, sourceVersionID uuid.UUID, chunks []e
 		audit.CoverageAfter = audit.CoverageBefore + improvement*retainedFraction
 		audit.Complete = false
 	}
-	return &audit, rejected, nil
+	return &audit, rejectedRepairs + metadataCorrections, nil
 }
 
 func remapPlanFidelityEvidence(audit *PlanFidelityAudit, chunks []modelSourceChunk) {
@@ -536,7 +554,13 @@ func proseEquivalent(left, right string) bool {
 		}
 	}
 	union := len(leftTokens) + len(rightTokens) - intersection
-	return union > 0 && float64(intersection)/float64(union) >= 0.82
+	smaller := min(len(leftTokens), len(rightTokens))
+	if union == 0 || smaller == 0 {
+		return false
+	}
+	jaccard := float64(intersection) / float64(union)
+	containment := float64(intersection) / float64(smaller)
+	return jaccard >= 0.72 || intersection >= 5 && containment >= 0.90
 }
 
 func planTokenSet(value string) map[string]bool {
@@ -544,11 +568,55 @@ func planTokenSet(value string) map[string]bool {
 	for _, token := range strings.FieldsFunc(strings.ToLower(value), func(r rune) bool {
 		return !unicode.IsLetter(r) && !unicode.IsDigit(r)
 	}) {
-		if utf8.RuneCountInString(token) >= 2 {
+		token = normalizedPlanToken(token)
+		if utf8.RuneCountInString(token) >= 2 && !isPlanStopWord(token) {
 			result[token] = true
+		}
+		runes := []rune(token)
+		for index := 0; index+1 < len(runes); index++ {
+			if isCJKPlanRune(runes[index]) && isCJKPlanRune(runes[index+1]) {
+				result[string(runes[index:index+2])] = true
+			}
 		}
 	}
 	return result
+}
+
+func normalizedPlanToken(value string) string {
+	switch {
+	case strings.HasPrefix(value, "deserializ"):
+		return "deserialize"
+	case strings.HasPrefix(value, "serializ"):
+		return "serialize"
+	case strings.HasPrefix(value, "retriev") || value == "retrieval":
+		return "retrieve"
+	case strings.HasPrefix(value, "distinct"):
+		return "distinct"
+	}
+	if len(value) > 4 && strings.HasSuffix(value, "s") &&
+		!strings.HasSuffix(value, "ss") && !strings.HasSuffix(value, "us") &&
+		!strings.HasSuffix(value, "is") {
+		return strings.TrimSuffix(value, "s")
+	}
+	return value
+}
+
+func isCJKPlanRune(value rune) bool {
+	return value >= '\u3400' && value <= '\u9fff' ||
+		value >= '\uf900' && value <= '\ufaff' ||
+		value >= '\u3040' && value <= '\u30ff' ||
+		value >= '\uac00' && value <= '\ud7af'
+}
+
+func isPlanStopWord(value string) bool {
+	switch value {
+	case "a", "an", "and", "are", "as", "at", "be", "been", "between", "by", "for", "from",
+		"has", "have", "in", "into", "is", "it", "its", "of", "on", "or", "that", "the",
+		"their", "these", "this", "to", "using", "was", "were", "where", "which", "with":
+		return true
+	default:
+		return false
+	}
 }
 
 // assessImportPlanQuality deliberately ignores the model-authored score. The
@@ -557,7 +625,9 @@ func planTokenSet(value string) map[string]bool {
 func assessImportPlanQuality(
 	plan *ImportPlan,
 	chunks []evidence.SourceChunk,
-	fidelity, threshold float64,
+	fidelity float64,
+	expansionWithinBudget bool,
+	threshold float64,
 ) PlanQuality {
 	if threshold < DefaultQualityThreshold {
 		threshold = DefaultQualityThreshold
@@ -579,10 +649,14 @@ func assessImportPlanQuality(
 		Routing:   roundQuality(planRoutingScore(plan)),
 		Threshold: threshold,
 	}
+	if !expansionWithinBudget {
+		quality.Concision = 0
+	}
 	score := quality.Fidelity*0.35 + quality.Grounding*0.25 +
 		quality.Structure*0.20 + quality.Concision*0.10 + quality.Routing*0.10
 	if quality.Fidelity < DefaultQualityThreshold || quality.Grounding < 0.65 ||
-		quality.Structure < 0.78 {
+		planMinimumGroundingScore(plan) < minimumPlanBlockGrounding ||
+		quality.Structure < 0.78 || !expansionWithinBudget {
 		score = min(score, DefaultQualityThreshold-0.01)
 	}
 	quality.Overall = roundQuality(clampUnit(score))
@@ -601,45 +675,105 @@ func planGroundingScore(plan *ImportPlan) float64 {
 			continue
 		}
 		for _, block := range route.Blocks {
-			total++
-			if len(block.Evidence) == 0 {
-				continue
-			}
 			if block.Type == string(ast.BlockHeading) {
-				score += 1
 				continue
 			}
-			text := block.Text
-			if block.Type == string(ast.BlockBulletList) {
-				text = strings.Join(block.Items, " ")
-			}
-			proseRunes := max(1, utf8.RuneCountInString(text))
-			quotedRunes := 0
-			seen := map[string]bool{}
-			for _, item := range block.Evidence {
-				key := evidenceKey(item)
-				if !seen[key] {
-					seen[key] = true
-					quotedRunes += utf8.RuneCountInString(item.Quotation)
-				}
-			}
-			ratio := float64(quotedRunes) / float64(proseRunes)
-			switch {
-			case ratio >= 0.50:
-				score += 1
-			case ratio >= 0.25:
-				score += 0.85
-			case ratio >= 0.12:
-				score += 0.70
-			default:
-				score += 0.45
-			}
+			total++
+			score += plannedBlockGroundingScore(block)
 		}
 	}
 	if total == 0 {
 		return 0
 	}
 	return clampUnit(score / float64(total))
+}
+
+func planMinimumGroundingScore(plan *ImportPlan) float64 {
+	minimum, found := 1.0, false
+	for _, route := range plan.Routes {
+		if route.Action != RouteCreate && route.Action != RouteUpdate {
+			continue
+		}
+		for _, block := range route.Blocks {
+			if block.Type == string(ast.BlockHeading) {
+				continue
+			}
+			minimum = min(minimum, plannedBlockGroundingScore(block))
+			found = true
+		}
+	}
+	if !found {
+		return 0
+	}
+	return minimum
+}
+
+func plannedBlockGroundingScore(block PlannedBlock) float64 {
+	if len(block.Evidence) == 0 {
+		return 0
+	}
+	statements := splitPlanSentences(block.Text)
+	if block.Type == string(ast.BlockBulletList) {
+		statements = block.Items
+	}
+	if len(statements) == 0 {
+		return 0
+	}
+	quotedRunes := 0
+	seen := map[string]bool{}
+	for _, item := range block.Evidence {
+		key := evidenceKey(item)
+		if !seen[key] {
+			seen[key] = true
+			quotedRunes += utf8.RuneCountInString(item.Quotation)
+		}
+	}
+	minimum := 1.0
+	for _, statement := range statements {
+		proseRunes := max(1, utf8.RuneCountInString(statement))
+		ratio := float64(quotedRunes) / float64(proseRunes)
+		lengthScore := 0.45
+		switch {
+		case ratio >= 0.50:
+			lengthScore = 1
+		case ratio >= 0.25:
+			lengthScore = 0.85
+		case ratio >= 0.12:
+			lengthScore = 0.70
+		}
+		minimum = min(minimum, lengthScore*planEvidenceTokenSupport(statement, block.Evidence))
+	}
+	return minimum
+}
+
+func planEvidenceTokenSupport(text string, items []CandidateEvidence) float64 {
+	textTokens := planTokenSet(text)
+	if len(textTokens) == 0 {
+		return 0
+	}
+	evidenceTokens := map[string]bool{}
+	for _, item := range items {
+		for token := range planTokenSet(item.Quotation) {
+			evidenceTokens[token] = true
+		}
+	}
+	overlap := 0
+	for token := range textTokens {
+		if evidenceTokens[token] {
+			overlap++
+		}
+	}
+	coverage := float64(overlap) / float64(len(textTokens))
+	switch {
+	case coverage >= 0.35:
+		return 1
+	case coverage >= 0.20:
+		return 0.85
+	case coverage >= 0.10:
+		return 0.65
+	default:
+		return 0.35
+	}
 }
 
 func planStructureScore(plan *ImportPlan, sourceRunes int) float64 {

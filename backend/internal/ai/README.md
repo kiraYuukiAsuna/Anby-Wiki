@@ -17,8 +17,10 @@ Worker 首次启用来源导入时，幂等登记当前 `source-extraction-v7` P
 临时候选 UUID 与持久化 Entity ID，并提供运行时支持的 Entity type / Claim property
 词表与关系方向约束；作品/RFC 属性有独立语义，禁止用 `part_of` 代替发布组织，也禁止
 任何 Entity 关系指回主体自身；`instance_of` 只允许有明确分类措辞的单值候选，禁止退化为
-通用关联。页面规划使用 `source-import-plan-v6`，多窗口结果由服务端
-确定性合并，并由 `source-import-plan-fidelity-v4` 对照原始 Chunk 做证据化遗漏审计和章节级修复。
+通用关联。页面规划使用 `source-import-plan-v7`，多窗口结果由服务端
+确定性合并，并由 `source-import-plan-fidelity-v5` 对照原始 Chunk 做证据化遗漏审计和章节级修复。
+两者都把用户指定范围和块数上限视为跨窗口全局约束，并要求每条正文陈述由引文直接支撑；
+导航标签、标题、孤立代码或示例值不能支撑宽泛说明。
 模型规划使用只包含语义内容和 `chunk_id + quotation` 的轻量 Schema；服务端再生成完整
 ImportPlan v1。保真审计使用独立的只允许既有 route_index 和精确 evidence 的内部 Schema；最终质量分由
 服务端计算而非采信模型自评分。保真 v4 明确禁止翻译 evidence 引文，并在三次语义纠正耗尽后

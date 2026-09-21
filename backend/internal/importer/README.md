@@ -77,10 +77,11 @@ Gateway 相同的权威 JSON Schema 预校验并纠正失败输出；OpenAI comp
 缩写/全名与 label/alias 命中的同一 Entity，并确定性拒绝方向、类型不成立或主体等于
 Entity 值的自引用 Claim；相同约束在逐字证据核验、稳定 ID 分类与 Knowledge 写入边界
 重复兜底，旧 Extraction 复用时也会重新执行。`instance_of` 仅保留引文中明确表达分类
-关系的候选，不再把相邻技术术语当作通用关联边；同一主体的单值属性若在一个模型批次中
+关系且分类短语直接连接候选主体和值标签的候选，不再把“基于 JavaScript 语法”之类的
+相邻技术术语误写成 `JSON instance_of JavaScript`；同一主体的单值属性若在一个模型批次中
 出现多个值，分类器按“支持现有事实优先，其次置信度、证据覆盖、稳定 ID”只保留一个，
 Composer/Apply 前置校验与 Knowledge 写入约束继续防御不可能应用的 Proposal。
-事实候选允许为空：来源随后仍会进入 `source-import-plan-v6`，由不受固定 Entity/Claim
+事实候选允许为空：来源随后仍会进入 `source-import-plan-v7`，由不受固定 Entity/Claim
 词表限制的页面规划判断百科价值。模型提供的
 引文必须逐字存在；服务端会重新推导 rune 范围以纠正模型常见的 Unicode/字节计数偏差。
 引文重复出现时选择离模型提示位置最近的精确匹配，最近距离并列才拒绝；模糊匹配、翻译
@@ -109,7 +110,7 @@ Operation 排在 Claim Operation 之前，Claim 的主体和 Entity 值在 Compo
 可核验 Entity/Claim 继续进入治理。新实体 canonical key 使用 `type_key:label`，避免
 不同类型的同名实体在整批应用时互相冲突。
 
-`source-import-plan-v6` 在事实抽取之后执行来源理解与页面路由。它先按标题、来源名、
+`source-import-plan-v7` 在事实抽取之后执行来源理解与页面路由。它先按标题、来源名、
 Entity/alias 召回已有 Page 及可替换 Block，再允许一份来源同时生成多个 `create`、
 `update`、`link` 与 `ignore` 路由。`link.related_to` 显式选择同批 create/update
 页面并携带原文证据，随后编译为稳定 `page_reference`，由投影生成反链；每个新写或改写
@@ -126,11 +127,21 @@ Page/Block ID。模型只输出页面语义、正文和 `chunk_id + quotation`�
 内容时才保留路由。Composer 调用 Citation 领域服务后再按稳定 ID 去重，同一段不可变
 证据在重试、多窗口或多路由中只会建立一个 Citation 记录。
 
-确定性合并后由 `source-import-plan-fidelity-v4` 按原始 Chunk 分窗比较完整页面计划，逐项检查定义、
+HTML 来源优先从 DOM 的 `main` 正文提取语义块，并排除导航、侧栏、页眉和页脚。
+跨窗口合并会归并近义段落；单页面指令中的标题/内容块上限在最终合并计划上执行，
+代表块按正向要求覆盖、排除项与引文直接支撑度选择，最终块对正向要求的覆盖率继续
+约束 fidelity。未显式限制的现有页更新仍受相对当前页规模的扩张门禁，异常大更新停在
+Plan 阶段而不会静默截断或进入 Proposal。
+用户在要求中明确点名的函数/方法标识符必须全部出现在最终计划中。
+Grounding 只评价正文块；标题不会抬高平均分，任一正文块低于直接支撑底线时整份计划
+都不能通过质量门禁。
+
+确定性合并后由 `source-import-plan-fidelity-v5` 按原始 Chunk 分窗比较完整页面计划，逐项检查定义、
 约束、禁止事项、条件、例外、先后顺序、数量、互操作和安全要求。模型只能返回带精确 Chunk
 引文的遗漏段落；模型同样只给 `chunk_id + quotation`，服务端重新定位并把修复插入已有路由和章节；不能借审计新建页面或猜测
 章节，目标页面语言也不得用于翻译 evidence 引文。单个保真分窗经过三次纠正仍含坏修复时，
 只丢弃无法核验的修复并撤销其覆盖率增益，已经独立核验的页面计划和同窗修复不会被连带丢弃；
+仅 `complete/coverage` 元数据自相矛盾时也按同一原则保守归一化；
 回退后的覆盖率仍必须通过质量门槛。最终 `quality_score` 不再采用模型自评分，而由服务端按原文保真度 35%、证据支撑 25%、
 文章结构 20%、去重精炼 10% 和路由置信度 10% 计算。保真度低于 0.70、证据或结构存在硬伤，
 或综合分低于管理员阈值（默认 0.70）时，计划停在 Plan 阶段，不生成 Proposal；达到门槛才进入
