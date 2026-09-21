@@ -161,6 +161,7 @@ func toAIConfigResponse(value *aiconfig.Config) aiConfigResponse {
 }
 
 func aiConfigError(w http.ResponseWriter, r *http.Request, err error) {
+	var providerErr *ai.ProviderError
 	switch {
 	case errors.Is(err, governance.ErrPermissionDenied):
 		governanceError(w, r, err)
@@ -170,9 +171,35 @@ func aiConfigError(w http.ResponseWriter, r *http.Request, err error) {
 		httpx.WriteError(w, r, http.StatusConflict, httpx.CodeConflict, "请先保存并启用 AI 配置")
 	case errors.Is(err, ai.ErrTimeout), errors.Is(err, context.DeadlineExceeded):
 		httpx.WriteError(w, r, http.StatusGatewayTimeout, httpx.CodeInternal, "模型配置测试超时")
+	case errors.As(err, &providerErr):
+		reason, message := classifyAIConfigProviderError(providerErr)
+		httpx.WriteJSON(w, http.StatusBadGateway, httpx.Error{
+			Code: httpx.CodeInternal, Message: message,
+			RequestID: httpx.RequestIDFrom(r.Context()),
+			Details: map[string]any{
+				"reason": reason, "temporary": providerErr.Temporary,
+			},
+		})
 	case errors.Is(err, ai.ErrProvider), errors.Is(err, ai.ErrInvalidOutput):
 		httpx.WriteError(w, r, http.StatusBadGateway, httpx.CodeInternal, "模型配置测试失败")
 	default:
 		serviceError(w, r, err)
+	}
+}
+
+func classifyAIConfigProviderError(err *ai.ProviderError) (string, string) {
+	switch err.Code {
+	case "authentication_failed", "http_401", "http_403":
+		return "authentication_failed", "模型供应商拒绝了 API Key"
+	case "rate_limited", "http_429":
+		return "rate_limited", "模型供应商正在限流，请稍后重试"
+	case "invalid_request", "http_400", "http_404":
+		return "invalid_request", "模型地址、模型 ID 或请求格式不被供应商接受"
+	case "provider_unavailable", "transport", "kernel_unavailable":
+		return "provider_unavailable", "模型供应商暂时不可用"
+	case "invalid_structured_output", "output_truncated":
+		return "structured_output_invalid", "模型未返回兼容的结构化输出"
+	default:
+		return "provider_error", "模型配置测试失败"
 	}
 }

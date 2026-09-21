@@ -58,6 +58,31 @@ const configSchema = z
     }
   });
 
+const aiConfigTestErrorSchema = z.object({
+  message: z.string().min(1),
+  details: z.object({
+    reason: z.string(),
+  }).optional(),
+});
+
+async function readAIConfigTestError(error: unknown) {
+  if (!(error instanceof ResponseError)) return null;
+  try {
+    const parsed = aiConfigTestErrorSchema.safeParse(
+      await error.response.clone().json(),
+    );
+    return parsed.success
+      ? {
+        status: error.response.status,
+        message: parsed.data.message,
+        reason: parsed.data.details?.reason,
+      }
+      : { status: error.response.status, message: null, reason: null };
+  } catch {
+    return { status: error.response.status, message: null, reason: null };
+  }
+}
+
 function ConfigForm({
   config,
   onSaved,
@@ -148,18 +173,18 @@ function ConfigForm({
         description: `${result.provider} · ${result.model} · ${result.latencyMs} ms`,
       });
     } catch (error) {
-      if (error instanceof ResponseError && error.response.status === 409) {
+      const detail = await readAIConfigTestError(error);
+      if (detail?.status === 409) {
         toast.error("请先保存并启用 AI 配置");
-      } else if (
-        error instanceof ResponseError &&
-        error.response.status === 504
-      ) {
+      } else if (detail?.status === 504) {
         toast.error("模型配置测试超时", {
           description: "请检查供应商地址、模型 ID、超时设置和上游状态。",
         });
       } else {
-        toast.error("模型配置测试失败", {
-          description: "密钥不会显示在错误信息中，请重新填写后保存再试。",
+        toast.error(detail?.message ?? "模型配置测试失败", {
+          description: detail?.reason
+            ? `诊断代码：${detail.reason}`
+            : "密钥不会显示在错误信息中，请重新填写后保存再试。",
         });
       }
     } finally {

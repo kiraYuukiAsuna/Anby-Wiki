@@ -78,6 +78,16 @@ class ModelOutputTruncatedError(ValueError):
     pass
 
 
+def provider_status_error_code(status_code: int) -> str:
+    if status_code in (401, 403):
+        return "authentication_failed"
+    if status_code == 429:
+        return "rate_limited"
+    if 400 <= status_code < 500:
+        return "invalid_request"
+    return "provider_unavailable"
+
+
 class OpenAICompatibleChatCompletion(ChatCompletionClientBase):
     """Small SK connector for providers implementing the OpenAI chat API.
 
@@ -292,7 +302,12 @@ async def generate(payload: GenerateRequest) -> JSONResponse:
                     await asyncio.sleep(2**attempt)
                     continue
                 status = 503 if temporary else 502
-                return error_response(status, "provider_http_error", f"model provider returned HTTP {exc.status_code}", temporary)
+                return error_response(
+                    status,
+                    provider_status_error_code(exc.status_code),
+                    f"model provider returned HTTP {exc.status_code}",
+                    temporary,
+                )
         return error_response(502, "semantic_kernel_error", "Semantic Kernel request failed", False)
     finally:
         await client.close()

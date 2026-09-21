@@ -193,3 +193,14 @@ def test_generate_reports_output_truncation(monkeypatch):
 
     assert response.status_code == 502
     assert response.json()["code"] == "output_truncated"
+
+
+def test_provider_status_error_code_is_safe_and_actionable():
+    module = importlib.import_module("app")
+
+    assert module.provider_status_error_code(401) == "authentication_failed"
+    assert module.provider_status_error_code(403) == "authentication_failed"
+    assert module.provider_status_error_code(429) == "rate_limited"
+    assert module.provider_status_error_code(400) == "invalid_request"
+    assert module.provider_status_error_code(404) == "invalid_request"
+    assert module.provider_status_error_code(500) == "provider_unavailable"
