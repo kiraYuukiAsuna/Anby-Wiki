@@ -1081,6 +1081,66 @@ func TestNormalizePlanLinksKeepsExplicitGroundedEdgesOnly(t *testing.T) {
 	}
 }
 
+func TestEnsureRequestedPlanLinksRecoversGroundedExistingPages(t *testing.T) {
+	jsonID, pointerID, unrelatedID := uuid.New(), uuid.New(), uuid.New()
+	evidenceItem := CandidateEvidence{
+		ChunkID:   uuid.New(),
+		Quotation: "JSON Patch uses JSON Pointer paths to modify JSON documents.",
+		CharStart: 0, CharEnd: 59,
+	}
+	routes := ensureRequestedPlanLinks(
+		normalizePlanLinks([]PageRoute{
+			{
+				Action: RouteCreate, Title: "JSON Patch", Reason: "new subject", Confidence: 0.9,
+				Blocks: []PlannedBlock{{
+					Type: string(ast.BlockParagraph), Mode: BlockAppend,
+					Text: "JSON Patch uses JSON Pointer paths.", Evidence: []CandidateEvidence{evidenceItem},
+				}},
+			},
+			{Action: RouteLink, Title: "JSON", PageID: &jsonID},
+		}),
+		[]PageCandidate{
+			{PageID: jsonID, Title: "JSON"},
+			{PageID: pointerID, Title: "JSON Pointer"},
+			{PageID: unrelatedID, Title: "HTTP PATCH"},
+		},
+		"Include link routes to the existing JSON and JSON Pointer pages.",
+	)
+	routes = normalizePlanLinks(routes)
+	if len(routes) != 3 {
+		t.Fatalf("routes=%#v, want one actionable route and two links", routes)
+	}
+	links := map[uuid.UUID]PageRoute{}
+	for _, route := range routes {
+		if route.Action == RouteLink && route.PageID != nil {
+			links[*route.PageID] = route
+		}
+	}
+	for _, pageID := range []uuid.UUID{jsonID, pointerID} {
+		link, ok := links[pageID]
+		if !ok || len(link.RelatedTo) != 1 || link.RelatedTo[0] != "JSON Patch" ||
+			len(link.Evidence) != 1 {
+			t.Fatalf("missing grounded link for %s: %#v", pageID, links)
+		}
+	}
+	if _, ok := links[unrelatedID]; ok {
+		t.Fatalf("unrequested page received a link route: %#v", links[unrelatedID])
+	}
+
+	onlyPointer := normalizePlanLinks(ensureRequestedPlanLinks(
+		routes[:1],
+		[]PageCandidate{
+			{PageID: jsonID, Title: "JSON"},
+			{PageID: pointerID, Title: "JSON Pointer"},
+		},
+		"Include a link route to the existing JSON Pointer page.",
+	))
+	if len(onlyPointer) != 2 || onlyPointer[1].PageID == nil ||
+		*onlyPointer[1].PageID != pointerID {
+		t.Fatalf("short title was inferred from a longer requested title: %#v", onlyPointer)
+	}
+}
+
 func TestValidateImportPlanAcceptsGroundedExplicitLink(t *testing.T) {
 	sourceVersionID, chunkID, targetPageID := uuid.New(), uuid.New(), uuid.New()
 	text := "Alpha is related to Gamma."

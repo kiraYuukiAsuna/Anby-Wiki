@@ -443,10 +443,11 @@ func selectCandidatesForPlan(candidates *Candidates, plan *ImportPlan) *Candidat
 				exact = append(exact, candidate.CandidateID)
 			}
 		}
-		if len(exact) > 0 {
-			for _, candidateID := range exact {
-				selected[candidateID] = true
-			}
+		if len(exact) == 1 {
+			selected[exact[0]] = true
+			continue
+		}
+		if len(exact) > 1 {
 			continue
 		}
 		wanted := map[string]bool{}

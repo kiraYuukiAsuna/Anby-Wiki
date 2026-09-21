@@ -284,6 +284,7 @@ func (p *PagePlanner) Plan(ctx context.Context, params PlanParams) (*PlanResult,
 	p.removeNoOpUpdates(plan, candidatePages)
 	plan.Routes = mergePageRoutes(plan.Routes)
 	plan.Routes = normalizePlanLinks(plan.Routes)
+	plan.Routes = ensureRequestedPlanLinks(plan.Routes, candidatePages, params.Instructions)
 	refineImportPlan(plan)
 	applyExplicitPlanBlockLimits(plan, params.Instructions)
 	if plan.Profile.Useful && actionablePageRouteCount(plan.Routes) == 0 {
@@ -750,7 +751,7 @@ func normalizeImportPlanCollections(plan *ImportPlan) {
 
 func (p *PagePlanner) recallPages(ctx context.Context, params PlanParams) ([]PageCandidate, error) {
 	terms := []string{params.PreferredTitle, params.SourceLabel}
-	for _, candidate := range rankedEntityCandidates(params.Candidates, 12) {
+	for _, candidate := range rankedEntityCandidates(params.Candidates, 20) {
 		terms = append(terms, candidate.Label)
 		terms = append(terms, candidate.Aliases...)
 	}
@@ -774,7 +775,7 @@ func (p *PagePlanner) recallPages(ctx context.Context, params PlanParams) ([]Pag
 	for _, rawTerm := range terms {
 		term := strings.TrimSpace(rawTerm)
 		key := strings.ToLower(term)
-		if term == "" || seenTerm[key] || len(seenTerm) >= 16 || len(hits) >= 20 {
+		if term == "" || seenTerm[key] || len(seenTerm) >= 32 || len(hits) >= 20 {
 			continue
 		}
 		seenTerm[key] = true
@@ -1066,6 +1067,123 @@ func normalizePlanLinks(routes []PageRoute) []PageRoute {
 		}
 		route.RelatedTo = resolved
 		result = append(result, route)
+	}
+	return result
+}
+
+func ensureRequestedPlanLinks(
+	routes []PageRoute,
+	candidates []PageCandidate,
+	instructions string,
+) []PageRoute {
+	instructionText := " " + normalizedIdentityText(instructions) + " "
+	if !strings.Contains(instructionText, " link ") || actionablePageRouteCount(routes) != 1 {
+		return routes
+	}
+	actionableTitle := ""
+	existing := map[uuid.UUID]bool{}
+	for _, route := range routes {
+		if route.Action == RouteCreate || route.Action == RouteUpdate {
+			actionableTitle = route.Title
+		}
+		if route.PageID != nil {
+			existing[*route.PageID] = true
+		}
+	}
+	actionableKey := normalizedIdentityText(actionableTitle)
+	for _, candidate := range candidates {
+		titleKey := normalizedIdentityText(candidate.Title)
+		if candidate.PageID == uuid.Nil || existing[candidate.PageID] ||
+			titleKey == "" || titleKey == actionableKey ||
+			!explicitlyRequestedLinkTitle(instructionText, titleKey, actionableTitle, candidates) {
+			continue
+		}
+		linkEvidence := requestedLinkEvidence(routes, titleKey)
+		if len(linkEvidence) == 0 {
+			continue
+		}
+		pageID := candidate.PageID
+		routes = append(routes, PageRoute{
+			Action: RouteLink, Title: candidate.Title, PageID: &pageID,
+			Reason:     "The requested related page is explicitly referenced by the source.",
+			Confidence: 0.9, RelatedTo: []string{actionableTitle},
+			Evidence: linkEvidence, Blocks: []PlannedBlock{},
+		})
+		existing[pageID] = true
+	}
+	return routes
+}
+
+func explicitlyRequestedLinkTitle(
+	instructionText string,
+	titleKey string,
+	actionableTitle string,
+	candidates []PageCandidate,
+) bool {
+	instructionWords := strings.Fields(instructionText)
+	titleWords := strings.Fields(titleKey)
+	if len(titleWords) == 0 {
+		return false
+	}
+	longerTitles := make([][]string, 0, len(candidates)+1)
+	actionableWords := strings.Fields(normalizedIdentityText(actionableTitle))
+	if len(actionableWords) > len(titleWords) {
+		longerTitles = append(longerTitles, actionableWords)
+	}
+	for _, candidate := range candidates {
+		words := strings.Fields(normalizedIdentityText(candidate.Title))
+		if len(words) > len(titleWords) {
+			longerTitles = append(longerTitles, words)
+		}
+	}
+	for index := 0; index+len(titleWords) <= len(instructionWords); index++ {
+		if !planWordsMatchAt(instructionWords, titleWords, index) {
+			continue
+		}
+		contained := false
+		for _, longer := range longerTitles {
+			if planWordsMatchAt(instructionWords, longer, index) {
+				contained = true
+				break
+			}
+		}
+		if !contained {
+			return true
+		}
+	}
+	return false
+}
+
+func planWordsMatchAt(value, wanted []string, start int) bool {
+	if start < 0 || start+len(wanted) > len(value) {
+		return false
+	}
+	for index := range wanted {
+		if value[start+index] != wanted[index] {
+			return false
+		}
+	}
+	return true
+}
+
+func requestedLinkEvidence(routes []PageRoute, titleKey string) []CandidateEvidence {
+	result := make([]CandidateEvidence, 0, 2)
+	for _, route := range routes {
+		if route.Action != RouteCreate && route.Action != RouteUpdate {
+			continue
+		}
+		for _, block := range route.Blocks {
+			for _, item := range block.Evidence {
+				quotation := " " + normalizedIdentityText(item.Quotation) + " "
+				if !strings.Contains(quotation, " "+titleKey+" ") {
+					continue
+				}
+				result = mergeCandidateEvidence(result, []CandidateEvidence{item})
+				if len(result) == 2 {
+					return result
+				}
+			}
+		}
 	}
 	return result
 }

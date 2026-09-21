@@ -787,6 +787,13 @@ func TestSelectCandidatesForPlanPrefersExactLabelOverAlias(t *testing.T) {
 		t.Fatalf("alias match competed with exact page subject: %#v", selected)
 	}
 
+	candidates.Entities[0].Label = "JSON Pointer"
+	selected = selectCandidatesForPlan(candidates, plan)
+	if len(selected.Entities) != 0 || len(selected.Claims) != 0 {
+		t.Fatalf("ambiguous exact page subjects must require review: %#v", selected)
+	}
+
+	candidates.Entities[0].Label = "RFC 6901"
 	candidates.Entities = []EntityCandidate{candidates.Entities[0], candidates.Entities[2]}
 	selected = selectCandidatesForPlan(candidates, plan)
 	if len(selected.Entities) != 2 || len(selected.Claims) != 1 {
