@@ -271,7 +271,7 @@ export function ImportJobList() {
           所有历史任务、失败原因、重试记录和待审核提议都会保存在这里。
         </p>
         <Button asChild className="mt-5">
-          <Link href={LOGIN_PATH}>登录并查看</Link>
+          <a href={LOGIN_PATH}>登录并查看</a>
         </Button>
       </div>
     );
