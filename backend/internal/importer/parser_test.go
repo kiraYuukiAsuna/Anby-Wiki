@@ -151,6 +151,30 @@ func TestValidateUploadDetectsStructuredMIME(t *testing.T) {
 	}
 }
 
+func TestValidateUploadAcceptsHTMLFragment(t *testing.T) {
+	source, err := ValidateUpload(
+		context.Background(),
+		DefaultURLPolicy(),
+		SignatureScanner{},
+		"rfc6901.html",
+		"text/html",
+		[]byte("<pre>Internet Engineering Task Force (IETF)</pre>"),
+	)
+	if err != nil {
+		t.Fatalf("validate HTML fragment: %v", err)
+	}
+	if source.MIMEType != "text/html" {
+		t.Fatalf("mime=%q, want text/html", source.MIMEType)
+	}
+	blocks, err := parseHTML(source.Content)
+	if err != nil {
+		t.Fatalf("parse HTML fragment: %v", err)
+	}
+	if len(blocks) != 1 || blocks[0].Text != "Internet Engineering Task Force (IETF)" {
+		t.Fatalf("unexpected HTML fragment blocks: %#v", blocks)
+	}
+}
+
 func TestParseImageOCRRuntime(t *testing.T) {
 	imagePath := strings.TrimSpace(os.Getenv("ANBY_OCR_TEST_IMAGE"))
 	if imagePath == "" {

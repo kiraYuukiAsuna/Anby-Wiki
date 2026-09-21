@@ -267,8 +267,24 @@ func magicMatches(mimeType string, content []byte) bool {
 		return bytes.HasPrefix(trimmed, []byte("%PDF-"))
 	case "text/html":
 		lower := bytes.ToLower(trimmed)
-		return bytes.Contains(lower[:min(len(lower), 512)], []byte("<html")) ||
-			bytes.Contains(lower[:min(len(lower), 512)], []byte("<!doctype html"))
+		prefix := lower[:min(len(lower), 512)]
+		for _, marker := range [][]byte{
+			[]byte("<!doctype html"),
+			[]byte("<html"),
+			[]byte("<head"),
+			[]byte("<body"),
+			[]byte("<main"),
+			[]byte("<article"),
+			[]byte("<section"),
+			[]byte("<div"),
+			[]byte("<p"),
+			[]byte("<pre"),
+		} {
+			if bytes.Contains(prefix, marker) {
+				return true
+			}
+		}
+		return false
 	case "text/plain":
 		return !bytes.Contains(content, []byte{0})
 	case "text/csv":
