@@ -2,8 +2,8 @@
 
 > 字节小团队内部技术分享详细底稿
 > 副标题：一份 PDF 如何经过 AI 理解、证据校验、人工治理，最终成为可追溯的百科页面与结构化事实
-> 文档日期：2026-08-17
-> 项目状态：核心架构与主要业务链路已落到代码并完成本地真实联调；协作收口、生产容量、安全与可访问性仍有待验收
+> 文档日期：2026-09-22
+> 项目状态：核心架构、主要业务链路、Web/CLI 入口和导入治理闭环已落到代码并完成真实联调；导入计划版本化、跨窗口收敛、实体/关联门禁和异常扩张保护已实现；目标容量、安全、备份恢复与人工可访问性仍有待验收
 > 建议完整版分享时长：90 分钟；本文先保留完整细节，后续可按 30/45/60 分钟版本裁剪
 
 ---
@@ -1555,7 +1555,10 @@ URL 路径包含 SSRF 防护：
 
 #### HTML 与文本
 
-- 抽取正文；
+- 接受完整 HTML 文档，也接受以 `<main>`、`<article>`、`<section>`、`<div>`、
+  `<p>`、`<pre>` 等正文元素开头的合法 fragment；
+- 优先抽取 DOM 主正文；
+- 排除导航、侧栏、页眉、页脚、目录和隐藏节点；
 - 去除脚本执行面；
 - 保留可定位文本；
 - 按语义边界分 Chunk。
@@ -1720,6 +1723,11 @@ Worker 会：
 - 验证后再映射回原始 Chunk ID 和全局字符位置；
 - 不新增虚假的 SourceChunk。
 
+Extraction 保留“每批最多 6 个 Chunk”的输出保护；ImportPlan 则先判断整份来源是否
+适配模型输入预算，能放入同一窗口时使用一个全局规划窗口，只有超预算或结构化输出
+失败时才自适应二分。这样可以避免同一章节在多个窗口里被重复规划，后续再靠服务端
+强行删重。
+
 ### 9.9 Semantic Kernel Sidecar 的边界
 
 当前模型调用经过私网 Semantic Kernel Sidecar。
@@ -1730,7 +1738,7 @@ Sidecar 负责：
 - 结构化输出模式；
 - JSON 解析；
 - 权威 Schema 预校验；
-- 有限纠正重试；
+- 默认三次结构化调用与纠正重试；
 - Token 用量返回。
 
 Go Worker 仍然负责：
@@ -1799,6 +1807,12 @@ update
 link
 ignore
 ```
+
+Web 当前提供三种常用模式：
+
+- 智能多页面：由模型和服务端共同判断 create/update/link/ignore；
+- 强制创建单页：把来源收敛到用户指定标题；
+- 更新指定页面：只允许围绕目标页面生成可审核补丁。
 
 简化示例：
 
@@ -1871,6 +1885,13 @@ ignore
 - Page/Block 权威 ID；
 - 最终质量分。
 
+同一个 ImportJob 可以拥有多个不可变 ImportPlan 版本。重新规划只更新该 Job 的规划输入，
+新增 ImportRun 和 ImportPlan，不创建子 Job；历史版本通过 `revision` 与
+`parent_plan_id` 保留。Job 同时保存 `current_plan_id` 与 `confirmed_plan_id`，手工确认
+必须提交精确的 plan ID，避免并发重新规划时确认错误版本。管理员可以在 `/admin/ai`
+开启“通过质量门禁后自动确认中间计划”，但它不绕过质量门禁，也不会自动批准或应用最终
+Proposal。
+
 ### 9.12 页面计划的确定性整理
 
 多个模型窗口的页面计划不会再交给一个“大模型收敛调用”重写。
@@ -1878,12 +1899,16 @@ ignore
 服务端使用确定性逻辑：
 
 - 合并同标题路由；
-- 合并重复段落；
+- 合并重复和近义段落；
 - 清理无内容标题；
 - 清理 References、See also、External links 等模型样板；
 - 规范 H2 起始和不跳级层次；
 - 复用更新页已有标准章节和 Block ID；
+- 将用户标题、指定范围、排除项和内容块数上限作为跨窗口全局约束；
+- 按指令主题覆盖与引文直接支撑度选择代表块；
+- 对未写明上限的现有页异常扩张执行质量门禁，不静默截断不同事实；
 - 根据显式证据生成页面关联；
+- 在模型漏掉用户明确点名的既有页面关系时，依据原文引文补成 `link` route；
 - 确定性生成标准“参见 / See also”章节。
 
 References 不由模型自由书写，而是由 Current Revision 的 Citation 投影生成。
@@ -1916,7 +1941,9 @@ References 不由模型自由书写，而是由 Current Revision 的 Citation �
 - 翻译 evidence quotation；
 - 用无法定位的“总结句”充当来源。
 
-失败修复会被隔离，不会污染已验证的页面计划。
+失败修复会被隔离，不会污染已验证的页面计划。保真模型如果连续三次返回自相矛盾的
+`complete/coverage` 元数据，服务端会保守撤销覆盖率增益并继续隔离该窗口，不会让
+已经通过独立证据校验的正文因为可选审计元数据而整项失败。
 
 ### 9.14 五维质量评分
 
@@ -1942,6 +1969,11 @@ References 不由模型自由书写，而是由 Current Revision 的 Citation �
 - 保留诊断与不可变来源；
 - 不生成 Proposal；
 - 更不会直接创建 Page 或 Claim。
+
+Grounding 只按正文块计算，标题不再提供无条件满分。任一正文块低于直接支撑底线时，
+即使平均分或综合分达到 0.70，也不能通过质量门禁。用户明确点名的函数、方法或协议
+标识符，例如 `JSON.parse()` 与 `Response.json()`，必须出现在最终计划中；代表块选择
+会优先补齐尚未覆盖的标识符。
 
 ### 9.15 第 9 步：Entity 匹配与消歧
 
@@ -1973,7 +2005,8 @@ new_review
 - 两个高分候选太接近：`ambiguous`，进入人工处理；
 - 没有足够强匹配：`new_review`，预分配稳定 Entity ID，等待审核创建。
 
-系统明确禁止“同名自动合并”。
+页面标题有唯一精确 Entity 标签时，精确标签优先于别名候选；同名跨类型候选保持歧义，
+不产生权威图谱写入。系统明确禁止“同名自动合并”。
 
 ### 9.16 第 10 步：Claim 去重、支持、冲突与替代
 
@@ -2007,6 +2040,10 @@ supersede
 2. 再比较置信度；
 3. 再比较证据覆盖；
 4. 最后用 Candidate ID 稳定打破平局。
+
+`instance_of` 的分类证据必须由分类短语直接连接候选主体和值标签，不能把“JSON 基于
+JavaScript 对象语法”这类关联描述误写成分类关系。Claim 方向、类型和非自引用门禁在
+导入过滤、领域服务和数据库约束三层兜底。
 
 ### 9.17 第 11 步：创建 Citation
 
@@ -3053,25 +3090,27 @@ Claim 独立后：
 
 ## 18. 当前已经实现到什么程度
 
-截至 2026-08-18 的项目状态：
+截至 2026-09-22 的项目状态：
 
 ### 18.1 已落到代码和契约的能力
 
-- Page、Revision、ContentSnapshot、历史、Diff、回滚、改名、Redirect；
+- Page、Revision、ContentSnapshot、稳定 Block ID、历史、Diff、补偿回滚、改名、PageRedirect、BlockRedirect 和页面保护；
 - Typed Block AST 与 BlockNote 双向 Adapter；
-- Yjs WorkingDocument、持久增量 update、普通发布与 AI 合并的 sequence CAS、未确认 update 幂等重发、Block 级 Presence 和发布换基；
-- Entity、Property、Claim、标签、别名、验证与合并；
-- Source、Version、Chunk、Citation、Asset；
-- ProposalOperation v1 的 24 种 Operation；
-- Review、Risk、MergeConflict、ChangeBatch 和补偿回滚；
-- URL/HTML/文本/PDF/图片/JSON/CSV 导入；
+- Yjs WorkingDocument、持久增量 update、普通发布与 AI 合并的 sequence CAS、未确认 update 幂等重发、自动 snapshot/compact、Block 级 Presence 和发布换基；
+- Entity、Property、Claim、标签、别名、验证、主 Entity 绑定、合并与回滚、联邦映射和图谱查询；
+- Source、Version、Chunk、Citation、Asset、逐处正文回链、按页面聚合的反向使用和可审计来源目录；
+- Dataset、View、Record、Component、Collection、信息框、反链与组件依赖投影；
+- ProposalOperation v1 的 24 种 Operation，含 Page 主 Entity 绑定的原子应用和补偿回滚；
+- Review、Risk、MergeConflict、ChangeBatch、审计、ChangeTag、AI Trust 档案/策略、事实一致性和批量审核；
+- URL/HTML fragment/文本/PDF/PNG/JPEG/JSON/CSV 导入；
 - PDF 与图片 OCR；
-- Extraction、ImportPlan、保真审计和五维质量门禁；
+- Extraction、同 Job 多 Run/多不可变 ImportPlan 版本、Plan 精确确认、保真审计和五维质量门禁；
+- 跨窗口页面计划收敛、近义段落合并、用户范围/块数全局约束、现有页异常扩张门禁、精确 Entity 标签优先、歧义 Entity 保守处理和用户点名关联补全；
 - 多页面复合 Proposal 与原子 Apply；
 - Outbox、Projection、References、Related、图谱和重建；
 - PostgreSQL fallback 与 Meilisearch 关键词/混合/语义搜索；
-- Next.js 阅读、编辑、导入、审核、治理和管理入口；
-- 本地账号、Session、RBAC、限流、Metrics、Trace、Doctor 和备份恢复工具。
+- Next.js 阅读、编辑、导入、审核、治理、AI 配置诊断、后台管理和 CLI 授权入口；
+- 本地账号、Session、RBAC、注册账号删除、一次性授权码、可撤销 Agent CLI Bearer Token、限流、Metrics、Trace、Doctor 和备份恢复工具。
 
 ### 18.2 已完成的真实联调
 
@@ -3086,7 +3125,13 @@ Claim 独立后：
 - Outbox dead 事件兼容回放；
 - Revision 冷归档与 S3 透明回源；
 - 34 个桌面路由和 390×844 移动端浏览器回归；
-- OpenAPI operation 与 Web 生成客户端调用路径覆盖检查。
+- OpenAPI operation 与 Web 生成客户端调用路径覆盖检查；
+- 同 Job 重新规划、Plan 版本精确确认和自动确认开关；
+- HTML fragment 导入、跨窗口重复规划收敛、现有页异常扩张拒绝；
+- JSON Web 相关页面导入中，36 个近义段落收敛为一个标题和三个互补正文块；
+- `JSON.parse()`、`Response.json()` 等用户明确点名标识符覆盖；
+- `instance_of` 分类证据门禁、Claim 非自引用门禁和同名 Entity 歧义保护；
+- 用户明确点名的 JSON Pointer、JSON Patch 等既有页面关联补全。
 
 远端生产联调进一步完成：
 
@@ -3107,14 +3152,19 @@ Claim 独立后：
 - CLI 验收修复提交 `0196ec6` 已部署到正式域名；Migration gate、Doctor、全服务健康检查、
   API/CLI 版本、首页、`/settings/cli` 和 Worker 指标均通过。既有 version-1 数据库在
   自校验备份后以单事务补充两张 CLI 授权表，变更前后权威表哈希一致。
-- Go Agent CLI 以统一 JSON envelope 暴露全部 OpenAPI operation，并覆盖 Yjs
-  WebSocket；网页后台通过一次性授权码签发可撤销 Bearer Token，权限仍由现有
-  Actor/RBAC/治理边界实时决定。隔离生产等价 E2E 已覆盖授权闭环；正式域名仍保留
-  一次管理员人工登录冒烟。
+- Go CLI 保留统一 JSON envelope 供 Agent 调用，同时提供面向人工的普通命令行封装；
+  两种模式都覆盖全部 OpenAPI operation，JSON action 额外覆盖 Yjs WebSocket。网页后台
+  通过一次性授权码签发可撤销 Bearer Token，权限仍由现有 Actor/RBAC/治理边界实时决定。
+  隔离生产等价 E2E 已覆盖授权闭环；正式域名仍保留一次管理员人工登录冒烟。
 - 后续全量 CLI 验收用隔离管理员 Token 逐个经过 CLI transport 调用 149/149
   operation，并覆盖 multipart、二进制 base64 round-trip、WorkingDocument update、
   Presence 与 snapshot/compact；测试同时修复了本地校验退出码和 nullable enum 两处
   协议问题。
+- 最新导入修复已将生产版本推进到 `f848608`，JSON Pointer 与 JSON Patch 页面已完成
+  集成，分别新增 17 条和 37 条引用，并建立 JSON 相关页面的双向关联；待审核任务与
+  投影错误均为零。
+- 当前仓库 `main` 进一步包含导入路由选项布局和登录入口导航的小修，未改变权威写入
+  与导入治理模型。
 
 ### 18.3 第一版修复后的协作实现边界
 
@@ -3148,7 +3198,8 @@ Proposal，因此普通导入尚未使用 AI Trust 分档。分享时可以展�
 
 因此分享中应使用：
 
-> “核心架构与主要业务链路已实现并完成本地真实联调；协作与生产门禁仍有明确待收口项”
+> “核心架构与主要业务链路已实现，导入、治理、协作和 Web/CLI 入口已完成真实联调；
+> 生产就绪仍受容量、安全、备份恢复、账号恢复和人工可访问性验收约束”
 
 而不是：
 
@@ -3492,7 +3543,8 @@ AST 适合保存一份不可变文档快照，但不适合高频关系查询。
 
 ### Q9：现在可以生产使用吗？
 
-核心链路已实现，并完成本地联调及远端生产拓扑部署/E2E，但仍有明确的发布阻塞：
+核心链路已实现，导入、治理、协作和 Web/CLI 入口已完成真实联调；最新导入修复也已在
+生产拓扑验证。但仍有明确的发布阻塞：
 
 - 备份恢复演练；
 - HSTS/CSRF；
