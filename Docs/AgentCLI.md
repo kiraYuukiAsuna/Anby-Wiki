@@ -1,7 +1,8 @@
-# Agent JSON CLI
+# Anby Wiki CLI
 
-`anby-wiki` 是供 Agent 调用 Anby Wiki 的 Go CLI。它以 OpenAPI `operationId`
-覆盖全部 HTTP 能力，并单独覆盖 Yjs 协作 WebSocket。
+`anby-wiki` 是 Anby Wiki 的 Go CLI。它保留面向 Agent 的单 JSON envelope
+输入输出，同时提供面向人工使用的普通命令行封装。两种模式共用同一个执行入口：
+HTTP 能力仍以 OpenAPI `operationId` 覆盖，Yjs 协作 WebSocket 仍由专用 action 覆盖。
 
 ## 构建与安装
 
@@ -13,12 +14,63 @@ make cli-install
 # 安装到当前 Go bin
 ```
 
-CLI 每次只读取一个 JSON 对象，只向 stdout 写一个 JSON 结果。可从 stdin 读取，
-也可用 `--input request.json`。手动查看帮助可用 `--help`，或保持 JSON 协议使用
-`{"action":"help"}`：
+## 人类命令模式
+
+直接传入子命令时，CLI 会按普通命令行参数解析，并默认输出更适合终端阅读的内容：
 
 ```sh
 bin/anby-wiki --help
+bin/anby-wiki version
+bin/anby-wiki auth exchange anby_code_... --base-url https://anbywiki.example.com
+bin/anby-wiki auth status
+bin/anby-wiki operations list --tag pages --search page
+bin/anby-wiki describe create-page
+bin/anby-wiki collaboration run --page-id 0198... --client-id 0198...
+bin/anby-wiki get-page-by-id --id 0198... --content-mode html
+```
+
+所有 OpenAPI operation 都可以用 kebab-case 命令名直接调用，也可以显式走 `call`：
+
+```sh
+bin/anby-wiki create-page \
+  --namespace main \
+  --title 'CLI Created Page' \
+  --language zh-Hans \
+  --content-model block-v1
+
+bin/anby-wiki call create-import-upload-job \
+  --title '导入资料' \
+  --route-mode auto \
+  --file file=/absolute/path/source.pdf \
+  --timeout 600
+```
+
+常用参数：
+
+- `--base-url URL`：覆盖配置中的服务地址；
+- `--config PATH`：覆盖本地配置文件路径；
+- `--timeout SECONDS`：覆盖请求超时；
+- `--json`：人类命令也输出完整 JSON envelope；
+- `--path key=value`、`--query key=value`、`--header key=value`：显式设置请求部分；
+- `--param key=value`：按 OpenAPI 参数定义自动放入 path/query/header；
+- `--field key=value`：设置顶层 JSON 或 multipart body 字段；
+- body 顶层字段也可直接写成同名 flag，例如 `--title 'CLI Created Page'`；
+- `--body '{...}'`、`--body @file.json`、`--body-file file.json`：使用完整 JSON body；
+- `--file key=PATH`：设置 multipart 文件字段。
+
+operation 的 path/query/header 参数也可以直接写成同名 flag，例如
+`--id PAGE_ID`、`--content-mode html`。需要查看参数和 body schema 时使用：
+
+```sh
+bin/anby-wiki describe create-page
+```
+
+## JSON Agent 模式
+
+不传子命令时，CLI 每次只读取一个 JSON 对象，只向 stdout 写一个 JSON 结果。可从
+stdin 读取，也可用 `--input request.json`。JSON 协议帮助使用 `{"action":"help"}`：
+
+```sh
 printf '%s\n' '{"action":"help"}' | bin/anby-wiki
 printf '%s\n' '{"action":"version"}' | bin/anby-wiki
 bin/anby-wiki --input request.json
@@ -208,6 +260,23 @@ UUID/枚举/范围不会发到服务器。
 
 `collaboration.run` 恢复指定 Page 的 WorkingDocument，并可顺序发送 update、
 Presence 或 snapshot。Yjs bytes 必须用 base64。
+
+人类命令模式：
+
+```sh
+bin/anby-wiki collaboration run \
+  --page-id 0198... \
+  --client-id 0198... \
+  --last-sequence 0
+
+bin/anby-wiki collaboration run \
+  --page-id 0198... \
+  --client-id 0198... \
+  --last-sequence 12 \
+  --message '{"type":"presence","cursor":{"block_id":"0198...","selection":"text"}}'
+```
+
+复杂消息数组可以通过 `--messages @messages.json` 传入。
 
 恢复：
 

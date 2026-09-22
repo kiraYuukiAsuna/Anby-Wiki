@@ -52,11 +52,11 @@ dev-worker: ## 使用当前 shell 环境启动 Worker
 dev-web: ## 使用当前 shell 环境启动 Web
 	cd $(WEB_DIR) && npm run dev
 
-cli-build: ## 构建 Agent JSON CLI 到 bin/anby-wiki
+cli-build: ## 构建 Anby Wiki CLI 到 bin/anby-wiki
 	mkdir -p bin
 	cd $(BACKEND_DIR) && go build -trimpath -o ../bin/anby-wiki ./cmd/anby-wiki
 
-cli-install: ## 安装 Agent JSON CLI 到当前 Go bin
+cli-install: ## 安装 Anby Wiki CLI 到当前 Go bin
 	cd $(BACKEND_DIR) && go install ./cmd/anby-wiki
 
 ##@ 本地数据库

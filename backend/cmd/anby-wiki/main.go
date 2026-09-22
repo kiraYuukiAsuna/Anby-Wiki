@@ -1,9 +1,8 @@
-// Command wiki-cli is the JSON-only agent client for Anby Wiki.
+// Command anby-wiki is the CLI client for Anby Wiki.
 package main
 
 import (
 	"context"
-	"io"
 	"os"
 
 	"github.com/anby/wiki/backend/internal/wikicli"
@@ -12,32 +11,33 @@ import (
 var version = "dev"
 
 func main() {
-	if isHelp(os.Args[1:]) {
-		_ = wikicli.EncodeResult(os.Stdout, wikicli.HelpResult(version))
-		os.Exit(0)
-	}
-	reader, closeInput, argumentError := inputReader(os.Args[1:])
-	if closeInput != nil {
-		defer closeInput()
+	invocation, argumentError := buildInvocation(os.Args[1:], os.Stdin)
+	if invocation.closeInput != nil {
+		defer invocation.closeInput()
 	}
 	if argumentError != nil {
-		_ = wikicli.EncodeResult(os.Stdout, wikicli.Result{
-			OK: false, Action: "startup",
-			Error: &wikicli.Error{
-				Code: "invalid_arguments", Message: argumentError.Error(),
-			},
-		})
+		writeStartupError(invocation.output, argumentError)
 		os.Exit(2)
 	}
-	input, err := wikicli.DecodeInput(reader)
-	if err != nil {
-		_ = wikicli.EncodeResult(os.Stdout, wikicli.Result{
-			OK: false, Action: "startup",
-			Error: &wikicli.Error{
-				Code: "invalid_json", Message: err.Error(),
-			},
-		})
-		os.Exit(2)
+	if invocation.helpText != "" {
+		_, _ = os.Stdout.WriteString(invocation.helpText)
+		os.Exit(0)
+	}
+	input := wikicli.Input{}
+	if invocation.input != nil {
+		input = *invocation.input
+	} else {
+		decoded, err := wikicli.DecodeInput(invocation.reader)
+		if err != nil {
+			_ = wikicli.EncodeResult(os.Stdout, wikicli.Result{
+				OK: false, Action: "startup",
+				Error: &wikicli.Error{
+					Code: "invalid_json", Message: err.Error(),
+				},
+			})
+			os.Exit(2)
+		}
+		input = decoded
 	}
 	app, err := wikicli.New(version)
 	if err != nil {
@@ -50,36 +50,14 @@ func main() {
 		os.Exit(1)
 	}
 	result, exitCode := app.Execute(context.Background(), input)
-	if err := wikicli.EncodeResult(os.Stdout, result); err != nil {
-		os.Exit(1)
-	}
-	os.Exit(exitCode)
-}
-
-func isHelp(arguments []string) bool {
-	return len(arguments) == 1 && (arguments[0] == "--help" || arguments[0] == "-h")
-}
-
-func inputReader(arguments []string) (io.Reader, func(), error) {
-	if len(arguments) == 0 {
-		return os.Stdin, nil, nil
-	}
-	if len(arguments) != 2 || arguments[0] != "--input" {
-		return nil, nil, &argumentError{
-			message: "usage: wiki-cli [--input request.json]",
+	if invocation.output == outputJSON {
+		if err := wikicli.EncodeResult(os.Stdout, result); err != nil {
+			os.Exit(1)
+		}
+	} else {
+		if err := writeHumanResult(os.Stdout, os.Stderr, result); err != nil {
+			os.Exit(1)
 		}
 	}
-	file, err := os.Open(arguments[1])
-	if err != nil {
-		return nil, nil, err
-	}
-	return file, func() { _ = file.Close() }, nil
-}
-
-type argumentError struct {
-	message string
-}
-
-func (e *argumentError) Error() string {
-	return e.message
+	os.Exit(exitCode)
 }

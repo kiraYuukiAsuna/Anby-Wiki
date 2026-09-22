@@ -35,7 +35,7 @@ AI 配置和双用户协作 E2E。“实现完成”仍不等于“生产发布�
 | 投影与搜索 | Outbox 租约/重试/死信、链接/目录/锚点/章节/渲染/知识使用/References/相关推荐/组件依赖/图谱投影、可解释的链接+Collection+Entity 相关度、PostgreSQL fallback、Meilisearch 关键词/混合/语义检索 |
 | 规模与归档 | 章节懒加载、服务端可信 HTML 渲染、Revision 热冷分层与 S3 回源、Projection/Search 重建、容量基准命令 |
 | 协作 | Yjs WorkingDocument、持久增量 update、重连游标、普通发布与 AI 合并的 sequence CAS、未确认 update 幂等重发、自动 snapshot/compact、Block 级 Presence、三方合并与人工冲突决议；跨标签页离线恢复和多 API 实例广播仍待实现 |
-| 平台 | 本地账号/Session/RBAC、管理员用户角色授予/撤销与注册账号删除、一次性授权码与可撤销/可清理 Agent CLI Bearer Token、157 个 OpenAPI operation 和协作 WebSocket 的 JSON CLI、Redis 限流、安全头、OTel/Prometheus、备份恢复、Doctor、多 Wiki 读取隔离、生产部署清单 |
+| 平台 | 本地账号/Session/RBAC、管理员用户角色授予/撤销与注册账号删除、一次性授权码与可撤销/可清理 Agent CLI Bearer Token、157 个 OpenAPI operation 和协作 WebSocket 的 JSON + 人类命令双模式 CLI、Redis 限流、安全头、OTel/Prometheus、备份恢复、Doctor、多 Wiki 读取隔离、生产部署清单 |
 
 ## 关键不变量
 
@@ -396,11 +396,13 @@ outlines。References/Related 是 Current Revision
 
 ## Agent CLI
 
-- `backend/cmd/anby-wiki` 提供供 Agent 使用的 Go CLI；stdin/stdout 均为单一 JSON
-  envelope，退出码区分成功、输入/契约错误和远端错误。
+- `backend/cmd/anby-wiki` 提供 Go CLI；不带子命令或使用 `--input` 时保持供 Agent
+  使用的单一 JSON envelope，传入子命令时提供面向人工的普通命令行参数封装，退出码
+  仍区分成功、输入/契约错误和远端错误。
 - CLI 从嵌入的权威 OpenAPI 读取 157 个 operationId，支持清单、搜索、Schema 描述和
-  通用调用；发送前校验 path/query/header、JSON/multipart body，收到 JSON 后按状态码
-  校验响应。文件上传读取本地路径，二进制响应统一转为 base64 JSON。
+  通用调用；所有 HTTP operation 均可通过 kebab-case 命令名或 `call <operation>`
+  调用，发送前校验 path/query/header、JSON/multipart body，收到 JSON 后按状态码校验
+  响应。文件上传读取本地路径，二进制响应统一转为 base64 JSON。
 - Yjs 协作 WebSocket 不属于 OpenAPI，另由 `collaboration.run` 覆盖恢复、
   durable update、Presence 和 snapshot/compact，opaque bytes 均通过 base64。
 - `/settings/cli` 使用浏览器 Session 生成十分钟一次性授权码，CLI 兑换只显示一次的
