@@ -214,8 +214,8 @@ export function LazySectionDocument({
               slug: hash,
             });
             if (anchor.pageId !== pageId) {
-              window.location.assign(
-                `/pages/${anchor.pageId}#${encodeURIComponent(anchor.blockId)}`,
+              router.push(
+                `/pages/${encodeURIComponent(anchor.pageId)}#${encodeURIComponent(anchor.blockId)}`,
               );
               return;
             }
@@ -242,7 +242,7 @@ export function LazySectionDocument({
     return () => {
       cancelled = true;
     };
-  }, [initialBlockId, manifest.data?.ready, pageId]);
+  }, [initialBlockId, manifest.data?.ready, pageId, router]);
 
   useEffect(() => {
     if (

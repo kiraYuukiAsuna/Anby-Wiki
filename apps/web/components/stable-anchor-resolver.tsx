@@ -1,10 +1,13 @@
 "use client";
 
 import { useEffect } from "react";
+import { useRouter } from "next/navigation";
 
 import { projectionApi } from "@/lib/api";
 
 export function StableAnchorResolver({ pageId }: { pageId: string }) {
+  const router = useRouter();
+
   useEffect(() => {
     let generation = 0;
 
@@ -33,7 +36,9 @@ export function StableAnchorResolver({ pageId }: { pageId: string }) {
         if (currentGeneration !== generation) return;
 
         if (target.pageId !== pageId) {
-          window.location.assign(`/pages/${target.pageId}#${target.blockId}`);
+          router.push(
+            `/pages/${encodeURIComponent(target.pageId)}#${encodeURIComponent(target.blockId)}`,
+          );
           return;
         }
         const element = document.getElementById(target.blockId);
@@ -55,7 +60,7 @@ export function StableAnchorResolver({ pageId }: { pageId: string }) {
       generation += 1;
       window.removeEventListener("hashchange", resolveHash);
     };
-  }, [pageId]);
+  }, [pageId, router]);
 
   return null;
 }
