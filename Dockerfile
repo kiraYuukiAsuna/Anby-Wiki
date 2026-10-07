@@ -105,7 +105,7 @@ COPY --from=go-builder /out/wiki-migrate /usr/local/bin/wiki-migrate
 COPY --from=go-builder /out/wiki-doctor /usr/local/bin/wiki-doctor
 COPY --from=go-builder /out/wiki-ai-config-import-env /usr/local/bin/wiki-ai-config-import-env
 COPY --from=go-builder /out/wiki-perf /usr/local/bin/wiki-perf
-COPY backend/migrations/ /app/migrations/
+COPY --chown=10001:10001 backend/migrations/ /app/migrations/
 CMD ["wiki-migrate"]
 
 FROM ${PYTHON_IMAGE} AS ai-kernel
@@ -125,7 +125,7 @@ WORKDIR /app
 COPY services/ai-kernel/requirements.txt ./requirements.txt
 RUN pip install --no-cache-dir --requirement requirements.txt && \
     pip install --no-cache-dir --no-deps semantic-kernel==1.44.1
-COPY services/ai-kernel/app.py ./app.py
+COPY --chown=10002:10002 services/ai-kernel/app.py ./app.py
 USER 10002:10002
 EXPOSE 8090
 HEALTHCHECK --interval=10s --timeout=3s --start-period=15s --retries=6 \
