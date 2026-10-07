@@ -25,7 +25,15 @@ private_backup="$ROOT/Secret/deploy-backups/$deployment"
 data_backup="$ROOT/data/deploy-backups/$deployment"
 install -d -m 0700 "$private_backup" "$data_backup"
 previous=false
-if [ -f "$DEPLOY_ENV_FILE" ]; then cp -p "$DEPLOY_ENV_FILE" "$private_backup/environment"; previous=true; fi
+if [ -f "$DEPLOY_ENV_FILE" ]; then
+  cp -p "$DEPLOY_ENV_FILE" "$private_backup/environment"
+  # A prepared environment from an interrupted first deployment is not a
+  # previously accepted release. Never restore its open bootstrap registration.
+  if [ -s "$ROOT/Secret/current-release" ] &&
+    [ "$(cat "$ROOT/Secret/current-release")" = "$(python3 "$ROOT/scripts/production_environment.py" get "$DEPLOY_ENV_FILE" RELEASE_ID)" ]; then
+    previous=true
+  fi
+fi
 git rev-parse HEAD > "$private_backup/source-commit"
 if [ -f /etc/nginx/sites-available/anby-wiki ]; then
   cp -p /etc/nginx/sites-available/anby-wiki "$private_backup/nginx.conf"
@@ -46,7 +54,7 @@ cleanup() {
   exit "$result"
 }
 trap cleanup EXIT
-if [ "$previous" = true ] && [ "$(docker inspect --format '{{.State.Running}}' anby-wiki-production-postgres-1 2>/dev/null || true)" = true ]; then
+if [ -f "$DEPLOY_ENV_FILE" ] && [ "$(docker inspect --format '{{.State.Running}}' anby-wiki-production-postgres-1 2>/dev/null || true)" = true ]; then
   python3 "$ROOT/scripts/production_environment.py" exec "$DEPLOY_ENV_FILE" \
     sh -c 'docker exec anby-wiki-production-postgres-1 pg_dump -U "$POSTGRES_USER" -d "$POSTGRES_DB"' \
     </dev/null > "$data_backup/postgres.sql"

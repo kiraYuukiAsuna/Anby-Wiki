@@ -36,6 +36,8 @@ AI 配置和双用户协作 E2E。“实现完成”仍不等于“生产发布�
 - 生产对象存储使用固定 digest 的 RustFS 1.0.1；一次性 AWS CLI 工具以 path-style
   初始化私有 bucket，不依赖已不可拉取的 MinIO/mc 镜像。已有 MinIO 目录不能直接
   当作 RustFS 数据目录使用，必须通过 S3 导出/恢复。
+- 上线检查补齐 sharp 0.35.5、source-map-js 1.2.2、golang.org/x/text 0.41.0 与
+  OpenTelemetry Go 1.45.0 的安全修复；首次部署失败重试不视为可回滚的已验收版本。
 
 ## 设计能力覆盖与已知边界
 
