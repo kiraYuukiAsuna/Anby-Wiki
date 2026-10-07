@@ -162,8 +162,8 @@ start_data_tier() {
 roll_services() {
   # Keep this order stable: readers/writers before async consumers, then edge.
   compose up -d --no-deps --wait ai-kernel
-  compose up -d --no-deps --wait api
-  compose up -d --no-deps --wait worker
+  compose up -d --no-deps --wait --wait-timeout 720 api
+  compose up -d --no-deps --wait --wait-timeout 720 worker
   compose up -d --no-deps --wait web
 }
 

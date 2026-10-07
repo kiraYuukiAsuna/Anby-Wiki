@@ -73,7 +73,7 @@ release=$(python3 "$ROOT/scripts/production_environment.py" get "$DEPLOY_ENV_FIL
 DEPLOY_CONFIRM="DEPLOY:$release" sh "$ROOT/scripts/deploy.sh" deploy </dev/null
 python3 "$ROOT/scripts/bootstrap-administrator.py" "$ROOT" "$DEPLOY_ENV_FILE"
 # Refresh registration settings after the initial administrator has been verified.
-production_compose up -d --no-deps --wait api worker
+production_compose up -d --no-deps --wait --wait-timeout 720 api worker
 sh "$ROOT/scripts/enable-tls.sh" </dev/null
 sh "$ROOT/scripts/smoke-production.sh" </dev/null
 printf '%s\n' "$release" > "$ROOT/Secret/current-release"

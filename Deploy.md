@@ -130,6 +130,9 @@ sudo -E sh scripts/deploy-production.sh
 Git 工作区并 `git pull --ff-only`，使用提交 SHA 标记镜像，然后顺序构建、初始化数据
 目录、执行迁移闸门与 Doctor、更新容器、申请/复用证书并验收。已经拉取代码时可传
 `--no-pull`。首次部署过程中公网站点返回 503，直到管理员初始化和 HTTPS 配置完成。
+首次启动时 Meilisearch 会下载语义搜索模型；API/Worker 健康检查提供 10 分钟启动
+宽限，部署最多等待 12 分钟。服务提前就绪就立即继续，模型缓存保留在
+`data/meilisearch/`，后续启动通常无需再次下载。
 
 运行文件布局：
 

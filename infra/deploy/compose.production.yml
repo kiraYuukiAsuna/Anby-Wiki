@@ -290,7 +290,9 @@ services:
       interval: 10s
       timeout: 3s
       retries: 6
-      start_period: 15s
+      # First-start Meilisearch embedder initialization can download a model.
+      # Match the default MEILI_TASK_TIMEOUT without delaying a successful probe.
+      start_period: 10m
 
   worker:
     <<: *runtime-security
@@ -328,7 +330,7 @@ services:
       interval: 10s
       timeout: 3s
       retries: 6
-      start_period: 20s
+      start_period: 10m
 
   web:
     <<: *runtime-security

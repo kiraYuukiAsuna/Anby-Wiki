@@ -24,6 +24,9 @@ AI 配置和双用户协作 E2E。“实现完成”仍不等于“生产发布�
 
 ## 2026-10-08 宿主机部署入口
 
+- API/Worker 提供 10 分钟启动宽限和 12 分钟部署等待，覆盖首次启动的
+  Meilisearch 语义模型下载；健康探针成功后立即继续。
+
 - `scripts/deploy-production.sh` 提供干净工作区检查、ff-only 拉取、提交 SHA 镜像标签、
   顺序构建、迁移闸门、Doctor、应用更新与失败回滚。
 - 宿主机 Nginx 模板覆盖 HTTPS、ACME 验证、HSTS、流式响应与协作 WebSocket；
