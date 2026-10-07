@@ -3,7 +3,7 @@ set -eu
 
 ROOT=$(CDPATH= cd -- "$(dirname -- "$0")/.." && pwd)
 COMPOSE_FILE=${COMPOSE_FILE:-"$ROOT/infra/deploy/compose.production.yml"}
-DEPLOY_ENV_FILE=${DEPLOY_ENV_FILE:-"$ROOT/infra/deploy/.env"}
+DEPLOY_ENV_FILE=${DEPLOY_ENV_FILE:-"$ROOT/.env"}
 
 fail() {
   echo "deploy: $*" >&2
@@ -25,10 +25,10 @@ check_env_file_permissions() {
 
 [ -r "$DEPLOY_ENV_FILE" ] || fail "environment file is not readable: $DEPLOY_ENV_FILE"
 check_env_file_permissions
-set -a
-# Deployment env files must remain shell-compatible KEY=VALUE files.
-. "$DEPLOY_ENV_FILE"
-set +a
+# Load dotenv as data, preserving literal secrets without executing shell text.
+if [ "${ANBY_DEPLOY_ENV_LOADED:-}" != "$DEPLOY_ENV_FILE" ]; then
+  exec python3 "$ROOT/scripts/production_environment.py" exec "$DEPLOY_ENV_FILE" sh "$0" "$@"
+fi
 
 # Build provenance is derived from the checked-out source, not maintained by
 # operators in the environment file.
@@ -109,21 +109,21 @@ require_local_images() {
 
 run_gate() {
   check_window
-  compose --profile tools run --rm migrate wiki-migrate up
-  compose --profile tools run --rm migrate wiki-migrate check \
+  compose --profile tools run --rm -T --interactive=false migrate wiki-migrate up
+  compose --profile tools run --rm -T --interactive=false migrate wiki-migrate check \
     "$MIGRATION_EXPECTED_VERSION" \
     "$SCHEMA_MIN_COMPATIBLE_VERSION" \
     "$SCHEMA_MAX_COMPATIBLE_VERSION"
-  compose --profile tools run --rm doctor
+  compose --profile tools run --rm -T --interactive=false doctor
 }
 
 check_existing_schema() {
   check_window
-  compose --profile tools run --rm migrate wiki-migrate check \
+  compose --profile tools run --rm -T --interactive=false migrate wiki-migrate check \
     "$MIGRATION_EXPECTED_VERSION" \
     "$SCHEMA_MIN_COMPATIBLE_VERSION" \
     "$SCHEMA_MAX_COMPATIBLE_VERSION"
-  compose --profile tools run --rm doctor
+  compose --profile tools run --rm -T --interactive=false doctor
 }
 
 # Production secrets live in DEPLOY_ENV_FILE. Refuse missing values before any
@@ -152,12 +152,11 @@ check_sensitive_env() {
 # exists. These are stateful, so they are started before the application and
 # are never recreated as part of an application roll.
 start_data_tier() {
-  # Create service containers first: images that declare VOLUME may populate a
-  # brand-new named volume and reset its root ownership during container create.
+  # Create containers before initializing host bind directory ownership.
   compose create postgres redis minio meilisearch
-  compose --profile tools run --rm storage-init
+  compose --profile tools run --rm -T --interactive=false storage-init
   compose up -d --no-recreate --wait postgres redis minio meilisearch
-  compose --profile tools run --rm minio-init
+  compose --profile tools run --rm -T --interactive=false minio-init
 }
 
 roll_services() {
@@ -185,7 +184,7 @@ case "$command" in
     run_gate
     ;;
   doctor)
-    compose --profile tools run --rm doctor
+    compose --profile tools run --rm -T --interactive=false doctor
     ;;
   deploy)
     confirm_production

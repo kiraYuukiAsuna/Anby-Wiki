@@ -10,3 +10,8 @@
 backend/bin
 backend/perf
 Docs
+data
+Secret
+artifacts
+**/__pycache__
+**/*.pyc

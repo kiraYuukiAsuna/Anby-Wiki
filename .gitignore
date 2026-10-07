@@ -26,3 +26,6 @@ __pycache__/
 *.swp
 
 # 本地数据（docker volume 映射等）
+data/
+Secret/
+artifacts/

@@ -1,6 +1,6 @@
 # 当前实现状态
 
-> 更新时间：2026-09-21
+> 更新时间：2026-10-08
 > 产品与能力审计依据：[整体设计方案](WikiDesignOnePage.md)
 
 ## 总体结论
@@ -21,6 +21,18 @@ PostgreSQL、Redis、MinIO、Meilisearch、API、Linux Worker 与 Next.js Web �
 AI 配置和双用户协作 E2E。“实现完成”仍不等于“生产发布就绪”：目标规模容量、正式域名
 安全边界、账号恢复、备份恢复与人工可访问性等仍须验收。详见
 [待解决问题](OutstandingIssues.md)。
+
+## 2026-10-08 宿主机部署入口
+
+- `scripts/deploy-production.sh` 提供干净工作区检查、ff-only 拉取、提交 SHA 镜像标签、
+  顺序构建、迁移闸门、Doctor、应用更新与失败回滚。
+- 宿主机 Nginx 模板覆盖 HTTPS、ACME 验证、HSTS、流式响应与协作 WebSocket；
+  Certbot 证书可沿用服务器账户，续期由系统 timer 和 reload hook 管理。
+- PostgreSQL、MinIO 与 Meilisearch 持久数据统一到根目录 `data/`；配置、首个管理员
+  凭据及配置备份位于被 Git/Docker 排除的 `.env` / `Secret/`。首次管理员通过现有
+  领域 API 初始化后关闭公开注册，未引入直接 SQL 权威写入。
+- dotenv 按数据读取，不执行 Shell；本入口用于 `anbywiki.momiya.cloud` 独立实例，
+  不自动迁移其他实例的数据。既有生产发布验收项继续见 `OutstandingIssues.md`。
 
 ## 设计能力覆盖与已知边界
 

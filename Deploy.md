@@ -5,7 +5,7 @@
 - **开发（dev）**：不使用 Docker。直接跑起前端 `npm` 与后端 Go 进程；
   PostgreSQL / Redis / MinIO 视为外部依赖，连接信息经 `.env` 提供。
 - **生产（production）**：用 Docker Compose 一并部署数据层与应用，
-  不含反向代理。
+  由宿主机 Nginx 提供 HTTPS 与协作 WebSocket 代理。
 
 > 早期阶段的取舍与安全影响见文末「早期阶段限制」，上线前必读。
 
@@ -112,6 +112,68 @@ make ci                 # check + 生成物漂移 + 安全扫描
 
 ## 2. 生产部署
 
+### 一键部署与更新（推荐）
+
+Linux 宿主机需要 Git、Docker Compose v2+、Python 3、Nginx、Certbot、OpenSSL、curl
+和 flock。首次克隆到 `/home/Services/Anby-Wiki` 后执行：
+
+```sh
+cd /home/Services/Anby-Wiki
+# 二选一：沿用服务器现有 Certbot 账户，或指定证书联系邮箱。
+export CERTBOT_ACCOUNT='<existing-account-id>'
+# export CERTBOT_EMAIL='you@example.com'
+export ANBY_DOMAIN=anbywiki.momiya.cloud
+sudo -E sh scripts/deploy-production.sh
+```
+
+以后更新只需在该目录运行 `sudo sh scripts/deploy-production.sh`。脚本默认检查干净
+Git 工作区并 `git pull --ff-only`，使用提交 SHA 标记镜像，然后顺序构建、初始化数据
+目录、执行迁移闸门与 Doctor、更新容器、申请/复用证书并验收。已经拉取代码时可传
+`--no-pull`。首次部署过程中公网站点返回 503，直到管理员初始化和 HTTPS 配置完成。
+
+运行文件布局：
+
+```text
+Anby-Wiki/
+  .env                         # 配置与机密，0600，Git/Docker 排除
+  Secret/bootstrap-admin.json  # 首个管理员凭据，0600
+  Secret/current-release       # 当前成功发布的提交标识
+  Secret/deploy-backups/       # 历史配置、Nginx 和回滚诊断
+  data/postgres/               # 权威数据库
+  data/minio/                  # 对象存储
+  data/meilisearch/            # 搜索索引及模型缓存
+  data/deploy-backups/         # 部署前 PostgreSQL 一致性导出
+  data/deploy.lock             # flock 锁，文件存在不等于仍被占用
+```
+
+首个管理员由脚本通过本机 API 创建，验证管理员权限后关闭公开注册。密码只保存在
+`Secret/bootstrap-admin.json`，不会出现在日志中；已有管理员及配置不会重新生成。
+AI 供应商、模型和 Key 仍在登录后的 `/admin/ai` 配置。
+
+公网入口为 `https://anbywiki.momiya.cloud/`，宿主机默认仅监听
+`127.0.0.1:60019`，映射 Web 容器 `3000`。API `8080`、Worker `9091`、AI Kernel
+`8090`、PostgreSQL `5432`、Redis `6379`、MinIO `9000/9001`、Meilisearch `7700`
+均只在 Docker 私有网络使用。域名和 `WEB_PORT` 可在 `.env` 中修改。
+
+Nginx 模板位于 `infra/deploy/nginx/`；安装前先检查，失败恢复原站点配置。
+Certbot 使用 webroot 验证，证书位于 `/etc/letsencrypt/live/<域名>/`，通过
+`certbot.timer` 自动续期，成功续期后检查并 reload Nginx。80 端口的 ACME 路径需持续可用。
+
+```sh
+sh scripts/install-nginx.sh production --render  # 只预览
+sh scripts/smoke-production.sh                  # HTTPS/就绪/Worker/Doctor 验收
+sudo certbot renew --cert-name anbywiki.momiya.cloud --dry-run --run-deploy-hooks
+```
+
+更新失败时恢复原环境并尝试切回旧应用镜像，仍受数据库兼容窗口约束；不会执行
+down 迁移，也不会删除数据。新实例没有可回滚的旧镜像，修复原因后重新运行即可。
+部署前导出不代替完整备份；完整恢复还需要对象存储、`.env`、`Secret/`、Nginx 和
+`/etc/letsencrypt/`。
+
+**旧命名卷部署迁移提醒：**本清单现使用根目录 `data/` 的宿主机绑定。已运行的旧实例
+必须先停止写入并把原 `pgdata/miniodata/meilidata` 内容及权限迁移到对应目录，再使用
+新清单；不要直接启动空目录。本次 `anbywiki.momiya.cloud` 是独立的新实例。
+
 ### 2.1 拓扑
 
 ```text
@@ -129,8 +191,8 @@ make ci                 # check + 生成物漂移 + 安全扫描
 要点：
 
 - **不含反向代理。** `web` 是唯一发布端口的服务，通过 Next.js rewrites 转发 `/api/*`。
-- **本清单不终结 TLS。** 需要 HTTPS 请在外层（云 LB、Cloudflare、宿主机独立代理）终结。
-- 数据与搜索层（postgres/redis/minio/meilisearch）由 Compose 自己拉起，使用命名卷持久化。
+- **Compose 不终结 TLS。** 一键入口使用宿主机 Nginx 和 Certbot 提供 HTTPS。
+- 数据与搜索层由 Compose 拉起，PostgreSQL、MinIO、Meilisearch 使用根目录 `data/` 持久化；Redis 是可丢弃缓存。
 - 限流、安全响应头、身份头清洗全部在 Go API 内实现，不依赖代理。
 
 ### 2.2 准备环境文件
@@ -140,7 +202,8 @@ cp infra/deploy/.env.example /etc/anby-wiki/.env
 sudo chmod 0600 /etc/anby-wiki/.env
 ```
 
-该文件同时包含普通配置和机密，必须位于仓库之外且仅允许部署用户读取。
+该文件同时包含普通配置和机密，必须仅允许部署用户读取且不进入 Git/Docker。
+手动入口可继续使用仓库外文件；一键入口默认根目录 `.env`。
 Compose 会把机密注入容器环境，因此具有 Docker 管理权限的人可通过
 `docker inspect` 查看；不要把环境文件、Compose 展开结果或容器环境写入日志和工单。
 
@@ -160,10 +223,11 @@ Compose 会把机密注入容器环境，因此具有 Docker 管理权限的人�
 | `S3_BUCKET` | 对象存储桶名 |
 | `SESSION_COOKIE_SECURE` | 外层提供 HTTPS 时设 `true`，否则 `false` |
 | `COLLABORATION_ORIGIN_PATTERNS` | Next.js rewrite 或反向代理改写上游 `Host` 时，填写允许建立协作 WebSocket 的公开 Origin；多个值用逗号分隔，生产建议包含 `https://` 以固定协议 |
-| `WEB_BIND` `WEB_PORT` | 对外端口；默认 `127.0.0.1:3000` 只绑本机 |
+| `WEB_BIND` `WEB_PORT` | 宿主机端口；默认 `127.0.0.1:60019` 只绑本机 |
 | `TRUSTED_PROXY_IPS` | 仅在 API 直连对端可信且其传来的 `X-Forwarded-For` 已被清洗时填写；默认留空最安全 |
 
-环境文件必须保持 shell 兼容的 `KEY=VALUE` 格式。生产 `DATABASE_URL` 由 Compose
+环境文件使用逐行 `KEY=VALUE` 的 dotenv 格式，支持单/双引号，不执行 Shell，不进行
+变量插值；不支持多行值或行尾注释。生产 `DATABASE_URL` 由 Compose
 根据 `POSTGRES_DB`、`POSTGRES_USER`、`POSTGRES_PASSWORD` 自动生成，无需重复填写。
 `VCS_REF` 和 `BUILD_DATE` 由部署脚本从当前 Git 提交和 UTC 时间自动生成。
 
@@ -204,7 +268,7 @@ sh scripts/deploy.sh deploy     # 本地构建并正式发布
 
 1. 校验 `ENV=production`、`RELEASE_ID`、机密变量和环境文件权限；
 2. 从当前源码本地构建六个带 `RELEASE_ID` 标签的业务镜像；
-3. 运行 `storage-init` 修正命名卷根目录属主；
+3. 运行 `storage-init` 修正根目录 `data/` 的属主；
 4. 启动数据层 postgres / redis / minio 并等待健康；
 5. 运行 `minio-init` 创建 bucket 并关闭匿名访问；
 6. 执行迁移，再校验迁移版本落在镜像兼容窗口内；
@@ -316,8 +380,8 @@ go test ./internal/wikicli \
 
 ### 2.7 备份
 
-数据在命名卷 `pgdata` 与 `miniodata` 中，随 `docker compose down` 保留，
-但 `down -v` 会删除。备份脚本见 `scripts/backup/postgres-backup.sh`、
+数据在根目录 `data/postgres`、`data/minio` 与 `data/meilisearch` 中，随容器重建保留。
+备份必须保留原路径、目录权限和数据库恢复所需文件。备份脚本见 `scripts/backup/postgres-backup.sh`、
 `scripts/backup/object-storage-backup.sh`。
 
 ---

@@ -1,7 +1,8 @@
 # Production Deployment and Migration Runbook
 
 本手册是 [Deploy.md](../../Deploy.md) 的生产运维补充。权威清单为
-`infra/deploy/compose.production.yml`，发布入口为 `scripts/deploy.sh`。
+`infra/deploy/compose.production.yml`，宿主机一键入口为 `scripts/deploy-production.sh`，
+底层发布入口为 `scripts/deploy.sh`。新实例操作与端口见 [一键部署](../../Deploy.md#一键部署与更新推荐)。
 
 ## 当前拓扑
 
@@ -53,7 +54,7 @@ Compose 会把这些值注入容器环境，Docker 管理员可通过 `docker in
 ## 运行时安全
 
 应用与数据服务使用只读根文件系统、非 root 用户、capability drop 与
-`no-new-privileges`；持久数据只写命名卷。Go API 接管原边界层职责：
+`no-new-privileges`；持久数据只写根目录 `data/` 的宿主机绑定。Go API 接管原边界层职责：
 
 - 普通请求体 2 MiB，上传 envelope 11 MiB，文件内容仍限制 10 MiB；
 - auth、upload、general 三类 Redis 固定窗口限流；
@@ -91,7 +92,7 @@ sh scripts/deploy.sh deploy
 
 1. 校验环境、`RELEASE_ID`、迁移窗口、机密变量与环境文件权限；
 2. 从当前源码本地构建六个业务镜像；
-3. 运行 `storage-init` 修正命名卷根目录属主；
+3. 运行 `storage-init` 修正宿主机数据目录属主；
 4. 启动并等待 PostgreSQL、Redis、MinIO、Meilisearch；
 5. 运行 `minio-init` 创建私有 bucket；
 6. 执行 `wiki-migrate up` 与版本兼容检查；
@@ -118,7 +119,7 @@ Schema，禁止回滚，必须发布 forward fix。
 
 - 数据层启动失败：保留卷与容器日志，修复用户、tmpfs、环境变量或卷权限后重试。
 - `minio-init` 失败：确认 root 凭据与应用 S3 凭据一致，bucket 名合法。
-- Meilisearch 不健康：检查命名卷属主、Master Key、模型下载/缓存和内存水位；
+- Meilisearch 不健康：检查宿主机数据目录属主、Master Key、模型下载/缓存和内存水位；
   不得静默把 production 切回容量不合格的 PostgreSQL fallback。
 - 迁移失败或 dirty：停止发布，在备份恢复副本上准备幂等前向修复。
 - doctor 返回 error/critical：按

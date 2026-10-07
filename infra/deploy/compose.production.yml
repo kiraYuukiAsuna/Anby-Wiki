@@ -75,7 +75,7 @@ services:
   # ---- 数据层 ----
 
   storage-init:
-    # 一次性 job：只修正新建命名卷的根目录属主，使数据服务可始终以非 root 运行。
+    # 一次性 job：修正宿主机 data/ 目录属主，使数据服务以非 root 运行。
     image: alpine:3.22
     profiles: ["tools"]
     user: "0:0"
@@ -88,9 +88,9 @@ services:
       - no-new-privileges:true
     network_mode: none
     volumes:
-      - pgdata:/pgdata
-      - miniodata:/miniodata
-      - meilidata:/meilidata
+      - ../../data/postgres:/pgdata
+      - ../../data/minio:/miniodata
+      - ../../data/meilisearch:/meilidata
     entrypoint: ["/bin/sh", "-c"]
     command:
       - |
@@ -111,7 +111,7 @@ services:
       # 数据目录放在卷的子目录，避免与卷根的 lost+found 冲突。
       PGDATA: /var/lib/postgresql/data/pgdata
     volumes:
-      - pgdata:/var/lib/postgresql/data
+      - ../../data/postgres:/var/lib/postgresql/data
     tmpfs:
       - /tmp:size=64m,mode=1777
       - /run/postgresql:size=16m,mode=0755,uid=70,gid=70
@@ -146,7 +146,7 @@ services:
       MINIO_ROOT_USER: "${S3_ACCESS_KEY:?set S3_ACCESS_KEY}"
       MINIO_ROOT_PASSWORD: "${S3_SECRET_KEY:?set S3_SECRET_KEY}"
     volumes:
-      - miniodata:/data
+      - ../../data/minio:/data
     tmpfs:
       - /tmp:size=64m,mode=1777
     healthcheck:
@@ -201,7 +201,7 @@ services:
       MEILI_LOG_LEVEL: WARN
       HF_HOME: /meili_data/huggingface
     volumes:
-      - meilidata:/meili_data
+      - ../../data/meilisearch:/meili_data
     tmpfs:
       - /tmp:size=128m,mode=1777
     healthcheck:
@@ -329,7 +329,7 @@ services:
       PORT: "3000"
     # 唯一对外发布的端口。默认只绑本机，由外层代理决定是否公开。
     ports:
-      - "${WEB_BIND:-127.0.0.1}:${WEB_PORT:-3000}:3000"
+      - "${WEB_BIND:-127.0.0.1}:${WEB_PORT:-60019}:3000"
     depends_on:
       api:
         condition: service_healthy
@@ -407,8 +407,3 @@ services:
 networks:
   app:
     driver: bridge
-
-volumes:
-  pgdata:
-  miniodata:
-  meilidata:

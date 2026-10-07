@@ -14,6 +14,12 @@ fail() {
 
 for script in \
   "$ROOT/scripts/deploy.sh" \
+  "$ROOT/scripts/deploy-production.sh" \
+  "$ROOT/scripts/production-common.sh" \
+  "$ROOT/scripts/install-nginx.sh" \
+  "$ROOT/scripts/enable-tls.sh" \
+  "$ROOT/scripts/reload-nginx.sh" \
+  "$ROOT/scripts/smoke-production.sh" \
   "$ROOT/scripts/check-deploy-config.sh"
 do
   /bin/sh -n "$script"
@@ -42,7 +48,13 @@ fi
 grep -Eq '^    image: getmeili/meilisearch:v[0-9]+\.[0-9]+\.[0-9]+$' "$COMPOSE_FILE" ||
   fail "Meilisearch image must use a fixed semantic version"
 grep -q '^  storage-init:' "$COMPOSE_FILE" ||
-  fail "production compose must initialize named-volume ownership"
+  fail "production compose must initialize host data directory ownership"
+for binding in '../../data/postgres:' '../../data/minio:' '../../data/meilisearch:'; do
+  grep -Fq "$binding" "$COMPOSE_FILE" || fail "persistent host data binding missing: $binding"
+done
+for template in anby-wiki.bootstrap.conf anby-wiki.conf; do
+  [ -s "$ROOT/infra/deploy/nginx/$template" ] || fail "Nginx template missing: $template"
+done
 if grep -Eq '^[[:space:]]*secrets:' "$COMPOSE_FILE"; then
   fail "production compose must read secrets from DEPLOY_ENV_FILE, not Compose secrets"
 fi
