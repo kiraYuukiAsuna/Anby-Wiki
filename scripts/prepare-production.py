@@ -31,7 +31,7 @@ def main() -> None:
             "CERTBOT_ACCOUNT": os.environ.get("CERTBOT_ACCOUNT", ""),
             "CERTBOT_EMAIL": os.environ.get("CERTBOT_EMAIL", ""),
             "POSTGRES_PASSWORD": secrets.token_hex(32),
-            "S3_ACCESS_KEY": "anbywiki",
+            "S3_ACCESS_KEY": secrets.token_hex(16),
             "S3_SECRET_KEY": secrets.token_hex(32),
             "MEILI_MASTER_KEY": secrets.token_hex(32),
             "AI_CONFIG_MASTER_KEY": base64.b64encode(secrets.token_bytes(32)).decode(),
