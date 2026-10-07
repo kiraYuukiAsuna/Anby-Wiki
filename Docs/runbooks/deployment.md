@@ -6,7 +6,7 @@
 
 ## 当前拓扑
 
-Production Compose 部署 PostgreSQL、Redis、MinIO、Meilisearch、Semantic Kernel
+Production Compose 部署 PostgreSQL、Redis、RustFS、Meilisearch、Semantic Kernel
 Sidecar、API、Worker 与 Web。
 Web 是唯一发布宿主机端口的服务，并经 Next.js rewrite 将 `/api/*` 转发到
 Docker 内网 API。清单不包含 Nginx、TLS 终结或外部身份提供方。
@@ -38,7 +38,7 @@ sh scripts/deploy.sh build
 Compose 使用 `POSTGRES_DB`、`POSTGRES_USER`、`POSTGRES_PASSWORD` 自动生成内部
 `DATABASE_URL`，无需重复填写。PostgreSQL 三个值只允许字母、数字、点、下划线
 和连字符；密码建议用
-`openssl rand -hex 32` 生成。S3 两个值同时作为 MinIO root 凭据与应用凭据。
+`openssl rand -hex 32` 生成。S3 两个值同时作为 RustFS 凭据与应用凭据。
 Compose 以同一个 `MEILI_MASTER_KEY` 启动 Meilisearch 并派生应用的内部
 `MEILI_API_KEY`；生产默认 `SEARCH_BACKEND=meilisearch`，不得保留模板占位值。
 首次部署时保持 `AUTH_REGISTRATION_ENABLED=true`，从 `/register` 创建首个管理员；
@@ -93,8 +93,8 @@ sh scripts/deploy.sh deploy
 1. 校验环境、`RELEASE_ID`、迁移窗口、机密变量与环境文件权限；
 2. 从当前源码本地构建六个业务镜像；
 3. 运行 `storage-init` 修正宿主机数据目录属主；
-4. 启动并等待 PostgreSQL、Redis、MinIO、Meilisearch；
-5. 运行 `minio-init` 创建私有 bucket；
+4. 启动并等待 PostgreSQL、Redis、RustFS、Meilisearch；
+5. 运行 `object-storage-init`，通过官方 AWS CLI 创建私有 bucket；
 6. 执行 `wiki-migrate up` 与版本兼容检查；
 7. 运行 `wiki-doctor -format json`；
 8. 依次替换 Semantic Kernel、API、Worker、Web，并等待各自 healthcheck。
@@ -118,7 +118,7 @@ Schema，禁止回滚，必须发布 forward fix。
 ## 故障处置
 
 - 数据层启动失败：保留卷与容器日志，修复用户、tmpfs、环境变量或卷权限后重试。
-- `minio-init` 失败：确认 root 凭据与应用 S3 凭据一致，bucket 名合法。
+- `object-storage-init` 失败：确认 RustFS 凭据与应用 S3 凭据一致，bucket 名合法。
 - Meilisearch 不健康：检查宿主机数据目录属主、Master Key、模型下载/缓存和内存水位；
   不得静默把 production 切回容量不合格的 PostgreSQL fallback。
 - 迁移失败或 dirty：停止发布，在备份恢复副本上准备幂等前向修复。

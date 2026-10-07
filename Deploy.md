@@ -4,7 +4,7 @@
 
 - **开发（dev）**：不使用 Docker。直接跑起前端 `npm` 与后端 Go 进程；
   PostgreSQL / Redis / MinIO 视为外部依赖，连接信息经 `.env` 提供。
-- **生产（production）**：用 Docker Compose 一并部署数据层与应用，
+- **生产（production）**：用 Docker Compose 一并部署数据层与应用，使用 RustFS 对象存储，
   由宿主机 Nginx 提供 HTTPS 与协作 WebSocket 代理。
 
 > 早期阶段的取舍与安全影响见文末「早期阶段限制」，上线前必读。
@@ -140,7 +140,7 @@ Anby-Wiki/
   Secret/current-release       # 当前成功发布的提交标识
   Secret/deploy-backups/       # 历史配置、Nginx 和回滚诊断
   data/postgres/               # 权威数据库
-  data/minio/                  # 对象存储
+  data/rustfs/                 # RustFS 对象存储
   data/meilisearch/            # 搜索索引及模型缓存
   data/deploy-backups/         # 部署前 PostgreSQL 一致性导出
   data/deploy.lock             # flock 锁，文件存在不等于仍被占用
@@ -152,8 +152,10 @@ AI 供应商、模型和 Key 仍在登录后的 `/admin/ai` 配置。
 
 公网入口为 `https://anbywiki.momiya.cloud/`，宿主机默认仅监听
 `127.0.0.1:60019`，映射 Web 容器 `3000`。API `8080`、Worker `9091`、AI Kernel
-`8090`、PostgreSQL `5432`、Redis `6379`、MinIO `9000/9001`、Meilisearch `7700`
+`8090`、PostgreSQL `5432`、Redis `6379`、RustFS `9000`、Meilisearch `7700`
 均只在 Docker 私有网络使用。域名和 `WEB_PORT` 可在 `.env` 中修改。
+RustFS Console 关闭；官方 `1.0.1` 镜像固定 digest，使用独立凭据与 `data/rustfs/`，
+不与服务器上的其他 RustFS 实例共享数据或存储桶。
 
 Nginx 模板位于 `infra/deploy/nginx/`；安装前先检查，失败恢复原站点配置。
 Certbot 使用 webroot 验证，证书位于 `/etc/letsencrypt/live/<域名>/`，通过
@@ -171,8 +173,9 @@ down 迁移，也不会删除数据。新实例没有可回滚的旧镜像，修
 `/etc/letsencrypt/`。
 
 **旧命名卷部署迁移提醒：**本清单现使用根目录 `data/` 的宿主机绑定。已运行的旧实例
-必须先停止写入并把原 `pgdata/miniodata/meilidata` 内容及权限迁移到对应目录，再使用
-新清单；不要直接启动空目录。本次 `anbywiki.momiya.cloud` 是独立的新实例。
+必须先停止写入并把原 PostgreSQL/Meilisearch 数据及权限迁移到对应目录；MinIO 对象
+必须通过 S3 导出/恢复到 RustFS，不能直接复制 MinIO 数据目录。`data/minio/` 非空时
+一键入口会拒绝部署，避免误用空对象存储。本次 `anbywiki.momiya.cloud` 是独立的新实例。
 
 ### 2.1 拓扑
 
@@ -183,7 +186,7 @@ down 迁移，也不会删除数据。新实例没有可回滚的旧镜像，修
                     │                         ├──► postgres:5432       │
                     │             worker ─────┤                        │
                     │                         ├──► redis:6379          │
-                    │                         ├──► minio:9000          │
+                    │                         ├──► rustfs:9000         │
                     │                         └──► meilisearch:7700    │
                     └──────────────────────────────────────────────────┘
 ```
@@ -192,7 +195,7 @@ down 迁移，也不会删除数据。新实例没有可回滚的旧镜像，修
 
 - **不含反向代理。** `web` 是唯一发布端口的服务，通过 Next.js rewrites 转发 `/api/*`。
 - **Compose 不终结 TLS。** 一键入口使用宿主机 Nginx 和 Certbot 提供 HTTPS。
-- 数据与搜索层由 Compose 拉起，PostgreSQL、MinIO、Meilisearch 使用根目录 `data/` 持久化；Redis 是可丢弃缓存。
+- 数据与搜索层由 Compose 拉起，PostgreSQL、RustFS、Meilisearch 使用根目录 `data/` 持久化；Redis 是可丢弃缓存。
 - 限流、安全响应头、身份头清洗全部在 Go API 内实现，不依赖代理。
 
 ### 2.2 准备环境文件
@@ -214,7 +217,7 @@ Compose 会把机密注入容器环境，因此具有 Docker 管理权限的人�
 | `RELEASE_ID` | 本地镜像版本标签，只允许字母、数字、点、下划线和连字符 |
 | `POSTGRES_DB` `POSTGRES_USER` | PostgreSQL 数据库名和用户 |
 | `POSTGRES_PASSWORD` | PostgreSQL 密码；只允许字母、数字、点、下划线和连字符，建议使用 `openssl rand -hex 32` 生成 |
-| `S3_ACCESS_KEY` `S3_SECRET_KEY` | 同时作为 MinIO root 凭据与应用 S3 凭据 |
+| `S3_ACCESS_KEY` `S3_SECRET_KEY` | 同时作为 RustFS 凭据与应用 S3 凭据 |
 | `MEILI_MASTER_KEY` | 同时作为 Meilisearch Master Key 与应用内部 API Key，必须替换模板占位值 |
 | `SEARCH_BACKEND` | 生产保持 `meilisearch`；PostgreSQL 只作为开发 fallback |
 | `AUTH_REGISTRATION_ENABLED` | 是否允许公开注册；首个管理员建立后建议设为 `false` |
@@ -251,7 +254,7 @@ sh scripts/deploy.sh build
 - `anby-wiki-migrate:$RELEASE_ID`
 
 `deploy` 会自动再次执行本地增量构建，因此单独运行 `build` 只用于提前确认构建过程。
-PostgreSQL、Redis、MinIO、Meilisearch、Alpine 等第三方基础镜像仍会在本机缺失时从其上游拉取。
+PostgreSQL、Redis、RustFS、Meilisearch、Alpine 等第三方基础镜像仍会在本机缺失时从其上游拉取。
 部署目录必须保留完整且受保护的商业源码与 Docker 构建上下文。
 
 ### 2.4 部署
@@ -269,8 +272,8 @@ sh scripts/deploy.sh deploy     # 本地构建并正式发布
 1. 校验 `ENV=production`、`RELEASE_ID`、机密变量和环境文件权限；
 2. 从当前源码本地构建六个带 `RELEASE_ID` 标签的业务镜像；
 3. 运行 `storage-init` 修正根目录 `data/` 的属主；
-4. 启动数据层 postgres / redis / minio 并等待健康；
-5. 运行 `minio-init` 创建 bucket 并关闭匿名访问；
+4. 启动数据层 postgres / redis / rustfs / meilisearch 并等待健康；
+5. 运行 `object-storage-init`，通过官方 AWS CLI 创建 bucket 并移除匿名策略；
 6. 执行迁移，再校验迁移版本落在镜像兼容窗口内；
 7. 运行 `doctor` 自检；
 8. 按 `ai-kernel` → `api` → `worker` → `web` 顺序滚动替换。
@@ -380,7 +383,7 @@ go test ./internal/wikicli \
 
 ### 2.7 备份
 
-数据在根目录 `data/postgres`、`data/minio` 与 `data/meilisearch` 中，随容器重建保留。
+数据在根目录 `data/postgres`、`data/rustfs` 与 `data/meilisearch` 中，随容器重建保留。
 备份必须保留原路径、目录权限和数据库恢复所需文件。备份脚本见 `scripts/backup/postgres-backup.sh`、
 `scripts/backup/object-storage-backup.sh`。
 

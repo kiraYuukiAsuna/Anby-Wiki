@@ -38,8 +38,8 @@ grep -q '^USER 10001:10001$' "$DOCKERFILE" ||
   fail "Go runtime must use numeric non-root user"
 grep -q '^USER node$' "$DOCKERFILE" ||
   fail "Web runtime must use non-root node user"
-# postgres redis minio meilisearch ai-kernel api worker web cli migrate doctor = 11
-# (storage-init and minio-init are short-lived jobs with dedicated policies).
+# postgres redis rustfs meilisearch ai-kernel api worker web cli migrate doctor = 11
+# (storage-init and object-storage-init are short-lived jobs with dedicated policies).
 [ "$(grep -c '<<: \*runtime-security' "$COMPOSE_FILE")" -eq 11 ] ||
   fail "every production service must inherit runtime security"
 if grep -qE '^  nginx:' "$COMPOSE_FILE"; then
@@ -49,7 +49,7 @@ grep -Eq '^    image: getmeili/meilisearch:v[0-9]+\.[0-9]+\.[0-9]+$' "$COMPOSE_F
   fail "Meilisearch image must use a fixed semantic version"
 grep -q '^  storage-init:' "$COMPOSE_FILE" ||
   fail "production compose must initialize host data directory ownership"
-for binding in '../../data/postgres:' '../../data/minio:' '../../data/meilisearch:'; do
+for binding in '../../data/postgres:' '../../data/rustfs:' '../../data/meilisearch:'; do
   grep -Fq "$binding" "$COMPOSE_FILE" || fail "persistent host data binding missing: $binding"
 done
 for template in anby-wiki.bootstrap.conf anby-wiki.conf; do
@@ -58,7 +58,8 @@ done
 if grep -Eq '^[[:space:]]*secrets:' "$COMPOSE_FILE"; then
   fail "production compose must read secrets from DEPLOY_ENV_FILE, not Compose secrets"
 fi
-if grep -q '_FILE:' "$COMPOSE_FILE" || grep -q 'container-entrypoint' "$DOCKERFILE"; then
+if grep -Eq '(POSTGRES_PASSWORD|S3_ACCESS_KEY|S3_SECRET_KEY|MEILI_MASTER_KEY|AI_CONFIG_MASTER_KEY|AI_KERNEL_INTERNAL_TOKEN)_FILE:' "$COMPOSE_FILE" ||
+  grep -q 'container-entrypoint' "$DOCKERFILE"; then
   fail "legacy file-based secret injection is still configured"
 fi
 for name in POSTGRES_DB POSTGRES_USER POSTGRES_PASSWORD S3_ACCESS_KEY S3_SECRET_KEY MEILI_MASTER_KEY AI_CONFIG_MASTER_KEY AI_KERNEL_INTERNAL_TOKEN

@@ -148,15 +148,15 @@ check_sensitive_env() {
   done
 }
 
-# start_data_tier brings up PostgreSQL/Redis/MinIO/Meilisearch and ensures the bucket
+# start_data_tier brings up PostgreSQL/Redis/RustFS/Meilisearch and ensures the bucket
 # exists. These are stateful, so they are started before the application and
 # are never recreated as part of an application roll.
 start_data_tier() {
   # Create containers before initializing host bind directory ownership.
-  compose create postgres redis minio meilisearch
+  compose create postgres redis rustfs meilisearch
   compose --profile tools run --rm -T --interactive=false storage-init
-  compose up -d --no-recreate --wait postgres redis minio meilisearch
-  compose --profile tools run --rm -T --interactive=false minio-init
+  compose up -d --no-recreate --wait postgres redis rustfs meilisearch
+  compose --profile tools run --rm -T --interactive=false object-storage-init
 }
 
 roll_services() {

@@ -28,11 +28,14 @@ AI 配置和双用户协作 E2E。“实现完成”仍不等于“生产发布�
   顺序构建、迁移闸门、Doctor、应用更新与失败回滚。
 - 宿主机 Nginx 模板覆盖 HTTPS、ACME 验证、HSTS、流式响应与协作 WebSocket；
   Certbot 证书可沿用服务器账户，续期由系统 timer 和 reload hook 管理。
-- PostgreSQL、MinIO 与 Meilisearch 持久数据统一到根目录 `data/`；配置、首个管理员
+- PostgreSQL、RustFS 与 Meilisearch 持久数据统一到根目录 `data/`；配置、首个管理员
   凭据及配置备份位于被 Git/Docker 排除的 `.env` / `Secret/`。首次管理员通过现有
   领域 API 初始化后关闭公开注册，未引入直接 SQL 权威写入。
 - dotenv 按数据读取，不执行 Shell；本入口用于 `anbywiki.momiya.cloud` 独立实例，
   不自动迁移其他实例的数据。既有生产发布验收项继续见 `OutstandingIssues.md`。
+- 生产对象存储使用固定 digest 的 RustFS 1.0.1；一次性 AWS CLI 工具以 path-style
+  初始化私有 bucket，不依赖已不可拉取的 MinIO/mc 镜像。已有 MinIO 目录不能直接
+  当作 RustFS 数据目录使用，必须通过 S3 导出/恢复。
 
 ## 设计能力覆盖与已知边界
 

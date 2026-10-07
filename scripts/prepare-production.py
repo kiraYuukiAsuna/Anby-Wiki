@@ -19,7 +19,7 @@ def main() -> None:
         directory.mkdir(mode=0o700, parents=True, exist_ok=True)
     fresh = not environment.exists()
     if fresh:
-        for directory in [root / "data/postgres", root / "data/minio", root / "data/meilisearch"]:
+        for directory in [root / "data/postgres", root / "data/rustfs", root / "data/meilisearch", root / "data/minio"]:
             if directory.exists() and any(directory.iterdir()):
                 raise ValueError("Existing service data requires the original deployment environment.")
         environment.parent.mkdir(mode=0o700, parents=True, exist_ok=True)
@@ -50,6 +50,11 @@ def main() -> None:
             json.dump(credentials, handle, indent=2)
             handle.write("\n")
     values = load(environment)
+    legacy_storage = root / "data/minio"
+    if legacy_storage.exists() and any(legacy_storage.iterdir()):
+        raise ValueError("Existing MinIO objects require an S3 export and restore to RustFS before deployment.")
+    if values.get("S3_ENDPOINT") == "http://minio:9000":
+        update(environment, {"S3_ENDPOINT": "http://rustfs:9000"})
     if values.get("ENV") != "production":
         raise ValueError("Production deployment requires ENV=production.")
     if values.get("SESSION_COOKIE_SECURE") != "true":
@@ -60,7 +65,7 @@ def main() -> None:
         "RELEASE_ID": revision[:12],
         "COLLABORATION_ORIGIN_PATTERNS": "https://" + settings["ANBY_DOMAIN"],
     })
-    for name in ["postgres", "minio", "meilisearch", "deploy-backups"]:
+    for name in ["postgres", "rustfs", "meilisearch", "deploy-backups"]:
         (root / "data" / name).mkdir(mode=0o700, exist_ok=True)
     print("Production settings prepared; existing credentials preserved.")
 

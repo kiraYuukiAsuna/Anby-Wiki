@@ -1,7 +1,7 @@
 # 生产部署参考清单。
 #
 # 与开发环境的区别：这里用 Docker 把数据层和应用一起拉起，
-# 包括 PostgreSQL / Redis / MinIO / api / worker / web。
+# 包括 PostgreSQL / Redis / RustFS / api / worker / web。
 # 不再包含反向代理：web 是唯一对外发布端口的服务，
 # 并通过 Next.js rewrites 把 /api/* 转发到内网的 api。
 #
@@ -29,7 +29,7 @@ x-app-environment: &app-environment
   LOG_LEVEL: ${LOG_LEVEL:-info}
   DATABASE_URL: "postgres://${POSTGRES_USER:?set POSTGRES_USER}:${POSTGRES_PASSWORD:?set POSTGRES_PASSWORD}@postgres:5432/${POSTGRES_DB:?set POSTGRES_DB}?sslmode=disable"
   REDIS_URL: ${REDIS_URL:-redis://redis:6379/0}
-  S3_ENDPOINT: ${S3_ENDPOINT:-http://minio:9000}
+  S3_ENDPOINT: ${S3_ENDPOINT:-http://rustfs:9000}
   S3_REGION: ${S3_REGION:-us-east-1}
   S3_BUCKET: ${S3_BUCKET:?set S3_BUCKET}
   S3_ACCESS_KEY: "${S3_ACCESS_KEY:?set S3_ACCESS_KEY}"
@@ -89,14 +89,14 @@ services:
     network_mode: none
     volumes:
       - ../../data/postgres:/pgdata
-      - ../../data/minio:/miniodata
+      - ../../data/rustfs:/rustfsdata
       - ../../data/meilisearch:/meilidata
     entrypoint: ["/bin/sh", "-c"]
     command:
       - |
         set -e
         chown 70:70 /pgdata
-        chown 1000:1000 /miniodata
+        chown 10001:10001 /rustfsdata
         chown 1000:1000 /meilidata
     restart: "no"
 
@@ -137,38 +137,48 @@ services:
       retries: 12
       start_period: 10s
 
-  minio:
+  rustfs:
     <<: *runtime-security
-    image: minio/minio:RELEASE.2025-09-07T16-13-09Z
-    user: "1000:1000"
-    command: ["server", "/data", "--console-address", ":9001"]
+    image: rustfs/rustfs:1.0.1@sha256:1803faef57627e2d9c2e7d89d655d712ddded5389040054987163043fecb6a3c
+    user: "10001:10001"
+    command: ["/data"]
     environment:
-      MINIO_ROOT_USER: "${S3_ACCESS_KEY:?set S3_ACCESS_KEY}"
-      MINIO_ROOT_PASSWORD: "${S3_SECRET_KEY:?set S3_SECRET_KEY}"
+      RUSTFS_ACCESS_KEY: "${S3_ACCESS_KEY:?set S3_ACCESS_KEY}"
+      RUSTFS_SECRET_KEY: "${S3_SECRET_KEY:?set S3_SECRET_KEY}"
+      RUSTFS_ADDRESS: "0.0.0.0:9000"
+      RUSTFS_CONSOLE_ENABLE: "false"
+      RUSTFS_OBS_LOGGER_LEVEL: warn
+      RUSTFS_OBS_LOG_DIRECTORY: /logs
     volumes:
-      - ../../data/minio:/data
+      - ../../data/rustfs:/data
     tmpfs:
       - /tmp:size=64m,mode=1777
+      - /logs:size=64m,mode=0755,uid=10001,gid=10001
     healthcheck:
-      test: ["CMD", "mc", "ready", "local"]
+      test: ["CMD", "curl", "--fail", "--silent", "http://127.0.0.1:9000/health"]
       interval: 10s
       timeout: 5s
       retries: 12
       start_period: 20s
 
-  minio-init:
+  object-storage-init:
     # 一次性 job：创建 bucket 并关闭匿名访问，完成后退出。
-    image: minio/mc:RELEASE.2025-08-13T08-35-41Z
+    image: public.ecr.aws/aws-cli/aws-cli:2.31.0
     profiles: ["tools"]
     depends_on:
-      minio:
+      rustfs:
         condition: service_healthy
     environment:
-      MINIO_BUCKET: ${S3_BUCKET:?set S3_BUCKET}
-      MINIO_ACCESS_KEY: "${S3_ACCESS_KEY:?set S3_ACCESS_KEY}"
-      MINIO_SECRET_KEY: "${S3_SECRET_KEY:?set S3_SECRET_KEY}"
-      MC_CONFIG_DIR: /tmp/.mc
-    user: "1000:1000"
+      S3_BUCKET: ${S3_BUCKET:?set S3_BUCKET}
+      S3_ENDPOINT: ${S3_ENDPOINT:-http://rustfs:9000}
+      AWS_ACCESS_KEY_ID: "${S3_ACCESS_KEY:?set S3_ACCESS_KEY}"
+      AWS_SECRET_ACCESS_KEY: "${S3_SECRET_KEY:?set S3_SECRET_KEY}"
+      AWS_DEFAULT_REGION: ${S3_REGION:-us-east-1}
+      AWS_CONFIG_FILE: /tmp/aws-config
+      AWS_PAGER: ""
+      AWS_EC2_METADATA_DISABLED: "true"
+      HOME: /tmp
+    user: "10001:10001"
     read_only: true
     cap_drop:
       - ALL
@@ -180,11 +190,23 @@ services:
     command:
       - |
         set -e
-        mc alias set target http://minio:9000 \
-          "$${MINIO_ACCESS_KEY}" "$${MINIO_SECRET_KEY}"
-        mc mb --ignore-existing "target/$${MINIO_BUCKET}"
-        mc anonymous set none "target/$${MINIO_BUCKET}"
-        echo "minio-init: bucket '$${MINIO_BUCKET}' ready (anonymous access disabled)"
+        aws configure set default.s3.addressing_style path
+        buckets=$$(aws --endpoint-url "$${S3_ENDPOINT}" s3api list-buckets --query 'Buckets[].Name' --output text)
+        existing=false
+        for bucket in $$buckets; do
+          if [ "$$bucket" = "$${S3_BUCKET}" ]; then existing=true; fi
+        done
+        if [ "$$existing" = false ]; then
+          if [ "$${AWS_DEFAULT_REGION}" = us-east-1 ]; then
+            aws --endpoint-url "$${S3_ENDPOINT}" s3api create-bucket --bucket "$${S3_BUCKET}" >/dev/null
+          else
+            aws --endpoint-url "$${S3_ENDPOINT}" s3api create-bucket --bucket "$${S3_BUCKET}" \
+              --create-bucket-configuration "LocationConstraint=$${AWS_DEFAULT_REGION}" >/dev/null
+          fi
+        fi
+        aws --endpoint-url "$${S3_ENDPOINT}" s3api delete-bucket-policy --bucket "$${S3_BUCKET}"
+        aws --endpoint-url "$${S3_ENDPOINT}" s3api head-bucket --bucket "$${S3_BUCKET}" >/dev/null
+        echo 'object-storage-init: bucket ready (anonymous policy removed)'
     networks:
       - app
     restart: "no"
@@ -255,7 +277,7 @@ services:
         condition: service_healthy
       redis:
         condition: service_healthy
-      minio:
+      rustfs:
         condition: service_healthy
       meilisearch:
         condition: service_healthy
@@ -293,7 +315,7 @@ services:
         condition: service_healthy
       redis:
         condition: service_healthy
-      minio:
+      rustfs:
         condition: service_healthy
       meilisearch:
         condition: service_healthy
