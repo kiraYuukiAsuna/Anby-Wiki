@@ -153,10 +153,11 @@ Anby-Wiki/
 `Secret/bootstrap-admin.json`，不会出现在日志中；已有管理员及配置不会重新生成。
 AI 供应商、模型和 Key 仍在登录后的 `/admin/ai` 配置。
 
-公网入口为 `https://anbywiki.momiya.cloud/`，宿主机默认仅监听
-`127.0.0.1:60019`，映射 Web 容器 `3000`。API `8080`、Worker `9091`、AI Kernel
+公网入口为 `https://anbywiki.momiya.cloud/`。宿主机默认把 Web 容器 `3000`
+映射到 `127.0.0.1:60019`，把 API 容器 `8080` 映射到
+`127.0.0.1:60018`；两个端口都只供宿主机代理访问。Worker `9091`、AI Kernel
 `8090`、PostgreSQL `5432`、Redis `6379`、RustFS `9000`、Meilisearch `7700`
-均只在 Docker 私有网络使用。域名和 `WEB_PORT` 可在 `.env` 中修改。
+仍只在 Docker 私有网络使用。域名、`WEB_PORT` 和 `API_HOST_PORT` 可在 `.env` 中修改。
 RustFS Console 关闭；官方 `1.0.1` 镜像固定 digest，使用独立凭据与 `data/rustfs/`，
 不与服务器上的其他 RustFS 实例共享数据或存储桶。
 
@@ -183,20 +184,24 @@ down 迁移，也不会删除数据。新实例没有可回滚的旧镜像，修
 ### 2.1 拓扑
 
 ```text
-                    ┌───────────────────────────── docker network: app ─┐
-  外部访问 ─────────►│  web:3000 ──/api/*──► api:8080                    │
-  (仅 web 发布端口)  │                         │                        │
-                    │                         ├──► postgres:5432       │
-                    │             worker ─────┤                        │
-                    │                         ├──► redis:6379          │
-                    │                         ├──► rustfs:9000         │
-                    │                         └──► meilisearch:7700    │
-                    └──────────────────────────────────────────────────┘
+ 外部访问 ──► 宿主机 Nginx ──┬── 页面 ──► 127.0.0.1:60019 ──► web:3000
+                            └── /api/* ─► 127.0.0.1:60018 ──► api:8080
+                                                               │
+                    ┌────────── docker network: app ────────────┤
+                    │                              worker ──────┤
+                    │                                          ├──► postgres:5432
+                    │                                          ├──► redis:6379
+                    │                                          ├──► rustfs:9000
+                    │                                          └──► meilisearch:7700
+                    └────────────────────────────────────────────────────┘
 ```
 
 要点：
 
-- **不含反向代理。** `web` 是唯一发布端口的服务，通过 Next.js rewrites 转发 `/api/*`。
+- **Compose 不含反向代理。** `web` 和 `api` 只发布宿主机回环端口；宿主机 Nginx
+  将 `/api/*`、`/healthz`、`/readyz` 直送 API，其余请求送 Web。
+- **Next.js rewrite 是兼容路径。** 开发环境或未配置上述分流的外部代理仍可经 Web
+  访问 API，但 Next 会按 `proxyClientMaxBodySize` 缓冲请求，不适合作为生产大文件入口。
 - **Compose 不终结 TLS。** 一键入口使用宿主机 Nginx 和 Certbot 提供 HTTPS。
 - 数据与搜索层由 Compose 拉起，PostgreSQL、RustFS、Meilisearch 使用根目录 `data/` 持久化；Redis 是可丢弃缓存。
 - 限流、安全响应头、身份头清洗全部在 Go API 内实现，不依赖代理。
@@ -230,6 +235,7 @@ Compose 会把机密注入容器环境，因此具有 Docker 管理权限的人�
 | `SESSION_COOKIE_SECURE` | 外层提供 HTTPS 时设 `true`，否则 `false` |
 | `COLLABORATION_ORIGIN_PATTERNS` | Next.js rewrite 或反向代理改写上游 `Host` 时，填写允许建立协作 WebSocket 的公开 Origin；多个值用逗号分隔，生产建议包含 `https://` 以固定协议 |
 | `WEB_BIND` `WEB_PORT` | 宿主机端口；默认 `127.0.0.1:60019` 只绑本机 |
+| `API_HOST_PORT` | API 的宿主机回环端口；默认 `60018`，绑定地址不可配置为公网 |
 | `TRUSTED_PROXY_IPS` | 仅在 API 直连对端可信且其传来的 `X-Forwarded-For` 已被清洗时填写；默认留空最安全 |
 
 环境文件使用逐行 `KEY=VALUE` 的 dotenv 格式，支持单/双引号，不执行 Shell，不进行
@@ -285,8 +291,9 @@ sh scripts/deploy.sh deploy     # 本地构建并正式发布
 
 #### 2.4.1 外层 HTTPS 代理
 
-外层代理必须指向环境文件中实际的 `WEB_BIND:WEB_PORT`，不能假定端口始终为
-3000。宿主机 Nginx 的最小站点配置示例：
+外层代理必须把页面请求指向环境文件中的 `WEB_BIND:WEB_PORT`，并把 `/api/*`、
+`/healthz`、`/readyz` 指向 `127.0.0.1:API_HOST_PORT`，不能假定端口始终为默认值。
+宿主机 Nginx 的最小站点配置示例：
 
 ```nginx
 map $http_upgrade $anbywiki_connection_upgrade {
@@ -297,6 +304,17 @@ map $http_upgrade $anbywiki_connection_upgrade {
 server {
     listen 443 ssl;
     server_name anbywiki.example.com;
+
+    location ~ ^/(?:api(?:/.*)?|healthz|readyz)$ {
+        proxy_pass http://127.0.0.1:4443;
+        proxy_http_version 1.1;
+        proxy_set_header Host $host;
+        proxy_set_header X-Forwarded-Proto $scheme;
+        proxy_set_header X-Forwarded-For $remote_addr;
+        proxy_set_header Upgrade $http_upgrade;
+        proxy_set_header Connection $anbywiki_connection_upgrade;
+        proxy_request_buffering off;
+    }
 
     location / {
         proxy_pass http://127.0.0.1:4444;
@@ -315,13 +333,14 @@ server {
 ```sh
 WEB_BIND=127.0.0.1
 WEB_PORT=4444
+API_HOST_PORT=4443
 SESSION_COOKIE_SECURE=true
 COLLABORATION_ORIGIN_PATTERNS=https://anbywiki.example.com
 ```
 
-不要只在一次 `docker compose` 命令中临时覆盖 `WEB_BIND/WEB_PORT`。后续 release
-重建 Web 容器时仍会读取部署环境文件；缺失时会回退到 Compose 默认端口，可能与宿主机
-其他站点冲突并使滚动部署停在 Web 切换阶段。
+不要只在一次 `docker compose` 命令中临时覆盖 `WEB_BIND`、`WEB_PORT` 或
+`API_HOST_PORT`。后续 release 重建容器时仍会读取部署环境文件；缺失时会回退到
+Compose 默认端口，可能与宿主机其他站点冲突并使发布中止。
 
 修改代理后必须先运行 `nginx -t`，再平滑 reload。部署完成后同时验证：
 

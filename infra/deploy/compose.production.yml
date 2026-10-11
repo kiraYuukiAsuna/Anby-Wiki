@@ -2,8 +2,8 @@
 #
 # 与开发环境的区别：这里用 Docker 把数据层和应用一起拉起，
 # 包括 PostgreSQL / Redis / RustFS / api / worker / web。
-# 不再包含反向代理：web 是唯一对外发布端口的服务，
-# 并通过 Next.js rewrites 把 /api/* 转发到内网的 api。
+# 不再包含反向代理：web 与 api 只发布宿主机回环端口，由外层代理分流。
+# Next.js rewrites 仍作为开发环境和未采用该分流拓扑时的兼容路径。
 #
 # 因此本清单不终结 TLS。若需要 HTTPS，请在其外层（云负载均衡、
 # Cloudflare、宿主机上的独立代理等）终结，并同步调整
@@ -272,6 +272,9 @@ services:
       AI_CONFIG_MASTER_KEY: "${AI_CONFIG_MASTER_KEY:?set AI_CONFIG_MASTER_KEY}"
       AI_KERNEL_URL: http://ai-kernel:8090
       AI_KERNEL_INTERNAL_TOKEN: "${AI_KERNEL_INTERNAL_TOKEN:?set AI_KERNEL_INTERNAL_TOKEN}"
+    # 仅供宿主机反向代理直连，避免大文件经过 Next.js 内存缓冲。
+    ports:
+      - "127.0.0.1:${API_HOST_PORT:-60018}:${API_PORT:-8080}"
     depends_on:
       postgres:
         condition: service_healthy
@@ -352,7 +355,7 @@ services:
       HOSTNAME: 0.0.0.0
       NODE_ENV: production
       PORT: "3000"
-    # 唯一对外发布的端口。默认只绑本机，由外层代理决定是否公开。
+    # 默认只绑本机，由外层代理决定是否公开。
     ports:
       - "${WEB_BIND:-127.0.0.1}:${WEB_PORT:-60019}:3000"
     depends_on:

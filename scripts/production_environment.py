@@ -9,7 +9,15 @@ import shlex
 import stat
 import sys
 
-PUBLIC_KEYS = {"ANBY_DOMAIN", "CERTBOT_ACCOUNT", "CERTBOT_EMAIL", "WEB_PORT", "WEB_BIND", "RELEASE_ID"}
+PUBLIC_KEYS = {
+    "ANBY_DOMAIN",
+    "API_HOST_PORT",
+    "CERTBOT_ACCOUNT",
+    "CERTBOT_EMAIL",
+    "RELEASE_ID",
+    "WEB_BIND",
+    "WEB_PORT",
+}
 
 
 def load(path: Path) -> dict[str, str]:
@@ -71,9 +79,14 @@ def domain(values: dict[str, str]) -> dict[str, str]:
     hostname = values.get("ANBY_DOMAIN", "")
     if len(hostname) > 253 or not re.fullmatch(r"[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?(?:\.[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?)+", hostname):
         raise ValueError("ANBY_DOMAIN must be a lowercase DNS hostname without scheme, path or port.")
-    port = values.get("WEB_PORT", "60019")
-    if not re.fullmatch(r"[1-9][0-9]{0,4}", port) or int(port) > 65535:
+    web_port = values.get("WEB_PORT", "60019")
+    if not re.fullmatch(r"[1-9][0-9]{0,4}", web_port) or int(web_port) > 65535:
         raise ValueError("WEB_PORT must be an integer from 1 to 65535.")
+    api_host_port = values.get("API_HOST_PORT", "60018")
+    if not re.fullmatch(r"[1-9][0-9]{0,4}", api_host_port) or int(api_host_port) > 65535:
+        raise ValueError("API_HOST_PORT must be an integer from 1 to 65535.")
+    if api_host_port == web_port:
+        raise ValueError("API_HOST_PORT and WEB_PORT must be different.")
     if values.get("WEB_BIND", "127.0.0.1") != "127.0.0.1":
         raise ValueError("Host Nginx deployment requires WEB_BIND=127.0.0.1.")
     account = values.get("CERTBOT_ACCOUNT", "")
@@ -82,7 +95,13 @@ def domain(values: dict[str, str]) -> dict[str, str]:
         raise ValueError("CERTBOT_ACCOUNT must be an existing Certbot account ID.")
     if not account and not re.fullmatch(r"[^\s@-][^\s@]*@[^\s@]+", email):
         raise ValueError("Set CERTBOT_ACCOUNT or CERTBOT_EMAIL before deploying.")
-    return dict(ANBY_DOMAIN=hostname, WEB_PORT=port, CERTBOT_ACCOUNT=account, CERTBOT_EMAIL=email)
+    return dict(
+        ANBY_DOMAIN=hostname,
+        API_HOST_PORT=api_host_port,
+        WEB_PORT=web_port,
+        CERTBOT_ACCOUNT=account,
+        CERTBOT_EMAIL=email,
+    )
 
 
 def main() -> None:

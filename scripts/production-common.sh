@@ -6,7 +6,7 @@ load_production_domain() {
   # Only validated public settings are emitted, with shell-safe quoting.
   settings=$(python3 "$ROOT/scripts/production_environment.py" domain "$DEPLOY_ENV_FILE") || return 1
   eval "$settings"
-  export ANBY_DOMAIN CERTBOT_ACCOUNT CERTBOT_EMAIL WEB_PORT
+  export ANBY_DOMAIN API_HOST_PORT CERTBOT_ACCOUNT CERTBOT_EMAIL WEB_PORT
 }
 
 production_compose() {

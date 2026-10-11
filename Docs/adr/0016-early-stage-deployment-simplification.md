@@ -1,7 +1,8 @@
 # ADR-0016：早期阶段部署简化
 
 - 状态：部分被取代（第 2 节被 ADR-0006 的内部 Beta 决策重新取代；第 3 节被
-  ADR-0019、第 5 节部分被 ADR-0020、第 6 节被 ADR-0017 取代）
+  ADR-0019、第 4 节的单端口结论被 2026-10-12 修订、第 5 节部分被 ADR-0020、
+  第 6 节被 ADR-0017 取代）
 - 日期：2026-07-25
 
 ## 背景
@@ -43,13 +44,13 @@ PostgreSQL、Redis、对象存储视为外部依赖，连接信息经仓库根 `
 
 ### 4. 移除 Nginx，安全职责下沉到 Go API
 
-生产 Compose 不再包含反向代理，`web` 是唯一发布端口的服务，
-通过 Next.js rewrites 把 `/api/*` 转发到内网 api。
+本节原决策为：生产 Compose 不再包含反向代理，`web` 是唯一发布端口的服务，
+通过 Next.js rewrites 把 `/api/*` 转发到内网 api。后续回环端口修订见本节末。
 
 Nginx 原先独有的四项职责改由 API 中间件承担：
 
 | 原 Nginx 职责 | 现实现 |
-|---|---|
+| --- | --- |
 | 限流（general / auth / upload 三桶） | `RateLimit` 中间件 + Redis 固定窗口 |
 | 清空可伪造身份头 | `StripSpoofableAuthHeaders` 中间件 |
 | API 响应安全头 | `SecurityHeaders` 中间件 |
@@ -60,6 +61,12 @@ Nginx 原先独有的四项职责改由 API 中间件承担：
 
 客户端身份取自直连对端 IP；只有当对端属于 `TRUSTED_PROXY_IPS` 时
 才采信 `X-Forwarded-For`，否则任何客户端都能自选限流桶。
+
+> 2026-10-12 修订：生产实测确认 Next.js 外部 rewrite 默认只缓冲 10 MiB，
+> 超限后仍转发截断请求，导致大文件上传对客户端表现为非结构化 500。Compose
+> 因此把 Go API 额外发布到固定宿主机回环地址，宿主机 Nginx 直接分流 `/api/*`
+> 与健康检查；Web rewrite 只保留为兼容路径。Compose 仍不内置反向代理，限流、
+> 身份头清洗、安全头和最终请求体边界继续由 Go API 承担。
 
 ### 5. 不再默认终结 TLS
 

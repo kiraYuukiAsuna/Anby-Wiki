@@ -13,7 +13,11 @@ case "$1" in
   *) echo 'Unknown Nginx mode.' >&2; exit 64 ;;
 esac
 render() {
-  sed -e "s/__ANBY_DOMAIN__/$ANBY_DOMAIN/g" -e "s/__WEB_PORT__/$WEB_PORT/g" "$template"
+  sed \
+    -e "s/__ANBY_DOMAIN__/$ANBY_DOMAIN/g" \
+    -e "s/__API_HOST_PORT__/$API_HOST_PORT/g" \
+    -e "s/__WEB_PORT__/$WEB_PORT/g" \
+    "$template"
 }
 if [ "${2:-}" = --render ]; then render; exit 0; fi
 [ "$(id -u)" -eq 0 ] || { echo 'Run Nginx installation as root.' >&2; exit 1; }

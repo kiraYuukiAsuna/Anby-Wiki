@@ -67,6 +67,8 @@ do
   grep -q "^${name}=" "$EXAMPLE_ENV" ||
     fail "deployment environment example is missing $name"
 done
+grep -q '^API_HOST_PORT=' "$EXAMPLE_ENV" ||
+  fail "deployment environment example is missing API_HOST_PORT"
 # 生产模板必须覆盖开发模板中的全部通用应用变量；只允许额外增加生产部署变量。
 for name in $(sed -n 's/^\([A-Z][A-Z0-9_]*\)=.*/\1/p' "$DEV_EXAMPLE_ENV"); do
   # Production Compose derives its internal PostgreSQL URL from the three
@@ -109,6 +111,16 @@ grep -Fq 'MEILI_MASTER_KEY: "${MEILI_MASTER_KEY:?set MEILI_MASTER_KEY}"' "$COMPO
   fail "Meilisearch master key environment injection is missing"
 grep -Fq 'AUTH_REGISTRATION_ENABLED: ${AUTH_REGISTRATION_ENABLED:-false}' "$COMPOSE_FILE" ||
   fail "account registration configuration is missing"
+grep -Fq '"127.0.0.1:${API_HOST_PORT:-60018}:${API_PORT:-8080}"' "$COMPOSE_FILE" ||
+  fail "API must publish only a configurable host loopback port"
+grep -Fq 'server 127.0.0.1:__API_HOST_PORT__;' "$ROOT/infra/deploy/nginx/anby-wiki.conf" ||
+  fail "Nginx API loopback upstream is missing"
+grep -Fq 'proxy_pass http://anby_wiki_api;' "$ROOT/infra/deploy/nginx/anby-wiki.conf" ||
+  fail "Nginx must proxy API requests directly to the Go service"
+grep -Fq 'proxy_request_buffering off;' "$ROOT/infra/deploy/nginx/anby-wiki.conf" ||
+  fail "Nginx API request buffering must remain disabled"
+grep -Fq 'proxyClientMaxBodySize: "301mb"' "$ROOT/apps/web/next.config.ts" ||
+  fail "Next.js fallback proxy upload limit is missing"
 sed -n '/^  worker:/,/^  web:/p' "$COMPOSE_FILE" |
   grep -q '^    stop_grace_period: 2h5m$' ||
   fail "Worker stop grace period must exceed the two-hour import job timeout"

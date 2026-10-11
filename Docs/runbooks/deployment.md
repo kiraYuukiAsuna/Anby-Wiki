@@ -8,12 +8,13 @@
 
 Production Compose 部署 PostgreSQL、Redis、RustFS、Meilisearch、Semantic Kernel
 Sidecar、API、Worker 与 Web。
-Web 是唯一发布宿主机端口的服务，并经 Next.js rewrite 将 `/api/*` 转发到
-Docker 内网 API。清单不包含 Nginx、TLS 终结或外部身份提供方。
+Web 与 API 分别发布只绑定宿主机回环地址的端口。宿主机 Nginx 将 `/api/*`、
+`/healthz`、`/readyz` 直送 API，其余请求送 Web；Next.js rewrite 仅作为开发环境
+或未采用该分流拓扑时的兼容路径。清单不包含 Nginx、TLS 终结或外部身份提供方。
 
-Compose 本身不终结 TLS。默认 `WEB_BIND=127.0.0.1`，适合由宿主机代理、云负载
-均衡或隧道接入；如果直接改成公网监听，必须先评估明文登录凭据与 session cookie
-风险。完整限制见 `Deploy.md` 与 `Docs/OutstandingIssues.md`。
+Compose 本身不终结 TLS。默认 Web 为 `127.0.0.1:60019`，API 为固定回环地址上的
+`60018`；适合由宿主机代理、云负载均衡或隧道接入。API 绑定地址不可通过环境改为
+公网。完整限制见 `Deploy.md` 与 `Docs/OutstandingIssues.md`。
 
 ## 本地构建策略
 
@@ -65,9 +66,13 @@ ADR-0020 已移除 Origin/Referer CSRF 门禁和 COOP/CORP。Session cookie 仍�
 HttpOnly、SameSite=Lax；该简化只适用于当前受控早期部署，公网发布前必须重新评估
 显式 CSRF 防护。
 
-默认不信任 `X-Forwarded-For`，因此 Web → API 拓扑下限流按 Web 容器这个直连
-对端计数。只有上游已可靠清洗来源头，且 API 直连对端 IP 已明确配置到
-`TRUSTED_PROXY_IPS` 时，才能按最终客户端 IP 分桶。
+默认不信任 `X-Forwarded-For`，因此限流按 API 看到的直连对端计数。只有上游已可靠
+清洗来源头，且 API 直连对端 IP 已明确配置到 `TRUSTED_PROXY_IPS` 时，才能按最终
+客户端 IP 分桶。
+
+生产 Nginx 的 API location 必须保持 `proxy_request_buffering off`，避免接近
+300 MiB 的上传先写入宿主机临时文件；`client_max_body_size`、Go 全局请求体限制和
+上传 handler 的文件限制仍分别承担网关、envelope 与文件内容边界。
 
 ## 发布前检查
 
