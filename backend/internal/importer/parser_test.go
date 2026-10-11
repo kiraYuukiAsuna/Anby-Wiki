@@ -198,6 +198,71 @@ func TestVisionPageAnalysisPreservesChartStructureAndRegion(t *testing.T) {
 	}
 }
 
+func TestVisionPageAnalysisSanitizesOutOfBoundsRegions(t *testing.T) {
+	generator := parserGeneratorFunc(func(
+		context.Context,
+		ai.Request,
+	) (*ai.Result, error) {
+		return &ai.Result{
+			PromptKey: DocumentPageAnalysisPromptKey, PromptVersion: 1,
+			Provider: "test", Model: "vision-model",
+			JSON: json.RawMessage(`{
+				"schema_version":1,
+				"page":1,
+				"section_path":[],
+				"elements":[
+					{
+						"kind":"text",
+						"title":"",
+						"text":"Outside page.",
+						"summary":"",
+						"section_path":[],
+						"region":{"x":100,"y":1050,"width":200,"height":100},
+						"structured_data":{},
+						"confidence":0.8
+					},
+					{
+						"kind":"figure",
+						"title":"Clipped",
+						"text":"Clipped figure.",
+						"summary":"Clipped.",
+						"section_path":[],
+						"region":{"x":900,"y":100,"width":200,"height":200},
+						"structured_data":{},
+						"confidence":0.8
+					}
+				],
+				"warnings":[],
+				"quality_score":0.8
+			}`),
+		}, nil
+	})
+	adapter := visionPDFAdapter{generator: generator}
+	analysis, err := adapter.analyzePage(
+		context.Background(),
+		ParseRequest{Filename: "regions.pdf", Provider: "test", Model: "vision-model"},
+		renderedVisionPage{Data: []byte("jpeg"), Width: 1000, Height: 1000},
+		"",
+		1,
+		1,
+	)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if analysis.Elements[0].Region != nil ||
+		analysis.Elements[1].Region == nil ||
+		analysis.Elements[1].Region.Width != 100 ||
+		len(analysis.Warnings) != 2 {
+		t.Fatalf("unexpected sanitized analysis: %#v", analysis)
+	}
+	blocks := pageAnalysisBlocks(analysis)
+	if blocks[0].ImageRegion != nil ||
+		blocks[1].ImageRegion == nil ||
+		blocks[1].ImageRegion.Width != 100 {
+		t.Fatalf("unexpected sanitized blocks: %#v", blocks)
+	}
+}
+
 func TestParserFingerprintIncludesFormatProviderAndPromptVersion(t *testing.T) {
 	first := parserFingerprint(
 		"vision", "1", "hybrid", "application/pdf",

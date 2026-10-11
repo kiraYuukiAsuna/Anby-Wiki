@@ -12,7 +12,12 @@ import urllib.request
 import uuid
 
 
-TERMINAL_JOB_STATUSES = {"succeeded", "failed", "cancelled"}
+TERMINAL_JOB_STATUSES = {
+    "action_required",
+    "succeeded",
+    "failed",
+    "cancelled",
+}
 
 
 class AcceptanceError(RuntimeError):
@@ -307,8 +312,10 @@ def run_case(client, case, manifest_dir, timeout_seconds):
         chunk_summary = None
         if source_version_id and case.get("inspect_chunks", True):
             chunk_summary = validate_chunks(client, source_version_id, case)
-        if expected_status == "failed" and job.get("proposal_id"):
-            raise AcceptanceError("failed job unexpectedly created a proposal")
+        if expected_status in {"failed", "action_required"} and job.get("proposal_id"):
+            raise AcceptanceError(
+                f"{expected_status} job unexpectedly created a proposal"
+            )
         quality = None
         if isinstance(detail.get("plan"), dict):
             quality = detail["plan"].get("quality")
@@ -377,6 +384,7 @@ def main():
                 args.timeout_seconds,
             )
             result["result"] = "pass"
+            case.pop("_partial", None)
         except Exception as error:
             failed = True
             result = {

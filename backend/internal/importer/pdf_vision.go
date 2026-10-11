@@ -311,6 +311,23 @@ func (a *visionPDFAdapter) analyzePage(
 		if len(element.StructuredData) == 0 {
 			element.StructuredData = json.RawMessage(`{}`)
 		}
+		if element.Region != nil {
+			region := element.Region
+			if region.X >= 1000 || region.Y >= 1000 {
+				analysis.Warnings = append(
+					analysis.Warnings,
+					fmt.Sprintf("element %d region origin outside page; locator omitted", index),
+				)
+				element.Region = nil
+			} else if region.X+region.Width > 1000 || region.Y+region.Height > 1000 {
+				region.Width = min(region.Width, 1000-region.X)
+				region.Height = min(region.Height, 1000-region.Y)
+				analysis.Warnings = append(
+					analysis.Warnings,
+					fmt.Sprintf("element %d region clipped to page bounds", index),
+				)
+			}
+		}
 	}
 	analysis.RenderWidth = rendered.Width
 	analysis.RenderHeight = rendered.Height
@@ -354,6 +371,10 @@ func normalizedToPixelRegion(
 	imageWidth, imageHeight int32,
 ) *evidence.ImageRegion {
 	if region == nil || imageWidth <= 0 || imageHeight <= 0 {
+		return nil
+	}
+	if region.X < 0 || region.Y < 0 || region.X >= 1000 || region.Y >= 1000 ||
+		region.Width <= 0 || region.Height <= 0 {
 		return nil
 	}
 	x := min(region.X, 999)
