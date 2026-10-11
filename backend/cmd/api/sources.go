@@ -46,13 +46,18 @@ type externalResourceCatalogResponse struct {
 }
 
 type sourceVersionCatalogResponse struct {
-	ID               uuid.UUID  `json:"id"`
-	SourceID         uuid.UUID  `json:"source_id"`
-	VersionHash      string     `json:"version_hash"`
-	RawAssetID       *uuid.UUID `json:"raw_asset_id"`
-	ExtractedAssetID *uuid.UUID `json:"extracted_asset_id"`
-	FetchedAt        time.Time  `json:"fetched_at"`
-	CreatedAt        time.Time  `json:"created_at"`
+	ID                uuid.UUID       `json:"id"`
+	SourceID          uuid.UUID       `json:"source_id"`
+	VersionHash       string          `json:"version_hash"`
+	RawAssetID        *uuid.UUID      `json:"raw_asset_id"`
+	ExtractedAssetID  *uuid.UUID      `json:"extracted_asset_id"`
+	ParseTrack        string          `json:"parse_track"`
+	ParserName        string          `json:"parser_name"`
+	ParserVersion     string          `json:"parser_version"`
+	ParserFingerprint string          `json:"parser_fingerprint"`
+	ParseMetadata     json.RawMessage `json:"parse_metadata"`
+	FetchedAt         time.Time       `json:"fetched_at"`
+	CreatedAt         time.Time       `json:"created_at"`
 }
 
 type sourceVersionListResponse struct {
@@ -79,7 +84,8 @@ type createSourceRequest struct {
 
 type locatorRequest struct {
 	Page        *int32              `json:"page"`
-	Section     *string             `json:"section"`
+	PageEnd     *int32              `json:"page_end"`
+	SectionPath []string            `json:"section_path"`
 	CharStart   *int32              `json:"char_start"`
 	CharEnd     *int32              `json:"char_end"`
 	ImageRegion *imageRegionRequest `json:"image_region"`
@@ -121,7 +127,10 @@ func toSourceVersionCatalogResponse(value evidence.SourceVersion) sourceVersionC
 	return sourceVersionCatalogResponse{
 		ID: value.ID, SourceID: value.SourceID, VersionHash: value.VersionHash,
 		RawAssetID: value.RawAssetID, ExtractedAssetID: value.ExtractedAssetID,
-		FetchedAt: value.FetchedAt, CreatedAt: value.CreatedAt,
+		ParseTrack: value.ParseTrack, ParserName: value.ParserName,
+		ParserVersion: value.ParserVersion, ParserFingerprint: value.ParserFingerprint,
+		ParseMetadata: value.ParseMetadataJSON,
+		FetchedAt:     value.FetchedAt, CreatedAt: value.CreatedAt,
 	}
 }
 
@@ -238,8 +247,9 @@ func (a *SourceAPI) chunks(w http.ResponseWriter, r *http.Request) {
 	for index := range result.Items {
 		value := result.Items[index]
 		items[index] = sourceChunkResponse{
-			ID: value.ID, Ordinal: value.Ordinal, Locator: value.LocatorJSON,
-			TextContent: value.TextContent, TextHash: value.TextHash,
+			ID: value.ID, Ordinal: value.Ordinal, ChunkType: value.ChunkType,
+			Locator: value.LocatorJSON, TextContent: value.TextContent,
+			Content: value.ContentJSON, TextHash: value.TextHash,
 		}
 	}
 	httpx.WriteJSON(w, http.StatusOK, sourceChunkListResponse{
@@ -259,8 +269,9 @@ func (a *SourceAPI) createCitation(w http.ResponseWriter, r *http.Request) {
 	var locator *evidence.Locator
 	if body.Locator != nil {
 		locator = &evidence.Locator{
-			Page: body.Locator.Page, Section: body.Locator.Section,
-			CharStart: body.Locator.CharStart, CharEnd: body.Locator.CharEnd,
+			Page: body.Locator.Page, PageEnd: body.Locator.PageEnd,
+			SectionPath: append([]string(nil), body.Locator.SectionPath...),
+			CharStart:   body.Locator.CharStart, CharEnd: body.Locator.CharEnd,
 		}
 		if body.Locator.ImageRegion != nil {
 			region := body.Locator.ImageRegion

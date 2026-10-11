@@ -13,12 +13,15 @@ Gateway 使用同一份权威 JSON Schema 严格校验；JSON Object 抽取固�
 408 和 5xx 标记为可重试，其他 4xx 不重试。新增供应商时实现窄 `Provider` 接口，
 供应商 DTO 必须留在本包。
 
-Worker 首次启用来源导入时，幂等登记当前 `source-extraction-v7` Prompt；该版本明确区分
+Worker 首次启用来源导入时，幂等登记当前 `source-extraction-v8` Prompt；该版本明确区分
 临时候选 UUID 与持久化 Entity ID，并提供运行时支持的 Entity type / Claim property
 词表与关系方向约束；作品/RFC 属性有独立语义，禁止用 `part_of` 代替发布组织，也禁止
 任何 Entity 关系指回主体自身；`instance_of` 只允许有明确分类措辞的单值候选，禁止退化为
-通用关联。页面规划使用 `source-import-plan-v7`，多窗口结果由服务端
-确定性合并，并由 `source-import-plan-fidelity-v5` 对照原始 Chunk 做证据化遗漏审计和章节级修复。
+通用关联，并识别 text/table/chart/figure/page Chunk。页面规划使用
+`source-import-plan-v8`，多窗口结果由服务端确定性合并，并由
+`source-import-plan-fidelity-v6` 对照原始 Chunk 做证据化遗漏审计和章节级修复。
+复杂 PDF 的 `document-page-analysis-v1` 通过同一 Gateway 发送单页图片，继续使用
+Prompt Registry、结构化 Schema 双重校验、重试和用量审计。
 两者都把用户指定范围和块数上限视为跨窗口全局约束，并要求每条正文陈述由引文直接支撑；
 导航标签、标题、孤立代码或示例值不能支撑宽泛说明。
 模型规划使用只包含语义内容和 `chunk_id + quotation` 的轻量 Schema；服务端再生成完整

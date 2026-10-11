@@ -24,8 +24,9 @@ func parseJSON(content []byte) ([]TextBlock, error) {
 	if normalized.Len() == 0 || normalized.Len() > maxStructuredTextBytes {
 		return nil, ErrParseFailed
 	}
-	section := "JSON"
-	return []TextBlock{{Text: normalized.String(), Section: &section}}, nil
+	return []TextBlock{{
+		Kind: "text", Text: normalized.String(), SectionPath: []string{"JSON"},
+	}}, nil
 }
 
 func parseCSV(content []byte) ([]TextBlock, error) {
@@ -75,15 +76,15 @@ func parseCSV(content []byte) ([]TextBlock, error) {
 		if len(values) == 0 {
 			continue
 		}
-		section := fmt.Sprintf("CSV row %d", rowNumber)
 		blocks = append(blocks, TextBlock{
-			Text: strings.Join(values, "; "), Section: &section,
+			Kind: "table", Text: strings.Join(values, "; "),
+			SectionPath: []string{fmt.Sprintf("CSV row %d", rowNumber)},
 		})
 	}
 	if len(blocks) == 0 {
-		section := "CSV header"
 		blocks = append(blocks, TextBlock{
-			Text: strings.Join(header, ", "), Section: &section,
+			Kind: "table", Text: strings.Join(header, ", "),
+			SectionPath: []string{"CSV header"},
 		})
 	}
 	return blocks, nil

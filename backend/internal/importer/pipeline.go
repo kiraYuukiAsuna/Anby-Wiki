@@ -56,7 +56,7 @@ func NewPipeline(services PipelineServices) *Pipeline {
 		classifier: services.Classifier, composer: services.Composer, reviews: services.Reviews,
 		fetcher: services.Fetcher, scanner: services.Scanner}
 	if p.parser == nil {
-		p.parser = NewParser(0)
+		p.parser = NewParser(0, nil)
 	}
 	if p.scanner == nil {
 		p.scanner = SignatureScanner{}
@@ -462,18 +462,49 @@ func (p *Pipeline) prepareParsedSource(
 	}
 	parser := p.parser
 	if request.ChunkCharacters > 0 {
-		parser = NewParser(request.ChunkCharacters)
+		parser = NewParser(request.ChunkCharacters, p.parser.generator)
 	}
-	chunks, err := parser.Parse(ctx, acquired.MIMEType, acquired.Content)
+	parsed, err := parser.Parse(ctx, ParseRequest{
+		Filename:    acquired.Filename,
+		MIMEType:    acquired.MIMEType,
+		Content:     acquired.Content,
+		Provider:    request.Provider,
+		Model:       request.Model,
+		ImportJobID: &request.JobID,
+		ImportRunID: &runID,
+	})
 	if err != nil {
 		// Asset and Source were deliberately persisted before parsing so a failed
 		// parser never destroys the original evidence.
 		_, failed := fail(parseStage, parseErrorCode(err), err)
 		return nil, "", failed
 	}
+	artifactJSON, err := parsed.ArtifactJSON()
+	if err != nil {
+		_, failed := fail(parseStage, "parse_artifact_failed", err)
+		return nil, "", failed
+	}
+	extractedAsset, err := p.evidence.StoreAsset(
+		ctx,
+		evidence.StoreAssetParams{
+			WikiID:   request.WikiID,
+			Name:     acquired.Filename + ".parse.json",
+			Content:  bytes.NewReader(artifactJSON),
+			MimeType: "application/json",
+			ActorID:  request.ActorID,
+		},
+	)
+	if err != nil {
+		_, failed := fail(parseStage, "parse_artifact_store_failed", err)
+		return nil, "", failed
+	}
 	version, err := p.evidence.AddSourceVersion(ctx, evidence.AddSourceVersionParams{
-		SourceID: *sourceID, VersionHash: acquired.ContentHash, RawAssetID: &asset.Revision.ID,
-		FetchedAt: time.Now().UTC(), Chunks: chunks,
+		SourceID: *sourceID, VersionHash: acquired.ContentHash,
+		RawAssetID: &asset.Revision.ID, ExtractedAssetID: &extractedAsset.Revision.ID,
+		ParseTrack: parsed.Track, ParserName: parsed.ParserName,
+		ParserVersion: parsed.ParserVersion, ParserFingerprint: parsed.ParserFingerprint,
+		ParseMetadata: parsed.MetadataJSON(),
+		FetchedAt:     time.Now().UTC(), Chunks: parsed.Chunks,
 	})
 	if err != nil {
 		_, failed := fail(parseStage, "source_version_failed", err)
@@ -536,7 +567,11 @@ func parseErrorCode(err error) string {
 	case errors.Is(err, ErrPDFRasterizerUnavailable):
 		return "pdf_rasterizer_unavailable"
 	case errors.Is(err, ErrPDFPageLimitExceeded):
-		return "pdf_ocr_page_limit_exceeded"
+		return "pdf_page_limit_exceeded"
+	case errors.Is(err, ErrAdvancedParserUnavailable):
+		return "advanced_parser_unavailable"
+	case errors.Is(err, ErrVisionPageAnalysisFailed):
+		return "vision_page_analysis_failed"
 	case errors.Is(err, ErrOCRUnavailable):
 		return "ocr_unavailable"
 	case errors.Is(err, ErrOCRImageTooLarge):

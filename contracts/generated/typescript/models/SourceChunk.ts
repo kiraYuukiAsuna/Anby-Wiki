@@ -33,6 +33,12 @@ export interface SourceChunk {
     ordinal: number;
     /**
      *
+     * @type {SourceChunkChunkTypeEnum}
+     * @memberof SourceChunk
+     */
+    chunkType: SourceChunkChunkTypeEnum;
+    /**
+     *
      * @type {{ [key: string]: any; }}
      * @memberof SourceChunk
      */
@@ -45,11 +51,31 @@ export interface SourceChunk {
     textContent: string;
     /**
      *
+     * @type {{ [key: string]: any; }}
+     * @memberof SourceChunk
+     */
+    content: { [key: string]: any; };
+    /**
+     *
      * @type {string}
      * @memberof SourceChunk
      */
     textHash: string;
 }
+
+
+/**
+ * @export
+ */
+export const SourceChunkChunkTypeEnum = {
+    Text: 'text',
+    Table: 'table',
+    Chart: 'chart',
+    Figure: 'figure',
+    Page: 'page'
+} as const;
+export type SourceChunkChunkTypeEnum = typeof SourceChunkChunkTypeEnum[keyof typeof SourceChunkChunkTypeEnum];
+
 
 /**
  * Check if a given object implements the SourceChunk interface.
@@ -57,8 +83,10 @@ export interface SourceChunk {
 export function instanceOfSourceChunk(value: object): value is SourceChunk {
     if (!('id' in value) || value['id'] === undefined) return false;
     if (!('ordinal' in value) || value['ordinal'] === undefined) return false;
+    if ((!('chunkType' in (value as Record<string, any>)) && !('chunk_type' in (value as Record<string, any>))) || ((value as Record<string, any>)['chunkType'] === undefined && (value as Record<string, any>)['chunk_type'] === undefined)) return false;
     if (!('locator' in value) || value['locator'] === undefined) return false;
     if ((!('textContent' in (value as Record<string, any>)) && !('text_content' in (value as Record<string, any>))) || ((value as Record<string, any>)['textContent'] === undefined && (value as Record<string, any>)['text_content'] === undefined)) return false;
+    if (!('content' in value) || value['content'] === undefined) return false;
     if ((!('textHash' in (value as Record<string, any>)) && !('text_hash' in (value as Record<string, any>))) || ((value as Record<string, any>)['textHash'] === undefined && (value as Record<string, any>)['text_hash'] === undefined)) return false;
     return true;
 }
@@ -75,8 +103,10 @@ export function SourceChunkFromJSONTyped(json: any, ignoreDiscriminator: boolean
 
         'id': json['id'],
         'ordinal': json['ordinal'],
+        'chunkType': json['chunk_type'],
         'locator': json['locator'],
         'textContent': json['text_content'],
+        'content': json['content'],
         'textHash': json['text_hash'],
     };
 }
@@ -94,8 +124,10 @@ export function SourceChunkToJSONTyped(value?: SourceChunk | null, ignoreDiscrim
 
         'id': value['id'],
         'ordinal': value['ordinal'],
+        'chunk_type': value['chunkType'],
         'locator': value['locator'],
         'text_content': value['textContent'],
+        'content': value['content'],
         'text_hash': value['textHash'],
     };
 }

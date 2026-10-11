@@ -9,6 +9,8 @@ responses are never logged here.
 from __future__ import annotations
 
 import asyncio
+import base64
+import binascii
 import json
 import os
 import secrets
@@ -55,6 +57,13 @@ class RuntimeConfig(BaseModel):
     max_attempts: int = Field(ge=1, le=5)
 
 
+class ImageInput(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    media_type: Literal["image/jpeg", "image/png"]
+    data_base64: str = Field(min_length=1, max_length=22_400_000)
+
+
 class GenerateRequest(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
@@ -63,6 +72,7 @@ class GenerateRequest(BaseModel):
     system_prompt: str = Field(min_length=1)
     user_prompt: str = Field(min_length=1)
     json_schema: dict[str, Any]
+    images: list[ImageInput] = Field(default_factory=list, max_length=4)
 
 
 class OpenAICompatibleExecutionSettings(PromptExecutionSettings):
@@ -72,6 +82,7 @@ class OpenAICompatibleExecutionSettings(PromptExecutionSettings):
     response_format: dict[str, Any] = Field(default_factory=dict)
     extra_body: dict[str, Any] | None = None
     max_tokens: int | None = Field(default=None, ge=1)
+    images: list[ImageInput] = Field(default_factory=list, max_length=4)
 
 
 class ModelOutputTruncatedError(ValueError):
@@ -114,12 +125,35 @@ class OpenAICompatibleChatCompletion(ChatCompletionClientBase):
                 settings
             )
 
+        messages: list[dict[str, Any]] = []
+        images_attached = False
+        for message in chat_history.messages:
+            content: Any = message.content or ""
+            if (
+                message.role == AuthorRole.USER
+                and settings.images
+                and not images_attached
+            ):
+                content = [{"type": "text", "text": content}]
+                content.extend(
+                    {
+                        "type": "image_url",
+                        "image_url": {
+                            "url": (
+                                f"data:{image.media_type};base64,"
+                                f"{image.data_base64}"
+                            ),
+                            "detail": "high",
+                        },
+                    }
+                    for image in settings.images
+                )
+                images_attached = True
+            messages.append({"role": message.role.value, "content": content})
+
         request: dict[str, Any] = {
             "model": self.ai_model_id,
-            "messages": [
-                {"role": message.role.value, "content": message.content or ""}
-                for message in chat_history.messages
-            ],
+            "messages": messages,
             "temperature": settings.temperature,
             "response_format": settings.response_format,
         }
@@ -192,6 +226,17 @@ async def internal_authentication(request: Request, call_next: Any) -> JSONRespo
 @app.post("/v1/generate")
 async def generate(payload: GenerateRequest) -> JSONResponse:
     config = payload.config
+    for image in payload.images:
+        try:
+            decoded = base64.b64decode(image.data_base64, validate=True)
+        except (binascii.Error, ValueError):
+            return error_response(
+                422, "invalid_image", "image data is not valid base64", False
+            )
+        if not decoded or len(decoded) > 16 * 1024 * 1024:
+            return error_response(
+                422, "invalid_image", "image data size is outside the allowed range", False
+            )
     client = AsyncOpenAI(
         api_key=config.api_key.get_secret_value(),
         base_url=str(config.base_url).rstrip("/"),
@@ -232,6 +277,7 @@ async def generate(payload: GenerateRequest) -> JSONResponse:
         max_tokens=DEEPSEEK_MAX_OUTPUT_TOKENS
         if config.provider == "deepseek"
         else None,
+        images=payload.images,
     )
 
     try:

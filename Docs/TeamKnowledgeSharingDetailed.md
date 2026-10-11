@@ -1521,7 +1521,7 @@ URL 路径包含 SSRF 防护：
 - 每次重定向重新校验；
 - DNS 解析与 Dial 时都拒绝内网、回环、link-local、CGNAT 等地址；
 - 防止 DNS rebinding；
-- 默认最大 10 MiB。
+- 默认最大 300 MiB。
 
 来源中的脚本或指令只被当作数据，不执行。
 
@@ -1570,22 +1570,20 @@ URL 路径包含 SSRF 防护：
 - 规范化为可读、可定位的文本 Chunk；
 - 不执行其中的表达式或脚本。
 
-#### 标准 PDF
+#### PDF 文本与视觉双轨
 
-- 使用 Poppler `pdftotext`；
-- PDF 从标准输入传入；
-- 文本从标准输出读取；
-- 不把 Worker 全部环境变量传给子进程；
-- 页间换页符保留页码；
-- 解压后文本有 32 MiB 上限。
+- Poppler `pdftotext` 保留每页原生文本，`pdftoppm` 同时渲染最长边 2000 像素的 JPEG；
+- 管理员配置的多模态模型逐页识别标题路径、正文、表格、图表、图片和页内区域；
+- 有文本层时以原生页文本生成精确 `page` Chunk，视觉结果只补充非文本元素；
+- 扫描页使用视觉转写，单页临时图在模型调用后删除；
+- 最多处理 500 页，页分析并发为 3；
+- 不把 Worker 全部环境变量传给 Poppler 子进程；
+- 解压后原生文本有 32 MiB 上限；
+- 解析器、Prompt、模型、警告与完整解析 manifest 一并固化。
 
-#### 扫描 PDF 与图片
+#### 独立图片
 
-- 无文本层 PDF 逐页栅格化；
-- Tesseract OCR；
-- 最多处理 20 页；
-- 单页临时图随页删除；
-- PNG/JPEG 走同一 OCR 链路；
+- PNG/JPEG 使用 Tesseract 中英 OCR；
 - 限制 4000 万像素；
 - 保存 OCR 行级像素区域、图像尺寸、引擎、语言和置信度。
 
@@ -1603,8 +1601,10 @@ Source
 
 去重规则：
 
-- 同一 Source 的同一 `version_hash` 复用 SourceVersion；
-- Chunk 由服务端计算 `text_hash`；
+- 同一 Source 的同一 `version_hash + parser_fingerprint` 复用 SourceVersion；
+- Parser、MIME、Provider、Prompt、模型或分片参数变化时，相同原文件可生成新的解析版本；
+- Chunk 区分 `text/table/chart/figure/page`，由服务端计算 `text_hash`，类型化结果
+  保存在 `content_json`；
 - SourceVersion 与 SourceChunk 不可变；
 - 同一证据的 Citation 可幂等复用。
 

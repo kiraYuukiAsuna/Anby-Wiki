@@ -2,52 +2,70 @@ package importer
 
 import (
 	"context"
+	"encoding/json"
+	"fmt"
 	"os"
+	"os/exec"
 	"strings"
 	"testing"
+
+	"github.com/anby/wiki/backend/internal/ai"
 )
 
 func TestParseStructuredSources(t *testing.T) {
-	parser := NewParser(1200)
+	parser := NewParser(1200, nil)
 
-	jsonChunks, err := parser.Parse(
+	jsonResult, err := parser.Parse(
 		context.Background(),
-		"application/json",
-		[]byte(`{"name":"安比","level":60}`),
+		ParseRequest{
+			MIMEType: "application/json",
+			Content:  []byte(`{"name":"安比","level":60}`),
+		},
 	)
 	if err != nil {
 		t.Fatalf("parse JSON: %v", err)
 	}
+	jsonChunks := jsonResult.Chunks
 	if len(jsonChunks) != 1 || !strings.Contains(jsonChunks[0].TextContent, `"name": "安比"`) {
 		t.Fatalf("unexpected JSON chunks: %#v", jsonChunks)
 	}
 
-	csvChunks, err := parser.Parse(
+	csvResult, err := parser.Parse(
 		context.Background(),
-		"text/csv",
-		[]byte("name,faction\n安比,狡兔屋\n"),
+		ParseRequest{
+			MIMEType: "text/csv",
+			Content:  []byte("name,faction\n安比,狡兔屋\n"),
+		},
 	)
 	if err != nil {
 		t.Fatalf("parse CSV: %v", err)
 	}
+	csvChunks := csvResult.Chunks
 	if len(csvChunks) != 1 || csvChunks[0].TextContent != "name=安比; faction=狡兔屋" {
 		t.Fatalf("unexpected CSV chunks: %#v", csvChunks)
+	}
+	if csvChunks[0].ChunkType != "table" {
+		t.Fatalf("csv chunk type=%q, want table", csvChunks[0].ChunkType)
 	}
 }
 
 func TestDefaultParserUsesConfiguredProductDefault(t *testing.T) {
-	parser := NewParser(0)
+	parser := NewParser(0, nil)
 	if parser.MaxChunkRunes != 32000 {
 		t.Fatalf("default chunk characters=%d, want 32000", parser.MaxChunkRunes)
 	}
 }
 
 func TestParserPrefersSemanticBoundaryWithinLimit(t *testing.T) {
-	parser := NewParser(12)
-	chunks, err := parser.Parse(context.Background(), "text/plain", []byte("Alpha one. Beta two. Gamma."))
+	parser := NewParser(12, nil)
+	result, err := parser.Parse(context.Background(), ParseRequest{
+		MIMEType: "text/plain",
+		Content:  []byte("Alpha one. Beta two. Gamma."),
+	})
 	if err != nil {
 		t.Fatal(err)
 	}
+	chunks := result.Chunks
 	if len(chunks) < 2 || chunks[0].TextContent != "Alpha one." {
 		t.Fatalf("unexpected semantic chunks: %#v", chunks)
 	}
@@ -82,11 +100,12 @@ func TestParseHTMLUsesMainContentAndSkipsNavigation(t *testing.T) {
 		t.Fatalf("blocks=%d, want 2: %#v", len(blocks), blocks)
 	}
 	if blocks[0].Text != "JSON is a text-based data format." ||
-		blocks[0].Section == nil || *blocks[0].Section != "JSON" {
+		len(blocks[0].SectionPath) != 1 || blocks[0].SectionPath[0] != "JSON" {
 		t.Fatalf("unexpected lead block: %#v", blocks[0])
 	}
 	if blocks[1].Text != "Use JSON.parse() and JSON.stringify()." ||
-		blocks[1].Section == nil || *blocks[1].Section != "Converting objects and text" {
+		len(blocks[1].SectionPath) != 2 ||
+		blocks[1].SectionPath[1] != "Converting objects and text" {
 		t.Fatalf("unexpected section block: %#v", blocks[1])
 	}
 	combined := blocks[0].Text + blocks[1].Text
@@ -132,6 +151,189 @@ func TestParseTesseractTSVPreservesImageLocator(t *testing.T) {
 		*blocks[0].OCR.Confidence > 0.94 {
 		t.Fatalf("unexpected OCR metadata: %#v", blocks[0].OCR)
 	}
+}
+
+func TestVisionPageAnalysisPreservesChartStructureAndRegion(t *testing.T) {
+	structured := json.RawMessage(`{
+		"series":[{"name":"Latency","points":[{"label":"P95","value":120,"unit":"ms"}]}]
+	}`)
+	blocks := pageAnalysisBlocks(pageAnalysis{
+		Page: 3, RenderWidth: 2000, RenderHeight: 1000,
+		SectionPath: []string{"Performance"},
+		Elements: []pageElement{{
+			Kind: "chart", Title: "Latency", Text: "P95 latency is 120 ms.",
+			Summary: "Latency chart", StructuredData: structured,
+			Confidence: 0.93,
+			Region:     &normalizedRegion{X: 100, Y: 200, Width: 500, Height: 400},
+		}},
+	})
+	if len(blocks) != 1 {
+		t.Fatalf("blocks=%d, want 1", len(blocks))
+	}
+	block := blocks[0]
+	if block.Kind != "chart" || block.Page == nil || *block.Page != 3 ||
+		len(block.SectionPath) != 1 || block.SectionPath[0] != "Performance" {
+		t.Fatalf("unexpected block: %#v", block)
+	}
+	if block.ImageRegion == nil ||
+		block.ImageRegion.X != 200 || block.ImageRegion.Y != 200 ||
+		block.ImageRegion.Width != 1000 || block.ImageRegion.Height != 400 ||
+		block.ImageRegion.ImageWidth != 2000 || block.ImageRegion.ImageHeight != 1000 {
+		t.Fatalf("unexpected chart region: %#v", block.ImageRegion)
+	}
+	chunks := NewParser(1200, nil).chunk(blocks)
+	if len(chunks) != 1 || chunks[0].ChunkType != "chart" {
+		t.Fatalf("unexpected chunks: %#v", chunks)
+	}
+	if err := chunks[0].Locator.Validate(); err != nil {
+		t.Fatalf("invalid chart locator: %v", err)
+	}
+	var content map[string]any
+	if err := json.Unmarshal(chunks[0].Content, &content); err != nil {
+		t.Fatal(err)
+	}
+	if content["source"] != "vision_page" {
+		t.Fatalf("content=%#v", content)
+	}
+}
+
+func TestParserFingerprintIncludesFormatProviderAndPromptVersion(t *testing.T) {
+	first := parserFingerprint(
+		"vision", "1", "hybrid", "application/pdf",
+		"openai-compatible", "model", "page", 1, 32000,
+	)
+	second := parserFingerprint(
+		"vision", "1", "hybrid", "application/pdf",
+		"openai-compatible", "model", "page", 2, 32000,
+	)
+	if first == second {
+		t.Fatal("parser fingerprint did not change with prompt version")
+	}
+	otherMIME := parserFingerprint(
+		"vision", "1", "hybrid", "text/plain",
+		"openai-compatible", "model", "page", 1, 32000,
+	)
+	if first == otherMIME {
+		t.Fatal("parser fingerprint did not change with MIME type")
+	}
+	otherProvider := parserFingerprint(
+		"vision", "1", "hybrid", "application/pdf",
+		"deepseek", "model", "page", 1, 32000,
+	)
+	if first == otherProvider {
+		t.Fatal("parser fingerprint did not change with provider")
+	}
+}
+
+type parserGeneratorFunc func(context.Context, ai.Request) (*ai.Result, error)
+
+func (f parserGeneratorFunc) Generate(
+	ctx context.Context,
+	request ai.Request,
+) (*ai.Result, error) {
+	return f(ctx, request)
+}
+
+func TestVisionPDFAdapterUsesRenderedPageAndNativeText(t *testing.T) {
+	for _, command := range []string{"pdfinfo", "pdftotext", "pdftoppm"} {
+		if _, err := exec.LookPath(command); err != nil {
+			t.Skipf("%s is not installed", command)
+		}
+	}
+	generator := parserGeneratorFunc(func(
+		_ context.Context,
+		request ai.Request,
+	) (*ai.Result, error) {
+		if request.PromptKey != DocumentPageAnalysisPromptKey ||
+			len(request.Images) != 1 ||
+			request.Images[0].MediaType != "image/jpeg" ||
+			len(request.Images[0].Data) == 0 {
+			t.Fatalf("unexpected page request: %#v", request)
+		}
+		if !strings.Contains(request.Variables["native_text"].(string), "Hello PDF") {
+			t.Fatalf("native text=%q", request.Variables["native_text"])
+		}
+		return &ai.Result{
+			PromptKey:     DocumentPageAnalysisPromptKey,
+			PromptVersion: 1,
+			Provider:      "openai-compatible",
+			Model:         "vision-model",
+			JSON: json.RawMessage(`{
+				"schema_version":1,
+				"page":1,
+				"section_path":["Overview"],
+				"elements":[{
+					"kind":"chart",
+					"title":"Diagnostic chart",
+					"text":"The diagnostic chart contains the label Hello PDF.",
+					"summary":"One labeled chart.",
+					"section_path":["Overview"],
+					"region":{"x":100,"y":100,"width":300,"height":100},
+					"structured_data":{"labels":["Hello PDF"]},
+					"confidence":0.99
+				}],
+				"warnings":[],
+				"quality_score":0.99
+			}`),
+		}, nil
+	})
+
+	result, err := NewParser(32000, generator).Parse(
+		context.Background(),
+		ParseRequest{
+			Filename: "hello.pdf",
+			MIMEType: "application/pdf",
+			Content:  minimalPDF("Hello PDF"),
+			Provider: "semantic-kernel",
+			Model:    "vision-model",
+		},
+	)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if result.Track != "hybrid" || result.ParserName != "anby-vision-pdf" ||
+		result.Metadata.PageCount != 1 || result.Metadata.PromptVersion != 1 ||
+		result.Metadata.Provider != "openai-compatible" ||
+		len(result.Chunks) != 2 {
+		t.Fatalf("unexpected parse result: %#v", result)
+	}
+	if result.Chunks[0].ChunkType != "page" ||
+		!strings.Contains(result.Chunks[0].TextContent, "Hello PDF") ||
+		result.Chunks[1].ChunkType != "chart" ||
+		result.Chunks[1].Locator.ImageRegion == nil {
+		t.Fatalf("unexpected parsed chunks: %#v", result.Chunks)
+	}
+}
+
+func minimalPDF(text string) []byte {
+	var output strings.Builder
+	output.WriteString("%PDF-1.4\n")
+	objects := []string{
+		"<< /Type /Catalog /Pages 2 0 R >>",
+		"<< /Type /Pages /Kids [3 0 R] /Count 1 >>",
+		"<< /Type /Page /Parent 2 0 R /MediaBox [0 0 612 792] /Resources << /Font << /F1 4 0 R >> >> /Contents 5 0 R >>",
+		"<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica >>",
+	}
+	stream := fmt.Sprintf("BT /F1 12 Tf 72 720 Td (%s) Tj ET", text)
+	objects = append(objects, fmt.Sprintf("<< /Length %d >>\nstream\n%s\nendstream", len(stream), stream))
+	offsets := make([]int, len(objects)+1)
+	for index, object := range objects {
+		offsets[index+1] = output.Len()
+		fmt.Fprintf(&output, "%d 0 obj\n%s\nendobj\n", index+1, object)
+	}
+	xref := output.Len()
+	fmt.Fprintf(&output, "xref\n0 %d\n", len(objects)+1)
+	output.WriteString("0000000000 65535 f \n")
+	for index := 1; index < len(offsets); index++ {
+		fmt.Fprintf(&output, "%010d 00000 n \n", offsets[index])
+	}
+	fmt.Fprintf(
+		&output,
+		"trailer\n<< /Size %d /Root 1 0 R >>\nstartxref\n%d\n%%%%EOF\n",
+		len(objects)+1,
+		xref,
+	)
+	return []byte(output.String())
 }
 
 func TestValidateUploadDetectsStructuredMIME(t *testing.T) {
@@ -184,14 +386,14 @@ func TestParseImageOCRRuntime(t *testing.T) {
 	if err != nil {
 		t.Fatalf("read OCR fixture: %v", err)
 	}
-	chunks, err := NewParser(1200).Parse(
-		context.Background(),
-		"image/png",
-		content,
-	)
+	result, err := NewParser(1200, nil).Parse(context.Background(), ParseRequest{
+		MIMEType: "image/png",
+		Content:  content,
+	})
 	if err != nil {
 		t.Fatalf("parse OCR image: %v", err)
 	}
+	chunks := result.Chunks
 	if len(chunks) == 0 {
 		t.Fatal("OCR returned no chunks")
 	}
@@ -202,37 +404,6 @@ func TestParseImageOCRRuntime(t *testing.T) {
 		}
 		if err := chunk.Locator.Validate(); err != nil {
 			t.Fatalf("invalid OCR locator: %v", err)
-		}
-	}
-}
-
-func TestParseScannedPDFOCRRuntime(t *testing.T) {
-	pdfPath := strings.TrimSpace(os.Getenv("ANBY_OCR_TEST_PDF"))
-	if pdfPath == "" {
-		t.Skip("set ANBY_OCR_TEST_PDF to exercise scanned-PDF OCR")
-	}
-	content, err := os.ReadFile(pdfPath)
-	if err != nil {
-		t.Fatalf("read scanned PDF fixture: %v", err)
-	}
-	chunks, err := NewParser(1200).Parse(
-		context.Background(),
-		"application/pdf",
-		content,
-	)
-	if err != nil {
-		t.Fatalf("parse scanned PDF: %v", err)
-	}
-	if len(chunks) == 0 {
-		t.Fatal("scanned-PDF OCR returned no chunks")
-	}
-	for _, chunk := range chunks {
-		if chunk.Locator.Page == nil || *chunk.Locator.Page != 1 ||
-			chunk.Locator.ImageRegion == nil || chunk.Locator.OCR == nil {
-			t.Fatalf("scanned-PDF chunk lost page/OCR locator: %#v", chunk)
-		}
-		if err := chunk.Locator.Validate(); err != nil {
-			t.Fatalf("invalid scanned-PDF locator: %v", err)
 		}
 	}
 }

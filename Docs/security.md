@@ -43,7 +43,9 @@ Fetch Metadata 或等价来源校验，并且不得在缺少等价防护时使�
 
 ## 应用边界控制
 
-- 普通 API 请求体上限 2 MiB；`/api/v1/import-jobs/uploads` 上限 11 MiB，业务文件上限仍为 10 MiB。
+- 普通 API 请求体上限 2 MiB；`/api/v1/import-jobs/uploads` envelope 上限 301 MiB，
+  业务文件上限为 300 MiB。上传仍受独立 Redis 速率桶、MIME/magic、恶意签名和内容
+  哈希复核约束。
 - auth、upload、general API 由 Go + Redis 分别限流；超限返回 429。Redis 不可达时放行并记录告警。
 - Go API 清空 `X-Authenticated-User`、`X-Auth-Request-User`、`X-Remote-User`；除显式本地开发模式外也清空 `X-Actor-ID`。
 - Web 与 API 分别设置 CSP、nosniff、frame 和 referrer 头；Web 另设置 Permissions Policy，localhost CSP 仅为 Next HMR 保留 `unsafe-eval`。COOP/CORP 已由 ADR-0020 移除。

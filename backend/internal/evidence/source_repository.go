@@ -280,12 +280,15 @@ func (r *Repository) InsertSource(ctx context.Context, tx pgx.Tx, s *Source) err
 }
 
 const sourceVersionColumns = `id, source_id, version_hash, raw_asset_id, extracted_asset_id,
+	parse_track, parser_name, parser_version, parser_fingerprint, parse_metadata_json,
 	fetched_at, created_at`
 
 func scanSourceVersion(row pgx.Row) (*SourceVersion, error) {
 	var v SourceVersion
 	err := row.Scan(
 		&v.ID, &v.SourceID, &v.VersionHash, &v.RawAssetID, &v.ExtractedAssetID,
+		&v.ParseTrack, &v.ParserName, &v.ParserVersion, &v.ParserFingerprint,
+		&v.ParseMetadataJSON,
 		&v.FetchedAt, &v.CreatedAt,
 	)
 	if err != nil {
@@ -307,14 +310,23 @@ func (r *Repository) GetSourceVersionByID(ctx context.Context, tx pgx.Tx, id uui
 	return v, nil
 }
 
-// GetSourceVersionByHash 按 (source_id, version_hash) 查 source_version，
+// GetSourceVersionByIdentity 按内容与解析器指纹查 source_version，
 // 未命中返回 ErrSourceVersionNotFound。
-func (r *Repository) GetSourceVersionByHash(ctx context.Context, tx pgx.Tx, sourceID uuid.UUID, versionHash string) (*SourceVersion, error) {
+func (r *Repository) GetSourceVersionByIdentity(
+	ctx context.Context,
+	tx pgx.Tx,
+	sourceID uuid.UUID,
+	versionHash, parserFingerprint string,
+) (*SourceVersion, error) {
 	v, err := scanSourceVersion(r.q(tx).QueryRow(ctx, `
 		SELECT `+sourceVersionColumns+` FROM source_version
-		WHERE source_id = $1 AND version_hash = $2`, sourceID, versionHash))
+		WHERE source_id = $1 AND version_hash = $2 AND parser_fingerprint = $3`,
+		sourceID, versionHash, parserFingerprint))
 	if errors.Is(err, pgx.ErrNoRows) {
-		return nil, fmt.Errorf("%w: source=%s version_hash=%q", ErrSourceVersionNotFound, sourceID, versionHash)
+		return nil, fmt.Errorf(
+			"%w: source=%s version_hash=%q parser_fingerprint=%q",
+			ErrSourceVersionNotFound, sourceID, versionHash, parserFingerprint,
+		)
 	}
 	if err != nil {
 		return nil, fmt.Errorf("evidence: 查询 source_version 失败: %w", err)
@@ -323,13 +335,23 @@ func (r *Repository) GetSourceVersionByHash(ctx context.Context, tx pgx.Tx, sour
 }
 
 // InsertSourceVersion 插入来源版本，created_at 由 DB 默认值回填。
-// (source_id, version_hash) 唯一索引冲突返回 ErrSourceVersionExists（服务层转幂等返回）。
+// 内容哈希与解析器指纹唯一索引冲突返回 ErrSourceVersionExists（服务层转幂等返回）。
 func (r *Repository) InsertSourceVersion(ctx context.Context, tx pgx.Tx, v *SourceVersion) error {
+	parseMetadata := v.ParseMetadataJSON
+	if len(parseMetadata) == 0 {
+		parseMetadata = []byte("{}")
+	}
 	err := r.q(tx).QueryRow(ctx, `
-		INSERT INTO source_version (id, source_id, version_hash, raw_asset_id, extracted_asset_id, fetched_at)
-		VALUES ($1, $2, $3, $4, $5, $6)
+		INSERT INTO source_version (
+			id, source_id, version_hash, raw_asset_id, extracted_asset_id,
+			parse_track, parser_name, parser_version, parser_fingerprint,
+			parse_metadata_json, fetched_at
+		)
+		VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10::jsonb, $11)
 		RETURNING created_at`,
-		v.ID, v.SourceID, v.VersionHash, v.RawAssetID, v.ExtractedAssetID, v.FetchedAt,
+		v.ID, v.SourceID, v.VersionHash, v.RawAssetID, v.ExtractedAssetID,
+		v.ParseTrack, v.ParserName, v.ParserVersion, v.ParserFingerprint,
+		parseMetadata, v.FetchedAt,
 	).Scan(&v.CreatedAt)
 	if err != nil {
 		var pgErr *pgconn.PgError
@@ -341,7 +363,8 @@ func (r *Repository) InsertSourceVersion(ctx context.Context, tx pgx.Tx, v *Sour
 	return nil
 }
 
-const sourceChunkColumns = `id, source_version_id, ordinal, locator_json, text_content, text_hash, created_at`
+const sourceChunkColumns = `id, source_version_id, ordinal, chunk_type, locator_json,
+	text_content, content_json, text_hash, created_at`
 
 // InsertSourceChunk 插入来源分片，created_at 由 DB 默认值回填。
 func (r *Repository) InsertSourceChunk(ctx context.Context, tx pgx.Tx, c *SourceChunk) error {
@@ -349,11 +372,19 @@ func (r *Repository) InsertSourceChunk(ctx context.Context, tx pgx.Tx, c *Source
 	if locator == nil {
 		locator = []byte("{}")
 	}
+	content := c.ContentJSON
+	if content == nil {
+		content = []byte("{}")
+	}
 	err := r.q(tx).QueryRow(ctx, `
-		INSERT INTO source_chunk (id, source_version_id, ordinal, locator_json, text_content, text_hash)
-		VALUES ($1, $2, $3, $4::jsonb, $5, $6)
+		INSERT INTO source_chunk (
+			id, source_version_id, ordinal, chunk_type, locator_json,
+			text_content, content_json, text_hash
+		)
+		VALUES ($1, $2, $3, $4, $5::jsonb, $6, $7::jsonb, $8)
 		RETURNING created_at`,
-		c.ID, c.SourceVersionID, c.Ordinal, locator, c.TextContent, c.TextHash,
+		c.ID, c.SourceVersionID, c.Ordinal, c.ChunkType, locator,
+		c.TextContent, content, c.TextHash,
 	).Scan(&c.CreatedAt)
 	if err != nil {
 		return fmt.Errorf("evidence: 插入 source_chunk 失败: %w", err)
@@ -366,7 +397,10 @@ func (r *Repository) GetSourceChunkByID(ctx context.Context, tx pgx.Tx, id uuid.
 	var c SourceChunk
 	err := r.q(tx).QueryRow(ctx, `
 		SELECT `+sourceChunkColumns+` FROM source_chunk WHERE id = $1`, id,
-	).Scan(&c.ID, &c.SourceVersionID, &c.Ordinal, &c.LocatorJSON, &c.TextContent, &c.TextHash, &c.CreatedAt)
+	).Scan(
+		&c.ID, &c.SourceVersionID, &c.Ordinal, &c.ChunkType, &c.LocatorJSON,
+		&c.TextContent, &c.ContentJSON, &c.TextHash, &c.CreatedAt,
+	)
 	if errors.Is(err, pgx.ErrNoRows) {
 		return nil, fmt.Errorf("%w: id=%s", ErrSourceChunkNotFound, id)
 	}
@@ -389,7 +423,11 @@ func (r *Repository) ListSourceChunks(ctx context.Context, tx pgx.Tx, sourceVers
 	chunks := []SourceChunk{}
 	for rows.Next() {
 		var c SourceChunk
-		if err := rows.Scan(&c.ID, &c.SourceVersionID, &c.Ordinal, &c.LocatorJSON, &c.TextContent, &c.TextHash, &c.CreatedAt); err != nil {
+		if err := rows.Scan(
+			&c.ID, &c.SourceVersionID, &c.Ordinal, &c.ChunkType,
+			&c.LocatorJSON, &c.TextContent, &c.ContentJSON, &c.TextHash,
+			&c.CreatedAt,
+		); err != nil {
 			return nil, fmt.Errorf("evidence: 扫描 source_chunk 失败: %w", err)
 		}
 		chunks = append(chunks, c)

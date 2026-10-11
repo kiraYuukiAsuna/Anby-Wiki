@@ -42,10 +42,16 @@ export interface EvidenceLocator {
     page?: number;
     /**
      *
-     * @type {string}
+     * @type {number}
      * @memberof EvidenceLocator
      */
-    section?: string;
+    pageEnd?: number;
+    /**
+     *
+     * @type {Array<string>}
+     * @memberof EvidenceLocator
+     */
+    sectionPath?: Array<string>;
     /**
      *
      * @type {number}
@@ -90,7 +96,8 @@ export function EvidenceLocatorFromJSONTyped(json: any, ignoreDiscriminator: boo
     return {
 
         'page': json['page'] == null ? undefined : json['page'],
-        'section': json['section'] == null ? undefined : json['section'],
+        'pageEnd': json['page_end'] == null ? undefined : json['page_end'],
+        'sectionPath': json['section_path'] == null ? undefined : json['section_path'],
         'charStart': json['char_start'] == null ? undefined : json['char_start'],
         'charEnd': json['char_end'] == null ? undefined : json['char_end'],
         'imageRegion': json['image_region'] == null ? undefined : EvidenceImageRegionFromJSON(json['image_region']),
@@ -110,7 +117,8 @@ export function EvidenceLocatorToJSONTyped(value?: EvidenceLocator | null, ignor
     return {
 
         'page': value['page'],
-        'section': value['section'],
+        'page_end': value['pageEnd'],
+        'section_path': value['sectionPath'],
         'char_start': value['charStart'],
         'char_end': value['charEnd'],
         'image_region': EvidenceImageRegionToJSON(value['imageRegion']),

@@ -57,7 +57,7 @@ const uploadSchema = z.object({
       const candidate = value as { name?: unknown; size?: unknown; type?: unknown };
       return typeof candidate.name === "string" && typeof candidate.size === "number" && typeof candidate.type === "string";
     }, "请选择来源文件")
-    .refine((file) => file.size <= 10 * 1024 * 1024, "文件不能超过 10 MiB")
+    .refine((file) => file.size <= 300 * 1024 * 1024, "文件不能超过 300 MiB")
     .refine(
       (file) =>
         [
@@ -264,7 +264,10 @@ export function ImportJobForm() {
           <Label htmlFor="source-file">来源文件</Label>
           <Input id="source-file" type="file" accept=".html,.htm,.txt,.csv,.json,.pdf,.png,.jpg,.jpeg,text/html,text/plain,text/csv,application/json,application/pdf,image/png,image/jpeg"
             onChange={(event) => setFile(event.target.files?.[0] ?? null)} required />
-          <p className="text-xs text-muted-foreground">支持网页、文本、JSON/CSV 数据、PDF 与图片，最大 10 MiB；扫描件和图片会执行受限 OCR。</p>
+          <p className="text-xs text-muted-foreground">
+            支持网页、文本、JSON/CSV 数据、PDF 与图片，最大 300 MiB；PDF 会保留原生
+            文本并逐页识别表格、图表和图片。
+          </p>
         </div>
       )}
       <fieldset className="space-y-2">

@@ -921,11 +921,12 @@ paths:
         - sessionCookie: []
         - cliBearer: []
       description: |
-        接受最大 10 MiB 的 HTML、纯文本、JSON、CSV、PDF、PNG 或 JPEG。API 在排队前
+        接受最大 300 MiB 的 HTML、纯文本、JSON、CSV、PDF、PNG 或 JPEG。API 在排队前
         执行 MIME/magic、大小与恶意签名检查，并经 Evidence 领域服务写入私有对象存储；
-        Worker 获取后会再次校验内容哈希与全部安全门禁。图片与无文本层 PDF 进入受限
-        OCR；JSON API 快照与 CSV/JSON 数据库导出保留为可定位 SourceChunk。原始内容
-        不写入 ImportJob config 或诊断日志。
+        Worker 获取后会再次校验内容哈希与全部安全门禁。PDF 采用原生文本层与逐页视觉
+        理解双轨，统一输出 text/table/chart/figure/page SourceChunk；图片使用中英 OCR，
+        JSON API 快照与 CSV/JSON 数据库导出保留为可定位 SourceChunk。原始内容不写入
+        ImportJob config 或诊断日志。
       parameters:
         - $ref: "#/components/parameters/Idempotency-Key"
       requestBody:
@@ -4575,13 +4576,20 @@ components:
                 - $ref: "#/components/schemas/ExternalResourceDetail"
     EvidenceSourceVersion:
       type: object
-      required: [id, source_id, version_hash, fetched_at, created_at]
+      required:
+        [id, source_id, version_hash, parse_track, parser_name, parser_version,
+         parser_fingerprint, parse_metadata, fetched_at, created_at]
       properties:
         id: { type: string, format: uuid }
         source_id: { type: string, format: uuid }
         version_hash: { type: string }
         raw_asset_id: { type: string, format: uuid, nullable: true }
         extracted_asset_id: { type: string, format: uuid, nullable: true }
+        parse_track: { type: string, enum: [text, vision, hybrid] }
+        parser_name: { type: string, minLength: 1 }
+        parser_version: { type: string, minLength: 1 }
+        parser_fingerprint: { type: string, pattern: "^[0-9a-f]{64}$" }
+        parse_metadata: { type: object, additionalProperties: true }
         fetched_at: { type: string, format: date-time }
         created_at: { type: string, format: date-time }
     EvidenceSourceVersionListPage:
@@ -4594,12 +4602,14 @@ components:
         next_cursor: { type: string, nullable: true }
     EvidenceSourceChunk:
       type: object
-      required: [id, ordinal, locator, text_content, text_hash]
+      required: [id, ordinal, chunk_type, locator, text_content, content, text_hash]
       properties:
         id: { type: string, format: uuid }
         ordinal: { type: integer, minimum: 0 }
+        chunk_type: { type: string, enum: [text, table, chart, figure, page] }
         locator: { $ref: "#/components/schemas/EvidenceLocator" }
         text_content: { type: string }
+        content: { type: object, additionalProperties: true }
         text_hash: { type: string }
     EvidenceSourceChunkListPage:
       type: object
@@ -4642,7 +4652,10 @@ components:
       additionalProperties: false
       properties:
         page: { type: integer, minimum: 1 }
-        section: { type: string, minLength: 1 }
+        page_end: { type: integer, minimum: 1 }
+        section_path:
+          type: array
+          items: { type: string, minLength: 1 }
         char_start: { type: integer, minimum: 0 }
         char_end: { type: integer, minimum: 0 }
         image_region: { $ref: "#/components/schemas/EvidenceImageRegion" }
@@ -5611,7 +5624,9 @@ components:
           type: string
           enum: [openai-compatible, deepseek]
         base_url: { type: string, format: uri }
-        model: { type: string }
+        model:
+          type: string
+          description: 同时用于来源抽取和复杂 PDF 逐页视觉分析，必须支持文本、图片输入与结构化 JSON 输出。
         response_format:
           type: string
           enum: [json_object, json_schema]
@@ -7978,13 +7993,28 @@ components:
           additionalProperties: true
     SourceVersionSummary:
       type: object
-      required: [id, version_hash, fetched_at, created_at]
+      required:
+        [id, version_hash, parse_track, parser_name, parser_version,
+         parser_fingerprint, parse_metadata, fetched_at, created_at]
       properties:
         id:
           type: string
           format: uuid
         version_hash:
           type: string
+        parse_track:
+          type: string
+          enum: [text, vision, hybrid]
+        parser_name:
+          type: string
+        parser_version:
+          type: string
+        parser_fingerprint:
+          type: string
+          pattern: "^[0-9a-f]{64}$"
+        parse_metadata:
+          type: object
+          additionalProperties: true
         fetched_at:
           type: string
           format: date-time
@@ -7993,18 +8023,24 @@ components:
           format: date-time
     SourceChunk:
       type: object
-      required: [id, ordinal, locator, text_content, text_hash]
+      required: [id, ordinal, chunk_type, locator, text_content, content, text_hash]
       properties:
         id:
           type: string
           format: uuid
         ordinal:
           type: integer
+        chunk_type:
+          type: string
+          enum: [text, table, chart, figure, page]
         locator:
           type: object
           additionalProperties: true
         text_content:
           type: string
+        content:
+          type: object
+          additionalProperties: true
         text_hash:
           type: string
     ExternalResourceSummary:

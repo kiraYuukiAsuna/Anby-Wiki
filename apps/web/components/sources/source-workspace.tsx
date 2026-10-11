@@ -67,7 +67,8 @@ function CitationComposer({
 }) {
   const [quotation, setQuotation] = useState("");
   const [page, setPage] = useState("");
-  const [section, setSection] = useState("");
+  const [pageEnd, setPageEnd] = useState("");
+  const [sectionPath, setSectionPath] = useState("");
   const [charStart, setCharStart] = useState("");
   const [charEnd, setCharEnd] = useState("");
   const [saving, setSaving] = useState(false);
@@ -75,11 +76,17 @@ function CitationComposer({
 
   const submit = async () => {
     const parsedPage = page ? Number(page) : undefined;
+    const parsedPageEnd = pageEnd ? Number(pageEnd) : undefined;
     const parsedStart = charStart ? Number(charStart) : undefined;
     const parsedEnd = charEnd ? Number(charEnd) : undefined;
     if (
       (parsedPage !== undefined &&
         (!Number.isInteger(parsedPage) || parsedPage < 1)) ||
+      (parsedPageEnd !== undefined &&
+        (!Number.isInteger(parsedPageEnd) ||
+          parsedPageEnd < 1 ||
+          parsedPage === undefined ||
+          parsedPageEnd < parsedPage)) ||
       (parsedStart !== undefined &&
         (!Number.isInteger(parsedStart) || parsedStart < 0)) ||
       (parsedEnd !== undefined &&
@@ -91,6 +98,10 @@ function CitationComposer({
       toast.error("请检查页码和字符范围");
       return;
     }
+    const parsedSectionPath = sectionPath
+      .split("/")
+      .map((part) => part.trim())
+      .filter(Boolean);
     setSaving(true);
     try {
       const citation = await sourcesApi().createCitation({
@@ -100,12 +111,17 @@ function CitationComposer({
           quotation: quotation || undefined,
           locator:
             parsedPage !== undefined ||
-            section.trim() ||
+            parsedPageEnd !== undefined ||
+            parsedSectionPath.length > 0 ||
             parsedStart !== undefined ||
             parsedEnd !== undefined
               ? {
                   page: parsedPage,
-                  section: section.trim() || undefined,
+                  pageEnd: parsedPageEnd,
+                  sectionPath:
+                    parsedSectionPath.length > 0
+                      ? parsedSectionPath
+                      : undefined,
                   charStart: parsedStart,
                   charEnd: parsedEnd,
                 }
@@ -189,11 +205,22 @@ function CitationComposer({
           />
         </div>
         <div className="space-y-2">
-          <Label htmlFor="citation-section">章节</Label>
+          <Label htmlFor="citation-page-end">结束页</Label>
           <Input
-            id="citation-section"
-            value={section}
-            onChange={(event) => setSection(event.target.value)}
+            id="citation-page-end"
+            type="number"
+            min={1}
+            value={pageEnd}
+            onChange={(event) => setPageEnd(event.target.value)}
+          />
+        </div>
+        <div className="space-y-2 sm:col-span-2">
+          <Label htmlFor="citation-section-path">章节路径</Label>
+          <Input
+            id="citation-section-path"
+            value={sectionPath}
+            onChange={(event) => setSectionPath(event.target.value)}
+            placeholder="一级标题 / 二级标题"
           />
         </div>
         <div className="space-y-2">
@@ -279,6 +306,10 @@ function VersionPanel({ version }: { version: EvidenceSourceVersion }) {
           <p className="mt-1 truncate font-mono text-[10px] text-muted-foreground">
             {version.versionHash}
           </p>
+          <p className="mt-1 text-xs text-muted-foreground">
+            {version.parseTrack} · {version.parserName}@
+            {version.parserVersion}
+          </p>
         </div>
         <Button
           type="button"
@@ -329,7 +360,7 @@ function VersionPanel({ version }: { version: EvidenceSourceVersion }) {
                   <div className="flex items-center justify-between gap-3">
                     <div>
                       <p className="text-xs font-semibold">
-                        SourceChunk #{chunk.ordinal}
+                        SourceChunk #{chunk.ordinal} · {chunk.chunkType}
                       </p>
                       <p className="mt-1 font-mono text-[10px] text-muted-foreground">
                         {chunk.id} · {chunk.textHash.slice(0, 12)}
@@ -356,6 +387,11 @@ function VersionPanel({ version }: { version: EvidenceSourceVersion }) {
                     <p className="mt-2 font-mono text-[10px] text-muted-foreground">
                       {JSON.stringify(chunk.locator)}
                     </p>
+                    {Object.keys(chunk.content).length > 0 ? (
+                      <pre className="mt-2 max-h-52 overflow-auto whitespace-pre-wrap rounded-lg bg-muted/30 p-3 text-[10px] leading-5 text-muted-foreground">
+                        {JSON.stringify(chunk.content, null, 2)}
+                      </pre>
+                    ) : null}
                   </details>
                 </li>
               ))}

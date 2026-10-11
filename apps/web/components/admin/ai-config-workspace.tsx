@@ -197,9 +197,11 @@ function ConfigForm({
       <section className="rounded-3xl border bg-card p-6 shadow-[0_18px_50px_-42px_rgb(15_23_42/0.55)] sm:p-7">
         <div className="flex flex-wrap items-start justify-between gap-4 border-b pb-5">
           <div>
-            <h2 className="text-xl font-semibold tracking-tight">抽取模型</h2>
+            <h2 className="text-xl font-semibold tracking-tight">
+              文档理解模型
+            </h2>
             <p className="mt-1 text-sm leading-6 text-muted-foreground">
-              Semantic Kernel 负责供应商调用；Go 服务继续校验 Prompt 输出 Schema。
+              同一模型负责文本抽取与复杂 PDF 视觉分析，必须支持图片输入和结构化 JSON。
             </p>
           </div>
           <label className="flex cursor-pointer items-center gap-2 rounded-full border bg-muted/30 px-3 py-2 text-xs font-medium">
@@ -231,7 +233,7 @@ function ConfigForm({
             </select>
           </div>
           <div>
-            <Label htmlFor="ai-model">模型 ID</Label>
+            <Label htmlFor="ai-model">多模态模型 ID</Label>
             <Input
               id="ai-model"
               className="mt-2 h-9"

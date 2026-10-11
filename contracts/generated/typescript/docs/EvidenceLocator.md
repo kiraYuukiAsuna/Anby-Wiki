@@ -7,7 +7,8 @@
 Name | Type
 ------------ | -------------
 `page` | number
-`section` | string
+`pageEnd` | number
+`sectionPath` | Array&lt;string&gt;
 `charStart` | number
 `charEnd` | number
 `imageRegion` | [EvidenceImageRegion](EvidenceImageRegion.md)
@@ -21,7 +22,8 @@ import type { EvidenceLocator } from ''
 // TODO: Update the object below with actual values
 const example = {
   "page": null,
-  "section": null,
+  "pageEnd": null,
+  "sectionPath": null,
   "charStart": null,
   "charEnd": null,
   "imageRegion": null,

@@ -8,6 +8,11 @@ Name | Type
 ------------ | -------------
 `id` | string
 `versionHash` | string
+`parseTrack` | string
+`parserName` | string
+`parserVersion` | string
+`parserFingerprint` | string
+`parseMetadata` | { [key: string]: any; }
 `fetchedAt` | Date
 `createdAt` | Date
 
@@ -20,6 +25,11 @@ import type { SourceVersionSummary } from ''
 const example = {
   "id": null,
   "versionHash": null,
+  "parseTrack": null,
+  "parserName": null,
+  "parserVersion": null,
+  "parserFingerprint": null,
+  "parseMetadata": null,
   "fetchedAt": null,
   "createdAt": null,
 } satisfies SourceVersionSummary

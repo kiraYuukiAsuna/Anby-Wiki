@@ -175,10 +175,12 @@ func (s *ExtractionService) generateBatchOnce(ctx context.Context, params Extrac
 	chunkViews := make([]map[string]any, len(chunks))
 	for index := range chunks {
 		chunkViews[index] = map[string]any{
-			"chunk_id": views[index].ID,
-			"ordinal":  views[index].Ordinal,
-			"text":     views[index].TextContent,
-			"locator":  json.RawMessage(views[index].LocatorJSON),
+			"chunk_id":   views[index].ID,
+			"ordinal":    views[index].Ordinal,
+			"chunk_type": modelChunkType(views[index]),
+			"text":       views[index].TextContent,
+			"locator":    json.RawMessage(views[index].LocatorJSON),
+			"content":    modelChunkContent(views[index]),
 		}
 	}
 	chunksJSON, err := json.Marshal(chunkViews)
@@ -216,7 +218,8 @@ func estimateChunkInputTokens(chunk evidence.SourceChunk) int {
 	// JSON field names, UUID, ordinal, locator, and escaping account for the
 	// fixed overhead. Non-ASCII is intentionally conservative for multilingual
 	// tokenizers; ASCII prose/code averages roughly four characters per token.
-	return 96 + (ascii+3)/4 + nonASCII*2 + (len(chunk.LocatorJSON)+3)/4
+	return 112 + (ascii+3)/4 + nonASCII*2 +
+		(len(chunk.LocatorJSON)+3)/4 + (len(chunk.ContentJSON)+3)/4
 }
 
 func (s *ExtractionService) mergeCandidateBatches(sourceVersionID uuid.UUID,

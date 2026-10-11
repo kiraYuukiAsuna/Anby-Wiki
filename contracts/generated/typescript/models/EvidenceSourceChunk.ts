@@ -41,6 +41,12 @@ export interface EvidenceSourceChunk {
     ordinal: number;
     /**
      *
+     * @type {EvidenceSourceChunkChunkTypeEnum}
+     * @memberof EvidenceSourceChunk
+     */
+    chunkType: EvidenceSourceChunkChunkTypeEnum;
+    /**
+     *
      * @type {EvidenceLocator}
      * @memberof EvidenceSourceChunk
      */
@@ -53,11 +59,31 @@ export interface EvidenceSourceChunk {
     textContent: string;
     /**
      *
+     * @type {{ [key: string]: any; }}
+     * @memberof EvidenceSourceChunk
+     */
+    content: { [key: string]: any; };
+    /**
+     *
      * @type {string}
      * @memberof EvidenceSourceChunk
      */
     textHash: string;
 }
+
+
+/**
+ * @export
+ */
+export const EvidenceSourceChunkChunkTypeEnum = {
+    Text: 'text',
+    Table: 'table',
+    Chart: 'chart',
+    Figure: 'figure',
+    Page: 'page'
+} as const;
+export type EvidenceSourceChunkChunkTypeEnum = typeof EvidenceSourceChunkChunkTypeEnum[keyof typeof EvidenceSourceChunkChunkTypeEnum];
+
 
 /**
  * Check if a given object implements the EvidenceSourceChunk interface.
@@ -65,8 +91,10 @@ export interface EvidenceSourceChunk {
 export function instanceOfEvidenceSourceChunk(value: object): value is EvidenceSourceChunk {
     if (!('id' in value) || value['id'] === undefined) return false;
     if (!('ordinal' in value) || value['ordinal'] === undefined) return false;
+    if ((!('chunkType' in (value as Record<string, any>)) && !('chunk_type' in (value as Record<string, any>))) || ((value as Record<string, any>)['chunkType'] === undefined && (value as Record<string, any>)['chunk_type'] === undefined)) return false;
     if (!('locator' in value) || value['locator'] === undefined) return false;
     if ((!('textContent' in (value as Record<string, any>)) && !('text_content' in (value as Record<string, any>))) || ((value as Record<string, any>)['textContent'] === undefined && (value as Record<string, any>)['text_content'] === undefined)) return false;
+    if (!('content' in value) || value['content'] === undefined) return false;
     if ((!('textHash' in (value as Record<string, any>)) && !('text_hash' in (value as Record<string, any>))) || ((value as Record<string, any>)['textHash'] === undefined && (value as Record<string, any>)['text_hash'] === undefined)) return false;
     return true;
 }
@@ -83,8 +111,10 @@ export function EvidenceSourceChunkFromJSONTyped(json: any, ignoreDiscriminator:
 
         'id': json['id'],
         'ordinal': json['ordinal'],
+        'chunkType': json['chunk_type'],
         'locator': EvidenceLocatorFromJSON(json['locator']),
         'textContent': json['text_content'],
+        'content': json['content'],
         'textHash': json['text_hash'],
     };
 }
@@ -102,8 +132,10 @@ export function EvidenceSourceChunkToJSONTyped(value?: EvidenceSourceChunk | nul
 
         'id': value['id'],
         'ordinal': value['ordinal'],
+        'chunk_type': value['chunkType'],
         'locator': EvidenceLocatorToJSON(value['locator']),
         'text_content': value['textContent'],
+        'content': value['content'],
         'text_hash': value['textHash'],
     };
 }

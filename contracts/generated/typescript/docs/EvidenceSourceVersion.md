@@ -11,6 +11,11 @@ Name | Type
 `versionHash` | string
 `rawAssetId` | string
 `extractedAssetId` | string
+`parseTrack` | string
+`parserName` | string
+`parserVersion` | string
+`parserFingerprint` | string
+`parseMetadata` | { [key: string]: any; }
 `fetchedAt` | Date
 `createdAt` | Date
 
@@ -26,6 +31,11 @@ const example = {
   "versionHash": null,
   "rawAssetId": null,
   "extractedAssetId": null,
+  "parseTrack": null,
+  "parserName": null,
+  "parserVersion": null,
+  "parserFingerprint": null,
+  "parseMetadata": null,
   "fetchedAt": null,
   "createdAt": null,
 } satisfies EvidenceSourceVersion

@@ -23,7 +23,7 @@ import (
 
 const (
 	ImportPlanFidelitySchemaURL = "https://anby.wiki/schemas/import-plan-fidelity/v1/audit.schema.json"
-	ImportPlanFidelityPromptKey = "source-import-plan-fidelity-v5"
+	ImportPlanFidelityPromptKey = "source-import-plan-fidelity-v6"
 
 	planFidelityValidationAttempts = 3
 	minimumPlanBlockGrounding      = 0.90

@@ -118,19 +118,27 @@ func (s *Service) CreateSource(ctx context.Context, params CreateSourceParams) (
 // ChunkInput 来源分片入参。Ordinal 必须从 0 开始连续递增；
 // Locator 全字段可选；TextContent 必须非空。
 type ChunkInput struct {
-	Ordinal     int
-	Locator     Locator
-	TextContent string
+	Ordinal     int             `json:"ordinal"`
+	ChunkType   string          `json:"chunk_type"`
+	Locator     Locator         `json:"locator"`
+	TextContent string          `json:"text_content"`
+	Content     json.RawMessage `json:"content"`
 }
 
 // AddSourceVersionParams 登记来源版本的入参。
 // VersionHash 是客户端内容哈希（如抓取内容的 SHA-256）。
 type AddSourceVersionParams struct {
-	SourceID    uuid.UUID
-	VersionHash string
-	RawAssetID  *uuid.UUID
-	FetchedAt   time.Time
-	Chunks      []ChunkInput
+	SourceID          uuid.UUID
+	VersionHash       string
+	RawAssetID        *uuid.UUID
+	ExtractedAssetID  *uuid.UUID
+	ParseTrack        string
+	ParserName        string
+	ParserVersion     string
+	ParserFingerprint string
+	ParseMetadata     json.RawMessage
+	FetchedAt         time.Time
+	Chunks            []ChunkInput
 }
 
 // AddSourceVersionResult AddSourceVersion 的结果。
@@ -153,8 +161,8 @@ type SourceVersionContent struct {
 
 // AddSourceVersion 登记来源版本与其分片（source_version + source_chunk 同事务写入）。
 // 校验链：version_hash 非空 → fetched_at 非零 → source 存在 → raw_asset 存在 →
-// chunks ordinal 从 0 连续 / 文本非空 / locator 形态。
-// version_hash 重复（含并发撞唯一索引）幂等返回既有版本（Reused=true）。
+// 解析器身份与元数据合法 → chunks ordinal 从 0 连续 / 类型与内容合法 / locator 形态。
+// 内容哈希与解析器指纹重复（含并发撞唯一索引）幂等返回既有版本（Reused=true）。
 // chunk text_hash 由服务端按 text_content 计算（SHA-256 hex），不信任调用方。
 //
 // source_version 表无 actor 列（版本登记属导入管道行为），故本方法不做 Actor 准入。
@@ -174,9 +182,28 @@ func (s *Service) AddSourceVersion(ctx context.Context, params AddSourceVersionP
 			return nil, err
 		}
 	}
-	for i, c := range params.Chunks {
+	if params.ExtractedAssetID != nil {
+		if _, err := s.repo.GetAssetRevisionByID(ctx, nil, *params.ExtractedAssetID); err != nil {
+			return nil, err
+		}
+	}
+	params.ParserName = strings.TrimSpace(params.ParserName)
+	params.ParserVersion = strings.TrimSpace(params.ParserVersion)
+	if !IsValidParseTrack(params.ParseTrack) || params.ParserName == "" ||
+		params.ParserVersion == "" || !validSHA256(params.ParserFingerprint) {
+		return nil, fmt.Errorf("%w: 解析器身份非法", ErrInvalidSourceInput)
+	}
+	parseMetadata, err := jsonObject(params.ParseMetadata)
+	if err != nil {
+		return nil, fmt.Errorf("%w: parse_metadata 必须是 JSON object", ErrInvalidSourceInput)
+	}
+	for i := range params.Chunks {
+		c := &params.Chunks[i]
 		if c.Ordinal != i {
 			return nil, fmt.Errorf("%w: 第 %d 个 chunk ordinal=%d", ErrInvalidChunkOrdinal, i, c.Ordinal)
+		}
+		if !IsValidSourceChunkType(c.ChunkType) {
+			return nil, fmt.Errorf("%w: 第 %d 个 chunk_type=%q", ErrInvalidSourceInput, i, c.ChunkType)
 		}
 		if c.TextContent == "" {
 			return nil, fmt.Errorf("%w: 第 %d 个 chunk 文本为空", ErrInvalidSourceInput, i)
@@ -184,12 +211,19 @@ func (s *Service) AddSourceVersion(ctx context.Context, params AddSourceVersionP
 		if err := c.Locator.Validate(); err != nil {
 			return nil, err
 		}
+		content, err := jsonObject(c.Content)
+		if err != nil {
+			return nil, fmt.Errorf("%w: 第 %d 个 chunk content 必须是 JSON object", ErrInvalidSourceInput, i)
+		}
+		c.Content = content
 	}
 
 	var result *AddSourceVersionResult
-	err := s.txm.InTx(ctx, func(tx pgx.Tx) error {
+	err = s.txm.InTx(ctx, func(tx pgx.Tx) error {
 		// 事务内查重：并发重复导入恰一插入，后到者复用既有版本。
-		existing, err := s.repo.GetSourceVersionByHash(ctx, tx, params.SourceID, versionHash)
+		existing, err := s.repo.GetSourceVersionByIdentity(
+			ctx, tx, params.SourceID, versionHash, params.ParserFingerprint,
+		)
 		if err == nil {
 			chunks, err := s.repo.ListSourceChunks(ctx, tx, existing.ID)
 			if err != nil {
@@ -207,11 +241,17 @@ func (s *Service) AddSourceVersion(ctx context.Context, params AddSourceVersionP
 			return err
 		}
 		v := &SourceVersion{
-			ID:          versionID,
-			SourceID:    params.SourceID,
-			VersionHash: versionHash,
-			RawAssetID:  params.RawAssetID,
-			FetchedAt:   params.FetchedAt,
+			ID:                versionID,
+			SourceID:          params.SourceID,
+			VersionHash:       versionHash,
+			RawAssetID:        params.RawAssetID,
+			ExtractedAssetID:  params.ExtractedAssetID,
+			ParseTrack:        params.ParseTrack,
+			ParserName:        params.ParserName,
+			ParserVersion:     params.ParserVersion,
+			ParserFingerprint: params.ParserFingerprint,
+			ParseMetadataJSON: parseMetadata,
+			FetchedAt:         params.FetchedAt,
 		}
 		if err := s.repo.InsertSourceVersion(ctx, tx, v); err != nil {
 			return err
@@ -226,8 +266,10 @@ func (s *Service) AddSourceVersion(ctx context.Context, params AddSourceVersionP
 				ID:              chunkID,
 				SourceVersionID: versionID,
 				Ordinal:         input.Ordinal,
+				ChunkType:       input.ChunkType,
 				LocatorJSON:     input.Locator.toJSON(),
 				TextContent:     input.TextContent,
+				ContentJSON:     input.Content,
 				TextHash:        sha256Hex(input.TextContent),
 			}
 			if err := s.repo.InsertSourceChunk(ctx, tx, &c); err != nil {
@@ -240,8 +282,10 @@ func (s *Service) AddSourceVersion(ctx context.Context, params AddSourceVersionP
 	})
 	if err != nil {
 		if errors.Is(err, ErrSourceVersionExists) {
-			// 并发插入撞 (source_id, version_hash) 唯一索引：回查既有版本，幂等返回。
-			existing, qerr := s.repo.GetSourceVersionByHash(ctx, nil, params.SourceID, versionHash)
+			// 并发插入撞解析身份唯一索引：回查既有版本，幂等返回。
+			existing, qerr := s.repo.GetSourceVersionByIdentity(
+				ctx, nil, params.SourceID, versionHash, params.ParserFingerprint,
+			)
 			if qerr != nil {
 				return nil, err
 			}
@@ -254,6 +298,30 @@ func (s *Service) AddSourceVersion(ctx context.Context, params AddSourceVersionP
 		return nil, err
 	}
 	return result, nil
+}
+
+func jsonObject(value json.RawMessage) (json.RawMessage, error) {
+	if len(value) == 0 {
+		return json.RawMessage(`{}`), nil
+	}
+	var object map[string]json.RawMessage
+	if err := json.Unmarshal(value, &object); err != nil || object == nil {
+		return nil, ErrInvalidSourceInput
+	}
+	return json.Marshal(object)
+}
+
+func validSHA256(value string) bool {
+	if len(value) != 64 {
+		return false
+	}
+	for _, character := range value {
+		if (character < '0' || character > '9') &&
+			(character < 'a' || character > 'f') {
+			return false
+		}
+	}
+	return true
 }
 
 // LoadSourceVersionContent loads an already persisted parse artifact. It is a

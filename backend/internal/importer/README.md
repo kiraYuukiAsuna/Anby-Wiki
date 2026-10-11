@@ -15,6 +15,9 @@ Worker 不领取 `source_import`，已有任务保持 queued。
 模型调用经私网 Semantic Kernel Sidecar：OpenAI-compatible 可使用原生 strict JSON
 Schema，DeepSeek 使用 JSON Object；Sidecar 对 JSON 和权威 Schema 失败执行有限纠正重试，
 Go Gateway 再执行最终独立校验。Sidecar 不访问数据库、对象存储或用户会话。
+`document-page-analysis-v1` 使用同一边界发送单张渲染页；图片只在内存中停留到本次
+Provider 调用结束，并与普通结构化调用一样记录 Prompt 版本、模型、Token、耗时和状态。
+管理端模型测试会分别验证文本结构化输出和图片输入，文本模型不能通过配置验收。
 
 Worker 会从管理员提供的最大输入 Token 中预留 Prompt/Schema 空间，再按估算 Token 和
 单批最多 6 个 Chunk 分批调用，最多并行处理 3 批；较大上下文仍受独立的输出安全批量
@@ -47,20 +50,22 @@ Worker 被强制终止或部署替换后，超过完整任务超时仍处于 run
 
 HTTP 产品入口同时接收受控公网 URL 与 multipart 文件上传。支持 HTML、纯文本、
 JSON、CSV、PDF、PNG 与 JPEG：公网 JSON 作为 API 快照，上传的 JSON/CSV 作为
-数据库记录导出，图片进入 OCR。上传先由 API 经 Evidence 服务写入私有对象存储，
-Job config 只保存对象键与内容哈希、不保存正文；Worker 读取后再次校验。两条路径共享
-MIME/magic、10 MiB、恶意签名、哈希和证据固化门禁。
+数据库记录导出，图片进入 OCR，PDF 进入文本与视觉双轨解析。上传先由 API 经 Evidence
+服务写入私有对象存储，Job config 只保存对象键与内容哈希、不保存正文；Worker 读取后
+再次校验。两条路径共享 MIME/magic、300 MiB、恶意签名、哈希和证据固化门禁。
 
 来源固化前会在最多 256 KiB 的有界窗口中推导结构化元数据：HTML `title`/meta、
 JSON 常用字段、Markdown front matter 与 RFC 头可提供标题、作者、发布者、日期、
 DOI/标识符和语言；URL host、文件名与 MIME 作为补充。只把这些短字段写入 Source
 metadata，不记录正文、Prompt 或密钥；请求显式标题优先于自动推导结果。
 
-Worker 使用 Poppler `pdftotext` 从标准输入读取 PDF、从标准输出取得 UTF-8 文本，
-不创建临时来源文件，也不向子进程传递 Worker 环境变量。页间换页符用于保留页码定位，
-解压后的文本限制为 32 MiB。没有文本层的 PDF 由 Poppler 逐页、限尺寸栅格化后交给
-Tesseract；最多处理 20 页，单页临时图片随页删除，原 PDF 始终只经标准输入传递。
-PNG/JPEG 使用同一 OCR 路径，限制 4000 万像素。OCR 的行级像素区域、原图尺寸、引擎、
+Worker 使用 Poppler 从标准输入读取 PDF：`pdftotext` 保留每页原生 UTF-8 文本，
+`pdftoppm` 逐页生成最长边 2000 像素的临时 JPEG。PDF 最多 500 页，最多并行分析
+3 页；单页图片在模型调用后立即删除，子进程不继承 Worker 环境变量。管理员配置的
+多模态模型输出标题路径、正文、表格、图表、图片、区域和结构化数据。有文本层时以
+原生页文本生成精确 `page` Chunk，视觉模型只补充非文本元素；扫描页使用视觉转写。
+完整解析 manifest 另存对象存储，SourceVersion 固化 Adapter/MIME/Provider/Prompt/模型与警告。
+PNG/JPEG 仍走本地 Tesseract OCR，限制 4000 万像素；行级区域、原图尺寸、引擎、
 语言与置信度一并固化进 SourceChunk locator，Citation 可以还原到原始图像区域。
 
 DeepSeek 的 JSON Object 模式只保证返回合法 JSON，因此 Semantic Kernel 会使用与
@@ -68,7 +73,7 @@ Gateway 相同的权威 JSON Schema 预校验并纠正失败输出；OpenAI comp
 原生 strict JSON Schema。抽取固定 `temperature=0`，DeepSeek 同时关闭 thinking，避免
 推理正文污染 JSON 结果。
 
-`source-extraction-v7` Prompt 同时提供当前固定 Entity type / Claim property 词表，
+`source-extraction-v8` Prompt 同时提供当前固定 Entity type / Claim property 词表，
 明确要求模型生成临时 `candidate_id`、用 `entity_candidate_id` 表达同批 Entity 值、
 禁止猜测持久化 Entity ID，并为 Entity 关系规定严格的 subject/value 类型和方向；
 其中作品/RFC 可使用 `issued_by`、`document_identifier`、`document_category`、
@@ -81,7 +86,7 @@ Entity 值的自引用 Claim；相同约束在逐字证据核验、稳定 ID 分
 相邻技术术语误写成 `JSON instance_of JavaScript`；同一主体的单值属性若在一个模型批次中
 出现多个值，分类器按“支持现有事实优先，其次置信度、证据覆盖、稳定 ID”只保留一个，
 Composer/Apply 前置校验与 Knowledge 写入约束继续防御不可能应用的 Proposal。
-事实候选允许为空：来源随后仍会进入 `source-import-plan-v7`，由不受固定 Entity/Claim
+事实候选允许为空：来源随后仍会进入 `source-import-plan-v8`，由不受固定 Entity/Claim
 词表限制的页面规划判断百科价值。模型提供的
 引文必须逐字存在；服务端会重新推导 rune 范围以纠正模型常见的 Unicode/字节计数偏差。
 引文重复出现时选择离模型提示位置最近的精确匹配，最近距离并列才拒绝；模糊匹配、翻译
@@ -110,7 +115,7 @@ Operation 排在 Claim Operation 之前，Claim 的主体和 Entity 值在 Compo
 可核验 Entity/Claim 继续进入治理。新实体 canonical key 使用 `type_key:label`，避免
 不同类型的同名实体在整批应用时互相冲突。
 
-`source-import-plan-v7` 在事实抽取之后执行来源理解与页面路由。它先按标题、来源名、
+`source-import-plan-v8` 在事实抽取之后执行来源理解与页面路由。它先按标题、来源名、
 Entity/alias 召回已有 Page 及可替换 Block，再允许一份来源同时生成多个 `create`、
 `update`、`link` 与 `ignore` 路由。`link.related_to` 显式选择同批 create/update
 页面并携带原文证据，随后编译为稳定 `page_reference`，由投影生成反链；每个新写或改写
@@ -136,7 +141,7 @@ Plan 阶段而不会静默截断或进入 Proposal。
 Grounding 只评价正文块；标题不会抬高平均分，任一正文块低于直接支撑底线时整份计划
 都不能通过质量门禁。
 
-确定性合并后由 `source-import-plan-fidelity-v5` 按原始 Chunk 分窗比较完整页面计划，逐项检查定义、
+确定性合并后由 `source-import-plan-fidelity-v6` 按原始 Chunk 分窗比较完整页面计划，逐项检查定义、
 约束、禁止事项、条件、例外、先后顺序、数量、互操作和安全要求。模型只能返回带精确 Chunk
 引文的遗漏段落；模型同样只给 `chunk_id + quotation`，服务端重新定位并把修复插入已有路由和章节；不能借审计新建页面或猜测
 章节，目标页面语言也不得用于翻译 evidence 引文。单个保真分窗经过三次纠正仍含坏修复时，

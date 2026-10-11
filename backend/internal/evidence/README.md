@@ -66,10 +66,16 @@ M3-T06 起，投影事务通过系统级 `ExternalResourceService.UpsertInTx` �
 ### 定位粒度（设计 §7.4/§7.5）
 
 `source_version`（必有）→ `source_chunk`（可选，`ordinal` 从 0 连续，
-`text_hash` 为服务端计算的 text_content 小写 hex SHA-256，不信任调用方）→
-`locator_json`（可选）。`Locator` 全部字段可选：`page`（>=1）、`section`（非空）、
-`char_start`/`char_end`（0 起，`char_end >= char_start`）；citation.locator 与
+`chunk_type` 为 `text/table/chart/figure/page`，`text_hash` 为服务端计算的
+text_content 小写 hex SHA-256，不信任调用方，`content_json` 保存类型化结构）→
+`locator_json`（可选）。`Locator` 全部字段可选：`page/page_end`（页范围）、
+`section_path`（非空层级数组）、`char_start`/`char_end`
+（0 起，`char_end >= char_start`）；citation.locator 与
 chunk.locator 叠加表示更细粒度定位（如 chunk 定位到页，citation 定位到页内字符段）。
+
+SourceVersion 还固化 `parse_track`、解析 Adapter 名称/版本、解析器指纹与
+`parse_metadata_json`。完整解析 manifest 作为不可变 AssetRevision 由
+`extracted_asset_id` 引用；原文件仍由 `raw_asset_id` 引用。
 
 ### Quotation 规则（INV-07 定位侧）
 
@@ -81,8 +87,8 @@ chunk.locator 叠加表示更细粒度定位（如 chunk 定位到页，citation
 
 ### 幂等语义
 
-- `AddSourceVersion`：`unique(source_id, version_hash)` 是重复导入不重复抽取的
-  DB 基础。version_hash 重复（含并发撞唯一索引）返回既有版本与其 chunks，
+- `AddSourceVersion`：`unique(source_id, version_hash, parser_fingerprint)` 是重复
+  解析不重复写入的 DB 基础。相同内容和解析器身份重复（含并发撞唯一索引）返回既有版本与其 chunks，
   `AddSourceVersionResult.Reused=true`，未重复插入；
 - `CreateCitation`：以 `(source_version_id, source_chunk_id, locator_json,
   quotation_hash)` 作为不可变证据身份。重试、多窗口收敛或不同页面使用

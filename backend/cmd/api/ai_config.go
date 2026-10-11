@@ -1,9 +1,12 @@
 package main
 
 import (
+	"bytes"
 	"context"
 	"encoding/json"
 	"errors"
+	"image"
+	"image/png"
 	"net/http"
 	"time"
 
@@ -116,7 +119,7 @@ func (a *AIConfigAPI) test(w http.ResponseWriter, r *http.Request) {
 		aiConfigError(w, r, err)
 		return
 	}
-	timeout := time.Duration(runtime.RequestTimeoutSeconds*runtime.MaxAttempts+10) * time.Second
+	timeout := time.Duration(runtime.RequestTimeoutSeconds*runtime.MaxAttempts*2+10) * time.Second
 	if timeout > 10*time.Minute {
 		timeout = 10 * time.Minute
 	}
@@ -141,8 +144,38 @@ func (a *AIConfigAPI) test(w http.ResponseWriter, r *http.Request) {
 		aiConfigError(w, r, ai.ErrInvalidOutput)
 		return
 	}
+	var probeImage bytes.Buffer
+	if err := png.Encode(
+		&probeImage,
+		image.NewGray(image.Rect(0, 0, 256, 256)),
+	); err != nil {
+		aiConfigError(w, r, err)
+		return
+	}
+	visionResult, err := a.provider.Generate(ctx, ai.ProviderRequest{
+		SystemPrompt: "Analyze the attached rendered page. Return only JSON conforming exactly to the supplied schema.",
+		UserPrompt:   "This is page 1 of a one-page diagnostic document. Return schema_version 1 and page 1. The page may contain no meaningful elements.",
+		JSONSchema:   importer.DocumentPageAnalysisSchemaJSON(),
+		Images: []ai.ImageInput{{
+			MediaType: "image/png",
+			Data:      probeImage.Bytes(),
+		}},
+	})
+	if err != nil {
+		aiConfigError(w, r, err)
+		return
+	}
+	var pageAnalysis struct {
+		SchemaVersion int `json:"schema_version"`
+		Page          int `json:"page"`
+	}
+	if json.Unmarshal(visionResult.JSON, &pageAnalysis) != nil ||
+		pageAnalysis.SchemaVersion != 1 || pageAnalysis.Page != 1 {
+		aiConfigError(w, r, ai.ErrInvalidOutput)
+		return
+	}
 	httpx.WriteJSON(w, http.StatusOK, aiConfigTestResponse{
-		OK: true, Provider: result.Provider, Model: result.Model,
+		OK: true, Provider: visionResult.Provider, Model: visionResult.Model,
 		LatencyMS: time.Since(started).Milliseconds(),
 	})
 }

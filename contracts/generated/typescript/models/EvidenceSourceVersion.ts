@@ -51,6 +51,36 @@ export interface EvidenceSourceVersion {
     extractedAssetId?: string;
     /**
      *
+     * @type {EvidenceSourceVersionParseTrackEnum}
+     * @memberof EvidenceSourceVersion
+     */
+    parseTrack: EvidenceSourceVersionParseTrackEnum;
+    /**
+     *
+     * @type {string}
+     * @memberof EvidenceSourceVersion
+     */
+    parserName: string;
+    /**
+     *
+     * @type {string}
+     * @memberof EvidenceSourceVersion
+     */
+    parserVersion: string;
+    /**
+     *
+     * @type {string}
+     * @memberof EvidenceSourceVersion
+     */
+    parserFingerprint: string;
+    /**
+     *
+     * @type {{ [key: string]: any; }}
+     * @memberof EvidenceSourceVersion
+     */
+    parseMetadata: { [key: string]: any; };
+    /**
+     *
      * @type {Date}
      * @memberof EvidenceSourceVersion
      */
@@ -63,6 +93,18 @@ export interface EvidenceSourceVersion {
     createdAt: Date;
 }
 
+
+/**
+ * @export
+ */
+export const EvidenceSourceVersionParseTrackEnum = {
+    Text: 'text',
+    Vision: 'vision',
+    Hybrid: 'hybrid'
+} as const;
+export type EvidenceSourceVersionParseTrackEnum = typeof EvidenceSourceVersionParseTrackEnum[keyof typeof EvidenceSourceVersionParseTrackEnum];
+
+
 /**
  * Check if a given object implements the EvidenceSourceVersion interface.
  */
@@ -70,6 +112,11 @@ export function instanceOfEvidenceSourceVersion(value: object): value is Evidenc
     if (!('id' in value) || value['id'] === undefined) return false;
     if ((!('sourceId' in (value as Record<string, any>)) && !('source_id' in (value as Record<string, any>))) || ((value as Record<string, any>)['sourceId'] === undefined && (value as Record<string, any>)['source_id'] === undefined)) return false;
     if ((!('versionHash' in (value as Record<string, any>)) && !('version_hash' in (value as Record<string, any>))) || ((value as Record<string, any>)['versionHash'] === undefined && (value as Record<string, any>)['version_hash'] === undefined)) return false;
+    if ((!('parseTrack' in (value as Record<string, any>)) && !('parse_track' in (value as Record<string, any>))) || ((value as Record<string, any>)['parseTrack'] === undefined && (value as Record<string, any>)['parse_track'] === undefined)) return false;
+    if ((!('parserName' in (value as Record<string, any>)) && !('parser_name' in (value as Record<string, any>))) || ((value as Record<string, any>)['parserName'] === undefined && (value as Record<string, any>)['parser_name'] === undefined)) return false;
+    if ((!('parserVersion' in (value as Record<string, any>)) && !('parser_version' in (value as Record<string, any>))) || ((value as Record<string, any>)['parserVersion'] === undefined && (value as Record<string, any>)['parser_version'] === undefined)) return false;
+    if ((!('parserFingerprint' in (value as Record<string, any>)) && !('parser_fingerprint' in (value as Record<string, any>))) || ((value as Record<string, any>)['parserFingerprint'] === undefined && (value as Record<string, any>)['parser_fingerprint'] === undefined)) return false;
+    if ((!('parseMetadata' in (value as Record<string, any>)) && !('parse_metadata' in (value as Record<string, any>))) || ((value as Record<string, any>)['parseMetadata'] === undefined && (value as Record<string, any>)['parse_metadata'] === undefined)) return false;
     if ((!('fetchedAt' in (value as Record<string, any>)) && !('fetched_at' in (value as Record<string, any>))) || ((value as Record<string, any>)['fetchedAt'] === undefined && (value as Record<string, any>)['fetched_at'] === undefined)) return false;
     if ((!('createdAt' in (value as Record<string, any>)) && !('created_at' in (value as Record<string, any>))) || ((value as Record<string, any>)['createdAt'] === undefined && (value as Record<string, any>)['created_at'] === undefined)) return false;
     return true;
@@ -90,6 +137,11 @@ export function EvidenceSourceVersionFromJSONTyped(json: any, ignoreDiscriminato
         'versionHash': json['version_hash'],
         'rawAssetId': json['raw_asset_id'] == null ? undefined : json['raw_asset_id'],
         'extractedAssetId': json['extracted_asset_id'] == null ? undefined : json['extracted_asset_id'],
+        'parseTrack': json['parse_track'],
+        'parserName': json['parser_name'],
+        'parserVersion': json['parser_version'],
+        'parserFingerprint': json['parser_fingerprint'],
+        'parseMetadata': json['parse_metadata'],
         'fetchedAt': (new Date(json['fetched_at'])),
         'createdAt': (new Date(json['created_at'])),
     };
@@ -111,6 +163,11 @@ export function EvidenceSourceVersionToJSONTyped(value?: EvidenceSourceVersion |
         'version_hash': value['versionHash'],
         'raw_asset_id': value['rawAssetId'],
         'extracted_asset_id': value['extractedAssetId'],
+        'parse_track': value['parseTrack'],
+        'parser_name': value['parserName'],
+        'parser_version': value['parserVersion'],
+        'parser_fingerprint': value['parserFingerprint'],
+        'parse_metadata': value['parseMetadata'],
         'fetched_at': value['fetchedAt'].toISOString(),
         'created_at': value['createdAt'].toISOString(),
     };

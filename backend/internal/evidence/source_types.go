@@ -97,37 +97,63 @@ func IsValidExternalResourceStatus(status string) bool {
 
 const ImageRegionUnitPixel = "pixel"
 
+const (
+	ParseTrackText   = "text"
+	ParseTrackVision = "vision"
+	ParseTrackHybrid = "hybrid"
+
+	SourceChunkTypeText   = "text"
+	SourceChunkTypeTable  = "table"
+	SourceChunkTypeChart  = "chart"
+	SourceChunkTypeFigure = "figure"
+	SourceChunkTypePage   = "page"
+)
+
+func IsValidParseTrack(value string) bool {
+	return value == ParseTrackText || value == ParseTrackVision || value == ParseTrackHybrid
+}
+
+func IsValidSourceChunkType(value string) bool {
+	switch value {
+	case SourceChunkTypeText, SourceChunkTypeTable, SourceChunkTypeChart,
+		SourceChunkTypeFigure, SourceChunkTypePage:
+		return true
+	}
+	return false
+}
+
 // ImageRegion 保存图片或 PDF 栅格页中的像素区域。原图尺寸一并固化，避免后续
 // 缩放展示时丢失可还原的定位坐标。
 type ImageRegion struct {
-	X           int32
-	Y           int32
-	Width       int32
-	Height      int32
-	ImageWidth  int32
-	ImageHeight int32
-	Unit        string
+	X           int32  `json:"x"`
+	Y           int32  `json:"y"`
+	Width       int32  `json:"width"`
+	Height      int32  `json:"height"`
+	ImageWidth  int32  `json:"image_width"`
+	ImageHeight int32  `json:"image_height"`
+	Unit        string `json:"unit"`
 }
 
 // OCRInfo 说明该定位文本来自 OCR，而不是来源自带的文本层。
 type OCRInfo struct {
-	Engine     string
-	Languages  []string
-	Confidence *float64
+	Engine     string   `json:"engine"`
+	Languages  []string `json:"languages"`
+	Confidence *float64 `json:"confidence,omitempty"`
 }
 
 // Locator 来源定位信息（source_chunk.locator_json / citation.locator_json 的结构，
-// 设计 §7.4/§7.5）。全部字段可选：page 页码（>=1）、section 章节名（非空）、
+// 设计 §7.4/§7.5）。全部字段可选：page/page_end 页码范围、section_path 章节路径、
 // char_start/char_end 文本字符范围，以及图片像素区域和 OCR 元数据。
 // citation.locator 与 chunk.locator 叠加表示更细粒度定位
 // （如 chunk 定位到页，citation 定位到页内字符段）。
 type Locator struct {
-	Page        *int32
-	Section     *string
-	CharStart   *int32
-	CharEnd     *int32
-	ImageRegion *ImageRegion
-	OCR         *OCRInfo
+	Page        *int32       `json:"page,omitempty"`
+	PageEnd     *int32       `json:"page_end,omitempty"`
+	SectionPath []string     `json:"section_path,omitempty"`
+	CharStart   *int32       `json:"char_start,omitempty"`
+	CharEnd     *int32       `json:"char_end,omitempty"`
+	ImageRegion *ImageRegion `json:"image_region,omitempty"`
+	OCR         *OCRInfo     `json:"ocr,omitempty"`
 }
 
 // Validate 校验 locator 形态（Go 侧手写结构校验，等价契约层 Zod 校验）。
@@ -135,8 +161,15 @@ func (l Locator) Validate() error {
 	if l.Page != nil && *l.Page < 1 {
 		return fmt.Errorf("%w: page=%d（必须 >= 1）", ErrInvalidLocator, *l.Page)
 	}
-	if l.Section != nil && strings.TrimSpace(*l.Section) == "" {
-		return fmt.Errorf("%w: section 为空", ErrInvalidLocator)
+	if l.PageEnd != nil {
+		if l.Page == nil || *l.PageEnd < *l.Page {
+			return fmt.Errorf("%w: page_end 必须大于等于 page", ErrInvalidLocator)
+		}
+	}
+	for index, section := range l.SectionPath {
+		if strings.TrimSpace(section) == "" {
+			return fmt.Errorf("%w: section_path[%d] 为空", ErrInvalidLocator, index)
+		}
 	}
 	if l.CharStart != nil && *l.CharStart < 0 {
 		return fmt.Errorf("%w: char_start=%d（必须 >= 0）", ErrInvalidLocator, *l.CharStart)
@@ -190,8 +223,11 @@ func (l Locator) toJSON() []byte {
 	if l.Page != nil {
 		m["page"] = *l.Page
 	}
-	if l.Section != nil {
-		m["section"] = *l.Section
+	if l.PageEnd != nil {
+		m["page_end"] = *l.PageEnd
+	}
+	if len(l.SectionPath) > 0 {
+		m["section_path"] = l.SectionPath
 	}
 	if l.CharStart != nil {
 		m["char_start"] = *l.CharStart
@@ -267,15 +303,21 @@ type Source struct {
 
 // SourceVersion 来源某时间点的具体版本（source_version 表，不可变，设计 §7.3）。
 // VersionHash 是客户端内容哈希（如抓取内容 SHA-256），
-// unique(source_id, version_hash) 是重复导入不重复抽取的 DB 基础。
+// ParserFingerprint 绑定 Adapter、MIME、Provider、Prompt、模型和分片参数；
+// 相同原文在解析器身份变化后可生成新的不可变版本。
 type SourceVersion struct {
-	ID               uuid.UUID
-	SourceID         uuid.UUID
-	VersionHash      string
-	RawAssetID       *uuid.UUID
-	ExtractedAssetID *uuid.UUID
-	FetchedAt        time.Time
-	CreatedAt        time.Time
+	ID                uuid.UUID
+	SourceID          uuid.UUID
+	VersionHash       string
+	RawAssetID        *uuid.UUID
+	ExtractedAssetID  *uuid.UUID
+	ParseTrack        string
+	ParserName        string
+	ParserVersion     string
+	ParserFingerprint string
+	ParseMetadataJSON []byte
+	FetchedAt         time.Time
+	CreatedAt         time.Time
 }
 
 // SourceChunk SourceVersion 的可定位分片（source_chunk 表，不可变，设计 §7.4）。
@@ -284,8 +326,10 @@ type SourceChunk struct {
 	ID              uuid.UUID
 	SourceVersionID uuid.UUID
 	Ordinal         int
+	ChunkType       string
 	LocatorJSON     []byte
 	TextContent     string
+	ContentJSON     []byte
 	TextHash        string
 	CreatedAt       time.Time
 }

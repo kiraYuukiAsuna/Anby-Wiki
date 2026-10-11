@@ -168,8 +168,9 @@ func (r *Repository) ListSourceChunksPage(
 	for rows.Next() {
 		var value SourceChunk
 		if err := rows.Scan(
-			&value.ID, &value.SourceVersionID, &value.Ordinal, &value.LocatorJSON,
-			&value.TextContent, &value.TextHash, &value.CreatedAt,
+			&value.ID, &value.SourceVersionID, &value.Ordinal, &value.ChunkType,
+			&value.LocatorJSON, &value.TextContent, &value.ContentJSON,
+			&value.TextHash, &value.CreatedAt,
 		); err != nil {
 			return nil, fmt.Errorf("evidence: 扫描来源分片目录失败: %w", err)
 		}

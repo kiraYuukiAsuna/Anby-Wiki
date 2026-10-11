@@ -16,6 +16,7 @@ import (
 )
 
 const usageRecordTimeout = 5 * time.Second
+const maxImageInputBytes = 16 << 20
 
 type PromptResolver interface {
 	ActivePrompt(ctx context.Context, key string) (*Prompt, error)
@@ -82,6 +83,9 @@ func (g *Gateway) Generate(ctx context.Context, request Request) (*Result, error
 	if err != nil {
 		return nil, fmt.Errorf("%w: %v", ErrInvalidPrompt, err)
 	}
+	if err := validateImageInputs(request.Images); err != nil {
+		return nil, err
+	}
 
 	select {
 	case g.limit <- struct{}{}:
@@ -99,7 +103,8 @@ func (g *Gateway) Generate(ctx context.Context, request Request) (*Result, error
 		attempts++
 		callCtx, cancel := context.WithTimeout(ctx, g.config.Timeout)
 		response, callErr = provider.Generate(callCtx, ProviderRequest{
-			Model: request.Model, SystemPrompt: system, UserPrompt: user, JSONSchema: prompt.OutputSchema,
+			Model: request.Model, SystemPrompt: system, UserPrompt: user,
+			JSONSchema: prompt.OutputSchema, Images: request.Images,
 		})
 		deadline := errors.Is(callCtx.Err(), context.DeadlineExceeded)
 		cancel()
@@ -195,6 +200,20 @@ func (g *Gateway) Generate(ctx context.Context, request Request) (*Result, error
 	return &Result{JSON: response.JSON, PromptKey: prompt.Key, PromptVersion: prompt.Version,
 		Provider: effectiveProvider, Model: effectiveModel, InputTokens: response.InputTokens,
 		OutputTokens: response.OutputTokens}, nil
+}
+
+func validateImageInputs(images []ImageInput) error {
+	if len(images) > 4 {
+		return fmt.Errorf("%w: image input 超过 4 个", ErrInvalidPrompt)
+	}
+	for index := range images {
+		image := images[index]
+		if (image.MediaType != "image/jpeg" && image.MediaType != "image/png") ||
+			len(image.Data) == 0 || len(image.Data) > maxImageInputBytes {
+			return fmt.Errorf("%w: image input %d 非法", ErrInvalidPrompt, index)
+		}
+	}
+	return nil
 }
 
 func validateStructuredOutput(prompt *Prompt, output []byte) error {

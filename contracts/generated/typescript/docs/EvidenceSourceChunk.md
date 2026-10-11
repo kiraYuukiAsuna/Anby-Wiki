@@ -8,8 +8,10 @@ Name | Type
 ------------ | -------------
 `id` | string
 `ordinal` | number
+`chunkType` | string
 `locator` | [EvidenceLocator](EvidenceLocator.md)
 `textContent` | string
+`content` | { [key: string]: any; }
 `textHash` | string
 
 ## Example
@@ -21,8 +23,10 @@ import type { EvidenceSourceChunk } from ''
 const example = {
   "id": null,
   "ordinal": null,
+  "chunkType": null,
   "locator": null,
   "textContent": null,
+  "content": null,
   "textHash": null,
 } satisfies EvidenceSourceChunk
 

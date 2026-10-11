@@ -159,17 +159,24 @@ type sourceResponse struct {
 }
 
 type sourceVersionResponse struct {
-	ID          uuid.UUID `json:"id"`
-	VersionHash string    `json:"version_hash"`
-	FetchedAt   time.Time `json:"fetched_at"`
-	CreatedAt   time.Time `json:"created_at"`
+	ID                uuid.UUID       `json:"id"`
+	VersionHash       string          `json:"version_hash"`
+	ParseTrack        string          `json:"parse_track"`
+	ParserName        string          `json:"parser_name"`
+	ParserVersion     string          `json:"parser_version"`
+	ParserFingerprint string          `json:"parser_fingerprint"`
+	ParseMetadata     json.RawMessage `json:"parse_metadata"`
+	FetchedAt         time.Time       `json:"fetched_at"`
+	CreatedAt         time.Time       `json:"created_at"`
 }
 
 type sourceChunkResponse struct {
 	ID          uuid.UUID       `json:"id"`
 	Ordinal     int             `json:"ordinal"`
+	ChunkType   string          `json:"chunk_type"`
 	Locator     json.RawMessage `json:"locator"`
 	TextContent string          `json:"text_content"`
+	Content     json.RawMessage `json:"content"`
 	TextHash    string          `json:"text_hash"`
 }
 
@@ -351,13 +358,22 @@ func (a *KnowledgeReadAPI) getCitation(w http.ResponseWriter, r *http.Request) {
 			Title: detail.Source.Title, Author: detail.Source.Author, Publisher: detail.Source.Publisher,
 			PublishedAt: detail.Source.PublishedAt, Metadata: detail.Source.MetadataJSON},
 		SourceVersion: sourceVersionResponse{ID: detail.SourceVersion.ID,
-			VersionHash: detail.SourceVersion.VersionHash, FetchedAt: detail.SourceVersion.FetchedAt,
-			CreatedAt: detail.SourceVersion.CreatedAt},
+			VersionHash:       detail.SourceVersion.VersionHash,
+			ParseTrack:        detail.SourceVersion.ParseTrack,
+			ParserName:        detail.SourceVersion.ParserName,
+			ParserVersion:     detail.SourceVersion.ParserVersion,
+			ParserFingerprint: detail.SourceVersion.ParserFingerprint,
+			ParseMetadata:     detail.SourceVersion.ParseMetadataJSON,
+			FetchedAt:         detail.SourceVersion.FetchedAt,
+			CreatedAt:         detail.SourceVersion.CreatedAt},
 	}
 	if detail.SourceChunk != nil {
 		resp.SourceChunk = &sourceChunkResponse{ID: detail.SourceChunk.ID,
-			Ordinal: detail.SourceChunk.Ordinal, Locator: detail.SourceChunk.LocatorJSON,
-			TextContent: detail.SourceChunk.TextContent, TextHash: detail.SourceChunk.TextHash}
+			Ordinal: detail.SourceChunk.Ordinal, ChunkType: detail.SourceChunk.ChunkType,
+			Locator:     detail.SourceChunk.LocatorJSON,
+			TextContent: detail.SourceChunk.TextContent,
+			Content:     detail.SourceChunk.ContentJSON,
+			TextHash:    detail.SourceChunk.TextHash}
 	}
 	if detail.ExternalResource != nil {
 		resp.ExternalResource = &externalResourceResponse{ID: detail.ExternalResource.ID,

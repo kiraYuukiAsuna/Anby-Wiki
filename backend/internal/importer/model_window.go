@@ -220,8 +220,25 @@ func planModelChunkViews(chunks []modelSourceChunk) []map[string]any {
 	for index := range views {
 		result[index] = map[string]any{
 			"chunk_id": views[index].ID, "ordinal": views[index].Ordinal,
-			"text": views[index].TextContent, "locator": json.RawMessage(views[index].LocatorJSON),
+			"chunk_type": modelChunkType(views[index]),
+			"text":       views[index].TextContent,
+			"locator":    json.RawMessage(views[index].LocatorJSON),
+			"content":    modelChunkContent(views[index]),
 		}
 	}
 	return result
+}
+
+func modelChunkType(chunk evidence.SourceChunk) string {
+	if evidence.IsValidSourceChunkType(chunk.ChunkType) {
+		return chunk.ChunkType
+	}
+	return evidence.SourceChunkTypeText
+}
+
+func modelChunkContent(chunk evidence.SourceChunk) json.RawMessage {
+	if len(chunk.ContentJSON) == 0 {
+		return json.RawMessage(`{}`)
+	}
+	return json.RawMessage(chunk.ContentJSON)
 }

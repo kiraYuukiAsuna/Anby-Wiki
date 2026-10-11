@@ -25,3 +25,9 @@ M7-T02 已建立 HttpOnly 服务端 session，但 SameSite 不能替代写请求
 - 静态 CSP 为兼容 Next 当前内联 bootstrap 保留 `script-src 'unsafe-inline'`；后续可用每请求 nonce 收紧，但会迫使动态渲染并影响缓存。
 - IP 限流是边界保护而非业务配额；多副本部署时如需全局配额，应另行引入共享限流服务。
 - 安全扫描是阻断门禁。上游尚无兼容修复时，发布保持阻塞而不是降低 audit level。
+
+## 后续修订
+
+ADR-0022 为复杂 PDF 双轨解析把导入文件上限提升为 300 MiB，并同步把 API/Nginx
+multipart envelope 提升为 301 MiB。独立 upload 速率桶、内容类型、magic、恶意签名、
+对象存储哈希和 Worker 二次复核继续保留；本 ADR 的原 10/11 MiB 数值不再适用。

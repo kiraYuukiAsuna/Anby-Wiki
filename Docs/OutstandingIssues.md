@@ -153,6 +153,28 @@
 3. 让 Import/AI Proposal 使用对应机器 Actor，同时保留 human 发起者的可见性与权限。
 4. 增加 `untrusted/assisted/trusted` 三档策略、抽样命中和管理员更新成功路径 E2E。
 
+## 8. 复杂 PDF 多模态链路尚未完成真实供应商验收
+
+### 8.1 现状
+
+- 文本与视觉双轨 Parser、逐页 Poppler 渲染、页面分析 Schema、AI Kernel 图片输入、
+  SourceVersion/SourceChunk 持久化、Extraction/ImportPlan 映射及管理端配置探针均已实现。
+- 本地测试已覆盖真实 Poppler 页文本/栅格化与伪造视觉模型输出，AI Kernel 测试已覆盖
+  OpenAI-compatible 图片消息格式；当前环境没有可用的外部多模态模型凭据，因此尚未
+  用真实复杂 PDF 完成 Provider → Worker → Proposal 的端到端调用。
+- 300 MiB 文件目前会在 API 与 Worker 校验阶段完整读入内存；安全上限已一致，但尚未
+  在目标 Worker 规格上验证并发上传、逐页视觉调用的峰值内存、成本和两小时任务窗口。
+
+### 8.2 关闭条件
+
+1. 用管理员配置的目标多模态模型通过文本与图片双探针，并记录模型版本和供应商能力。
+2. 使用文本型、扫描型、多栏、跨页表格和多图表 PDF 跑完整导入，核对页码、章节路径、
+   区域、表头、图例、数值、单位、精确引文及最终 Proposal。
+3. 验证畸形 PDF、模型超时、单页失败、500 页边界、Worker 重启和重试不会发布部分
+   SourceVersion，且解析制品与用量审计可追踪。
+4. 在目标资源规格上记录 300 MiB 文件和三页并发分析的内存峰值、耗时与成本；必要时
+   再把上传和 Worker 获取改为流式校验及临时文件解析。
+
 ## 本轮已关闭
 
 - Agent CLI：Go CLI 已通过嵌入 OpenAPI 覆盖全部 HTTP operation，并单独覆盖 Yjs
@@ -210,8 +232,9 @@
   API/Worker/Web/Redis/MinIO/Meilisearch 联调和 Doctor 均已完成。
 - 可重建投影与异步恢复：全量重建 0 失败，一致性状态 30/30，旧
   `claim.changed` dead 事件兼容回放成功，当前 Outbox 为 0 backlog/0 dead。
-- 多格式导入：文本、JSON、CSV、图片 OCR 与扫描 PDF OCR 均通过真实解析；文本、
-  PNG、JSON、CSV Job 经完整 Worker 管线生成 Proposal，浏览器重开后仍可找回。
+- 多格式导入基础链路：文本、JSON、CSV、图片 OCR 与旧扫描 PDF 本地 OCR 均通过真实
+  解析；文本、PNG、JSON、CSV Job 经完整 Worker 管线生成 Proposal，浏览器重开后仍
+  可找回。当前复杂 PDF 双轨链路的真实多模态验收见问题 8。
 - Revision 冷热分层：非当前快照经领域服务写入 MinIO 并切换 cold tier，历史读取
   端点完成哈希校验和透明回源。
 

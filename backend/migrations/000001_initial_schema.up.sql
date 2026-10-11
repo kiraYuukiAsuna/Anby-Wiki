@@ -758,18 +758,30 @@ CREATE TABLE source_version (
     version_hash       text        NOT NULL,
     raw_asset_id       uuid        REFERENCES asset_revision (id),
     extracted_asset_id uuid        REFERENCES asset_revision (id),
+    parse_track        text        NOT NULL
+                                 CHECK (parse_track IN ('text', 'vision', 'hybrid')),
+    parser_name        text        NOT NULL,
+    parser_version     text        NOT NULL,
+    parser_fingerprint text        NOT NULL CHECK (parser_fingerprint ~ '^[0-9a-f]{64}$'),
+    parse_metadata_json jsonb      NOT NULL DEFAULT '{}'::jsonb
+                                 CHECK (jsonb_typeof(parse_metadata_json) = 'object'),
     fetched_at         timestamptz NOT NULL,
     created_at         timestamptz NOT NULL DEFAULT now()
 );
 
-CREATE UNIQUE INDEX source_version_source_hash_key ON source_version (source_id, version_hash);
+CREATE UNIQUE INDEX source_version_source_parser_key
+    ON source_version (source_id, version_hash, parser_fingerprint);
 
 CREATE TABLE source_chunk (
     id                uuid        PRIMARY KEY,
     source_version_id uuid        NOT NULL REFERENCES source_version (id),
     ordinal           integer     NOT NULL,
+    chunk_type        text        NOT NULL
+                                CHECK (chunk_type IN ('text', 'table', 'chart', 'figure', 'page')),
     locator_json      jsonb       NOT NULL DEFAULT '{}'::jsonb,
     text_content      text        NOT NULL,
+    content_json      jsonb       NOT NULL DEFAULT '{}'::jsonb
+                                CHECK (jsonb_typeof(content_json) = 'object'),
     text_hash         text        NOT NULL,
     created_at        timestamptz NOT NULL DEFAULT now()
 );

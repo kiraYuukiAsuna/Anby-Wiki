@@ -1,0 +1,90 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://anby.wiki/schemas/document-page-analysis/v1/page.schema.json",
+  "title": "Anby Wiki Document Page Analysis v1",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_version",
+    "page",
+    "section_path",
+    "elements",
+    "warnings",
+    "quality_score"
+  ],
+  "properties": {
+    "schema_version": { "const": 1 },
+    "page": { "type": "integer", "minimum": 1 },
+    "section_path": {
+      "type": "array",
+      "items": { "type": "string", "minLength": 1, "maxLength": 500 },
+      "maxItems": 12
+    },
+    "elements": {
+      "type": "array",
+      "maxItems": 200,
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "kind",
+          "title",
+          "text",
+          "summary",
+          "section_path",
+          "region",
+          "structured_data",
+          "confidence"
+        ],
+        "properties": {
+          "kind": {
+            "enum": ["text", "table", "chart", "figure"]
+          },
+          "title": { "type": "string", "maxLength": 500 },
+          "text": { "type": "string", "minLength": 1, "maxLength": 120000 },
+          "summary": { "type": "string", "maxLength": 8000 },
+          "section_path": {
+            "type": "array",
+            "items": { "type": "string", "minLength": 1, "maxLength": 500 },
+            "maxItems": 12
+          },
+          "region": {
+            "anyOf": [
+              { "type": "null" },
+              {
+                "type": "object",
+                "additionalProperties": false,
+                "required": ["x", "y", "width", "height"],
+                "properties": {
+                  "x": { "type": "integer", "minimum": 0, "maximum": 1000 },
+                  "y": { "type": "integer", "minimum": 0, "maximum": 1000 },
+                  "width": { "type": "integer", "minimum": 1, "maximum": 1000 },
+                  "height": { "type": "integer", "minimum": 1, "maximum": 1000 }
+                }
+              }
+            ]
+          },
+          "structured_data": {
+            "type": "object",
+            "additionalProperties": true
+          },
+          "confidence": {
+            "type": "number",
+            "minimum": 0,
+            "maximum": 1
+          }
+        }
+      }
+    },
+    "warnings": {
+      "type": "array",
+      "items": { "type": "string", "minLength": 1, "maxLength": 500 },
+      "maxItems": 50
+    },
+    "quality_score": {
+      "type": "number",
+      "minimum": 0,
+      "maximum": 1
+    }
+  }
+}

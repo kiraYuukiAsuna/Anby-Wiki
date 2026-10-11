@@ -25,7 +25,7 @@ import (
 const (
 	ImportPlanSchemaURL           = "https://anby.wiki/schemas/import-plan/v1/plan.schema.json"
 	ImportPlanGenerationSchemaURL = "https://anby.wiki/schemas/import-plan-generation/v1/plan.schema.json"
-	ImportPlanPromptKey           = "source-import-plan-v7"
+	ImportPlanPromptKey           = "source-import-plan-v8"
 	planBatchConcurrency          = 3
 	planLeafValidationAttempts    = 3
 

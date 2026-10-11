@@ -14,6 +14,7 @@ import (
 	"github.com/google/uuid"
 
 	authdomain "github.com/anby/wiki/backend/internal/auth"
+	"github.com/anby/wiki/backend/internal/importer"
 	"github.com/anby/wiki/backend/internal/platform/httpx"
 	"github.com/anby/wiki/backend/internal/platform/observability"
 	"github.com/anby/wiki/backend/internal/platform/ratelimit"
@@ -21,7 +22,7 @@ import (
 
 const (
 	defaultRequestBodyLimit int64 = 2 << 20
-	uploadRequestBodyLimit  int64 = 11 << 20
+	uploadRequestBodyLimit  int64 = importer.DefaultMaxSourceBytes + (1 << 20)
 )
 
 // requestIDHeader 透传/回写请求 ID 的响应头。
@@ -224,7 +225,7 @@ func SecurityHeaders(next http.Handler) http.Handler {
 }
 
 // RequestBodyLimit retains the request-size boundary that previously lived in
-// the reverse proxy. Uploads get room for the 10 MiB file plus multipart
+// the reverse proxy. Uploads get room for the 300 MiB file plus multipart
 // framing; every other request is capped at 2 MiB.
 func RequestBodyLimit(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {

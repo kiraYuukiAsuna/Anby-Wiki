@@ -56,7 +56,7 @@ Compose 会把这些值注入容器环境，Docker 管理员可通过 `docker in
 应用与数据服务使用只读根文件系统、非 root 用户、capability drop 与
 `no-new-privileges`；持久数据只写根目录 `data/` 的宿主机绑定。Go API 接管原边界层职责：
 
-- 普通请求体 2 MiB，上传 envelope 11 MiB，文件内容仍限制 10 MiB；
+- 普通请求体 2 MiB，上传 envelope 301 MiB，文件内容限制 300 MiB；
 - auth、upload、general 三类 Redis 固定窗口限流；
 - production 清除可伪造的身份头；
 - API 添加 CSP、nosniff、frame 与 referrer 安全头。

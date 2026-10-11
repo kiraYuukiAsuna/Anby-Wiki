@@ -9,9 +9,7 @@ import (
 	_ "image/jpeg"
 	_ "image/png"
 	"io"
-	"os"
 	"os/exec"
-	"path/filepath"
 	"regexp"
 	"strconv"
 	"strings"
@@ -22,14 +20,11 @@ import (
 )
 
 const (
-	maxOCRPixels            = int64(40_000_000)
-	maxOCRTextBytes         = int64(16 << 20)
-	maxPDFInfoBytes         = int64(1 << 20)
-	maxPDFOCRPages          = 20
-	maxRasterizedImageBytes = int64(24 << 20)
-	maxRasterizedPageEdge   = 2400
-	tesseractOCRLanguages   = "chi_sim+eng"
-	tesseractOCREngine      = "tesseract"
+	maxOCRPixels          = int64(40_000_000)
+	maxOCRTextBytes       = int64(16 << 20)
+	maxPDFInfoBytes       = int64(1 << 20)
+	tesseractOCRLanguages = "chi_sim+eng"
+	tesseractOCREngine    = "tesseract"
 )
 
 var pdfPagesPattern = regexp.MustCompile(`(?m)^Pages:\s+([0-9]+)\s*$`)
@@ -78,50 +73,6 @@ func parseImageOCR(
 	return parseTesseractTSV(output, page, int32(config.Width), int32(config.Height))
 }
 
-func parsePDFOCR(ctx context.Context, content []byte) ([]TextBlock, error) {
-	if _, err := exec.LookPath("tesseract"); err != nil {
-		return nil, ErrOCRUnavailable
-	}
-	pdfInfoPath, err := exec.LookPath("pdfinfo")
-	if err != nil {
-		return nil, ErrPDFRasterizerUnavailable
-	}
-	rasterizerPath, err := exec.LookPath("pdftoppm")
-	if err != nil {
-		return nil, ErrPDFRasterizerUnavailable
-	}
-	pageCount, err := pdfPageCount(ctx, pdfInfoPath, content)
-	if err != nil {
-		return nil, err
-	}
-	if pageCount > maxPDFOCRPages {
-		return nil, ErrPDFPageLimitExceeded
-	}
-
-	blocks := make([]TextBlock, 0, pageCount)
-	for pageNumber := 1; pageNumber <= pageCount; pageNumber++ {
-		rendered, renderErr := renderPDFPage(
-			ctx, rasterizerPath, content, pageNumber,
-		)
-		if renderErr != nil {
-			return nil, renderErr
-		}
-		page := int32(pageNumber)
-		pageBlocks, ocrErr := parseImageOCR(ctx, rendered, &page)
-		if errors.Is(ocrErr, ErrOCRNoText) {
-			continue
-		}
-		if ocrErr != nil {
-			return nil, ocrErr
-		}
-		blocks = append(blocks, pageBlocks...)
-	}
-	if len(blocks) == 0 {
-		return nil, ErrOCRNoText
-	}
-	return blocks, nil
-}
-
 func pdfPageCount(
 	ctx context.Context,
 	pdfInfoPath string,
@@ -149,53 +100,6 @@ func pdfPageCount(
 		return 0, ErrParseFailed
 	}
 	return count, nil
-}
-
-func renderPDFPage(
-	ctx context.Context,
-	rasterizerPath string,
-	content []byte,
-	pageNumber int,
-) ([]byte, error) {
-	tempDirectory, err := os.MkdirTemp("", "anby-wiki-pdf-ocr-*")
-	if err != nil {
-		return nil, ErrParseFailed
-	}
-	defer os.RemoveAll(tempDirectory)
-
-	outputRoot := filepath.Join(tempDirectory, "page")
-	page := strconv.Itoa(pageNumber)
-	command := exec.CommandContext(
-		ctx,
-		rasterizerPath,
-		"-f", page,
-		"-l", page,
-		"-singlefile",
-		"-scale-to", strconv.Itoa(maxRasterizedPageEdge),
-		"-png",
-		"-",
-		outputRoot,
-	)
-	command.Env = []string{}
-	command.Stdin = bytes.NewReader(content)
-	command.Stdout = io.Discard
-	command.Stderr = io.Discard
-	if err := command.Run(); err != nil {
-		if ctx.Err() != nil {
-			return nil, ctx.Err()
-		}
-		return nil, ErrOCRFailed
-	}
-	outputPath := outputRoot + ".png"
-	info, err := os.Stat(outputPath)
-	if err != nil || info.Size() <= 0 || info.Size() > maxRasterizedImageBytes {
-		return nil, ErrOCRImageTooLarge
-	}
-	rendered, err := os.ReadFile(outputPath)
-	if err != nil {
-		return nil, ErrParseFailed
-	}
-	return rendered, nil
 }
 
 func readBoundedCommandOutput(
@@ -317,6 +221,7 @@ func parseTesseractTSV(
 			confidence = line.confidenceTotal / float64(line.confidenceWords) / 100
 		}
 		blocks = append(blocks, TextBlock{
+			Kind: "text",
 			Text: text,
 			Page: page,
 			ImageRegion: &evidence.ImageRegion{

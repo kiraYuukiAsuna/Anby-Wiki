@@ -22,6 +22,19 @@
     },
     "system_prompt": { "type": "string", "minLength": 1 },
     "user_prompt": { "type": "string", "minLength": 1 },
-    "json_schema": { "type": "object" }
+    "json_schema": { "type": "object" },
+    "images": {
+      "type": "array",
+      "maxItems": 4,
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["media_type", "data_base64"],
+        "properties": {
+          "media_type": { "enum": ["image/jpeg", "image/png"] },
+          "data_base64": { "type": "string", "minLength": 1, "maxLength": 22400000 }
+        }
+      }
+    }
   }
 }

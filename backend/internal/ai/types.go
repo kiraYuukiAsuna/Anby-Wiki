@@ -61,8 +61,16 @@ type Request struct {
 	Model       string
 	PromptKey   string
 	Variables   map[string]any
+	Images      []ImageInput
 	ImportJobID *uuid.UUID
 	ImportRunID *uuid.UUID
+}
+
+// ImageInput is one bounded visual input for a structured model request.
+// Data remains in memory only for the provider call and must never be logged.
+type ImageInput struct {
+	MediaType string
+	Data      []byte
 }
 
 type Result struct {
@@ -81,6 +89,7 @@ type ProviderRequest struct {
 	SystemPrompt string
 	UserPrompt   string
 	JSONSchema   json.RawMessage
+	Images       []ImageInput
 }
 
 type ProviderResponse struct {

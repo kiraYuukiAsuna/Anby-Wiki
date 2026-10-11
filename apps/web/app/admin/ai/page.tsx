@@ -16,8 +16,8 @@ export default function AIConfigPage() {
           AI 模型配置
         </h1>
         <p className="mt-4 max-w-3xl text-sm leading-7 text-muted-foreground">
-          管理来源抽取使用的模型、超时和重试策略。供应商密钥会在服务端加密保存，
-          不写入环境变量，也不会从管理接口再次返回。
+          管理文本抽取与复杂 PDF 视觉分析共用的多模态模型、超时和重试策略。
+          供应商密钥会在服务端加密保存，不写入环境变量，也不会从管理接口再次返回。
         </p>
       </header>
       <AIConfigWorkspace />

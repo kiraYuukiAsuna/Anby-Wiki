@@ -44,7 +44,7 @@ export interface AIConfig {
      */
     baseUrl: string;
     /**
-     *
+     * 同时用于来源抽取和复杂 PDF 逐页视觉分析，必须支持文本、图片输入与结构化 JSON 输出。
      * @type {string}
      * @memberof AIConfig
      */

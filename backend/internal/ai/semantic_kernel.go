@@ -3,6 +3,7 @@ package ai
 import (
 	"bytes"
 	"context"
+	"encoding/base64"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -66,11 +67,17 @@ func NewSemanticKernelProvider(
 }
 
 type semanticKernelGenerateRequest struct {
-	Version      int                  `json:"version"`
-	Config       semanticKernelConfig `json:"config"`
-	SystemPrompt string               `json:"system_prompt"`
-	UserPrompt   string               `json:"user_prompt"`
-	JSONSchema   json.RawMessage      `json:"json_schema"`
+	Version      int                   `json:"version"`
+	Config       semanticKernelConfig  `json:"config"`
+	SystemPrompt string                `json:"system_prompt"`
+	UserPrompt   string                `json:"user_prompt"`
+	JSONSchema   json.RawMessage       `json:"json_schema"`
+	Images       []semanticKernelImage `json:"images,omitempty"`
+}
+
+type semanticKernelImage struct {
+	MediaType string `json:"media_type"`
+	Data      string `json:"data_base64"`
 }
 
 type semanticKernelConfig struct {
@@ -103,6 +110,13 @@ func (p *SemanticKernelProvider) Generate(ctx context.Context, request ProviderR
 	if err != nil {
 		return nil, &ProviderError{Code: "configuration_unavailable", Err: err}
 	}
+	images := make([]semanticKernelImage, len(request.Images))
+	for index := range request.Images {
+		images[index] = semanticKernelImage{
+			MediaType: request.Images[index].MediaType,
+			Data:      base64.StdEncoding.EncodeToString(request.Images[index].Data),
+		}
+	}
 	body, err := json.Marshal(semanticKernelGenerateRequest{
 		Version: semanticKernelProtocolVersion,
 		Config: semanticKernelConfig{
@@ -111,7 +125,7 @@ func (p *SemanticKernelProvider) Generate(ctx context.Context, request ProviderR
 			RequestTimeoutSeconds: config.RequestTimeoutSeconds, MaxAttempts: config.MaxAttempts,
 		},
 		SystemPrompt: request.SystemPrompt, UserPrompt: request.UserPrompt,
-		JSONSchema: request.JSONSchema,
+		JSONSchema: request.JSONSchema, Images: images,
 	})
 	if err != nil {
 		return nil, fmt.Errorf("ai: 构造 Semantic Kernel 请求失败: %w", err)

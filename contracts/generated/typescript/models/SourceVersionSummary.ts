@@ -33,6 +33,36 @@ export interface SourceVersionSummary {
     versionHash: string;
     /**
      *
+     * @type {SourceVersionSummaryParseTrackEnum}
+     * @memberof SourceVersionSummary
+     */
+    parseTrack: SourceVersionSummaryParseTrackEnum;
+    /**
+     *
+     * @type {string}
+     * @memberof SourceVersionSummary
+     */
+    parserName: string;
+    /**
+     *
+     * @type {string}
+     * @memberof SourceVersionSummary
+     */
+    parserVersion: string;
+    /**
+     *
+     * @type {string}
+     * @memberof SourceVersionSummary
+     */
+    parserFingerprint: string;
+    /**
+     *
+     * @type {{ [key: string]: any; }}
+     * @memberof SourceVersionSummary
+     */
+    parseMetadata: { [key: string]: any; };
+    /**
+     *
      * @type {Date}
      * @memberof SourceVersionSummary
      */
@@ -45,12 +75,29 @@ export interface SourceVersionSummary {
     createdAt: Date;
 }
 
+
+/**
+ * @export
+ */
+export const SourceVersionSummaryParseTrackEnum = {
+    Text: 'text',
+    Vision: 'vision',
+    Hybrid: 'hybrid'
+} as const;
+export type SourceVersionSummaryParseTrackEnum = typeof SourceVersionSummaryParseTrackEnum[keyof typeof SourceVersionSummaryParseTrackEnum];
+
+
 /**
  * Check if a given object implements the SourceVersionSummary interface.
  */
 export function instanceOfSourceVersionSummary(value: object): value is SourceVersionSummary {
     if (!('id' in value) || value['id'] === undefined) return false;
     if ((!('versionHash' in (value as Record<string, any>)) && !('version_hash' in (value as Record<string, any>))) || ((value as Record<string, any>)['versionHash'] === undefined && (value as Record<string, any>)['version_hash'] === undefined)) return false;
+    if ((!('parseTrack' in (value as Record<string, any>)) && !('parse_track' in (value as Record<string, any>))) || ((value as Record<string, any>)['parseTrack'] === undefined && (value as Record<string, any>)['parse_track'] === undefined)) return false;
+    if ((!('parserName' in (value as Record<string, any>)) && !('parser_name' in (value as Record<string, any>))) || ((value as Record<string, any>)['parserName'] === undefined && (value as Record<string, any>)['parser_name'] === undefined)) return false;
+    if ((!('parserVersion' in (value as Record<string, any>)) && !('parser_version' in (value as Record<string, any>))) || ((value as Record<string, any>)['parserVersion'] === undefined && (value as Record<string, any>)['parser_version'] === undefined)) return false;
+    if ((!('parserFingerprint' in (value as Record<string, any>)) && !('parser_fingerprint' in (value as Record<string, any>))) || ((value as Record<string, any>)['parserFingerprint'] === undefined && (value as Record<string, any>)['parser_fingerprint'] === undefined)) return false;
+    if ((!('parseMetadata' in (value as Record<string, any>)) && !('parse_metadata' in (value as Record<string, any>))) || ((value as Record<string, any>)['parseMetadata'] === undefined && (value as Record<string, any>)['parse_metadata'] === undefined)) return false;
     if ((!('fetchedAt' in (value as Record<string, any>)) && !('fetched_at' in (value as Record<string, any>))) || ((value as Record<string, any>)['fetchedAt'] === undefined && (value as Record<string, any>)['fetched_at'] === undefined)) return false;
     if ((!('createdAt' in (value as Record<string, any>)) && !('created_at' in (value as Record<string, any>))) || ((value as Record<string, any>)['createdAt'] === undefined && (value as Record<string, any>)['created_at'] === undefined)) return false;
     return true;
@@ -68,6 +115,11 @@ export function SourceVersionSummaryFromJSONTyped(json: any, ignoreDiscriminator
 
         'id': json['id'],
         'versionHash': json['version_hash'],
+        'parseTrack': json['parse_track'],
+        'parserName': json['parser_name'],
+        'parserVersion': json['parser_version'],
+        'parserFingerprint': json['parser_fingerprint'],
+        'parseMetadata': json['parse_metadata'],
         'fetchedAt': (new Date(json['fetched_at'])),
         'createdAt': (new Date(json['created_at'])),
     };
@@ -86,6 +138,11 @@ export function SourceVersionSummaryToJSONTyped(value?: SourceVersionSummary | n
 
         'id': value['id'],
         'version_hash': value['versionHash'],
+        'parse_track': value['parseTrack'],
+        'parser_name': value['parserName'],
+        'parser_version': value['parserVersion'],
+        'parser_fingerprint': value['parserFingerprint'],
+        'parse_metadata': value['parseMetadata'],
         'fetched_at': value['fetchedAt'].toISOString(),
         'created_at': value['createdAt'].toISOString(),
     };

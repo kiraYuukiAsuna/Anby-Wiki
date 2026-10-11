@@ -38,9 +38,11 @@ type URLPolicy struct {
 	AllowedPorts map[string]bool
 }
 
+const DefaultMaxSourceBytes = int64(300 << 20)
+
 func DefaultURLPolicy() URLPolicy {
 	return URLPolicy{
-		MaxBytes: 10 << 20, MaxRedirects: 3,
+		MaxBytes: DefaultMaxSourceBytes, MaxRedirects: 3,
 		AllowedMIMEs: map[string]bool{
 			"text/html":        true,
 			"text/plain":       true,
