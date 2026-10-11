@@ -15,8 +15,9 @@ Yjs update、持久恢复、普通发布与 AI 合并的 sequence CAS、同标�
 
 当前代码已通过编译、契约、依赖安全和部署静态门禁，并在本机隔离环境完成
 PostgreSQL、Redis、MinIO、Meilisearch、API、Linux Worker 与 Next.js Web 的真实
-联调。提交 `0196ec6` 已在远端生产拓扑完成六个 OCI target 构建、迁移 gate、Doctor、
-滚动替换和健康检查。另一个完全隔离的远端数据库/bucket/index/Redis DB 已执行
+联调。提交 `c1163d0` 已在远端生产拓扑完成六个 OCI target 构建、迁移 gate、Doctor、
+滚动替换和健康检查，并通过复杂 PDF/扫描件、提示注入、Provider 故障恢复、上传幂等、
+501 页边界和在途 Worker restart 验收。另一个完全隔离的远端数据库/bucket/index/Redis DB 已执行
 149/149 OpenAPI operation handler 探针、核心成功工作流、治理、批量审核、导入、
 AI 配置和双用户协作 E2E。“实现完成”仍不等于“生产发布就绪”：目标规模容量、正式域名
 安全边界、账号恢复、备份恢复与人工可访问性等仍须验收。详见
@@ -89,6 +90,23 @@ AI 配置和双用户协作 E2E。“实现完成”仍不等于“生产发布�
   单任务恢复窗口为 2 小时。任一页面分析失败时 Parse stage 整体失败，不发布部分版本。
 - 本次按预发布策略直接修改唯一初始化 Schema，不兼容旧 SourceVersion/SourceChunk
   行；部署验证必须使用重建后的空库。
+
+## 2026-10-11 复杂文档生产验收
+
+- Prompt Registry 会在代码请求版本高于当前活动版本时原子创建并激活新版本，同时
+  保留更高的运维版本。生产 `document-page-analysis-v1` 已从 version 1 升级到
+  version 2，Schema 越界 locator 先容错再由 Go 裁剪或省略。
+- 事实抽取低于质量门槛但未检测到提示注入时，只丢弃不可信 Entity/Claim enrichment，
+  继续由不可变原文 Chunk 生成 ImportPlan；提示注入仍以 `quality_gate` 硬失败。
+- 真实三页论文和混合扫描 PDF 已完成七阶段导入并拒绝测试 Proposal；纯扫描件低于
+  0.70 时进入 `action_required`，扫描提示注入不会生成 Proposal。
+- AI Kernel 不可用会稳定分类为 `extraction_provider_failed`。恢复后重试复用同一
+  SourceVersion，fetch/parse 显式标记 `skipped`；错误 Job 不隐藏已完成的解析证据。
+- Worker 使用 `2h5m` stop grace 覆盖两小时导入窗口。生产复杂 PDF 在 parse 阶段执行
+  Compose restart，等待 55 秒完成单一 Run 后健康重启，无 `worker_interrupted`。
+- 截断 PDF 和 501 页 PDF 分别以 `parse_failed`、`pdf_page_limit_exceeded` 原子失败；
+  上传幂等冲突返回 409 且不修改当前 Asset Revision。完整证据见
+  [商业验收报告](CommercialAcceptance-2026-10-11.md)。
 
 ## 2026-09-21 导入更新精炼与扩张门禁
 

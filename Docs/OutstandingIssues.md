@@ -153,27 +153,31 @@
 3. 让 Import/AI Proposal 使用对应机器 Actor，同时保留 human 发起者的可见性与权限。
 4. 增加 `untrusted/assisted/trusted` 三档策略、抽样命中和管理员更新成功路径 E2E。
 
-## 8. 复杂 PDF 多模态链路尚未完成真实供应商验收
+## 8. 复杂文档大文件与供应商成本边界尚未验收
 
 ### 8.1 现状
 
 - 文本与视觉双轨 Parser、逐页 Poppler 渲染、页面分析 Schema、AI Kernel 图片输入、
   SourceVersion/SourceChunk 持久化、Extraction/ImportPlan 映射及管理端配置探针均已实现。
-- 本地测试已覆盖真实 Poppler 页文本/栅格化与伪造视觉模型输出，AI Kernel 测试已覆盖
-  OpenAI-compatible 图片消息格式；当前环境没有可用的外部多模态模型凭据，因此尚未
-  用真实复杂 PDF 完成 Provider → Worker → Proposal 的端到端调用。
-- 300 MiB 文件目前会在 API 与 Worker 校验阶段完整读入内存；安全上限已一致，但尚未
-  在目标 Worker 规格上验证并发上传、逐页视觉调用的峰值内存、成本和两小时任务窗口。
+- `c1163d0` 已在正式域名使用真实多模态 Provider 完成三页论文、原生文本+扫描混合、
+  纯扫描表格和扫描提示注入语料。成功路径生成的 Proposal 均已通过治理 API 拒绝；
+  低于 0.70 的结果进入 `action_required`，提示注入在 Extraction 失败且不生成 Proposal。
+- 畸形 PDF、501 页边界、上传幂等冲突、AI Kernel 不可用/恢复重试及在途 Worker
+  Compose restart 均已通过。重试复用不可变 SourceVersion；Worker 在 parse 阶段收到
+  restart 后等待 55 秒完成单一 Run，再健康启动。
+- 三页并发视觉分析的目标机峰值为 API 145.2 MiB、AI Kernel 119.7 MiB、Web 45.3 MiB、
+  Worker 20.2 MiB。Doctor、Outbox backlog/dead 与 Projection error 均为 0。
+- 300 MiB 文件目前仍会在 API 与 Worker 校验阶段完整读入内存；尚未验证该上限文件、
+  多任务并发、真实供应商超时/限流和账单成本。
 
 ### 8.2 关闭条件
 
-1. 用管理员配置的目标多模态模型通过文本与图片双探针，并记录模型版本和供应商能力。
-2. 使用文本型、扫描型、多栏、跨页表格和多图表 PDF 跑完整导入，核对页码、章节路径、
-   区域、表头、图例、数值、单位、精确引文及最终 Proposal。
-3. 验证畸形 PDF、模型超时、单页失败、500 页边界、Worker 重启和重试不会发布部分
-   SourceVersion，且解析制品与用量审计可追踪。
-4. 在目标资源规格上记录 300 MiB 文件和三页并发分析的内存峰值、耗时与成本；必要时
-   再把上传和 Worker 获取改为流式校验及临时文件解析。
+1. 在目标资源规格上记录 300 MiB 文件及多任务并发的 API/Worker 峰值、耗时和失败恢复；
+   超出预算时改为流式校验与临时文件解析。
+2. 用真实供应商超时、限流和配额耗尽场景验证告警、重试、错误分类与账单成本。
+3. 补充长文档跨页表格/图表回归集，并定义模型升级后的固定质量基线和抽样频率。
+
+已完成证据见 [商业验收报告](CommercialAcceptance-2026-10-11.md)。
 
 ## 本轮已关闭
 
