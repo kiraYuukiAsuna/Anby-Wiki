@@ -53,6 +53,39 @@ func TestSemanticKernelProviderMapsStructuredOutputFailure(t *testing.T) {
 	}
 }
 
+func TestSemanticKernelProviderClassifiesUnavailableKernel(t *testing.T) {
+	server := httptest.NewServer(http.NotFoundHandler())
+	endpoint := server.URL
+	server.Close()
+
+	provider, err := NewSemanticKernelProvider(
+		endpoint,
+		"internal-token",
+		SemanticKernelConfigResolverFunc(func(context.Context) (*SemanticKernelConfig, error) {
+			return &SemanticKernelConfig{
+				Provider: "deepseek", BaseURL: "https://api.deepseek.com",
+				APIKey: "secret", Model: "model", ResponseFormat: "json_object",
+				RequestTimeoutSeconds: 30, MaxAttempts: 2,
+			}, nil
+		}),
+		nil,
+	)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	_, err = provider.Generate(context.Background(), ProviderRequest{
+		SystemPrompt: "system", UserPrompt: "user", JSONSchema: []byte(`{"type":"object"}`),
+	})
+	if !errors.Is(err, ErrProvider) {
+		t.Fatalf("unavailable kernel must be classified as provider failure: %v", err)
+	}
+	var providerErr *ProviderError
+	if !errors.As(err, &providerErr) || providerErr.Code != "kernel_unavailable" || !providerErr.Temporary {
+		t.Fatalf("unexpected unavailable kernel error: %v", err)
+	}
+}
+
 func TestSemanticKernelProviderEncodesImageInputs(t *testing.T) {
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		var body struct {

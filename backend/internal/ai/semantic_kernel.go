@@ -141,12 +141,18 @@ func (p *SemanticKernelProvider) Generate(ctx context.Context, request ProviderR
 		if errors.Is(err, context.DeadlineExceeded) || errors.Is(ctx.Err(), context.DeadlineExceeded) {
 			return nil, ErrTimeout
 		}
-		return nil, &ProviderError{Code: "kernel_unavailable", Temporary: true, Err: err}
+		return nil, &ProviderError{
+			Code: "kernel_unavailable", Temporary: true,
+			Err: fmt.Errorf("%w: %v", ErrProvider, err),
+		}
 	}
 	defer response.Body.Close()
 	payload, err := io.ReadAll(io.LimitReader(response.Body, 4<<20))
 	if err != nil {
-		return nil, &ProviderError{Code: "kernel_response_read", Temporary: true, Err: err}
+		return nil, &ProviderError{
+			Code: "kernel_response_read", Temporary: true,
+			Err: fmt.Errorf("%w: %v", ErrProvider, err),
+		}
 	}
 	if response.StatusCode < 200 || response.StatusCode >= 300 {
 		var kernelErr semanticKernelError
