@@ -1,6 +1,6 @@
 # 当前实现状态
 
-> 更新时间：2026-10-11
+> 更新时间：2026-10-12
 > 产品与能力审计依据：[整体设计方案](WikiDesignOnePage.md)
 
 ## 总体结论
@@ -15,9 +15,10 @@ Yjs update、持久恢复、普通发布与 AI 合并的 sequence CAS、同标�
 
 当前代码已通过编译、契约、依赖安全和部署静态门禁，并在本机隔离环境完成
 PostgreSQL、Redis、MinIO、Meilisearch、API、Linux Worker 与 Next.js Web 的真实
-联调。提交 `c1163d0` 已在远端生产拓扑完成六个 OCI target 构建、迁移 gate、Doctor、
+联调。提交 `e87e9a8` 已在远端生产拓扑完成六个 OCI target 构建、迁移 gate、Doctor、
 滚动替换和健康检查，并通过复杂 PDF/扫描件、提示注入、Provider 故障恢复、上传幂等、
-501 页边界和在途 Worker restart 验收。另一个完全隔离的远端数据库/bucket/index/Redis DB 已执行
+501 页边界、在途 Worker restart 及关联文档正逆序验收。另一个完全隔离的远端
+数据库/bucket/index/Redis DB 已执行
 149/149 OpenAPI operation handler 探针、核心成功工作流、治理、批量审核、导入、
 AI 配置和双用户协作 E2E。“实现完成”仍不等于“生产发布就绪”：目标规模容量、正式域名
 安全边界、账号恢复、备份恢复与人工可访问性等仍须验收。详见
@@ -107,6 +108,17 @@ AI 配置和双用户协作 E2E。“实现完成”仍不等于“生产发布�
 - 截断 PDF 和 501 页 PDF 分别以 `parse_failed`、`pdf_page_limit_exceeded` 原子失败；
   上传幂等冲突返回 409 且不修改当前 Asset Revision。完整证据见
   [商业验收报告](CommercialAcceptance-2026-10-11.md)。
+- 三份各 3 页且互相引用的架构、运维、事故文档已分别按正序和逆序合并验收。两种顺序
+  均稳定生成 26 个 Chunk、覆盖 9 页和 19 个页内区域，并只规划三个指定页面；低于
+  0.70 的结果保持在 `action_required`，未生成 Proposal。
+- 顺序扰动曾暴露模型把 `operationalizes`、`remains authoritative` 误判为 `updates`
+  的问题。关系候选现在必须由直接方向证据支持；同 Chunk 的 “It updates/obsoletes”
+  只有在 240 字符内存在唯一前置作品主语且中间无其他作品时才保留。不可变 Extraction
+  不回写，复用时重新执行确定性守卫。
+- ImportPlan `related_to` 只表示面向已存在 Page 的 link route；同时创建的新页面之间
+  的候选 Claim 不以该字段表达。最终生产版本为 `e87e9a8a458b`，CI `38156591183`
+  的 8 个 Job、Migration gate、全服务健康检查和只读 Doctor 均通过；active ImportJob、
+  开放导入 Proposal、Outbox backlog/dead 与 Projection error 均为 0。
 
 ## 2026-09-21 导入更新精炼与扩张门禁
 

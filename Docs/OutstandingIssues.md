@@ -159,9 +159,12 @@
 
 - 文本与视觉双轨 Parser、逐页 Poppler 渲染、页面分析 Schema、AI Kernel 图片输入、
   SourceVersion/SourceChunk 持久化、Extraction/ImportPlan 映射及管理端配置探针均已实现。
-- `c1163d0` 已在正式域名使用真实多模态 Provider 完成三页论文、原生文本+扫描混合、
+- `e87e9a8` 已在正式域名使用真实多模态 Provider 完成三页论文、原生文本+扫描混合、
   纯扫描表格和扫描提示注入语料。成功路径生成的 Proposal 均已通过治理 API 拒绝；
   低于 0.70 的结果进入 `action_required`，提示注入在 Extraction 失败且不生成 Proposal。
+- 三份各 3 页的关联架构、运维、事故文档已按正序和逆序合并验收。两次均得到 26 个
+  Chunk、9 页覆盖、19 个区域定位和三个指定 create route；顺序扰动暴露的错误
+  `updates` Claim 已由直接关系证据守卫修复，唯一前置主语的同 Chunk 代词证据仍可保留。
 - 畸形 PDF、501 页边界、上传幂等冲突、AI Kernel 不可用/恢复重试及在途 Worker
   Compose restart 均已通过。重试复用不可变 SourceVersion；Worker 在 parse 阶段收到
   restart 后等待 55 秒完成单一 Run，再健康启动。
@@ -175,7 +178,8 @@
 1. 在目标资源规格上记录 300 MiB 文件及多任务并发的 API/Worker 峰值、耗时和失败恢复；
    超出预算时改为流式校验与临时文件解析。
 2. 用真实供应商超时、限流和配额耗尽场景验证告警、重试、错误分类与账单成本。
-3. 补充长文档跨页表格/图表回归集，并定义模型升级后的固定质量基线和抽样频率。
+3. 在当前 9 页关联语料基础上补充更长文档、跨页表格/图表和更多语言回归集，并定义
+   模型升级后的固定质量基线和抽样频率。
 
 已完成证据见 [商业验收报告](CommercialAcceptance-2026-10-11.md)。
 

@@ -2,7 +2,7 @@
 
 ## 结论
 
-提交 `c1163d0` 已部署到 `https://anbywiki.momiya.cloud/`。复杂 PDF、扫描件、
+提交 `e87e9a8` 已部署到 `https://anbywiki.momiya.cloud/`。复杂 PDF、扫描件、
 多模态 Provider、不可变解析制品、ImportPlan、Proposal 治理、失败重试和 Worker
 优雅重启已达到 Internal Beta 的商业使用门槛。
 
@@ -11,12 +11,12 @@
 
 ## 发布门禁
 
-- GitHub Actions CI `38152894957`：backend、web、ai-kernel、contracts、
+- GitHub Actions CI `38156591183`：backend、web、ai-kernel、contracts、
   client-drift、migrations、security、deploy 共 8 个 Job 全部通过。
 - 本地：`go test ./...`、`make check` 通过；Docker 实例验证由 CI 与生产部署完成。
 - 生产：Migration gate `current=1 expected=1 compatible=1..1 dirty=false`；
   部署前后及最终只读 Doctor 均为 0 issue。
-- 当前 API/Worker/Web/AI Kernel 均为 `c1163d01d071` 且 healthy。
+- 当前 API/Worker/Web/AI Kernel 均为 `e87e9a8a458b` 且 healthy。
 
 ## 真实语料
 
@@ -24,6 +24,8 @@
 | --- | --- | --- |
 | 三页真实论文，多栏/图/表 | 成功 | 七阶段成功；3 page、2 figure、1 table；3 个图像定位；质量 0.970；Proposal 已拒绝 |
 | 原生文本与扫描页混合 PDF | 成功 | 七阶段成功；page/table/figure/text 齐全；质量 0.976；Proposal 已拒绝 |
+| 三份关联文档正序合并 | 安全降级 | 9 页、26 Chunk、19 个区域定位；恰好规划 3 个目标页面；质量 0.690；无 Proposal |
+| 同一关联文档逆序合并 | 安全降级 | Chunk 与路由形态不变；暴露并修复顺序敏感关系误判；质量 0.690；无 Proposal |
 | 纯扫描表格页 | 安全降级 | parse/extract/plan 成功；质量 0.690，进入 `action_required`；无 Proposal |
 | 扫描页提示注入 | 安全拒绝 | SourceVersion 保留；Extraction `quality_gate`；无 Proposal |
 | 截断但保留 PDF 签名 | 原子失败 | fetch 成功、parse `parse_failed`；无 SourceVersion/Proposal |
@@ -32,6 +34,30 @@
 真实论文 SourceVersion 使用 `hybrid` track、`anby-vision-pdf` parser 和 Prompt
 version 2。越界 locator 被裁剪或省略并写入安全 warning，正文、表格和图片 Chunk
 仍完整持久化。
+
+## 关联文档与顺序扰动
+
+固定语料由架构规范、运维手册和事故报告组成，每份 3 页，共 9 页。语料混合原生文本、
+扫描页、表格、图表、文档编号、日期冲突及跨文档引用，同时包含以下真假关系：
+
+- `AG-INC-042 updates AG-OPS-2026`；
+- `AG-OPS-2026 updates and obsoletes AG-OPS-2025`；
+- `AG-OPS-2026 operationalizes AG-ARCH-2026`，但不更新架构规范；
+- `AG-ARCH-2026 remains authoritative`，不能被误读为事故报告更新架构规范。
+
+正序 Job `01a12bd2-f0c2-7c1b-b573-5fb2cc2dc812` 与逆序 Job
+`01a12bd4-8c55-7987-8e46-c33fa29e84f6` 均通过 fetch、parse、extract、plan，
+稳定得到 7 page、8 table、3 figure、2 chart、6 text Chunk，覆盖第 1 至 9 页，
+并只生成 `AG-ARCH-2026`、`AG-OPS-2026`、`AG-INC-042` 三个 create route。
+
+逆序语料曾让模型把 `operationalizes` 和 `remains authoritative` 误写为 `updates`。
+服务端现在只接受由主语、方向标记和值直接连接的关系证据；对 “It updates and
+obsoletes ...” 仅在同一 Chunk 内存在 240 字符以内、无其他作品插入的唯一前置主语时
+放行。不可变历史 Extraction 不重写，读取时重新执行该确定性守卫。
+
+ImportPlan 的 `related_to` 只表示面向已存在 Page 的 link route，不表示候选 Claim
+或三条同时创建的页面之间的全部语义关系。因此当前无已发布目标页时 `related_to=[]`
+是契约语义，不是关联抽取失败。
 
 ## 故障与治理
 
@@ -43,7 +69,9 @@ version 2。越界 locator 被裁剪或省略并写入安全 warning，正文、
 - Worker restart：复杂 PDF 在 `parse` 阶段收到 Compose restart；Worker 等待 55 秒
   完成在途任务后退出并健康重启。Job 只有一个 Run，没有 `worker_interrupted`。
 - 测试生成的 Proposal 共 5 个，最终全部为 `rejected`；没有测试内容被批准或应用。
-- Outbox backlog/dead、Projection error 均为 0。
+- 本轮新增的关联文档任务均在 `action_required` 后取消，没有生成 Proposal。
+- 最终 active ImportJob、开放导入 Proposal、Outbox backlog/dead、Projection error
+  均为 0。
 
 ## 资源证据
 
@@ -65,4 +93,5 @@ version 2。越界 locator 被裁剪或省略并写入安全 warning，正文、
 1. 尚未执行 300 MiB 文件与多任务并发的峰值内存、耗时和供应商成本测试。
 2. 真实供应商超时/限流仍需结合账单与告警验证；本轮已验证内部 Kernel 不可用、
    错误分类、恢复和重试。
-3. 全产品商业发布仍受备份恢复、账号恢复/MFA、目标规模搜索容量及人工可访问性阻塞。
+3. 当前关联回归集为 9 页；还需扩展长文档跨页表格、更多语言和模型升级后的稳定性抽样。
+4. 全产品商业发布仍受备份恢复、账号恢复/MFA、目标规模搜索容量及人工可访问性阻塞。
