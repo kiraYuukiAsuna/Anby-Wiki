@@ -65,52 +65,47 @@ func (r *Registry) Register(ctx context.Context, key string, version int, system
 	return p, err
 }
 
-// EnsureActive returns an operator-selected active version when one exists;
-// otherwise it activates or creates the requested bootstrap version. This is
-// safe for concurrent Worker startup and never replaces a newer active prompt.
+// EnsureActive creates and activates a requested bundled prompt version when
+// the current active version is older. A newer operator-selected version is
+// preserved. Callers must increment version whenever bundled content changes.
 func (r *Registry) EnsureActive(ctx context.Context, key string, version int, system, user string, schema json.RawMessage) (*Prompt, error) {
-	if active, err := r.repo.ActivePrompt(ctx, key); err == nil {
+	if active, err := r.repo.ActivePrompt(ctx, key); err == nil && active.Version >= version {
 		return active, nil
-	} else if !errors.Is(err, ErrPromptNotFound) {
+	} else if err != nil && !errors.Is(err, ErrPromptNotFound) {
 		return nil, err
 	}
-	if existing, err := r.repo.PromptVersion(ctx, key, version); err == nil {
-		activated := false
-		err = r.txm.InTx(ctx, func(tx pgx.Tx) error {
-			var err error
-			activated, err = r.repo.ActivatePromptIfNone(ctx, tx, existing.ID, key)
-			return err
-		})
-		if err == nil && activated {
-			existing.Active = true
-			return existing, nil
-		}
-		if err == nil {
-			return r.repo.ActivePrompt(ctx, key)
-		}
-	} else if !errors.Is(err, ErrPromptNotFound) {
+
+	requested, err := r.repo.PromptVersion(ctx, key, version)
+	if err != nil && !errors.Is(err, ErrPromptNotFound) {
 		return nil, err
 	}
-	created, err := r.Register(ctx, key, version, system, user, schema, false)
+	if errors.Is(err, ErrPromptNotFound) {
+		requested, err = r.Register(ctx, key, version, system, user, schema, false)
+	}
 	if err != nil {
 		// A concurrent Worker may have inserted the same bootstrap version.
-		created, err = r.repo.PromptVersion(ctx, key, version)
+		requested, err = r.repo.PromptVersion(ctx, key, version)
 		if err != nil {
 			return nil, err
 		}
 	}
-	activated := false
+
 	err = r.txm.InTx(ctx, func(tx pgx.Tx) error {
-		var err error
-		activated, err = r.repo.ActivatePromptIfNone(ctx, tx, created.ID, key)
-		return err
+		active, activeErr := r.repo.activePromptForUpdate(ctx, tx, key)
+		switch {
+		case activeErr == nil && active.Version >= version:
+			return nil
+		case activeErr == nil:
+			return r.repo.ActivatePrompt(ctx, tx, requested.ID, key)
+		case !errors.Is(activeErr, ErrPromptNotFound):
+			return activeErr
+		default:
+			_, activateErr := r.repo.ActivatePromptIfNone(ctx, tx, requested.ID, key)
+			return activateErr
+		}
 	})
 	if err != nil {
 		return nil, err
-	}
-	if activated {
-		created.Active = true
-		return created, nil
 	}
 	return r.repo.ActivePrompt(ctx, key)
 }

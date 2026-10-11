@@ -205,9 +205,11 @@ func (p *Pipeline) run(ctx context.Context, request PipelineRequest, acquire acq
 	if threshold < DefaultQualityThreshold {
 		threshold = DefaultQualityThreshold
 	}
-	if !passesExtractionQualityGate(extracted.Candidates, threshold) {
+	planningCandidates, err := trustedPlanningCandidates(extracted.Candidates, threshold)
+	if err != nil {
 		return fail(current, "quality_gate", ErrQualityGate)
 	}
+	extracted.Candidates = planningCandidates
 	extractOutput := extracted.Extraction.ID.String()
 	if err := p.jobs.CompleteStage(ctx, request.JobID, current, &extractOutput); err != nil {
 		return nil, err
@@ -371,6 +373,22 @@ func passesExtractionQualityGate(candidates *Candidates, threshold float64) bool
 		confidence += candidates.Claims[index].Confidence
 	}
 	return count > 0 && candidates.QualityScore >= threshold/2 && confidence/float64(count) >= threshold
+}
+
+func trustedPlanningCandidates(candidates *Candidates, threshold float64) (*Candidates, error) {
+	if candidates == nil || candidates.PromptInjectionDetected {
+		return nil, ErrQualityGate
+	}
+	if passesExtractionQualityGate(candidates, threshold) {
+		return candidates, nil
+	}
+	return &Candidates{
+		SchemaVersion:   candidates.SchemaVersion,
+		SourceVersionID: candidates.SourceVersionID,
+		Entities:        []EntityCandidate{},
+		Claims:          []ClaimCandidate{},
+		QualityScore:    candidates.QualityScore,
+	}, nil
 }
 
 func (p *Pipeline) prepareParsedSource(

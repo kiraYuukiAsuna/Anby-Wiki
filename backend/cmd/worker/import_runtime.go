@@ -154,7 +154,7 @@ func assembleImportRunner(ctx context.Context, pool *pgxpool.Pool, cfg config.Co
 	if _, err := registry.EnsureActive(
 		ctx,
 		importer.DocumentPageAnalysisPromptKey,
-		1,
+		importer.DocumentPageAnalysisPromptVersion,
 		documentPageAnalysisPromptSystem,
 		documentPageAnalysisPromptUser,
 		importer.DocumentPageAnalysisSchemaJSON(),

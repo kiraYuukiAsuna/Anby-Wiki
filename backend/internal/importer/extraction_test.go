@@ -868,3 +868,26 @@ func TestPassesExtractionQualityGateAcceptsOnlyStrongVerifiedSalvage(t *testing.
 		t.Fatal("prompt injection must always fail")
 	}
 }
+
+func TestTrustedPlanningCandidatesDropsWeakEnrichmentButRejectsInjection(t *testing.T) {
+	sourceVersionID := uuid.New()
+	weak := &Candidates{
+		SchemaVersion: 1, SourceVersionID: sourceVersionID, QualityScore: 0.55,
+		Entities: []EntityCandidate{{Confidence: 0.68}},
+		Claims:   []ClaimCandidate{{Confidence: 0.69}},
+	}
+	trusted, err := trustedPlanningCandidates(weak, 0.7)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if trusted == weak || trusted.SourceVersionID != sourceVersionID ||
+		trusted.QualityScore != weak.QualityScore ||
+		len(trusted.Entities) != 0 || len(trusted.Claims) != 0 {
+		t.Fatalf("weak enrichment was not safely removed: %#v", trusted)
+	}
+
+	weak.PromptInjectionDetected = true
+	if _, err := trustedPlanningCandidates(weak, 0.7); !errors.Is(err, ErrQualityGate) {
+		t.Fatalf("prompt injection error=%v, want quality gate", err)
+	}
+}

@@ -21,13 +21,14 @@ import (
 )
 
 const (
-	DocumentPageAnalysisPromptKey = "document-page-analysis-v1"
-	visionPDFParserVersion        = "1"
-	maxAdvancedPDFPages           = 500
-	maxVisionPageImageBytes       = 16 << 20
-	maxVisionNativeTextRunes      = 24000
-	visionRenderEdge              = 2000
-	visionPageWorkers             = 3
+	DocumentPageAnalysisPromptKey     = "document-page-analysis-v1"
+	DocumentPageAnalysisPromptVersion = 2
+	visionPDFParserVersion            = "1"
+	maxAdvancedPDFPages               = 500
+	maxVisionPageImageBytes           = 16 << 20
+	maxVisionNativeTextRunes          = 24000
+	visionRenderEdge                  = 2000
+	visionPageWorkers                 = 3
 )
 
 //go:embed schema/document-page-analysis.schema.json

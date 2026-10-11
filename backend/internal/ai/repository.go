@@ -39,6 +39,16 @@ func (r *Repository) ActivePrompt(ctx context.Context, key string) (*Prompt, err
 	return p, err
 }
 
+func (r *Repository) activePromptForUpdate(ctx context.Context, tx pgx.Tx, key string) (*Prompt, error) {
+	p, err := scanPrompt(tx.QueryRow(ctx, `SELECT id,prompt_key,version,system_template,
+		user_template,output_schema_json,content_hash,active,created_at
+		FROM prompt_template WHERE prompt_key=$1 AND active FOR UPDATE`, key))
+	if errors.Is(err, pgx.ErrNoRows) {
+		return nil, fmt.Errorf("%w: key=%s", ErrPromptNotFound, key)
+	}
+	return p, err
+}
+
 func (r *Repository) PromptVersion(ctx context.Context, key string, version int) (*Prompt, error) {
 	p, err := scanPrompt(r.pool.QueryRow(ctx, `SELECT id,prompt_key,version,system_template,
 		user_template,output_schema_json,content_hash,active,created_at
