@@ -209,6 +209,13 @@ def schema_validation_feedback(error: jsonschema.ValidationError) -> str:
     )
 
 
+def schema_validation_location(error: jsonschema.ValidationError) -> str:
+    path = "$"
+    for item in error.absolute_path:
+        path += f"[{item}]" if isinstance(item, int) else f".{item}"
+    return f"{path} ({error.validator})"
+
+
 @app.get("/healthz")
 async def healthz() -> dict[str, Any]:
     return {"status": "ok", "version": PROTOCOL_VERSION}
@@ -321,7 +328,13 @@ async def generate(payload: GenerateRequest) -> JSONResponse:
                 )
             except jsonschema.ValidationError as exc:
                 if attempt + 1 >= config.max_attempts:
-                    return error_response(502, "invalid_structured_output", "model output failed schema validation", False)
+                    location = schema_validation_location(exc)
+                    return error_response(
+                        502,
+                        "invalid_structured_output",
+                        f"model output failed schema validation at {location}",
+                        False,
+                    )
                 history.add_user_message(schema_validation_feedback(exc))
             except (json.JSONDecodeError, TypeError, ValueError):
                 if attempt + 1 >= config.max_attempts:

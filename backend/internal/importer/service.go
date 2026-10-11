@@ -24,6 +24,16 @@ type Service struct {
 	ids  *id.Generator
 }
 
+type UploadIdentity struct {
+	Filename     string
+	MIMEType     string
+	ContentHash  string
+	Title        string
+	Instructions string
+	RouteMode    string
+	PageID       *uuid.UUID
+}
+
 const (
 	DefaultPageSize = 20
 	MaxPageSize     = 100
@@ -99,6 +109,44 @@ func (s *Service) Create(
 		return nil, err
 	}
 	if existing.JobType != jobType || !jsonEqual(existing.Config, canonical) {
+		return nil, ErrIdempotencyMismatch
+	}
+	return existing, nil
+}
+
+// FindUploadByKey resolves a completed upload preflight without repeating its
+// object-store or Asset side effects.
+func (s *Service) FindUploadByKey(
+	ctx context.Context,
+	actorID uuid.UUID,
+	key string,
+	expected UploadIdentity,
+) (*Job, error) {
+	key = strings.TrimSpace(key)
+	if key == "" {
+		return nil, ErrInvalidJob
+	}
+	existing, err := s.repo.GetJobByKey(ctx, actorID, key)
+	if err != nil {
+		return nil, err
+	}
+	config, err := decodeSourceImportConfig(existing.Config)
+	if err != nil {
+		return nil, err
+	}
+	samePage := config.PageID == nil && expected.PageID == nil
+	if config.PageID != nil && expected.PageID != nil {
+		samePage = *config.PageID == *expected.PageID
+	}
+	if existing.JobType != "source_import" ||
+		config.Source.Kind != "upload" ||
+		config.Source.Filename != expected.Filename ||
+		config.Source.MIMEType != expected.MIMEType ||
+		config.Source.ContentHash != expected.ContentHash ||
+		config.Title != expected.Title ||
+		config.Instructions != expected.Instructions ||
+		config.RouteMode != expected.RouteMode ||
+		!samePage {
 		return nil, ErrIdempotencyMismatch
 	}
 	return existing, nil

@@ -158,7 +158,10 @@ func (p *SemanticKernelProvider) Generate(ctx context.Context, request ProviderR
 		}
 		if kernelErr.Code == "invalid_schema" || kernelErr.Code == "invalid_structured_output" ||
 			kernelErr.Code == "output_truncated" {
-			return nil, &ProviderError{Code: kernelErr.Code, Err: ErrInvalidOutput}
+			return nil, &ProviderError{
+				Code: kernelErr.Code,
+				Err:  fmt.Errorf("%w: %s", ErrInvalidOutput, kernelErr.Message),
+			}
 		}
 		return nil, &ProviderError{
 			Code: kernelErr.Code, Temporary: kernelErr.Temporary,

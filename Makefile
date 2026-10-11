@@ -2,7 +2,11 @@
 
 WEB_DIR := apps/web
 BACKEND_DIR := backend
+AI_KERNEL_DIR := services/ai-kernel
 SH := sh
+PYTHON ?= python3.12
+AI_KERNEL_VENV := $(AI_KERNEL_DIR)/.venv
+AI_KERNEL_PYTHON := $(CURDIR)/$(AI_KERNEL_VENV)/bin/python
 GOVULNCHECK_VERSION := v1.1.4
 GITLEAKS_VERSION := v8.28.0
 
@@ -17,6 +21,7 @@ endif
 	dev dev-api dev-worker dev-web \
 	cli-build cli-install \
 	pg-start pg-stop pg-reset migrate-up migrate-down migrate-version migration-check \
+	test test-go test-ai \
 	format-check typecheck lint lint-go lint-web shell-check \
 	build build-go build-web check \
 	gen-client contracts-check web-api-coverage gen-check \
@@ -39,6 +44,10 @@ help: ## 显示分组命令帮助
 bootstrap: ## 安装 Go 与 Web 依赖
 	cd $(BACKEND_DIR) && go mod download
 	cd $(WEB_DIR) && npm ci
+	$(PYTHON) -m venv $(AI_KERNEL_VENV)
+	$(AI_KERNEL_PYTHON) -m pip install --requirement $(AI_KERNEL_DIR)/requirements.txt
+	$(AI_KERNEL_PYTHON) -m pip install --no-deps semantic-kernel==1.44.1
+	$(AI_KERNEL_PYTHON) -m pip install --requirement $(AI_KERNEL_DIR)/requirements-test.txt
 
 dev: ## 从根目录 .env 启动 API、Worker 与 Web
 	$(SH) scripts/dev.sh
@@ -81,6 +90,20 @@ migrate-version: ## 显示当前迁移版本
 
 migration-check: ## 校验迁移文件命名、配对与连续性
 	$(SH) scripts/check-migrations.sh
+
+##@ 测试
+
+test: test-go test-ai ## 执行 Go 与 AI Kernel 测试
+
+test-go: ## 执行 Go 测试并要求复杂 PDF 运行时可用
+	command -v pdfinfo >/dev/null
+	command -v pdftotext >/dev/null
+	command -v pdftoppm >/dev/null
+	cd $(BACKEND_DIR) && go test -count=1 ./...
+
+test-ai: ## 执行 AI Kernel 测试
+	@test -x "$(AI_KERNEL_PYTHON)" || { echo 'Run make bootstrap with Python 3.12 first.' >&2; exit 1; }
+	cd $(AI_KERNEL_DIR) && $(AI_KERNEL_PYTHON) -m pytest -q
 
 ##@ 质量检查
 
@@ -157,7 +180,7 @@ perf-full: ## 执行完整性能压测
 
 ##@ 汇总
 
-ci: check gen-check security ## 执行本地等价 CI
+ci: test check gen-check security ## 执行本地等价 CI
 
 # 兼容旧入口；不在 help 中展示。
 contract-schema-check: contracts-check

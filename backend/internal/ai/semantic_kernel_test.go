@@ -7,6 +7,7 @@ import (
 	"errors"
 	"net/http"
 	"net/http/httptest"
+	"strings"
 	"testing"
 )
 
@@ -14,7 +15,7 @@ func TestSemanticKernelProviderMapsStructuredOutputFailure(t *testing.T) {
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", "application/json")
 		w.WriteHeader(http.StatusBadGateway)
-		_, _ = w.Write([]byte(`{"code":"invalid_structured_output","message":"invalid","temporary":false}`))
+		_, _ = w.Write([]byte(`{"code":"invalid_structured_output","message":"model output failed schema validation at $.elements[0].region (required)","temporary":false}`))
 	}))
 	t.Cleanup(server.Close)
 
@@ -46,6 +47,9 @@ func TestSemanticKernelProviderMapsStructuredOutputFailure(t *testing.T) {
 	var providerErr *ProviderError
 	if !errors.As(err, &providerErr) || providerErr.Code != "invalid_structured_output" {
 		t.Fatalf("expected stable kernel error code, got %v", err)
+	}
+	if !strings.Contains(err.Error(), "$.elements[0].region (required)") {
+		t.Fatalf("safe validation diagnostic was discarded: %v", err)
 	}
 }
 

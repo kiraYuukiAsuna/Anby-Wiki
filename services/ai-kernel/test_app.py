@@ -4,7 +4,7 @@ import base64
 import os
 from types import SimpleNamespace
 
-from fastapi.testclient import TestClient
+from starlette.testclient import TestClient
 
 
 def load_app():
@@ -253,6 +253,27 @@ def test_generate_reports_output_truncation(monkeypatch):
 
     assert response.status_code == 502
     assert response.json()["code"] == "output_truncated"
+
+
+def test_schema_validation_location_excludes_model_values():
+    module = importlib.import_module("app")
+    schema = {
+        "type": "object",
+        "required": ["secret"],
+        "properties": {"secret": {"type": "integer"}},
+    }
+    try:
+        module.jsonschema.validate(
+            instance={"secret": "sensitive model output"},
+            schema=schema,
+        )
+    except module.jsonschema.ValidationError as error:
+        location = module.schema_validation_location(error)
+    else:
+        raise AssertionError("schema validation unexpectedly passed")
+
+    assert location == "$.secret (type)"
+    assert "sensitive model output" not in location
 
 
 def test_generate_rejects_invalid_image_base64():

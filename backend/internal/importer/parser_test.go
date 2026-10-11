@@ -3,6 +3,7 @@ package importer
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"os"
 	"os/exec"
@@ -235,11 +236,7 @@ func (f parserGeneratorFunc) Generate(
 }
 
 func TestVisionPDFAdapterUsesRenderedPageAndNativeText(t *testing.T) {
-	for _, command := range []string{"pdfinfo", "pdftotext", "pdftoppm"} {
-		if _, err := exec.LookPath(command); err != nil {
-			t.Skipf("%s is not installed", command)
-		}
-	}
+	requirePDFTestRuntime(t)
 	generator := parserGeneratorFunc(func(
 		_ context.Context,
 		request ai.Request,
@@ -302,6 +299,86 @@ func TestVisionPDFAdapterUsesRenderedPageAndNativeText(t *testing.T) {
 		result.Chunks[1].ChunkType != "chart" ||
 		result.Chunks[1].Locator.ImageRegion == nil {
 		t.Fatalf("unexpected parsed chunks: %#v", result.Chunks)
+	}
+}
+
+func TestVisionPDFAdapterTranscribesScanOnlyPage(t *testing.T) {
+	requirePDFTestRuntime(t)
+	generator := parserGeneratorFunc(func(
+		_ context.Context,
+		request ai.Request,
+	) (*ai.Result, error) {
+		if request.Variables["native_text"] != "" {
+			t.Fatalf("native text=%q, want empty scan text", request.Variables["native_text"])
+		}
+		return &ai.Result{
+			PromptKey: DocumentPageAnalysisPromptKey, PromptVersion: 1,
+			Provider: "test", Model: "vision-model",
+			JSON: json.RawMessage(`{
+				"schema_version":1,
+				"page":1,
+				"section_path":["Scanned page"],
+				"elements":[{
+					"kind":"text",
+					"title":"",
+					"text":"Vision-only transcription.",
+					"summary":"",
+					"section_path":["Scanned page"],
+					"region":{"x":100,"y":100,"width":500,"height":100},
+					"structured_data":{},
+					"confidence":0.95
+				}],
+				"warnings":[],
+				"quality_score":0.95
+			}`),
+		}, nil
+	})
+
+	result, err := NewParser(32000, generator).Parse(
+		context.Background(),
+		ParseRequest{
+			Filename: "scan.pdf", MIMEType: "application/pdf",
+			Content: minimalPDF(""), Provider: "test", Model: "vision-model",
+		},
+	)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if result.Track != "vision" || len(result.Chunks) != 1 ||
+		result.Chunks[0].ChunkType != "text" ||
+		result.Chunks[0].TextContent != "Vision-only transcription." {
+		t.Fatalf("unexpected scan-only result: %#v", result)
+	}
+}
+
+func TestVisionPDFAdapterFailsWholeParseWhenPageAnalysisFails(t *testing.T) {
+	requirePDFTestRuntime(t)
+	providerFailure := errors.New("provider unavailable")
+	generator := parserGeneratorFunc(func(
+		context.Context,
+		ai.Request,
+	) (*ai.Result, error) {
+		return nil, providerFailure
+	})
+
+	_, err := NewParser(32000, generator).Parse(
+		context.Background(),
+		ParseRequest{
+			Filename: "failed.pdf", MIMEType: "application/pdf",
+			Content: minimalPDF("Page"), Provider: "test", Model: "vision-model",
+		},
+	)
+	if !errors.Is(err, ErrVisionPageAnalysisFailed) {
+		t.Fatalf("error=%v, want ErrVisionPageAnalysisFailed", err)
+	}
+}
+
+func requirePDFTestRuntime(t *testing.T) {
+	t.Helper()
+	for _, command := range []string{"pdfinfo", "pdftotext", "pdftoppm"} {
+		if _, err := exec.LookPath(command); err != nil {
+			t.Skipf("%s is not installed", command)
+		}
 	}
 }
 

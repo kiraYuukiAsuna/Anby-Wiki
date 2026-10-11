@@ -160,6 +160,19 @@ func (a *ImportAPI) createUploadJob(w http.ResponseWriter, r *http.Request) {
 		httpx.WriteError(w, r, http.StatusUnprocessableEntity, httpx.CodeValidationFailed, "更新指定页面时必须选择目标页面")
 		return
 	}
+	existing, err := a.jobs.FindUploadByKey(r.Context(), actorID, key, importer.UploadIdentity{
+		Filename: acquired.Filename, MIMEType: acquired.MIMEType,
+		ContentHash: acquired.ContentHash, Title: title,
+		Instructions: instructions, RouteMode: routeMode, PageID: pageID,
+	})
+	if err == nil {
+		httpx.WriteJSON(w, http.StatusCreated, existing)
+		return
+	}
+	if !errors.Is(err, importer.ErrJobNotFound) {
+		importError(w, r, err)
+		return
+	}
 	asset, err := a.evidence.StoreAsset(r.Context(), evidence.StoreAssetParams{WikiID: a.wikiID,
 		Name: acquired.Filename, Content: bytes.NewReader(acquired.Content), MimeType: acquired.MIMEType, ActorID: actorID})
 	if err != nil {

@@ -21,7 +21,41 @@
 | `enable-tls.sh` | Certbot 签发/复用、安装续期 hook、启用 `certbot.timer` |
 | `reload-nginx.sh` | 成功续期后检查并 reload Nginx，不申请证书 |
 | `smoke-production.sh` | 验证实际 HTTPS、API readiness、主页、Worker 与 Doctor；不写业务数据 |
+| `import-acceptance.py` | 按 JSON 语料清单执行真实导入、Chunk/阶段/质量断言，并拒绝测试 Proposal |
 | `backup/` | PostgreSQL 与对象存储的备份/恢复演练 |
 
 生产入口与 `backup/` 下的脚本可能修改外部环境，因此不包装成日常 Make 目标。请按
 `Deploy.md` 和 `Docs/runbooks/` 中的步骤设置确认令牌后显式执行。
+
+`import-acceptance.py` 从环境读取
+`ANBY_ACCEPTANCE_IDENTIFIER`、`ANBY_ACCEPTANCE_PASSWORD`，凭据不会写入报告。
+语料清单中的文件路径相对清单文件解析：
+
+```json
+{
+  "version": 1,
+  "cases": [
+    {
+      "name": "complex-pdf",
+      "file": "complex.pdf",
+      "expected_status": "succeeded",
+      "expected_stages": {"parse": "succeeded", "review": "succeeded"},
+      "required_chunk_types": ["page", "table"],
+      "minimum_pages": 2,
+      "minimum_located_chunks": 1
+    }
+  ]
+}
+```
+
+```bash
+ANBY_ACCEPTANCE_IDENTIFIER='admin' \
+ANBY_ACCEPTANCE_PASSWORD='...' \
+python3 scripts/import-acceptance.py \
+  --base-url https://wiki.example.com \
+  --manifest /tmp/import-corpus/manifest.json \
+  --report /tmp/import-acceptance.json
+```
+
+成功任务生成的 Proposal 会被治理 API 拒绝；脚本不会批准或发布测试内容。失败任务
+可用 `expected_error_code`、`require_source_version` 和 `expected_stages` 断言原子性。

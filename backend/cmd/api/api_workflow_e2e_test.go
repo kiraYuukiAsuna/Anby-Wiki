@@ -2,6 +2,7 @@ package main
 
 import (
 	"bytes"
+	"crypto/sha256"
 	"encoding/base64"
 	"encoding/json"
 	"fmt"
@@ -536,9 +537,47 @@ func TestAPIImportAndAIConfigE2E(t *testing.T) {
 	requestE2EMap(t, admin, http.MethodPut,
 		baseURL+"/api/v1/admin/ai-config", configBody, http.StatusOK)
 	title := "API E2E Upload " + runID
-	upload := createImportUploadE2E(t, admin, baseURL, title,
-		[]byte("Anby Wiki API E2E evidence text.\nThis source validates immutable chunks.\n"))
+	filename := "api-e2e-" + runID + ".txt"
+	content := []byte("Anby Wiki API E2E evidence text.\nThis source validates immutable chunks.\n")
+	uploadKey := uuid.NewString()
+	upload := requestImportUploadE2E(
+		t, admin, baseURL, filename, title, uploadKey, content, http.StatusCreated,
+	)
 	uploadID := e2eUUID(t, upload, "id")
+	replayed := requestImportUploadE2E(
+		t, admin, baseURL, filename, title, uploadKey, content, http.StatusCreated,
+	)
+	if e2eUUID(t, replayed, "id") != uploadID {
+		t.Fatalf("idempotent upload returned a different job: %#v", replayed)
+	}
+	requestImportUploadE2E(
+		t, admin, baseURL, filename, title, uploadKey,
+		[]byte("different content must not replace the staged asset"),
+		http.StatusConflict,
+	)
+	assets := requestE2EMap(t, admin, http.MethodGet,
+		baseURL+"/api/v1/assets?page_size=100", nil, http.StatusOK)
+	assetItems, ok := assets["items"].([]any)
+	if !ok {
+		t.Fatalf("asset list has no items: %#v", assets)
+	}
+	expectedHash := fmt.Sprintf("%x", sha256.Sum256(content))
+	foundAsset := false
+	for _, rawAsset := range assetItems {
+		asset, ok := rawAsset.(map[string]any)
+		if !ok || asset["name"] != filename {
+			continue
+		}
+		revision, ok := asset["current_revision"].(map[string]any)
+		if !ok || revision["content_hash"] != expectedHash {
+			t.Fatalf("idempotency mismatch changed the staged asset: %#v", asset)
+		}
+		foundAsset = true
+		break
+	}
+	if !foundAsset {
+		t.Fatalf("staged upload asset %q was not listed", filename)
+	}
 	detail := waitForE2EImportTerminal(t, admin,
 		fmt.Sprintf("%s/api/v1/import-jobs/%s", baseURL, uploadID))
 	job, ok := detail["job"].(map[string]any)
@@ -773,16 +812,17 @@ func testAssetWorkflow(t *testing.T, client *http.Client, baseURL, runID string)
 	assertE2EStatus(t, response, http.StatusOK)
 }
 
-func createImportUploadE2E(
+func requestImportUploadE2E(
 	t *testing.T,
 	client *http.Client,
-	baseURL, title string,
+	baseURL, filename, title, key string,
 	content []byte,
+	expectedStatus int,
 ) map[string]any {
 	t.Helper()
 	var body bytes.Buffer
 	writer := multipart.NewWriter(&body)
-	part, err := writer.CreateFormFile("file", "api-e2e.txt")
+	part, err := writer.CreateFormFile("file", filename)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -807,15 +847,15 @@ func createImportUploadE2E(
 		t.Fatal(err)
 	}
 	request.Header.Set("Content-Type", writer.FormDataContentType())
-	request.Header.Set("Idempotency-Key", uuid.NewString())
+	request.Header.Set("Idempotency-Key", key)
 	response, err := client.Do(request)
 	if err != nil {
 		t.Fatal(err)
 	}
 	defer response.Body.Close()
-	if response.StatusCode != http.StatusCreated {
-		t.Fatalf("upload import status=%d: %s",
-			response.StatusCode, readE2EBody(response.Body))
+	if response.StatusCode != expectedStatus {
+		t.Fatalf("upload import status=%d want=%d: %s",
+			response.StatusCode, expectedStatus, readE2EBody(response.Body))
 	}
 	var result map[string]any
 	if err := json.NewDecoder(response.Body).Decode(&result); err != nil {

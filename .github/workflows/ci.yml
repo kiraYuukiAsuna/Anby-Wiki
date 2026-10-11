@@ -29,6 +29,8 @@ jobs:
         with:
           go-version-file: backend/go.mod
           cache-dependency-path: backend/go.sum
+      - name: 安装复杂 PDF 测试运行时
+        run: sudo apt-get update && sudo apt-get install --yes poppler-utils
       - name: 校验 Go module 完整性
         run: go mod verify
       - name: gofmt 检查
@@ -41,8 +43,32 @@ jobs:
           fi
       - name: go vet
         run: go vet ./...
+      - name: Go 测试
+        run: go test -count=1 ./...
       - name: go build
         run: go build ./...
+
+  ai-kernel:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: services/ai-kernel
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+          cache: pip
+          cache-dependency-path: |
+            services/ai-kernel/requirements.txt
+            services/ai-kernel/requirements-test.txt
+      - name: 安装 AI Kernel 依赖
+        run: |
+          python -m pip install --requirement requirements.txt
+          python -m pip install --no-deps semantic-kernel==1.44.1
+          python -m pip install --requirement requirements-test.txt
+      - name: AI Kernel 测试
+        run: python -m pytest -q
 
   # 前端类型检查 + lint + 构建（等价 make lint-web build-web）
   web:
