@@ -38,11 +38,16 @@
     {
       "name": "complex-pdf",
       "file": "complex.pdf",
-      "expected_status": "succeeded",
-      "expected_stages": {"parse": "succeeded", "review": "succeeded"},
+      "route_mode": "auto",
+      "expected_statuses": ["succeeded", "action_required"],
+      "expected_stages": {"parse": "succeeded", "plan": "succeeded"},
       "required_chunk_types": ["page", "table"],
       "minimum_pages": 2,
-      "minimum_located_chunks": 1
+      "minimum_located_chunks": 1,
+      "minimum_plan_routes": 2,
+      "maximum_plan_routes": 3,
+      "expected_route_action_counts": {"create": 2},
+      "required_route_titles": ["Architecture", "Operations"]
     }
   ]
 }
@@ -57,5 +62,9 @@ python3 scripts/import-acceptance.py \
   --report /tmp/import-acceptance.json
 ```
 
-成功任务生成的 Proposal 会被治理 API 拒绝；脚本不会批准或发布测试内容。失败任务
-可用 `expected_error_code`、`require_source_version` 和 `expected_stages` 断言原子性。
+成功任务生成的 Proposal 会被治理 API 拒绝，`action_required` 任务会被取消；脚本
+不会批准或发布测试内容。失败任务可用 `expected_error_code`、
+`require_source_version` 和 `expected_stages` 断言原子性。多页面计划可用
+`minimum_plan_routes`、`maximum_plan_routes`、`expected_route_action_counts`、
+`required_route_actions`、`required_route_titles` 与 `required_related_titles`
+断言路由结构。
