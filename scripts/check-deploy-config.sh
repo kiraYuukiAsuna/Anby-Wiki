@@ -52,6 +52,8 @@ grep -q '^  storage-init:' "$COMPOSE_FILE" ||
 for binding in '../../data/postgres:' '../../data/rustfs:' '../../data/meilisearch:'; do
   grep -Fq "$binding" "$COMPOSE_FILE" || fail "persistent host data binding missing: $binding"
 done
+grep -Fq '../../data/upload-tmp:/var/lib/anby-wiki/upload-tmp' "$COMPOSE_FILE" ||
+  fail "API disk-backed upload temporary directory is missing"
 for template in anby-wiki.bootstrap.conf anby-wiki.conf; do
   [ -s "$ROOT/infra/deploy/nginx/$template" ] || fail "Nginx template missing: $template"
 done
@@ -111,6 +113,10 @@ grep -Fq 'MEILI_MASTER_KEY: "${MEILI_MASTER_KEY:?set MEILI_MASTER_KEY}"' "$COMPO
   fail "Meilisearch master key environment injection is missing"
 grep -Fq 'AUTH_REGISTRATION_ENABLED: ${AUTH_REGISTRATION_ENABLED:-false}' "$COMPOSE_FILE" ||
   fail "account registration configuration is missing"
+grep -Fq 'IMPORT_UPLOAD_MAX_CONCURRENCY: ${IMPORT_UPLOAD_MAX_CONCURRENCY:-1}' "$COMPOSE_FILE" ||
+  fail "API upload concurrency backpressure is missing"
+grep -Fq 'TMPDIR: /var/lib/anby-wiki/upload-tmp' "$COMPOSE_FILE" ||
+  fail "API multipart temporary directory is missing"
 grep -Fq '"127.0.0.1:${API_HOST_PORT:-60018}:${API_PORT:-8080}"' "$COMPOSE_FILE" ||
   fail "API must publish only a configurable host loopback port"
 grep -Fq 'server 127.0.0.1:__API_HOST_PORT__;' "$ROOT/infra/deploy/nginx/anby-wiki.conf" ||

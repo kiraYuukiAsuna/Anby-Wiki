@@ -16,7 +16,10 @@ import (
 	"github.com/anby/wiki/backend/internal/platform/storage"
 )
 
-const maxAssetUploadBytes int64 = 50 << 20
+const (
+	maxAssetUploadBytes        int64 = 50 << 20
+	assetUploadFormMemoryBytes int64 = 1 << 20
+)
 
 type AssetAPI struct {
 	service *evidence.Service
@@ -95,7 +98,7 @@ func (a *AssetAPI) upload(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	r.Body = http.MaxBytesReader(w, r.Body, maxAssetUploadBytes+(1<<20))
-	if err := r.ParseMultipartForm(maxAssetUploadBytes); err != nil {
+	if err := r.ParseMultipartForm(assetUploadFormMemoryBytes); err != nil {
 		httpx.WriteError(w, r, http.StatusRequestEntityTooLarge, httpx.CodeBadRequest,
 			"资产超过 50 MiB 或表单非法")
 		return
@@ -123,7 +126,7 @@ func (a *AssetAPI) upload(w http.ResponseWriter, r *http.Request) {
 		mimeType = "application/octet-stream"
 	}
 	result, err := a.service.StoreAsset(r.Context(), evidence.StoreAssetParams{
-		WikiID: a.wikiID, Name: name, Content: io.LimitReader(file, maxAssetUploadBytes+1),
+		WikiID: a.wikiID, Name: name, Content: file,
 		MimeType: mimeType, ActorID: actorID,
 	})
 	if err != nil {

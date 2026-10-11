@@ -120,18 +120,26 @@ func (p *Pipeline) RunStoredUpload(ctx context.Context, request PipelineRequest,
 		if store == nil || strings.TrimSpace(storageKey) == "" || strings.TrimSpace(expectedHash) == "" {
 			return nil, ErrFetchFailed
 		}
+		limit := DefaultURLPolicy().MaxBytes
+		meta, err := store.Head(ctx, storageKey)
+		if err != nil {
+			return nil, ErrFetchFailed
+		}
+		if meta.Size < 0 || meta.Size > limit {
+			return nil, ErrSourceTooLarge
+		}
 		reader, err := store.Get(ctx, storageKey)
 		if err != nil {
 			return nil, ErrFetchFailed
 		}
 		defer reader.Close()
-		limit := DefaultURLPolicy().MaxBytes
-		content, err := io.ReadAll(io.LimitReader(reader, limit+1))
-		if err != nil {
+		content := make([]byte, int(meta.Size))
+		if _, err := io.ReadFull(reader, content); err != nil {
 			return nil, ErrFetchFailed
 		}
-		if int64(len(content)) > limit {
-			return nil, ErrSourceTooLarge
+		var extra [1]byte
+		if read, err := io.ReadFull(reader, extra[:]); read != 0 || !errors.Is(err, io.EOF) {
+			return nil, ErrFetchFailed
 		}
 		acquired, err := ValidateUpload(ctx, DefaultURLPolicy(), p.scanner, filename, mimeType, content)
 		if err != nil {
@@ -153,7 +161,7 @@ func (p *Pipeline) RunURL(ctx context.Context, request PipelineRequest, rawURL s
 		if err != nil {
 			return nil, err
 		}
-		if err := p.scanner.Scan(ctx, acquired.Content); err != nil {
+		if err := p.scanner.Scan(ctx, bytes.NewReader(acquired.Content)); err != nil {
 			return nil, ErrMalware
 		}
 		return acquired, nil

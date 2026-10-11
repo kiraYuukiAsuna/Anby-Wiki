@@ -59,6 +59,8 @@ Compose 会把这些值注入容器环境，Docker 管理员可通过 `docker in
 
 - 普通请求体 2 MiB，上传 envelope 301 MiB，文件内容限制 300 MiB；
 - auth、upload、general 三类 Redis 固定窗口限流；
+- multipart 仅在内存保留 1 MiB，其余写入权限为 `0700` 的
+  `data/upload-tmp/`；`IMPORT_UPLOAD_MAX_CONCURRENCY=1` 默认串行处理大文件；
 - production 清除可伪造的身份头；
 - API 添加 CSP、nosniff、frame 与 referrer 安全头。
 
@@ -72,7 +74,8 @@ HttpOnly、SameSite=Lax；该简化只适用于当前受控早期部署，公网
 
 生产 Nginx 的 API location 必须保持 `proxy_request_buffering off`，避免接近
 300 MiB 的上传先写入宿主机临时文件；`client_max_body_size`、Go 全局请求体限制和
-上传 handler 的文件限制仍分别承担网关、envelope 与文件内容边界。
+上传 handler 的文件限制仍分别承担网关、envelope 与文件内容边界。API 自己的临时
+文件在 multipart 表单释放时删除；异常退出遗留文件应在确认无在途上传后清理。
 
 ## 发布前检查
 

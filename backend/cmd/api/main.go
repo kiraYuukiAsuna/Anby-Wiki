@@ -269,7 +269,7 @@ func main() {
 			}
 			evidenceService := evidence.NewService(evidence.NewRepository(pool), pageRepo, objectStore,
 				cfg.Env, db.NewTxManager(pool), id.NewGenerator())
-			importAPI.WithUploads(evidenceService, wikiID)
+			importAPI.WithUploads(evidenceService, wikiID, cfg.ImportUploadMaxConcurrency)
 			assetAPI = NewAssetAPI(evidenceService, wikiID)
 		}
 	}

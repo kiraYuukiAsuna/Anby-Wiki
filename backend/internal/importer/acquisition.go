@@ -304,43 +304,333 @@ func magicMatches(mimeType string, content []byte) bool {
 	}
 }
 
+const (
+	uploadSniffBytes       = 4096
+	signatureScanChunkSize = 64 << 10
+)
+
+var blockedUploadSignatures = [][]byte{
+	[]byte("EICAR-STANDARD-ANTIVIRUS-TEST-FILE"),
+	[]byte("<SCRIPT>DOCUMENT.COOKIE"),
+}
+
 type MalwareScanner interface {
-	Scan(ctx context.Context, content []byte) error
+	Scan(ctx context.Context, content io.Reader) error
 }
 
 type SignatureScanner struct{}
 
-func (SignatureScanner) Scan(_ context.Context, content []byte) error {
-	upper := bytes.ToUpper(content)
-	if bytes.Contains(upper, []byte("EICAR-STANDARD-ANTIVIRUS-TEST-FILE")) ||
-		bytes.Contains(upper, []byte("<SCRIPT>DOCUMENT.COOKIE")) {
-		return ErrMalware
+func (SignatureScanner) Scan(ctx context.Context, content io.Reader) error {
+	maxSignatureBytes := 0
+	for _, signature := range blockedUploadSignatures {
+		maxSignatureBytes = max(maxSignatureBytes, len(signature))
 	}
-	return nil
+	overlapBytes := maxSignatureBytes - 1
+	buffer := make([]byte, signatureScanChunkSize+overlapBytes)
+	overlap := 0
+	for {
+		if err := ctx.Err(); err != nil {
+			return err
+		}
+		read, err := content.Read(buffer[overlap : overlap+signatureScanChunkSize])
+		total := overlap + read
+		for index := overlap; index < total; index++ {
+			if buffer[index] >= 'a' && buffer[index] <= 'z' {
+				buffer[index] -= 'a' - 'A'
+			}
+		}
+		for _, signature := range blockedUploadSignatures {
+			if bytes.Contains(buffer[:total], signature) {
+				return ErrMalware
+			}
+		}
+		if errors.Is(err, io.EOF) {
+			return nil
+		}
+		if err != nil {
+			return fmt.Errorf("%w: 扫描上传内容失败: %v", ErrFetchFailed, err)
+		}
+		overlap = min(overlapBytes, total)
+		copy(buffer[:overlap], buffer[total-overlap:total])
+	}
 }
 
-func ValidateUpload(ctx context.Context, policy URLPolicy, scanner MalwareScanner, filename, mimeType string, content []byte) (*AcquiredSource, error) {
+type ValidatedUpload struct {
+	Filename    string
+	MIMEType    string
+	ContentHash string
+	SizeBytes   int64
+}
+
+func ValidateUploadReader(
+	ctx context.Context,
+	policy URLPolicy,
+	scanner MalwareScanner,
+	filename, mimeType string,
+	content io.ReadSeeker,
+) (*ValidatedUpload, error) {
 	if policy.MaxBytes <= 0 {
 		policy = DefaultURLPolicy()
 	}
-	if int64(len(content)) > policy.MaxBytes {
+	if content == nil {
+		return nil, ErrFetchFailed
+	}
+	if _, err := content.Seek(0, io.SeekStart); err != nil {
+		return nil, ErrFetchFailed
+	}
+	hash := sha256.New()
+	size, err := io.Copy(hash, io.LimitReader(content, policy.MaxBytes+1))
+	if err != nil {
+		return nil, ErrFetchFailed
+	}
+	if size > policy.MaxBytes {
 		return nil, ErrSourceTooLarge
 	}
-	mimeType = refineMIME(filename, normalizedMIME(mimeType), content)
-	if !policy.AllowedMIMEs[mimeType] || !magicMatches(mimeType, content) {
+	mimeType, err = refineMIMEReader(filename, normalizedMIME(mimeType), content)
+	if err != nil {
+		return nil, ErrFetchFailed
+	}
+	matches, err := magicMatchesReader(mimeType, content)
+	if err != nil {
+		return nil, ErrFetchFailed
+	}
+	if !policy.AllowedMIMEs[mimeType] || !matches {
 		return nil, ErrUnsupportedMIME
 	}
 	if scanner == nil {
 		scanner = SignatureScanner{}
 	}
+	if _, err := content.Seek(0, io.SeekStart); err != nil {
+		return nil, ErrFetchFailed
+	}
 	if err := scanner.Scan(ctx, content); err != nil {
+		if errors.Is(err, ErrFetchFailed) || errors.Is(err, context.Canceled) ||
+			errors.Is(err, context.DeadlineExceeded) {
+			return nil, err
+		}
 		return nil, ErrMalware
 	}
 	filename = filepath.Base(strings.TrimSpace(filename))
 	if filename == "." || filename == "" {
 		filename = "source"
 	}
-	sum := sha256.Sum256(content)
-	return &AcquiredSource{Filename: filename, MIMEType: mimeType, Content: content,
-		ContentHash: hex.EncodeToString(sum[:])}, nil
+	if _, err := content.Seek(0, io.SeekStart); err != nil {
+		return nil, ErrFetchFailed
+	}
+	return &ValidatedUpload{
+		Filename: filename, MIMEType: mimeType,
+		ContentHash: hex.EncodeToString(hash.Sum(nil)), SizeBytes: size,
+	}, nil
+}
+
+func ValidateUpload(
+	ctx context.Context,
+	policy URLPolicy,
+	scanner MalwareScanner,
+	filename, mimeType string,
+	content []byte,
+) (*AcquiredSource, error) {
+	validated, err := ValidateUploadReader(
+		ctx, policy, scanner, filename, mimeType, bytes.NewReader(content),
+	)
+	if err != nil {
+		return nil, err
+	}
+	return &AcquiredSource{
+		Filename: validated.Filename, MIMEType: validated.MIMEType,
+		Content: content, ContentHash: validated.ContentHash,
+	}, nil
+}
+
+func refineMIMEReader(filename, mimeType string, content io.ReadSeeker) (string, error) {
+	extension := strings.ToLower(filepath.Ext(strings.TrimSpace(filename)))
+	if mimeType == "" || mimeType == "application/octet-stream" || mimeType == "text/plain" {
+		valid, err := validJSONReader(content)
+		if err != nil {
+			return "", err
+		}
+		if valid {
+			return "application/json", nil
+		}
+	}
+	if (mimeType == "" || mimeType == "application/octet-stream" || mimeType == "text/plain") &&
+		extension == ".csv" {
+		return "text/csv", nil
+	}
+	if mimeType == "" || mimeType == "application/octet-stream" {
+		prefix, err := uploadPrefix(content)
+		if err != nil {
+			return "", err
+		}
+		return normalizedMIME(http.DetectContentType(prefix)), nil
+	}
+	return mimeType, nil
+}
+
+func magicMatchesReader(mimeType string, content io.ReadSeeker) (bool, error) {
+	prefix, err := uploadPrefix(content)
+	if err != nil {
+		return false, err
+	}
+	trimmed := bytes.TrimSpace(prefix)
+	switch mimeType {
+	case "application/pdf":
+		return bytes.HasPrefix(trimmed, []byte("%PDF-")), nil
+	case "text/html":
+		lower := bytes.ToLower(trimmed)
+		prefix := lower[:min(len(lower), 512)]
+		for _, marker := range [][]byte{
+			[]byte("<!doctype html"),
+			[]byte("<html"),
+			[]byte("<head"),
+			[]byte("<body"),
+			[]byte("<main"),
+			[]byte("<article"),
+			[]byte("<section"),
+			[]byte("<div"),
+			[]byte("<p"),
+			[]byte("<pre"),
+		} {
+			if bytes.Contains(prefix, marker) {
+				return true, nil
+			}
+		}
+		return false, nil
+	case "text/plain":
+		contains, err := readerContainsByte(content, 0)
+		return !contains, err
+	case "text/csv":
+		contains, err := readerContainsByte(content, 0)
+		if err != nil || contains {
+			return false, err
+		}
+		return validUTF8Reader(content)
+	case "application/json":
+		return validJSONReader(content)
+	case "image/png":
+		return len(prefix) >= 8 &&
+			bytes.Equal(prefix[:8], []byte{0x89, 'P', 'N', 'G', '\r', '\n', 0x1a, '\n'}), nil
+	case "image/jpeg":
+		return len(prefix) >= 3 &&
+			prefix[0] == 0xff && prefix[1] == 0xd8 && prefix[2] == 0xff, nil
+	default:
+		return false, nil
+	}
+}
+
+func uploadPrefix(content io.ReadSeeker) ([]byte, error) {
+	if _, err := content.Seek(0, io.SeekStart); err != nil {
+		return nil, err
+	}
+	prefix := make([]byte, uploadSniffBytes)
+	read, err := io.ReadFull(content, prefix)
+	if err != nil && !errors.Is(err, io.EOF) && !errors.Is(err, io.ErrUnexpectedEOF) {
+		return nil, err
+	}
+	return prefix[:read], nil
+}
+
+func readerContainsByte(content io.ReadSeeker, target byte) (bool, error) {
+	if _, err := content.Seek(0, io.SeekStart); err != nil {
+		return false, err
+	}
+	buffer := make([]byte, signatureScanChunkSize)
+	for {
+		read, err := content.Read(buffer)
+		if bytes.IndexByte(buffer[:read], target) >= 0 {
+			return true, nil
+		}
+		if errors.Is(err, io.EOF) {
+			return false, nil
+		}
+		if err != nil {
+			return false, err
+		}
+	}
+}
+
+func validUTF8Reader(content io.ReadSeeker) (bool, error) {
+	if _, err := content.Seek(0, io.SeekStart); err != nil {
+		return false, err
+	}
+	buffer := make([]byte, signatureScanChunkSize+utf8.UTFMax)
+	pending := 0
+	for {
+		read, err := content.Read(buffer[pending:])
+		total := pending + read
+		complete := total
+		if err == nil && !utf8.Valid(buffer[:complete]) {
+			minimum := max(0, complete-(utf8.UTFMax-1))
+			for complete > minimum && !utf8.Valid(buffer[:complete]) {
+				complete--
+			}
+		}
+		if !utf8.Valid(buffer[:complete]) {
+			return false, nil
+		}
+		pending = total - complete
+		copy(buffer[:pending], buffer[complete:total])
+		if errors.Is(err, io.EOF) {
+			return pending == 0, nil
+		}
+		if err != nil {
+			return false, err
+		}
+	}
+}
+
+func validJSONReader(content io.ReadSeeker) (bool, error) {
+	if _, err := content.Seek(0, io.SeekStart); err != nil {
+		return false, err
+	}
+	decoder := json.NewDecoder(content)
+	decoder.UseNumber()
+	token, err := decoder.Token()
+	if errors.Is(err, io.EOF) {
+		return false, nil
+	}
+	if err != nil || !consumeJSONToken(decoder, token) {
+		return false, nil
+	}
+	_, err = decoder.Token()
+	if errors.Is(err, io.EOF) {
+		return true, nil
+	}
+	return false, nil
+}
+
+func consumeJSONToken(decoder *json.Decoder, token json.Token) bool {
+	delimiter, ok := token.(json.Delim)
+	if !ok {
+		return true
+	}
+	switch delimiter {
+	case '{':
+		for decoder.More() {
+			key, err := decoder.Token()
+			if err != nil {
+				return false
+			}
+			if _, ok := key.(string); !ok {
+				return false
+			}
+			value, err := decoder.Token()
+			if err != nil || !consumeJSONToken(decoder, value) {
+				return false
+			}
+		}
+		closeToken, err := decoder.Token()
+		return err == nil && closeToken == json.Delim('}')
+	case '[':
+		for decoder.More() {
+			value, err := decoder.Token()
+			if err != nil || !consumeJSONToken(decoder, value) {
+				return false
+			}
+		}
+		closeToken, err := decoder.Token()
+		return err == nil && closeToken == json.Delim(']')
+	default:
+		return false
+	}
 }

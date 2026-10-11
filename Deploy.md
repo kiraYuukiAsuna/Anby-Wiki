@@ -145,6 +145,7 @@ Anby-Wiki/
   data/postgres/               # 权威数据库
   data/rustfs/                 # RustFS 对象存储
   data/meilisearch/            # 搜索索引及模型缓存
+  data/upload-tmp/             # API multipart 临时文件，0700，响应结束即删除
   data/deploy-backups/         # 部署前 PostgreSQL 一致性导出
   data/deploy.lock             # flock 锁，文件存在不等于仍被占用
 ```
@@ -160,6 +161,8 @@ AI 供应商、模型和 Key 仍在登录后的 `/admin/ai` 配置。
 仍只在 Docker 私有网络使用。域名、`WEB_PORT` 和 `API_HOST_PORT` 可在 `.env` 中修改。
 RustFS Console 关闭；官方 `1.0.1` 镜像固定 digest，使用独立凭据与 `data/rustfs/`，
 不与服务器上的其他 RustFS 实例共享数据或存储桶。
+大文件 multipart 只在 API 内存保留 1 MiB，其余写入 `data/upload-tmp/`；单 API
+进程默认同时处理一个上传，避免多个 300 MiB 请求叠加磁盘和内存峰值。
 
 Nginx 模板位于 `infra/deploy/nginx/`；安装前先检查，失败恢复原站点配置。
 Certbot 使用 webroot 验证，证书位于 `/etc/letsencrypt/live/<域名>/`，通过
@@ -236,6 +239,7 @@ Compose 会把机密注入容器环境，因此具有 Docker 管理权限的人�
 | `COLLABORATION_ORIGIN_PATTERNS` | Next.js rewrite 或反向代理改写上游 `Host` 时，填写允许建立协作 WebSocket 的公开 Origin；多个值用逗号分隔，生产建议包含 `https://` 以固定协议 |
 | `WEB_BIND` `WEB_PORT` | 宿主机端口；默认 `127.0.0.1:60019` 只绑本机 |
 | `API_HOST_PORT` | API 的宿主机回环端口；默认 `60018`，绑定地址不可配置为公网 |
+| `IMPORT_UPLOAD_MAX_CONCURRENCY` | 单 API 进程同时落盘并校验的上传数；目标机默认 `1` |
 | `TRUSTED_PROXY_IPS` | 仅在 API 直连对端可信且其传来的 `X-Forwarded-For` 已被清洗时填写；默认留空最安全 |
 
 环境文件使用逐行 `KEY=VALUE` 的 dotenv 格式，支持单/双引号，不执行 Shell，不进行

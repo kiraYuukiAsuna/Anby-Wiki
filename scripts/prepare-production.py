@@ -65,7 +65,7 @@ def main() -> None:
         "RELEASE_ID": revision[:12],
         "COLLABORATION_ORIGIN_PATTERNS": "https://" + settings["ANBY_DOMAIN"],
     })
-    for name in ["postgres", "rustfs", "meilisearch", "deploy-backups"]:
+    for name in ["postgres", "rustfs", "meilisearch", "upload-tmp", "deploy-backups"]:
         (root / "data" / name).mkdir(mode=0o700, exist_ok=True)
     print("Production settings prepared; existing credentials preserved.")
 

@@ -86,6 +86,9 @@ type Config struct {
 	RateLimitAuthPerMinute int `env:"RATE_LIMIT_AUTH_PER_MINUTE" envDefault:"10"`
 	// RateLimitUploadPerMinute caps upload endpoints.
 	RateLimitUploadPerMinute int `env:"RATE_LIMIT_UPLOAD_PER_MINUTE" envDefault:"3"`
+	// ImportUploadMaxConcurrency bounds simultaneous multipart spooling and
+	// validation in one API process.
+	ImportUploadMaxConcurrency int `env:"IMPORT_UPLOAD_MAX_CONCURRENCY" envDefault:"1"`
 	// TrustedProxyIPs lists proxy addresses whose X-Forwarded-For may be
 	// trusted for limiter client identity. Empty means use the socket peer.
 	TrustedProxyIPs []string `env:"TRUSTED_PROXY_IPS" envSeparator:","`
@@ -180,6 +183,9 @@ func (c Config) validate() error {
 				return fmt.Errorf("config: RATE_LIMIT_ENABLED=true 时 %s 必须大于 0", name)
 			}
 		}
+	}
+	if c.ImportUploadMaxConcurrency <= 0 {
+		return fmt.Errorf("config: IMPORT_UPLOAD_MAX_CONCURRENCY 必须大于 0")
 	}
 	for _, raw := range c.TrustedProxyIPs {
 		if net.ParseIP(strings.TrimSpace(raw)) == nil {

@@ -1,12 +1,17 @@
 package importer
 
 import (
+	"bytes"
 	"context"
+	"crypto/sha256"
+	"encoding/hex"
 	"encoding/json"
 	"errors"
 	"fmt"
+	"io"
 	"os"
 	"os/exec"
+	"path/filepath"
 	"strings"
 	"testing"
 
@@ -516,6 +521,79 @@ func TestValidateUploadAcceptsHTMLFragment(t *testing.T) {
 	}
 	if len(blocks) != 1 || blocks[0].Text != "Internet Engineering Task Force (IETF)" {
 		t.Fatalf("unexpected HTML fragment blocks: %#v", blocks)
+	}
+}
+
+func TestValidateUploadReaderStreamsAndRewinds(t *testing.T) {
+	content := append([]byte("%PDF-1.7\n"), bytes.Repeat([]byte("stream-data\n"), 120000)...)
+	reader := bytes.NewReader(content)
+	validated, err := ValidateUploadReader(
+		context.Background(),
+		DefaultURLPolicy(),
+		SignatureScanner{},
+		"large.pdf",
+		"application/pdf",
+		reader,
+	)
+	if err != nil {
+		t.Fatalf("validate upload reader: %v", err)
+	}
+	sum := sha256.Sum256(content)
+	if validated.SizeBytes != int64(len(content)) ||
+		validated.ContentHash != hex.EncodeToString(sum[:]) ||
+		validated.MIMEType != "application/pdf" {
+		t.Fatalf("unexpected validation metadata: %#v", validated)
+	}
+	position, err := reader.Seek(0, io.SeekCurrent)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if position != 0 {
+		t.Fatalf("reader position=%d, want 0", position)
+	}
+}
+
+func TestSignatureScannerDetectsCrossChunkPattern(t *testing.T) {
+	signature := []byte("eicar-standard-antivirus-test-file")
+	content := append(
+		bytes.Repeat([]byte("x"), signatureScanChunkSize-len(signature)/2),
+		signature...,
+	)
+	if err := (SignatureScanner{}).Scan(
+		context.Background(),
+		bytes.NewReader(content),
+	); !errors.Is(err, ErrMalware) {
+		t.Fatalf("scan error=%v, want ErrMalware", err)
+	}
+}
+
+func TestValidateUploadReaderRuntime(t *testing.T) {
+	path := strings.TrimSpace(os.Getenv("ANBY_LARGE_UPLOAD_TEST_FILE"))
+	if path == "" {
+		t.Skip("set ANBY_LARGE_UPLOAD_TEST_FILE to exercise streaming validation")
+	}
+	content, err := os.Open(path)
+	if err != nil {
+		t.Fatalf("open large upload fixture: %v", err)
+	}
+	defer content.Close()
+	validated, err := ValidateUploadReader(
+		context.Background(),
+		DefaultURLPolicy(),
+		SignatureScanner{},
+		filepath.Base(path),
+		"application/pdf",
+		content,
+	)
+	if err != nil {
+		t.Fatalf("validate large upload fixture: %v", err)
+	}
+	info, err := content.Stat()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if validated.SizeBytes != info.Size() {
+		t.Fatalf("validated size=%d, want %d", validated.SizeBytes, info.Size())
 	}
 }
 

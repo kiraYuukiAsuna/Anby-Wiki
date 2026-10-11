@@ -1,7 +1,6 @@
 package evidence
 
 import (
-	"bytes"
 	"context"
 	"crypto/sha256"
 	"encoding/hex"
@@ -24,7 +23,7 @@ import (
 //
 // StoreAsset 写入路径：
 //  1. 校验 Actor 与入参；
-//  2. 流式 SHA-256（TeeReader：内容只读一遍，同时入缓冲与摘要）；
+//  2. 流式 SHA-256 与大小统计，随后回卷输入；
 //  3. 去重预检（同事务外只读）：同 wiki 同名 active asset 已有同 content_hash
 //     的 asset_revision 时跳过对象存储 Put（Put 幂等，预检未命中时最坏多 Put
 //     一次同内容，无害）；
@@ -55,7 +54,7 @@ func NewService(repo *Repository, pages *page.Repository, store storage.Store, e
 type StoreAssetParams struct {
 	WikiID   uuid.UUID
 	Name     string
-	Content  io.Reader
+	Content  io.ReadSeeker
 	MimeType string
 	ActorID  uuid.UUID
 }
@@ -88,14 +87,15 @@ func (s *Service) StoreAsset(ctx context.Context, params StoreAssetParams) (*Sto
 		return nil, fmt.Errorf("%w: content 为 nil", ErrInvalidAssetInput)
 	}
 
-	// 流式 SHA-256：TeeReader 让内容只读一遍，同时进缓冲（供 Put）与摘要。
+	if _, err := params.Content.Seek(0, io.SeekStart); err != nil {
+		return nil, fmt.Errorf("evidence: 回卷资产内容失败: %w", err)
+	}
 	h := sha256.New()
-	buf, err := io.ReadAll(io.TeeReader(params.Content, h))
+	size, err := io.Copy(h, params.Content)
 	if err != nil {
 		return nil, fmt.Errorf("evidence: 读取资产内容失败: %w", err)
 	}
 	contentHash := hex.EncodeToString(h.Sum(nil))
-	size := int64(len(buf))
 	storageKey, err := storage.ContentKey(s.env, DomainAsset, contentHash)
 	if err != nil {
 		return nil, err
@@ -115,7 +115,10 @@ func (s *Service) StoreAsset(ctx context.Context, params StoreAssetParams) (*Sto
 	}
 
 	if needPut {
-		if err := s.store.Put(ctx, storageKey, bytes.NewReader(buf), size, mimeType); err != nil {
+		if _, err := params.Content.Seek(0, io.SeekStart); err != nil {
+			return nil, fmt.Errorf("evidence: 回卷资产内容失败: %w", err)
+		}
+		if err := s.store.Put(ctx, storageKey, params.Content, size, mimeType); err != nil {
 			return nil, err
 		}
 	}

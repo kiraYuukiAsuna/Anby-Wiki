@@ -1,12 +1,11 @@
 package main
 
 import (
-	"bytes"
 	"context"
 	"encoding/json"
 	"errors"
-	"io"
 	"net/http"
+	"strconv"
 	"strings"
 
 	"github.com/go-chi/chi/v5"
@@ -18,17 +17,31 @@ import (
 )
 
 type ImportAPI struct {
-	jobs     *importer.Service
-	evidence *evidence.Service
-	wikiID   uuid.UUID
+	jobs        *importer.Service
+	evidence    *evidence.Service
+	wikiID      uuid.UUID
+	uploadSlots chan struct{}
 }
 
 func NewImportAPI(jobs *importer.Service) *ImportAPI { return &ImportAPI{jobs: jobs} }
 
-func (a *ImportAPI) WithUploads(evidenceService *evidence.Service, wikiID uuid.UUID) *ImportAPI {
+func (a *ImportAPI) WithUploads(
+	evidenceService *evidence.Service,
+	wikiID uuid.UUID,
+	maxConcurrentUploads int,
+) *ImportAPI {
+	if maxConcurrentUploads < 1 {
+		maxConcurrentUploads = 1
+	}
 	a.evidence, a.wikiID = evidenceService, wikiID
+	a.uploadSlots = make(chan struct{}, maxConcurrentUploads)
 	return a
 }
+
+const (
+	importUploadFormMemoryBytes   = 1 << 20
+	importUploadRetryAfterSeconds = 1
+)
 
 type createImportJobRequest struct {
 	JobType string          `json:"job_type"`
@@ -94,9 +107,16 @@ func (a *ImportAPI) createUploadJob(w http.ResponseWriter, r *http.Request) {
 		httpx.WriteError(w, r, http.StatusServiceUnavailable, httpx.CodeInternal, "上传存储未配置")
 		return
 	}
+	if !a.acquireUploadSlot() {
+		w.Header().Set("Retry-After", strconv.Itoa(importUploadRetryAfterSeconds))
+		httpx.WriteError(w, r, http.StatusServiceUnavailable, httpx.CodeRateLimited,
+			"上传处理繁忙，请稍后重试")
+		return
+	}
+	defer a.releaseUploadSlot()
 	maxBytes := importer.DefaultURLPolicy().MaxBytes
 	r.Body = http.MaxBytesReader(w, r.Body, maxBytes+(1<<20))
-	if err := r.ParseMultipartForm(maxBytes + 1); err != nil {
+	if err := r.ParseMultipartForm(importUploadFormMemoryBytes); err != nil {
 		httpx.WriteError(w, r, http.StatusRequestEntityTooLarge, httpx.CodeBadRequest, "上传内容超过限制或表单非法")
 		return
 	}
@@ -109,17 +129,15 @@ func (a *ImportAPI) createUploadJob(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	defer file.Close()
-	content, err := io.ReadAll(io.LimitReader(file, maxBytes+1))
-	if err != nil || int64(len(content)) > maxBytes {
+	if header.Size > maxBytes {
 		httpx.WriteError(w, r, http.StatusRequestEntityTooLarge, httpx.CodeBadRequest, "上传内容超过限制")
 		return
 	}
 	mimeType := header.Header.Get("Content-Type")
-	if mimeType == "" || strings.HasPrefix(mimeType, "application/octet-stream") {
-		mimeType = http.DetectContentType(content)
-	}
-	acquired, err := importer.ValidateUpload(r.Context(), importer.DefaultURLPolicy(), importer.SignatureScanner{},
-		header.Filename, mimeType, content)
+	acquired, err := importer.ValidateUploadReader(
+		r.Context(), importer.DefaultURLPolicy(), importer.SignatureScanner{},
+		header.Filename, mimeType, file,
+	)
 	if err != nil {
 		importError(w, r, err)
 		return
@@ -174,7 +192,7 @@ func (a *ImportAPI) createUploadJob(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	asset, err := a.evidence.StoreAsset(r.Context(), evidence.StoreAssetParams{WikiID: a.wikiID,
-		Name: acquired.Filename, Content: bytes.NewReader(acquired.Content), MimeType: acquired.MIMEType, ActorID: actorID})
+		Name: acquired.Filename, Content: file, MimeType: acquired.MIMEType, ActorID: actorID})
 	if err != nil {
 		serviceError(w, r, err)
 		return
@@ -190,6 +208,19 @@ func (a *ImportAPI) createUploadJob(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	httpx.WriteJSON(w, http.StatusCreated, job)
+}
+
+func (a *ImportAPI) acquireUploadSlot() bool {
+	select {
+	case a.uploadSlots <- struct{}{}:
+		return true
+	default:
+		return false
+	}
+}
+
+func (a *ImportAPI) releaseUploadSlot() {
+	<-a.uploadSlots
 }
 
 func (a *ImportAPI) getJob(w http.ResponseWriter, r *http.Request) {
