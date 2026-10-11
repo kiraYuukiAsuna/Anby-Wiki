@@ -1525,6 +1525,18 @@ URL 路径包含 SSRF 防护：
 
 来源中的脚本或指令只被当作数据，不执行。
 
+#### 大文件入口与当前内存边界
+
+生产浏览器仍使用同源 `/api/*`，但大文件不能经 Next.js 外部 rewrite：Next 16 默认
+只缓冲 10 MiB，超限后会继续转发截断请求，而不是向客户端直接返回 413。实测 128 MiB
+上传因此曾表现为非 JSON 500。当前宿主机 Nginx 将 API 路径直送仅绑定回环地址的
+Go API，并关闭 request buffering；Next 的 301 MiB 配置只保留给开发和兼容路径。
+
+这个路由修复解决了“请求被截断”，没有解决“服务端全量读入”。合法 128 MiB 级和
+298 MiB 级 PDF 的存储前校验分别让 API cgroup 达到 826.7 MiB 和 1,905.6 MiB，
+响应后大堆仍被保留。进入 GA 前仍需流式校验/受控落盘、上传并发背压和完整 Worker
+成功路径复测；分享中不能把 300 MiB 配置上限等同于已通过容量验收。
+
 ### 9.4 第 2 步：先固化来源，再解析
 
 原始资产和 Source 会在解析前持久化。
@@ -1604,6 +1616,11 @@ URL 路径包含 SSRF 防护：
 两种顺序都稳定得到 26 个 Chunk：7 page、8 table、3 figure、2 chart、6 text，
 其中 19 个带页内区域。模型对正序和逆序均给出了较高的 grounding/fidelity 等分项，
 但服务端综合安全分仍为 0.69，因此门禁没有因为“看起来不错”而放行。
+
+进一步把正序与逆序 dossier 拼接为 18 页，用重复内容和方向反转同时施压。结果稳定为
+50 个 Chunk：14 page、15 table、6 figure、3 chart、12 text；36 个带页内区域，
+页码完整覆盖 1–18，ImportPlan 仍恰好只有三个 create route。该案例说明长文档验收
+不能只数 Chunk，还要同时约束页覆盖、目标页面数量和顺序扰动后的语义稳定性。
 
 逆序语料还暴露了一个只测单文档很难发现的问题：模型曾把
 “`AG-OPS-2026 operationalizes AG-ARCH-2026`”和
@@ -3128,7 +3145,7 @@ Claim 独立后：
 
 ## 18. 当前已经实现到什么程度
 
-截至 2026-09-22 的项目状态：
+截至 2026-10-12 的项目状态：
 
 ### 18.1 已落到代码和契约的能力
 
@@ -3174,12 +3191,13 @@ Claim 独立后：
 远端生产联调进一步完成：
 
 - 六个 OCI target 构建、Migration gate、Doctor 与完整生产拓扑滚动部署；
-- PostgreSQL、Redis、MinIO、Meilisearch、Semantic Kernel、API、Worker、Web
+- PostgreSQL、Redis、RustFS、Meilisearch、Semantic Kernel、API、Worker、Web
   全部 healthy，Web/API 探针通过；
 - 双用户正式 Session + WebSocket E2E，覆盖 Presence、update 广播、幂等重放、
   断线恢复、陈旧 sequence 409、最新 sequence 发布及 snapshot/compact 恢复。
-- 正式域名由宿主机 Nginx 终结 HTTPS，并代理到仅绑定 `127.0.0.1:4444` 的 Web；
-  HTTPS 首页/API 与 WSS 协作 E2E 已通过。
+- 正式域名由宿主机 Nginx 终结 HTTPS；页面代理到回环 Web，`/api/*` 与健康检查
+  直送回环 Go API，HTTPS 首页/API 与 WSS 协作 E2E 已通过。API location 关闭请求
+  缓冲，避免大文件经 Next.js 默认 10 MiB 缓冲后被截断。
 - 157/157 个 OpenAPI operation 均有明确 Web 或 CLI owner；155 个 Web-owned
   operation 可追踪到页面/global layout，2 个授权兑换/自撤销 operation 属于 CLI transport，
   并由 `make web-api-coverage` 持续检查。
@@ -3202,10 +3220,15 @@ Claim 独立后：
   集成，分别新增 17 条和 37 条引用，并建立 JSON 相关页面的双向关联；待审核任务与
   投影错误均为零。
 - 复杂文档生产验收进一步覆盖真实论文、混合扫描件、提示注入、501 页边界、Provider
-  故障恢复、Worker 优雅重启，以及三份关联文档的正序/逆序 9 页 dossier。顺序扰动
-  暴露的关系误判和代词关系召回已修复，最终版本为 `e87e9a8a458b`。
+  故障恢复、Worker 优雅重启，以及三份关联文档的正序/逆序 9 页 dossier。继续把
+  正逆序拼接为 18 页后得到 50 个 Chunk、36 个页内区域，仍只规划三个目标页面。
+  顺序扰动暴露的关系误判和代词关系召回已修复。
+- 128 MiB 级与 298 MiB 级合法 PDF 的上传边界分别返回预期 422 JSON，权威计数不变；
+  小 PDF 通过同源 Session/multipart 返回 201 并可取消。API 峰值分别为 826.7 MiB
+  和 1,905.6 MiB，且大请求后保留堆，因此当前结论仍限于 Internal Beta。
 - 最终 CI 的 8 个 Job、Migration gate、全服务健康检查和 Doctor 均通过；active
   ImportJob、开放导入 Proposal、Outbox backlog/dead 与 Projection error 均为零。
+  当前生产版本为 `106add8d3672`。
 
 ### 18.3 第一版修复后的协作实现边界
 
@@ -3233,9 +3256,10 @@ Proposal，因此普通导入尚未使用 AI Trust 分档。分享时可以展�
 1. PostgreSQL 与对象存储备份恢复演练及 RPO/RTO；
 2. 完整键盘、读屏、对比度和网络失败态人工验收；
 3. 邮箱验证、账号恢复、MFA 和会话管理；
-4. HSTS、证书续期告警与完整 CSRF 防护；
+4. 证书续期失败告警、代理恢复演练与完整 CSRF 防护；
 5. 目标硬件上的 10 万页面容量与中文语义召回；
-6. Beta 用户、观察期、SLO 和负责人。
+6. 接近 300 MiB 的完整 Worker 成功路径、并发背压与 API 内存回收；
+7. Beta 用户、观察期、SLO 和负责人。
 
 因此分享中应使用：
 
@@ -3588,9 +3612,9 @@ AST 适合保存一份不可变文档快照，但不适合高频关系查询。
 生产拓扑验证。但仍有明确的发布阻塞：
 
 - 备份恢复演练；
-- HSTS/CSRF；
+- 证书续期失败告警、代理恢复演练与完整 CSRF；
 - 账号恢复/MFA；
-- 目标容量；
+- 搜索目标容量，以及接近 300 MiB 导入的 Worker/并发/内存回收；
 - 正式 Beta 范围和 SLO；
 - 完整人工可访问性验收。
 

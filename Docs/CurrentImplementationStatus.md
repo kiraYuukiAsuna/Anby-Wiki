@@ -14,10 +14,10 @@ Yjs update、持久恢复、普通发布与 AI 合并的 sequence CAS、同标�
 跨标签页离线恢复与多 API 实例实时广播尚未闭环，不能概括为全部协作设计能力均已完成。
 
 当前代码已通过编译、契约、依赖安全和部署静态门禁，并在本机隔离环境完成
-PostgreSQL、Redis、MinIO、Meilisearch、API、Linux Worker 与 Next.js Web 的真实
-联调。提交 `e87e9a8` 已在远端生产拓扑完成六个 OCI target 构建、迁移 gate、Doctor、
+PostgreSQL、Redis、RustFS、Meilisearch、API、Linux Worker 与 Next.js Web 的真实
+联调。提交 `106add8` 已在远端生产拓扑完成六个 OCI target 构建、迁移 gate、Doctor、
 滚动替换和健康检查，并通过复杂 PDF/扫描件、提示注入、Provider 故障恢复、上传幂等、
-501 页边界、在途 Worker restart 及关联文档正逆序验收。另一个完全隔离的远端
+501 页边界、在途 Worker restart、18 页关联文档及 128/298 MiB 上传边界验收。另一个完全隔离的远端
 数据库/bucket/index/Redis DB 已执行
 149/149 OpenAPI operation handler 探针、核心成功工作流、治理、批量审核、导入、
 AI 配置和双用户协作 E2E。“实现完成”仍不等于“生产发布就绪”：目标规模容量、正式域名
@@ -33,6 +33,9 @@ AI 配置和双用户协作 E2E。“实现完成”仍不等于“生产发布�
   顺序构建、迁移闸门、Doctor、应用更新与失败回滚。
 - 宿主机 Nginx 模板覆盖 HTTPS、ACME 验证、HSTS、流式响应与协作 WebSocket；
   Certbot 证书可沿用服务器账户，续期由系统 timer 和 reload hook 管理。
+- Web 与 API 分别只发布宿主机回环端口。Nginx 将 `/api/*` 和健康检查直送 Go API，
+  并关闭 API 请求缓冲；其余页面请求送 Web。Next rewrite 只作为开发和兼容路径，
+  避免生产大文件受其默认 10 MiB 请求缓冲截断。
 - PostgreSQL、RustFS 与 Meilisearch 持久数据统一到根目录 `data/`；配置、首个管理员
   凭据及配置备份位于被 Git/Docker 排除的 `.env` / `Secret/`。首次管理员通过现有
   领域 API 初始化后关闭公开注册，未引入直接 SQL 权威写入。
@@ -111,12 +114,19 @@ AI 配置和双用户协作 E2E。“实现完成”仍不等于“生产发布�
 - 三份各 3 页且互相引用的架构、运维、事故文档已分别按正序和逆序合并验收。两种顺序
   均稳定生成 26 个 Chunk、覆盖 9 页和 19 个页内区域，并只规划三个指定页面；低于
   0.70 的结果保持在 `action_required`，未生成 Proposal。
+- 同一正序与逆序 dossier 拼接为 18 页后，仍只规划三个指定页面；生产结果为 50 个
+  Chunk、36 个页内区域并完整覆盖第 1–18 页，质量 0.690，最终取消且无 Proposal。
 - 顺序扰动曾暴露模型把 `operationalizes`、`remains authoritative` 误判为 `updates`
   的问题。关系候选现在必须由直接方向证据支持；同 Chunk 的 “It updates/obsoletes”
   只有在 240 字符内存在唯一前置作品主语且中间无其他作品时才保留。不可变 Extraction
   不回写，复用时重新执行确定性守卫。
 - ImportPlan `related_to` 只表示面向已存在 Page 的 link route；同时创建的新页面之间
-  的候选 Claim 不以该字段表达。最终生产版本为 `e87e9a8a458b`，CI `38156591183`
+  的候选 Claim 不以该字段表达。
+- 128 MiB 级和 298 MiB 级合法 EmbeddedFile PDF 经直连入口分别在 3.973 秒和
+  6.059 秒返回预期的存储前 422 JSON，权威计数不变；7,474 字节 PDF 返回 201 并
+  可取消。Web 保持约 39 MiB，但 API cgroup 峰值分别为 826.7 MiB 和 1,905.6 MiB，
+  且响应后保留堆；完整 300 MiB Worker 路径和并发仍属发布阻塞。
+- 最终生产版本为 `106add8d3672`，CI `38169645904`
   的 8 个 Job、Migration gate、全服务健康检查和只读 Doctor 均通过；active ImportJob、
   开放导入 Proposal、Outbox backlog/dead 与 Projection error 均为 0。
 
@@ -354,7 +364,7 @@ outlines。References/Related 是 Current Revision
 - 预发布阶段只维护 `000001_initial_schema.up/down.sql`。
 - 开发环境不使用 Docker；`scripts/dev.sh` 连接自行提供的 PostgreSQL、Redis、
   MinIO，并可按配置连接外部 Meilisearch。
-- 生产 Compose 包含 PostgreSQL、Redis、MinIO、Meilisearch、Semantic Kernel、API、
+- 生产 Compose 包含 PostgreSQL、Redis、RustFS、Meilisearch、Semantic Kernel、API、
   Worker、Web、CLI tools image、migrate 和 doctor；不包含 Nginx、OIDC 或 TLS 终结。
 - 数据与应用服务继承只读根文件系统、非 root、capability drop 和
   `no-new-privileges` 策略。应用镜像在部署机本地按 `RELEASE_ID` 构建。
@@ -420,7 +430,8 @@ outlines。References/Related 是 Current Revision
 
 - PostgreSQL/对象存储备份恢复演练和 RPO/RTO 记录；
 - 10 万页面目标硬件容量、搜索语义质量和长时间队列/SLO 观察；
-- 正式域名下的 HSTS、CSRF、账号恢复/MFA 与完整键盘、读屏、对比度人工验收。
+- 正式域名下的证书续期失败告警、代理恢复演练、CSRF、账号恢复/MFA 与完整键盘、
+  读屏、对比度人工验收。
 
 仓库现有 Go 单元测试、157-operation handler 探针和高风险成功工作流仍不能穷举
 全部 ProposalOperation 组合、外部模型供应商行为或容量/安全/人工可访问性；本轮真实

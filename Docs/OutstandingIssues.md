@@ -48,21 +48,21 @@
 3. 提供 TOTP 或 WebAuthn MFA、恢复码和登录设备/会话管理。
 4. 在正式域名验证注册关闭、登录、退出、角色授予/撤销和注册账号删除。
 
-## 3. TLS 已终结，显式 CSRF 与 HSTS 尚未恢复
+## 3. TLS/HSTS 已终结，显式 CSRF 与证书恢复演练尚未完成
 
 ### 3.1 现状
 
 - 生产 Compose 不终结 TLS；宿主机 Nginx 已为
-  `anbywiki.kirayuukiasuna.cloud` 终结 HTTPS，并代理到仅绑定
-  `127.0.0.1:4444` 的 Web。
+  `anbywiki.momiya.cloud` 终结 HTTPS。页面代理到仅绑定回环地址的 Web，
+  `/api/*` 与健康检查直送仅绑定 `127.0.0.1:60018` 的 Go API。
 - `SESSION_COOKIE_SECURE=true`，正式 HTTPS/WSS 域名的登录和协作 E2E 已通过；
-  当前响应尚未提供 HSTS。
+  当前响应提供一年期 HSTS。
 - Session Cookie 使用 HttpOnly、Secure 与 `SameSite=Lax`，但 ADR-0020 已移除
   Origin/Referer 门禁；`SameSite=Lax` 不是完整 CSRF 防护。
 
 ### 3.2 关闭条件
 
-1. 为正式域名启用 HSTS，并验证证书自动续期、失败告警和代理配置备份恢复。
+1. 验证证书自动续期、失败告警和代理配置备份恢复。
 2. 采用同步 CSRF Token、Fetch Metadata 或等价可信来源校验，并完成浏览器验证。
 3. 若按最终客户端 IP 限流，先由外层清洗 `X-Forwarded-For`，再只把 API 的可信
    直连对端加入 `TRUSTED_PROXY_IPS`。
@@ -159,26 +159,34 @@
 
 - 文本与视觉双轨 Parser、逐页 Poppler 渲染、页面分析 Schema、AI Kernel 图片输入、
   SourceVersion/SourceChunk 持久化、Extraction/ImportPlan 映射及管理端配置探针均已实现。
-- `e87e9a8` 已在正式域名使用真实多模态 Provider 完成三页论文、原生文本+扫描混合、
+- `106add8` 已在正式域名使用真实多模态 Provider 完成三页论文、原生文本+扫描混合、
   纯扫描表格和扫描提示注入语料。成功路径生成的 Proposal 均已通过治理 API 拒绝；
   低于 0.70 的结果进入 `action_required`，提示注入在 Extraction 失败且不生成 Proposal。
 - 三份各 3 页的关联架构、运维、事故文档已按正序和逆序合并验收。两次均得到 26 个
   Chunk、9 页覆盖、19 个区域定位和三个指定 create route；顺序扰动暴露的错误
   `updates` Claim 已由直接关系证据守卫修复，唯一前置主语的同 Chunk 代词证据仍可保留。
+- 正序与逆序 dossier 拼接为 18 页后得到 50 个 Chunk、36 个区域定位、完整 1–18 页
+  覆盖，仍只规划三个指定 create route；质量 0.690，安全停在 `action_required`。
 - 畸形 PDF、501 页边界、上传幂等冲突、AI Kernel 不可用/恢复重试及在途 Worker
   Compose restart 均已通过。重试复用不可变 SourceVersion；Worker 在 parse 阶段收到
   restart 后等待 55 秒完成单一 Run，再健康启动。
 - 三页并发视觉分析的目标机峰值为 API 145.2 MiB、AI Kernel 119.7 MiB、Web 45.3 MiB、
   Worker 20.2 MiB。Doctor、Outbox backlog/dead 与 Projection error 均为 0。
-- 300 MiB 文件目前仍会在 API 与 Worker 校验阶段完整读入内存；尚未验证该上限文件、
-  多任务并发、真实供应商超时/限流和账单成本。
+- Next.js 外部 rewrite 默认只缓冲 10 MiB，超限仍会转发截断请求，曾让 128 MiB
+  上传表现为非 JSON 500。生产 Nginx 现直连回环 API 并关闭请求缓冲，Next 的
+  301 MiB 上限只作兼容路径；修复后小 PDF 的 Session/multipart 201 与取消链路通过。
+- 128 MiB 级和 298 MiB 级合法 PDF 的存储前 422 边界已实测：API cgroup 峰值分别为
+  826.7 MiB 和 1,905.6 MiB，Web 维持约 39 MiB，权威计数不变且无 OOM。API 响应后
+  仍保留约 1.86 GiB，测试结束需重启恢复到 8.5 MiB。
+- 接近 300 MiB 的完整 Worker 成功路径、多任务并发、真实供应商超时/限流和账单成本
+  仍未验证；API 与 Worker 的全量读取也尚未流式化。
 
 ### 8.2 关闭条件
 
-1. 在目标资源规格上记录 300 MiB 文件及多任务并发的 API/Worker 峰值、耗时和失败恢复；
-   超出预算时改为流式校验与临时文件解析。
+1. 将上传校验/解析改为流式或受控落盘，并增加明确的并发背压；复测接近 300 MiB 的
+   完整 Worker 成功路径和多任务并发，证明 API 无需人工重启回收内存。
 2. 用真实供应商超时、限流和配额耗尽场景验证告警、重试、错误分类与账单成本。
-3. 在当前 9 页关联语料基础上补充更长文档、跨页表格/图表和更多语言回归集，并定义
+3. 在当前 18 页关联语料基础上补充跨页表格/图表和更多语言回归集，并定义
    模型升级后的固定质量基线和抽样频率。
 
 已完成证据见 [商业验收报告](CommercialAcceptance-2026-10-11.md)。
