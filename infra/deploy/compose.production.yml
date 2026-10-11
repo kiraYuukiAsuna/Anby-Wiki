@@ -100,7 +100,6 @@ services:
         chown 10001:10001 /rustfsdata
         chown 1000:1000 /meilidata
         chown 10001:10001 /uploadtmp
-        chmod 0700 /uploadtmp
     restart: "no"
 
   postgres:
