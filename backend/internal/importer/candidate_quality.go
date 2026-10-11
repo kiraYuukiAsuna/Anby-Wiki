@@ -86,14 +86,14 @@ func normalizeCandidatesForUse(input *Candidates) *Candidates {
 	return result
 }
 
-// claimCandidateRelationExplicit applies a deliberately conservative guard to
-// instance_of, the only built-in taxonomic relation. Models often misuse it as
-// a generic "related to" edge for every nearby technical term. Page prose is
-// still retained when this guard drops a Claim, so requiring an explicit
-// classification phrase improves graph precision without losing source
-// content. Other properties already have stronger direction/type guards.
+// claimCandidateRelationExplicit applies conservative evidence guards to
+// semantic relations that models commonly infer from nearby work mentions.
+// Page prose is retained when a Claim is dropped, so requiring an explicit
+// directional phrase improves graph precision without losing source content.
 func claimCandidateRelationExplicit(candidate ClaimCandidate, entities map[uuid.UUID]EntityCandidate) bool {
-	if candidate.PropertyKey != "instance_of" {
+	if candidate.PropertyKey != "instance_of" &&
+		candidate.PropertyKey != "updates" &&
+		candidate.PropertyKey != "obsoletes" {
 		return true
 	}
 	if candidate.Subject.CandidateID != nil {
@@ -104,10 +104,20 @@ func claimCandidateRelationExplicit(candidate ClaimCandidate, entities map[uuid.
 			return false
 		}
 		for _, item := range candidate.Evidence {
-			if evidenceExplicitlyClassifies(item.Quotation, subject, value) {
+			if candidate.PropertyKey == "instance_of" &&
+				evidenceExplicitlyClassifies(item.Quotation, subject, value) {
+				return true
+			}
+			if candidate.PropertyKey != "instance_of" &&
+				evidenceExplicitlyRelatesWorks(
+					item.Quotation, subject, value, candidate.PropertyKey,
+				) {
 				return true
 			}
 		}
+		return false
+	}
+	if candidate.PropertyKey != "instance_of" {
 		return false
 	}
 	for _, item := range candidate.Evidence {
@@ -119,6 +129,54 @@ func claimCandidateRelationExplicit(candidate ClaimCandidate, entities map[uuid.
 		} {
 			if strings.Contains(text, marker) {
 				return true
+			}
+		}
+	}
+	return false
+}
+
+func evidenceExplicitlyRelatesWorks(
+	quotation string,
+	subject EntityCandidate,
+	value EntityCandidate,
+	property string,
+) bool {
+	markers := []string{"updates"}
+	if property == "obsoletes" {
+		markers = []string{"obsoletes", "supersedes", "replaces"}
+	}
+	text := " " + normalizedIdentityText(quotation) + " "
+	for subjectName := range entityCandidateNames(subject) {
+		for valueName := range entityCandidateNames(value) {
+			for _, marker := range markers {
+				if strings.Contains(
+					text,
+					" "+subjectName+" "+marker+" "+valueName+" ",
+				) || strings.Contains(
+					text,
+					" "+subjectName+" updates and obsoletes "+valueName+" ",
+				) {
+					return true
+				}
+			}
+		}
+	}
+	compact := strings.ReplaceAll(text, " ", "")
+	for subjectName := range entityCandidateNames(subject) {
+		for valueName := range entityCandidateNames(value) {
+			subjectName = strings.ReplaceAll(subjectName, " ", "")
+			valueName = strings.ReplaceAll(valueName, " ", "")
+			markers := []string{"更新", "修订"}
+			if property == "obsoletes" {
+				markers = []string{"废止", "取代", "替代"}
+			}
+			for _, marker := range markers {
+				if strings.Contains(
+					compact,
+					subjectName+marker+valueName,
+				) {
+					return true
+				}
 			}
 		}
 	}

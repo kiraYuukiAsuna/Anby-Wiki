@@ -765,6 +765,71 @@ func TestNormalizeCandidatesDeduplicatesNamesAndRejectsWrongRelationDirection(t 
 	}
 }
 
+func TestNormalizeCandidatesRequiresExplicitUpdatesAndObsoletesEvidence(t *testing.T) {
+	incidentID, operationsID, architectureID, oldOperationsID :=
+		uuid.New(), uuid.New(), uuid.New(), uuid.New()
+	value := func(id uuid.UUID) json.RawMessage {
+		raw, _ := json.Marshal(map[string]uuid.UUID{"entity_candidate_id": id})
+		return raw
+	}
+	evidence := func(quotation string) []CandidateEvidence {
+		return []CandidateEvidence{{
+			ChunkID: uuid.New(), Quotation: quotation,
+			CharStart: 0, CharEnd: len([]rune(quotation)),
+		}}
+	}
+	candidates := &Candidates{
+		SchemaVersion: 1, SourceVersionID: uuid.New(), QualityScore: 0.9,
+		Entities: []EntityCandidate{
+			{CandidateID: incidentID, TypeKey: "work", Label: "AG-INC-042"},
+			{CandidateID: operationsID, TypeKey: "work", Label: "AG-OPS-2026"},
+			{CandidateID: architectureID, TypeKey: "work", Label: "AG-ARCH-2026"},
+			{CandidateID: oldOperationsID, TypeKey: "work", Label: "AG-OPS-2025"},
+		},
+		Claims: []ClaimCandidate{
+			{
+				CandidateID: uuid.New(),
+				Subject:     CandidateSubject{CandidateID: &incidentID},
+				PropertyKey: "updates", Value: value(operationsID),
+				Evidence: evidence("AG-INC-042 updates AG-OPS-2026."),
+			},
+			{
+				CandidateID: uuid.New(),
+				Subject:     CandidateSubject{CandidateID: &operationsID},
+				PropertyKey: "obsoletes", Value: value(oldOperationsID),
+				Evidence: evidence(
+					"AG-OPS-2026 updates and obsoletes AG-OPS-2025.",
+				),
+			},
+			{
+				CandidateID: uuid.New(),
+				Subject:     CandidateSubject{CandidateID: &operationsID},
+				PropertyKey: "updates", Value: value(architectureID),
+				Evidence: evidence(
+					"AG-OPS-2026 operationalizes the topology defined in AG-ARCH-2026.",
+				),
+			},
+			{
+				CandidateID: uuid.New(),
+				Subject:     CandidateSubject{CandidateID: &incidentID},
+				PropertyKey: "updates", Value: value(architectureID),
+				Evidence: evidence(
+					"AG-INC-042 updates AG-OPS-2026; AG-ARCH-2026 remains authoritative.",
+				),
+			},
+		},
+	}
+
+	normalized := normalizeCandidatesForUse(candidates)
+	if len(normalized.Claims) != 2 {
+		t.Fatalf("unexpected normalized claims: %#v", normalized.Claims)
+	}
+	if normalized.Claims[0].PropertyKey != "updates" ||
+		normalized.Claims[1].PropertyKey != "obsoletes" {
+		t.Fatalf("explicit work relations were not retained: %#v", normalized.Claims)
+	}
+}
+
 func TestSelectCandidatesForPlanPrefersExactLabelOverAlias(t *testing.T) {
 	conceptID, workID, authorID := uuid.New(), uuid.New(), uuid.New()
 	value, _ := json.Marshal(map[string]uuid.UUID{"entity_candidate_id": authorID})
