@@ -2,22 +2,22 @@
 
 ## 结论
 
-提交 `106add8d3672` 已部署到 `https://anbywiki.momiya.cloud/`。复杂 PDF、扫描件、
+提交 `18944a7d0c30` 已部署到 `https://anbywiki.momiya.cloud/`。复杂 PDF、扫描件、
 多模态 Provider、不可变解析制品、ImportPlan、Proposal 治理、失败重试和 Worker
 优雅重启已达到 Internal Beta 的商业使用门槛。
 
-本结论不等于全产品 GA 授权。接近 300 MiB 的单次 API 上传边界已实测，但完整 Worker
-成功路径、并发上传与内存回收仍未达标；备份恢复、账号恢复/MFA、目标规模搜索容量和
-人工可访问性也继续按 `OutstandingIssues.md` 保留。
+本结论不等于全产品 GA 授权。298 MiB 完整 Worker 路径、单实例并发背压和内存回收
+已达标；持续压力、多副本策略、备份恢复、账号恢复/MFA、目标规模搜索容量和人工
+可访问性仍按 `OutstandingIssues.md` 保留。
 
 ## 发布门禁
 
-- GitHub Actions CI `38169645904`：backend、web、ai-kernel、contracts、
+- GitHub Actions CI `38173395650`：backend、web、ai-kernel、contracts、
   client-drift、migrations、security、deploy 共 8 个 Job 全部通过。
 - 本地：`go test ./...`、`make check` 通过；Docker 实例验证由 CI 与生产部署完成。
 - 生产：Migration gate `current=1 expected=1 compatible=1..1 dirty=false`；
   部署前后及最终只读 Doctor 均为 0 issue。
-- 当前 API/Worker/Web/AI Kernel 均为 `106add8d3672` 且 healthy。
+- 当前 API/Worker/Web/AI Kernel 均为 `18944a7d0c30` 且 healthy。
 
 ## 真实语料
 
@@ -84,6 +84,12 @@ Chunk；36 个 Chunk 带页内区域，页码完整覆盖 1–18。计划仍只�
   `proxy_request_buffering off`；Next 的 301 MiB 设置只保留为兼容路径。
 - 修复后 7,474 字节 PDF 经同源 Session 和 multipart 返回 201，Job 从 `queued`
   取消为 `cancelled`，无 Proposal；证明直连入口不破坏 cookie、上传或取消语义。
+- 大文件预检进一步改为 1 MiB 内存 + 受控磁盘临时文件，MIME、恶意签名与 SHA-256
+  流式执行；Evidence 回卷后直传对象存储，Worker 按对象 `Head` 精确分配一份内容。
+  同一 API 进程同时只接纳一个上传；298 MiB 在途时第二个请求立即返回结构化 503，
+  主请求不受影响且临时目录最终为空。
+- 首次部署因受限 `storage-init` 在 `chown` 后无权执行冗余 `chmod` 而安全中止，
+  自动恢复旧版本；移除该命令后重新部署成功，目录保持 `0700` 和 `10001:10001`。
 - 最终 active ImportJob、开放导入 Proposal、Outbox backlog/dead、Projection error
   均为 0。
 
@@ -101,8 +107,8 @@ Chunk；36 个 Chunk 带页内区域，页码完整覆盖 1–18。计划仍只�
 18 页关联 dossier 处理期间的容器峰值为 API 86.77 MiB、Worker 31.5 MiB、
 AI Kernel 126.7 MiB、Web 49.17 MiB。
 
-两个带真实 EmbeddedFile 对象且经生产 Worker 镜像 `pdfinfo`/`pdfdetach` 验证的
-大 PDF 使用 256 字符标题在存储前触发确定性 422：
+修复前，两个带真实 EmbeddedFile 对象且经生产 Worker 镜像 `pdfinfo`/`pdfdetach`
+验证的大 PDF 使用 256 字符标题在存储前触发确定性 422：
 
 | 文件 | HTTP 结果 | API cgroup 峰值 | Web 峰值 | 宿主机最低可用内存 |
 | --- | --- | ---: | ---: | ---: |
@@ -114,15 +120,28 @@ AI Kernel 126.7 MiB、Web 49.17 MiB。
 内存，测试结束后通过单实例重启恢复到 8.5 MiB；这说明当前全量 multipart、
 `io.ReadAll` 和签名扫描会产生显著堆保留，不能只依据“未 OOM”判定容量达标。
 
+流式化后使用同类 PDF 重新测试：
+
+| 场景 | 结果 | API 总峰值 | API anon 峰值 | Worker 峰值 | 宿主机最低可用内存 |
+| --- | --- | ---: | ---: | ---: | ---: |
+| 134,214,531 bytes，存储前 422 | 1.441 秒，权威计数不变 | 211.4 MiB | 75.9 MiB | 14.9 MiB | 3.86 GiB |
+| 312,472,451 bytes，存储前 422 | 2.650 秒，权威计数不变 | 390.5 MiB | 80.0 MiB | 11.1 MiB | 3.87 GiB |
+| 312,472,451 bytes，完整 Worker | 20 秒，七阶段成功、质量 1.0 | 461.2 MiB | 148.3 MiB | 774.0 MiB | 2.96 GiB |
+
+API 总峰值主要包含可回收的临时文件页缓存；两次 422 后 anon 只增加约 4 MiB，
+临时目录均回到 0。完整 Job `01a12cbc-65ea-7c7a-9ae6-9d67c2336849` 生成一个 page
+Chunk，review 为 `skipped` 且无 Proposal；30 秒后 API/Worker 分别回落到
+150.3/312.8 MiB，无需重启。全程无 OOM 或服务重启，最终 Doctor 和活动
+Job/Proposal/Outbox/Dead 均为 0。
+
 同一真实论文在不同模型运行中既出现过自动通过，也出现过质量 0.690 的
 `action_required`。系统没有降低 0.70 门槛或发布低质量 Proposal；这种供应商波动
 按人工复核路径显式暴露。
 
 ## 保留风险
 
-1. 298 MiB API 前置校验已完成，但尚未执行接近 300 MiB 的完整 Worker 成功路径和
-   多任务并发；API 单请求峰值 1.9 GiB 且响应后不主动归还，需流式化或增加明确的
-   并发/背压与内存回收方案后复测。
+1. 单次 298 MiB 完整链路和并发拒绝已通过；仍需做持续上传/重试压力、异常退出后的
+   临时文件清理演练，以及未来多 API/Worker 副本下的全局并发策略。
 2. 真实供应商超时/限流仍需结合账单与告警验证；本轮已验证内部 Kernel 不可用、
    错误分类、恢复和重试。
 3. 当前关联回归集已扩展到 18 页；还需补充长文档跨页表格、更多语言和模型升级后的

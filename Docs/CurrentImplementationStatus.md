@@ -15,7 +15,7 @@ Yjs update、持久恢复、普通发布与 AI 合并的 sequence CAS、同标�
 
 当前代码已通过编译、契约、依赖安全和部署静态门禁，并在本机隔离环境完成
 PostgreSQL、Redis、RustFS、Meilisearch、API、Linux Worker 与 Next.js Web 的真实
-联调。提交 `106add8` 已在远端生产拓扑完成六个 OCI target 构建、迁移 gate、Doctor、
+联调。提交 `18944a7` 已在远端生产拓扑完成六个 OCI target 构建、迁移 gate、Doctor、
 滚动替换和健康检查，并通过复杂 PDF/扫描件、提示注入、Provider 故障恢复、上传幂等、
 501 页边界、在途 Worker restart、18 页关联文档及 128/298 MiB 上传边界验收。另一个完全隔离的远端
 数据库/bucket/index/Redis DB 已执行
@@ -122,11 +122,13 @@ AI 配置和双用户协作 E2E。“实现完成”仍不等于“生产发布�
   不回写，复用时重新执行确定性守卫。
 - ImportPlan `related_to` 只表示面向已存在 Page 的 link route；同时创建的新页面之间
   的候选 Claim 不以该字段表达。
-- 128 MiB 级和 298 MiB 级合法 EmbeddedFile PDF 经直连入口分别在 3.973 秒和
-  6.059 秒返回预期的存储前 422 JSON，权威计数不变；7,474 字节 PDF 返回 201 并
-  可取消。Web 保持约 39 MiB，但 API cgroup 峰值分别为 826.7 MiB 和 1,905.6 MiB，
-  且响应后保留堆；完整 300 MiB Worker 路径和并发仍属发布阻塞。
-- 最终生产版本为 `106add8d3672`，CI `38169645904`
+- multipart 超过 1 MiB 后写入权限为 `0700` 的宿主机临时目录；MIME、签名和摘要
+  流式校验，Evidence 直传对象存储，Worker 只保留一份按 `Head` 精确分配的内容。
+  单 API 进程默认只接纳一个上传，第二个并发请求返回结构化 503。
+- 128 MiB 与 298 MiB 存储前 422 的 API anon 峰值降为 75.9/80.0 MiB，临时文件
+  响应后均清零。298 MiB 完整 Worker Job 在 20 秒内七阶段成功、质量 1.0；
+  API/Worker 峰值为 461.2/774.0 MiB，30 秒后回落至 150.3/312.8 MiB，无重启或 OOM。
+- 最终生产版本为 `18944a7d0c30`，CI `38173395650`
   的 8 个 Job、Migration gate、全服务健康检查和只读 Doctor 均通过；active ImportJob、
   开放导入 Proposal、Outbox backlog/dead 与 Projection error 均为 0。
 
