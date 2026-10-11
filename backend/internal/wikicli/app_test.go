@@ -39,10 +39,11 @@ func TestAuthExchangeChecksConfigPathBeforeRemoteCall(t *testing.T) {
 	defer server.Close()
 
 	app := testApp(t)
+	app.ensureConfigWritable = func(string) error { return os.ErrPermission }
 	result, exitCode := app.Execute(context.Background(), Input{
 		Action:     "auth.exchange",
 		BaseURL:    server.URL,
-		ConfigPath: filepath.Join(os.TempDir(), "anby-wiki-cli-test.json"),
+		ConfigPath: filepath.Join(t.TempDir(), "cli.json"),
 		Code:       "anby_code_test",
 	})
 	if exitCode != 1 || result.OK || result.Error == nil ||

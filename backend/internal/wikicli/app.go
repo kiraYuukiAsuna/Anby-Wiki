@@ -83,10 +83,11 @@ type Config struct {
 }
 
 type App struct {
-	contract *clicontract.Contract
-	version  string
-	client   *http.Client
-	getenv   func(string) string
+	contract             *clicontract.Contract
+	version              string
+	client               *http.Client
+	getenv               func(string) string
+	ensureConfigWritable func(string) error
 }
 
 type operationSummary struct {
@@ -124,10 +125,11 @@ func New(version string) (*App, error) {
 		return nil, err
 	}
 	return &App{
-		contract: contract,
-		version:  version,
-		client:   &http.Client{Timeout: defaultTimeout},
-		getenv:   os.Getenv,
+		contract:             contract,
+		version:              version,
+		client:               &http.Client{Timeout: defaultTimeout},
+		getenv:               os.Getenv,
+		ensureConfigWritable: ensureConfigWritable,
 	}, nil
 }
 
@@ -507,7 +509,7 @@ func (a *App) exchange(ctx context.Context, input Input) (Result, int) {
 	}
 	persist := input.Persist == nil || *input.Persist
 	if persist {
-		if err := ensureConfigWritable(configPath); err != nil {
+		if err := a.ensureConfigWritable(configPath); err != nil {
 			return failure(input.Action, "config_write_failed", err.Error(), nil), 1
 		}
 	}

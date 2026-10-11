@@ -1,6 +1,6 @@
 # 当前实现状态
 
-> 更新时间：2026-10-10
+> 更新时间：2026-10-11
 > 产品与能力审计依据：[整体设计方案](WikiDesignOnePage.md)
 
 ## 总体结论
@@ -313,9 +313,9 @@ outlines。References/Related 是 Current Revision
   固定；开发工具链同时锁定已修复的 `fast-uri@3.1.5`、`hono@4.13.1`、
   `ip-address@10.5.0`、`js-yaml@4.3.1` 与 `undici@7.29.0`。
 - 完整 `npm audit --audit-level=high` 与 production-only audit 均为 0。
-- Go 构建基线升级到 `1.26.6`，修复 `net/url`、`html/template`、TLS、HTTP/2、
-  XML/ASN.1 与 IDNA 标准库可达漏洞；gRPC 为 `1.82.1`，OpenTelemetry 家族为 `1.44.0`；
-  `govulncheck` 报告 0 个可达漏洞。
+- Go 构建基线升级到 `1.26.9`，`golang.org/x/net` 升级到 `0.60.0`，修复
+  `net/http`、`html/template`、TLS、HTTP/2、MIME 与 IDNA 可达漏洞；gRPC 为
+  `1.83.1`，OpenTelemetry 家族为 `1.45.0`；`govulncheck` 报告 0 个可达漏洞。
 - gitleaks 扫描全部 tracked 与未忽略 untracked 源文件，包括环境模板；忽略的本机
   `0600` 部署环境文件不再被 `dir` 模式误当成仓库内容。
 

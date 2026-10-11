@@ -1,6 +1,6 @@
 # syntax=docker/dockerfile:1.7
 
-ARG GO_IMAGE=golang:1.26.6-alpine
+ARG GO_IMAGE=golang:1.26.9-alpine
 ARG NODE_IMAGE=node:22-alpine3.22
 ARG RUNTIME_IMAGE=alpine:3.22
 ARG PYTHON_IMAGE=python:3.12.11-slim-bookworm
