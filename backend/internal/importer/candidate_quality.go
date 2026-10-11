@@ -109,8 +109,8 @@ func claimCandidateRelationExplicit(candidate ClaimCandidate, entities map[uuid.
 				return true
 			}
 			if candidate.PropertyKey != "instance_of" &&
-				evidenceExplicitlyRelatesWorks(
-					item.Quotation, subject, value, candidate.PropertyKey,
+				claimEvidenceExplicitlyRelatesWorks(
+					item, subject, value, candidate.PropertyKey, entities,
 				) {
 				return true
 			}
@@ -130,6 +130,83 @@ func claimCandidateRelationExplicit(candidate ClaimCandidate, entities map[uuid.
 			if strings.Contains(text, marker) {
 				return true
 			}
+		}
+	}
+	return false
+}
+
+func claimEvidenceExplicitlyRelatesWorks(
+	evidence CandidateEvidence,
+	subject EntityCandidate,
+	value EntityCandidate,
+	property string,
+	entities map[uuid.UUID]EntityCandidate,
+) bool {
+	if evidenceExplicitlyRelatesWorks(evidence.Quotation, subject, value, property) {
+		return true
+	}
+	if !pronounEvidenceExplicitlyRelatesValue(evidence.Quotation, value, property) {
+		return false
+	}
+
+	const maximumSubjectDistance = 240
+	subjectEnd := -1
+	for _, item := range subject.Evidence {
+		if item.ChunkID != evidence.ChunkID || item.CharEnd > evidence.CharStart ||
+			evidence.CharStart-item.CharEnd > maximumSubjectDistance ||
+			!evidenceNamesEntity(item.Quotation, subject) {
+			continue
+		}
+		subjectEnd = max(subjectEnd, item.CharEnd)
+	}
+	if subjectEnd < 0 {
+		return false
+	}
+	for _, other := range entities {
+		if other.CandidateID == subject.CandidateID || other.CandidateID == value.CandidateID ||
+			normalizedPlanText(other.TypeKey) != "work" {
+			continue
+		}
+		for _, item := range other.Evidence {
+			if item.ChunkID == evidence.ChunkID && item.CharEnd > subjectEnd &&
+				item.CharStart < evidence.CharStart {
+				return false
+			}
+		}
+	}
+	return true
+}
+
+func pronounEvidenceExplicitlyRelatesValue(
+	quotation string,
+	value EntityCandidate,
+	property string,
+) bool {
+	text := normalizedIdentityText(quotation)
+	for valueName := range entityCandidateNames(value) {
+		patterns := []string{"it updates " + valueName}
+		if property == "obsoletes" {
+			patterns = []string{
+				"it obsoletes " + valueName,
+				"it supersedes " + valueName,
+				"it replaces " + valueName,
+			}
+		}
+		patterns = append(patterns, "it updates and obsoletes "+valueName)
+		for _, pattern := range patterns {
+			if text == pattern || strings.HasPrefix(text, pattern+" ") {
+				return true
+			}
+		}
+	}
+	return false
+}
+
+func evidenceNamesEntity(quotation string, entity EntityCandidate) bool {
+	text := " " + normalizedIdentityText(quotation) + " "
+	for name := range entityCandidateNames(entity) {
+		if strings.Contains(text, " "+name+" ") {
+			return true
 		}
 	}
 	return false

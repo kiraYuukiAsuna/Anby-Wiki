@@ -768,6 +768,7 @@ func TestNormalizeCandidatesDeduplicatesNamesAndRejectsWrongRelationDirection(t 
 func TestNormalizeCandidatesRequiresExplicitUpdatesAndObsoletesEvidence(t *testing.T) {
 	incidentID, operationsID, architectureID, oldOperationsID :=
 		uuid.New(), uuid.New(), uuid.New(), uuid.New()
+	relationChunkID := uuid.New()
 	value := func(id uuid.UUID) json.RawMessage {
 		raw, _ := json.Marshal(map[string]uuid.UUID{"entity_candidate_id": id})
 		return raw
@@ -782,7 +783,14 @@ func TestNormalizeCandidatesRequiresExplicitUpdatesAndObsoletesEvidence(t *testi
 		SchemaVersion: 1, SourceVersionID: uuid.New(), QualityScore: 0.9,
 		Entities: []EntityCandidate{
 			{CandidateID: incidentID, TypeKey: "work", Label: "AG-INC-042"},
-			{CandidateID: operationsID, TypeKey: "work", Label: "AG-OPS-2026"},
+			{
+				CandidateID: operationsID, TypeKey: "work", Label: "AG-OPS-2026",
+				Aliases: []string{"Aurora Grid Operations Handbook"},
+				Evidence: []CandidateEvidence{{
+					ChunkID: relationChunkID, Quotation: "Aurora Grid Operations Handbook",
+					CharStart: 48, CharEnd: 79,
+				}},
+			},
 			{CandidateID: architectureID, TypeKey: "work", Label: "AG-ARCH-2026"},
 			{CandidateID: oldOperationsID, TypeKey: "work", Label: "AG-OPS-2025"},
 		},
@@ -797,9 +805,21 @@ func TestNormalizeCandidatesRequiresExplicitUpdatesAndObsoletesEvidence(t *testi
 				CandidateID: uuid.New(),
 				Subject:     CandidateSubject{CandidateID: &operationsID},
 				PropertyKey: "obsoletes", Value: value(oldOperationsID),
-				Evidence: evidence(
-					"AG-OPS-2026 updates and obsoletes AG-OPS-2025.",
-				),
+				Evidence: []CandidateEvidence{{
+					ChunkID:   relationChunkID,
+					Quotation: "It updates and obsoletes AG-OPS-2025.",
+					CharStart: 275, CharEnd: 312,
+				}},
+			},
+			{
+				CandidateID: uuid.New(),
+				Subject:     CandidateSubject{CandidateID: &operationsID},
+				PropertyKey: "updates", Value: value(oldOperationsID),
+				Evidence: []CandidateEvidence{{
+					ChunkID:   relationChunkID,
+					Quotation: "It updates and obsoletes AG-OPS-2025.",
+					CharStart: 275, CharEnd: 312,
+				}},
 			},
 			{
 				CandidateID: uuid.New(),
@@ -821,12 +841,59 @@ func TestNormalizeCandidatesRequiresExplicitUpdatesAndObsoletesEvidence(t *testi
 	}
 
 	normalized := normalizeCandidatesForUse(candidates)
-	if len(normalized.Claims) != 2 {
+	if len(normalized.Claims) != 3 {
 		t.Fatalf("unexpected normalized claims: %#v", normalized.Claims)
 	}
 	if normalized.Claims[0].PropertyKey != "updates" ||
-		normalized.Claims[1].PropertyKey != "obsoletes" {
+		normalized.Claims[1].PropertyKey != "obsoletes" ||
+		normalized.Claims[2].PropertyKey != "updates" {
 		t.Fatalf("explicit work relations were not retained: %#v", normalized.Claims)
+	}
+}
+
+func TestPronounWorkRelationRequiresUnambiguousPrecedingSubject(t *testing.T) {
+	chunkID := uuid.New()
+	subject := EntityCandidate{
+		CandidateID: uuid.New(), TypeKey: "work", Label: "AG-OPS-2026",
+		Evidence: []CandidateEvidence{{
+			ChunkID: chunkID, Quotation: "AG-OPS-2026",
+			CharStart: 20, CharEnd: 31,
+		}},
+	}
+	value := EntityCandidate{
+		CandidateID: uuid.New(), TypeKey: "work", Label: "AG-OPS-2025",
+	}
+	evidence := CandidateEvidence{
+		ChunkID: chunkID, Quotation: "It updates and obsoletes AG-OPS-2025.",
+		CharStart: 100, CharEnd: 137,
+	}
+	entities := map[uuid.UUID]EntityCandidate{
+		subject.CandidateID: subject,
+		value.CandidateID:   value,
+	}
+	if !claimEvidenceExplicitlyRelatesWorks(evidence, subject, value, "updates", entities) ||
+		!claimEvidenceExplicitlyRelatesWorks(evidence, subject, value, "obsoletes", entities) {
+		t.Fatal("unambiguous pronoun relation was not retained")
+	}
+
+	withoutContext := subject
+	withoutContext.Evidence = nil
+	entities[subject.CandidateID] = withoutContext
+	if claimEvidenceExplicitlyRelatesWorks(evidence, withoutContext, value, "updates", entities) {
+		t.Fatal("pronoun relation without subject context was retained")
+	}
+
+	other := EntityCandidate{
+		CandidateID: uuid.New(), TypeKey: "work", Label: "AG-ARCH-2026",
+		Evidence: []CandidateEvidence{{
+			ChunkID: chunkID, Quotation: "AG-ARCH-2026",
+			CharStart: 50, CharEnd: 62,
+		}},
+	}
+	entities[subject.CandidateID] = subject
+	entities[other.CandidateID] = other
+	if claimEvidenceExplicitlyRelatesWorks(evidence, subject, value, "updates", entities) {
+		t.Fatal("pronoun relation with an intervening work was retained")
 	}
 }
 
