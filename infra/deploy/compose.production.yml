@@ -298,6 +298,7 @@ services:
     <<: *runtime-security
     image: anby-wiki-worker:${RELEASE_ID:?set RELEASE_ID}
     pull_policy: never
+    stop_grace_period: 2h5m
     build:
       context: ../..
       dockerfile: Dockerfile

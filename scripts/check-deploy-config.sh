@@ -109,6 +109,9 @@ grep -Fq 'MEILI_MASTER_KEY: "${MEILI_MASTER_KEY:?set MEILI_MASTER_KEY}"' "$COMPO
   fail "Meilisearch master key environment injection is missing"
 grep -Fq 'AUTH_REGISTRATION_ENABLED: ${AUTH_REGISTRATION_ENABLED:-false}' "$COMPOSE_FILE" ||
   fail "account registration configuration is missing"
+sed -n '/^  worker:/,/^  web:/p' "$COMPOSE_FILE" |
+  grep -q '^    stop_grace_period: 2h5m$' ||
+  fail "Worker stop grace period must exceed the two-hour import job timeout"
 if grep -Eq '\$\{(POSTGRES|REDIS|MINIO|MINIO_CLIENT|MEILI|ALPINE)_IMAGE' "$COMPOSE_FILE" ||
   grep -Eq '^(POSTGRES|REDIS|MINIO|MINIO_CLIENT|MEILI|ALPINE)_IMAGE=' "$EXAMPLE_ENV"; then
   fail "third-party image versions must be fixed in Compose, not the environment file"
