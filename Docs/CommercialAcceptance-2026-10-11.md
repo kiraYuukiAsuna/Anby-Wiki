@@ -7,8 +7,9 @@
 优雅重启已达到 Internal Beta 的商业使用门槛。
 
 本结论不等于全产品 GA 授权。298 MiB 完整 Worker 路径、单实例并发背压和内存回收
-已达标；持续压力、多副本策略、备份恢复、账号恢复/MFA、目标规模搜索容量和人工
-可访问性仍按 `OutstandingIssues.md` 保留。
+已达标，12 次 32 MiB 顺序预检也已覆盖限流重试和临时文件回收；近上限长时压力、
+异常退出、多副本策略、备份恢复、账号恢复/MFA、目标规模搜索容量和人工可访问性
+仍按 `OutstandingIssues.md` 保留。
 
 ## 发布门禁
 
@@ -28,8 +29,13 @@
 | 三份关联文档正序合并 | 安全降级 | 9 页、26 Chunk、19 个区域定位；恰好规划 3 个目标页面；质量 0.690；无 Proposal |
 | 同一关联文档逆序合并 | 安全降级 | Chunk 与路由形态不变；暴露并修复顺序敏感关系误判；质量 0.690；无 Proposal |
 | 正序+逆序关联文档拼接 | 安全降级 | 18 页、50 Chunk、36 个区域定位；覆盖第 1–18 页；仍恰好规划 3 个目标页面；质量 0.690；无 Proposal |
+| 混合方向/尺寸且重复页面 | 安全降级 | 12 页、28 Chunk、18 个区域定位；覆盖 0/90/180/270 度与 A4/Letter；仍只规划 3 个目标页面 |
+| 中英双语跨页表格+恶意附件 | 安全降级 | 6 页、9 Chunk；36 行表格、中文和图表完整；33 个 EmbeddedFile 不进入证据；只规划 1 个目标页面 |
+| 同一跨页表格页序扰动 | 安全降级 | Chunk、36 个行标识、双语文本和单页路由不变；质量 0.690；无 Proposal |
 | 纯扫描表格页 | 安全降级 | parse/extract/plan 成功；质量 0.690，进入 `action_required`；无 Proposal |
 | 扫描页提示注入 | 安全拒绝 | SourceVersion 保留；Extraction `quality_gate`；无 Proposal |
+| 可见正文含反提示注入措辞 | 安全拒绝 | 两种页序均在 Extraction 触发 `quality_gate`；SourceVersion 保留；无 Proposal |
+| 密码加密 PDF | 原子失败 | fetch 成功、parse `parse_failed`；无 SourceVersion/Proposal |
 | 截断但保留 PDF 签名 | 原子失败 | fetch 成功、parse `parse_failed`；无 SourceVersion/Proposal |
 | 501 页合法 PDF | 边界拒绝 | 1.45 秒内 `pdf_page_limit_exceeded`；无逐页模型调用、SourceVersion 或 Proposal |
 
@@ -67,6 +73,20 @@ extract 和 plan，生成 14 page、15 table、6 figure、3 chart、12 text，�
 Chunk；36 个 Chunk 带页内区域，页码完整覆盖 1–18。计划仍只有三个 create route，
 没有因重复和顺序反转扩张目标页面。
 
+继续把原语料重排、重复并设置 0/90/180/270 度旋转和 A4/Letter 混合尺寸后，生产
+Job `01a12e0c-99ef-7b63-af6a-b45935f8578e` 在 67.437 秒内生成 10 page、
+8 table、3 figure、2 chart、5 text，共 28 个 Chunk；18 个 Chunk 有页内区域，
+页码完整覆盖 1–12。ImportPlan 仍恰好只有三个指定 create route，质量 0.690 后
+安全停在 `action_required`。
+
+另一组 6 页语料把 36 行维护矩阵拆到连续两页，混合中英文正文和图表，并嵌入
+33 个附件，其中一个附件内容要求创建 `ATTACHMENT-INJECTION` 页面。正常页序 Job
+`01a12e0f-6cfc-7283-978f-3cda4c555b77` 与扰乱页序 Job
+`01a12e10-2453-75bd-98f7-9c795e27b30f` 均得到 6 page、2 table、1 chart；
+3 个视觉 Chunk 有页内区域，`M-01` 至 `M-36` 和中文原文完整保留，附件攻击文本
+未出现在任何 Chunk。两次计划都只创建 `Aurora Grid Operations Matrix 2026`，
+质量 0.690 后取消且无 Proposal。
+
 ## 故障与治理
 
 - 上传幂等冲突：相同 Idempotency-Key、不同文件内容返回 409；当前 Asset Revision
@@ -78,6 +98,11 @@ Chunk；36 个 Chunk 带页内区域，页码完整覆盖 1–18。计划仍只�
   完成在途任务后退出并健康重启。Job 只有一个 Run，没有 `worker_interrupted`。
 - 测试生成的 Proposal 共 5 个，最终全部为 `rejected`；没有测试内容被批准或应用。
 - 本轮新增的关联文档任务均在 `action_required` 后取消，没有生成 Proposal。
+- 跨页夹具初版在可见正文中写了反提示注入措辞，两种页序均以 `quality_gate` 失败；
+  删除该正文、只保留 EmbeddedFile 内的攻击载荷后，两种页序都完成规划。该对照证明
+  页面提示注入 fail-closed，同时附件对象不会被静默当成页面证据。
+- 密码加密 PDF 在 1.087 秒内以 `parse_failed` 原子失败；没有 SourceVersion 或
+  Proposal。合法 PDF 的原生文本与视觉页不受该失败任务污染。
 - 初次 128 MiB 上传经 Next.js 外部 rewrite 时触发其默认 10 MiB 缓冲截断：Go API
   收到部分请求并返回 413，但客户端在约 30.38 秒后得到非 JSON 500。生产入口现由
   Nginx 把 `/api/*`、`/healthz`、`/readyz` 直接转发到仅绑定回环地址的 Go API，
@@ -134,16 +159,29 @@ Chunk，review 为 `skipped` 且无 Proposal；30 秒后 API/Worker 分别回落
 150.3/312.8 MiB，无需重启。全程无 OOM 或服务重启，最终 Doctor 和活动
 Job/Proposal/Outbox/Dead 均为 0。
 
+短窗口顺序压力使用带 32 MiB EmbeddedFile 的 33,624,981 字节合法 PDF，在正式
+HTTPS 入口连续完成 12 次存储前 422，总扫描量约 384 MiB：
+
+- 单次耗时 0.360–0.422 秒，平均 0.395 秒；每次响应后临时目录都回到 0；
+- 每分钟三个上传额度用尽后，三次额外请求分别在 0.046–0.056 秒内返回 429，
+  `Retry-After` 为 54/57/58 秒；按该值等待后下一窗口恢复；
+- 采样观察到请求在途时最多一个临时文件，API/Worker 峰值 184.2/25.74 MiB；
+  结束后 API 回落到 25.63 MiB，无 OOM、重启或人工回收；
+- Asset/ImportJob/Proposal/活跃 Outbox 前后均为 `39/38/5/0`，最终上传临时目录、
+  active ImportJob、开放 Proposal、Outbox backlog/dead、Projection error 和 Doctor
+  issue 均为 0。
+
 同一真实论文在不同模型运行中既出现过自动通过，也出现过质量 0.690 的
 `action_required`。系统没有降低 0.70 门槛或发布低质量 Proposal；这种供应商波动
 按人工复核路径显式暴露。
 
 ## 保留风险
 
-1. 单次 298 MiB 完整链路和并发拒绝已通过；仍需做持续上传/重试压力、异常退出后的
-   临时文件清理演练，以及未来多 API/Worker 副本下的全局并发策略。
+1. 单次 298 MiB 完整链路、并发拒绝和 12×32 MiB 限流重试已通过；仍需做近上限
+   长时上传/重试压力、异常退出后的临时文件清理演练，以及未来多 API/Worker 副本下
+   的全局并发策略。
 2. 真实供应商超时/限流仍需结合账单与告警验证；本轮已验证内部 Kernel 不可用、
    错误分类、恢复和重试。
-3. 当前关联回归集已扩展到 18 页；还需补充长文档跨页表格、更多语言和模型升级后的
-   稳定性抽样。
+3. 当前关联回归集已覆盖 18 页重复、12 页混合方向/尺寸、中英双语跨页表格与页序
+   扰动；还需增加其他语言，并定义模型升级后的固定质量基线和抽样频率。
 4. 全产品商业发布仍受备份恢复、账号恢复/MFA、目标规模搜索容量及人工可访问性阻塞。

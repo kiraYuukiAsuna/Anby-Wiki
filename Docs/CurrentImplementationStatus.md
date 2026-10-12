@@ -17,8 +17,9 @@ Yjs update、持久恢复、普通发布与 AI 合并的 sequence CAS、同标�
 PostgreSQL、Redis、RustFS、Meilisearch、API、Linux Worker 与 Next.js Web 的真实
 联调。提交 `18944a7` 已在远端生产拓扑完成六个 OCI target 构建、迁移 gate、Doctor、
 滚动替换和健康检查，并通过复杂 PDF/扫描件、提示注入、Provider 故障恢复、上传幂等、
-501 页边界、在途 Worker restart、18 页关联文档及 128/298 MiB 上传边界验收。另一个完全隔离的远端
-数据库/bucket/index/Redis DB 已执行
+501 页边界、在途 Worker restart、18 页关联文档、12 页混合方向/尺寸文档、中英双语
+跨页表格、恶意附件隔离、密码加密拒绝及 128/298 MiB 上传边界验收。另一个完全隔离的
+远端数据库/bucket/index/Redis DB 已执行
 149/149 OpenAPI operation handler 探针、核心成功工作流、治理、批量审核、导入、
 AI 配置和双用户协作 E2E。“实现完成”仍不等于“生产发布就绪”：目标规模容量、正式域名
 安全边界、账号恢复、备份恢复与人工可访问性等仍须验收。详见
@@ -116,6 +117,14 @@ AI 配置和双用户协作 E2E。“实现完成”仍不等于“生产发布�
   0.70 的结果保持在 `action_required`，未生成 Proposal。
 - 同一正序与逆序 dossier 拼接为 18 页后，仍只规划三个指定页面；生产结果为 50 个
   Chunk、36 个页内区域并完整覆盖第 1–18 页，质量 0.690，最终取消且无 Proposal。
+- 同一关联语料经重复、重排、0/90/180/270 度旋转及 A4/Letter 混合尺寸后，12 页
+  生产结果为 28 个 Chunk、18 个页内区域，仍只规划三个指定页面；质量 0.690 后取消。
+- 6 页中英双语语料把 36 行表格拆到两页，并分别按正常和扰乱页序导入。两次均得到
+  6 page、2 table、1 chart，完整保留 `M-01` 至 `M-36` 和中文原文，只规划一个
+  指定页面。带 33 个 EmbeddedFile 的版本不会把附件内的提示注入载荷写入 Chunk。
+- 可见正文中的反提示注入措辞会在 Extraction 触发 `quality_gate`；只保留附件内攻击
+  载荷后，同一页面内容完成规划。密码加密 PDF 则以 `parse_failed` 原子失败且不创建
+  SourceVersion/Proposal。
 - 顺序扰动曾暴露模型把 `operationalizes`、`remains authoritative` 误判为 `updates`
   的问题。关系候选现在必须由直接方向证据支持；同 Chunk 的 “It updates/obsoletes”
   只有在 240 字符内存在唯一前置作品主语且中间无其他作品时才保留。不可变 Extraction
@@ -128,6 +137,10 @@ AI 配置和双用户协作 E2E。“实现完成”仍不等于“生产发布�
 - 128 MiB 与 298 MiB 存储前 422 的 API anon 峰值降为 75.9/80.0 MiB，临时文件
   响应后均清零。298 MiB 完整 Worker Job 在 20 秒内七阶段成功、质量 1.0；
   API/Worker 峰值为 461.2/774.0 MiB，30 秒后回落至 150.3/312.8 MiB，无重启或 OOM。
+- 12 次 32 MiB EmbeddedFile PDF 顺序预检共扫描约 384 MiB，单次 0.360–0.422 秒；
+  每分钟三个额度耗尽时返回带 `Retry-After` 的 429，等待后恢复。每次 422 后临时目录
+  都为 0，API/Worker 峰值 184.2/25.74 MiB，结束后 API 回落到 25.63 MiB，权威计数
+  不变且无 OOM、重启或 Doctor issue。
 - 最终生产版本为 `18944a7d0c30`，CI `38173395650`
   的 8 个 Job、Migration gate、全服务健康检查和只读 Doctor 均通过；active ImportJob、
   开放导入 Proposal、Outbox backlog/dead 与 Projection error 均为 0。
