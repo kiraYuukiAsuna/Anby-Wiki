@@ -34,6 +34,12 @@ export interface SourceImportConfig {
      */
     source: SourceImportSource;
     /**
+     * source_only 仅用于 HTML/纯文本/JSON/CSV，在固化 SourceVersion/Chunk 后成功结束且不调用模型或生成 Proposal。
+     * @type {SourceImportConfigIngestionModeEnum}
+     * @memberof SourceImportConfig
+     */
+    ingestionMode?: SourceImportConfigIngestionModeEnum;
+    /**
      *
      * @type {string}
      * @memberof SourceImportConfig
@@ -75,6 +81,15 @@ export interface SourceImportConfig {
 /**
  * @export
  */
+export const SourceImportConfigIngestionModeEnum = {
+    Wiki: 'wiki',
+    SourceOnly: 'source_only'
+} as const;
+export type SourceImportConfigIngestionModeEnum = typeof SourceImportConfigIngestionModeEnum[keyof typeof SourceImportConfigIngestionModeEnum];
+
+/**
+ * @export
+ */
 export const SourceImportConfigRouteModeEnum = {
     Auto: 'auto',
     ForceCreate: 'force_create',
@@ -102,6 +117,7 @@ export function SourceImportConfigFromJSONTyped(json: any, ignoreDiscriminator: 
     return {
 
         'source': SourceImportSourceFromJSON(json['source']),
+        'ingestionMode': json['ingestion_mode'] == null ? undefined : json['ingestion_mode'],
         'title': json['title'] == null ? undefined : json['title'],
         'instructions': json['instructions'] == null ? undefined : json['instructions'],
         'routeMode': json['route_mode'] == null ? undefined : json['route_mode'],
@@ -123,6 +139,7 @@ export function SourceImportConfigToJSONTyped(value?: SourceImportConfig | null,
     return {
 
         'source': SourceImportSourceToJSON(value['source']),
+        'ingestion_mode': value['ingestionMode'],
         'title': value['title'],
         'instructions': value['instructions'],
         'route_mode': value['routeMode'],

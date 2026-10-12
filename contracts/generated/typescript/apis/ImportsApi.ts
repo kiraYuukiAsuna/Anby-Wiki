@@ -63,6 +63,7 @@ export interface CreateImportUploadJobRequest {
     file: Blob;
     title?: string;
     instructions?: string;
+    ingestionMode?: CreateImportUploadJobIngestionModeEnum;
     routeMode?: CreateImportUploadJobRouteModeEnum;
     pageId?: string;
 }
@@ -334,6 +335,10 @@ export class ImportsApi extends runtime.BaseAPI {
 
         if (requestParameters['instructions'] != null) {
             formParams.append('instructions', requestParameters['instructions'] as any);
+        }
+
+        if (requestParameters['ingestionMode'] != null) {
+            formParams.append('ingestion_mode', requestParameters['ingestionMode'] as any);
         }
 
         if (requestParameters['routeMode'] != null) {
@@ -617,6 +622,14 @@ export class ImportsApi extends runtime.BaseAPI {
 
 }
 
+/**
+ * @export
+ */
+export const CreateImportUploadJobIngestionModeEnum = {
+    Wiki: 'wiki',
+    SourceOnly: 'source_only'
+} as const;
+export type CreateImportUploadJobIngestionModeEnum = typeof CreateImportUploadJobIngestionModeEnum[keyof typeof CreateImportUploadJobIngestionModeEnum];
 /**
  * @export
  */

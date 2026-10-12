@@ -7,6 +7,7 @@
 Name | Type
 ------------ | -------------
 `source` | [SourceImportSource](SourceImportSource.md)
+`ingestionMode` | string
 `title` | string
 `instructions` | string
 `routeMode` | string
@@ -22,6 +23,7 @@ import type { SourceImportConfig } from ''
 // TODO: Update the object below with actual values
 const example = {
   "source": null,
+  "ingestionMode": null,
   "title": null,
   "instructions": null,
   "routeMode": null,

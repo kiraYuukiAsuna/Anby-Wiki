@@ -251,7 +251,7 @@ example().catch(console.error);
 
 ## createImportUploadJob
 
-> ImportJob createImportUploadJob(idempotencyKey, file, title, instructions, routeMode, pageId)
+> ImportJob createImportUploadJob(idempotencyKey, file, title, instructions, ingestionMode, routeMode, pageId)
 
 校验并暂存用户文件，幂等创建来源导入任务
 
@@ -285,6 +285,8 @@ async function example() {
     title: title_example,
     // string (optional)
     instructions: instructions_example,
+    // string | source_only 仅用于 HTML/纯文本/JSON/CSV，固化不可变来源与分片且不调用模型或生成 Proposal。 (optional)
+    ingestionMode: ingestionMode_example,
     // string (optional)
     routeMode: routeMode_example,
     // string (optional)
@@ -312,6 +314,7 @@ example().catch(console.error);
 | **file** | `Blob` |  | [Defaults to `undefined`] |
 | **title** | `string` |  | [Optional] [Defaults to `undefined`] |
 | **instructions** | `string` |  | [Optional] [Defaults to `undefined`] |
+| **ingestionMode** | `wiki`, `source_only` | source_only 仅用于 HTML/纯文本/JSON/CSV，固化不可变来源与分片且不调用模型或生成 Proposal。 | [Optional] [Defaults to `&#39;wiki&#39;`] [Enum: wiki, source_only] |
 | **routeMode** | `auto`, `force_create`, `force_update` |  | [Optional] [Defaults to `&#39;auto&#39;`] [Enum: auto, force_create, force_update] |
 | **pageId** | `string` |  | [Optional] [Defaults to `undefined`] |
 

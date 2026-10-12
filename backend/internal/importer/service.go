@@ -25,13 +25,14 @@ type Service struct {
 }
 
 type UploadIdentity struct {
-	Filename     string
-	MIMEType     string
-	ContentHash  string
-	Title        string
-	Instructions string
-	RouteMode    string
-	PageID       *uuid.UUID
+	Filename      string
+	MIMEType      string
+	ContentHash   string
+	IngestionMode string
+	Title         string
+	Instructions  string
+	RouteMode     string
+	PageID        *uuid.UUID
 }
 
 const (
@@ -143,6 +144,7 @@ func (s *Service) FindUploadByKey(
 		config.Source.Filename != expected.Filename ||
 		config.Source.MIMEType != expected.MIMEType ||
 		config.Source.ContentHash != expected.ContentHash ||
+		config.IngestionMode != expected.IngestionMode ||
 		config.Title != expected.Title ||
 		config.Instructions != expected.Instructions ||
 		config.RouteMode != expected.RouteMode ||
@@ -227,11 +229,21 @@ func (s *Service) BeginRun(ctx context.Context, jobID uuid.UUID, key string) (*R
 // SKIP LOCKED lets multiple Worker processes share a queue without duplicate
 // model calls. Pipeline.BeginRun later reuses the returned idempotency key.
 func (s *Service) ClaimNext(ctx context.Context) (*Job, *Run, error) {
+	return s.claimNext(ctx, false)
+}
+
+// ClaimNextSourceOnly claims source-only work before consulting model runtime
+// configuration. These jobs stop after immutable source parsing.
+func (s *Service) ClaimNextSourceOnly(ctx context.Context) (*Job, *Run, error) {
+	return s.claimNext(ctx, true)
+}
+
+func (s *Service) claimNext(ctx context.Context, sourceOnly bool) (*Job, *Run, error) {
 	var job *Job
 	var run *Run
 	err := s.txm.InTx(ctx, func(tx pgx.Tx) error {
 		var err error
-		job, err = s.repo.NextQueuedJobForUpdate(ctx, tx)
+		job, err = s.repo.NextQueuedJobForUpdate(ctx, tx, sourceOnly)
 		if err != nil {
 			return err
 		}

@@ -59,10 +59,16 @@ func (r *Repository) GetJobForUpdate(ctx context.Context, tx pgx.Tx, id uuid.UUI
 	return job, err
 }
 
-func (r *Repository) NextQueuedJobForUpdate(ctx context.Context, tx pgx.Tx) (*Job, error) {
+func (r *Repository) NextQueuedJobForUpdate(
+	ctx context.Context,
+	tx pgx.Tx,
+	sourceOnly bool,
+) (*Job, error) {
 	job, err := scanJob(r.q(tx).QueryRow(ctx, `SELECT `+jobColumns+` FROM import_job
 		WHERE status='queued' AND job_type='source_import'
-		ORDER BY created_at,id FOR UPDATE SKIP LOCKED LIMIT 1`))
+		  AND (NOT $1 OR config_json->>'ingestion_mode'=$2)
+		ORDER BY created_at,id FOR UPDATE SKIP LOCKED LIMIT 1`,
+		sourceOnly, IngestionModeSourceOnly))
 	if errors.Is(err, pgx.ErrNoRows) {
 		return nil, ErrNoQueuedJob
 	}

@@ -23,6 +23,7 @@ var (
 	ErrAmbiguousEntity     = errors.New("importer: 实体匹配存在歧义")
 	ErrEvidenceRequired    = errors.New("importer: 候选缺少可核验证据")
 	ErrNoQueuedJob         = errors.New("importer: 没有排队中的导入任务")
+	ErrSourceOnlyFormat    = errors.New("importer: source_only 仅支持确定性解析格式")
 )
 
 const (
@@ -35,6 +36,10 @@ const (
 
 	ActionConfirmPlan = "confirm_plan"
 	ActionQualityGate = "quality_gate"
+
+	IngestionModeWiki       = "wiki"
+	IngestionModeSourceOnly = "source_only"
+	ErrorSourceOnlyFormat   = "source_only_unsupported_format"
 
 	StageQueued   = "queued"
 	StageFetch    = "fetch"

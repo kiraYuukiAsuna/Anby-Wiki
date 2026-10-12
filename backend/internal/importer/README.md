@@ -10,7 +10,14 @@ API 的 `POST /api/v1/import-jobs` 只创建队列项。Provider、API 根地址
 模型最大输入 Token、来源 Chunk 字符数、超时、尝试次数和密钥由管理员在 `/admin/ai` 配置；默认
 上下文上限为 128000 Token，默认持久 Chunk 上限为 32000 Unicode 字符。API Key 使用部署主密钥加密写入
 `wiki_site.settings_json`，不再通过 Worker 环境变量注入。配置缺失、禁用或不可解密时，
-Worker 不领取 `source_import`，已有任务保持 queued。
+Worker 不领取需要模型的 `source_import`，已有任务保持 queued。
+
+`ingestion_mode=source_only` 用于大规模 HTML、纯文本、JSON 或 CSV 来源归档：仍执行
+受控获取、MIME/magic 与恶意内容检查、原始资产和解析 manifest 存储，并通过 Evidence
+服务固化不可变 Source/SourceVersion/SourceChunk；Parse 成功后 Job 直接完成，不调用
+模型、不生成 ImportPlan/Proposal，也不发布页面。Worker 会在读取 AI 配置前优先领取
+这类任务，因此模型未配置或被禁用时仍可处理；PDF/图片会以
+`source_only_unsupported_format` 显式失败，默认 `ingestion_mode=wiki` 保持完整七阶段行为。
 
 模型调用经私网 Semantic Kernel Sidecar：OpenAI-compatible 可使用原生 strict JSON
 Schema，DeepSeek 使用 JSON Object；Sidecar 对 JSON 和权威 Schema 失败执行有限纠正重试，

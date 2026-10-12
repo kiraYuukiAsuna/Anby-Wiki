@@ -26,6 +26,7 @@ type SourceImportConfig struct {
 		MIMEType    string `json:"mime_type,omitempty"`
 		ContentHash string `json:"content_hash,omitempty"`
 	} `json:"source"`
+	IngestionMode    string     `json:"ingestion_mode,omitempty"`
 	Title            string     `json:"title,omitempty"`
 	Instructions     string     `json:"instructions,omitempty"`
 	RouteMode        string     `json:"route_mode,omitempty"`
@@ -107,12 +108,20 @@ func (r *Runner) ProcessOne(ctx context.Context) (bool, error) {
 	chunkCharacters := 0
 	autoApprovePlans := true
 	model := r.config.Model
-	if r.config.Runtime != nil {
-		runtime, err := r.config.Runtime(ctx)
-		if err != nil {
-			span.RecordError(err)
+	recovered, err := r.jobs.RecoverStale(ctx, time.Now().Add(-r.config.JobTimeout))
+	if err != nil {
+		span.RecordError(err)
+		span.SetStatus(codes.Error, "stale_recovery_failed")
+		return false, err
+	}
+	span.SetAttributes(attribute.Bool("import.stale_job_recovered", recovered))
+	job, run, err := r.jobs.ClaimNextSourceOnly(ctx)
+	if errors.Is(err, ErrNoQueuedJob) && r.config.Runtime != nil {
+		runtime, runtimeErr := r.config.Runtime(ctx)
+		if runtimeErr != nil {
+			span.RecordError(runtimeErr)
 			span.SetStatus(codes.Error, "ai_configuration_unavailable")
-			return false, err
+			return false, runtimeErr
 		}
 		if !runtime.Available {
 			span.SetAttributes(attribute.Bool("import.ai_available", false))
@@ -128,26 +137,22 @@ func (r *Runner) ProcessOne(ctx context.Context) (bool, error) {
 			chunkCharacters = runtime.ChunkCharacters
 		}
 		autoApprovePlans = runtime.AutoApprovePlans
-	} else if r.config.Availability != nil {
-		available, err := r.config.Availability(ctx)
-		if err != nil {
-			span.RecordError(err)
+		job, run, err = r.jobs.ClaimNext(ctx)
+	} else if errors.Is(err, ErrNoQueuedJob) && r.config.Availability != nil {
+		available, availabilityErr := r.config.Availability(ctx)
+		if availabilityErr != nil {
+			span.RecordError(availabilityErr)
 			span.SetStatus(codes.Error, "ai_configuration_unavailable")
-			return false, err
+			return false, availabilityErr
 		}
 		if !available {
 			span.SetAttributes(attribute.Bool("import.ai_available", false))
 			return false, nil
 		}
+		job, run, err = r.jobs.ClaimNext(ctx)
+	} else if errors.Is(err, ErrNoQueuedJob) {
+		job, run, err = r.jobs.ClaimNext(ctx)
 	}
-	recovered, err := r.jobs.RecoverStale(ctx, time.Now().Add(-r.config.JobTimeout))
-	if err != nil {
-		span.RecordError(err)
-		span.SetStatus(codes.Error, "stale_recovery_failed")
-		return false, err
-	}
-	span.SetAttributes(attribute.Bool("import.stale_job_recovered", recovered))
-	job, run, err := r.jobs.ClaimNext(ctx)
 	if errors.Is(err, ErrNoQueuedJob) {
 		span.SetAttributes(attribute.Bool("import.job_claimed", false))
 		return false, nil
@@ -168,12 +173,16 @@ func (r *Runner) ProcessOne(ctx context.Context) (bool, error) {
 		span.SetStatus(codes.Error, "invalid_planning_input")
 		return true, r.failInvalidConfig(ctx, job, run)
 	}
-	span.SetAttributes(attribute.String("import.source_kind", config.Source.Kind))
+	span.SetAttributes(
+		attribute.String("import.source_kind", config.Source.Kind),
+		attribute.String("import.ingestion_mode", config.IngestionMode),
+	)
 	request := PipelineRequest{
 		JobID: job.ID, RunKey: run.IdempotencyKey, WikiID: r.config.WikiID,
 		ActorID: job.InitiatedBy, PageID: planning.PageID, SourceID: config.SourceID,
 		Title: planning.Title, Instructions: planning.Instructions,
 		RouteMode: planning.RouteMode, PlanningInput: job.PlanningInput,
+		SourceOnly:      config.IngestionMode == IngestionModeSourceOnly,
 		AutoApprovePlan: autoApprovePlans, ConfirmedPlanID: job.ConfirmedPlanID,
 		Provider: r.config.Provider, Model: model,
 		MaxInputTokens:   maxInputTokens,
@@ -209,10 +218,15 @@ func decodeSourceImportConfig(raw json.RawMessage) (*SourceImportConfig, error) 
 		validSource = strings.TrimSpace(config.Source.StorageKey) != "" && strings.TrimSpace(config.Source.Filename) != "" &&
 			strings.TrimSpace(config.Source.MIMEType) != "" && validSHA256(config.Source.ContentHash)
 	}
+	if config.IngestionMode == "" {
+		config.IngestionMode = IngestionModeWiki
+	}
 	if config.RouteMode == "" {
 		config.RouteMode = RouteModeAuto
 	}
-	if !validSource || config.QualityThreshold < 0 || config.QualityThreshold > 1 ||
+	if !validSource ||
+		(config.IngestionMode != IngestionModeWiki && config.IngestionMode != IngestionModeSourceOnly) ||
+		config.QualityThreshold < 0 || config.QualityThreshold > 1 ||
 		(config.RouteMode != RouteModeAuto && config.RouteMode != RouteModeForceCreate &&
 			config.RouteMode != RouteModeForceUpdate) ||
 		len([]rune(config.Title)) > 255 || len([]rune(config.Instructions)) > 4000 ||

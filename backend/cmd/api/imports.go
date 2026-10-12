@@ -152,6 +152,15 @@ func (a *ImportAPI) createUploadJob(w http.ResponseWriter, r *http.Request) {
 		httpx.WriteError(w, r, http.StatusUnprocessableEntity, httpx.CodeValidationFailed, "导入说明超过 4000 个字符")
 		return
 	}
+	ingestionMode := strings.TrimSpace(r.FormValue("ingestion_mode"))
+	if ingestionMode == "" {
+		ingestionMode = importer.IngestionModeWiki
+	}
+	if ingestionMode != importer.IngestionModeWiki &&
+		ingestionMode != importer.IngestionModeSourceOnly {
+		httpx.WriteError(w, r, http.StatusUnprocessableEntity, httpx.CodeValidationFailed, "导入模式不合法")
+		return
+	}
 	routeMode := strings.TrimSpace(r.FormValue("route_mode"))
 	if routeMode == "" {
 		routeMode = importer.RouteModeAuto
@@ -180,7 +189,7 @@ func (a *ImportAPI) createUploadJob(w http.ResponseWriter, r *http.Request) {
 	}
 	existing, err := a.jobs.FindUploadByKey(r.Context(), actorID, key, importer.UploadIdentity{
 		Filename: acquired.Filename, MIMEType: acquired.MIMEType,
-		ContentHash: acquired.ContentHash, Title: title,
+		ContentHash: acquired.ContentHash, IngestionMode: ingestionMode, Title: title,
 		Instructions: instructions, RouteMode: routeMode, PageID: pageID,
 	})
 	if err == nil {
@@ -200,7 +209,8 @@ func (a *ImportAPI) createUploadJob(w http.ResponseWriter, r *http.Request) {
 	config, _ := json.Marshal(map[string]any{"source": map[string]any{
 		"kind": "upload", "storage_key": asset.Revision.StorageKey, "filename": acquired.Filename,
 		"mime_type": acquired.MIMEType, "content_hash": acquired.ContentHash,
-	}, "title": title, "instructions": instructions, "route_mode": routeMode,
+	}, "ingestion_mode": ingestionMode, "title": title,
+		"instructions": instructions, "route_mode": routeMode,
 		"page_id": pageID})
 	job, err := a.jobs.Create(r.Context(), actorID, "source_import", key, config)
 	if err != nil {

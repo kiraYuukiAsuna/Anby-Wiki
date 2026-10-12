@@ -75,6 +75,7 @@ type PipelineRequest struct {
 	Instructions     string
 	RouteMode        string
 	PlanningInput    json.RawMessage
+	SourceOnly       bool
 	AutoApprovePlan  bool
 	Provider         string
 	Model            string
@@ -171,7 +172,7 @@ func (p *Pipeline) RunURL(ctx context.Context, request PipelineRequest, rawURL s
 type acquireSource func(context.Context) (*AcquiredSource, error)
 
 func (p *Pipeline) run(ctx context.Context, request PipelineRequest, acquire acquireSource) (*PipelineResult, error) {
-	if err := p.validate(); err != nil {
+	if err := p.validate(request.SourceOnly); err != nil {
 		return nil, err
 	}
 	if acquire == nil || request.JobID == uuid.Nil || request.WikiID == uuid.Nil ||
@@ -197,6 +198,13 @@ func (p *Pipeline) run(ctx context.Context, request PipelineRequest, acquire acq
 	}
 	result.SourceVersionID = version.Version.ID
 	parseOutput := version.Version.ID.String()
+	if request.SourceOnly {
+		if err := p.jobs.Succeed(ctx, request.JobID, run.ID, version.Version.ID, nil); err != nil {
+			return nil, err
+		}
+		result.Job, _ = p.jobs.DetailJob(ctx, request.JobID)
+		return result, nil
+	}
 
 	current, err = p.jobs.StartStage(ctx, run.ID, StageExtract, &parseOutput)
 	if err != nil {
@@ -444,6 +452,14 @@ func (p *Pipeline) prepareParsedSource(
 		_, failed := fail(fetchStage, acquisitionErrorCode(err), err)
 		return nil, "", failed
 	}
+	if request.SourceOnly {
+		switch acquired.MIMEType {
+		case "text/html", "text/plain", "application/json", "text/csv":
+		default:
+			_, failed := fail(fetchStage, ErrorSourceOnlyFormat, ErrSourceOnlyFormat)
+			return nil, "", failed
+		}
+	}
 	inputHash := acquired.ContentHash
 	asset, err := p.evidence.StoreAsset(ctx, evidence.StoreAssetParams{WikiID: request.WikiID,
 		Name: acquired.Filename, Content: bytes.NewReader(acquired.Content), MimeType: acquired.MIMEType, ActorID: request.ActorID})
@@ -652,9 +668,12 @@ func extractionErrorCode(err error) string {
 	}
 }
 
-func (p *Pipeline) validate() error {
-	if p.jobs == nil || p.repository == nil || p.evidence == nil || p.parser == nil || p.extraction == nil || p.planner == nil ||
-		p.matcher == nil || p.classifier == nil || p.composer == nil || p.reviews == nil {
+func (p *Pipeline) validate(sourceOnly bool) error {
+	if p.jobs == nil || p.repository == nil || p.evidence == nil || p.parser == nil {
+		return fmt.Errorf("%w: pipeline dependencies", ErrInvalidJob)
+	}
+	if !sourceOnly && (p.extraction == nil || p.planner == nil || p.matcher == nil ||
+		p.classifier == nil || p.composer == nil || p.reviews == nil) {
 		return fmt.Errorf("%w: pipeline dependencies", ErrInvalidJob)
 	}
 	return nil

@@ -946,6 +946,11 @@ paths:
                 instructions:
                   type: string
                   maxLength: 4000
+                ingestion_mode:
+                  type: string
+                  enum: [wiki, source_only]
+                  default: wiki
+                  description: source_only 仅用于 HTML/纯文本/JSON/CSV，固化不可变来源与分片且不调用模型或生成 Proposal。
                 route_mode:
                   type: string
                   enum: [auto, force_create, force_update]
@@ -4894,6 +4899,11 @@ components:
       required: [source]
       properties:
         source: { $ref: "#/components/schemas/SourceImportSource" }
+        ingestion_mode:
+          type: string
+          enum: [wiki, source_only]
+          default: wiki
+          description: source_only 仅用于 HTML/纯文本/JSON/CSV，在固化 SourceVersion/Chunk 后成功结束且不调用模型或生成 Proposal。
         title: { type: string, maxLength: 255 }
         instructions: { type: string, maxLength: 4000 }
         route_mode: { type: string, enum: [auto, force_create, force_update], default: auto }
