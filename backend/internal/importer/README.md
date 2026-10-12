@@ -18,6 +18,8 @@ Worker 不领取需要模型的 `source_import`，已有任务保持 queued。
 模型、不生成 ImportPlan/Proposal，也不发布页面。Worker 会在读取 AI 配置前优先领取
 这类任务，因此模型未配置或被禁用时仍可处理；PDF/图片会以
 `source_only_unsupported_format` 显式失败，默认 `ingestion_mode=wiki` 保持完整七阶段行为。
+历史纯文本中的 NUL 填充在确认整体仍为 UTF-8 后只从解析 Chunk 移除，并记录
+`nul_bytes_removed` 警告；原始 Asset、VersionHash 与下载内容保持逐字节一致。
 
 模型调用经私网 Semantic Kernel Sidecar：OpenAI-compatible 可使用原生 strict JSON
 Schema，DeepSeek 使用 JSON Object；Sidecar 对 JSON 和权威 Schema 失败执行有限纠正重试，

@@ -1,19 +1,24 @@
 package importer
 
 import (
+	"bytes"
 	"context"
 	"crypto/sha256"
 	"encoding/hex"
 	"encoding/json"
 	"fmt"
 	"strings"
+	"unicode/utf8"
 
 	"github.com/google/uuid"
 
 	"github.com/anby/wiki/backend/internal/evidence"
 )
 
-const deterministicParserVersion = "2"
+const (
+	deterministicParserVersion = "3"
+	warningNULBytesRemoved     = "nul_bytes_removed"
+)
 
 type ParseRequest struct {
 	Filename    string
@@ -254,11 +259,20 @@ func (deterministicDocumentAdapter) Parse(
 ) (*adapterResult, error) {
 	var blocks []TextBlock
 	var err error
+	warnings := []string{}
 	switch request.MIMEType {
 	case "text/html":
 		blocks, err = parseHTML(request.Content)
 	case "text/plain":
-		blocks = []TextBlock{{Kind: evidence.SourceChunkTypeText, Text: string(request.Content)}}
+		content := request.Content
+		if bytes.IndexByte(content, 0) >= 0 {
+			content = bytes.ReplaceAll(content, []byte{0}, nil)
+			warnings = append(warnings, warningNULBytesRemoved)
+		}
+		if !utf8.Valid(content) {
+			return nil, ErrParseFailed
+		}
+		blocks = []TextBlock{{Kind: evidence.SourceChunkTypeText, Text: string(content)}}
 	case "application/json":
 		blocks, err = parseJSON(request.Content)
 	case "text/csv":
@@ -274,7 +288,7 @@ func (deterministicDocumentAdapter) Parse(
 	return &adapterResult{
 		Track: evidence.ParseTrackText,
 		Metadata: ParseMetadata{
-			Warnings: []string{},
+			Warnings: warnings,
 		},
 		Blocks: blocks,
 	}, nil

@@ -62,6 +62,34 @@ func TestDefaultParserUsesConfiguredProductDefault(t *testing.T) {
 	}
 }
 
+func TestPlainTextParserRemovesNULPadding(t *testing.T) {
+	content := []byte("RFC text\x00with padding")
+	source, err := ValidateUpload(
+		context.Background(), DefaultURLPolicy(), SignatureScanner{},
+		"rfc.txt", "text/plain", content,
+	)
+	if err != nil {
+		t.Fatal(err)
+	}
+	expectedHash := sha256.Sum256(content)
+	if source.ContentHash != hex.EncodeToString(expectedHash[:]) {
+		t.Fatal("raw content hash changed while validating NUL-padded text")
+	}
+	result, err := NewParser(0, nil).Parse(context.Background(), ParseRequest{
+		Filename: source.Filename, MIMEType: source.MIMEType, Content: source.Content,
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(result.Chunks) != 1 || result.Chunks[0].TextContent != "RFC textwith padding" {
+		t.Fatalf("unexpected sanitized chunks: %#v", result.Chunks)
+	}
+	if len(result.Metadata.Warnings) != 1 ||
+		result.Metadata.Warnings[0] != warningNULBytesRemoved {
+		t.Fatalf("warnings=%v, want %q", result.Metadata.Warnings, warningNULBytesRemoved)
+	}
+}
+
 func TestParserPrefersSemanticBoundaryWithinLimit(t *testing.T) {
 	parser := NewParser(12, nil)
 	result, err := parser.Parse(context.Background(), ParseRequest{

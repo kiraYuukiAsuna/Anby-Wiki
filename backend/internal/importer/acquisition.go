@@ -288,7 +288,7 @@ func magicMatches(mimeType string, content []byte) bool {
 		}
 		return false
 	case "text/plain":
-		return !bytes.Contains(content, []byte{0})
+		return utf8.Valid(content)
 	case "text/csv":
 		return utf8.Valid(content) && !bytes.Contains(content, []byte{0})
 	case "application/json":
@@ -497,8 +497,7 @@ func magicMatchesReader(mimeType string, content io.ReadSeeker) (bool, error) {
 		}
 		return false, nil
 	case "text/plain":
-		contains, err := readerContainsByte(content, 0)
-		return !contains, err
+		return validUTF8Reader(content)
 	case "text/csv":
 		contains, err := readerContainsByte(content, 0)
 		if err != nil || contains {
