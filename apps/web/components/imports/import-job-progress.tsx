@@ -282,6 +282,10 @@ function importErrorMessage(error: unknown) {
   return typeof code === "string" ? ERROR_MESSAGES[code] ?? null : null;
 }
 
+function isSourceOnly(config: object) {
+  return "ingestion_mode" in config && config.ingestion_mode === "source_only";
+}
+
 export function ImportJobProgress({ id }: { id: string }) {
   const router = useRouter();
   const { data, error, mutate } = useSWR(
@@ -341,7 +345,9 @@ export function ImportJobProgress({ id }: { id: string }) {
   const latestByStage = new Map(data.stages.map((stage) => [stage.stage, stage]));
   const errorMessage = importErrorMessage(data.job.error);
   const planningInput = data.job.planningInput;
-  const canReplan = Boolean(data.job.sourceVersionId) &&
+  const sourceOnlyComplete =
+    data.job.status === "succeeded" && isSourceOnly(data.job.config);
+  const canReplan = !sourceOnlyComplete && Boolean(data.job.sourceVersionId) &&
     !data.job.proposalId && !["queued", "running"].includes(data.job.status);
   const currentPlanVersion = data.plans.find((item) => item.id === data.job.currentPlanId)
     ?? data.plans.at(-1);
@@ -397,7 +403,10 @@ export function ImportJobProgress({ id }: { id: string }) {
       <ol className="grid gap-3 sm:grid-cols-2">
         {STAGES.map((name) => {
           const stage = latestByStage.get(name);
-          const status = stage?.status ?? "pending";
+          const status = stage?.status ??
+            (sourceOnlyComplete && name !== "fetch" && name !== "parse"
+              ? "skipped"
+              : "pending");
           return <li key={name} className="rounded-lg border border-border p-4">
             <div className="flex items-center justify-between gap-2">
               <span className="text-sm font-medium">{LABELS[name]}</span>
