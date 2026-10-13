@@ -145,24 +145,6 @@ AI 配置和双用户协作 E2E。“实现完成”仍不等于“生产发布�
   的 8 个 Job、Migration gate、全服务健康检查和只读 Doctor 均通过；active ImportJob、
   开放导入 Proposal、Outbox backlog/dead 与 Projection error 均为 0。
 
-## 2026-10-12 RFC 全集来源导入
-
-- 以 RFC Editor 官方 `rfcs-text-only` rsync 模块和 `rfc-index.xml` 为权威输入。
-  镜像包含 9,840 个规范编号 `rfc[0-9]+.txt`，原文共 538,145,927 bytes；另有非规范
-  编号副本 `rfc17a.txt`，不进入清单。索引中的 RFC 8、9、51、418、500、530、598
-  没有官方 TXT 文件，本次不伪造内容。
-- 新增 `ingestion_mode=source_only`：HTML、纯文本、JSON、CSV 仍经 URL 安全获取、
-  MIME/magic、恶意签名、原始 Asset、解析 manifest 及 Evidence 领域服务门禁，但在
-  SourceVersion/SourceChunk 固化后成功结束，不调用模型、不生成 ImportPlan/Proposal，
-  也不自动发布 Page。默认 `wiki` 七阶段行为不变。
-- 生产共固化 9,840 个 RFC Source、9,840 个 SourceVersion 和 22,001 个 SourceChunk。
-  数据库中每个 VersionHash 已逐项与镜像 `SHA256SUMS` 比较，9,840/9,840 一致。
-- 9 份历史 TXT 含 NUL 填充。原始 Asset 与 VersionHash 保持逐字节一致；解析器仅在
-  确认剩余内容为 UTF-8 后从 Chunk 移除 NUL，并固化 `nul_bytes_removed` 警告。
-- `source_only` 的 9,836 个 Job 全部成功，AI request、ImportPlan、Proposal、活动 Job
-  和待审 ReviewTask 均为 0。生产版本 `a1fd8679c4b0`，CI `38258304864`、Migration
-  gate、HTTPS/readiness、单 Worker 和只读 Doctor 均通过；Doctor 为 0 issue。
-
 ## 2026-09-21 导入更新精炼与扩张门禁
 
 - HTML 获取接受完整文档及以 `<main>`、`<article>`、`<section>`、`<div>`、`<p>`、
