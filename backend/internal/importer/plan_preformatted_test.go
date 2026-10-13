@@ -67,6 +67,7 @@ func TestEnsurePlanPreformattedBlocksPreservesASCIIFlowDiagram(t *testing.T) {
 
 func TestEnsurePlanPreformattedBlocksReplacesOverlappingFragmentsInSourceOrder(t *testing.T) {
 	sourceVersionID, chunkID, pageID := uuid.New(), uuid.New(), uuid.New()
+	formula := "Formula alpha\nFormula beta"
 	source := "First diagram\n" +
 		"+-------+\n" +
 		"| Start |\n" +
@@ -75,7 +76,8 @@ func TestEnsurePlanPreformattedBlocksReplacesOverlappingFragmentsInSourceOrder(t
 		"    V\n" +
 		"+-------+\n" +
 		"|  End  |\n" +
-		"+-------+\n" +
+		"+-------+\n\n" +
+		formula + "\n" +
 		"\fRFC header\n\n" +
 		"Second diagram\n" +
 		"+-------+\n" +
@@ -98,9 +100,12 @@ func TestEnsurePlanPreformattedBlocksReplacesOverlappingFragmentsInSourceOrder(t
 	split := len(firstRunes) / 2
 	firstHalf := string(firstRunes[:split])
 	secondHalf := string(firstRunes[split:])
+	formulaStart := strings.Index(source, formula)
 	plan := &ImportPlan{Routes: []PageRoute{{
 		Action: RouteUpdate, PageID: &pageID, Title: "Diagrams",
 		Blocks: []PlannedBlock{
+			{Type: string(ast.BlockHeading), Mode: BlockAppend, Text: "Generated heading"},
+			{Type: string(ast.BlockParagraph), Mode: BlockAppend, Text: "Generated prose."},
 			{
 				Type: string(ast.BlockCode), Mode: BlockAppend, Text: detected[1].text,
 				Evidence: []CandidateEvidence{detected[1].evidence},
@@ -121,17 +126,31 @@ func TestEnsurePlanPreformattedBlocksReplacesOverlappingFragmentsInSourceOrder(t
 					CharEnd:   first.evidence.CharEnd,
 				}},
 			},
+			{
+				Type: string(ast.BlockCode), Mode: BlockAppend, Text: formula,
+				Evidence: []CandidateEvidence{{
+					ChunkID: chunkID, Quotation: formula,
+					CharStart: formulaStart, CharEnd: formulaStart + len([]rune(formula)),
+				}},
+			},
 		},
 	}}}
 
-	if added := ensurePlanPreformattedBlocks(plan, chunks, "Preserve all diagrams."); added != 1 {
+	instructions := "Add every diagram as exact code blocks. Do not add, rewrite, or duplicate prose."
+	if added := ensurePlanPreformattedBlocks(plan, chunks, instructions); added != 1 {
 		t.Fatalf("added=%d, want 1", added)
 	}
 	blocks := plan.Routes[0].Blocks
-	if len(blocks) != 2 ||
+	if len(blocks) != 3 ||
 		blocks[0].Text != detected[0].text ||
-		blocks[1].Text != detected[1].text {
+		blocks[1].Text != formula ||
+		blocks[2].Text != detected[1].text {
 		t.Fatalf("unexpected reconciled blocks: %#v", blocks)
+	}
+	for _, block := range blocks {
+		if block.Type != string(ast.BlockCode) {
+			t.Fatalf("unexpected non-code block: %#v", block)
+		}
 	}
 }
 

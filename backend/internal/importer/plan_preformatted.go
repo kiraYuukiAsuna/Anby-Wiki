@@ -1,12 +1,14 @@
 package importer
 
 import (
+	"sort"
 	"strings"
 	"unicode"
 	"unicode/utf8"
 
 	"github.com/anby/wiki/backend/internal/ast"
 	"github.com/anby/wiki/backend/internal/evidence"
+	"github.com/google/uuid"
 )
 
 const (
@@ -53,9 +55,12 @@ func ensurePlanPreformattedBlocks(plan *ImportPlan, chunks []evidence.SourceChun
 	}
 	existing := map[string]bool{}
 	blocks := make([]PlannedBlock, 0, len(plan.Routes[routeIndex].Blocks)+len(sources))
+	onlyPreformatted := instructionsRequireOnlyPreformatted(instructions)
 	for _, block := range plan.Routes[routeIndex].Blocks {
 		if block.Type != string(ast.BlockCode) {
-			blocks = append(blocks, block)
+			if !onlyPreformatted {
+				blocks = append(blocks, block)
+			}
 			continue
 		}
 		key := preformattedKey(block.Text)
@@ -84,6 +89,7 @@ func ensurePlanPreformattedBlocks(plan *ImportPlan, chunks []evidence.SourceChun
 			added++
 		}
 	}
+	sortPlanCodeBlocksByEvidence(blocks, chunks)
 	plan.Routes[routeIndex].Blocks = blocks
 	return added
 }
@@ -99,6 +105,58 @@ func plannedBlockOverlapsPreformatted(block PlannedBlock, sources []preformatted
 		}
 	}
 	return false
+}
+
+func sortPlanCodeBlocksByEvidence(blocks []PlannedBlock, chunks []evidence.SourceChunk) {
+	code := make([]PlannedBlock, 0)
+	for _, block := range blocks {
+		if block.Type == string(ast.BlockCode) {
+			code = append(code, block)
+		}
+	}
+	if len(code) < 2 {
+		return
+	}
+	chunkOrder := make(map[uuid.UUID]int, len(chunks))
+	for index := range chunks {
+		chunkOrder[chunks[index].ID] = index
+	}
+	sort.SliceStable(code, func(left, right int) bool {
+		leftChunk, leftStart, leftOK := plannedBlockEvidencePosition(code[left], chunkOrder)
+		rightChunk, rightStart, rightOK := plannedBlockEvidencePosition(code[right], chunkOrder)
+		if leftOK != rightOK {
+			return leftOK
+		}
+		if !leftOK {
+			return false
+		}
+		if leftChunk != rightChunk {
+			return leftChunk < rightChunk
+		}
+		return leftStart < rightStart
+	})
+	codeIndex := 0
+	for index := range blocks {
+		if blocks[index].Type != string(ast.BlockCode) {
+			continue
+		}
+		blocks[index] = code[codeIndex]
+		codeIndex++
+	}
+}
+
+func plannedBlockEvidencePosition(block PlannedBlock, chunkOrder map[uuid.UUID]int) (int, int, bool) {
+	chunkIndex, charStart, found := 0, 0, false
+	for _, item := range block.Evidence {
+		index, ok := chunkOrder[item.ChunkID]
+		if !ok || item.CharStart < 0 || item.CharEnd <= item.CharStart {
+			continue
+		}
+		if !found || index < chunkIndex || index == chunkIndex && item.CharStart < charStart {
+			chunkIndex, charStart, found = index, item.CharStart, true
+		}
+	}
+	return chunkIndex, charStart, found
 }
 
 func preformattedPlanCoverage(plan *ImportPlan, chunks []evidence.SourceChunk, instructions string) float64 {
@@ -345,6 +403,34 @@ func instructionsExcludePreformatted(instructions string) bool {
 			"ascii 图", "固定宽度图", "流程图",
 		)
 		if excluded && preformatted {
+			return true
+		}
+	}
+	return false
+}
+
+func instructionsRequireOnlyPreformatted(instructions string) bool {
+	lower := strings.ToLower(instructions)
+	required := containsAnyPlanPhrase(
+		lower,
+		"as exact code blocks", "only code blocks",
+		"仅添加代码块", "只添加代码块",
+	)
+	if !required {
+		return false
+	}
+	for _, sentence := range splitPlanSentences(lower) {
+		excluded := containsAnyPlanPhrase(
+			sentence,
+			"do not add", "exclude", "omit",
+			"不要添加", "不添加", "排除", "省略",
+		)
+		prose := containsAnyPlanPhrase(
+			sentence,
+			"prose", "paragraph", "heading",
+			"正文", "段落", "标题",
+		)
+		if excluded && prose {
 			return true
 		}
 	}

@@ -295,6 +295,7 @@ func (p *PagePlanner) Plan(ctx context.Context, params PlanParams) (*PlanResult,
 	if err != nil && !errors.Is(err, ErrQualityGate) {
 		return nil, err
 	}
+	ensurePlanPreformattedBlocks(plan, params.Chunks, params.Instructions)
 	applyExplicitPlanBlockLimits(plan, params.Instructions)
 	fidelity = min(fidelity, constrainedPlanInstructionCoverage(plan, params.Instructions))
 	fidelity = min(fidelity, preformattedPlanCoverage(plan, params.Chunks, params.Instructions))
