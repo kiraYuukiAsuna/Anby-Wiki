@@ -65,6 +65,76 @@ func TestEnsurePlanPreformattedBlocksPreservesASCIIFlowDiagram(t *testing.T) {
 	}
 }
 
+func TestEnsurePlanPreformattedBlocksReplacesOverlappingFragmentsInSourceOrder(t *testing.T) {
+	sourceVersionID, chunkID, pageID := uuid.New(), uuid.New(), uuid.New()
+	source := "First diagram\n" +
+		"+-------+\n" +
+		"| Start |\n" +
+		"+---+---+\n" +
+		"    |\n" +
+		"    V\n" +
+		"+-------+\n" +
+		"|  End  |\n" +
+		"+-------+\n" +
+		"\fRFC header\n\n" +
+		"Second diagram\n" +
+		"+-------+\n" +
+		"| Input |\n" +
+		"+---+---+\n" +
+		"    |\n" +
+		"    V\n" +
+		"+-------+\n" +
+		"|Output |\n" +
+		"+-------+"
+	chunks := []evidence.SourceChunk{{
+		ID: chunkID, SourceVersionID: sourceVersionID, TextContent: source,
+	}}
+	detected := sourcePreformattedBlocks(chunks)
+	if len(detected) != 2 {
+		t.Fatalf("detected=%d, want 2", len(detected))
+	}
+	first := detected[0]
+	firstRunes := []rune(first.text)
+	split := len(firstRunes) / 2
+	firstHalf := string(firstRunes[:split])
+	secondHalf := string(firstRunes[split:])
+	plan := &ImportPlan{Routes: []PageRoute{{
+		Action: RouteUpdate, PageID: &pageID, Title: "Diagrams",
+		Blocks: []PlannedBlock{
+			{
+				Type: string(ast.BlockCode), Mode: BlockAppend, Text: detected[1].text,
+				Evidence: []CandidateEvidence{detected[1].evidence},
+			},
+			{
+				Type: string(ast.BlockCode), Mode: BlockAppend, Text: firstHalf,
+				Evidence: []CandidateEvidence{{
+					ChunkID: chunkID, Quotation: firstHalf,
+					CharStart: first.evidence.CharStart,
+					CharEnd:   first.evidence.CharStart + split,
+				}},
+			},
+			{
+				Type: string(ast.BlockCode), Mode: BlockAppend, Text: secondHalf,
+				Evidence: []CandidateEvidence{{
+					ChunkID: chunkID, Quotation: secondHalf,
+					CharStart: first.evidence.CharStart + split,
+					CharEnd:   first.evidence.CharEnd,
+				}},
+			},
+		},
+	}}}
+
+	if added := ensurePlanPreformattedBlocks(plan, chunks, "Preserve all diagrams."); added != 1 {
+		t.Fatalf("added=%d, want 1", added)
+	}
+	blocks := plan.Routes[0].Blocks
+	if len(blocks) != 2 ||
+		blocks[0].Text != detected[0].text ||
+		blocks[1].Text != detected[1].text {
+		t.Fatalf("unexpected reconciled blocks: %#v", blocks)
+	}
+}
+
 func TestCompilePlannedCodePreservesWhitespace(t *testing.T) {
 	composer := &ProposalComposer{ids: id.NewGenerator()}
 	text := "  +---+\n  | A |\n  +---+"

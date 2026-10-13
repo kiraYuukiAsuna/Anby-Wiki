@@ -46,26 +46,59 @@ func ensurePlanPreformattedBlocks(plan *ImportPlan, chunks []evidence.SourceChun
 		return 0
 	}
 
-	existing := map[string]bool{}
-	for _, block := range plan.Routes[routeIndex].Blocks {
-		if block.Type == string(ast.BlockCode) {
-			existing[preformattedKey(block.Text)] = true
-		}
+	sources := sourcePreformattedBlocks(chunks)
+	sourceKeys := make(map[string]bool, len(sources))
+	for _, source := range sources {
+		sourceKeys[preformattedKey(source.text)] = true
 	}
-	added := 0
-	for _, source := range sourcePreformattedBlocks(chunks) {
-		key := preformattedKey(source.text)
-		if key == "" || existing[key] {
+	existing := map[string]bool{}
+	blocks := make([]PlannedBlock, 0, len(plan.Routes[routeIndex].Blocks)+len(sources))
+	for _, block := range plan.Routes[routeIndex].Blocks {
+		if block.Type != string(ast.BlockCode) {
+			blocks = append(blocks, block)
 			continue
 		}
-		plan.Routes[routeIndex].Blocks = append(plan.Routes[routeIndex].Blocks, PlannedBlock{
+		key := preformattedKey(block.Text)
+		if sourceKeys[key] {
+			existing[key] = true
+			continue
+		}
+		if plannedBlockOverlapsPreformatted(block, sources) {
+			continue
+		}
+		blocks = append(blocks, block)
+	}
+	added := 0
+	appended := map[string]bool{}
+	for _, source := range sources {
+		key := preformattedKey(source.text)
+		if key == "" || appended[key] {
+			continue
+		}
+		blocks = append(blocks, PlannedBlock{
 			Type: string(ast.BlockCode), Mode: BlockAppend,
 			Text: source.text, Evidence: []CandidateEvidence{source.evidence},
 		})
-		existing[key] = true
-		added++
+		appended[key] = true
+		if !existing[key] {
+			added++
+		}
 	}
+	plan.Routes[routeIndex].Blocks = blocks
 	return added
+}
+
+func plannedBlockOverlapsPreformatted(block PlannedBlock, sources []preformattedSourceBlock) bool {
+	for _, item := range block.Evidence {
+		for _, source := range sources {
+			evidence := source.evidence
+			if item.ChunkID == evidence.ChunkID &&
+				item.CharStart < evidence.CharEnd && evidence.CharStart < item.CharEnd {
+				return true
+			}
+		}
+	}
+	return false
 }
 
 func preformattedPlanCoverage(plan *ImportPlan, chunks []evidence.SourceChunk, instructions string) float64 {
