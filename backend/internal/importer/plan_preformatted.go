@@ -235,7 +235,8 @@ func detectPreformattedSpans(runes []rune) []preformattedLine {
 				signals[end]-signals[end-1] <= preformattedMaxSignalGap+1 {
 				end++
 			}
-			if end-start >= preformattedMinSignalLines {
+			if end-start >= preformattedMinSignalLines ||
+				hasStrongPreformattedArrow(lines, signals[start:end]) {
 				first, last := signals[start], signals[end-1]
 				first = includePreformattedTitle(lines, pageStart, first)
 				last = includePreformattedTail(lines, pageEnd, last)
@@ -317,6 +318,17 @@ func isPreformattedSignal(line string) bool {
 		}
 	}
 	return structural >= 3 && strings.ContainsAny(line, "+|/\\")
+}
+
+func hasStrongPreformattedArrow(lines []preformattedLine, signals []int) bool {
+	for _, index := range signals {
+		line := lines[index].text
+		if strings.Count(line, "-") >= 3 && containsAnyPlanPhrase(line, "-->", "<--") ||
+			strings.Count(line, "=") >= 3 && containsAnyPlanPhrase(line, "==>", "<==") {
+			return true
+		}
+	}
+	return false
 }
 
 func isPreformattedTitle(text string) bool {

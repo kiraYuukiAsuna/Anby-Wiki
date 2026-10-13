@@ -154,6 +154,24 @@ func TestEnsurePlanPreformattedBlocksReplacesOverlappingFragmentsInSourceOrder(t
 	}
 }
 
+func TestSourcePreformattedBlocksDetectsSingleLongArrowMessage(t *testing.T) {
+	chunkID := uuid.New()
+	message := "             HOST(x)       Control link                      HOST(y)\n" +
+		"                         -------------------->\n" +
+		"                           ENQ PRIM 0 1 2"
+	blocks := sourcePreformattedBlocks([]evidence.SourceChunk{{
+		ID: chunkID, SourceVersionID: uuid.New(), TextContent: message,
+	}})
+	if len(blocks) != 1 || blocks[0].text != message {
+		t.Fatalf("unexpected long-arrow blocks: %#v", blocks)
+	}
+	item := blocks[0].evidence
+	if item.ChunkID != chunkID || item.CharStart != 0 ||
+		item.CharEnd != len([]rune(message)) || item.Quotation != message {
+		t.Fatalf("unexpected long-arrow evidence: %#v", item)
+	}
+}
+
 func TestCompilePlannedCodePreservesWhitespace(t *testing.T) {
 	composer := &ProposalComposer{ids: id.NewGenerator()}
 	text := "  +---+\n  | A |\n  +---+"
