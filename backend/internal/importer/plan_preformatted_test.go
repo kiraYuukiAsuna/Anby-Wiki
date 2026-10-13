@@ -2,6 +2,7 @@ package importer
 
 import (
 	"encoding/json"
+	"strings"
 	"testing"
 
 	"github.com/google/uuid"
@@ -127,5 +128,37 @@ func TestPlanConcisionDoesNotMergeDistinctDiagrams(t *testing.T) {
 	plan.Routes[0].Blocks = append(plan.Routes[0].Blocks, plan.Routes[0].Blocks[0])
 	if score := planConcisionScore(plan); score >= 1 {
 		t.Fatalf("duplicate diagram concision=%f, want below 1", score)
+	}
+}
+
+func TestImportPlanExpansionBudgetSeparatesPreformattedContent(t *testing.T) {
+	pageID := uuid.New()
+	blocks := make([]PlannedBlock, 4)
+	for index := range blocks {
+		blocks[index] = PlannedBlock{
+			Type: string(ast.BlockCode), Mode: BlockAppend,
+			Text: strings.Repeat(string(rune('A'+index)), 2000),
+		}
+	}
+	plan := &ImportPlan{Routes: []PageRoute{{
+		Action: RouteUpdate, PageID: &pageID, Blocks: blocks,
+	}}}
+	candidates := []PageCandidate{{
+		PageID: pageID, Blocks: []PageCandidateBlock{{
+			Type: string(ast.BlockParagraph), Text: "Existing article.",
+		}},
+	}}
+	if !importPlanExpansionWithinBudget(plan, candidates, "") {
+		t.Fatal("bounded preformatted content should not consume the prose expansion budget")
+	}
+
+	plan.Routes[0].Blocks = make([]PlannedBlock, preformattedMaxPlanBlocks+1)
+	for index := range plan.Routes[0].Blocks {
+		plan.Routes[0].Blocks[index] = PlannedBlock{
+			Type: string(ast.BlockCode), Mode: BlockAppend, Text: "diagram",
+		}
+	}
+	if importPlanExpansionWithinBudget(plan, candidates, "") {
+		t.Fatal("unbounded preformatted block count should fail the expansion budget")
 	}
 }

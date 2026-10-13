@@ -584,6 +584,7 @@ func importPlanExpansionWithinBudget(
 			headingLimit = limits.heading
 		}
 		appendContent, appendHeadings, appendRunes := 0, 0, 0
+		appendPreformatted, appendPreformattedRunes := 0, 0
 		for _, block := range route.Blocks {
 			if block.Mode != BlockAppend {
 				continue
@@ -592,11 +593,18 @@ func importPlanExpansionWithinBudget(
 				appendHeadings++
 				continue
 			}
+			if block.Type == string(ast.BlockCode) {
+				appendPreformatted++
+				appendPreformattedRunes += utf8.RuneCountInString(block.Text)
+				continue
+			}
 			appendContent++
 			appendRunes += utf8.RuneCountInString(plannedBlockText(block))
 		}
 		runeLimit := max(6000, min(24000, currentRunes/2+4000))
-		if appendContent > contentLimit || appendHeadings > headingLimit || appendRunes > runeLimit {
+		if appendContent > contentLimit || appendHeadings > headingLimit || appendRunes > runeLimit ||
+			appendPreformatted > preformattedMaxPlanBlocks ||
+			appendPreformattedRunes > preformattedMaxPlanRunes {
 			return false
 		}
 	}

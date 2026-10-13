@@ -13,6 +13,8 @@ const (
 	preformattedMaxSignalGap     = 8
 	preformattedMaxEvidenceRunes = 4000
 	preformattedMinSignalLines   = 3
+	preformattedMaxPlanBlocks    = 16
+	preformattedMaxPlanRunes     = 32000
 )
 
 type preformattedLine struct {
