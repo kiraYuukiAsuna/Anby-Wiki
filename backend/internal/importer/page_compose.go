@@ -746,6 +746,19 @@ func (c *ProposalComposer) compilePlannedBlockWithReferences(planned PlannedBloc
 	case string(ast.BlockParagraph):
 		return c.textBlock(blockID, ast.BlockParagraph, strings.TrimSpace(planned.Text), citationIDs, entityReferences)
 
+	case string(ast.BlockCode):
+		content, err := json.Marshal(planned.Text)
+		if err != nil {
+			return nil, err
+		}
+		block := &ast.Block{ID: blockID, Type: ast.BlockCode, Content: content}
+		if err := ast.Validate(&ast.Document{
+			Type: "document", SchemaVersion: ast.SchemaVersion, Children: []*ast.Block{block},
+		}); err != nil {
+			return nil, err
+		}
+		return block, nil
+
 	case string(ast.BlockQuote):
 		paragraphID, err := c.ids.NewString()
 		if err != nil {

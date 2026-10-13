@@ -18,8 +18,10 @@ Worker 首次启用来源导入时，幂等登记当前 `source-extraction-v8` P
 词表与关系方向约束；作品/RFC 属性有独立语义，禁止用 `part_of` 代替发布组织，也禁止
 任何 Entity 关系指回主体自身；`instance_of` 只允许有明确分类措辞的单值候选，禁止退化为
 通用关联，并识别 text/table/chart/figure/page Chunk。页面规划使用
-`source-import-plan-v8`，多窗口结果由服务端确定性合并，并由
+`source-import-plan-v9`，多窗口结果由服务端确定性合并，并由
 `source-import-plan-fidelity-v6` 对照原始 Chunk 做证据化遗漏审计和章节级修复。
+规划契约允许用 `code` 逐字表达固定宽度图和协议布局；单路由计划还会由服务端确定性
+补齐模型遗漏，并把布局逐字覆盖率纳入最终 fidelity。
 复杂 PDF 的 `document-page-analysis-v1` 通过同一 Gateway 发送单页图片，继续使用
 Prompt Registry、结构化 Schema 双重校验、重试和用量审计。
 两者都把用户指定范围和块数上限视为跨窗口全局约束，并要求每条正文陈述由引文直接支撑；

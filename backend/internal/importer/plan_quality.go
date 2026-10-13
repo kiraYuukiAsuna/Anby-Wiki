@@ -97,7 +97,7 @@ func refinePlannedBlocks(blocks []PlannedBlock) []PlannedBlock {
 	discardLevel := 0
 	for _, raw := range blocks {
 		block := raw
-		block.Text = strings.TrimSpace(block.Text)
+		block.Text = normalizePlannedBlockText(block.Type, block.Text)
 		if block.Type == string(ast.BlockBulletList) {
 			block.Items = refineListItems(block.Items)
 			if len(block.Items) == 0 {

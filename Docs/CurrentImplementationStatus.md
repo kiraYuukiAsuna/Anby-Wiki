@@ -151,8 +151,10 @@ AI 配置和双用户协作 E2E。“实现完成”仍不等于“生产发布�
   `<pre>` 等正文元素开头的合法 fragment；解析仍优先读取 DOM 主正文并排除导航、
   侧栏、页眉、页脚、目录和隐藏节点，防止站点容器文本进入不可变 SourceChunk 并
   诱发无关页面规划。
-- `source-import-plan-v8` 与 `source-import-plan-fidelity-v6` 将用户范围、排除项和
+- `source-import-plan-v9` 与 `source-import-plan-fidelity-v6` 将用户范围、排除项和
   块数限制明确为跨窗口全局约束，并禁止用导航标签、孤立代码或示例值支撑宽泛正文。
+- ImportPlan 支持由精确 SourceChunk evidence 支撑的 `code` 块；单路由计划会确定性
+  保留固定宽度图、协议布局和多行公式，并把逐字覆盖率纳入 fidelity 硬门禁。
 - 服务端在跨窗口合并时归并近义段落；单页面显式块数上限按指令主题覆盖与引文直接
   支撑度选择代表块，并以最终块对正向要求的覆盖率约束 fidelity。未写明上限的现有页
   更新超过相对当前页规模的预算时直接失败质量门禁，不会静默截断不同事实或生成不可

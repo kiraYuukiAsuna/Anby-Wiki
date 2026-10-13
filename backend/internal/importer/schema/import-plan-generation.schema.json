@@ -57,7 +57,7 @@
       "additionalProperties": false,
       "required": ["type", "evidence"],
       "properties": {
-        "type": { "enum": ["heading", "paragraph", "bullet_list", "quote"] },
+        "type": { "enum": ["heading", "paragraph", "bullet_list", "quote", "code"] },
         "text": { "type": "string", "maxLength": 12000 },
         "level": { "type": "integer", "minimum": 1, "maximum": 6 },
         "items": {

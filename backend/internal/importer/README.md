@@ -95,7 +95,7 @@ Entity 值的自引用 Claim；相同约束在逐字证据核验、稳定 ID 分
 相邻技术术语误写成 `JSON instance_of JavaScript`；同一主体的单值属性若在一个模型批次中
 出现多个值，分类器按“支持现有事实优先，其次置信度、证据覆盖、稳定 ID”只保留一个，
 Composer/Apply 前置校验与 Knowledge 写入约束继续防御不可能应用的 Proposal。
-事实候选允许为空：来源随后仍会进入 `source-import-plan-v8`，由不受固定 Entity/Claim
+事实候选允许为空：来源随后仍会进入 `source-import-plan-v9`，由不受固定 Entity/Claim
 词表限制的页面规划判断百科价值。模型提供的
 引文必须逐字存在；服务端会重新推导 rune 范围以纠正模型常见的 Unicode/字节计数偏差。
 引文重复出现时选择离模型提示位置最近的精确匹配，最近距离并列才拒绝；模糊匹配、翻译
@@ -124,7 +124,7 @@ Operation 排在 Claim Operation 之前，Claim 的主体和 Entity 值在 Compo
 可核验 Entity/Claim 继续进入治理。新实体 canonical key 使用 `type_key:label`，避免
 不同类型的同名实体在整批应用时互相冲突。
 
-`source-import-plan-v8` 在事实抽取之后执行来源理解与页面路由。它先按标题、来源名、
+`source-import-plan-v9` 在事实抽取之后执行来源理解与页面路由。它先按标题、来源名、
 Entity/alias 召回已有 Page 及可替换 Block，再允许一份来源同时生成多个 `create`、
 `update`、`link` 与 `ignore` 路由。`link.related_to` 显式选择同批 create/update
 页面并携带原文证据，随后编译为稳定 `page_reference`，由投影生成反链；每个新写或改写
@@ -136,6 +136,10 @@ Page/Block ID。模型只输出页面语义、正文和 `chunk_id + quotation`�
 只允许将字母、标点和大小写全部一致的纯空白差异回填为不可变 Chunk 中的原始逐字引文；
 独立窗口并行规划后直接经过确定性的路由/段落合并、无内容标题与非正文区段清理，不再用一次
 大输出 LLM 调用重写整份计划，避免可选的“收敛”步骤成为新的单点失败。
+固定宽度流程图、ASCII 图、协议布局和多行公式使用 `code` 计划块逐字保留。单一
+create/update 路由下，服务端还会从 SourceChunk 确定性识别布局片段并补齐模型漏项；
+代码块文本必须与一个精确 evidence 引文一致，最终固定宽度覆盖率继续压低 fidelity，
+因此遗漏布局内容的计划不能再仅凭模型自报覆盖率通过质量门禁。
 作者、编辑、贡献者、出版者或发布机构若只出现在文档头、署名、联系方式或
 元数据中，规划与合并阶段都不为其生成独立页面；只有来源提供独立人物或机构
 内容时才保留路由。Composer 调用 Citation 领域服务后再按稳定 ID 去重，同一段不可变

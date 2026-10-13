@@ -139,7 +139,7 @@ func DecodeGeneratedImportPlan(raw []byte, sourceVersionID uuid.UUID, chunks []e
 			originalBlocks++
 			block := PlannedBlock{
 				Type: sourceBlock.Type, Mode: BlockAppend, TargetBlockID: nil,
-				Text: strings.TrimSpace(sourceBlock.Text), Level: sourceBlock.Level,
+				Text: normalizePlannedBlockText(sourceBlock.Type, sourceBlock.Text), Level: sourceBlock.Level,
 				Items:    normalizedGeneratedItems(sourceBlock.Items),
 				Evidence: catalog.normalize(generatedEvidenceCandidates(sourceBlock.Evidence)),
 			}

@@ -418,6 +418,8 @@ func planFidelityDraftView(plan *ImportPlan) []planFidelityRouteView {
 				for _, item := range block.Items {
 					blocks = append(blocks, "- "+item)
 				}
+			case string(ast.BlockCode):
+				blocks = append(blocks, "```\n"+block.Text+"\n```")
 			default:
 				blocks = append(blocks, block.Text)
 			}
@@ -710,6 +712,15 @@ func planMinimumGroundingScore(plan *ImportPlan) float64 {
 
 func plannedBlockGroundingScore(block PlannedBlock) float64 {
 	if len(block.Evidence) == 0 {
+		return 0
+	}
+	if block.Type == string(ast.BlockCode) {
+		wanted := preformattedKey(block.Text)
+		for _, item := range block.Evidence {
+			if wanted != "" && preformattedKey(item.Quotation) == wanted {
+				return 1
+			}
+		}
 		return 0
 	}
 	statements := splitPlanSentences(block.Text)

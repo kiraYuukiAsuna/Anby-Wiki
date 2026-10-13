@@ -25,7 +25,7 @@ import (
 const (
 	ImportPlanSchemaURL           = "https://anby.wiki/schemas/import-plan/v1/plan.schema.json"
 	ImportPlanGenerationSchemaURL = "https://anby.wiki/schemas/import-plan-generation/v1/plan.schema.json"
-	ImportPlanPromptKey           = "source-import-plan-v8"
+	ImportPlanPromptKey           = "source-import-plan-v9"
 	planBatchConcurrency          = 3
 	planLeafValidationAttempts    = 3
 
@@ -286,6 +286,7 @@ func (p *PagePlanner) Plan(ctx context.Context, params PlanParams) (*PlanResult,
 	plan.Routes = normalizePlanLinks(plan.Routes)
 	plan.Routes = ensureRequestedPlanLinks(plan.Routes, candidatePages, params.Instructions)
 	refineImportPlan(plan)
+	ensurePlanPreformattedBlocks(plan, params.Chunks, params.Instructions)
 	applyExplicitPlanBlockLimits(plan, params.Instructions)
 	if plan.Profile.Useful && actionablePageRouteCount(plan.Routes) == 0 {
 		return nil, ErrNoPagePlan
@@ -296,6 +297,7 @@ func (p *PagePlanner) Plan(ctx context.Context, params PlanParams) (*PlanResult,
 	}
 	applyExplicitPlanBlockLimits(plan, params.Instructions)
 	fidelity = min(fidelity, constrainedPlanInstructionCoverage(plan, params.Instructions))
+	fidelity = min(fidelity, preformattedPlanCoverage(plan, params.Chunks, params.Instructions))
 	threshold := params.QualityThreshold
 	if threshold < DefaultQualityThreshold {
 		threshold = DefaultQualityThreshold
@@ -698,6 +700,17 @@ func validPlannedBlockContent(block PlannedBlock) bool {
 		return strings.TrimSpace(block.Text) != "" && block.Level >= 1 && block.Level <= 6 && len(block.Items) == 0
 	case string(ast.BlockParagraph), string(ast.BlockQuote):
 		return strings.TrimSpace(block.Text) != "" && len(block.Items) == 0
+	case string(ast.BlockCode):
+		wanted := preformattedKey(block.Text)
+		if wanted == "" || len(block.Items) != 0 {
+			return false
+		}
+		for _, item := range block.Evidence {
+			if preformattedKey(item.Quotation) == wanted {
+				return true
+			}
+		}
+		return false
 	case string(ast.BlockBulletList):
 		if strings.TrimSpace(block.Text) != "" || len(block.Items) == 0 {
 			return false

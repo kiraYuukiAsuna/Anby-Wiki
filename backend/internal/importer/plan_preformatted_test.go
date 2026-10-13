@@ -1,0 +1,115 @@
+package importer
+
+import (
+	"encoding/json"
+	"testing"
+
+	"github.com/google/uuid"
+
+	"github.com/anby/wiki/backend/internal/ast"
+	"github.com/anby/wiki/backend/internal/evidence"
+	"github.com/anby/wiki/backend/internal/platform/id"
+)
+
+func TestEnsurePlanPreformattedBlocksPreservesASCIIFlowDiagram(t *testing.T) {
+	sourceVersionID, chunkID, pageID := uuid.New(), uuid.New(), uuid.New()
+	diagram := "IMP to HOST Message\n" +
+		"       +-------+\n" +
+		"       | Start |\n" +
+		"       +---+---+\n" +
+		"           |\n" +
+		"           V\n" +
+		"       +-------+\n" +
+		"       |  End  |\n" +
+		"       +-------+"
+	source := "Introductory prose.\n\n\f\nRFC 12 header\n\n" + diagram + "\n\nClosing prose."
+	chunks := []evidence.SourceChunk{{
+		ID: chunkID, SourceVersionID: sourceVersionID,
+		TextContent: source, LocatorJSON: json.RawMessage(`{"page":2}`),
+	}}
+	plan := &ImportPlan{Routes: []PageRoute{{
+		Action: RouteUpdate, PageID: &pageID, Title: "RFC 12",
+		Blocks: []PlannedBlock{{
+			Type: string(ast.BlockParagraph), Mode: BlockAppend, Text: "Introductory prose.",
+			Evidence: []CandidateEvidence{{
+				ChunkID: chunkID, Quotation: "Introductory prose.", CharStart: 0, CharEnd: 19,
+			}},
+		}},
+	}}}
+
+	if added := ensurePlanPreformattedBlocks(plan, chunks, "Preserve all diagrams."); added != 1 {
+		t.Fatalf("added=%d, want 1", added)
+	}
+	code := plan.Routes[0].Blocks[1]
+	if code.Type != string(ast.BlockCode) || code.Text != diagram || len(code.Evidence) != 1 {
+		t.Fatalf("unexpected code block: %#v", code)
+	}
+	item := code.Evidence[0]
+	runes := []rune(source)
+	if item.Page == nil || *item.Page != 2 ||
+		item.Quotation != diagram ||
+		string(runes[item.CharStart:item.CharEnd]) != diagram {
+		t.Fatalf("unexpected code evidence: %#v", item)
+	}
+	if coverage := preformattedPlanCoverage(plan, chunks, ""); coverage != 1 {
+		t.Fatalf("coverage=%f, want 1", coverage)
+	}
+
+	missing := &ImportPlan{Routes: []PageRoute{{
+		Action: RouteUpdate, PageID: &pageID, Title: "RFC 12",
+		Blocks: []PlannedBlock{{Type: string(ast.BlockParagraph), Text: "Summary"}},
+	}}}
+	if coverage := preformattedPlanCoverage(missing, chunks, ""); coverage != 0 {
+		t.Fatalf("missing coverage=%f, want 0", coverage)
+	}
+}
+
+func TestCompilePlannedCodePreservesWhitespace(t *testing.T) {
+	composer := &ProposalComposer{ids: id.NewGenerator()}
+	text := "  +---+\n  | A |\n  +---+"
+	block, err := composer.compilePlannedBlock(PlannedBlock{
+		Type: string(ast.BlockCode), Mode: BlockAppend, Text: text,
+	}, []uuid.UUID{uuid.New()})
+	if err != nil {
+		t.Fatal(err)
+	}
+	content, err := block.TextContent()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if block.Type != ast.BlockCode || content != text {
+		t.Fatalf("unexpected code block: %#v content=%q", block, content)
+	}
+}
+
+func TestDecodeGeneratedImportPlanAcceptsExactCodeEvidence(t *testing.T) {
+	sourceVersionID, chunkID := uuid.New(), uuid.New()
+	text := "  +---+\n  | A |\n  +---+"
+	raw, err := json.Marshal(generatedImportPlanDocument{
+		Profile: SourceProfile{
+			Title: "Diagram", Summary: "A fixed-width diagram.", Language: "en", Useful: true,
+			Subjects: []SourceSubject{},
+		},
+		Routes: []generatedPageRoute{{
+			Action: RouteCreate, Title: "Diagram", Reason: "The source contains a diagram.", Confidence: 0.9,
+			Blocks: []generatedPlannedBlock{{
+				Type: string(ast.BlockCode), Text: text,
+				Evidence: []generatedPlanEvidence{{ChunkID: chunkID, Quotation: text}},
+			}},
+		}},
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	plan, _, err := DecodeGeneratedImportPlan(raw, sourceVersionID, []evidence.SourceChunk{{
+		ID: chunkID, SourceVersionID: sourceVersionID, TextContent: text,
+	}}, nil, RouteModeAuto)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(plan.Routes) != 1 || len(plan.Routes[0].Blocks) != 1 ||
+		plan.Routes[0].Blocks[0].Type != string(ast.BlockCode) ||
+		plan.Routes[0].Blocks[0].Text != text {
+		t.Fatalf("unexpected decoded plan: %#v", plan)
+	}
+}

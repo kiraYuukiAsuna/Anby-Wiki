@@ -79,7 +79,8 @@ export const ImportPlannedBlockTypeEnum = {
     Heading: 'heading',
     Paragraph: 'paragraph',
     BulletList: 'bullet_list',
-    Quote: 'quote'
+    Quote: 'quote',
+    Code: 'code'
 } as const;
 export type ImportPlannedBlockTypeEnum = typeof ImportPlannedBlockTypeEnum[keyof typeof ImportPlannedBlockTypeEnum];
 

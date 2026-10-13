@@ -5044,7 +5044,7 @@ components:
       additionalProperties: false
       required: [type, mode, target_block_id, evidence]
       properties:
-        type: { type: string, enum: [heading, paragraph, bullet_list, quote] }
+        type: { type: string, enum: [heading, paragraph, bullet_list, quote, code] }
         mode: { type: string, enum: [append, replace] }
         target_block_id: { type: string, format: uuid, nullable: true }
         text: { type: string }
