@@ -855,7 +855,11 @@ func planStructureScore(plan *ImportPlan, sourceRunes int) float64 {
 }
 
 func planConcisionScore(plan *ImportPlan) float64 {
-	texts := make([]string, 0)
+	type content struct {
+		text  string
+		exact bool
+	}
+	texts := make([]content, 0)
 	for _, route := range plan.Routes {
 		if route.Action != RouteCreate && route.Action != RouteUpdate {
 			continue
@@ -868,9 +872,15 @@ func planConcisionScore(plan *ImportPlan) float64 {
 				continue
 			}
 			if block.Type == string(ast.BlockBulletList) {
-				texts = append(texts, block.Items...)
+				for _, item := range block.Items {
+					texts = append(texts, content{text: item})
+				}
+			} else if block.Type == string(ast.BlockCode) {
+				texts = append(texts, content{text: preformattedKey(block.Text), exact: true})
 			} else {
-				texts = append(texts, splitPlanSentences(block.Text)...)
+				for _, sentence := range splitPlanSentences(block.Text) {
+					texts = append(texts, content{text: sentence})
+				}
 			}
 		}
 	}
@@ -880,7 +890,14 @@ func planConcisionScore(plan *ImportPlan) float64 {
 	duplicates := 0
 	for index := range texts {
 		for previous := 0; previous < index; previous++ {
-			if proseEquivalent(texts[previous], texts[index]) {
+			equivalent := texts[index].exact || texts[previous].exact
+			if equivalent {
+				equivalent = texts[index].exact && texts[previous].exact &&
+					texts[index].text == texts[previous].text
+			} else {
+				equivalent = proseEquivalent(texts[previous].text, texts[index].text)
+			}
+			if equivalent {
 				duplicates++
 				break
 			}

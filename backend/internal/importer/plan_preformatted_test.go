@@ -113,3 +113,19 @@ func TestDecodeGeneratedImportPlanAcceptsExactCodeEvidence(t *testing.T) {
 		t.Fatalf("unexpected decoded plan: %#v", plan)
 	}
 }
+
+func TestPlanConcisionDoesNotMergeDistinctDiagrams(t *testing.T) {
+	plan := &ImportPlan{Routes: []PageRoute{{
+		Action: RouteCreate, Blocks: []PlannedBlock{
+			{Type: string(ast.BlockCode), Text: "+---+\n| A |\n+---+"},
+			{Type: string(ast.BlockCode), Text: "+---+\n| B |\n+---+"},
+		},
+	}}}
+	if score := planConcisionScore(plan); score != 1 {
+		t.Fatalf("distinct diagram concision=%f, want 1", score)
+	}
+	plan.Routes[0].Blocks = append(plan.Routes[0].Blocks, plan.Routes[0].Blocks[0])
+	if score := planConcisionScore(plan); score >= 1 {
+		t.Fatalf("duplicate diagram concision=%f, want below 1", score)
+	}
+}
