@@ -7,12 +7,32 @@
 //   - 字符串：仅转义 '"'、'\\' 与 < 0x20 的控制字符
 //     （\b \f \n \r \t 用短转义，其余用 \u00xx 小写 hex），
 //     其余字符（含非 ASCII 与 '<' '>' '&'）保留原始 UTF-8，不做 HTML 转义；
-//   - 数字：v1 AST 只含整数（schema_version、level），按十进制整数输出；
-//     非整数或超出安全整数范围（|n| > 2^53-1）抛错，不参与 canonical 约定。
+//   - 数字：有限 IEEE 754 双精度值按最短十进制形式输出，禁止指数记法；
+//     超出安全整数范围（|n| > 2^53-1）抛错。
 //
 // 输入为 JSON.parse / Zod parse 产出的普通对象；undefined 值按 JSON 语义忽略。
 
 const MAX_SAFE_INTEGER = Number.MAX_SAFE_INTEGER; // 2^53 - 1
+
+function expandExponential(value: string): string {
+  const [coefficient, exponentText] = value.toLowerCase().split("e");
+  if (exponentText === undefined) return value;
+  const negative = coefficient.startsWith("-");
+  const unsigned = negative ? coefficient.slice(1) : coefficient;
+  const [integer, fraction = ""] = unsigned.split(".");
+  const digits = integer + fraction;
+  const decimalIndex = integer.length + Number(exponentText);
+  let expanded: string;
+  if (decimalIndex <= 0) {
+    expanded = "0." + "0".repeat(-decimalIndex) + digits;
+  } else if (decimalIndex >= digits.length) {
+    expanded = digits + "0".repeat(decimalIndex - digits.length);
+  } else {
+    expanded =
+      digits.slice(0, decimalIndex) + "." + digits.slice(decimalIndex);
+  }
+  return negative ? "-" + expanded : expanded;
+}
 
 function escapeString(s: string): string {
   let out = '"';
@@ -57,14 +77,11 @@ function writeCanonical(value: unknown): string {
   if (typeof value === "boolean") return value ? "true" : "false";
   if (typeof value === "string") return escapeString(value);
   if (typeof value === "number") {
-    if (
-      !Number.isInteger(value) ||
-      Math.abs(value) > MAX_SAFE_INTEGER
-    ) {
-      throw new Error(`canonical 仅支持安全整数，得到 ${value}`);
+    if (!Number.isFinite(value) || Math.abs(value) > MAX_SAFE_INTEGER) {
+      throw new Error(`canonical 数字超出有限安全范围，得到 ${value}`);
     }
-    // Object.is(value, -0) 时 String(-0) === "0"，与 Go int64(-0.0) 一致。
-    return String(value);
+    if (Object.is(value, -0)) return "0";
+    return expandExponential(String(value));
   }
   if (Array.isArray(value)) {
     return "[" + value.map(writeCanonical).join(",") + "]";

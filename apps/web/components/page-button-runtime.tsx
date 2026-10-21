@@ -86,6 +86,7 @@ async function insertBlocks(action: Extract<ButtonAction, { type: "insert_blocks
         ? { revisionId: content.revision.id }
         : { stateVersion: 0 },
       target: { pageId: action.target_page_id },
+      expectedHash: null,
       evidence: [],
       risk: {
         level: "medium",

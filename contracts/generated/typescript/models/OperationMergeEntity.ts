@@ -84,7 +84,7 @@ export interface OperationMergeEntity {
      * @type {string}
      * @memberof OperationMergeEntity
      */
-    expectedHash: string;
+    expectedHash: string | null;
     /**
      *
      * @type {Array<OperationEvidence>}

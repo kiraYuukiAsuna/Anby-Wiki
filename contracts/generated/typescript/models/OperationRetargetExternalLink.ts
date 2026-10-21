@@ -77,7 +77,7 @@ export interface OperationRetargetExternalLink {
      * @type {string}
      * @memberof OperationRetargetExternalLink
      */
-    expectedHash: string;
+    expectedHash: string | null;
     /**
      *
      * @type {Array<OperationEvidence>}

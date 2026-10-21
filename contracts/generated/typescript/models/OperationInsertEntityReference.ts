@@ -77,7 +77,7 @@ export interface OperationInsertEntityReference {
      * @type {string}
      * @memberof OperationInsertEntityReference
      */
-    expectedHash: string;
+    expectedHash: string | null;
     /**
      *
      * @type {Array<OperationEvidence>}

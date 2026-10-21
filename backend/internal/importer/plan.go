@@ -25,7 +25,7 @@ import (
 const (
 	ImportPlanSchemaURL           = "https://anby.wiki/schemas/import-plan/v1/plan.schema.json"
 	ImportPlanGenerationSchemaURL = "https://anby.wiki/schemas/import-plan-generation/v1/plan.schema.json"
-	ImportPlanPromptKey           = "source-import-plan-v9"
+	ImportPlanPromptKey           = "source-import-plan-v10"
 	planBatchConcurrency          = 3
 	planLeafValidationAttempts    = 3
 
@@ -299,6 +299,7 @@ func (p *PagePlanner) Plan(ctx context.Context, params PlanParams) (*PlanResult,
 	plan.Routes = ensureRequestedPlanLinks(plan.Routes, candidatePages, params.Instructions)
 	refineImportPlan(plan)
 	ensurePlanPreformattedBlocks(plan, params.Chunks, params.Instructions)
+	ensurePlanStructuredBlocks(plan, params.Chunks)
 	applyExplicitPlanBlockLimits(plan, params.Instructions)
 	if plan.Profile.Useful && actionablePageRouteCount(plan.Routes) == 0 {
 		return nil, ErrNoPagePlan
@@ -308,7 +309,9 @@ func (p *PagePlanner) Plan(ctx context.Context, params PlanParams) (*PlanResult,
 		return nil, err
 	}
 	ensurePlanPreformattedBlocks(plan, params.Chunks, params.Instructions)
+	ensurePlanStructuredBlocks(plan, params.Chunks)
 	applyExplicitPlanBlockLimits(plan, params.Instructions)
+	removeWeaklyGroundedPlanBlocks(plan)
 	fidelity = min(fidelity, constrainedPlanInstructionCoverage(plan, params.Instructions))
 	fidelity = min(fidelity, preformattedPlanCoverage(plan, params.Chunks, params.Instructions))
 	threshold := params.QualityThreshold

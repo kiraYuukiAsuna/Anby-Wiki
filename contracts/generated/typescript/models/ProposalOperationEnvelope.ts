@@ -77,7 +77,7 @@ export interface ProposalOperationEnvelope {
      * @type {string}
      * @memberof ProposalOperationEnvelope
      */
-    expectedHash: string;
+    expectedHash: string | null;
     /**
      *
      * @type {Array<OperationEvidence>}

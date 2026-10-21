@@ -803,7 +803,12 @@ func planStructureScore(plan *ImportPlan, sourceRunes int) float64 {
 			continue
 		}
 		routeScore := 0.0
-		if route.Action != RouteCreate || route.Blocks[0].Type == string(ast.BlockParagraph) {
+		first := route.Blocks[0]
+		if route.Action != RouteCreate ||
+			first.Type == string(ast.BlockParagraph) ||
+			len(route.Blocks) == 1 &&
+				first.Type != string(ast.BlockHeading) &&
+				plannedBlockGroundingScore(first) >= minimumPlanBlockGrounding {
 			routeScore += 0.20
 		}
 		headings, contentBlocks, contentRunes := 0, 0, 0
@@ -846,6 +851,7 @@ func planStructureScore(plan *ImportPlan, sourceRunes int) float64 {
 		if sourceRunes >= 4000 {
 			minimumRunes = 240
 		}
+		minimumRunes = min(minimumRunes, max(1, sourceRunes))
 		routeScore += 0.35 * min(1, float64(contentRunes)/float64(minimumRunes))
 		score += routeScore
 	}

@@ -77,7 +77,7 @@ export interface OperationRemoveCollectionMembership {
      * @type {string}
      * @memberof OperationRemoveCollectionMembership
      */
-    expectedHash: string;
+    expectedHash: string | null;
     /**
      *
      * @type {Array<OperationEvidence>}

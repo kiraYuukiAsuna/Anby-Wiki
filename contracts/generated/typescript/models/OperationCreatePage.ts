@@ -84,7 +84,7 @@ export interface OperationCreatePage {
      * @type {string}
      * @memberof OperationCreatePage
      */
-    expectedHash: string;
+    expectedHash: string | null;
     /**
      *
      * @type {Array<OperationEvidence>}

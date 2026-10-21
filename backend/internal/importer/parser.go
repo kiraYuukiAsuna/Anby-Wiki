@@ -7,6 +7,7 @@ import (
 	"strings"
 	"unicode/utf8"
 
+	"github.com/anby/wiki/backend/internal/evidence"
 	"golang.org/x/net/html"
 )
 
@@ -85,12 +86,110 @@ func collectHTMLBlocks(node *html.Node, sectionPath *[]string, blocks *[]TextBlo
 					append([]string(nil), (*sectionPath)[:parentCount]...),
 					value,
 				)
+				if level > 1 {
+					appendHTMLHintBlock(blocks, *sectionPath, value, sourceBlockHint{
+						BlockType: "heading", Text: value, Level: level,
+					})
+				}
 			}
 			return
-		case "p", "pre", "blockquote", "li", "dt", "dd", "figcaption", "td", "th":
+		case "ul", "ol":
+			items := htmlListItems(node)
+			if len(items) > 0 {
+				blockType := "bullet_list"
+				if node.Data == "ol" {
+					blockType = "ordered_list"
+				}
+				appendHTMLHintBlock(
+					blocks, *sectionPath, strings.Join(items, "\n"),
+					sourceBlockHint{BlockType: blockType, Items: items},
+				)
+			}
+			return
+		case "table":
+			rows := htmlTableRows(node)
+			if len(rows) > 0 {
+				lines := make([]string, len(rows))
+				for index := range rows {
+					lines[index] = strings.Join(rows[index], "\t")
+				}
+				appendHTMLHintBlock(
+					blocks, *sectionPath, strings.Join(lines, "\n"),
+					sourceBlockHint{
+						BlockType: "table", Rows: rows,
+						Caption:         htmlNodeText(firstHTMLDescendant(node, "caption")),
+						HasColumnHeader: firstHTMLDescendant(node, "th") != nil,
+					},
+				)
+			}
+			return
+		case "details":
+			summary := htmlNodeText(firstHTMLDescendant(node, "summary"))
+			body := htmlDetailsBody(node)
+			if summary != "" && body != "" {
+				appendHTMLHintBlock(
+					blocks, *sectionPath, summary+"\n"+body,
+					sourceBlockHint{
+						BlockType: "toggle", Text: summary,
+						Children: []sourceBlockHint{{
+							BlockType: "paragraph", Text: body,
+						}},
+					},
+				)
+			}
+			return
+		case "aside":
+			if value := htmlNodeText(node); value != "" {
+				kind, color := htmlCalloutKind(node)
+				appendHTMLHintBlock(blocks, *sectionPath, value, sourceBlockHint{
+					BlockType: "callout", Text: value, Kind: kind, Color: color,
+				})
+			}
+			return
+		case "pre":
+			if value := strings.Trim(htmlNodeRawText(node), "\r\n"); value != "" {
+				if code := firstHTMLDescendant(node, "code"); code != nil {
+					appendHTMLHintBlock(blocks, *sectionPath, value, sourceBlockHint{
+						BlockType: "code", Text: value, Language: htmlCodeLanguage(code),
+					})
+				} else {
+					appendHTMLHintBlock(blocks, *sectionPath, value, sourceBlockHint{
+						BlockType: "preformatted", Text: value,
+						Kind: sourcePreformattedKind(value),
+					})
+				}
+			}
+			return
+		case "blockquote":
+			if value := htmlNodeText(node); value != "" {
+				appendHTMLHintBlock(blocks, *sectionPath, value, sourceBlockHint{
+					BlockType: "quote", Text: value,
+				})
+			}
+			return
+		case "p":
+			if value := htmlNodeText(node); value != "" {
+				if checkbox := htmlCheckbox(node); checkbox != nil {
+					checked := htmlHasAttribute(checkbox, "checked")
+					appendHTMLHintBlock(blocks, *sectionPath, value, sourceBlockHint{
+						BlockType: "todo", Text: value, Checked: &checked,
+					})
+				} else if expression, ok := standaloneHTMLEquation(node, value); ok {
+					appendHTMLHintBlock(blocks, *sectionPath, expression, sourceBlockHint{
+						BlockType: "equation", Expression: expression,
+					})
+				} else {
+					*blocks = append(*blocks, TextBlock{
+						Kind: evidence.SourceChunkTypeText, Text: value,
+						SectionPath: append([]string(nil), (*sectionPath)...),
+					})
+				}
+			}
+			return
+		case "dt", "dd", "figcaption":
 			if value := htmlNodeText(node); value != "" {
 				*blocks = append(*blocks, TextBlock{
-					Kind: "text", Text: value,
+					Kind: evidence.SourceChunkTypeText, Text: value,
 					SectionPath: append([]string(nil), (*sectionPath)...),
 				})
 			}
@@ -104,7 +203,7 @@ func collectHTMLBlocks(node *html.Node, sectionPath *[]string, blocks *[]TextBlo
 
 func ignoredHTMLElement(node *html.Node) bool {
 	switch node.Data {
-	case "script", "style", "noscript", "template", "svg", "nav", "aside", "header", "footer",
+	case "script", "style", "noscript", "template", "svg", "nav", "header", "footer",
 		"form", "button":
 		return true
 	}
@@ -128,6 +227,9 @@ func ignoredHTMLElement(node *html.Node) bool {
 }
 
 func htmlNodeText(node *html.Node) string {
+	if node == nil {
+		return ""
+	}
 	return collectHTMLNodeText(node, false)
 }
 
@@ -170,6 +272,185 @@ func startsWithClosingPunctuation(value string) bool {
 			return true
 		default:
 			return false
+		}
+	}
+	return false
+}
+
+func appendHTMLHintBlock(
+	blocks *[]TextBlock,
+	sectionPath []string,
+	text string,
+	hint sourceBlockHint,
+) {
+	kind := evidence.SourceChunkTypeText
+	if hint.BlockType == "table" {
+		kind = evidence.SourceChunkTypeTable
+	}
+	*blocks = append(*blocks, TextBlock{
+		Kind: kind, Text: text,
+		SectionPath: append([]string(nil), sectionPath...),
+		Content:     sourceBlockHintJSON(hint),
+	})
+}
+
+func firstHTMLDescendant(node *html.Node, name string) *html.Node {
+	if node == nil {
+		return nil
+	}
+	for child := node.FirstChild; child != nil; child = child.NextSibling {
+		if child.Type == html.ElementNode && child.Data == name {
+			return child
+		}
+		if found := firstHTMLDescendant(child, name); found != nil {
+			return found
+		}
+	}
+	return nil
+}
+
+func htmlNodeRawText(node *html.Node) string {
+	if node == nil {
+		return ""
+	}
+	var builder strings.Builder
+	var visit func(*html.Node)
+	visit = func(current *html.Node) {
+		if current.Type == html.ElementNode && ignoredHTMLElement(current) {
+			return
+		}
+		if current.Type == html.TextNode {
+			builder.WriteString(current.Data)
+			return
+		}
+		for child := current.FirstChild; child != nil; child = child.NextSibling {
+			visit(child)
+		}
+	}
+	visit(node)
+	return builder.String()
+}
+
+func htmlListItems(node *html.Node) []string {
+	result := []string{}
+	for child := node.FirstChild; child != nil; child = child.NextSibling {
+		if child.Type != html.ElementNode || child.Data != "li" {
+			continue
+		}
+		if value := htmlNodeText(child); value != "" {
+			result = append(result, value)
+		}
+	}
+	return result
+}
+
+func htmlTableRows(node *html.Node) [][]string {
+	rows := [][]string{}
+	var visit func(*html.Node)
+	visit = func(current *html.Node) {
+		if current.Type == html.ElementNode && current.Data == "tr" {
+			row := []string{}
+			for child := current.FirstChild; child != nil; child = child.NextSibling {
+				if child.Type == html.ElementNode &&
+					(child.Data == "th" || child.Data == "td") {
+					row = append(row, htmlNodeText(child))
+				}
+			}
+			if len(row) > 0 {
+				rows = append(rows, row)
+			}
+			return
+		}
+		for child := current.FirstChild; child != nil; child = child.NextSibling {
+			visit(child)
+		}
+	}
+	visit(node)
+	return rows
+}
+
+func htmlDetailsBody(node *html.Node) string {
+	parts := []string{}
+	for child := node.FirstChild; child != nil; child = child.NextSibling {
+		if child.Type == html.ElementNode && child.Data == "summary" {
+			continue
+		}
+		if value := htmlNodeText(child); value != "" {
+			parts = append(parts, value)
+		}
+	}
+	return strings.Join(parts, " ")
+}
+
+func htmlCalloutKind(node *html.Node) (string, string) {
+	value := strings.ToLower(htmlAttribute(node, "class") + " " + htmlAttribute(node, "role"))
+	switch {
+	case strings.Contains(value, "danger"), strings.Contains(value, "error"):
+		return "danger", "red"
+	case strings.Contains(value, "warning"), strings.Contains(value, "alert"):
+		return "warning", "yellow"
+	default:
+		return "info", "blue"
+	}
+}
+
+func htmlCodeLanguage(node *html.Node) string {
+	for _, token := range strings.Fields(htmlAttribute(node, "class")) {
+		if strings.HasPrefix(token, "language-") {
+			return strings.TrimPrefix(token, "language-")
+		}
+	}
+	return ""
+}
+
+func htmlCheckbox(node *html.Node) *html.Node {
+	var find func(*html.Node) *html.Node
+	find = func(current *html.Node) *html.Node {
+		if current.Type == html.ElementNode && current.Data == "input" &&
+			strings.EqualFold(htmlAttribute(current, "type"), "checkbox") {
+			return current
+		}
+		for child := current.FirstChild; child != nil; child = child.NextSibling {
+			if found := find(child); found != nil {
+				return found
+			}
+		}
+		return nil
+	}
+	return find(node)
+}
+
+func standaloneHTMLEquation(node *html.Node, text string) (string, bool) {
+	trimmed := strings.TrimSpace(text)
+	if strings.HasPrefix(trimmed, "$$") && strings.HasSuffix(trimmed, "$$") &&
+		len(trimmed) > 4 {
+		return strings.TrimSpace(strings.TrimSuffix(strings.TrimPrefix(trimmed, "$$"), "$$")), true
+	}
+	if firstHTMLDescendant(node, "math") != nil {
+		return trimmed, trimmed != ""
+	}
+	return "", false
+}
+
+func htmlAttribute(node *html.Node, name string) string {
+	if node == nil {
+		return ""
+	}
+	for _, attribute := range node.Attr {
+		if strings.EqualFold(attribute.Key, name) {
+			return attribute.Val
+		}
+	}
+	return ""
+}
+
+func htmlHasAttribute(node *html.Node, name string) bool {
+	if node == nil {
+		return false
+	}
+	for _, attribute := range node.Attr {
+		if strings.EqualFold(attribute.Key, name) {
+			return true
 		}
 	}
 	return false

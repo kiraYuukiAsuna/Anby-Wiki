@@ -77,7 +77,7 @@ export interface OperationRetargetEntityReference {
      * @type {string}
      * @memberof OperationRetargetEntityReference
      */
-    expectedHash: string;
+    expectedHash: string | null;
     /**
      *
      * @type {Array<OperationEvidence>}

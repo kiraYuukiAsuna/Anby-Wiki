@@ -77,7 +77,7 @@ export interface OperationInsertClaimReference {
      * @type {string}
      * @memberof OperationInsertClaimReference
      */
-    expectedHash: string;
+    expectedHash: string | null;
     /**
      *
      * @type {Array<OperationEvidence>}

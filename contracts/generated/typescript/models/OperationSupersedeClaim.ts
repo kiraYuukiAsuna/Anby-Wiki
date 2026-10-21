@@ -77,7 +77,7 @@ export interface OperationSupersedeClaim {
      * @type {string}
      * @memberof OperationSupersedeClaim
      */
-    expectedHash: string;
+    expectedHash: string | null;
     /**
      *
      * @type {Array<OperationEvidence>}

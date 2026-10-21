@@ -130,22 +130,87 @@ func TestParseHTMLUsesMainContentAndSkipsNavigation(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if len(blocks) != 2 {
-		t.Fatalf("blocks=%d, want 2: %#v", len(blocks), blocks)
+	if len(blocks) != 3 {
+		t.Fatalf("blocks=%d, want 3: %#v", len(blocks), blocks)
 	}
 	if blocks[0].Text != "JSON is a text-based data format." ||
 		len(blocks[0].SectionPath) != 1 || blocks[0].SectionPath[0] != "JSON" {
 		t.Fatalf("unexpected lead block: %#v", blocks[0])
 	}
-	if blocks[1].Text != "Use JSON.parse() and JSON.stringify()." ||
-		len(blocks[1].SectionPath) != 2 ||
-		blocks[1].SectionPath[1] != "Converting objects and text" {
-		t.Fatalf("unexpected section block: %#v", blocks[1])
+	if blocks[1].Text != "Converting objects and text" ||
+		blocks[2].Text != "Use JSON.parse() and JSON.stringify()." ||
+		len(blocks[2].SectionPath) != 2 ||
+		blocks[2].SectionPath[1] != "Converting objects and text" {
+		t.Fatalf("unexpected section blocks: %#v", blocks[1:])
 	}
-	combined := blocks[0].Text + blocks[1].Text
+	combined := blocks[0].Text + blocks[1].Text + blocks[2].Text
 	if strings.Contains(combined, "Documentation home") || strings.Contains(combined, "On this page") ||
 		strings.Contains(combined, "Site legal links") {
 		t.Fatalf("navigation leaked into article text: %q", combined)
+	}
+}
+
+func TestParseHTMLPreservesTypedSourceBlocks(t *testing.T) {
+	blocks, err := parseHTML([]byte(`<html><body><main>
+<h1>Typed source</h1>
+<h2>Checklist</h2>
+<p><input type="checkbox" checked> Verify evidence</p>
+<details><summary>Import policy</summary><p>Preserve source evidence.</p></details>
+<aside class="warning">Review before apply.</aside>
+<ol><li>Validate</li><li>Review</li><li>Apply</li></ol>
+<table><caption>Stages</caption><tr><th>Stage</th><th>Result</th></tr><tr><td>Plan</td><td>Draft</td></tr></table>
+<pre><code class="language-go">fmt.Println("ok")</code></pre>
+<p>$$E = mc^2$$</p>
+</main></body></html>`))
+	if err != nil {
+		t.Fatal(err)
+	}
+	got := make([]string, 0, len(blocks))
+	for _, block := range blocks {
+		var hint sourceBlockHint
+		if json.Unmarshal(block.Content, &hint) == nil && hint.BlockType != "" {
+			got = append(got, hint.BlockType)
+		}
+	}
+	want := []string{
+		"heading", "todo", "toggle", "callout",
+		"ordered_list", "table", "code", "equation",
+	}
+	if fmt.Sprint(got) != fmt.Sprint(want) {
+		t.Fatalf("typed blocks=%v, want %v", got, want)
+	}
+}
+
+func TestParsePlainTextPreservesMarkdownBlocks(t *testing.T) {
+	blocks, err := parsePlainText([]byte(strings.Join([]string{
+		"## Release",
+		"- safe",
+		"- reviewable",
+		"",
+		"1. Validate",
+		"2. Apply",
+		"",
+		"- [ ] Review generated page",
+		"",
+		"```go",
+		`fmt.Println("ok")`,
+		"```",
+		"",
+		"$$E = mc^2$$",
+	}, "\n")))
+	if err != nil {
+		t.Fatal(err)
+	}
+	got := make([]string, 0, len(blocks))
+	for _, block := range blocks {
+		var hint sourceBlockHint
+		if json.Unmarshal(block.Content, &hint) == nil && hint.BlockType != "" {
+			got = append(got, hint.BlockType)
+		}
+	}
+	want := []string{"heading", "bullet_list", "ordered_list", "todo", "code", "equation"}
+	if fmt.Sprint(got) != fmt.Sprint(want) {
+		t.Fatalf("typed blocks=%v, want %v", got, want)
 	}
 }
 

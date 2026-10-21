@@ -77,7 +77,7 @@ export interface OperationInsertBlock {
      * @type {string}
      * @memberof OperationInsertBlock
      */
-    expectedHash: string;
+    expectedHash: string | null;
     /**
      *
      * @type {Array<OperationEvidence>}

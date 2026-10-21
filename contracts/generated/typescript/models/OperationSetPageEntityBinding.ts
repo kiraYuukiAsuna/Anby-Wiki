@@ -84,7 +84,7 @@ export interface OperationSetPageEntityBinding {
      * @type {string}
      * @memberof OperationSetPageEntityBinding
      */
-    expectedHash: string;
+    expectedHash: string | null;
     /**
      *
      * @type {Array<OperationEvidence>}

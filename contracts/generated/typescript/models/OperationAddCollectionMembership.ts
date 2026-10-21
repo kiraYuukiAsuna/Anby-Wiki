@@ -84,7 +84,7 @@ export interface OperationAddCollectionMembership {
      * @type {string}
      * @memberof OperationAddCollectionMembership
      */
-    expectedHash: string;
+    expectedHash: string | null;
     /**
      *
      * @type {Array<OperationEvidence>}

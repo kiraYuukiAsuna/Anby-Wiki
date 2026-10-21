@@ -84,7 +84,7 @@ export interface OperationCreateRedirect {
      * @type {string}
      * @memberof OperationCreateRedirect
      */
-    expectedHash: string;
+    expectedHash: string | null;
     /**
      *
      * @type {Array<OperationEvidence>}

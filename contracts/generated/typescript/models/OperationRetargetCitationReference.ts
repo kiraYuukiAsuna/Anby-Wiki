@@ -77,7 +77,7 @@ export interface OperationRetargetCitationReference {
      * @type {string}
      * @memberof OperationRetargetCitationReference
      */
-    expectedHash: string;
+    expectedHash: string | null;
     /**
      *
      * @type {Array<OperationEvidence>}

@@ -16,7 +16,7 @@ import (
 )
 
 const (
-	deterministicParserVersion = "3"
+	deterministicParserVersion = "4"
 	warningNULBytesRemoved     = "nul_bytes_removed"
 )
 
@@ -272,7 +272,7 @@ func (deterministicDocumentAdapter) Parse(
 		if !utf8.Valid(content) {
 			return nil, ErrParseFailed
 		}
-		blocks = []TextBlock{{Kind: evidence.SourceChunkTypeText, Text: string(content)}}
+		blocks, err = parsePlainText(content)
 	case "application/json":
 		blocks, err = parseJSON(request.Content)
 	case "text/csv":

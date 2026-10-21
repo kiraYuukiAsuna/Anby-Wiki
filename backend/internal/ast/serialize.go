@@ -7,8 +7,8 @@
 //   - 字符串：仅转义 '"'、'\\' 与 < 0x20 的控制字符
 //     （\b \f \n \r \t 用短转义，其余用 \u00xx 小写 hex），
 //     其余字符（含非 ASCII 与 '<' '>' '&'）保留原始 UTF-8，不做 HTML 转义；
-//   - 数字：v1 AST 只含整数（schema_version、level），按十进制整数输出；
-//     非整数或非安全整数范围（|n| > 2^53-1）的数字直接报错，不参与 canonical 约定。
+//   - 数字：有限 IEEE 754 双精度值按最短十进制形式输出，禁止指数记法；
+//     超出 JS 安全整数范围（|n| > 2^53-1）的值直接报错。
 package ast
 
 import (
@@ -120,10 +120,13 @@ func appendCanonicalNumber(dst []byte, n json.Number) ([]byte, error) {
 	if err != nil {
 		return nil, fmt.Errorf("ast: 非法数字 %q: %w", n.String(), err)
 	}
-	if math.IsInf(f, 0) || math.IsNaN(f) || f != math.Trunc(f) || math.Abs(f) > maxSafeInteger {
-		return nil, fmt.Errorf("ast: canonical 仅支持安全整数，得到 %q", n.String())
+	if math.IsInf(f, 0) || math.IsNaN(f) || math.Abs(f) > maxSafeInteger {
+		return nil, fmt.Errorf("ast: canonical 数字超出有限安全范围，得到 %q", n.String())
 	}
-	return strconv.AppendInt(dst, int64(f), 10), nil
+	if f == 0 {
+		return append(dst, '0'), nil
+	}
+	return strconv.AppendFloat(dst, f, 'f', -1, 64), nil
 }
 
 func appendCanonicalString(dst []byte, s string) []byte {

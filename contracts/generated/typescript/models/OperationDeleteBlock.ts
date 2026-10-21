@@ -77,7 +77,7 @@ export interface OperationDeleteBlock {
      * @type {string}
      * @memberof OperationDeleteBlock
      */
-    expectedHash: string;
+    expectedHash: string | null;
     /**
      *
      * @type {Array<OperationEvidence>}

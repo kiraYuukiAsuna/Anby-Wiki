@@ -77,7 +77,7 @@ export interface OperationRetargetPageReference {
      * @type {string}
      * @memberof OperationRetargetPageReference
      */
-    expectedHash: string;
+    expectedHash: string | null;
     /**
      *
      * @type {Array<OperationEvidence>}

@@ -84,7 +84,7 @@ export interface OperationRenamePage {
      * @type {string}
      * @memberof OperationRenamePage
      */
-    expectedHash: string;
+    expectedHash: string | null;
     /**
      *
      * @type {Array<OperationEvidence>}

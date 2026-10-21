@@ -145,6 +145,20 @@ AI 配置和双用户协作 E2E。“实现完成”仍不等于“生产发布�
   的 8 个 Job、Migration gate、全服务健康检查和只读 Doctor 均通过；active ImportJob、
   开放导入 Proposal、Outbox backlog/dead 与 Projection error 均为 0。
 
+## 2026-10-21 全量元素回归修复
+
+- 页面按钮的 `insert_blocks` Operation 现在显式发送必填的
+  `expected_hash: null`，继续只提交 Proposal；OpenAPI 3.1 契约同步使用
+  `string | null`。
+- AST canonical JSON 在 JS 安全数值范围内支持有限小数，Go 与 Web 都输出无指数的
+  最短十进制形式；音频时长、分栏比例和按钮 Dataset 值不再被旧整数约束误拒绝。
+- 编辑器媒体弹窗补齐 Image/Video，并对主资源和可选 Video poster 的 AssetRevision
+  MIME 做服务端元数据校验。
+- HTML 与纯文本 Parser 会把标题、列表、引用、代码、固定宽度内容、公式、Todo、
+  Toggle、Callout 和 Table 固化为 SourceChunk 结构 Hint。`source-import-plan-v10`
+  明确保留这些服务端派生结构；规划收敛会用精确证据确定性恢复对应 Typed Block，
+  删除低于既有 0.90 grounding 门槛的模型降级块，不放宽最终 0.70 质量门禁。
+
 ## 2026-10-20 页面布局与受控交互块
 
 - Typed Block AST v1 新增 `breadcrumb`、`column_list` / `column`、`button` 与

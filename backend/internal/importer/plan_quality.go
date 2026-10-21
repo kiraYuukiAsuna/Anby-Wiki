@@ -45,6 +45,30 @@ func refineImportPlan(plan *ImportPlan) {
 	normalizeImportPlanCollections(plan)
 }
 
+func removeWeaklyGroundedPlanBlocks(plan *ImportPlan) int {
+	if plan == nil {
+		return 0
+	}
+	removed := 0
+	for routeIndex := range plan.Routes {
+		route := &plan.Routes[routeIndex]
+		if route.Action != RouteCreate && route.Action != RouteUpdate {
+			continue
+		}
+		blocks := make([]PlannedBlock, 0, len(route.Blocks))
+		for _, block := range route.Blocks {
+			if block.Type != string(ast.BlockHeading) &&
+				plannedBlockGroundingScore(block) < minimumPlanBlockGrounding {
+				removed++
+				continue
+			}
+			blocks = append(blocks, block)
+		}
+		route.Blocks = removeOrphanHeadings(blocks)
+	}
+	return removed
+}
+
 func refineSourceSubjects(subjects []SourceSubject) []SourceSubject {
 	result := make([]SourceSubject, 0, len(subjects))
 	for _, subject := range subjects {

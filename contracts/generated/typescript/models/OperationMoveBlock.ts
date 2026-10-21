@@ -77,7 +77,7 @@ export interface OperationMoveBlock {
      * @type {string}
      * @memberof OperationMoveBlock
      */
-    expectedHash: string;
+    expectedHash: string | null;
     /**
      *
      * @type {Array<OperationEvidence>}

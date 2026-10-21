@@ -77,7 +77,7 @@ export interface OperationReplaceBlock {
      * @type {string}
      * @memberof OperationReplaceBlock
      */
-    expectedHash: string;
+    expectedHash: string | null;
     /**
      *
      * @type {Array<OperationEvidence>}

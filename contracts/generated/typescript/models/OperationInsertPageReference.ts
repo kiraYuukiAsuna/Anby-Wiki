@@ -77,7 +77,7 @@ export interface OperationInsertPageReference {
      * @type {string}
      * @memberof OperationInsertPageReference
      */
-    expectedHash: string;
+    expectedHash: string | null;
     /**
      *
      * @type {Array<OperationEvidence>}

@@ -84,7 +84,7 @@ export interface OperationCreateEntity {
      * @type {string}
      * @memberof OperationCreateEntity
      */
-    expectedHash: string;
+    expectedHash: string | null;
     /**
      *
      * @type {Array<OperationEvidence>}

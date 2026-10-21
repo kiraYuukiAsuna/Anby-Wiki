@@ -39,7 +39,9 @@ async function normalizeDirectory(directory) {
     }
 
     const original = await readFile(path, "utf8");
-    const normalized = original.replace(/[ \t]+$/gm, "");
+    const normalized = original
+      .replace(/[ \t]+$/gm, "")
+      .replace(/(\s+expectedHash:) string;/g, "$1 string | null;");
     if (normalized !== original) {
       await writeNormalized(path, normalized);
     }

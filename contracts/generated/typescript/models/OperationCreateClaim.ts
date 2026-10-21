@@ -77,7 +77,7 @@ export interface OperationCreateClaim {
      * @type {string}
      * @memberof OperationCreateClaim
      */
-    expectedHash: string;
+    expectedHash: string | null;
     /**
      *
      * @type {Array<OperationEvidence>}

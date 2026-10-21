@@ -5468,11 +5468,10 @@ components:
         base: { $ref: "#/components/schemas/OperationBase" }
         target: { $ref: "#/components/schemas/OperationTarget" }
         expected_hash:
-          type: string
+          type: [string, "null"]
           minLength: 64
           maxLength: 64
           pattern: "^[0-9a-f]{64}$"
-          nullable: true
         evidence:
           type: array
           items: { $ref: "#/components/schemas/OperationEvidence" }

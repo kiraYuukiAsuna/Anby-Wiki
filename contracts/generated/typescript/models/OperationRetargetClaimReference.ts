@@ -77,7 +77,7 @@ export interface OperationRetargetClaimReference {
      * @type {string}
      * @memberof OperationRetargetClaimReference
      */
-    expectedHash: string;
+    expectedHash: string | null;
     /**
      *
      * @type {Array<OperationEvidence>}

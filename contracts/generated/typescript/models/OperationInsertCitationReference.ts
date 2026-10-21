@@ -77,7 +77,7 @@ export interface OperationInsertCitationReference {
      * @type {string}
      * @memberof OperationInsertCitationReference
      */
-    expectedHash: string;
+    expectedHash: string | null;
     /**
      *
      * @type {Array<OperationEvidence>}
