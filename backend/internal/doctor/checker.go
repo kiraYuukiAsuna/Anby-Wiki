@@ -32,6 +32,7 @@ const (
 	CodeCitationReferenceOrphan      = "REF_CITATION_ORPHAN"
 	CodeAssetRevisionReferenceOrphan = "REF_ASSET_REVISION_ORPHAN"
 	CodeActorReferenceOrphan         = "REF_ACTOR_ORPHAN"
+	CodeDatasetReferenceOrphan       = "REF_DATASET_ORPHAN"
 	CodeDatasetViewReferenceOrphan   = "REF_DATASET_VIEW_ORPHAN"
 	CodeProjectionStateMissing       = "PROJECTION_STATE_MISSING"
 	CodeProjectionStateError         = "PROJECTION_STATE_ERROR"
@@ -323,7 +324,15 @@ func (c *Checker) checkCurrentASTReferences(ctx context.Context, issues *[]Issue
 		if err := ast.Walk(doc, func(node ast.WalkNode) bool {
 			if node.Block != nil {
 				switch node.Block.Type {
-				case ast.BlockImage, ast.BlockVideo:
+				case ast.BlockBreadcrumb:
+					for _, item := range node.Block.Items {
+						if item.TargetPageID != "" {
+							refs = append(refs, astReference{
+								CodePageReferenceOrphan, "page", "Page", item.TargetPageID,
+							})
+						}
+					}
+				case ast.BlockImage, ast.BlockVideo, ast.BlockAudio, ast.BlockFile, ast.BlockPDF:
 					refs = append(refs, astReference{
 						CodeAssetRevisionReferenceOrphan, "asset_revision",
 						"AssetRevision", node.Block.AssetRevisionID,
@@ -357,6 +366,8 @@ func (c *Checker) checkCurrentASTReferences(ctx context.Context, issues *[]Issue
 				refs = append(refs, astReference{CodeCitationReferenceOrphan, "citation", "Citation", node.Inline.CitationID})
 			case ast.InlineMention:
 				refs = append(refs, astReference{CodeActorReferenceOrphan, "actor", "Actor", node.Inline.ActorID})
+			case ast.InlineDatabaseMention:
+				refs = append(refs, astReference{CodeDatasetReferenceOrphan, "dataset", "Dataset", node.Inline.DatasetID})
 			}
 			return true
 		}); err != nil {

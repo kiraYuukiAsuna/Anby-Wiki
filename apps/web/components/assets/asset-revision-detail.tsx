@@ -6,8 +6,10 @@ import {
   Copy,
   Download,
   FileArchive,
+  FileText,
   Fingerprint,
   ImageIcon,
+  Music2,
   Video,
 } from "lucide-react";
 import Link from "next/link";
@@ -18,6 +20,8 @@ import type { AssetRevision } from "../../../../contracts/generated/typescript";
 
 import {
   AssetImage,
+  AssetAudio,
+  AssetPDF,
   AssetVideo,
   useAssetObjectUrl,
 } from "@/components/ast/asset-media";
@@ -46,6 +50,8 @@ export function AssetRevisionDetail({
   const [copied, setCopied] = useState<"id" | "hash">();
   const image = revision.mimeType.startsWith("image/");
   const video = revision.mimeType.startsWith("video/");
+  const audio = revision.mimeType.startsWith("audio/");
+  const pdf = revision.mimeType === "application/pdf";
 
   const copy = async (kind: "id" | "hash", value: string) => {
     try {
@@ -67,6 +73,10 @@ export function AssetRevisionDetail({
               <ImageIcon className="size-5" aria-hidden />
             ) : video ? (
               <Video className="size-5" aria-hidden />
+            ) : audio ? (
+              <Music2 className="size-5" aria-hidden />
+            ) : pdf ? (
+              <FileText className="size-5" aria-hidden />
             ) : (
               <FileArchive className="size-5" aria-hidden />
             )}
@@ -100,6 +110,21 @@ export function AssetRevisionDetail({
                 revisionId={revision.id}
                 title="不可变资产版本预览"
               />
+            ) : audio ? (
+              <div className="w-full max-w-2xl rounded-lg border bg-card p-5">
+                <AssetAudio
+                  revisionId={revision.id}
+                  title="不可变音频版本预览"
+                />
+              </div>
+            ) : pdf ? (
+              <div className="w-full overflow-hidden rounded-lg border bg-white">
+                <AssetPDF
+                  revisionId={revision.id}
+                  title="不可变 PDF 版本预览"
+                  height={640}
+                />
+              </div>
             ) : (
               <div className="py-20 text-center">
                 <span className="mx-auto flex size-20 items-center justify-center rounded-3xl bg-background text-muted-foreground shadow-sm">

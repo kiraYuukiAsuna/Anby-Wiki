@@ -81,7 +81,9 @@ func (c *ProposalComposer) buildCreatePageOperations(
 		document.Children = append(document.Children, infobox)
 	}
 	for _, planned := range route.Blocks {
-		citationIDs, blockEvidence, err := c.createCitations(ctx, params, planned.Evidence)
+		citationIDs, blockEvidence, err := c.createCitations(
+			ctx, params, plannedBlockEvidence(planned),
+		)
 		if err != nil {
 			return nil, err
 		}
@@ -187,7 +189,9 @@ func (c *ProposalComposer) buildUpdatePageOperations(
 	operations := make([]governance.OperationV1, 0, len(route.Blocks))
 	primaryEntity := primaryEntityForRoute(params, route)
 	for _, planned := range route.Blocks {
-		citationIDs, blockEvidence, err := c.createCitations(ctx, params, planned.Evidence)
+		citationIDs, blockEvidence, err := c.createCitations(
+			ctx, params, plannedBlockEvidence(planned),
+		)
 		if err != nil {
 			return nil, err
 		}
@@ -738,7 +742,16 @@ func (c *ProposalComposer) compilePlannedBlockWithReferences(planned PlannedBloc
 			return nil, err
 		}
 		block.Level = planned.Level
-		if err := ast.Validate(&ast.Document{Type: "document", SchemaVersion: 1, Children: []*ast.Block{block}}); err != nil {
+		block.IsToggleable = planned.IsToggleable
+		if planned.IsToggleable {
+			block.Children, err = c.compilePlannedChildren(
+				planned.Children, citationIDs, entityReferences,
+			)
+			if err != nil {
+				return nil, err
+			}
+		}
+		if err := validateCompiledBlock(block); err != nil {
 			return nil, err
 		}
 		return block, nil
@@ -751,10 +764,78 @@ func (c *ProposalComposer) compilePlannedBlockWithReferences(planned PlannedBloc
 		if err != nil {
 			return nil, err
 		}
-		block := &ast.Block{ID: blockID, Type: ast.BlockCode, Content: content}
-		if err := ast.Validate(&ast.Document{
-			Type: "document", SchemaVersion: ast.SchemaVersion, Children: []*ast.Block{block},
-		}); err != nil {
+		block := &ast.Block{
+			ID: blockID, Type: ast.BlockCode, Content: content,
+			Language: planned.Language, Caption: planned.Caption,
+		}
+		if err := validateCompiledBlock(block); err != nil {
+			return nil, err
+		}
+		return block, nil
+
+	case string(ast.BlockPreformatted):
+		content, err := json.Marshal(planned.Text)
+		if err != nil {
+			return nil, err
+		}
+		block := &ast.Block{
+			ID: blockID, Type: ast.BlockPreformatted, Content: content,
+			Kind: planned.Kind, Caption: planned.Caption,
+		}
+		if err := validateCompiledBlock(block); err != nil {
+			return nil, err
+		}
+		return block, nil
+
+	case string(ast.BlockEquation):
+		block := &ast.Block{
+			ID: blockID, Type: ast.BlockEquation,
+			Expression: planned.Expression, Caption: planned.Caption,
+		}
+		if err := validateCompiledBlock(block); err != nil {
+			return nil, err
+		}
+		return block, nil
+
+	case string(ast.BlockTodo):
+		block, err := c.textBlock(
+			blockID, ast.BlockTodo, strings.TrimSpace(planned.Text),
+			citationIDs, entityReferences,
+		)
+		if err != nil {
+			return nil, err
+		}
+		checked := false
+		if planned.Checked != nil {
+			checked = *planned.Checked
+		}
+		block.Checked = &checked
+		block.Children, err = c.compilePlannedChildren(
+			planned.Children, citationIDs, entityReferences,
+		)
+		if err != nil {
+			return nil, err
+		}
+		if err := validateCompiledBlock(block); err != nil {
+			return nil, err
+		}
+		return block, nil
+
+	case string(ast.BlockToggle):
+		block, err := c.textBlock(
+			blockID, ast.BlockToggle, strings.TrimSpace(planned.Text),
+			citationIDs, entityReferences,
+		)
+		if err != nil {
+			return nil, err
+		}
+		block.Children, err = c.compilePlannedChildren(
+			planned.Children, citationIDs, entityReferences,
+		)
+		if err != nil {
+			return nil, err
+		}
+		if err := validateCompiledBlock(block); err != nil {
 			return nil, err
 		}
 		return block, nil
@@ -769,13 +850,17 @@ func (c *ProposalComposer) compilePlannedBlockWithReferences(planned PlannedBloc
 			return nil, err
 		}
 		block := &ast.Block{ID: blockID, Type: ast.BlockQuote, Children: []*ast.Block{paragraph}}
-		if err := ast.Validate(&ast.Document{Type: "document", SchemaVersion: 1, Children: []*ast.Block{block}}); err != nil {
+		if err := validateCompiledBlock(block); err != nil {
 			return nil, err
 		}
 		return block, nil
 
-	case string(ast.BlockBulletList):
-		list := &ast.Block{ID: blockID, Type: ast.BlockBulletList, Children: []*ast.Block{}}
+	case string(ast.BlockBulletList), string(ast.BlockOrderedList):
+		listType := ast.BlockBulletList
+		if planned.Type == string(ast.BlockOrderedList) {
+			listType = ast.BlockOrderedList
+		}
+		list := &ast.Block{ID: blockID, Type: listType, Children: []*ast.Block{}}
 		for index, rawItem := range planned.Items {
 			itemID, err := c.ids.NewString()
 			if err != nil {
@@ -797,13 +882,122 @@ func (c *ProposalComposer) compilePlannedBlockWithReferences(planned PlannedBloc
 				ID: itemID, Type: ast.BlockListItem, Children: []*ast.Block{paragraph},
 			})
 		}
-		if err := ast.Validate(&ast.Document{Type: "document", SchemaVersion: 1, Children: []*ast.Block{list}}); err != nil {
+		if err := validateCompiledBlock(list); err != nil {
 			return nil, err
 		}
 		return list, nil
+
+	case string(ast.BlockCallout):
+		paragraphID, err := c.ids.NewString()
+		if err != nil {
+			return nil, err
+		}
+		paragraph, err := c.textBlock(
+			paragraphID, ast.BlockParagraph, strings.TrimSpace(planned.Text),
+			citationIDs, entityReferences,
+		)
+		if err != nil {
+			return nil, err
+		}
+		children, err := c.compilePlannedChildren(
+			planned.Children, citationIDs, entityReferences,
+		)
+		if err != nil {
+			return nil, err
+		}
+		block := &ast.Block{
+			ID: blockID, Type: ast.BlockCallout, Kind: planned.Kind,
+			Icon: planned.Icon, Color: ast.CalloutColor(planned.Color),
+			Children: append([]*ast.Block{paragraph}, children...),
+		}
+		if err := validateCompiledBlock(block); err != nil {
+			return nil, err
+		}
+		return block, nil
+
+	case string(ast.BlockTable):
+		table := &ast.Block{
+			ID: blockID, Type: ast.BlockTable, Caption: planned.Caption,
+			HasColumnHeader: planned.HasColumnHeader,
+			HasRowHeader:    planned.HasRowHeader,
+			Children:        []*ast.Block{},
+		}
+		for rowIndex, plannedRow := range planned.Rows {
+			rowID, err := c.ids.NewString()
+			if err != nil {
+				return nil, err
+			}
+			row := &ast.Block{ID: rowID, Type: ast.BlockTableRow, Children: []*ast.Block{}}
+			for cellIndex, cellText := range plannedRow {
+				cellID, err := c.ids.NewString()
+				if err != nil {
+					return nil, err
+				}
+				paragraphID, err := c.ids.NewString()
+				if err != nil {
+					return nil, err
+				}
+				cellCitations := []uuid.UUID{}
+				if rowIndex == len(planned.Rows)-1 && cellIndex == len(plannedRow)-1 {
+					cellCitations = citationIDs
+				}
+				paragraph, err := c.textBlock(
+					paragraphID, ast.BlockParagraph, cellText,
+					cellCitations, entityReferences,
+				)
+				if err != nil {
+					return nil, err
+				}
+				row.Children = append(row.Children, &ast.Block{
+					ID: cellID, Type: ast.BlockTableCell,
+					Children: []*ast.Block{paragraph},
+				})
+			}
+			table.Children = append(table.Children, row)
+		}
+		if err := validateCompiledBlock(table); err != nil {
+			return nil, err
+		}
+		return table, nil
 	default:
 		return nil, ErrInvalidJob
 	}
+}
+
+func (c *ProposalComposer) compilePlannedChildren(
+	children []PlannedBlock,
+	citationIDs []uuid.UUID,
+	entityReferences []entityReferenceTarget,
+) ([]*ast.Block, error) {
+	result := make([]*ast.Block, 0, len(children))
+	for _, child := range children {
+		block, err := c.compilePlannedBlockWithReferences(
+			child, citationIDs, entityReferences,
+		)
+		if err != nil {
+			return nil, err
+		}
+		result = append(result, block)
+	}
+	return result, nil
+}
+
+func validateCompiledBlock(block *ast.Block) error {
+	return ast.Validate(&ast.Document{
+		Type: "document", SchemaVersion: ast.SchemaVersion,
+		Children: []*ast.Block{block},
+	})
+}
+
+func plannedBlockEvidence(block PlannedBlock) []CandidateEvidence {
+	result := append([]CandidateEvidence(nil), block.Evidence...)
+	for _, child := range block.Children {
+		result = mergeCandidateEvidence(result, plannedBlockEvidence(child))
+		if len(result) >= 8 {
+			return result[:8]
+		}
+	}
+	return result
 }
 
 func (c *ProposalComposer) textBlock(

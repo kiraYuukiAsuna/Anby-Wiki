@@ -7,6 +7,8 @@ const contentSecurityPolicy = [
   `script-src 'self' 'unsafe-inline'${isDevelopment ? " 'unsafe-eval'" : ""}`,
   "style-src 'self' 'unsafe-inline'",
   "img-src 'self' data: blob:",
+  "media-src 'self' blob:",
+  "frame-src 'self' blob: https://www.youtube-nocookie.com https://player.vimeo.com https://www.figma.com",
   "font-src 'self' data:",
   `connect-src 'self'${isDevelopment ? " ws: wss:" : ""}`,
   "worker-src 'self' blob:",

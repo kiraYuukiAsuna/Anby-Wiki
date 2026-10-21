@@ -189,6 +189,19 @@ func scanView(row pgx.Row) (*View, error) {
 		&value.Config, &value.CreatedBy, &value.CreatedAt); err != nil {
 		return nil, err
 	}
+	var config struct {
+		ViewMode string `json:"view_mode"`
+	}
+	if err := json.Unmarshal(value.Config, &config); err != nil {
+		return nil, ErrInvalidView
+	}
+	if config.ViewMode != "" {
+		if !validViewType(config.ViewMode) ||
+			databaseViewType(config.ViewMode) != value.ViewType {
+			return nil, ErrInvalidView
+		}
+		value.ViewType = config.ViewMode
+	}
 	return &value, nil
 }
 
@@ -196,12 +209,12 @@ func (r *Repository) InsertView(ctx context.Context, tx pgx.Tx, value *View) err
 	return r.q(tx).QueryRow(ctx, `INSERT INTO dataset_view
 		(id,dataset_id,view_type,name,config_json,created_by)
 		VALUES ($1,$2,$3,$4,$5::jsonb,$6) RETURNING created_at`,
-		value.ID, value.DatasetID, value.ViewType, value.Name, value.Config,
+		value.ID, value.DatasetID, databaseViewType(value.ViewType), value.Name, value.Config,
 		value.CreatedBy).Scan(&value.CreatedAt)
 }
 
-func (r *Repository) GetView(ctx context.Context, id uuid.UUID) (*View, error) {
-	value, err := scanView(r.pool.QueryRow(ctx,
+func (r *Repository) GetView(ctx context.Context, tx pgx.Tx, id uuid.UUID) (*View, error) {
+	value, err := scanView(r.q(tx).QueryRow(ctx,
 		`SELECT `+viewColumns+` FROM dataset_view WHERE id=$1`, id))
 	if errors.Is(err, pgx.ErrNoRows) {
 		return nil, ErrViewNotFound
@@ -253,18 +266,34 @@ func (r *Repository) QueryRecords(
 	if err != nil {
 		return nil, err
 	}
-	order := "created_at DESC,id DESC"
-	if spec.Sort != nil {
-		args = append(args, spec.Sort.Field)
+	for _, group := range spec.Groups {
+		if !group.HideEmpty {
+			continue
+		}
+		args = append(args, group.Field)
+		fieldArg := "$" + strconv.Itoa(len(args))
+		where += " AND values_json ? " + fieldArg +
+			" AND jsonb_typeof(values_json->" + fieldArg + ")<>'null'" +
+			" AND COALESCE(values_json->>" + fieldArg + ",'')<>''"
+	}
+	groupArgs := append([]any(nil), args...)
+	orderParts := make([]string, 0, len(spec.Sorts)+2)
+	for _, sort := range spec.Sorts {
+		args = append(args, sort.Field)
 		fieldArg := "$" + strconv.Itoa(len(args))
 		expression := "values_json->>" + fieldArg
-		if spec.SortNumeric {
+		if sort.Numeric {
 			expression = "CASE WHEN jsonb_typeof(values_json->" + fieldArg +
 				")='number' THEN (values_json->>" + fieldArg + ")::numeric END"
 		}
-		direction := strings.ToUpper(spec.Sort.Direction)
-		order = expression + " " + direction + " NULLS LAST,created_at DESC,id DESC"
+		direction := strings.ToUpper(sort.Direction)
+		if direction != "ASC" && direction != "DESC" {
+			return nil, ErrInvalidView
+		}
+		orderParts = append(orderParts, expression+" "+direction+" NULLS LAST")
 	}
+	orderParts = append(orderParts, "created_at DESC", "id DESC")
+	order := strings.Join(orderParts, ",")
 	args = append(args, spec.Limit+1, spec.Offset)
 	limitArg, offsetArg := "$"+strconv.Itoa(len(args)-1), "$"+strconv.Itoa(len(args))
 	rows, err := r.pool.Query(ctx, `SELECT `+recordColumns+`
@@ -290,8 +319,8 @@ func (r *Repository) QueryRecords(
 		result.NextCursor = &next
 		result.Items = result.Items[:spec.Limit]
 	}
-	if spec.GroupBy != "" {
-		groups, err := r.groupCounts(ctx, where, argsBeforePaging(args, spec.Sort != nil), spec.GroupBy)
+	if len(spec.Groups) > 0 {
+		groups, err := r.groupCounts(ctx, where, groupArgs, spec.Groups)
 		if err != nil {
 			return nil, err
 		}
@@ -306,63 +335,140 @@ func recordWhere(datasetID uuid.UUID, filter *ViewFilter) (string, []any, error)
 	if filter == nil {
 		return where, args, nil
 	}
-	args = append(args, filter.Field)
-	fieldArg := "$2"
+	expression, err := recordFilterSQL(filter, &args)
+	if err != nil {
+		return "", nil, err
+	}
+	return where + " AND " + expression, args, nil
+}
+
+func recordFilterSQL(filter *ViewFilter, args *[]any) (string, error) {
+	if filter.Logic != "" {
+		if len(filter.Conditions) == 0 {
+			return "", ErrInvalidView
+		}
+		parts := make([]string, 0, len(filter.Conditions))
+		for index := range filter.Conditions {
+			expression, err := recordFilterSQL(&filter.Conditions[index], args)
+			if err != nil {
+				return "", err
+			}
+			parts = append(parts, expression)
+		}
+		logic := strings.ToUpper(filter.Logic)
+		if logic != "AND" && logic != "OR" {
+			return "", ErrInvalidView
+		}
+		return "(" + strings.Join(parts, " "+logic+" ") + ")", nil
+	}
+	*args = append(*args, filter.Field)
+	fieldArg := "$" + strconv.Itoa(len(*args))
 	switch filter.Operator {
 	case "exists":
-		where += " AND values_json ? " + fieldArg
+		return "values_json ? " + fieldArg, nil
+	case "not_exists":
+		return "NOT values_json ? " + fieldArg, nil
+	case "is_empty":
+		return "(NOT values_json ? " + fieldArg +
+			" OR jsonb_typeof(values_json->" + fieldArg + ")='null'" +
+			" OR COALESCE(values_json->>" + fieldArg + ",'')='')", nil
+	case "not_empty":
+		return "(values_json ? " + fieldArg +
+			" AND jsonb_typeof(values_json->" + fieldArg + ")<>'null'" +
+			" AND COALESCE(values_json->>" + fieldArg + ",'')<>'')", nil
 	case "eq":
-		args = append(args, string(filter.Value))
-		where += " AND values_json->" + fieldArg + " = $3::jsonb"
-	case "contains":
+		*args = append(*args, string(filter.Value))
+		valueArg := "$" + strconv.Itoa(len(*args))
+		return "values_json->" + fieldArg + " = " + valueArg + "::jsonb", nil
+	case "neq":
+		*args = append(*args, string(filter.Value))
+		valueArg := "$" + strconv.Itoa(len(*args))
+		return "values_json->" + fieldArg + " IS DISTINCT FROM " + valueArg + "::jsonb", nil
+	case "contains", "not_contains":
 		var text string
 		if err := json.Unmarshal(filter.Value, &text); err != nil {
-			return "", nil, ErrInvalidView
+			return "", ErrInvalidView
 		}
-		args = append(args, text)
-		where += " AND COALESCE(values_json->>" + fieldArg + ",'') ILIKE '%'||$3||'%'"
+		*args = append(*args, text)
+		valueArg := "$" + strconv.Itoa(len(*args))
+		expression := "COALESCE(values_json->>" + fieldArg + ",'') ILIKE '%'||" + valueArg + "||'%'"
+		if filter.Operator == "not_contains" {
+			expression = "NOT (" + expression + ")"
+		}
+		return expression, nil
 	case "gt", "gte", "lt", "lte":
 		var number float64
 		if err := json.Unmarshal(filter.Value, &number); err != nil {
-			return "", nil, ErrInvalidView
+			return "", ErrInvalidView
 		}
-		args = append(args, number)
+		*args = append(*args, number)
+		valueArg := "$" + strconv.Itoa(len(*args))
 		operator := map[string]string{"gt": ">", "gte": ">=", "lt": "<", "lte": "<="}[filter.Operator]
-		where += " AND CASE WHEN jsonb_typeof(values_json->" + fieldArg +
+		return "CASE WHEN jsonb_typeof(values_json->" + fieldArg +
 			")='number' THEN (values_json->>" + fieldArg + ")::numeric END " +
-			operator + " $3"
+			operator + " " + valueArg, nil
+	case "before", "after", "on_or_before", "on_or_after":
+		var value string
+		if err := json.Unmarshal(filter.Value, &value); err != nil {
+			return "", ErrInvalidView
+		}
+		*args = append(*args, value)
+		valueArg := "$" + strconv.Itoa(len(*args))
+		operator := map[string]string{
+			"before": "<", "after": ">",
+			"on_or_before": "<=", "on_or_after": ">=",
+		}[filter.Operator]
+		return "values_json->>" + fieldArg + " " + operator + " " + valueArg, nil
 	default:
-		return "", nil, ErrInvalidView
+		return "", ErrInvalidView
 	}
-	return where, args, nil
-}
-
-func argsBeforePaging(args []any, hasSort bool) []any {
-	count := len(args) - 2
-	if hasSort {
-		count--
-	}
-	return append([]any(nil), args[:count]...)
 }
 
 func (r *Repository) groupCounts(
-	ctx context.Context, where string, args []any, field string,
+	ctx context.Context, where string, args []any, groupSpecs []ViewGroup,
 ) ([]GroupCount, error) {
-	args = append(args, field)
-	fieldArg := "$" + strconv.Itoa(len(args))
-	rows, err := r.pool.Query(ctx, `SELECT COALESCE(values_json->>`+fieldArg+`,'(empty)'),count(*)
-		FROM dataset_record WHERE `+where+` GROUP BY 1 ORDER BY count(*) DESC,1 LIMIT 100`, args...)
+	if len(groupSpecs) == 0 || len(groupSpecs) > 2 {
+		return nil, ErrInvalidView
+	}
+	selectParts := make([]string, 0, len(groupSpecs))
+	groupParts := make([]string, 0, len(groupSpecs))
+	orderParts := make([]string, 0, len(groupSpecs))
+	for index, group := range groupSpecs {
+		args = append(args, group.Field)
+		fieldArg := "$" + strconv.Itoa(len(args))
+		selectParts = append(selectParts, "COALESCE(values_json->>"+fieldArg+",'(empty)')")
+		position := strconv.Itoa(index + 1)
+		groupParts = append(groupParts, position)
+		direction := strings.ToUpper(group.SortDirection)
+		if direction != "ASC" && direction != "DESC" {
+			return nil, ErrInvalidView
+		}
+		orderParts = append(orderParts, position+" "+direction)
+	}
+	rows, err := r.pool.Query(ctx, `SELECT `+strings.Join(selectParts, ",")+`,count(*)
+		FROM dataset_record WHERE `+where+` GROUP BY `+strings.Join(groupParts, ",")+
+		` ORDER BY `+strings.Join(orderParts, ",")+` LIMIT 500`, args...)
 	if err != nil {
 		return nil, fmt.Errorf("dataset: group records: %w", err)
 	}
 	defer rows.Close()
-	groups := []GroupCount{}
+	result := []GroupCount{}
 	for rows.Next() {
-		var group GroupCount
-		if err := rows.Scan(&group.Value, &group.Count); err != nil {
+		var first, second string
+		var count int
+		scan := []any{&first}
+		if len(groupSpecs) == 2 {
+			scan = append(scan, &second)
+		}
+		scan = append(scan, &count)
+		if err := rows.Scan(scan...); err != nil {
 			return nil, err
 		}
-		groups = append(groups, group)
+		path := []string{first}
+		if len(groupSpecs) == 2 {
+			path = append(path, second)
+		}
+		result = append(result, GroupCount{Value: first, Path: path, Count: count})
 	}
-	return groups, rows.Err()
+	return result, rows.Err()
 }

@@ -26,7 +26,9 @@ import (
 	"github.com/anby/wiki/backend/internal/governance"
 	"github.com/anby/wiki/backend/internal/importer"
 	"github.com/anby/wiki/backend/internal/knowledge"
+	"github.com/anby/wiki/backend/internal/linkhealth"
 	"github.com/anby/wiki/backend/internal/page"
+	"github.com/anby/wiki/backend/internal/pageaction"
 	"github.com/anby/wiki/backend/internal/platform/config"
 	"github.com/anby/wiki/backend/internal/platform/db"
 	"github.com/anby/wiki/backend/internal/platform/id"
@@ -213,7 +215,7 @@ func main() {
 		sourceAPI = NewSourceAPI(evidence.NewService(
 			evidence.NewRepository(pool), page.NewRepository(pool), nil, cfg.Env,
 			db.NewTxManager(pool), id.NewGenerator(),
-		))
+		)).WithLinkPreview(linkhealth.NewHTTPProber(nil, nil))
 		if strings.TrimSpace(cfg.AIConfigMasterKey) != "" && strings.TrimSpace(cfg.AIKernelInternalToken) != "" {
 			aiConfigService, aiConfigErr := aiconfig.NewService(
 				aiconfig.NewRepository(pool), db.NewTxManager(pool), id.NewGenerator(),
@@ -378,6 +380,7 @@ func assembleAPIs(pool *pgxpool.Pool, searchBackends ...wikisearch.SearchAdapter
 	}
 	return NewWriteAPI(svc, wikiID).
 			WithAuthorization(authorization).
+			WithButtonActions(pageaction.NewService(svc)).
 			WithCollaborationPublisher(collaboration.NewPublisher(txm, ids, svc)),
 		NewReadAPI(svc, wikiID, projection.NewQueries(pool)).
 			WithDynamicRenderer(projection.NewDynamicHTMLRenderer(pool)),

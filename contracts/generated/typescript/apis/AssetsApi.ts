@@ -126,6 +126,7 @@ export class AssetsApi extends runtime.BaseAPI {
     }
 
     /**
+     * 按真实 MIME 与不可变缓存头返回原始字节；application/pdf 额外允许同源 frame， 供正文 PDF 阅读块使用，其他响应保持禁止嵌入。
      * 流式读取不可变资产版本内容
      */
     async getAssetRevisionContentRaw(requestParameters: GetAssetRevisionContentRequest, initOverrides?: RequestInit | runtime.InitOverrideFunction): Promise<runtime.ApiResponse<Blob>> {
@@ -136,6 +137,7 @@ export class AssetsApi extends runtime.BaseAPI {
     }
 
     /**
+     * 按真实 MIME 与不可变缓存头返回原始字节；application/pdf 额外允许同源 frame， 供正文 PDF 阅读块使用，其他响应保持禁止嵌入。
      * 流式读取不可变资产版本内容
      */
     async getAssetRevisionContent(requestParameters: GetAssetRevisionContentRequest, initOverrides?: RequestInit | runtime.InitOverrideFunction): Promise<Blob> {
@@ -277,6 +279,8 @@ export class AssetsApi extends runtime.BaseAPI {
 export const ListAssetsKindEnum = {
     Image: 'image',
     Video: 'video',
+    Audio: 'audio',
+    Pdf: 'pdf',
     Other: 'other'
 } as const;
 export type ListAssetsKindEnum = typeof ListAssetsKindEnum[keyof typeof ListAssetsKindEnum];

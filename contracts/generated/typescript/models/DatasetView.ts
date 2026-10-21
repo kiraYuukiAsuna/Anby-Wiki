@@ -78,7 +78,14 @@ export interface DatasetView {
 export const DatasetViewViewTypeEnum = {
     Table: 'table',
     Cards: 'cards',
-    Chart: 'chart'
+    Chart: 'chart',
+    Board: 'board',
+    Timeline: 'timeline',
+    Calendar: 'calendar',
+    List: 'list',
+    Gallery: 'gallery',
+    Form: 'form',
+    Dashboard: 'dashboard'
 } as const;
 export type DatasetViewViewTypeEnum = typeof DatasetViewViewTypeEnum[keyof typeof DatasetViewViewTypeEnum];
 

@@ -18,6 +18,7 @@ import (
 	"github.com/anby/wiki/backend/internal/collaboration"
 	"github.com/anby/wiki/backend/internal/governance"
 	"github.com/anby/wiki/backend/internal/page"
+	"github.com/anby/wiki/backend/internal/pageaction"
 	"github.com/anby/wiki/backend/internal/platform/httpx"
 )
 
@@ -27,6 +28,7 @@ type WriteAPI struct {
 	wikiID                 uuid.UUID
 	auth                   *governance.AuthorizationService
 	collaborationPublisher *collaboration.Publisher
+	buttonActions          *pageaction.Service
 }
 
 // NewWriteAPI 装配写 API。wikiID 为种子里 site_key='default' 的站点，
@@ -44,6 +46,11 @@ func (a *WriteAPI) WithAuthorization(auth *governance.AuthorizationService) *Wri
 
 func (a *WriteAPI) WithCollaborationPublisher(publisher *collaboration.Publisher) *WriteAPI {
 	a.collaborationPublisher = publisher
+	return a
+}
+
+func (a *WriteAPI) WithButtonActions(service *pageaction.Service) *WriteAPI {
+	a.buttonActions = service
 	return a
 }
 
@@ -101,6 +108,59 @@ type pageRedirectTargetRequest struct {
 
 type createPageRedirectRequest struct {
 	Target pageRedirectTargetRequest `json:"target"`
+}
+
+type executeButtonWebhookRequest struct {
+	ActionIndex int       `json:"action_index"`
+	ExecutionID uuid.UUID `json:"execution_id"`
+}
+
+func (a *WriteAPI) executeButtonWebhook(w http.ResponseWriter, r *http.Request) {
+	actorID, ok := actorIDFrom(w, r)
+	if !ok {
+		return
+	}
+	pageID, ok := datasetPathID(w, r, "id")
+	if !ok {
+		return
+	}
+	blockID, err := uuid.Parse(chi.URLParam(r, "block_id"))
+	if err != nil {
+		httpx.WriteError(w, r, http.StatusBadRequest, httpx.CodeBadRequest,
+			"block_id 不是合法 UUID")
+		return
+	}
+	if !a.authorize(w, r, actorID, governance.ActionEdit, &pageID) {
+		return
+	}
+	var request executeButtonWebhookRequest
+	if !decodeJSON(w, r, &request) {
+		return
+	}
+	if a.buttonActions == nil {
+		httpx.WriteError(w, r, http.StatusServiceUnavailable, httpx.CodeInternal,
+			"页面按钮服务未装配")
+		return
+	}
+	result, err := a.buttonActions.ExecuteWebhook(
+		r.Context(), pageID, blockID.String(), request.ActionIndex, request.ExecutionID,
+	)
+	if err != nil {
+		switch {
+		case errors.Is(err, pageaction.ErrButtonNotFound),
+			errors.Is(err, pageaction.ErrActionNotFound):
+			httpx.WriteError(w, r, http.StatusNotFound, httpx.CodeNotFound, err.Error())
+		case errors.Is(err, pageaction.ErrInvalidWebhook):
+			httpx.WriteError(w, r, http.StatusUnprocessableEntity,
+				httpx.CodeValidationFailed, err.Error())
+		case errors.Is(err, pageaction.ErrWebhookRejected):
+			httpx.WriteError(w, r, http.StatusBadGateway, httpx.CodeInternal, err.Error())
+		default:
+			serviceError(w, r, err)
+		}
+		return
+	}
+	httpx.WriteJSON(w, http.StatusOK, result)
 }
 
 type pageRedirectTargetResponse struct {

@@ -1,6 +1,7 @@
 
 # DatasetViewFilter
 
+叶子条件使用 field/operator；组合条件使用 logic/conditions，服务端限制最多三层。
 
 ## Properties
 
@@ -9,6 +10,8 @@ Name | Type
 `field` | string
 `operator` | string
 `value` | any
+`logic` | string
+`conditions` | [Array&lt;DatasetViewFilter&gt;](DatasetViewFilter.md)
 
 ## Example
 
@@ -20,6 +23,8 @@ const example = {
   "field": null,
   "operator": null,
   "value": null,
+  "logic": null,
+  "conditions": null,
 } satisfies DatasetViewFilter
 
 console.log(example)

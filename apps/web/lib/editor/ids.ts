@@ -36,6 +36,8 @@ export interface AdapterState {
   liftedParagraphIds: Map<string, string>;
   /** AST list 容器 ID 映射：key = list_item 的块 ID，value = list 容器 UUIDv7。 */
   listIds: Map<string, string>;
+  /** BlockNote 原生 codeBlock 不承载 caption；按稳定块 ID 保存 AST caption。 */
+  codeCaptions: Map<string, string>;
 }
 
 export function createAdapterState(): AdapterState {
@@ -43,6 +45,7 @@ export function createAdapterState(): AdapterState {
     generatedIds: new Map(),
     liftedParagraphIds: new Map(),
     listIds: new Map(),
+    codeCaptions: new Map(),
   };
 }
 

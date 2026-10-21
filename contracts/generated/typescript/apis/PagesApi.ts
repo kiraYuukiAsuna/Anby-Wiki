@@ -34,6 +34,16 @@ import {
     CreatePageRequestToJSON,
 } from '../models/CreatePageRequest';
 import {
+    type ExecutePageButtonWebhookRequest,
+    ExecutePageButtonWebhookRequestFromJSON,
+    ExecutePageButtonWebhookRequestToJSON,
+} from '../models/ExecutePageButtonWebhookRequest';
+import {
+    type ExecutePageButtonWebhookResult,
+    ExecutePageButtonWebhookResultFromJSON,
+    ExecutePageButtonWebhookResultToJSON,
+} from '../models/ExecutePageButtonWebhookResult';
+import {
     type Page,
     PageFromJSON,
     PageToJSON,
@@ -80,6 +90,12 @@ export interface DeleteBlockRedirectRequest {
 
 export interface DeletePageRedirectRequest {
     id: string;
+}
+
+export interface ExecutePageButtonWebhookOperationRequest {
+    id: string;
+    blockId: string;
+    executePageButtonWebhookRequest: ExecutePageButtonWebhookRequest;
 }
 
 export interface GetPageRedirectRequest {
@@ -343,6 +359,79 @@ export class PagesApi extends runtime.BaseAPI {
      */
     async deletePageRedirect(requestParameters: DeletePageRedirectRequest, initOverrides?: RequestInit | runtime.InitOverrideFunction): Promise<void> {
         await this.deletePageRedirectRaw(requestParameters, initOverrides);
+    }
+
+    /**
+     * Creates request options for executePageButtonWebhook without sending the request
+     */
+    async executePageButtonWebhookRequestOpts(requestParameters: ExecutePageButtonWebhookOperationRequest): Promise<runtime.RequestOpts> {
+        if (requestParameters['id'] == null) {
+            throw new runtime.RequiredError(
+                'id',
+                'Required parameter "id" was null or undefined when calling executePageButtonWebhook().'
+            );
+        }
+
+        if (requestParameters['blockId'] == null) {
+            throw new runtime.RequiredError(
+                'blockId',
+                'Required parameter "blockId" was null or undefined when calling executePageButtonWebhook().'
+            );
+        }
+
+        if (requestParameters['executePageButtonWebhookRequest'] == null) {
+            throw new runtime.RequiredError(
+                'executePageButtonWebhookRequest',
+                'Required parameter "executePageButtonWebhookRequest" was null or undefined when calling executePageButtonWebhook().'
+            );
+        }
+
+        const queryParameters: any = {};
+
+        const headerParameters: runtime.HTTPHeaders = {};
+
+        headerParameters['Content-Type'] = 'application/json';
+
+        if (this.configuration && this.configuration.accessToken) {
+            const token = this.configuration.accessToken;
+            const tokenString = await token("cliBearer", []);
+
+            if (tokenString) {
+                headerParameters["Authorization"] = `Bearer ${tokenString}`;
+            }
+        }
+
+        let urlPath = `/api/v1/pages/{id}/buttons/{block_id}/webhooks`;
+        urlPath = urlPath.replace('{id}', encodeURIComponent(String(requestParameters['id'])));
+        urlPath = urlPath.replace('{block_id}', encodeURIComponent(String(requestParameters['blockId'])));
+
+        return {
+            path: urlPath,
+            method: 'POST',
+            headers: headerParameters,
+            query: queryParameters,
+            body: ExecutePageButtonWebhookRequestToJSON(requestParameters['executePageButtonWebhookRequest']),
+        };
+    }
+
+    /**
+     * 仅按 page_id、稳定 Block ID 与动作下标读取当前不可变 AST；请求体不能覆盖 URL 或 payload。出口只允许公网 HTTPS，拒绝私网、回环、重定向到非 HTTPS， 并向接收端传递 execution_id 作为 Idempotency-Key。
+     * 执行当前 Revision 中页面按钮的受控 Webhook 动作
+     */
+    async executePageButtonWebhookRaw(requestParameters: ExecutePageButtonWebhookOperationRequest, initOverrides?: RequestInit | runtime.InitOverrideFunction): Promise<runtime.ApiResponse<ExecutePageButtonWebhookResult>> {
+        const requestOptions = await this.executePageButtonWebhookRequestOpts(requestParameters);
+        const response = await this.request(requestOptions, initOverrides);
+
+        return new runtime.JSONApiResponse(response, (jsonValue) => ExecutePageButtonWebhookResultFromJSON(jsonValue));
+    }
+
+    /**
+     * 仅按 page_id、稳定 Block ID 与动作下标读取当前不可变 AST；请求体不能覆盖 URL 或 payload。出口只允许公网 HTTPS，拒绝私网、回环、重定向到非 HTTPS， 并向接收端传递 execution_id 作为 Idempotency-Key。
+     * 执行当前 Revision 中页面按钮的受控 Webhook 动作
+     */
+    async executePageButtonWebhook(requestParameters: ExecutePageButtonWebhookOperationRequest, initOverrides?: RequestInit | runtime.InitOverrideFunction): Promise<ExecutePageButtonWebhookResult> {
+        const response = await this.executePageButtonWebhookRaw(requestParameters, initOverrides);
+        return await response.value();
     }
 
     /**

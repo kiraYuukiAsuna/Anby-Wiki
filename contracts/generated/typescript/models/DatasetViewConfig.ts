@@ -13,6 +13,13 @@
  */
 
 import { mapValues } from '../runtime';
+import type { DatasetViewGroup } from './DatasetViewGroup';
+import {
+    DatasetViewGroupFromJSON,
+    DatasetViewGroupFromJSONTyped,
+    DatasetViewGroupToJSON,
+    DatasetViewGroupToJSONTyped,
+} from './DatasetViewGroup';
 import type { DatasetViewFilter } from './DatasetViewFilter';
 import {
     DatasetViewFilterFromJSON,
@@ -58,7 +65,129 @@ export interface DatasetViewConfig {
      * @memberof DatasetViewConfig
      */
     groupBy?: string;
+    /**
+     * 新视图类型的持久化兼容判别值；创建时由服务端写入。
+     * @type {DatasetViewConfigViewModeEnum}
+     * @memberof DatasetViewConfig
+     */
+    readonly viewMode?: DatasetViewConfigViewModeEnum;
+    /**
+     *
+     * @type {Array<DatasetViewSort>}
+     * @memberof DatasetViewConfig
+     */
+    sorts?: Array<DatasetViewSort>;
+    /**
+     *
+     * @type {Array<DatasetViewGroup>}
+     * @memberof DatasetViewConfig
+     */
+    groups?: Array<DatasetViewGroup>;
+    /**
+     *
+     * @type {string}
+     * @memberof DatasetViewConfig
+     */
+    titleField?: string;
+    /**
+     *
+     * @type {string}
+     * @memberof DatasetViewConfig
+     */
+    descriptionField?: string;
+    /**
+     *
+     * @type {string}
+     * @memberof DatasetViewConfig
+     */
+    coverField?: string;
+    /**
+     *
+     * @type {string}
+     * @memberof DatasetViewConfig
+     */
+    dateField?: string;
+    /**
+     *
+     * @type {string}
+     * @memberof DatasetViewConfig
+     */
+    endDateField?: string;
+    /**
+     *
+     * @type {DatasetViewConfigCardSizeEnum}
+     * @memberof DatasetViewConfig
+     */
+    cardSize?: DatasetViewConfigCardSizeEnum;
+    /**
+     *
+     * @type {Set<string>}
+     * @memberof DatasetViewConfig
+     */
+    formFields?: Set<string>;
+    /**
+     *
+     * @type {boolean}
+     * @memberof DatasetViewConfig
+     */
+    _public?: boolean;
+    /**
+     *
+     * @type {string}
+     * @memberof DatasetViewConfig
+     */
+    submitLabel?: string;
+    /**
+     *
+     * @type {string}
+     * @memberof DatasetViewConfig
+     */
+    successMessage?: string;
+    /**
+     *
+     * @type {Set<string>}
+     * @memberof DatasetViewConfig
+     */
+    viewIds?: Set<string>;
+    /**
+     *
+     * @type {Set<string>}
+     * @memberof DatasetViewConfig
+     */
+    globalFilterFields?: Set<string>;
+    /**
+     *
+     * @type {number}
+     * @memberof DatasetViewConfig
+     */
+    layoutColumns?: number;
 }
+
+
+/**
+ * @export
+ */
+export const DatasetViewConfigViewModeEnum = {
+    Board: 'board',
+    Timeline: 'timeline',
+    Calendar: 'calendar',
+    List: 'list',
+    Gallery: 'gallery',
+    Form: 'form',
+    Dashboard: 'dashboard'
+} as const;
+export type DatasetViewConfigViewModeEnum = typeof DatasetViewConfigViewModeEnum[keyof typeof DatasetViewConfigViewModeEnum];
+
+/**
+ * @export
+ */
+export const DatasetViewConfigCardSizeEnum = {
+    Small: 'small',
+    Medium: 'medium',
+    Large: 'large'
+} as const;
+export type DatasetViewConfigCardSizeEnum = typeof DatasetViewConfigCardSizeEnum[keyof typeof DatasetViewConfigCardSizeEnum];
+
 
 /**
  * Check if a given object implements the DatasetViewConfig interface.
@@ -81,6 +210,22 @@ export function DatasetViewConfigFromJSONTyped(json: any, ignoreDiscriminator: b
         'filter': json['filter'] == null ? undefined : DatasetViewFilterFromJSON(json['filter']),
         'sort': json['sort'] == null ? undefined : DatasetViewSortFromJSON(json['sort']),
         'groupBy': json['group_by'] == null ? undefined : json['group_by'],
+        'viewMode': json['view_mode'] == null ? undefined : json['view_mode'],
+        'sorts': json['sorts'] == null ? undefined : ((json['sorts'] as Array<any>).map(DatasetViewSortFromJSON)),
+        'groups': json['groups'] == null ? undefined : ((json['groups'] as Array<any>).map(DatasetViewGroupFromJSON)),
+        'titleField': json['title_field'] == null ? undefined : json['title_field'],
+        'descriptionField': json['description_field'] == null ? undefined : json['description_field'],
+        'coverField': json['cover_field'] == null ? undefined : json['cover_field'],
+        'dateField': json['date_field'] == null ? undefined : json['date_field'],
+        'endDateField': json['end_date_field'] == null ? undefined : json['end_date_field'],
+        'cardSize': json['card_size'] == null ? undefined : json['card_size'],
+        'formFields': json['form_fields'] == null ? undefined : new Set(json['form_fields']),
+        '_public': json['public'] == null ? undefined : json['public'],
+        'submitLabel': json['submit_label'] == null ? undefined : json['submit_label'],
+        'successMessage': json['success_message'] == null ? undefined : json['success_message'],
+        'viewIds': json['view_ids'] == null ? undefined : new Set(json['view_ids']),
+        'globalFilterFields': json['global_filter_fields'] == null ? undefined : new Set(json['global_filter_fields']),
+        'layoutColumns': json['layout_columns'] == null ? undefined : json['layout_columns'],
     };
 }
 
@@ -88,7 +233,7 @@ export function DatasetViewConfigToJSON(json: any): DatasetViewConfig {
     return DatasetViewConfigToJSONTyped(json, false);
 }
 
-export function DatasetViewConfigToJSONTyped(value?: DatasetViewConfig | null, ignoreDiscriminator: boolean = false): any {
+export function DatasetViewConfigToJSONTyped(value?: Omit<DatasetViewConfig, 'viewMode'> | null, ignoreDiscriminator: boolean = false): any {
     if (value == null) {
         return value;
     }
@@ -99,6 +244,21 @@ export function DatasetViewConfigToJSONTyped(value?: DatasetViewConfig | null, i
         'filter': DatasetViewFilterToJSON(value['filter']),
         'sort': DatasetViewSortToJSON(value['sort']),
         'group_by': value['groupBy'],
+        'sorts': value['sorts'] == null ? undefined : ((value['sorts'] as Array<any>).map(DatasetViewSortToJSON)),
+        'groups': value['groups'] == null ? undefined : ((value['groups'] as Array<any>).map(DatasetViewGroupToJSON)),
+        'title_field': value['titleField'],
+        'description_field': value['descriptionField'],
+        'cover_field': value['coverField'],
+        'date_field': value['dateField'],
+        'end_date_field': value['endDateField'],
+        'card_size': value['cardSize'],
+        'form_fields': value['formFields'] == null ? undefined : Array.from(value['formFields'] as Set<any>),
+        'public': value['_public'],
+        'submit_label': value['submitLabel'],
+        'success_message': value['successMessage'],
+        'view_ids': value['viewIds'] == null ? undefined : Array.from(value['viewIds'] as Set<any>),
+        'global_filter_fields': value['globalFilterFields'] == null ? undefined : Array.from(value['globalFilterFields'] as Set<any>),
+        'layout_columns': value['layoutColumns'],
     };
 }
 

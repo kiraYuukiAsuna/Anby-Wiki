@@ -8,6 +8,7 @@ All URIs are relative to *http://localhost:3000*
 | [**createPageRedirect**](PagesApi.md#createpageredirectoperation) | **POST** /api/v1/pages/{id}/redirect | 创建或更新页面重定向 |
 | [**deleteBlockRedirect**](PagesApi.md#deleteblockredirect) | **DELETE** /api/v1/pages/{id}/block-redirects/{block_id} | 删除错误的章节迁移映射（审计历史保留） |
 | [**deletePageRedirect**](PagesApi.md#deletepageredirect) | **DELETE** /api/v1/pages/{id}/redirect | 删除页面当前重定向 |
+| [**executePageButtonWebhook**](PagesApi.md#executepagebuttonwebhookoperation) | **POST** /api/v1/pages/{id}/buttons/{block_id}/webhooks | 执行当前 Revision 中页面按钮的受控 Webhook 动作 |
 | [**getPageRedirect**](PagesApi.md#getpageredirect) | **GET** /api/v1/pages/{id}/redirect | 读取页面当前重定向 |
 | [**listBlockRedirects**](PagesApi.md#listblockredirects) | **GET** /api/v1/pages/{id}/block-redirects | 列出页面的稳定章节迁移映射 |
 | [**publishRevision**](PagesApi.md#publishrevisionoperation) | **POST** /api/v1/pages/{id}/revisions | 发布 Revision |
@@ -328,6 +329,91 @@ example().catch(console.error);
 | **403** | 已认证但无权限 |  -  |
 | **404** | 资源不存在 |  -  |
 | **500** | 服务端内部错误 |  -  |
+
+[[Back to top]](#) [[Back to API list]](../README.md#api-endpoints) [[Back to Model list]](../README.md#models) [[Back to README]](../README.md)
+
+
+## executePageButtonWebhook
+
+> ExecutePageButtonWebhookResult executePageButtonWebhook(id, blockId, executePageButtonWebhookRequest)
+
+执行当前 Revision 中页面按钮的受控 Webhook 动作
+
+仅按 page_id、稳定 Block ID 与动作下标读取当前不可变 AST；请求体不能覆盖 URL 或 payload。出口只允许公网 HTTPS，拒绝私网、回环、重定向到非 HTTPS， 并向接收端传递 execution_id 作为 Idempotency-Key。
+
+### Example
+
+```ts
+import {
+  Configuration,
+  PagesApi,
+} from '';
+import type { ExecutePageButtonWebhookOperationRequest } from '';
+
+async function example() {
+  console.log("🚀 Testing  SDK...");
+  const config = new Configuration({
+    // Configure HTTP bearer authorization: cliBearer
+    accessToken: "YOUR BEARER TOKEN",
+    // To configure API key authorization: sessionCookie
+    apiKey: "YOUR API KEY",
+  });
+  const api = new PagesApi(config);
+
+  const body = {
+    // string | 页面 ID（UUIDv7）
+    id: 38400000-8cf0-11bd-b23e-10b96e4ef00d,
+    // string
+    blockId: 38400000-8cf0-11bd-b23e-10b96e4ef00d,
+    // ExecutePageButtonWebhookRequest
+    executePageButtonWebhookRequest: ...,
+  } satisfies ExecutePageButtonWebhookOperationRequest;
+
+  try {
+    const data = await api.executePageButtonWebhook(body);
+    console.log(data);
+  } catch (error) {
+    console.error(error);
+  }
+}
+
+// Run the test
+example().catch(console.error);
+```
+
+### Parameters
+
+
+| Name | Type | Description  | Notes |
+|------------- | ------------- | ------------- | -------------|
+| **id** | `string` | 页面 ID（UUIDv7） | [Defaults to `undefined`] |
+| **blockId** | `string` |  | [Defaults to `undefined`] |
+| **executePageButtonWebhookRequest** | [ExecutePageButtonWebhookRequest](ExecutePageButtonWebhookRequest.md) |  | |
+
+### Return type
+
+[**ExecutePageButtonWebhookResult**](ExecutePageButtonWebhookResult.md)
+
+### Authorization
+
+[cliBearer](../README.md#cliBearer), [sessionCookie](../README.md#sessionCookie)
+
+### HTTP request headers
+
+- **Content-Type**: `application/json`
+- **Accept**: `application/json`
+
+
+### HTTP response details
+| Status code | Description | Response headers |
+|-------------|-------------|------------------|
+| **200** | Webhook 接收端返回 2xx |  -  |
+| **400** | 请求格式错误 |  -  |
+| **401** | 未认证 |  -  |
+| **403** | 已认证但无权限 |  -  |
+| **404** | 资源不存在 |  -  |
+| **422** | 请求语义可理解但无法处理（如重定向环/重定向链过深） |  -  |
+| **502** | 服务端内部错误 |  -  |
 
 [[Back to top]](#) [[Back to API list]](../README.md#api-endpoints) [[Back to Model list]](../README.md#models) [[Back to README]](../README.md)
 

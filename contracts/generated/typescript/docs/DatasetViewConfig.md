@@ -10,6 +10,22 @@ Name | Type
 `filter` | [DatasetViewFilter](DatasetViewFilter.md)
 `sort` | [DatasetViewSort](DatasetViewSort.md)
 `groupBy` | string
+`viewMode` | string
+`sorts` | [Array&lt;DatasetViewSort&gt;](DatasetViewSort.md)
+`groups` | [Array&lt;DatasetViewGroup&gt;](DatasetViewGroup.md)
+`titleField` | string
+`descriptionField` | string
+`coverField` | string
+`dateField` | string
+`endDateField` | string
+`cardSize` | string
+`formFields` | Set&lt;string&gt;
+`_public` | boolean
+`submitLabel` | string
+`successMessage` | string
+`viewIds` | Set&lt;string&gt;
+`globalFilterFields` | Set&lt;string&gt;
+`layoutColumns` | number
 
 ## Example
 
@@ -22,6 +38,22 @@ const example = {
   "filter": null,
   "sort": null,
   "groupBy": null,
+  "viewMode": null,
+  "sorts": null,
+  "groups": null,
+  "titleField": null,
+  "descriptionField": null,
+  "coverField": null,
+  "dateField": null,
+  "endDateField": null,
+  "cardSize": null,
+  "formFields": null,
+  "_public": null,
+  "submitLabel": null,
+  "successMessage": null,
+  "viewIds": null,
+  "globalFilterFields": null,
+  "layoutColumns": null,
 } satisfies DatasetViewConfig
 
 console.log(example)

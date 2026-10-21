@@ -61,7 +61,7 @@ AI 配置和双用户协作 E2E。“实现完成”仍不等于“生产发布�
 | 投影与搜索 | Outbox 租约/重试/死信、链接/目录/锚点/章节/渲染/知识使用/References/相关推荐/组件依赖/图谱投影、可解释的链接+Collection+Entity 相关度、PostgreSQL fallback、Meilisearch 关键词/混合/语义检索 |
 | 规模与归档 | 章节懒加载、服务端可信 HTML 渲染、Revision 热冷分层与 S3 回源、Projection/Search 重建、容量基准命令 |
 | 协作 | Yjs WorkingDocument、持久增量 update、重连游标、普通发布与 AI 合并的 sequence CAS、未确认 update 幂等重发、自动 snapshot/compact、Block 级 Presence、三方合并与人工冲突决议；跨标签页离线恢复和多 API 实例广播仍待实现 |
-| 平台 | 本地账号/Session/RBAC、管理员用户角色授予/撤销与注册账号删除、一次性授权码与可撤销/可清理 Agent CLI Bearer Token、157 个 OpenAPI operation 和协作 WebSocket 的 JSON + 人类命令双模式 CLI、Redis 限流、安全头、OTel/Prometheus、备份恢复、Doctor、多 Wiki 读取隔离、生产部署清单 |
+| 平台 | 本地账号/Session/RBAC、管理员用户角色授予/撤销与注册账号删除、一次性授权码与可撤销/可清理 Agent CLI Bearer Token、162 个 OpenAPI operation 和协作 WebSocket 的 JSON + 人类命令双模式 CLI、Redis 限流、安全头、OTel/Prometheus、备份恢复、Doctor、多 Wiki 读取隔离、生产部署清单 |
 
 ## 关键不变量
 
@@ -145,6 +145,66 @@ AI 配置和双用户协作 E2E。“实现完成”仍不等于“生产发布�
   的 8 个 Job、Migration gate、全服务健康检查和只读 Doctor 均通过；active ImportJob、
   开放导入 Proposal、Outbox backlog/dead 与 Projection error 均为 0。
 
+## 2026-10-20 页面布局与受控交互块
+
+- Typed Block AST v1 新增 `breadcrumb`、`column_list` / `column`、`button` 与
+  `html`。Breadcrumb 的稳定页面项进入反链、Doctor 与搜索投影；多列保存 0.1-10
+  的宽度比例，并在 720px 以下确定性改为纵向堆叠。
+- 页面按钮支持插入内容块、修改 DatasetRecord、站内通知和 Webhook。读者执行前必须
+  显式确认；插块只创建并提交 Proposal，不直接发布 Revision；记录修改继续经 Dataset
+  领域服务；Webhook 的 URL/payload 只能来自当前不可变 Revision，出口只允许公网
+  HTTPS，并向接收端传递一次执行 ID 作为 `Idempotency-Key`。
+- HTML Block 支持粘贴或上传最多 200 KB 的 HTML，并在固定高度的空 `sandbox`
+  `srcdoc` iframe 中展示。内嵌 CSP 使用 `default-src 'none'`，只允许内联样式与
+  `data:` 图片/字体，不授予脚本、外部网络、表单、同源或弹窗能力。
+- 这些导航、动作和隔离 HTML 块只能由人工编辑/API 明确创建；Importer 继续排除来源
+  导航、表单与按钮，也不会把不可信来源自动提升为可执行动作。
+
+## 2026-10-20 媒体与外部内容块
+
+- Typed Block AST v1 新增 `audio`、`file`、`pdf`、`bookmark` 与 `link_preview`；
+  Audio/File/PDF 均固定不可变 AssetRevision，分别提供音频播放器与标题/艺术家/专辑/
+  时长元数据、正文下载卡片和可配置起始页/高度的 PDF 阅读器。
+- 资产目录增加 Audio/PDF 筛选，不可变版本详情可直接播放音频或阅读 PDF。Doctor 会
+  校验三类新资产引用，搜索投影纳入媒体标题、caption、书签和链接预览文本。
+- Bookmark 与 LinkPreview 在作者插入时通过登录态 API 安全抓取最多 512 KiB HTML，
+  拒绝私网、回环、保留地址和不安全重定向，只冻结净化后的最终 URL、标题、描述和
+  站点名；阅读请求不向第三方回源。
+- Embed 的交互供应商白名单为 YouTube、Vimeo、Figma。provider 与 URL 结构同时匹配
+  才输出受限 sandbox iframe，并由 CSP `frame-src` 精确允许；其他地址保持安全外链
+  降级，不执行任意第三方脚本。
+- Importer 仍只把 PDF/音视频作为来源或资产处理，不会依据不可信网页自动创建
+  Bookmark、LinkPreview 或交互式 Embed；这些正文块必须由人工编辑/API 明确插入。
+
+## 2026-10-20 行内富文本与 Mention
+
+- AST `text` 支持 `underline` mark，以及 gray/brown/red/orange/yellow/green/blue/
+  purple/pink 九色白名单内的 `text_color` 和 `background_color`。编辑器可无损往返
+  BlockNote 内置样式；任意 CSS 颜色继续在发布前显式拒绝。
+- Person 与 Page 分别保存稳定 Actor ID 和 Page ID；新增 `date_mention` 支持单日或
+  日期区间，新增 `database_mention` 保存稳定 Dataset ID。编辑器提供统一提及入口，
+  Page 继续使用页面搜索选择器，Database 使用站点 Dataset 目录。
+- 服务端 Renderer v12 输出语义化 `<u>`、受限颜色 `data-*`、`<time>` 和 Dataset
+  站内链接；React 阅读兜底、搜索正文、目录纯文本均同步支持。Doctor 会把不存在的
+  Actor 或 Dataset 引用报告为错误。
+
+## 2026-10-20 Dataset 多视图与交互
+
+- DatasetView 新增 Board、Timeline、Calendar、List、Gallery、Form 与 Dashboard；
+  保留 Table、Cards 和 Chart。Board 支持稳定字段分组、子分组、桌面拖放和移动端组选单，
+  移动记录继续经 Dataset 领域服务执行完整 Schema 校验。
+- 已部署数据库继续使用原有 `table/cards/chart` CHECK 约束；服务端把新增判别值规范化
+  保存到 `config.view_mode` 并在读取时恢复，避免单一初始化迁移无法升级存量生产库。
+- 视图查询支持最多三层的 AND/OR 条件树、空值/反向/数字/日期操作符、最多五字段排序链，
+  以及两级分组的展开状态、空组策略、组名排序和固定组选项。旧 `filter` / `sort` /
+  `group_by` 配置保持兼容。
+- Timeline 与 Calendar 使用 JSON Schema `string/date` 字段；Gallery 可选择安全
+  http/https 媒体封面、标题、描述和卡片尺寸；List 是独立的紧凑扫描视图。
+- Form 保存字段顺序、公开状态、提交按钮和成功提示。公开端点只暴露表单允许字段，
+  提交仍在 Dataset 服务内按完整 Schema 校验，并受 API 全局限流保护。
+- Dashboard 最多组合 12 个同 Dataset 的非 Dashboard 保存视图，支持一至三列布局和
+  运行时全局筛选；筛选通过参数化查询下推 PostgreSQL，不复制权威记录。
+
 ## 2026-09-21 导入更新精炼与扩张门禁
 
 - HTML 获取接受完整文档及以 `<main>`、`<article>`、`<section>`、`<div>`、`<p>`、
@@ -153,8 +213,11 @@ AI 配置和双用户协作 E2E。“实现完成”仍不等于“生产发布�
   诱发无关页面规划。
 - `source-import-plan-v9` 与 `source-import-plan-fidelity-v6` 将用户范围、排除项和
   块数限制明确为跨窗口全局约束，并禁止用导航标签、孤立代码或示例值支撑宽泛正文。
-- ImportPlan 支持由精确 SourceChunk evidence 支撑的 `code` 块；单路由计划会确定性
-  保留固定宽度图、协议布局和多行公式，并把逐字覆盖率纳入 fidelity 硬门禁。
+- Typed Block AST 与编辑器支持可折叠 Heading、Todo、Toggle、自定义图标/颜色 Callout、
+  带 caption/行列头的 Table、带 language/caption 的 Code、块级 Equation，以及按
+  ASCII 图、固定宽度表、协议轨迹和公式文本分类的 `preformatted`。
+- ImportPlan 可由精确 SourceChunk evidence 生成上述基础内容块；单路由计划会确定性
+  补齐 `preformatted`，并把逐字固定宽度覆盖率纳入 fidelity 硬门禁。
 - 服务端在跨窗口合并时归并近义段落；单页面显式块数上限按指令主题覆盖与引文直接
   支撑度选择代表块，并以最终块对正向要求的覆盖率约束 fidelity。未写明上限的现有页
   更新超过相对当前页规模的预算时直接失败质量门禁，不会静默截断不同事实或生成不可
@@ -279,7 +342,7 @@ AI 配置和双用户协作 E2E。“实现完成”仍不等于“生产发布�
 ## 2026-08-19 Agent CLI 全量接口验证
 
 - 新增 `TestAllOperationsReachHTTPTransport`：从嵌入 OpenAPI 自动生成满足必填约束的
-  path/query/header、JSON body 与 multipart fixture，157/157 个 operation 均通过
+  path/query/header、JSON body 与 multipart fixture，162/162 个 operation 均通过
   `App.Execute("operation.call")` 到达 HTTP transport；Bearer、方法、URL、文件字段和
   响应 metadata 同时校验。
 - 新增隔离全栈 `TestAllOperationsAgainstAPI`。首个管理员签发的 CLI Token 对 149 个
@@ -370,9 +433,10 @@ outlines。References/Related 是 Current Revision
   固定；开发工具链同时锁定已修复的 `fast-uri@3.1.5`、`hono@4.13.1`、
   `ip-address@10.5.0`、`js-yaml@4.3.1` 与 `undici@7.29.0`。
 - 完整 `npm audit --audit-level=high` 与 production-only audit 均为 0。
-- Go 构建基线升级到 `1.26.9`，`golang.org/x/net` 升级到 `0.60.0`，修复
+- Go 构建基线升级到 `1.26.10`，`golang.org/x/net` 升级到 `0.60.0`，修复
   `net/http`、`html/template`、TLS、HTTP/2、MIME 与 IDNA 可达漏洞；gRPC 为
-  `1.83.1`，OpenTelemetry 家族为 `1.45.0`；`govulncheck` 报告 0 个可达漏洞。
+  `1.83.1`，OpenTelemetry 家族为 `1.45.0`；同时关闭 `GO-2026-6809`
+  中间证书信任漏洞，`govulncheck` 报告 0 个可达漏洞。
 - gitleaks 扫描全部 tracked 与未忽略 untracked 源文件，包括环境模板；忽略的本机
   `0600` 部署环境文件不再被 `dir` 模式误当成仓库内容。
 
@@ -450,13 +514,13 @@ outlines。References/Related 是 Current Revision
 - 正式域名下的证书续期失败告警、代理恢复演练、CSRF、账号恢复/MFA 与完整键盘、
   读屏、对比度人工验收。
 
-仓库现有 Go 单元测试、157-operation handler 探针和高风险成功工作流仍不能穷举
+仓库现有 Go 单元测试、162-operation handler 探针和高风险成功工作流仍不能穷举
 全部 ProposalOperation 组合、外部模型供应商行为或容量/安全/人工可访问性；本轮真实
 系统演练不能替代发布环境验收。
 
 ## 2026-08-18 Web/API/CLI 可操作性审计
 
-- 权威 OpenAPI 当前共有 157 个 operation。155 个 Web-owned operation 全部通过生成
+- 权威 OpenAPI 当前共有 162 个 operation。160 个 Web-owned operation 全部通过生成
   客户端调用，调用文件均可沿 TypeScript import 图反向到达 48 个页面/global layout
   owner；`exchangeCLIAuthCode` 与 `revokeCurrentCLIToken` 是明确的 CLI transport。
 - 69 个写操作分别落在注册/登录、页面编辑与工具、导入、资产、来源、Dataset、
@@ -495,7 +559,7 @@ outlines。References/Related 是 Current Revision
 - `backend/cmd/anby-wiki` 提供 Go CLI；不带子命令或使用 `--input` 时保持供 Agent
   使用的单一 JSON envelope，传入子命令时提供面向人工的普通命令行参数封装，退出码
   仍区分成功、输入/契约错误和远端错误。
-- CLI 从嵌入的权威 OpenAPI 读取 157 个 operationId，支持清单、搜索、Schema 描述和
+- CLI 从嵌入的权威 OpenAPI 读取 162 个 operationId，支持清单、搜索、Schema 描述和
   通用调用；所有 HTTP operation 均可通过 kebab-case 命令名或 `call <operation>`
   调用，发送前校验 path/query/header、JSON/multipart body，收到 JSON 后按状态码校验
   响应。文件上传读取本地路径，二进制响应统一转为 base64 JSON。

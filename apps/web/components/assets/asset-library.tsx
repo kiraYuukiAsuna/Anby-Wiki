@@ -5,9 +5,11 @@ import {
   Check,
   Copy,
   FileArchive,
+  FileText,
   ImageIcon,
   Inbox,
   LoaderCircle,
+  Music2,
   RefreshCw,
   Upload,
   Video,
@@ -39,6 +41,8 @@ const FILTERS: Array<{ value: Filter; label: string }> = [
   { value: "all", label: "全部" },
   { value: "image", label: "图片" },
   { value: "video", label: "视频" },
+  { value: "audio", label: "音频" },
+  { value: "pdf", label: "PDF" },
   { value: "other", label: "其他" },
 ];
 
@@ -59,7 +63,17 @@ function AssetCard({ asset }: { asset: Asset }) {
   const revision = asset.currentRevision;
   const image = revision.mimeType.startsWith("image/");
   const video = revision.mimeType.startsWith("video/");
-  const KindIcon = image ? ImageIcon : video ? Video : FileArchive;
+  const audio = revision.mimeType.startsWith("audio/");
+  const pdf = revision.mimeType === "application/pdf";
+  const KindIcon = image
+    ? ImageIcon
+    : video
+      ? Video
+      : audio
+        ? Music2
+        : pdf
+          ? FileText
+          : FileArchive;
 
   const copyRevision = async () => {
     try {

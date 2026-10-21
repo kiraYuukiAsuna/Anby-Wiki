@@ -13,12 +13,20 @@ import { ZodError } from "zod";
 
 import type {
   Block as AstBlock,
+  ButtonAction,
+  CalloutColor,
   CalloutKind,
   Document,
+  InlineColor,
   InlineNode,
   Mark,
+  PreformattedKind,
 } from "@/lib/ast/schema";
-import { parseDocument } from "@/lib/ast/schema";
+import {
+  breadcrumbItemSchema,
+  buttonActionSchema,
+  parseDocument,
+} from "@/lib/ast/schema";
 
 import { AstValidationError, UnsupportedBlockNoteFeatureError } from "./errors";
 import {
@@ -34,6 +42,7 @@ import type { BNBlock } from "./schema";
 const MARK_BY_STYLE: Record<string, Mark> = {
   bold: "bold",
   italic: "italic",
+  underline: "underline",
   strike: "strikethrough",
   code: "code",
 };
@@ -42,15 +51,77 @@ const MARK_BY_STYLE: Record<string, Mark> = {
 const CANONICAL_MARK_ORDER: readonly Mark[] = [
   "bold",
   "italic",
+  "underline",
   "strikethrough",
   "code",
 ];
 
+const INLINE_COLORS = new Set<InlineColor>([
+  "gray",
+  "brown",
+  "red",
+  "orange",
+  "yellow",
+  "green",
+  "blue",
+  "purple",
+  "pink",
+]);
+
 function activeStyles(styles: unknown): string[] {
   if (!styles || typeof styles !== "object") return [];
   return Object.entries(styles as Record<string, unknown>)
-    .filter(([, value]) => Boolean(value))
+    .filter(
+      ([key, value]) =>
+        (key === "textColor" || key === "backgroundColor")
+          ? typeof value === "string" && value !== "" && value !== "default"
+          : Boolean(value),
+    )
     .map(([key]) => key);
+}
+
+function inlineColor(
+  value: unknown,
+  style: "textColor" | "backgroundColor",
+  where: string,
+): InlineColor | undefined {
+  if (value == null || value === "" || value === "default") return undefined;
+  if (typeof value !== "string" || !INLINE_COLORS.has(value as InlineColor)) {
+    throw new UnsupportedBlockNoteFeatureError(
+      `${where}: ${style}="${String(value)}" 不在 AST v1 调色板中`,
+    );
+  }
+  return value as InlineColor;
+}
+
+function plainBlockText(block: BNBlock, where: string): string {
+  const parts = Array.isArray(block.content) ? block.content : [];
+  let text = "";
+  for (const part of parts) {
+    if (part?.type !== "text") {
+      throw new UnsupportedBlockNoteFeatureError(
+        `${where}: ${block.type} 内含非文本内容（${String(part?.type)}）`,
+      );
+    }
+    const active = activeStyles(part.styles);
+    if (active.length > 0) {
+      throw new UnsupportedBlockNoteFeatureError(
+        `${where}: ${block.type} 内文本样式（${active.join(", ")}）无法映射到固定宽度文本`,
+      );
+    }
+    text += String(part.text ?? "");
+  }
+  return text;
+}
+
+function parseJSONProp(block: BNBlock, key: string, where: string): unknown {
+  try {
+    return JSON.parse(String(block.props?.[key] ?? ""));
+  } catch {
+    throw new UnsupportedBlockNoteFeatureError(
+      `${where}: ${block.type}.${key} 必须是合法 JSON`,
+    );
+  }
 }
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -67,10 +138,11 @@ function styledTextToInlineNodes(item: any, where: string): InlineNode[] {
   }
   const marks: Mark[] = [];
   for (const key of active) {
+    if (key === "textColor" || key === "backgroundColor") continue;
     const mark = MARK_BY_STYLE[key];
     if (!mark) {
       throw new UnsupportedBlockNoteFeatureError(
-        `${where}: 不支持的文本样式 "${key}"（AST v1 仅支持 bold/italic/strikethrough/code）`,
+        `${where}: 不支持的文本样式 "${key}"`,
       );
     }
     marks.push(mark);
@@ -82,6 +154,19 @@ function styledTextToInlineNodes(item: any, where: string): InlineNode[] {
   const node: InlineNode = { type: "text", text: String(item.text ?? "") };
   if (marks.length > 0) {
     (node as { marks?: Mark[] }).marks = marks;
+  }
+  const textColor = inlineColor(item.styles?.textColor, "textColor", where);
+  const backgroundColor = inlineColor(
+    item.styles?.backgroundColor,
+    "backgroundColor",
+    where,
+  );
+  if (textColor) {
+    (node as { text_color?: InlineColor }).text_color = textColor;
+  }
+  if (backgroundColor) {
+    (node as { background_color?: InlineColor }).background_color =
+      backgroundColor;
   }
   return [node];
 }
@@ -199,6 +284,23 @@ function extendedReferenceToInlineNode(item: any): InlineNode {
         actor_id: str("actorId"),
         display_text: str("displayText"),
       };
+    case "dateMention": {
+      const node: InlineNode = {
+        type: "date_mention",
+        date: str("date"),
+        display_text: str("displayText"),
+      };
+      if (str("endDate")) {
+        (node as { end_date?: string }).end_date = str("endDate");
+      }
+      return node;
+    }
+    case "databaseMention":
+      return {
+        type: "database_mention",
+        dataset_id: str("datasetId"),
+        display_text: str("displayText"),
+      };
     default:
       throw new UnsupportedBlockNoteFeatureError(
         `无法识别的扩展行内类型 "${String(item.type)}"`,
@@ -236,6 +338,8 @@ function inlineContentToAst(content: unknown, where: string): InlineNode[] {
       case "pageAnchorReference":
       case "math":
       case "mention":
+      case "dateMention":
+      case "databaseMention":
         out.push(extendedReferenceToInlineNode(item));
         break;
       default:
@@ -334,19 +438,171 @@ function singleBlockToAst(
         content: inlineContentToAst(block.content, where),
       };
     case "heading": {
-      assertSupportedProps(block, ["level"], where);
+      assertSupportedProps(block, ["level", "isToggleable"], where);
       const level = Number(block.props?.level);
       if (!Number.isInteger(level) || level < 1 || level > 6) {
         throw new UnsupportedBlockNoteFeatureError(
           `${where}: heading level=${JSON.stringify(block.props?.level)} 超出 AST 范围 1-6`,
         );
       }
-      return {
+      const isToggleable = Boolean(block.props?.isToggleable);
+      if (!isToggleable && block.children.length > 0) {
+        throw new UnsupportedBlockNoteFeatureError(
+          `${where}: 非折叠 heading 不能包含 children`,
+        );
+      }
+      const node: AstBlock = {
         id,
         type: "heading",
         level,
         content: inlineContentToAst(block.content, where),
       };
+      if (isToggleable) {
+        (node as Extract<AstBlock, { type: "heading" }>).is_toggleable = true;
+        const children = childrenToAst(
+          block.children,
+          state,
+          `${where}.children`,
+        );
+        if (children.length > 0) {
+          (node as Extract<AstBlock, { type: "heading" }>).children = children;
+        }
+      }
+      return node;
+    }
+    case "checkListItem": {
+      assertSupportedProps(block, ["checked"], where);
+      const checked = block.props?.checked;
+      if (typeof checked !== "boolean") {
+        throw new UnsupportedBlockNoteFeatureError(
+          `${where}: checkListItem.checked 必须是 boolean`,
+        );
+      }
+      const node: AstBlock = {
+        id,
+        type: "todo",
+        checked,
+        content: inlineContentToAst(block.content, where),
+      };
+      const children = childrenToAst(
+        block.children,
+        state,
+        `${where}.children`,
+      );
+      if (children.length > 0) node.children = children;
+      return node;
+    }
+    case "toggleListItem": {
+      assertSupportedProps(block, [], where);
+      const node: AstBlock = {
+        id,
+        type: "toggle",
+        content: inlineContentToAst(block.content, where),
+      };
+      const children = childrenToAst(
+        block.children,
+        state,
+        `${where}.children`,
+      );
+      if (children.length > 0) node.children = children;
+      return node;
+    }
+    case "breadcrumb": {
+      assertSupportedProps(block, ["itemsJson"], where);
+      const parsed = breadcrumbItemSchema
+        .array()
+        .min(1)
+        .max(32)
+        .safeParse(parseJSONProp(block, "itemsJson", where));
+      if (!parsed.success) {
+        throw new UnsupportedBlockNoteFeatureError(
+          `${where}: breadcrumb.itemsJson 不符合页面路径结构`,
+        );
+      }
+      return { id, type: "breadcrumb", items: parsed.data };
+    }
+    case "columnList": {
+      assertSupportedProps(block, [], where);
+      const children = childrenToAst(
+        block.children,
+        state,
+        `${where}.children`,
+      );
+      if (
+        children.length < 2 ||
+        children.length > 5 ||
+        children.some((child) => child.type !== "column")
+      ) {
+        throw new UnsupportedBlockNoteFeatureError(
+          `${where}: columnList 必须包含 2-5 个 column`,
+        );
+      }
+      return {
+        id,
+        type: "column_list",
+        children: children as Extract<AstBlock, { type: "column" }>[],
+      };
+    }
+    case "column": {
+      assertSupportedProps(block, ["widthRatio"], where);
+      const widthRatio = Number(block.props?.widthRatio);
+      if (!Number.isFinite(widthRatio) || widthRatio < 0.1 || widthRatio > 10) {
+        throw new UnsupportedBlockNoteFeatureError(
+          `${where}: column.widthRatio 必须在 0.1-10 之间`,
+        );
+      }
+      return {
+        id,
+        type: "column",
+        width_ratio: widthRatio,
+        children: childrenToAst(block.children, state, `${where}.children`),
+      };
+    }
+    case "pageButton": {
+      assertSupportedProps(
+        block,
+        ["label", "confirmation", "actionsJson"],
+        where,
+      );
+      const label = String(block.props?.label ?? "");
+      const parsed = buttonActionSchema
+        .array()
+        .min(1)
+        .max(10)
+        .safeParse(parseJSONProp(block, "actionsJson", where));
+      if (!label || !parsed.success) {
+        throw new UnsupportedBlockNoteFeatureError(
+          `${where}: pageButton 需要 label 和 1-10 个合法动作`,
+        );
+      }
+      const node: AstBlock = {
+        id,
+        type: "button",
+        label,
+        actions: parsed.data as ButtonAction[],
+      };
+      const confirmation = String(block.props?.confirmation ?? "");
+      if (confirmation) node.confirmation = confirmation;
+      return node;
+    }
+    case "htmlBlock": {
+      assertSupportedProps(block, ["html", "height", "caption"], where);
+      const height = Number(block.props?.height);
+      const html = String(block.props?.html ?? "");
+      if (
+        !Number.isInteger(height) ||
+        height < 120 ||
+        height > 1200 ||
+        html.length > 200000
+      ) {
+        throw new UnsupportedBlockNoteFeatureError(
+          `${where}: htmlBlock 的高度或内容长度非法`,
+        );
+      }
+      const node: AstBlock = { id, type: "html", html, height };
+      const caption = String(block.props?.caption ?? "");
+      if (caption) node.caption = caption;
+      return node;
     }
     case "quote":
       assertSupportedProps(block, [], where);
@@ -360,44 +616,93 @@ function singleBlockToAst(
       };
     case "codeBlock": {
       assertSupportedProps(block, ["language"], where);
-      const parts = Array.isArray(block.content) ? block.content : [];
-      let text = "";
-      for (const part of parts) {
-        if (part?.type !== "text") {
-          throw new UnsupportedBlockNoteFeatureError(
-            `${where}: codeBlock 内含非文本内容（${String(part?.type)}）`,
-          );
-        }
-        const active = activeStyles(part.styles);
-        if (active.length > 0) {
-          throw new UnsupportedBlockNoteFeatureError(
-            `${where}: codeBlock 内文本样式（${active.join(", ")}）无法映射到 AST code`,
-          );
-        }
-        text += String(part.text ?? "");
-      }
+      const text = plainBlockText(block, where);
       const language = String(block.props?.language ?? "");
       const node: AstBlock = { id, type: "code", content: text };
       if (language) (node as { language?: string }).language = language;
+      const caption = state.codeCaptions.get(block.id);
+      if (caption) (node as { caption?: string }).caption = caption;
+      return node;
+    }
+    case "preformatted": {
+      assertSupportedProps(block, ["kind", "caption", "text"], where);
+      const kind = String(block.props?.kind ?? "");
+      if (
+        ![
+          "ascii_diagram",
+          "fixed_table",
+          "protocol_trace",
+          "formula_text",
+          "plain",
+        ].includes(kind)
+      ) {
+        throw new UnsupportedBlockNoteFeatureError(
+          `${where}: preformatted kind="${kind}" 非法`,
+        );
+      }
+      const node: AstBlock = {
+        id,
+        type: "preformatted",
+        kind: kind as PreformattedKind,
+        content: String(block.props?.text ?? ""),
+      };
+      const caption = String(block.props?.caption ?? "");
+      if (caption) node.caption = caption;
+      return node;
+    }
+    case "equation": {
+      assertSupportedProps(block, ["expression", "caption"], where);
+      const expression = String(block.props?.expression ?? "");
+      if (!expression) {
+        throw new UnsupportedBlockNoteFeatureError(
+          `${where}: equation.expression 不能为空`,
+        );
+      }
+      const node: AstBlock = { id, type: "equation", expression };
+      const caption = String(block.props?.caption ?? "");
+      if (caption) node.caption = caption;
       return node;
     }
     case "divider":
       assertSupportedProps(block, [], where);
       return { id, type: "divider" };
     case "callout": {
-      assertSupportedProps(block, ["kind"], where);
+      assertSupportedProps(block, ["kind", "icon", "color"], where);
       const kind = String(block.props?.kind ?? "");
       if (!["info", "warning", "danger"].includes(kind)) {
         throw new UnsupportedBlockNoteFeatureError(
           `${where}: callout kind="${kind}" 不在 AST 枚举（info/warning/danger）内`,
         );
       }
-      return {
+      const color = String(block.props?.color ?? "default");
+      if (
+        ![
+          "default",
+          "gray",
+          "brown",
+          "orange",
+          "yellow",
+          "green",
+          "blue",
+          "purple",
+          "pink",
+          "red",
+        ].includes(color)
+      ) {
+        throw new UnsupportedBlockNoteFeatureError(
+          `${where}: callout color="${color}" 非法`,
+        );
+      }
+      const node: AstBlock = {
         id,
         type: "callout",
         kind: kind as CalloutKind,
         children: childrenToAst(block.children, state, `${where}.children`),
       };
+      const icon = String(block.props?.icon ?? "");
+      if (icon) node.icon = icon;
+      if (color !== "default") node.color = color as CalloutColor;
+      return node;
     }
     case "component": {
       assertSupportedProps(
@@ -474,6 +779,122 @@ function singleBlockToAst(
       if (caption) (node as { caption?: string }).caption = caption;
       return node;
     }
+    case "audioAsset": {
+      assertSupportedProps(
+        block,
+        [
+          "assetRevisionId",
+          "title",
+          "artist",
+          "album",
+          "durationSeconds",
+          "caption",
+        ],
+        where,
+      );
+      const title = String(block.props?.title ?? "");
+      const duration = Number(block.props?.durationSeconds ?? 0);
+      if (!title || !Number.isFinite(duration) || duration < 0) {
+        throw new UnsupportedBlockNoteFeatureError(
+          `${where}: audioAsset 的标题或时长非法`,
+        );
+      }
+      const node: AstBlock = {
+        id,
+        type: "audio",
+        asset_revision_id: String(block.props?.assetRevisionId ?? ""),
+        title,
+      };
+      const artist = String(block.props?.artist ?? "");
+      const album = String(block.props?.album ?? "");
+      const caption = String(block.props?.caption ?? "");
+      if (artist) node.artist = artist;
+      if (album) node.album = album;
+      if (duration > 0) node.duration_seconds = duration;
+      if (caption) node.caption = caption;
+      return node;
+    }
+    case "fileAsset": {
+      assertSupportedProps(
+        block,
+        ["assetRevisionId", "name", "caption"],
+        where,
+      );
+      const node: AstBlock = {
+        id,
+        type: "file",
+        asset_revision_id: String(block.props?.assetRevisionId ?? ""),
+        name: String(block.props?.name ?? ""),
+      };
+      const caption = String(block.props?.caption ?? "");
+      if (caption) node.caption = caption;
+      return node;
+    }
+    case "pdfAsset": {
+      assertSupportedProps(
+        block,
+        ["assetRevisionId", "title", "startPage", "height", "caption"],
+        where,
+      );
+      const startPage = Number(block.props?.startPage ?? 1);
+      const height = Number(block.props?.height);
+      if (
+        !Number.isInteger(startPage) ||
+        startPage < 1 ||
+        !Number.isInteger(height) ||
+        height < 320 ||
+        height > 1200
+      ) {
+        throw new UnsupportedBlockNoteFeatureError(
+          `${where}: pdfAsset 的页码或高度非法`,
+        );
+      }
+      const node: AstBlock = {
+        id,
+        type: "pdf",
+        asset_revision_id: String(block.props?.assetRevisionId ?? ""),
+        height,
+      };
+      const title = String(block.props?.title ?? "");
+      const caption = String(block.props?.caption ?? "");
+      if (title) node.title = title;
+      if (startPage !== 1) node.start_page = startPage;
+      if (caption) node.caption = caption;
+      return node;
+    }
+    case "bookmark":
+    case "linkPreview": {
+      assertSupportedProps(
+        block,
+        ["url", "title", "description", "siteName", "caption"],
+        where,
+      );
+      const isBookmark = block.type === "bookmark";
+      const url = String(block.props?.url ?? "");
+      const title = String(block.props?.title ?? "");
+      const description = String(block.props?.description ?? "");
+      const siteName = String(block.props?.siteName ?? "");
+      const caption = String(block.props?.caption ?? "");
+      if (isBookmark) {
+        return {
+          id,
+          type: "bookmark",
+          url,
+          title,
+          ...(description ? { description } : {}),
+          ...(siteName ? { site_name: siteName } : {}),
+          ...(caption ? { caption } : {}),
+        };
+      }
+      return {
+        id,
+        type: "link_preview",
+        url,
+        title,
+        ...(description ? { description } : {}),
+        ...(siteName ? { site_name: siteName } : {}),
+      };
+    }
     case "datasetView":
       assertSupportedProps(block, ["datasetViewId"], where);
       return {
@@ -482,19 +903,38 @@ function singleBlockToAst(
         dataset_view_id: String(block.props?.datasetViewId ?? ""),
       };
     case "embed": {
-      assertSupportedProps(block, ["url", "title"], where);
+      assertSupportedProps(
+        block,
+        ["url", "title", "provider", "caption"],
+        where,
+      );
       const node: AstBlock = {
         id,
         type: "embed",
         url: String(block.props?.url ?? ""),
       };
       const title = String(block.props?.title ?? "");
+      const provider = String(block.props?.provider ?? "none");
+      const caption = String(block.props?.caption ?? "");
+      if (!["none", "youtube", "vimeo", "figma"].includes(provider)) {
+        throw new UnsupportedBlockNoteFeatureError(
+          `${where}: embed provider="${provider}" 非法`,
+        );
+      }
       if (title) (node as { title?: string }).title = title;
+      if (provider !== "none") {
+        node.provider = provider as "youtube" | "vimeo" | "figma";
+      }
+      if (caption) node.caption = caption;
       return node;
     }
-    case "astTable":
-      assertSupportedProps(block, [], where);
-      return {
+    case "astTable": {
+      assertSupportedProps(
+        block,
+        ["caption", "hasColumnHeader", "hasRowHeader"],
+        where,
+      );
+      const node: AstBlock = {
         id,
         type: "table",
         children: childrenToAst(
@@ -503,6 +943,12 @@ function singleBlockToAst(
           `${where}.children`,
         ) as Extract<AstBlock, { type: "table_row" }>[],
       };
+      const caption = String(block.props?.caption ?? "");
+      if (caption) node.caption = caption;
+      if (Boolean(block.props?.hasColumnHeader)) node.has_column_header = true;
+      if (Boolean(block.props?.hasRowHeader)) node.has_row_header = true;
+      return node;
+    }
     case "astTableRow":
       assertSupportedProps(block, [], where);
       return {
@@ -524,7 +970,7 @@ function singleBlockToAst(
     default:
       throw new UnsupportedBlockNoteFeatureError(
         `${where}: block 类型 "${block.type}" 不在 AST v1 映射表中 ` +
-          `（audio/file/checkListItem/toggleListItem/pageBreak/原生 table 等特性不支持）`,
+          `（audio/file/pageBreak/原生 table 等特性不支持）`,
       );
   }
 }

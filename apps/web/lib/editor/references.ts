@@ -98,6 +98,40 @@ export function insertExternalLink(
   ]);
 }
 
+/** 在光标处插入稳定 Actor 引用。 */
+export function insertPersonMention(
+  editor: InlineContentEditor,
+  actorId: string,
+  displayText: string,
+): void {
+  editor.insertInlineContent([
+    { type: "mention", props: { actorId, displayText } },
+  ]);
+}
+
+/** 在光标处插入日期或日期区间。 */
+export function insertDateMention(
+  editor: InlineContentEditor,
+  date: string,
+  endDate: string,
+  displayText: string,
+): void {
+  editor.insertInlineContent([
+    { type: "dateMention", props: { date, endDate, displayText } },
+  ]);
+}
+
+/** 在光标处插入稳定 Dataset 引用。 */
+export function insertDatabaseMention(
+  editor: InlineContentEditor,
+  datasetId: string,
+  displayText: string,
+): void {
+  editor.insertInlineContent([
+    { type: "databaseMention", props: { datasetId, displayText } },
+  ]);
+}
+
 /** 当前选区选中的 pageReference 节点信息；未选中返回 null。 */
 export interface SelectedPageReference {
   /** ProseMirror 文档中节点的位置（NodeSelection.from）。 */

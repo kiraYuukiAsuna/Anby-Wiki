@@ -90,13 +90,25 @@ type SourceSubject struct {
 // prose and evidence rather than authoritative AST IDs. The composer assigns
 // IDs and compiles it into Typed Block AST or block-level Proposal operations.
 type PlannedBlock struct {
-	Type          string              `json:"type"`
-	Mode          string              `json:"mode"`
-	TargetBlockID *string             `json:"target_block_id"`
-	Text          string              `json:"text,omitempty"`
-	Level         int                 `json:"level,omitempty"`
-	Items         []string            `json:"items,omitempty"`
-	Evidence      []CandidateEvidence `json:"evidence"`
+	Type            string              `json:"type"`
+	Mode            string              `json:"mode"`
+	TargetBlockID   *string             `json:"target_block_id"`
+	Text            string              `json:"text,omitempty"`
+	Level           int                 `json:"level,omitempty"`
+	IsToggleable    bool                `json:"is_toggleable,omitempty"`
+	Checked         *bool               `json:"checked,omitempty"`
+	Kind            string              `json:"kind,omitempty"`
+	Icon            string              `json:"icon,omitempty"`
+	Color           string              `json:"color,omitempty"`
+	Language        string              `json:"language,omitempty"`
+	Caption         string              `json:"caption,omitempty"`
+	Expression      string              `json:"expression,omitempty"`
+	Items           []string            `json:"items,omitempty"`
+	Rows            [][]string          `json:"rows,omitempty"`
+	HasColumnHeader bool                `json:"has_column_header,omitempty"`
+	HasRowHeader    bool                `json:"has_row_header,omitempty"`
+	Children        []PlannedBlock      `json:"children,omitempty"`
+	Evidence        []CandidateEvidence `json:"evidence"`
 }
 
 type PageRoute struct {
@@ -696,14 +708,26 @@ func ValidateImportPlan(raw []byte, sourceVersionID uuid.UUID, chunks []evidence
 }
 
 func validPlannedBlockContent(block PlannedBlock) bool {
+	for _, child := range block.Children {
+		if child.Mode != BlockAppend || child.TargetBlockID != nil ||
+			!validPlannedBlockContent(child) {
+			return false
+		}
+	}
 	switch block.Type {
 	case string(ast.BlockHeading):
-		return strings.TrimSpace(block.Text) != "" && block.Level >= 1 && block.Level <= 6 && len(block.Items) == 0
+		return strings.TrimSpace(block.Text) != "" &&
+			block.Level >= 1 && block.Level <= 6 &&
+			(block.IsToggleable || len(block.Children) == 0)
 	case string(ast.BlockParagraph), string(ast.BlockQuote):
-		return strings.TrimSpace(block.Text) != "" && len(block.Items) == 0
-	case string(ast.BlockCode):
+		return strings.TrimSpace(block.Text) != "" && len(block.Children) == 0
+	case string(ast.BlockCode), string(ast.BlockPreformatted):
 		wanted := preformattedKey(block.Text)
-		if wanted == "" || len(block.Items) != 0 {
+		if wanted == "" || len(block.Children) != 0 {
+			return false
+		}
+		if block.Type == string(ast.BlockPreformatted) &&
+			!validPreformattedKind(block.Kind) {
 			return false
 		}
 		for _, item := range block.Evidence {
@@ -712,8 +736,9 @@ func validPlannedBlockContent(block PlannedBlock) bool {
 			}
 		}
 		return false
-	case string(ast.BlockBulletList):
-		if strings.TrimSpace(block.Text) != "" || len(block.Items) == 0 {
+	case string(ast.BlockBulletList), string(ast.BlockOrderedList):
+		if strings.TrimSpace(block.Text) != "" || len(block.Items) == 0 ||
+			len(block.Children) != 0 {
 			return false
 		}
 		for _, item := range block.Items {
@@ -721,6 +746,62 @@ func validPlannedBlockContent(block PlannedBlock) bool {
 				return false
 			}
 		}
+		return true
+	case string(ast.BlockTodo):
+		return strings.TrimSpace(block.Text) != "" && block.Checked != nil
+	case string(ast.BlockToggle):
+		return strings.TrimSpace(block.Text) != ""
+	case string(ast.BlockCallout):
+		return strings.TrimSpace(block.Text) != "" &&
+			validCalloutKind(block.Kind) && validCalloutColor(block.Color)
+	case string(ast.BlockTable):
+		if len(block.Rows) == 0 || len(block.Children) != 0 {
+			return false
+		}
+		width := len(block.Rows[0])
+		if width == 0 {
+			return false
+		}
+		for _, row := range block.Rows {
+			if len(row) != width {
+				return false
+			}
+		}
+		return true
+	case string(ast.BlockEquation):
+		return strings.TrimSpace(block.Expression) != "" && len(block.Children) == 0
+	default:
+		return false
+	}
+}
+
+func validPreformattedKind(value string) bool {
+	switch value {
+	case string(ast.PreformattedASCIIDiagram), string(ast.PreformattedFixedTable),
+		string(ast.PreformattedProtocolTrace), string(ast.PreformattedFormulaText),
+		string(ast.PreformattedPlain):
+		return true
+	default:
+		return false
+	}
+}
+
+func validCalloutKind(value string) bool {
+	switch value {
+	case string(ast.CalloutInfo), string(ast.CalloutWarning), string(ast.CalloutDanger):
+		return true
+	default:
+		return false
+	}
+}
+
+func validCalloutColor(value string) bool {
+	switch value {
+	case "", string(ast.CalloutColorDefault), string(ast.CalloutColorGray),
+		string(ast.CalloutColorBrown), string(ast.CalloutColorOrange),
+		string(ast.CalloutColorYellow), string(ast.CalloutColorGreen),
+		string(ast.CalloutColorBlue), string(ast.CalloutColorPurple),
+		string(ast.CalloutColorPink), string(ast.CalloutColorRed):
 		return true
 	default:
 		return false
@@ -756,10 +837,20 @@ func normalizeImportPlanCollections(plan *ImportPlan) {
 			route.Blocks = []PlannedBlock{}
 		}
 		for blockIndex := range route.Blocks {
-			if route.Blocks[blockIndex].Evidence == nil {
-				route.Blocks[blockIndex].Evidence = []CandidateEvidence{}
-			}
+			normalizePlannedBlockCollections(&route.Blocks[blockIndex])
 		}
+	}
+}
+
+func normalizePlannedBlockCollections(block *PlannedBlock) {
+	if block == nil {
+		return
+	}
+	if block.Evidence == nil {
+		block.Evidence = []CandidateEvidence{}
+	}
+	for index := range block.Children {
+		normalizePlannedBlockCollections(&block.Children[index])
 	}
 }
 
@@ -881,7 +972,8 @@ func plannedBlockTextFromAST(block *ast.Block) string {
 	if block == nil {
 		return ""
 	}
-	if block.Type == ast.BlockParagraph || block.Type == ast.BlockHeading {
+	if block.Type == ast.BlockParagraph || block.Type == ast.BlockHeading ||
+		block.Type == ast.BlockTodo || block.Type == ast.BlockToggle {
 		nodes, err := block.InlineContent()
 		if err != nil {
 			return ""
@@ -899,7 +991,23 @@ func plannedBlockTextFromAST(block *ast.Block) string {
 		}
 		return strings.TrimSpace(strings.Join(parts, ""))
 	}
-	return ""
+	if block.Type == ast.BlockCode || block.Type == ast.BlockPreformatted {
+		text, err := block.TextContent()
+		if err == nil {
+			return strings.TrimSpace(text)
+		}
+		return ""
+	}
+	if block.Type == ast.BlockEquation {
+		return strings.TrimSpace(block.Expression)
+	}
+	parts := make([]string, 0, len(block.Children))
+	for _, child := range block.Children {
+		if text := plannedBlockTextFromAST(child); text != "" {
+			parts = append(parts, text)
+		}
+	}
+	return strings.TrimSpace(strings.Join(parts, "\n"))
 }
 
 func (p *PagePlanner) resolveCreateCollisions(ctx context.Context, params PlanParams, plan *ImportPlan) error {
@@ -1269,10 +1377,27 @@ func plannedBlockKey(block PlannedBlock) string {
 }
 
 func plannedBlockText(block PlannedBlock) string {
-	if block.Type == string(ast.BlockBulletList) {
-		return strings.Join(block.Items, "\n")
+	var text string
+	switch block.Type {
+	case string(ast.BlockBulletList), string(ast.BlockOrderedList):
+		text = strings.Join(block.Items, "\n")
+	case string(ast.BlockTable):
+		rows := make([]string, 0, len(block.Rows))
+		for _, row := range block.Rows {
+			rows = append(rows, strings.Join(row, "\t"))
+		}
+		text = strings.Join(rows, "\n")
+	case string(ast.BlockEquation):
+		text = block.Expression
+	default:
+		text = block.Text
 	}
-	return block.Text
+	for _, child := range block.Children {
+		if childText := plannedBlockText(child); childText != "" {
+			text += "\n" + childText
+		}
+	}
+	return strings.TrimSpace(text)
 }
 
 func normalizedPlanText(value string) string {

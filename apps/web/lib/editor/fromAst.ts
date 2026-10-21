@@ -23,6 +23,7 @@ import type { BNPartialBlock } from "./schema";
 const STYLE_BY_MARK: Record<Mark, string> = {
   bold: "bold",
   italic: "italic",
+  underline: "underline",
   strikethrough: "strike",
   code: "code",
 };
@@ -30,9 +31,15 @@ const STYLE_BY_MARK: Record<Mark, string> = {
 function inlineNodeToBN(node: InlineNode): Record<string, unknown> {
   switch (node.type) {
     case "text": {
-      const styles: Record<string, boolean> = {};
+      const styles: Record<string, boolean | string> = {};
       for (const mark of node.marks ?? []) {
         styles[STYLE_BY_MARK[mark]] = true;
+      }
+      if (node.text_color) {
+        styles.textColor = node.text_color;
+      }
+      if (node.background_color) {
+        styles.backgroundColor = node.background_color;
       }
       return { type: "text", text: node.text, styles };
     }
@@ -109,6 +116,23 @@ function inlineNodeToBN(node: InlineNode): Record<string, unknown> {
         type: "mention",
         props: { actorId: node.actor_id, displayText: node.display_text },
       };
+    case "date_mention":
+      return {
+        type: "dateMention",
+        props: {
+          date: node.date,
+          endDate: node.end_date ?? "",
+          displayText: node.display_text,
+        },
+      };
+    case "database_mention":
+      return {
+        type: "databaseMention",
+        props: {
+          datasetId: node.dataset_id,
+          displayText: node.display_text,
+        },
+      };
   }
 }
 
@@ -153,8 +177,12 @@ function blockToBN(block: Block, state: AdapterState): BNPartialBlock {
       return {
         id: block.id,
         type: "heading",
-        props: { level: block.level },
+        props: {
+          level: block.level,
+          isToggleable: block.is_toggleable ?? false,
+        },
         content: inlinesToBN(block.content),
+        children: blocksToBN(block.children ?? [], state),
       };
     case "paragraph":
       return {
@@ -168,11 +196,87 @@ function blockToBN(block: Block, state: AdapterState): BNPartialBlock {
       // toAst 时会被重新包进新的 bullet_list 容器。
       return listItemToBN(block, "bulletListItem", state);
     case "code":
+      if (block.caption) {
+        state.codeCaptions.set(block.id, block.caption);
+      }
       return {
         id: block.id,
         type: "codeBlock",
         props: { language: block.language ?? "" },
         content: [{ type: "text", text: block.content, styles: {} }],
+      };
+    case "preformatted":
+      return {
+        id: block.id,
+        type: "preformatted",
+        props: {
+          kind: block.kind,
+          caption: block.caption ?? "",
+          text: block.content,
+        },
+      };
+    case "equation":
+      return {
+        id: block.id,
+        type: "equation",
+        props: {
+          expression: block.expression,
+          caption: block.caption ?? "",
+        },
+      };
+    case "todo":
+      return {
+        id: block.id,
+        type: "checkListItem",
+        props: { checked: block.checked },
+        content: inlinesToBN(block.content),
+        children: blocksToBN(block.children ?? [], state),
+      };
+    case "toggle":
+      return {
+        id: block.id,
+        type: "toggleListItem",
+        content: inlinesToBN(block.content),
+        children: blocksToBN(block.children ?? [], state),
+      };
+    case "breadcrumb":
+      return {
+        id: block.id,
+        type: "breadcrumb",
+        props: { itemsJson: JSON.stringify(block.items) },
+      };
+    case "column_list":
+      return {
+        id: block.id,
+        type: "columnList",
+        children: blocksToBN(block.children, state),
+      };
+    case "column":
+      return {
+        id: block.id,
+        type: "column",
+        props: { widthRatio: block.width_ratio },
+        children: blocksToBN(block.children, state),
+      };
+    case "button":
+      return {
+        id: block.id,
+        type: "pageButton",
+        props: {
+          label: block.label,
+          confirmation: block.confirmation ?? "",
+          actionsJson: JSON.stringify(block.actions),
+        },
+      };
+    case "html":
+      return {
+        id: block.id,
+        type: "htmlBlock",
+        props: {
+          html: block.html,
+          height: block.height,
+          caption: block.caption ?? "",
+        },
       };
     case "quote": {
       const { content, rest } = liftFirstParagraph(
@@ -191,7 +295,11 @@ function blockToBN(block: Block, state: AdapterState): BNPartialBlock {
       return {
         id: block.id,
         type: "callout",
-        props: { kind: block.kind },
+        props: {
+          kind: block.kind,
+          icon: block.icon ?? "",
+          color: block.color ?? "default",
+        },
         children: blocksToBN(block.children, state),
       };
     case "component":
@@ -226,6 +334,65 @@ function blockToBN(block: Block, state: AdapterState): BNPartialBlock {
           caption: block.caption ?? "",
         },
       };
+    case "audio":
+      return {
+        id: block.id,
+        type: "audioAsset",
+        props: {
+          assetRevisionId: block.asset_revision_id,
+          title: block.title,
+          artist: block.artist ?? "",
+          album: block.album ?? "",
+          durationSeconds: block.duration_seconds ?? 0,
+          caption: block.caption ?? "",
+        },
+      };
+    case "file":
+      return {
+        id: block.id,
+        type: "fileAsset",
+        props: {
+          assetRevisionId: block.asset_revision_id,
+          name: block.name,
+          caption: block.caption ?? "",
+        },
+      };
+    case "pdf":
+      return {
+        id: block.id,
+        type: "pdfAsset",
+        props: {
+          assetRevisionId: block.asset_revision_id,
+          title: block.title ?? "",
+          startPage: block.start_page ?? 1,
+          height: block.height,
+          caption: block.caption ?? "",
+        },
+      };
+    case "bookmark":
+      return {
+        id: block.id,
+        type: "bookmark",
+        props: {
+          url: block.url,
+          title: block.title,
+          description: block.description ?? "",
+          siteName: block.site_name ?? "",
+          caption: block.caption ?? "",
+        },
+      };
+    case "link_preview":
+      return {
+        id: block.id,
+        type: "linkPreview",
+        props: {
+          url: block.url,
+          title: block.title,
+          description: block.description ?? "",
+          siteName: block.site_name ?? "",
+          caption: "",
+        },
+      };
     case "dataset_view":
       return {
         id: block.id,
@@ -236,10 +403,24 @@ function blockToBN(block: Block, state: AdapterState): BNPartialBlock {
       return {
         id: block.id,
         type: "embed",
-        props: { url: block.url, title: block.title ?? "" },
+        props: {
+          url: block.url,
+          title: block.title ?? "",
+          provider: block.provider ?? "none",
+          caption: block.caption ?? "",
+        },
       };
     case "table":
-      return { id: block.id, type: "astTable", children: blocksToBN(block.children, state) };
+      return {
+        id: block.id,
+        type: "astTable",
+        props: {
+          caption: block.caption ?? "",
+          hasColumnHeader: block.has_column_header ?? false,
+          hasRowHeader: block.has_row_header ?? false,
+        },
+        children: blocksToBN(block.children, state),
+      };
     case "table_row":
       return { id: block.id, type: "astTableRow", children: blocksToBN(block.children, state) };
     case "table_cell":

@@ -100,7 +100,9 @@ docs/DatasetRecordPage.md
 docs/DatasetView.md
 docs/DatasetViewConfig.md
 docs/DatasetViewFilter.md
+docs/DatasetViewGroup.md
 docs/DatasetViewList.md
+docs/DatasetViewRuntimeQuery.md
 docs/DatasetViewSort.md
 docs/DatasetsApi.md
 docs/DeleteCLITokenRecordsResult.md
@@ -132,6 +134,8 @@ docs/EvidenceSourceListPage.md
 docs/EvidenceSourceVersion.md
 docs/EvidenceSourceVersionListPage.md
 docs/ExchangeCLIAuthCodeRequest.md
+docs/ExecutePageButtonWebhookRequest.md
+docs/ExecutePageButtonWebhookResult.md
 docs/ExternalResourceDetail.md
 docs/ExternalResourceSummary.md
 docs/FactConsistencyIssue.md
@@ -159,6 +163,7 @@ docs/ImportRun.md
 docs/ImportStageRun.md
 docs/ImportsApi.md
 docs/KnowledgeApi.md
+docs/LinkPreviewMetadata.md
 docs/LoginRequest.md
 docs/MergeConflict.md
 docs/MergeEntityRequest.md
@@ -241,6 +246,8 @@ docs/ProposalOperationEnvelope.md
 docs/ProposalOperationRecord.md
 docs/ProposalOperationV1.md
 docs/ProposalPreview.md
+docs/PublicDatasetForm.md
+docs/PublicDatasetFormField.md
 docs/PublishRevisionRequest.md
 docs/ReadingApi.md
 docs/ReadyResponse.md
@@ -256,6 +263,7 @@ docs/RenamePageRequest.md
 docs/RenderedPageSection.md
 docs/ReplaceCollectionMembersRequest.md
 docs/ReplanImportJobRequest.md
+docs/ResolveLinkPreviewRequest.md
 docs/ResolveMergeConflictRequest.md
 docs/ReviewDecisionRequest.md
 docs/ReviewTask.md
@@ -289,6 +297,7 @@ docs/SourceUsageLocationListPage.md
 docs/SourceVersionSummary.md
 docs/SourcesApi.md
 docs/SubmitProposalResult.md
+docs/SubmitPublicDatasetFormRequest.md
 docs/UpdateAIConfigRequest.md
 docs/UpdateAITrustProfileRequest.md
 docs/UpdateClaimVerificationRequest.md
@@ -383,7 +392,9 @@ models/DatasetRecordPage.ts
 models/DatasetView.ts
 models/DatasetViewConfig.ts
 models/DatasetViewFilter.ts
+models/DatasetViewGroup.ts
 models/DatasetViewList.ts
+models/DatasetViewRuntimeQuery.ts
 models/DatasetViewSort.ts
 models/DeleteCLITokenRecordsResult.ts
 models/DocumentDiff.ts
@@ -414,6 +425,8 @@ models/EvidenceSourceListPage.ts
 models/EvidenceSourceVersion.ts
 models/EvidenceSourceVersionListPage.ts
 models/ExchangeCLIAuthCodeRequest.ts
+models/ExecutePageButtonWebhookRequest.ts
+models/ExecutePageButtonWebhookResult.ts
 models/ExternalResourceDetail.ts
 models/ExternalResourceSummary.ts
 models/FactConsistencyIssue.ts
@@ -437,6 +450,7 @@ models/ImportPlannedBlock.ts
 models/ImportPlanningInput.ts
 models/ImportRun.ts
 models/ImportStageRun.ts
+models/LinkPreviewMetadata.ts
 models/LoginRequest.ts
 models/MergeConflict.ts
 models/MergeEntityRequest.ts
@@ -516,6 +530,8 @@ models/ProposalOperationEnvelope.ts
 models/ProposalOperationRecord.ts
 models/ProposalOperationV1.ts
 models/ProposalPreview.ts
+models/PublicDatasetForm.ts
+models/PublicDatasetFormField.ts
 models/PublishRevisionRequest.ts
 models/ReadyResponse.ts
 models/RebuildCollectionRequest.ts
@@ -530,6 +546,7 @@ models/RenamePageRequest.ts
 models/RenderedPageSection.ts
 models/ReplaceCollectionMembersRequest.ts
 models/ReplanImportJobRequest.ts
+models/ResolveLinkPreviewRequest.ts
 models/ResolveMergeConflictRequest.ts
 models/ReviewDecisionRequest.ts
 models/ReviewTask.ts
@@ -561,6 +578,7 @@ models/SourceUsageLocation.ts
 models/SourceUsageLocationListPage.ts
 models/SourceVersionSummary.ts
 models/SubmitProposalResult.ts
+models/SubmitPublicDatasetFormRequest.ts
 models/UpdateAIConfigRequest.ts
 models/UpdateAITrustProfileRequest.ts
 models/UpdateClaimVerificationRequest.ts

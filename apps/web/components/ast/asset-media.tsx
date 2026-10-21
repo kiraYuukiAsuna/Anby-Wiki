@@ -1,6 +1,13 @@
 "use client";
 
-import { ImageIcon, LoaderCircle, VideoIcon } from "lucide-react";
+import {
+  FileArchive,
+  FileText,
+  ImageIcon,
+  LoaderCircle,
+  Music2,
+  VideoIcon,
+} from "lucide-react";
 import { useEffect, useMemo } from "react";
 import useSWR from "swr";
 
@@ -30,10 +37,19 @@ function MediaFallback({
   kind,
   error,
 }: {
-  kind: "image" | "video";
+  kind: "image" | "video" | "audio" | "file" | "pdf";
   error: unknown;
 }) {
-  const Icon = kind === "image" ? ImageIcon : VideoIcon;
+  const Icon =
+    kind === "image"
+      ? ImageIcon
+      : kind === "video"
+        ? VideoIcon
+        : kind === "audio"
+          ? Music2
+          : kind === "pdf"
+            ? FileText
+            : FileArchive;
   return (
     <div className="flex min-h-44 items-center justify-center rounded-2xl border border-dashed bg-muted/35 text-center">
       <div>
@@ -86,6 +102,68 @@ export function AssetVideo({
       poster={poster.url}
       title={title}
       className="max-h-[70vh] w-full bg-black"
+    />
+  );
+}
+
+export function AssetAudio({
+  revisionId,
+  title,
+}: {
+  revisionId: string;
+  title: string;
+}) {
+  const media = useAssetObjectUrl(revisionId);
+  if (!media.url) return <MediaFallback kind="audio" error={media.error} />;
+  return (
+    <audio
+      controls
+      preload="metadata"
+      src={media.url}
+      aria-label={title}
+      className="w-full"
+    />
+  );
+}
+
+export function AssetFile({
+  revisionId,
+  name,
+}: {
+  revisionId: string;
+  name: string;
+}) {
+  const content = useAssetObjectUrl(revisionId);
+  if (!content.url) return <MediaFallback kind="file" error={content.error} />;
+  return (
+    <a href={content.url} download={name} className="wiki-file-download">
+      <FileArchive className="size-5 shrink-0" aria-hidden />
+      <span className="min-w-0 flex-1 truncate font-medium">{name}</span>
+      <span className="text-xs text-muted-foreground">下载</span>
+    </a>
+  );
+}
+
+export function AssetPDF({
+  revisionId,
+  title,
+  startPage = 1,
+  height,
+}: {
+  revisionId: string;
+  title: string;
+  startPage?: number;
+  height: number;
+}) {
+  const content = useAssetObjectUrl(revisionId);
+  if (!content.url) return <MediaFallback kind="pdf" error={content.error} />;
+  return (
+    <iframe
+      src={`${content.url}#page=${startPage}&view=FitH`}
+      title={title}
+      height={height}
+      loading="lazy"
+      className="block w-full border-0 bg-white"
     />
   );
 }

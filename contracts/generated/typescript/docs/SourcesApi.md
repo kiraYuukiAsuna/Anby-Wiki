@@ -10,6 +10,7 @@ All URIs are relative to *http://localhost:3000*
 | [**listSourceChunks**](SourcesApi.md#listsourcechunks) | **GET** /api/v1/source-versions/{id}/chunks | 分页列出不可变来源版本的可定位分片 |
 | [**listSourceVersions**](SourcesApi.md#listsourceversions) | **GET** /api/v1/sources/{id}/versions | 分页列出来源的不可变版本 |
 | [**listSources**](SourcesApi.md#listsources) | **GET** /api/v1/sources | 分页浏览逻辑来源目录 |
+| [**resolveLinkPreview**](SourcesApi.md#resolvelinkpreviewoperation) | **POST** /api/v1/link-previews/resolve | 安全解析第三方页面的冻结预览元数据 |
 
 
 
@@ -461,6 +462,83 @@ No authorization required
 | **200** | 来源目录 |  -  |
 | **400** | 请求格式错误 |  -  |
 | **500** | 服务端内部错误 |  -  |
+
+[[Back to top]](#) [[Back to API list]](../README.md#api-endpoints) [[Back to Model list]](../README.md#models) [[Back to README]](../README.md)
+
+
+## resolveLinkPreview
+
+> LinkPreviewMetadata resolveLinkPreview(resolveLinkPreviewRequest)
+
+安全解析第三方页面的冻结预览元数据
+
+仅允许登录用户发起。服务端拒绝私网、回环、保留地址与不安全重定向， 最多读取 512 KiB HTML，并只返回净化后的 URL、标题、描述和站点名。
+
+### Example
+
+```ts
+import {
+  Configuration,
+  SourcesApi,
+} from '';
+import type { ResolveLinkPreviewOperationRequest } from '';
+
+async function example() {
+  console.log("🚀 Testing  SDK...");
+  const config = new Configuration({
+    // Configure HTTP bearer authorization: cliBearer
+    accessToken: "YOUR BEARER TOKEN",
+    // To configure API key authorization: sessionCookie
+    apiKey: "YOUR API KEY",
+  });
+  const api = new SourcesApi(config);
+
+  const body = {
+    // ResolveLinkPreviewRequest
+    resolveLinkPreviewRequest: ...,
+  } satisfies ResolveLinkPreviewOperationRequest;
+
+  try {
+    const data = await api.resolveLinkPreview(body);
+    console.log(data);
+  } catch (error) {
+    console.error(error);
+  }
+}
+
+// Run the test
+example().catch(console.error);
+```
+
+### Parameters
+
+
+| Name | Type | Description  | Notes |
+|------------- | ------------- | ------------- | -------------|
+| **resolveLinkPreviewRequest** | [ResolveLinkPreviewRequest](ResolveLinkPreviewRequest.md) |  | |
+
+### Return type
+
+[**LinkPreviewMetadata**](LinkPreviewMetadata.md)
+
+### Authorization
+
+[cliBearer](../README.md#cliBearer), [sessionCookie](../README.md#sessionCookie)
+
+### HTTP request headers
+
+- **Content-Type**: `application/json`
+- **Accept**: `application/json`
+
+
+### HTTP response details
+| Status code | Description | Response headers |
+|-------------|-------------|------------------|
+| **200** | 已净化的链接预览元数据 |  -  |
+| **400** | 请求格式错误 |  -  |
+| **401** | 未认证 |  -  |
+| **422** | 请求语义可理解但无法处理（如重定向环/重定向链过深） |  -  |
+| **502** | 服务端内部错误 |  -  |
 
 [[Back to top]](#) [[Back to API list]](../README.md#api-endpoints) [[Back to Model list]](../README.md#models) [[Back to README]](../README.md)
 

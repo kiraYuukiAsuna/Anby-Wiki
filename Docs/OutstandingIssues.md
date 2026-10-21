@@ -217,7 +217,7 @@
 - CLI nullable enum 校验：OpenAPI `nullable: true` 与 `enum` 组合曾只扩展 type、
   未把 `null` 纳入 enum，导致合法的空 `change_batch_status` 被响应校验拒绝；
   规范化逻辑和回归测试已修复，隔离管理员 Token 的 149/149 operation 全量调用通过。
-- Go `1.26.5` 与 `1.26.6` 后续披露的标准库可达漏洞：构建基线已升级到 `1.26.9`，
+- Go `1.26.5`、`1.26.6` 与 `1.26.9` 后续披露的标准库可达漏洞：构建基线已升级到 `1.26.10`，
   `golang.org/x/net` 同步升级到 `0.60.0`；Nano ID 保持 `3.3.18`，
   Go/Web 依赖审计和 gitleaks 均恢复为 0。
 - 初始化 down 在已有 Page 时会提前删除 Namespace 种子并触发 FK：已移除冗余的提前

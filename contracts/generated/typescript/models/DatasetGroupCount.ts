@@ -27,6 +27,12 @@ export interface DatasetGroupCount {
     value: string;
     /**
      *
+     * @type {Array<string>}
+     * @memberof DatasetGroupCount
+     */
+    path?: Array<string>;
+    /**
+     *
      * @type {number}
      * @memberof DatasetGroupCount
      */
@@ -53,6 +59,7 @@ export function DatasetGroupCountFromJSONTyped(json: any, ignoreDiscriminator: b
     return {
 
         'value': json['value'],
+        'path': json['path'] == null ? undefined : json['path'],
         'count': json['count'],
     };
 }
@@ -69,6 +76,7 @@ export function DatasetGroupCountToJSONTyped(value?: DatasetGroupCount | null, i
     return {
 
         'value': value['value'],
+        'path': value['path'],
         'count': value['count'],
     };
 }

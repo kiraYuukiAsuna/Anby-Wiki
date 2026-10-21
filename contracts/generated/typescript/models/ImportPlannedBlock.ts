@@ -59,10 +59,82 @@ export interface ImportPlannedBlock {
     level?: number;
     /**
      *
+     * @type {boolean}
+     * @memberof ImportPlannedBlock
+     */
+    isToggleable?: boolean;
+    /**
+     *
+     * @type {boolean}
+     * @memberof ImportPlannedBlock
+     */
+    checked?: boolean;
+    /**
+     *
+     * @type {string}
+     * @memberof ImportPlannedBlock
+     */
+    kind?: string;
+    /**
+     *
+     * @type {string}
+     * @memberof ImportPlannedBlock
+     */
+    icon?: string;
+    /**
+     *
+     * @type {string}
+     * @memberof ImportPlannedBlock
+     */
+    color?: string;
+    /**
+     *
+     * @type {string}
+     * @memberof ImportPlannedBlock
+     */
+    language?: string;
+    /**
+     *
+     * @type {string}
+     * @memberof ImportPlannedBlock
+     */
+    caption?: string;
+    /**
+     *
+     * @type {string}
+     * @memberof ImportPlannedBlock
+     */
+    expression?: string;
+    /**
+     *
      * @type {Array<string>}
      * @memberof ImportPlannedBlock
      */
     items?: Array<string>;
+    /**
+     *
+     * @type {Array<Array<string>>}
+     * @memberof ImportPlannedBlock
+     */
+    rows?: Array<Array<string>>;
+    /**
+     *
+     * @type {boolean}
+     * @memberof ImportPlannedBlock
+     */
+    hasColumnHeader?: boolean;
+    /**
+     *
+     * @type {boolean}
+     * @memberof ImportPlannedBlock
+     */
+    hasRowHeader?: boolean;
+    /**
+     *
+     * @type {Array<ImportPlannedBlock>}
+     * @memberof ImportPlannedBlock
+     */
+    children?: Array<ImportPlannedBlock>;
     /**
      *
      * @type {Array<ImportPlanEvidence>}
@@ -79,8 +151,15 @@ export const ImportPlannedBlockTypeEnum = {
     Heading: 'heading',
     Paragraph: 'paragraph',
     BulletList: 'bullet_list',
+    OrderedList: 'ordered_list',
     Quote: 'quote',
-    Code: 'code'
+    Code: 'code',
+    Preformatted: 'preformatted',
+    Equation: 'equation',
+    Todo: 'todo',
+    Toggle: 'toggle',
+    Callout: 'callout',
+    Table: 'table'
 } as const;
 export type ImportPlannedBlockTypeEnum = typeof ImportPlannedBlockTypeEnum[keyof typeof ImportPlannedBlockTypeEnum];
 
@@ -120,7 +199,19 @@ export function ImportPlannedBlockFromJSONTyped(json: any, ignoreDiscriminator: 
         'targetBlockId': json['target_block_id'],
         'text': json['text'] == null ? undefined : json['text'],
         'level': json['level'] == null ? undefined : json['level'],
+        'isToggleable': json['is_toggleable'] == null ? undefined : json['is_toggleable'],
+        'checked': json['checked'] == null ? undefined : json['checked'],
+        'kind': json['kind'] == null ? undefined : json['kind'],
+        'icon': json['icon'] == null ? undefined : json['icon'],
+        'color': json['color'] == null ? undefined : json['color'],
+        'language': json['language'] == null ? undefined : json['language'],
+        'caption': json['caption'] == null ? undefined : json['caption'],
+        'expression': json['expression'] == null ? undefined : json['expression'],
         'items': json['items'] == null ? undefined : json['items'],
+        'rows': json['rows'] == null ? undefined : json['rows'],
+        'hasColumnHeader': json['has_column_header'] == null ? undefined : json['has_column_header'],
+        'hasRowHeader': json['has_row_header'] == null ? undefined : json['has_row_header'],
+        'children': json['children'] == null ? undefined : ((json['children'] as Array<any>).map(ImportPlannedBlockFromJSON)),
         'evidence': ((json['evidence'] as Array<any>).map(ImportPlanEvidenceFromJSON)),
     };
 }
@@ -141,7 +232,19 @@ export function ImportPlannedBlockToJSONTyped(value?: ImportPlannedBlock | null,
         'target_block_id': value['targetBlockId'],
         'text': value['text'],
         'level': value['level'],
+        'is_toggleable': value['isToggleable'],
+        'checked': value['checked'],
+        'kind': value['kind'],
+        'icon': value['icon'],
+        'color': value['color'],
+        'language': value['language'],
+        'caption': value['caption'],
+        'expression': value['expression'],
         'items': value['items'],
+        'rows': value['rows'],
+        'has_column_header': value['hasColumnHeader'],
+        'has_row_header': value['hasRowHeader'],
+        'children': value['children'] == null ? undefined : ((value['children'] as Array<any>).map(ImportPlannedBlockToJSON)),
         'evidence': ((value['evidence'] as Array<any>).map(ImportPlanEvidenceToJSON)),
     };
 }

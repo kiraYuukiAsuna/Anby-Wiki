@@ -42,7 +42,7 @@ func TestEnsurePlanPreformattedBlocksPreservesASCIIFlowDiagram(t *testing.T) {
 		t.Fatalf("added=%d, want 1", added)
 	}
 	code := plan.Routes[0].Blocks[1]
-	if code.Type != string(ast.BlockCode) || code.Text != diagram || len(code.Evidence) != 1 {
+	if code.Type != string(ast.BlockPreformatted) || code.Text != diagram || len(code.Evidence) != 1 {
 		t.Fatalf("unexpected code block: %#v", code)
 	}
 	item := code.Evidence[0]
@@ -107,11 +107,11 @@ func TestEnsurePlanPreformattedBlocksReplacesOverlappingFragmentsInSourceOrder(t
 			{Type: string(ast.BlockHeading), Mode: BlockAppend, Text: "Generated heading"},
 			{Type: string(ast.BlockParagraph), Mode: BlockAppend, Text: "Generated prose."},
 			{
-				Type: string(ast.BlockCode), Mode: BlockAppend, Text: detected[1].text,
+				Type: string(ast.BlockPreformatted), Mode: BlockAppend, Text: detected[1].text,
 				Evidence: []CandidateEvidence{detected[1].evidence},
 			},
 			{
-				Type: string(ast.BlockCode), Mode: BlockAppend, Text: firstHalf,
+				Type: string(ast.BlockPreformatted), Mode: BlockAppend, Text: firstHalf,
 				Evidence: []CandidateEvidence{{
 					ChunkID: chunkID, Quotation: firstHalf,
 					CharStart: first.evidence.CharStart,
@@ -119,7 +119,7 @@ func TestEnsurePlanPreformattedBlocksReplacesOverlappingFragmentsInSourceOrder(t
 				}},
 			},
 			{
-				Type: string(ast.BlockCode), Mode: BlockAppend, Text: secondHalf,
+				Type: string(ast.BlockPreformatted), Mode: BlockAppend, Text: secondHalf,
 				Evidence: []CandidateEvidence{{
 					ChunkID: chunkID, Quotation: secondHalf,
 					CharStart: first.evidence.CharStart + split,
@@ -127,7 +127,7 @@ func TestEnsurePlanPreformattedBlocksReplacesOverlappingFragmentsInSourceOrder(t
 				}},
 			},
 			{
-				Type: string(ast.BlockCode), Mode: BlockAppend, Text: formula,
+				Type: string(ast.BlockPreformatted), Mode: BlockAppend, Text: formula,
 				Evidence: []CandidateEvidence{{
 					ChunkID: chunkID, Quotation: formula,
 					CharStart: formulaStart, CharEnd: formulaStart + len([]rune(formula)),
@@ -148,7 +148,7 @@ func TestEnsurePlanPreformattedBlocksReplacesOverlappingFragmentsInSourceOrder(t
 		t.Fatalf("unexpected reconciled blocks: %#v", blocks)
 	}
 	for _, block := range blocks {
-		if block.Type != string(ast.BlockCode) {
+		if block.Type != string(ast.BlockPreformatted) {
 			t.Fatalf("unexpected non-code block: %#v", block)
 		}
 	}
@@ -176,7 +176,8 @@ func TestCompilePlannedCodePreservesWhitespace(t *testing.T) {
 	composer := &ProposalComposer{ids: id.NewGenerator()}
 	text := "  +---+\n  | A |\n  +---+"
 	block, err := composer.compilePlannedBlock(PlannedBlock{
-		Type: string(ast.BlockCode), Mode: BlockAppend, Text: text,
+		Type: string(ast.BlockPreformatted), Mode: BlockAppend, Text: text,
+		Kind: string(ast.PreformattedASCIIDiagram),
 	}, []uuid.UUID{uuid.New()})
 	if err != nil {
 		t.Fatal(err)
@@ -185,8 +186,62 @@ func TestCompilePlannedCodePreservesWhitespace(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if block.Type != ast.BlockCode || content != text {
+	if block.Type != ast.BlockPreformatted || content != text {
 		t.Fatalf("unexpected code block: %#v content=%q", block, content)
+	}
+}
+
+func TestCompileExtendedPlannedBlocks(t *testing.T) {
+	composer := &ProposalComposer{ids: id.NewGenerator()}
+	checked := true
+	child := PlannedBlock{
+		Type: string(ast.BlockParagraph), Mode: BlockAppend, Text: "Nested body.",
+	}
+	blocks := []PlannedBlock{
+		{
+			Type: string(ast.BlockHeading), Mode: BlockAppend,
+			Text: "Folded", Level: 2, IsToggleable: true,
+			Children: []PlannedBlock{child},
+		},
+		{
+			Type: string(ast.BlockTodo), Mode: BlockAppend,
+			Text: "Completed", Checked: &checked,
+		},
+		{
+			Type: string(ast.BlockToggle), Mode: BlockAppend,
+			Text: "Details", Children: []PlannedBlock{child},
+		},
+		{
+			Type: string(ast.BlockCallout), Mode: BlockAppend,
+			Text: "Warning", Kind: string(ast.CalloutWarning),
+			Icon: "!", Color: string(ast.CalloutColorOrange),
+		},
+		{
+			Type: string(ast.BlockTable), Mode: BlockAppend,
+			Caption: "Matrix", HasColumnHeader: true,
+			Rows: [][]string{{"Name", "Value"}, {"Alpha", "1"}},
+		},
+		{
+			Type: string(ast.BlockCode), Mode: BlockAppend,
+			Text: "fmt.Println(1)", Language: "go", Caption: "Example",
+		},
+		{
+			Type: string(ast.BlockPreformatted), Mode: BlockAppend,
+			Text: "+---+\n| A |\n+---+", Kind: string(ast.PreformattedASCIIDiagram),
+		},
+		{
+			Type: string(ast.BlockEquation), Mode: BlockAppend,
+			Expression: `E = mc^2`, Caption: "Energy",
+		},
+	}
+	for _, planned := range blocks {
+		block, err := composer.compilePlannedBlock(planned, nil)
+		if err != nil {
+			t.Fatalf("compile %s: %v", planned.Type, err)
+		}
+		if block.Type != ast.BlockType(planned.Type) {
+			t.Fatalf("compiled type=%s, want %s", block.Type, planned.Type)
+		}
 	}
 }
 
@@ -201,7 +256,8 @@ func TestDecodeGeneratedImportPlanAcceptsExactCodeEvidence(t *testing.T) {
 		Routes: []generatedPageRoute{{
 			Action: RouteCreate, Title: "Diagram", Reason: "The source contains a diagram.", Confidence: 0.9,
 			Blocks: []generatedPlannedBlock{{
-				Type: string(ast.BlockCode), Text: text,
+				Type: string(ast.BlockPreformatted), Text: text,
+				Kind:     string(ast.PreformattedASCIIDiagram),
 				Evidence: []generatedPlanEvidence{{ChunkID: chunkID, Quotation: text}},
 			}},
 		}},
@@ -216,17 +272,88 @@ func TestDecodeGeneratedImportPlanAcceptsExactCodeEvidence(t *testing.T) {
 		t.Fatal(err)
 	}
 	if len(plan.Routes) != 1 || len(plan.Routes[0].Blocks) != 1 ||
-		plan.Routes[0].Blocks[0].Type != string(ast.BlockCode) ||
+		plan.Routes[0].Blocks[0].Type != string(ast.BlockPreformatted) ||
 		plan.Routes[0].Blocks[0].Text != text {
 		t.Fatalf("unexpected decoded plan: %#v", plan)
+	}
+}
+
+func TestDecodeGeneratedImportPlanAcceptsExtendedBlocks(t *testing.T) {
+	sourceVersionID, chunkID := uuid.New(), uuid.New()
+	source := "Ordered item. Todo item. Toggle body. Warning. Name Value Alpha 1. fmt.Println(1)\n+---+\n| A |\n+---+\nE = mc^2"
+	evidenceFor := func(quotation string) []generatedPlanEvidence {
+		return []generatedPlanEvidence{{ChunkID: chunkID, Quotation: quotation}}
+	}
+	checked := true
+	raw, err := json.Marshal(generatedImportPlanDocument{
+		Profile: SourceProfile{
+			Title: "Extended", Summary: "Extended blocks.", Language: "en", Useful: true,
+			Subjects: []SourceSubject{},
+		},
+		Routes: []generatedPageRoute{{
+			Action: RouteCreate, Title: "Extended", Reason: "The source contains structured content.", Confidence: 0.9,
+			Blocks: []generatedPlannedBlock{
+				{Type: string(ast.BlockOrderedList), Items: []string{"Ordered item."}, Evidence: evidenceFor("Ordered item.")},
+				{Type: string(ast.BlockTodo), Text: "Todo item.", Checked: &checked, Evidence: evidenceFor("Todo item.")},
+				{
+					Type: string(ast.BlockToggle), Text: "Toggle body.", Evidence: evidenceFor("Toggle body."),
+					Children: []generatedPlannedBlock{{
+						Type: string(ast.BlockParagraph), Text: "Toggle body.", Evidence: evidenceFor("Toggle body."),
+					}},
+				},
+				{
+					Type: string(ast.BlockCallout), Text: "Warning.", Kind: string(ast.CalloutWarning),
+					Icon: "!", Color: string(ast.CalloutColorOrange), Evidence: evidenceFor("Warning."),
+				},
+				{
+					Type: string(ast.BlockTable), Caption: "Matrix", HasColumnHeader: true,
+					Rows: [][]string{{"Name", "Value"}, {"Alpha", "1"}}, Evidence: evidenceFor("Name Value Alpha 1"),
+				},
+				{
+					Type: string(ast.BlockCode), Text: "fmt.Println(1)", Language: "go",
+					Caption: "Example", Evidence: evidenceFor("fmt.Println(1)"),
+				},
+				{
+					Type: string(ast.BlockPreformatted), Text: "+---+\n| A |\n+---+",
+					Kind: string(ast.PreformattedASCIIDiagram), Evidence: evidenceFor("+---+\n| A |\n+---+"),
+				},
+				{
+					Type: string(ast.BlockEquation), Expression: "E = mc^2",
+					Evidence: evidenceFor("E = mc^2"),
+				},
+			},
+		}},
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	chunks := []evidence.SourceChunk{{
+		ID: chunkID, SourceVersionID: sourceVersionID, TextContent: source,
+	}}
+	plan, canonical, err := DecodeGeneratedImportPlan(
+		raw, sourceVersionID, chunks, nil, RouteModeAuto,
+	)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(plan.Routes) != 1 || len(plan.Routes[0].Blocks) != 8 {
+		t.Fatalf("unexpected extended plan: %#v", plan)
+	}
+	if len(plan.Routes[0].Blocks[2].Children) != 1 {
+		t.Fatalf("toggle children missing: %#v", plan.Routes[0].Blocks[2])
+	}
+	if _, _, err := ValidateImportPlan(
+		canonical, sourceVersionID, chunks, nil, RouteModeAuto, "",
+	); err != nil {
+		t.Fatalf("persisted extended plan: %v", err)
 	}
 }
 
 func TestPlanConcisionDoesNotMergeDistinctDiagrams(t *testing.T) {
 	plan := &ImportPlan{Routes: []PageRoute{{
 		Action: RouteCreate, Blocks: []PlannedBlock{
-			{Type: string(ast.BlockCode), Text: "+---+\n| A |\n+---+"},
-			{Type: string(ast.BlockCode), Text: "+---+\n| B |\n+---+"},
+			{Type: string(ast.BlockPreformatted), Text: "+---+\n| A |\n+---+"},
+			{Type: string(ast.BlockPreformatted), Text: "+---+\n| B |\n+---+"},
 		},
 	}}}
 	if score := planConcisionScore(plan); score != 1 {
@@ -243,7 +370,7 @@ func TestImportPlanExpansionBudgetSeparatesPreformattedContent(t *testing.T) {
 	blocks := make([]PlannedBlock, 4)
 	for index := range blocks {
 		blocks[index] = PlannedBlock{
-			Type: string(ast.BlockCode), Mode: BlockAppend,
+			Type: string(ast.BlockPreformatted), Mode: BlockAppend,
 			Text: strings.Repeat(string(rune('A'+index)), 2000),
 		}
 	}
@@ -262,7 +389,7 @@ func TestImportPlanExpansionBudgetSeparatesPreformattedContent(t *testing.T) {
 	plan.Routes[0].Blocks = make([]PlannedBlock, preformattedMaxPlanBlocks+1)
 	for index := range plan.Routes[0].Blocks {
 		plan.Routes[0].Blocks[index] = PlannedBlock{
-			Type: string(ast.BlockCode), Mode: BlockAppend, Text: "diagram",
+			Type: string(ast.BlockPreformatted), Mode: BlockAppend, Text: "diagram",
 		}
 	}
 	if importPlanExpansionWithinBudget(plan, candidates, "") {

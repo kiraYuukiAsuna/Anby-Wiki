@@ -119,7 +119,7 @@ func InsertCitationRef(doc *Document, blockID string, index int, citationID, dis
 	return ApplyPatch(doc, p)
 }
 
-// insertInlineNodePatch 在 paragraph/heading Block 的 content 第 index 处
+// insertInlineNodePatch 在持有 InlineNode content 的 Block 第 index 处
 // 插入行内节点，返回 replace_block Patch（Block 为原 Block 的深拷贝 + 新 content）。
 func insertInlineNodePatch(doc *Document, blockID string, index int, node *InlineNode) (Patch, error) {
 	if doc == nil {
@@ -130,9 +130,10 @@ func insertInlineNodePatch(doc *Document, blockID string, index int, node *Inlin
 		return Patch{}, patchErrorf(OpReplaceBlock, "目标 Block 不存在: %s", blockID)
 	}
 	blk := loc.Block
-	if blk.Type != BlockParagraph && blk.Type != BlockHeading {
+	if blk.Type != BlockParagraph && blk.Type != BlockHeading &&
+		blk.Type != BlockTodo && blk.Type != BlockToggle {
 		return Patch{}, patchErrorf(OpReplaceBlock,
-			"目标 Block %s 类型 %q 不持有行内 content（仅 paragraph/heading）", blockID, blk.Type)
+			"目标 Block %s 类型 %q 不持有行内 content", blockID, blk.Type)
 	}
 	nodes, err := blk.InlineContent()
 	if err != nil {

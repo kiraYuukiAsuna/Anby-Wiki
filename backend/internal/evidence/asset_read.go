@@ -17,7 +17,8 @@ func (s *Service) ListAssets(
 	ctx context.Context, wikiID uuid.UUID, kind, cursor string, limit int,
 ) (*AssetPage, error) {
 	kind = strings.TrimSpace(kind)
-	if kind != "" && kind != "image" && kind != "video" && kind != "other" {
+	if kind != "" && kind != "image" && kind != "video" &&
+		kind != "audio" && kind != "pdf" && kind != "other" {
 		return nil, ErrInvalidAssetInput
 	}
 	if limit <= 0 {

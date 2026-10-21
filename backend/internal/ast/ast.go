@@ -29,23 +29,37 @@ const SchemaVersion = 1
 type BlockType string
 
 const (
-	BlockHeading     BlockType = "heading"
-	BlockParagraph   BlockType = "paragraph"
-	BlockBulletList  BlockType = "bullet_list"
-	BlockOrderedList BlockType = "ordered_list"
-	BlockListItem    BlockType = "list_item"
-	BlockTable       BlockType = "table"
-	BlockTableRow    BlockType = "table_row"
-	BlockTableCell   BlockType = "table_cell"
-	BlockCode        BlockType = "code"
-	BlockQuote       BlockType = "quote"
-	BlockCallout     BlockType = "callout"
-	BlockComponent   BlockType = "component"
-	BlockImage       BlockType = "image"
-	BlockVideo       BlockType = "video"
-	BlockDatasetView BlockType = "dataset_view"
-	BlockEmbed       BlockType = "embed"
-	BlockDivider     BlockType = "divider"
+	BlockHeading      BlockType = "heading"
+	BlockParagraph    BlockType = "paragraph"
+	BlockBulletList   BlockType = "bullet_list"
+	BlockOrderedList  BlockType = "ordered_list"
+	BlockListItem     BlockType = "list_item"
+	BlockTable        BlockType = "table"
+	BlockTableRow     BlockType = "table_row"
+	BlockTableCell    BlockType = "table_cell"
+	BlockCode         BlockType = "code"
+	BlockPreformatted BlockType = "preformatted"
+	BlockEquation     BlockType = "equation"
+	BlockTodo         BlockType = "todo"
+	BlockToggle       BlockType = "toggle"
+	BlockBreadcrumb   BlockType = "breadcrumb"
+	BlockColumnList   BlockType = "column_list"
+	BlockColumn       BlockType = "column"
+	BlockButton       BlockType = "button"
+	BlockHTML         BlockType = "html"
+	BlockQuote        BlockType = "quote"
+	BlockCallout      BlockType = "callout"
+	BlockComponent    BlockType = "component"
+	BlockImage        BlockType = "image"
+	BlockVideo        BlockType = "video"
+	BlockAudio        BlockType = "audio"
+	BlockFile         BlockType = "file"
+	BlockPDF          BlockType = "pdf"
+	BlockBookmark     BlockType = "bookmark"
+	BlockLinkPreview  BlockType = "link_preview"
+	BlockDatasetView  BlockType = "dataset_view"
+	BlockEmbed        BlockType = "embed"
+	BlockDivider      BlockType = "divider"
 )
 
 // CalloutKind 是 callout Block 的种类。
@@ -57,14 +71,67 @@ const (
 	CalloutDanger  CalloutKind = "danger"
 )
 
+// CalloutColor 是 callout 的可选展示色；空值保持 kind 对应的默认语义色。
+type CalloutColor string
+
+const (
+	CalloutColorDefault CalloutColor = "default"
+	CalloutColorGray    CalloutColor = "gray"
+	CalloutColorBrown   CalloutColor = "brown"
+	CalloutColorOrange  CalloutColor = "orange"
+	CalloutColorYellow  CalloutColor = "yellow"
+	CalloutColorGreen   CalloutColor = "green"
+	CalloutColorBlue    CalloutColor = "blue"
+	CalloutColorPurple  CalloutColor = "purple"
+	CalloutColorPink    CalloutColor = "pink"
+	CalloutColorRed     CalloutColor = "red"
+)
+
+// PreformattedKind 区分固定宽度原文的内容语义，避免把图表误称为代码。
+type PreformattedKind string
+
+const (
+	PreformattedASCIIDiagram  PreformattedKind = "ascii_diagram"
+	PreformattedFixedTable    PreformattedKind = "fixed_table"
+	PreformattedProtocolTrace PreformattedKind = "protocol_trace"
+	PreformattedFormulaText   PreformattedKind = "formula_text"
+	PreformattedPlain         PreformattedKind = "plain"
+)
+
+// ButtonActionType 是页面按钮按顺序执行的声明式动作类型。
+type ButtonActionType string
+
+const (
+	ButtonActionInsertBlocks        ButtonActionType = "insert_blocks"
+	ButtonActionUpdateDatasetRecord ButtonActionType = "update_dataset_record"
+	ButtonActionNotification        ButtonActionType = "notification"
+	ButtonActionWebhook             ButtonActionType = "webhook"
+)
+
 // Mark 是 text 行内节点的修饰。
 type Mark string
 
 const (
 	MarkBold          Mark = "bold"
 	MarkItalic        Mark = "italic"
+	MarkUnderline     Mark = "underline"
 	MarkStrikethrough Mark = "strikethrough"
 	MarkCode          Mark = "code"
+)
+
+// InlineColor 是行内文本和背景使用的受限展示色。
+type InlineColor string
+
+const (
+	InlineColorGray   InlineColor = "gray"
+	InlineColorBrown  InlineColor = "brown"
+	InlineColorRed    InlineColor = "red"
+	InlineColorOrange InlineColor = "orange"
+	InlineColorYellow InlineColor = "yellow"
+	InlineColorGreen  InlineColor = "green"
+	InlineColorBlue   InlineColor = "blue"
+	InlineColorPurple InlineColor = "purple"
+	InlineColorPink   InlineColor = "pink"
 )
 
 // InlineType 是 v1 的行内节点类型判别值。
@@ -81,6 +148,8 @@ const (
 	InlineCitationReference   InlineType = "citation_reference"
 	InlineMath                InlineType = "math"
 	InlineMention             InlineType = "mention"
+	InlineDateMention         InlineType = "date_mention"
+	InlineDatabaseMention     InlineType = "database_mention"
 )
 
 // ResolutionUnresolved 是未解析页面引用的 resolution_status 取值。
@@ -98,17 +167,61 @@ func NewDocument() *Document {
 	return &Document{Type: "document", SchemaVersion: SchemaVersion, Children: []*Block{}}
 }
 
+// BreadcrumbItem 是 breadcrumb 中的一段页面路径；当前页可不含 TargetPageID。
+type BreadcrumbItem struct {
+	TargetPageID string `json:"target_page_id,omitempty"`
+	DisplayText  string `json:"display_text"`
+}
+
+// ButtonAction 保存经 Schema 判别的页面按钮动作。各动作只使用对应字段；
+// 权威写入由交互层调用领域服务，渲染器不会直接执行副作用。
+type ButtonAction struct {
+	Type         ButtonActionType `json:"type"`
+	TargetPageID string           `json:"target_page_id,omitempty"`
+	Blocks       []*Block         `json:"blocks,omitempty"`
+	RecordID     string           `json:"record_id,omitempty"`
+	EntityID     *string          `json:"entity_id,omitempty"`
+	Values       json.RawMessage  `json:"values,omitempty"`
+	Message      string           `json:"message,omitempty"`
+	Tone         string           `json:"tone,omitempty"`
+	URL          string           `json:"url,omitempty"`
+	Payload      json.RawMessage  `json:"payload,omitempty"`
+}
+
 // Block 是任意 Block 类型的通用载体：Go 无判别联合，
 // 字段合法性由 Validate 依据 JSON Schema 裁决（容器规则、additionalProperties 等）。
 //
-// Content 依类型不同为 []InlineNode（heading/paragraph）或 string（code），
+// Content 依类型不同为 []InlineNode（heading/paragraph/todo/toggle）或
+// string（code/preformatted），
 // 故保留原始 JSON，用 InlineContent / TextContent 解码。
 type Block struct {
-	ID       string      `json:"id"`
-	Type     BlockType   `json:"type"`
-	Level    int         `json:"level,omitempty"`
-	Kind     CalloutKind `json:"kind,omitempty"`
-	Language string      `json:"language,omitempty"`
+	ID              string           `json:"id"`
+	Type            BlockType        `json:"type"`
+	Level           int              `json:"level,omitempty"`
+	IsToggleable    bool             `json:"is_toggleable,omitempty"`
+	Checked         *bool            `json:"checked,omitempty"`
+	Kind            string           `json:"kind,omitempty"`
+	Icon            string           `json:"icon,omitempty"`
+	Color           CalloutColor     `json:"color,omitempty"`
+	Language        string           `json:"language,omitempty"`
+	Expression      string           `json:"expression,omitempty"`
+	HasColumnHeader bool             `json:"has_column_header,omitempty"`
+	HasRowHeader    bool             `json:"has_row_header,omitempty"`
+	Items           []BreadcrumbItem `json:"items,omitempty"`
+	WidthRatio      float64          `json:"width_ratio,omitempty"`
+	Label           string           `json:"label,omitempty"`
+	Confirmation    string           `json:"confirmation,omitempty"`
+	Actions         []ButtonAction   `json:"actions,omitempty"`
+	HTML            string           `json:"html,omitempty"`
+	Height          int              `json:"height,omitempty"`
+	Name            string           `json:"name,omitempty"`
+	Artist          string           `json:"artist,omitempty"`
+	Album           string           `json:"album,omitempty"`
+	DurationSeconds *float64         `json:"duration_seconds,omitempty"`
+	StartPage       int              `json:"start_page,omitempty"`
+	Description     string           `json:"description,omitempty"`
+	SiteName        string           `json:"site_name,omitempty"`
+	Provider        string           `json:"provider,omitempty"`
 	// ComponentBlock（M9-T03）：引用冻结组件版本和稳定 Entity，
 	// display_config 只保存展示配置，不复制 Claim 值。
 	ComponentID      string          `json:"component_id,omitempty"`
@@ -153,11 +266,13 @@ func (b *Block) TextContent() (string, error) {
 
 // InlineNode 是任意行内节点类型的通用载体，字段合法性由 Schema 校验裁决。
 type InlineNode struct {
-	Type        InlineType `json:"type"`
-	Text        string     `json:"text,omitempty"`
-	Marks       []Mark     `json:"marks,omitempty"`
-	URL         string     `json:"url,omitempty"`
-	DisplayText string     `json:"display_text,omitempty"`
+	Type            InlineType  `json:"type"`
+	Text            string      `json:"text,omitempty"`
+	Marks           []Mark      `json:"marks,omitempty"`
+	TextColor       InlineColor `json:"text_color,omitempty"`
+	BackgroundColor InlineColor `json:"background_color,omitempty"`
+	URL             string      `json:"url,omitempty"`
+	DisplayText     string      `json:"display_text,omitempty"`
 
 	// 已解析页面引用。
 	TargetPageID         string `json:"target_page_id,omitempty"`
@@ -177,6 +292,9 @@ type InlineNode struct {
 	// Math 与 Mention。
 	Expression string `json:"expression,omitempty"`
 	ActorID    string `json:"actor_id,omitempty"`
+	Date       string `json:"date,omitempty"`
+	EndDate    string `json:"end_date,omitempty"`
+	DatasetID  string `json:"dataset_id,omitempty"`
 }
 
 var compiledSchema = mustCompileSchema()

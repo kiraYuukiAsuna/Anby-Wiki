@@ -15,13 +15,20 @@ import { useEffect, useMemo, useState } from "react";
 import { BlockNoteView } from "@blocknote/mantine";
 import { useCreateBlockNote } from "@blocknote/react";
 import {
+  AtSign,
   BookMarked,
   BookOpenCheck,
+  CodeXml,
+  Columns3,
+  FileAudio,
   FileText,
   Globe2,
   Heading2,
   Link2,
   List,
+  MousePointerClick,
+  Navigation,
+  PanelsTopLeft,
   Table2,
 } from "lucide-react";
 import { toast } from "sonner";
@@ -30,19 +37,27 @@ import "@blocknote/core/style.css";
 import "@blocknote/mantine/style.css";
 
 import { ExternalLinkEditor } from "@/components/editor/external-link-editor";
+import { ExternalContentInsertDialog } from "@/components/editor/external-content-insert-dialog";
+import { HTMLBlockInsertDialog } from "@/components/editor/html-block-insert-dialog";
+import { InlineMentionInsertDialog } from "@/components/editor/inline-mention-insert-dialog";
+import { MediaBlockInsertDialog } from "@/components/editor/media-block-insert-dialog";
 import {
   InfoboxInsertButton,
   type InfoboxSelection,
 } from "@/components/editor/infobox-insert-button";
 import { PageReferencePicker } from "@/components/editor/page-reference-picker";
+import { PageButtonInsertDialog } from "@/components/editor/page-button-insert-dialog";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import type { Document } from "@/lib/ast/schema";
+import type { Block, Document } from "@/lib/ast/schema";
 import { fromAst } from "@/lib/editor/fromAst";
 import { createAdapterState, type AdapterState } from "@/lib/editor/ids";
 import {
   getSelectedPageReference,
+  insertDatabaseMention,
+  insertDateMention,
   insertExternalLink,
+  insertPersonMention,
   insertResolvedPageReference,
   insertUnresolvedPageReference,
   updateSelectedPageReferenceDisplayText,
@@ -50,6 +65,7 @@ import {
 } from "@/lib/editor/references";
 import { editorSchema, type BNBlock } from "@/lib/editor/schema";
 import { toAst } from "@/lib/editor/toAst";
+import type { LinkPreviewMetadata } from "../../../../contracts/generated/typescript";
 
 export interface BlockEditorProps {
   /** 初始文档（AST v1）。组件非受控于该 prop：后续变更不会重置编辑器。 */
@@ -62,6 +78,8 @@ export interface BlockEditorProps {
   editable?: boolean;
   /** 既有页面 ID；用于发现主 Entity 并插入可信信息框。 */
   pageId?: string;
+  /** 页面层注入的第三方预览解析器，避免编辑器直接持有服务端数据边界。 */
+  resolveLinkPreview?: (url: string) => Promise<LinkPreviewMetadata>;
 }
 
 export function BlockEditor({
@@ -70,6 +88,7 @@ export function BlockEditor({
   onPresenceChange,
   editable = true,
   pageId,
+  resolveLinkPreview,
 }: BlockEditorProps) {
   // AdapterState 随组件实例存活（lazy useState），保证会话内 Block ID 稳定。
   const [state] = useState<AdapterState>(() => createAdapterState());
@@ -91,6 +110,11 @@ export function BlockEditor({
   // ---- M2-T04 引用编辑 UI 状态 ----
   const [pickerOpen, setPickerOpen] = useState(false);
   const [linkOpen, setLinkOpen] = useState(false);
+  const [buttonOpen, setButtonOpen] = useState(false);
+  const [htmlOpen, setHTMLOpen] = useState(false);
+  const [mediaOpen, setMediaOpen] = useState(false);
+  const [externalContentOpen, setExternalContentOpen] = useState(false);
+  const [mentionOpen, setMentionOpen] = useState(false);
   // 打开外链编辑器时的默认显示文本（选中文本）。
   const [linkDefaultText, setLinkDefaultText] = useState("");
   // 当前选中的 pageReference 节点（点击引用产生的 NodeSelection）。
@@ -132,6 +156,14 @@ export function BlockEditor({
   const insertTemplate = (block: Record<string, unknown>) => {
     const cursor = editor.getTextCursorPosition();
     editor.insertBlocks([block] as never, cursor.block, "after");
+  };
+
+  const insertAstBlock = (block: Block) => {
+    const [mapped] = fromAst(
+      { type: "document", schema_version: 1, children: [block] },
+      state,
+    );
+    if (mapped) insertTemplate(mapped as Record<string, unknown>);
   };
 
   const insertEndSection = (title: string, placeholder: string) => {
@@ -203,7 +235,7 @@ export function BlockEditor({
   }, [editor, editable]);
 
   return (
-    <div data-block-editor>
+    <div className="min-w-0" data-block-editor>
       {editable ? (
         <div className="mb-2 flex flex-wrap items-center gap-2" data-editor-toolbar>
           <Button
@@ -215,6 +247,15 @@ export function BlockEditor({
             <FileText className="size-4" />
             页面引用
             <kbd className="text-xs text-muted-foreground">⌘K</kbd>
+          </Button>
+          <Button
+            type="button"
+            variant="outline"
+            size="sm"
+            onClick={() => setMentionOpen(true)}
+          >
+            <AtSign className="size-4" />
+            提及
           </Button>
           <Button
             type="button"
@@ -279,6 +320,85 @@ export function BlockEditor({
           >
             <Table2 className="size-4" />
             插入表格
+          </Button>
+          <Button
+            type="button"
+            variant="outline"
+            size="sm"
+            onClick={() =>
+              insertTemplate({
+                type: "breadcrumb",
+                props: {
+                  itemsJson: JSON.stringify([
+                    { display_text: "当前页面" },
+                  ]),
+                },
+              })
+            }
+          >
+            <Navigation className="size-4" />
+            路径
+          </Button>
+          <Button
+            type="button"
+            variant="outline"
+            size="sm"
+            onClick={() =>
+              insertTemplate({
+                type: "columnList",
+                children: [
+                  {
+                    type: "column",
+                    props: { widthRatio: 1 },
+                    children: [{ type: "paragraph", content: "左列" }],
+                  },
+                  {
+                    type: "column",
+                    props: { widthRatio: 1 },
+                    children: [{ type: "paragraph", content: "右列" }],
+                  },
+                ],
+              })
+            }
+          >
+            <Columns3 className="size-4" />
+            分栏
+          </Button>
+          <Button
+            type="button"
+            variant="outline"
+            size="sm"
+            onClick={() => setButtonOpen(true)}
+          >
+            <MousePointerClick className="size-4" />
+            按钮
+          </Button>
+          <Button
+            type="button"
+            variant="outline"
+            size="sm"
+            onClick={() => setHTMLOpen(true)}
+          >
+            <CodeXml className="size-4" />
+            HTML
+          </Button>
+          <Button
+            type="button"
+            variant="outline"
+            size="sm"
+            onClick={() => setMediaOpen(true)}
+          >
+            <FileAudio className="size-4" />
+            媒体
+          </Button>
+          <Button
+            type="button"
+            variant="outline"
+            size="sm"
+            onClick={() => setExternalContentOpen(true)}
+          >
+            <PanelsTopLeft className="size-4" />
+            外部内容
           </Button>
           {pageId ? (
             <InfoboxInsertButton pageId={pageId} onInsert={insertInfobox} />
@@ -379,6 +499,59 @@ export function BlockEditor({
             defaultDisplayText={linkDefaultText}
             onSubmit={(url, displayText) =>
               insertExternalLink(editor, url, displayText)
+            }
+          />
+          <PageButtonInsertDialog
+            open={buttonOpen}
+            onOpenChange={setButtonOpen}
+            currentPageId={pageId}
+            onInsert={(value) =>
+              insertTemplate({
+                type: "pageButton",
+                props: {
+                  label: value.label,
+                  confirmation: value.confirmation ?? "",
+                  actionsJson: JSON.stringify(value.actions),
+                },
+              })
+            }
+          />
+          <HTMLBlockInsertDialog
+            open={htmlOpen}
+            onOpenChange={setHTMLOpen}
+            onInsert={(value) =>
+              insertTemplate({
+                type: "htmlBlock",
+                props: {
+                  html: value.html,
+                  height: value.height,
+                  caption: value.caption ?? "",
+                },
+              })
+            }
+          />
+          <MediaBlockInsertDialog
+            open={mediaOpen}
+            onOpenChange={setMediaOpen}
+            onInsert={insertAstBlock}
+          />
+          <ExternalContentInsertDialog
+            open={externalContentOpen}
+            onOpenChange={setExternalContentOpen}
+            resolvePreview={resolveLinkPreview}
+            onInsert={insertAstBlock}
+          />
+          <InlineMentionInsertDialog
+            open={mentionOpen}
+            onOpenChange={setMentionOpen}
+            onInsertPerson={(actorId, displayText) =>
+              insertPersonMention(editor, actorId, displayText)
+            }
+            onInsertDate={(date, endDate, displayText) =>
+              insertDateMention(editor, date, endDate, displayText)
+            }
+            onInsertDatabase={(datasetId, displayText) =>
+              insertDatabaseMention(editor, datasetId, displayText)
             }
           />
         </>

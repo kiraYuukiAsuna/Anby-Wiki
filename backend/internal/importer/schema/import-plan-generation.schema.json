@@ -57,13 +57,52 @@
       "additionalProperties": false,
       "required": ["type", "evidence"],
       "properties": {
-        "type": { "enum": ["heading", "paragraph", "bullet_list", "quote", "code"] },
+        "type": {
+          "enum": [
+            "heading",
+            "paragraph",
+            "bullet_list",
+            "ordered_list",
+            "quote",
+            "code",
+            "preformatted",
+            "equation",
+            "todo",
+            "toggle",
+            "callout",
+            "table"
+          ]
+        },
         "text": { "type": "string", "maxLength": 12000 },
         "level": { "type": "integer", "minimum": 1, "maximum": 6 },
+        "is_toggleable": { "type": "boolean" },
+        "checked": { "type": "boolean" },
+        "kind": { "type": "string", "maxLength": 64 },
+        "icon": { "type": "string", "maxLength": 64 },
+        "color": { "type": "string", "maxLength": 32 },
+        "language": { "type": "string", "maxLength": 64 },
+        "caption": { "type": "string", "maxLength": 1000 },
+        "expression": { "type": "string", "maxLength": 12000 },
         "items": {
           "type": "array",
           "maxItems": 100,
           "items": { "type": "string", "minLength": 1, "maxLength": 2000 }
+        },
+        "rows": {
+          "type": "array",
+          "maxItems": 200,
+          "items": {
+            "type": "array",
+            "maxItems": 100,
+            "items": { "type": "string", "maxLength": 4000 }
+          }
+        },
+        "has_column_header": { "type": "boolean" },
+        "has_row_header": { "type": "boolean" },
+        "children": {
+          "type": "array",
+          "maxItems": 50,
+          "items": { "$ref": "#/$defs/block" }
         },
         "replace_block_id": { "type": "string", "format": "uuid" },
         "evidence": {

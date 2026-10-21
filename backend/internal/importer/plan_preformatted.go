@@ -57,7 +57,11 @@ func ensurePlanPreformattedBlocks(plan *ImportPlan, chunks []evidence.SourceChun
 	blocks := make([]PlannedBlock, 0, len(plan.Routes[routeIndex].Blocks)+len(sources))
 	onlyPreformatted := instructionsRequireOnlyPreformatted(instructions)
 	for _, block := range plan.Routes[routeIndex].Blocks {
-		if block.Type != string(ast.BlockCode) {
+		if block.Type != string(ast.BlockPreformatted) {
+			if block.Type == string(ast.BlockCode) &&
+				plannedBlockOverlapsPreformatted(block, sources) {
+				continue
+			}
 			if !onlyPreformatted {
 				blocks = append(blocks, block)
 			}
@@ -81,8 +85,9 @@ func ensurePlanPreformattedBlocks(plan *ImportPlan, chunks []evidence.SourceChun
 			continue
 		}
 		blocks = append(blocks, PlannedBlock{
-			Type: string(ast.BlockCode), Mode: BlockAppend,
-			Text: source.text, Evidence: []CandidateEvidence{source.evidence},
+			Type: string(ast.BlockPreformatted), Mode: BlockAppend,
+			Text: source.text, Kind: sourcePreformattedKind(source.text),
+			Evidence: []CandidateEvidence{source.evidence},
 		})
 		appended[key] = true
 		if !existing[key] {
@@ -92,6 +97,21 @@ func ensurePlanPreformattedBlocks(plan *ImportPlan, chunks []evidence.SourceChun
 	sortPlanCodeBlocksByEvidence(blocks, chunks)
 	plan.Routes[routeIndex].Blocks = blocks
 	return added
+}
+
+func sourcePreformattedKind(text string) string {
+	if containsAnyPlanPhrase(text, "-->", "<--", "==>", "<==") &&
+		!strings.ContainsAny(text, "+|/\\") {
+		return string(ast.PreformattedProtocolTrace)
+	}
+	if strings.Contains(text, "|") ||
+		strings.Count(text, "+") >= 2 && strings.Contains(text, "-") {
+		return string(ast.PreformattedASCIIDiagram)
+	}
+	if strings.Count(text, "=") >= 2 {
+		return string(ast.PreformattedFormulaText)
+	}
+	return string(ast.PreformattedPlain)
 }
 
 func plannedBlockOverlapsPreformatted(block PlannedBlock, sources []preformattedSourceBlock) bool {
@@ -110,7 +130,7 @@ func plannedBlockOverlapsPreformatted(block PlannedBlock, sources []preformatted
 func sortPlanCodeBlocksByEvidence(blocks []PlannedBlock, chunks []evidence.SourceChunk) {
 	code := make([]PlannedBlock, 0)
 	for _, block := range blocks {
-		if block.Type == string(ast.BlockCode) {
+		if block.Type == string(ast.BlockPreformatted) {
 			code = append(code, block)
 		}
 	}
@@ -137,7 +157,7 @@ func sortPlanCodeBlocksByEvidence(blocks []PlannedBlock, chunks []evidence.Sourc
 	})
 	codeIndex := 0
 	for index := range blocks {
-		if blocks[index].Type != string(ast.BlockCode) {
+		if blocks[index].Type != string(ast.BlockPreformatted) {
 			continue
 		}
 		blocks[index] = code[codeIndex]
@@ -174,7 +194,7 @@ func preformattedPlanCoverage(plan *ImportPlan, chunks []evidence.SourceChunk, i
 			continue
 		}
 		for _, block := range route.Blocks {
-			if block.Type == string(ast.BlockCode) {
+			if block.Type == string(ast.BlockPreformatted) {
 				actual[preformattedKey(block.Text)] = true
 			}
 		}
@@ -399,7 +419,7 @@ func preformattedKey(text string) string {
 }
 
 func normalizePlannedBlockText(blockType, text string) string {
-	if blockType == string(ast.BlockCode) {
+	if blockType == string(ast.BlockCode) || blockType == string(ast.BlockPreformatted) {
 		return strings.Trim(text, "\r\n")
 	}
 	return strings.TrimSpace(text)

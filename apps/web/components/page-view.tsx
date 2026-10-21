@@ -16,6 +16,7 @@ import {
 import { AstDocument } from "@/components/ast";
 import { ArticleEndMatter } from "@/components/article-end-matter";
 import { LazySectionDocument } from "@/components/lazy-section-document";
+import { PageButtonRuntime } from "@/components/page-button-runtime";
 import { RenamePageButton } from "@/components/rename-page-button";
 import { RedirectPageButton } from "@/components/redirect-page-button";
 import { RedirectSectionFocus } from "@/components/redirect-section-focus";
@@ -144,6 +145,7 @@ export async function PageView({ data }: { data: PageWithContent }) {
 
   return (
     <div className="mx-auto flex w-full max-w-5xl gap-8 px-4 py-8">
+      <PageButtonRuntime pageId={page.id} />
       <StableAnchorResolver pageId={page.id} />
       <RedirectSectionFocus blockId={sectionTarget} />
       <article className="min-w-0 max-w-3xl flex-1">

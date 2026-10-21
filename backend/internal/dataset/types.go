@@ -21,10 +21,28 @@ var (
 )
 
 const (
-	ViewTable = "table"
-	ViewCards = "cards"
-	ViewChart = "chart"
+	ViewTable     = "table"
+	ViewCards     = "cards"
+	ViewChart     = "chart"
+	ViewBoard     = "board"
+	ViewTimeline  = "timeline"
+	ViewCalendar  = "calendar"
+	ViewList      = "list"
+	ViewGallery   = "gallery"
+	ViewForm      = "form"
+	ViewDashboard = "dashboard"
 )
+
+func databaseViewType(viewType string) string {
+	switch viewType {
+	case ViewCards, ViewGallery:
+		return ViewCards
+	case ViewChart:
+		return ViewChart
+	default:
+		return ViewTable
+	}
+}
 
 type Dataset struct {
 	ID        uuid.UUID       `json:"id"`
@@ -55,9 +73,11 @@ type View struct {
 }
 
 type ViewFilter struct {
-	Field    string          `json:"field"`
-	Operator string          `json:"operator"`
-	Value    json.RawMessage `json:"value,omitempty"`
+	Field      string          `json:"field,omitempty"`
+	Operator   string          `json:"operator,omitempty"`
+	Value      json.RawMessage `json:"value,omitempty"`
+	Logic      string          `json:"logic,omitempty"`
+	Conditions []ViewFilter    `json:"conditions,omitempty"`
 }
 
 type ViewSort struct {
@@ -65,16 +85,64 @@ type ViewSort struct {
 	Direction string `json:"direction"`
 }
 
+type ViewGroup struct {
+	Field         string            `json:"field"`
+	Display       string            `json:"display,omitempty"`
+	HideEmpty     bool              `json:"hide_empty,omitempty"`
+	SortDirection string            `json:"sort_direction,omitempty"`
+	Options       []json.RawMessage `json:"options,omitempty"`
+}
+
 type ViewConfig struct {
 	Columns []string    `json:"columns,omitempty"`
 	Filter  *ViewFilter `json:"filter,omitempty"`
 	Sort    *ViewSort   `json:"sort,omitempty"`
 	GroupBy string      `json:"group_by,omitempty"`
+	// ViewMode preserves additive view types while the pre-release database
+	// keeps its original table/cards/chart CHECK constraint.
+	ViewMode string `json:"view_mode,omitempty"`
+
+	Sorts  []ViewSort  `json:"sorts,omitempty"`
+	Groups []ViewGroup `json:"groups,omitempty"`
+
+	TitleField       string `json:"title_field,omitempty"`
+	DescriptionField string `json:"description_field,omitempty"`
+	CoverField       string `json:"cover_field,omitempty"`
+	DateField        string `json:"date_field,omitempty"`
+	EndDateField     string `json:"end_date_field,omitempty"`
+	CardSize         string `json:"card_size,omitempty"`
+
+	FormFields     []string `json:"form_fields,omitempty"`
+	Public         bool     `json:"public,omitempty"`
+	SubmitLabel    string   `json:"submit_label,omitempty"`
+	SuccessMessage string   `json:"success_message,omitempty"`
+
+	ViewIDs            []uuid.UUID `json:"view_ids,omitempty"`
+	GlobalFilterFields []string    `json:"global_filter_fields,omitempty"`
+	LayoutColumns      int         `json:"layout_columns,omitempty"`
 }
 
 type GroupCount struct {
-	Value string `json:"value"`
-	Count int    `json:"count"`
+	Value string   `json:"value"`
+	Path  []string `json:"path,omitempty"`
+	Count int      `json:"count"`
+}
+
+type PublicFormField struct {
+	Key      string `json:"key"`
+	Title    string `json:"title"`
+	Type     string `json:"type"`
+	Format   string `json:"format,omitempty"`
+	Required bool   `json:"required"`
+}
+
+type PublicForm struct {
+	ID             uuid.UUID         `json:"id"`
+	DatasetID      uuid.UUID         `json:"dataset_id"`
+	Name           string            `json:"name"`
+	Fields         []PublicFormField `json:"fields"`
+	SubmitLabel    string            `json:"submit_label"`
+	SuccessMessage string            `json:"success_message"`
 }
 
 type DatasetPage struct {
@@ -117,10 +185,14 @@ type CreateViewParams struct {
 }
 
 type querySpec struct {
-	Filter      *ViewFilter
-	Sort        *ViewSort
-	SortNumeric bool
-	GroupBy     string
-	Offset      int
-	Limit       int
+	Filter *ViewFilter
+	Sorts  []querySort
+	Groups []ViewGroup
+	Offset int
+	Limit  int
+}
+
+type querySort struct {
+	ViewSort
+	Numeric bool
 }

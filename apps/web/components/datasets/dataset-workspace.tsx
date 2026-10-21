@@ -5,9 +5,16 @@ import {
   ArrowLeft,
   BarChart3,
   Braces,
+  CalendarDays,
+  ClipboardList,
+  Clock3,
   Database,
+  Images,
   LayoutGrid,
+  LayoutDashboard,
+  List,
   LoaderCircle,
+  PanelsTopLeft,
   Plus,
   Rows3,
   SlidersHorizontal,
@@ -19,18 +26,16 @@ import useSWR from "swr";
 import useSWRInfinite from "swr/infinite";
 
 import type {
-  CreateDatasetViewRequest,
   Dataset,
   DatasetRecord,
   DatasetRecordPage,
   DatasetView,
-  DatasetViewFilter,
   DatasetViewList,
 } from "../../../../contracts/generated/typescript";
 
 import { DatasetRecordTable } from "@/components/datasets/dataset-records";
+import { DatasetViewCreator } from "@/components/datasets/dataset-view-creator";
 import { Button } from "@/components/ui/button";
-import { Checkbox } from "@/components/ui/checkbox";
 import {
   Dialog,
   DialogContent,
@@ -51,10 +56,14 @@ const VIEW_META = {
   table: { label: "表格", icon: Table2 },
   cards: { label: "卡片", icon: LayoutGrid },
   chart: { label: "聚合图", icon: BarChart3 },
+  board: { label: "看板", icon: PanelsTopLeft },
+  timeline: { label: "时间轴", icon: Clock3 },
+  calendar: { label: "日历", icon: CalendarDays },
+  list: { label: "列表", icon: List },
+  gallery: { label: "画廊", icon: Images },
+  form: { label: "表单", icon: ClipboardList },
+  dashboard: { label: "仪表盘", icon: LayoutDashboard },
 } as const;
-
-type ViewType = CreateDatasetViewRequest["viewType"];
-type FilterOperator = DatasetViewFilter["operator"];
 
 function parseRecordValues(
   fields: DatasetField[],
@@ -187,7 +196,9 @@ function RecordEditor({
                 type={
                   field.type === "number" || field.type === "integer"
                     ? "number"
-                    : "text"
+                    : field.type === "date"
+                      ? "date"
+                      : "text"
                 }
                 step={field.type === "integer" ? "1" : "any"}
                 value={rawValues[field.key] ?? ""}
@@ -225,255 +236,6 @@ function RecordEditor({
   );
 }
 
-function parseFilterValue(field: DatasetField | undefined, value: string): unknown {
-  if (field?.type === "number" || field?.type === "integer") {
-    return Number(value);
-  }
-  if (field?.type === "boolean") {
-    return value === "true";
-  }
-  return value;
-}
-
-function ViewCreator({
-  dataset,
-  onClose,
-  onSaved,
-}: {
-  dataset: Dataset;
-  onClose: () => void;
-  onSaved: (view: DatasetView) => Promise<void>;
-}) {
-  const fields = datasetFields(dataset);
-  const [name, setName] = useState("");
-  const [viewType, setViewType] = useState<ViewType>("table");
-  const [columns, setColumns] = useState(() => new Set(fields.map((field) => field.key)));
-  const [filterField, setFilterField] = useState("");
-  const [filterOperator, setFilterOperator] =
-    useState<FilterOperator>("contains");
-  const [filterValue, setFilterValue] = useState("");
-  const [sortField, setSortField] = useState("");
-  const [sortDirection, setSortDirection] = useState<"asc" | "desc">("asc");
-  const [groupBy, setGroupBy] = useState("");
-  const [saving, setSaving] = useState(false);
-
-  const save = async () => {
-    if (!name.trim() || columns.size === 0) {
-      toast.error("请填写视图名称并至少选择一列");
-      return;
-    }
-    if (viewType === "chart" && !groupBy) {
-      toast.error("聚合图需要选择分组字段");
-      return;
-    }
-    if (filterField && filterOperator !== "exists" && !filterValue.trim()) {
-      toast.error("请填写筛选值");
-      return;
-    }
-    const filterSource = fields.find((field) => field.key === filterField);
-    const config: CreateDatasetViewRequest["config"] = {
-      columns,
-      filter: filterField
-        ? {
-            field: filterField,
-            operator: filterOperator,
-            value:
-              filterOperator === "exists"
-                ? undefined
-                : parseFilterValue(filterSource, filterValue),
-          }
-        : undefined,
-      sort: sortField
-        ? { field: sortField, direction: sortDirection }
-        : undefined,
-      groupBy: groupBy || undefined,
-    };
-    setSaving(true);
-    try {
-      const view = await datasetsApi().createDatasetView({
-        id: dataset.id,
-        createDatasetViewRequest: {
-          name: name.trim(),
-          viewType,
-          config,
-        },
-      });
-      await onSaved(view);
-      toast.success("保存视图已创建");
-      onClose();
-    } catch {
-      toast.error("创建视图失败", {
-        description: "请检查筛选、排序与分组字段。",
-      });
-    } finally {
-      setSaving(false);
-    }
-  };
-
-  return (
-    <>
-      <DialogHeader>
-        <DialogTitle>创建保存视图</DialogTitle>
-        <DialogDescription>
-          保存后的视图拥有稳定 ID，可从数据中心重新进入，也可嵌入页面。
-        </DialogDescription>
-      </DialogHeader>
-      <div className="max-h-[65vh] space-y-5 overflow-y-auto pr-1">
-        <div className="grid gap-4 sm:grid-cols-2">
-          <div className="space-y-2">
-            <Label htmlFor="view-name">视图名称</Label>
-            <Input
-              id="view-name"
-              value={name}
-              onChange={(event) => setName(event.target.value)}
-              placeholder="例如：按年份查看"
-            />
-          </div>
-          <div className="space-y-2">
-            <Label htmlFor="view-type">呈现方式</Label>
-            <select
-              id="view-type"
-              value={viewType}
-              onChange={(event) => setViewType(event.target.value as ViewType)}
-              className="h-8 w-full rounded-lg border border-input bg-background px-2.5 text-sm"
-            >
-              <option value="table">表格</option>
-              <option value="cards">卡片</option>
-              <option value="chart">聚合图</option>
-            </select>
-          </div>
-        </div>
-
-        <fieldset>
-          <legend className="text-sm font-medium">显示列</legend>
-          <div className="mt-2 grid gap-2 rounded-xl border bg-muted/20 p-3 sm:grid-cols-2">
-            {fields.map((field) => (
-              <label key={field.key} className="flex items-center gap-2 text-sm">
-                <Checkbox
-                  checked={columns.has(field.key)}
-                  onCheckedChange={(checked) =>
-                    setColumns((current) => {
-                      const next = new Set(current);
-                      if (checked === true) next.add(field.key);
-                      else next.delete(field.key);
-                      return next;
-                    })
-                  }
-                />
-                {field.title}
-              </label>
-            ))}
-          </div>
-        </fieldset>
-
-        <div>
-          <div className="flex items-center gap-2 text-sm font-medium">
-            <SlidersHorizontal className="size-4 text-muted-foreground" aria-hidden />
-            筛选
-          </div>
-          <div className="mt-2 grid gap-2 sm:grid-cols-3">
-            <select
-              value={filterField}
-              onChange={(event) => setFilterField(event.target.value)}
-              className="h-8 rounded-lg border border-input bg-background px-2.5 text-sm"
-              aria-label="筛选字段"
-            >
-              <option value="">不筛选</option>
-              {fields.map((field) => (
-                <option key={field.key} value={field.key}>
-                  {field.title}
-                </option>
-              ))}
-            </select>
-            <select
-              value={filterOperator}
-              onChange={(event) =>
-                setFilterOperator(event.target.value as FilterOperator)
-              }
-              disabled={!filterField}
-              className="h-8 rounded-lg border border-input bg-background px-2.5 text-sm disabled:opacity-50"
-              aria-label="筛选操作"
-            >
-              <option value="contains">包含</option>
-              <option value="eq">等于</option>
-              <option value="gt">大于</option>
-              <option value="gte">大于等于</option>
-              <option value="lt">小于</option>
-              <option value="lte">小于等于</option>
-              <option value="exists">已填写</option>
-            </select>
-            <Input
-              value={filterValue}
-              onChange={(event) => setFilterValue(event.target.value)}
-              disabled={!filterField || filterOperator === "exists"}
-              placeholder="筛选值"
-              aria-label="筛选值"
-            />
-          </div>
-        </div>
-
-        <div className="grid gap-4 sm:grid-cols-2">
-          <div className="space-y-2">
-            <Label htmlFor="sort-field">排序</Label>
-            <div className="grid grid-cols-[1fr_5.5rem] gap-2">
-              <select
-                id="sort-field"
-                value={sortField}
-                onChange={(event) => setSortField(event.target.value)}
-                className="h-8 rounded-lg border border-input bg-background px-2.5 text-sm"
-              >
-                <option value="">默认顺序</option>
-                {fields.map((field) => (
-                  <option key={field.key} value={field.key}>
-                    {field.title}
-                  </option>
-                ))}
-              </select>
-              <select
-                value={sortDirection}
-                onChange={(event) =>
-                  setSortDirection(event.target.value as "asc" | "desc")
-                }
-                disabled={!sortField}
-                className="h-8 rounded-lg border border-input bg-background px-2 text-sm disabled:opacity-50"
-                aria-label="排序方向"
-              >
-                <option value="asc">升序</option>
-                <option value="desc">降序</option>
-              </select>
-            </div>
-          </div>
-          <div className="space-y-2">
-            <Label htmlFor="group-field">分组</Label>
-            <select
-              id="group-field"
-              value={groupBy}
-              onChange={(event) => setGroupBy(event.target.value)}
-              className="h-8 w-full rounded-lg border border-input bg-background px-2.5 text-sm"
-            >
-              <option value="">不分组</option>
-              {fields.map((field) => (
-                <option key={field.key} value={field.key}>
-                  {field.title}
-                </option>
-              ))}
-            </select>
-          </div>
-        </div>
-      </div>
-      <DialogFooter>
-        <Button type="button" variant="outline" onClick={onClose}>
-          取消
-        </Button>
-        <Button type="button" disabled={saving} onClick={() => void save()}>
-          {saving ? <LoaderCircle className="animate-spin" aria-hidden /> : null}
-          保存视图
-        </Button>
-      </DialogFooter>
-    </>
-  );
-}
-
 function SavedViews({ views }: { views: DatasetView[] }) {
   if (views.length === 0) {
     return (
@@ -487,6 +249,9 @@ function SavedViews({ views }: { views: DatasetView[] }) {
       {views.map((view) => {
         const meta = VIEW_META[view.viewType];
         const Icon = meta.icon;
+        const groupFields =
+          view.config.groups?.map((group) => group.field) ??
+          (view.config.groupBy ? [view.config.groupBy] : []);
         return (
           <li key={view.id}>
             <Link
@@ -500,7 +265,9 @@ function SavedViews({ views }: { views: DatasetView[] }) {
                 <span className="block truncate text-sm font-semibold">{view.name}</span>
                 <span className="mt-0.5 block text-[11px] text-muted-foreground">
                   {meta.label}
-                  {view.config.groupBy ? ` · 按 ${view.config.groupBy} 分组` : ""}
+                  {groupFields.length > 0
+                    ? ` · 按 ${groupFields.join(" / ")} 分组`
+                    : ""}
                 </span>
               </span>
             </Link>
@@ -727,8 +494,9 @@ export function DatasetWorkspace({ id }: { id: string }) {
       <Dialog open={viewOpen} onOpenChange={setViewOpen}>
         <DialogContent className="sm:max-w-2xl">
           {viewOpen ? (
-            <ViewCreator
+            <DatasetViewCreator
               dataset={dataset}
+              views={viewState.data?.items ?? []}
               onClose={() => setViewOpen(false)}
               onSaved={async () => {
                 await viewState.mutate();

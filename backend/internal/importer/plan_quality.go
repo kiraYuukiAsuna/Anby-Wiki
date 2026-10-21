@@ -98,9 +98,20 @@ func refinePlannedBlocks(blocks []PlannedBlock) []PlannedBlock {
 	for _, raw := range blocks {
 		block := raw
 		block.Text = normalizePlannedBlockText(block.Type, block.Text)
-		if block.Type == string(ast.BlockBulletList) {
+		block.Children = refinePlannedBlocks(block.Children)
+		if block.Type == string(ast.BlockBulletList) ||
+			block.Type == string(ast.BlockOrderedList) {
 			block.Items = refineListItems(block.Items)
 			if len(block.Items) == 0 {
+				continue
+			}
+		} else if block.Type == string(ast.BlockTable) {
+			if len(block.Rows) == 0 {
+				continue
+			}
+		} else if block.Type == string(ast.BlockEquation) {
+			block.Expression = strings.TrimSpace(block.Expression)
+			if block.Expression == "" {
 				continue
 			}
 		} else if block.Text == "" {
@@ -138,7 +149,9 @@ func refinePlannedBlocks(blocks []PlannedBlock) []PlannedBlock {
 		if discardLevel > 0 {
 			continue
 		}
-		if block.Type == string(ast.BlockParagraph) || block.Type == string(ast.BlockQuote) {
+		if block.Type == string(ast.BlockParagraph) || block.Type == string(ast.BlockQuote) ||
+			block.Type == string(ast.BlockCallout) || block.Type == string(ast.BlockTodo) ||
+			block.Type == string(ast.BlockToggle) {
 			block.Text = deduplicatePlanSentences(block.Text, seenSentences)
 			if block.Text == "" {
 				continue
@@ -593,7 +606,7 @@ func importPlanExpansionWithinBudget(
 				appendHeadings++
 				continue
 			}
-			if block.Type == string(ast.BlockCode) {
+			if block.Type == string(ast.BlockPreformatted) {
 				appendPreformatted++
 				appendPreformattedRunes += utf8.RuneCountInString(block.Text)
 				continue
@@ -731,7 +744,7 @@ func removeOrphanHeadings(blocks []PlannedBlock) []PlannedBlock {
 			result = append(result, block)
 			continue
 		}
-		hasContent := false
+		hasContent := len(block.Children) > 0
 		for next := index + 1; next < len(blocks); next++ {
 			candidate := blocks[next]
 			if candidate.Type == string(ast.BlockHeading) && candidate.Level <= block.Level {

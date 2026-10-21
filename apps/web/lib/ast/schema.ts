@@ -16,12 +16,32 @@ import { httpUrlSchema } from "@/lib/http-url";
 /** Block ID：UUIDv7，标准 36 字符小写连字符形式（ADR-0008）。 */
 const idSchema = z.uuid();
 
-export const markSchema = z.enum(["bold", "italic", "strikethrough", "code"]);
+export const markSchema = z.enum([
+  "bold",
+  "italic",
+  "underline",
+  "strikethrough",
+  "code",
+]);
+
+export const inlineColorSchema = z.enum([
+  "gray",
+  "brown",
+  "red",
+  "orange",
+  "yellow",
+  "green",
+  "blue",
+  "purple",
+  "pink",
+]);
 
 export const textNodeSchema = z.strictObject({
   type: z.literal("text"),
   text: z.string(),
   marks: z.array(markSchema).optional(),
+  text_color: inlineColorSchema.optional(),
+  background_color: inlineColorSchema.optional(),
 });
 
 export const inlineCodeNodeSchema = z.strictObject({
@@ -101,6 +121,21 @@ export const mentionNodeSchema = z.strictObject({
   display_text: z.string(),
 });
 
+/** 日期或日期区间提及。 */
+export const dateMentionNodeSchema = z.strictObject({
+  type: z.literal("date_mention"),
+  date: z.iso.date(),
+  end_date: z.iso.date().optional(),
+  display_text: z.string(),
+});
+
+/** 对稳定 Dataset 的行内提及。 */
+export const databaseMentionNodeSchema = z.strictObject({
+  type: z.literal("database_mention"),
+  dataset_id: idSchema,
+  display_text: z.string(),
+});
+
 /** 行内节点联合；v1 仅以新增判别分支的方式 additive 演进。 */
 export const inlineNodeSchema = z.union([
   textNodeSchema,
@@ -113,9 +148,12 @@ export const inlineNodeSchema = z.union([
   citationReferenceNodeSchema,
   mathNodeSchema,
   mentionNodeSchema,
+  dateMentionNodeSchema,
+  databaseMentionNodeSchema,
 ]);
 
 export type Mark = z.infer<typeof markSchema>;
+export type InlineColor = z.infer<typeof inlineColorSchema>;
 export type TextNode = z.infer<typeof textNodeSchema>;
 export type InlineCodeNode = z.infer<typeof inlineCodeNodeSchema>;
 export type ResolvedPageReference = z.infer<typeof resolvedPageReferenceSchema>;
@@ -134,6 +172,8 @@ export type CitationReferenceNode = z.infer<
 >;
 export type MathNode = z.infer<typeof mathNodeSchema>;
 export type MentionNode = z.infer<typeof mentionNodeSchema>;
+export type DateMentionNode = z.infer<typeof dateMentionNodeSchema>;
+export type DatabaseMentionNode = z.infer<typeof databaseMentionNodeSchema>;
 export type InlineNode = z.infer<typeof inlineNodeSchema>;
 
 // ---- Block 成员接口（手工声明，对应 ast.schema.json 的 $defs；互递归无法推导）----
@@ -142,7 +182,9 @@ export interface HeadingBlock {
   id: string;
   type: "heading";
   level: number;
+  is_toggleable?: boolean;
   content: InlineNode[];
+  children?: Block[];
 }
 
 export interface ParagraphBlock {
@@ -187,6 +229,9 @@ export interface TableRowBlock {
 export interface TableBlock {
   id: string;
   type: "table";
+  caption?: string;
+  has_column_header?: boolean;
+  has_row_header?: boolean;
   children: TableRowBlock[];
 }
 
@@ -195,6 +240,102 @@ export interface CodeBlock {
   type: "code";
   content: string;
   language?: string;
+  caption?: string;
+}
+
+export type PreformattedKind = z.infer<typeof preformattedKindSchema>;
+
+export interface PreformattedBlock {
+  id: string;
+  type: "preformatted";
+  kind: PreformattedKind;
+  content: string;
+  caption?: string;
+}
+
+export interface EquationBlock {
+  id: string;
+  type: "equation";
+  expression: string;
+  caption?: string;
+}
+
+export interface TodoBlock {
+  id: string;
+  type: "todo";
+  checked: boolean;
+  content: InlineNode[];
+  children?: Block[];
+}
+
+export interface ToggleBlock {
+  id: string;
+  type: "toggle";
+  content: InlineNode[];
+  children?: Block[];
+}
+
+export interface BreadcrumbItem {
+  target_page_id?: string;
+  display_text: string;
+}
+
+export interface BreadcrumbBlock {
+  id: string;
+  type: "breadcrumb";
+  items: BreadcrumbItem[];
+}
+
+export interface ColumnBlock {
+  id: string;
+  type: "column";
+  width_ratio: number;
+  children: Block[];
+}
+
+export interface ColumnListBlock {
+  id: string;
+  type: "column_list";
+  children: ColumnBlock[];
+}
+
+export type ButtonAction =
+  | {
+      type: "insert_blocks";
+      target_page_id: string;
+      blocks: Block[];
+    }
+  | {
+      type: "update_dataset_record";
+      record_id: string;
+      entity_id?: string | null;
+      values: Record<string, unknown>;
+    }
+  | {
+      type: "notification";
+      message: string;
+      tone?: "default" | "success" | "info" | "warning" | "error";
+    }
+  | {
+      type: "webhook";
+      url: string;
+      payload: Record<string, unknown>;
+    };
+
+export interface ButtonBlock {
+  id: string;
+  type: "button";
+  label: string;
+  confirmation?: string;
+  actions: ButtonAction[];
+}
+
+export interface HTMLBlock {
+  id: string;
+  type: "html";
+  html: string;
+  height: number;
+  caption?: string;
 }
 
 export interface QuoteBlock {
@@ -204,11 +345,14 @@ export interface QuoteBlock {
 }
 
 export type CalloutKind = z.infer<typeof calloutKindSchema>;
+export type CalloutColor = z.infer<typeof calloutColorSchema>;
 
 export interface CalloutBlock {
   id: string;
   type: "callout";
   kind: CalloutKind;
+  icon?: string;
+  color?: CalloutColor;
   children: Block[];
 }
 
@@ -241,6 +385,54 @@ export interface VideoBlock {
   caption?: string;
 }
 
+export interface AudioBlock {
+  id: string;
+  type: "audio";
+  asset_revision_id: string;
+  title: string;
+  artist?: string;
+  album?: string;
+  duration_seconds?: number;
+  caption?: string;
+}
+
+export interface FileBlock {
+  id: string;
+  type: "file";
+  asset_revision_id: string;
+  name: string;
+  caption?: string;
+}
+
+export interface PDFBlock {
+  id: string;
+  type: "pdf";
+  asset_revision_id: string;
+  title?: string;
+  start_page?: number;
+  height: number;
+  caption?: string;
+}
+
+export interface BookmarkBlock {
+  id: string;
+  type: "bookmark";
+  url: string;
+  title: string;
+  description?: string;
+  site_name?: string;
+  caption?: string;
+}
+
+export interface LinkPreviewBlock {
+  id: string;
+  type: "link_preview";
+  url: string;
+  title: string;
+  description?: string;
+  site_name?: string;
+}
+
 /** 可查询数据只保存 DatasetView 稳定 ID，不复制记录。 */
 export interface DatasetViewBlock {
   id: string;
@@ -254,6 +446,8 @@ export interface EmbedBlock {
   type: "embed";
   url: string;
   title?: string;
+  provider?: "youtube" | "vimeo" | "figma";
+  caption?: string;
 }
 
 /** divider 无内容：不允许 content/children 等任何额外字段。 */
@@ -273,11 +467,25 @@ export type Block =
   | TableRowBlock
   | TableCellBlock
   | CodeBlock
+  | PreformattedBlock
+  | EquationBlock
+  | TodoBlock
+  | ToggleBlock
+  | BreadcrumbBlock
+  | ColumnListBlock
+  | ColumnBlock
+  | ButtonBlock
+  | HTMLBlock
   | QuoteBlock
   | CalloutBlock
   | ComponentBlock
   | ImageBlock
   | VideoBlock
+  | AudioBlock
+  | FileBlock
+  | PDFBlock
+  | BookmarkBlock
+  | LinkPreviewBlock
   | DatasetViewBlock
   | EmbedBlock
   | DividerBlock;
@@ -288,7 +496,17 @@ export const headingBlockSchema = z.strictObject({
   id: idSchema,
   type: z.literal("heading"),
   level: z.number().int().min(1).max(6),
+  is_toggleable: z.boolean().optional(),
   content: z.array(inlineNodeSchema),
+  children: z.array(z.lazy(() => blockSchema)).optional(),
+}).superRefine((value, context) => {
+  if (value.children !== undefined && value.is_toggleable !== true) {
+    context.addIssue({
+      code: "custom",
+      path: ["children"],
+      message: "heading children 要求 is_toggleable=true",
+    });
+  }
 });
 
 export const paragraphBlockSchema = z.strictObject({
@@ -330,6 +548,9 @@ export const tableRowBlockSchema = z.strictObject({
 export const tableBlockSchema = z.strictObject({
   id: idSchema,
   type: z.literal("table"),
+  caption: z.string().optional(),
+  has_column_header: z.boolean().optional(),
+  has_row_header: z.boolean().optional(),
   children: z.array(tableRowBlockSchema),
 });
 
@@ -338,6 +559,119 @@ export const codeBlockSchema = z.strictObject({
   type: z.literal("code"),
   content: z.string(),
   language: z.string().optional(),
+  caption: z.string().optional(),
+});
+
+export const preformattedKindSchema = z.enum([
+  "ascii_diagram",
+  "fixed_table",
+  "protocol_trace",
+  "formula_text",
+  "plain",
+]);
+
+export const preformattedBlockSchema = z.strictObject({
+  id: idSchema,
+  type: z.literal("preformatted"),
+  kind: preformattedKindSchema,
+  content: z.string(),
+  caption: z.string().optional(),
+});
+
+export const equationBlockSchema = z.strictObject({
+  id: idSchema,
+  type: z.literal("equation"),
+  expression: z.string().min(1),
+  caption: z.string().optional(),
+});
+
+export const todoBlockSchema = z.strictObject({
+  id: idSchema,
+  type: z.literal("todo"),
+  checked: z.boolean(),
+  content: z.array(inlineNodeSchema),
+  children: z.array(z.lazy(() => blockSchema)).optional(),
+});
+
+export const toggleBlockSchema = z.strictObject({
+  id: idSchema,
+  type: z.literal("toggle"),
+  content: z.array(inlineNodeSchema),
+  children: z.array(z.lazy(() => blockSchema)).optional(),
+});
+
+export const breadcrumbItemSchema = z.strictObject({
+  target_page_id: idSchema.optional(),
+  display_text: z.string().min(1).max(255),
+});
+
+export const breadcrumbBlockSchema = z.strictObject({
+  id: idSchema,
+  type: z.literal("breadcrumb"),
+  items: z.array(breadcrumbItemSchema).min(1).max(32),
+});
+
+export const columnBlockSchema: z.ZodType<ColumnBlock> = z.strictObject({
+  id: idSchema,
+  type: z.literal("column"),
+  width_ratio: z.number().min(0.1).max(10),
+  children: z.array(z.lazy(() => blockSchema)),
+});
+
+export const columnListBlockSchema = z.strictObject({
+  id: idSchema,
+  type: z.literal("column_list"),
+  children: z.array(columnBlockSchema).min(2).max(5),
+});
+
+const buttonInsertBlocksActionSchema = z.strictObject({
+  type: z.literal("insert_blocks"),
+  target_page_id: idSchema,
+  blocks: z.array(z.lazy(() => blockSchema)).min(1).max(20),
+});
+
+const buttonUpdateRecordActionSchema = z.strictObject({
+  type: z.literal("update_dataset_record"),
+  record_id: idSchema,
+  entity_id: idSchema.nullable().optional(),
+  values: z.record(z.string(), z.unknown()),
+});
+
+const buttonNotificationActionSchema = z.strictObject({
+  type: z.literal("notification"),
+  message: z.string().min(1).max(500),
+  tone: z.enum(["default", "success", "info", "warning", "error"]).optional(),
+});
+
+const buttonWebhookActionSchema = z.strictObject({
+  type: z.literal("webhook"),
+  url: httpUrlSchema.refine((value) => value.startsWith("https://"), {
+    message: "Webhook URL 必须使用 https",
+  }),
+  payload: z.record(z.string(), z.unknown()),
+});
+
+export const buttonActionSchema: z.ZodType<ButtonAction> = z.union([
+  buttonInsertBlocksActionSchema,
+  buttonUpdateRecordActionSchema,
+  buttonNotificationActionSchema,
+  buttonWebhookActionSchema,
+]);
+
+export const buttonBlockSchema = z.strictObject({
+  id: idSchema,
+  type: z.literal("button"),
+  label: z.string().min(1).max(120),
+  confirmation: z.string().min(1).max(500).optional(),
+  actions: z.array(buttonActionSchema).min(1).max(10),
+});
+
+export const htmlBlockSchema = z.strictObject({
+  id: idSchema,
+  type: z.literal("html"),
+  html: z.string().max(200000),
+  height: z.number().int().min(120).max(1200),
+  caption: z.string().max(1000).optional(),
 });
 
 export const quoteBlockSchema = z.strictObject({
@@ -347,11 +681,25 @@ export const quoteBlockSchema = z.strictObject({
 });
 
 export const calloutKindSchema = z.enum(["info", "warning", "danger"]);
+export const calloutColorSchema = z.enum([
+  "default",
+  "gray",
+  "brown",
+  "orange",
+  "yellow",
+  "green",
+  "blue",
+  "purple",
+  "pink",
+  "red",
+]);
 
 export const calloutBlockSchema = z.strictObject({
   id: idSchema,
   type: z.literal("callout"),
   kind: calloutKindSchema,
+  icon: z.string().min(1).max(64).optional(),
+  color: calloutColorSchema.optional(),
   children: z.array(z.lazy(() => blockSchema)),
 });
 
@@ -381,6 +729,54 @@ export const videoBlockSchema = z.strictObject({
   caption: z.string().optional(),
 });
 
+export const audioBlockSchema = z.strictObject({
+  id: idSchema,
+  type: z.literal("audio"),
+  asset_revision_id: idSchema,
+  title: z.string().min(1).max(500),
+  artist: z.string().max(500).optional(),
+  album: z.string().max(500).optional(),
+  duration_seconds: z.number().min(0).optional(),
+  caption: z.string().max(1000).optional(),
+});
+
+export const fileBlockSchema = z.strictObject({
+  id: idSchema,
+  type: z.literal("file"),
+  asset_revision_id: idSchema,
+  name: z.string().min(1).max(500),
+  caption: z.string().max(1000).optional(),
+});
+
+export const pdfBlockSchema = z.strictObject({
+  id: idSchema,
+  type: z.literal("pdf"),
+  asset_revision_id: idSchema,
+  title: z.string().max(500).optional(),
+  start_page: z.number().int().min(1).optional(),
+  height: z.number().int().min(320).max(1200),
+  caption: z.string().max(1000).optional(),
+});
+
+export const bookmarkBlockSchema = z.strictObject({
+  id: idSchema,
+  type: z.literal("bookmark"),
+  url: httpUrlSchema,
+  title: z.string().min(1).max(500),
+  description: z.string().max(1000).optional(),
+  site_name: z.string().max(255).optional(),
+  caption: z.string().max(1000).optional(),
+});
+
+export const linkPreviewBlockSchema = z.strictObject({
+  id: idSchema,
+  type: z.literal("link_preview"),
+  url: httpUrlSchema,
+  title: z.string().min(1).max(500),
+  description: z.string().max(1000).optional(),
+  site_name: z.string().max(255).optional(),
+});
+
 export const datasetViewBlockSchema = z.strictObject({
   id: idSchema,
   type: z.literal("dataset_view"),
@@ -392,6 +788,8 @@ export const embedBlockSchema = z.strictObject({
   type: z.literal("embed"),
   url: httpUrlSchema,
   title: z.string().optional(),
+  provider: z.enum(["youtube", "vimeo", "figma"]).optional(),
+  caption: z.string().max(1000).optional(),
 });
 
 export const dividerBlockSchema = z.strictObject({
@@ -399,7 +797,7 @@ export const dividerBlockSchema = z.strictObject({
   type: z.literal("divider"),
 });
 
-export const blockSchema: z.ZodType<Block> = z.discriminatedUnion("type", [
+export const blockSchema: z.ZodType<Block> = z.union([
   headingBlockSchema,
   paragraphBlockSchema,
   bulletListBlockSchema,
@@ -409,11 +807,25 @@ export const blockSchema: z.ZodType<Block> = z.discriminatedUnion("type", [
   tableRowBlockSchema,
   tableCellBlockSchema,
   codeBlockSchema,
+  preformattedBlockSchema,
+  equationBlockSchema,
+  todoBlockSchema,
+  toggleBlockSchema,
+  breadcrumbBlockSchema,
+  columnListBlockSchema,
+  columnBlockSchema,
+  buttonBlockSchema,
+  htmlBlockSchema,
   quoteBlockSchema,
   calloutBlockSchema,
   componentBlockSchema,
   imageBlockSchema,
   videoBlockSchema,
+  audioBlockSchema,
+  fileBlockSchema,
+  pdfBlockSchema,
+  bookmarkBlockSchema,
+  linkPreviewBlockSchema,
   datasetViewBlockSchema,
   embedBlockSchema,
   dividerBlockSchema,

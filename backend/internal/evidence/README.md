@@ -40,6 +40,10 @@ Evidence 领域服务：媒体资产（Asset）上传、外部资源（ExternalR
   （TRUNCATE 不触发行级触发器）。
 - `asset` 允许 UPDATE（status / name / current_revision_id 流转），软删除经
   `status='deleted'`，删除后名字可被新资产复用（与 page 标题同模式）。
+- 页面 `image/video/audio/file/pdf` Block 只引用 `asset_revision.id`，不引用
+  `asset.current_revision_id`，因此同名新上传不会改变既有 Revision。Audio/PDF
+  插入 UI 会读取版本 MIME 做类型校验；PDF 内容响应仅放宽为同源 frame，其他资产
+  继续保持禁止嵌入。
 
 ## Source / Citation（M4-T05）
 

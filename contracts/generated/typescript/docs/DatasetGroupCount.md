@@ -7,6 +7,7 @@
 Name | Type
 ------------ | -------------
 `value` | string
+`path` | Array&lt;string&gt;
 `count` | number
 
 ## Example
@@ -17,6 +18,7 @@ import type { DatasetGroupCount } from ''
 // TODO: Update the object below with actual values
 const example = {
   "value": null,
+  "path": null,
   "count": null,
 } satisfies DatasetGroupCount
 

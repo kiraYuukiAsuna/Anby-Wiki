@@ -11,6 +11,14 @@ M9-T05 外链健康检查由 Worker 常驻轮询，也可用
 - HTTP 客户端禁用环境代理，最多跟随 5 次 Redirect，读取正文上限 64 KiB。
 - 只保存有限内容摘要，不保存或记录响应正文、查询参数、凭据或 Token。
 
+作者创建 Bookmark/LinkPreview 时复用同一 SSRF、Redirect 与实际 Dial 边界：
+
+- `POST /api/v1/link-previews/resolve` 只允许登录用户调用；
+- 最多读取 512 KiB HTML，只提取并压缩 `og:*`、Twitter、description 与 `<title>`
+  文本，最长按 AST 字段约束截断；
+- 响应正文不落库、不写日志；净化后的 URL、标题、描述、站点名由编辑器冻结进
+  不可变 Revision，阅读路径不再向第三方回源。
+
 ## 状态与调度
 
 `external_resource.status` 使用既有 `unknown/ok/redirect/broken/blocked`：

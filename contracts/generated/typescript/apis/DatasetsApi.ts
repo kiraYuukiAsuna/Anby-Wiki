@@ -54,6 +54,21 @@ import {
     DatasetViewListToJSON,
 } from '../models/DatasetViewList';
 import {
+    type DatasetViewRuntimeQuery,
+    DatasetViewRuntimeQueryFromJSON,
+    DatasetViewRuntimeQueryToJSON,
+} from '../models/DatasetViewRuntimeQuery';
+import {
+    type PublicDatasetForm,
+    PublicDatasetFormFromJSON,
+    PublicDatasetFormToJSON,
+} from '../models/PublicDatasetForm';
+import {
+    type SubmitPublicDatasetFormRequest,
+    SubmitPublicDatasetFormRequestFromJSON,
+    SubmitPublicDatasetFormRequestToJSON,
+} from '../models/SubmitPublicDatasetFormRequest';
+import {
     type WriteDatasetRecordRequest,
     WriteDatasetRecordRequestFromJSON,
     WriteDatasetRecordRequestToJSON,
@@ -81,6 +96,10 @@ export interface GetDatasetViewRequest {
     id: string;
 }
 
+export interface GetPublicDatasetFormRequest {
+    id: string;
+}
+
 export interface ListDatasetRecordsRequest {
     id: string;
     cursor?: string;
@@ -100,6 +119,18 @@ export interface QueryDatasetViewRequest {
     id: string;
     cursor?: string;
     pageSize?: number;
+}
+
+export interface QueryDatasetViewWithFilterRequest {
+    id: string;
+    datasetViewRuntimeQuery: DatasetViewRuntimeQuery;
+    cursor?: string;
+    pageSize?: number;
+}
+
+export interface SubmitPublicDatasetFormOperationRequest {
+    id: string;
+    submitPublicDatasetFormRequest: SubmitPublicDatasetFormRequest;
 }
 
 export interface UpdateDatasetRecordRequest {
@@ -384,6 +415,51 @@ export class DatasetsApi extends runtime.BaseAPI {
     }
 
     /**
+     * Creates request options for getPublicDatasetForm without sending the request
+     */
+    async getPublicDatasetFormRequestOpts(requestParameters: GetPublicDatasetFormRequest): Promise<runtime.RequestOpts> {
+        if (requestParameters['id'] == null) {
+            throw new runtime.RequiredError(
+                'id',
+                'Required parameter "id" was null or undefined when calling getPublicDatasetForm().'
+            );
+        }
+
+        const queryParameters: any = {};
+
+        const headerParameters: runtime.HTTPHeaders = {};
+
+
+        let urlPath = `/api/v1/public/dataset-forms/{id}`;
+        urlPath = urlPath.replace('{id}', encodeURIComponent(String(requestParameters['id'])));
+
+        return {
+            path: urlPath,
+            method: 'GET',
+            headers: headerParameters,
+            query: queryParameters,
+        };
+    }
+
+    /**
+     * 读取公开 Dataset Form 定义
+     */
+    async getPublicDatasetFormRaw(requestParameters: GetPublicDatasetFormRequest, initOverrides?: RequestInit | runtime.InitOverrideFunction): Promise<runtime.ApiResponse<PublicDatasetForm>> {
+        const requestOptions = await this.getPublicDatasetFormRequestOpts(requestParameters);
+        const response = await this.request(requestOptions, initOverrides);
+
+        return new runtime.JSONApiResponse(response, (jsonValue) => PublicDatasetFormFromJSON(jsonValue));
+    }
+
+    /**
+     * 读取公开 Dataset Form 定义
+     */
+    async getPublicDatasetForm(requestParameters: GetPublicDatasetFormRequest, initOverrides?: RequestInit | runtime.InitOverrideFunction): Promise<PublicDatasetForm> {
+        const response = await this.getPublicDatasetFormRaw(requestParameters, initOverrides);
+        return await response.value();
+    }
+
+    /**
      * Creates request options for listDatasetRecords without sending the request
      */
     async listDatasetRecordsRequestOpts(requestParameters: ListDatasetRecordsRequest): Promise<runtime.RequestOpts> {
@@ -576,6 +652,124 @@ export class DatasetsApi extends runtime.BaseAPI {
      */
     async queryDatasetView(requestParameters: QueryDatasetViewRequest, initOverrides?: RequestInit | runtime.InitOverrideFunction): Promise<DatasetRecordPage> {
         const response = await this.queryDatasetViewRaw(requestParameters, initOverrides);
+        return await response.value();
+    }
+
+    /**
+     * Creates request options for queryDatasetViewWithFilter without sending the request
+     */
+    async queryDatasetViewWithFilterRequestOpts(requestParameters: QueryDatasetViewWithFilterRequest): Promise<runtime.RequestOpts> {
+        if (requestParameters['id'] == null) {
+            throw new runtime.RequiredError(
+                'id',
+                'Required parameter "id" was null or undefined when calling queryDatasetViewWithFilter().'
+            );
+        }
+
+        if (requestParameters['datasetViewRuntimeQuery'] == null) {
+            throw new runtime.RequiredError(
+                'datasetViewRuntimeQuery',
+                'Required parameter "datasetViewRuntimeQuery" was null or undefined when calling queryDatasetViewWithFilter().'
+            );
+        }
+
+        const queryParameters: any = {};
+
+        if (requestParameters['cursor'] != null) {
+            queryParameters['cursor'] = requestParameters['cursor'];
+        }
+
+        if (requestParameters['pageSize'] != null) {
+            queryParameters['page_size'] = requestParameters['pageSize'];
+        }
+
+        const headerParameters: runtime.HTTPHeaders = {};
+
+        headerParameters['Content-Type'] = 'application/json';
+
+
+        let urlPath = `/api/v1/dataset-views/{id}/query`;
+        urlPath = urlPath.replace('{id}', encodeURIComponent(String(requestParameters['id'])));
+
+        return {
+            path: urlPath,
+            method: 'POST',
+            headers: headerParameters,
+            query: queryParameters,
+            body: DatasetViewRuntimeQueryToJSON(requestParameters['datasetViewRuntimeQuery']),
+        };
+    }
+
+    /**
+     * 使用运行时过滤器执行保存视图
+     */
+    async queryDatasetViewWithFilterRaw(requestParameters: QueryDatasetViewWithFilterRequest, initOverrides?: RequestInit | runtime.InitOverrideFunction): Promise<runtime.ApiResponse<DatasetRecordPage>> {
+        const requestOptions = await this.queryDatasetViewWithFilterRequestOpts(requestParameters);
+        const response = await this.request(requestOptions, initOverrides);
+
+        return new runtime.JSONApiResponse(response, (jsonValue) => DatasetRecordPageFromJSON(jsonValue));
+    }
+
+    /**
+     * 使用运行时过滤器执行保存视图
+     */
+    async queryDatasetViewWithFilter(requestParameters: QueryDatasetViewWithFilterRequest, initOverrides?: RequestInit | runtime.InitOverrideFunction): Promise<DatasetRecordPage> {
+        const response = await this.queryDatasetViewWithFilterRaw(requestParameters, initOverrides);
+        return await response.value();
+    }
+
+    /**
+     * Creates request options for submitPublicDatasetForm without sending the request
+     */
+    async submitPublicDatasetFormRequestOpts(requestParameters: SubmitPublicDatasetFormOperationRequest): Promise<runtime.RequestOpts> {
+        if (requestParameters['id'] == null) {
+            throw new runtime.RequiredError(
+                'id',
+                'Required parameter "id" was null or undefined when calling submitPublicDatasetForm().'
+            );
+        }
+
+        if (requestParameters['submitPublicDatasetFormRequest'] == null) {
+            throw new runtime.RequiredError(
+                'submitPublicDatasetFormRequest',
+                'Required parameter "submitPublicDatasetFormRequest" was null or undefined when calling submitPublicDatasetForm().'
+            );
+        }
+
+        const queryParameters: any = {};
+
+        const headerParameters: runtime.HTTPHeaders = {};
+
+        headerParameters['Content-Type'] = 'application/json';
+
+
+        let urlPath = `/api/v1/public/dataset-forms/{id}/submissions`;
+        urlPath = urlPath.replace('{id}', encodeURIComponent(String(requestParameters['id'])));
+
+        return {
+            path: urlPath,
+            method: 'POST',
+            headers: headerParameters,
+            query: queryParameters,
+            body: SubmitPublicDatasetFormRequestToJSON(requestParameters['submitPublicDatasetFormRequest']),
+        };
+    }
+
+    /**
+     * 公开提交经 Dataset Schema 校验的记录
+     */
+    async submitPublicDatasetFormRaw(requestParameters: SubmitPublicDatasetFormOperationRequest, initOverrides?: RequestInit | runtime.InitOverrideFunction): Promise<runtime.ApiResponse<DatasetRecord>> {
+        const requestOptions = await this.submitPublicDatasetFormRequestOpts(requestParameters);
+        const response = await this.request(requestOptions, initOverrides);
+
+        return new runtime.JSONApiResponse(response, (jsonValue) => DatasetRecordFromJSON(jsonValue));
+    }
+
+    /**
+     * 公开提交经 Dataset Schema 校验的记录
+     */
+    async submitPublicDatasetForm(requestParameters: SubmitPublicDatasetFormOperationRequest, initOverrides?: RequestInit | runtime.InitOverrideFunction): Promise<DatasetRecord> {
+        const response = await this.submitPublicDatasetFormRaw(requestParameters, initOverrides);
         return await response.value();
     }
 

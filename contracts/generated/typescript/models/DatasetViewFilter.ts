@@ -14,7 +14,7 @@
 
 import { mapValues } from '../runtime';
 /**
- *
+ * 叶子条件使用 field/operator；组合条件使用 logic/conditions，服务端限制最多三层。
  * @export
  * @interface DatasetViewFilter
  */
@@ -24,19 +24,31 @@ export interface DatasetViewFilter {
      * @type {string}
      * @memberof DatasetViewFilter
      */
-    field: string;
+    field?: string;
     /**
      *
      * @type {DatasetViewFilterOperatorEnum}
      * @memberof DatasetViewFilter
      */
-    operator: DatasetViewFilterOperatorEnum;
+    operator?: DatasetViewFilterOperatorEnum;
     /**
      *
      * @type {any}
      * @memberof DatasetViewFilter
      */
     value?: any | null;
+    /**
+     *
+     * @type {DatasetViewFilterLogicEnum}
+     * @memberof DatasetViewFilter
+     */
+    logic?: DatasetViewFilterLogicEnum;
+    /**
+     *
+     * @type {Array<DatasetViewFilter>}
+     * @memberof DatasetViewFilter
+     */
+    conditions?: Array<DatasetViewFilter>;
 }
 
 
@@ -45,22 +57,38 @@ export interface DatasetViewFilter {
  */
 export const DatasetViewFilterOperatorEnum = {
     Eq: 'eq',
+    Neq: 'neq',
     Contains: 'contains',
+    NotContains: 'not_contains',
     Gt: 'gt',
     Gte: 'gte',
     Lt: 'lt',
     Lte: 'lte',
-    Exists: 'exists'
+    Before: 'before',
+    After: 'after',
+    OnOrBefore: 'on_or_before',
+    OnOrAfter: 'on_or_after',
+    Exists: 'exists',
+    NotExists: 'not_exists',
+    IsEmpty: 'is_empty',
+    NotEmpty: 'not_empty'
 } as const;
 export type DatasetViewFilterOperatorEnum = typeof DatasetViewFilterOperatorEnum[keyof typeof DatasetViewFilterOperatorEnum];
+
+/**
+ * @export
+ */
+export const DatasetViewFilterLogicEnum = {
+    And: 'and',
+    Or: 'or'
+} as const;
+export type DatasetViewFilterLogicEnum = typeof DatasetViewFilterLogicEnum[keyof typeof DatasetViewFilterLogicEnum];
 
 
 /**
  * Check if a given object implements the DatasetViewFilter interface.
  */
 export function instanceOfDatasetViewFilter(value: object): value is DatasetViewFilter {
-    if (!('field' in value) || value['field'] === undefined) return false;
-    if (!('operator' in value) || value['operator'] === undefined) return false;
     return true;
 }
 
@@ -74,9 +102,11 @@ export function DatasetViewFilterFromJSONTyped(json: any, ignoreDiscriminator: b
     }
     return {
 
-        'field': json['field'],
-        'operator': json['operator'],
+        'field': json['field'] == null ? undefined : json['field'],
+        'operator': json['operator'] == null ? undefined : json['operator'],
         'value': json['value'] === undefined ? undefined : json['value'] === null ? null : json['value'],
+        'logic': json['logic'] == null ? undefined : json['logic'],
+        'conditions': json['conditions'] == null ? undefined : ((json['conditions'] as Array<any>).map(DatasetViewFilterFromJSON)),
     };
 }
 
@@ -94,6 +124,8 @@ export function DatasetViewFilterToJSONTyped(value?: DatasetViewFilter | null, i
         'field': value['field'],
         'operator': value['operator'],
         'value': value['value'],
+        'logic': value['logic'],
+        'conditions': value['conditions'] == null ? undefined : ((value['conditions'] as Array<any>).map(DatasetViewFilterToJSON)),
     };
 }
 

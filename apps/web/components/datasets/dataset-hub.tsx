@@ -148,7 +148,13 @@ export function DatasetHub() {
       const properties = Object.fromEntries(
         normalized.map((field) => [
           field.key,
-          { type: field.type, title: field.title || field.key },
+          field.type === "date"
+            ? {
+                type: "string",
+                format: "date",
+                title: field.title || field.key,
+              }
+            : { type: field.type, title: field.title || field.key },
         ]),
       );
       const created = await datasetsApi().createDataset({
@@ -315,6 +321,7 @@ export function DatasetHub() {
                         <option value="number">数字</option>
                         <option value="integer">整数</option>
                         <option value="boolean">是/否</option>
+                        <option value="date">日期</option>
                       </select>
                     </div>
                     <div className="mt-2 flex items-center gap-2">

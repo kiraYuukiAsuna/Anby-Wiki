@@ -32,11 +32,25 @@
         { "$ref": "#/$defs/tableRowBlock" },
         { "$ref": "#/$defs/tableCellBlock" },
         { "$ref": "#/$defs/codeBlock" },
+        { "$ref": "#/$defs/preformattedBlock" },
+        { "$ref": "#/$defs/equationBlock" },
+        { "$ref": "#/$defs/todoBlock" },
+        { "$ref": "#/$defs/toggleBlock" },
+        { "$ref": "#/$defs/breadcrumbBlock" },
+        { "$ref": "#/$defs/columnListBlock" },
+        { "$ref": "#/$defs/columnBlock" },
+        { "$ref": "#/$defs/buttonBlock" },
+        { "$ref": "#/$defs/htmlBlock" },
         { "$ref": "#/$defs/quoteBlock" },
         { "$ref": "#/$defs/calloutBlock" },
         { "$ref": "#/$defs/componentBlock" },
         { "$ref": "#/$defs/imageBlock" },
         { "$ref": "#/$defs/videoBlock" },
+        { "$ref": "#/$defs/audioBlock" },
+        { "$ref": "#/$defs/fileBlock" },
+        { "$ref": "#/$defs/pdfBlock" },
+        { "$ref": "#/$defs/bookmarkBlock" },
+        { "$ref": "#/$defs/linkPreviewBlock" },
         { "$ref": "#/$defs/datasetViewBlock" },
         { "$ref": "#/$defs/embedBlock" },
         { "$ref": "#/$defs/dividerBlock" }
@@ -50,11 +64,25 @@
         "id": { "$ref": "#/$defs/blockId" },
         "type": { "const": "heading" },
         "level": { "type": "integer", "minimum": 1, "maximum": 6 },
+        "is_toggleable": { "type": "boolean" },
         "content": {
           "type": "array",
           "items": { "$ref": "#/$defs/inlineNode" }
+        },
+        "children": {
+          "type": "array",
+          "items": { "$ref": "#/$defs/block" }
         }
-      }
+      },
+      "allOf": [
+        {
+          "if": { "required": ["children"] },
+          "then": {
+            "required": ["is_toggleable"],
+            "properties": { "is_toggleable": { "const": true } }
+          }
+        }
+      ]
     },
     "paragraphBlock": {
       "type": "object",
@@ -118,6 +146,9 @@
       "properties": {
         "id": { "$ref": "#/$defs/blockId" },
         "type": { "const": "table" },
+        "caption": { "type": "string" },
+        "has_column_header": { "type": "boolean" },
+        "has_row_header": { "type": "boolean" },
         "children": {
           "type": "array",
           "items": { "$ref": "#/$defs/tableRowBlock" },
@@ -159,7 +190,215 @@
         "id": { "$ref": "#/$defs/blockId" },
         "type": { "const": "code" },
         "content": { "type": "string" },
-        "language": { "type": "string" }
+        "language": { "type": "string" },
+        "caption": { "type": "string" }
+      }
+    },
+    "preformattedKind": {
+      "enum": ["ascii_diagram", "fixed_table", "protocol_trace", "formula_text", "plain"]
+    },
+    "preformattedBlock": {
+      "description": "非程序代码的固定宽度原文；逐字保留空格、换行和对齐。",
+      "type": "object",
+      "required": ["id", "type", "kind", "content"],
+      "additionalProperties": false,
+      "properties": {
+        "id": { "$ref": "#/$defs/blockId" },
+        "type": { "const": "preformatted" },
+        "kind": { "$ref": "#/$defs/preformattedKind" },
+        "content": { "type": "string" },
+        "caption": { "type": "string" }
+      }
+    },
+    "equationBlock": {
+      "description": "块级数学表达式；expression 保存 LaTeX 源文本。",
+      "type": "object",
+      "required": ["id", "type", "expression"],
+      "additionalProperties": false,
+      "properties": {
+        "id": { "$ref": "#/$defs/blockId" },
+        "type": { "const": "equation" },
+        "expression": { "type": "string", "minLength": 1 },
+        "caption": { "type": "string" }
+      }
+    },
+    "todoBlock": {
+      "type": "object",
+      "required": ["id", "type", "checked", "content"],
+      "additionalProperties": false,
+      "properties": {
+        "id": { "$ref": "#/$defs/blockId" },
+        "type": { "const": "todo" },
+        "checked": { "type": "boolean" },
+        "content": {
+          "type": "array",
+          "items": { "$ref": "#/$defs/inlineNode" }
+        },
+        "children": {
+          "type": "array",
+          "items": { "$ref": "#/$defs/block" }
+        }
+      }
+    },
+    "toggleBlock": {
+      "type": "object",
+      "required": ["id", "type", "content"],
+      "additionalProperties": false,
+      "properties": {
+        "id": { "$ref": "#/$defs/blockId" },
+        "type": { "const": "toggle" },
+        "content": {
+          "type": "array",
+          "items": { "$ref": "#/$defs/inlineNode" }
+        },
+        "children": {
+          "type": "array",
+          "items": { "$ref": "#/$defs/block" }
+        }
+      }
+    },
+    "breadcrumbItem": {
+      "type": "object",
+      "required": ["display_text"],
+      "additionalProperties": false,
+      "properties": {
+        "target_page_id": { "type": "string", "format": "uuid" },
+        "display_text": { "type": "string", "minLength": 1, "maxLength": 255 }
+      }
+    },
+    "breadcrumbBlock": {
+      "description": "页面层级导航。已知祖先保存稳定 Page ID；当前页可只保存 display_text。",
+      "type": "object",
+      "required": ["id", "type", "items"],
+      "additionalProperties": false,
+      "properties": {
+        "id": { "$ref": "#/$defs/blockId" },
+        "type": { "const": "breadcrumb" },
+        "items": {
+          "type": "array",
+          "minItems": 1,
+          "maxItems": 32,
+          "items": { "$ref": "#/$defs/breadcrumbItem" }
+        }
+      }
+    },
+    "columnListBlock": {
+      "type": "object",
+      "required": ["id", "type", "children"],
+      "additionalProperties": false,
+      "properties": {
+        "id": { "$ref": "#/$defs/blockId" },
+        "type": { "const": "column_list" },
+        "children": {
+          "type": "array",
+          "minItems": 2,
+          "maxItems": 5,
+          "items": { "$ref": "#/$defs/columnBlock" },
+          "description": "容器规则：column_list 的 children 只能是 column。"
+        }
+      }
+    },
+    "columnBlock": {
+      "type": "object",
+      "required": ["id", "type", "width_ratio", "children"],
+      "additionalProperties": false,
+      "properties": {
+        "id": { "$ref": "#/$defs/blockId" },
+        "type": { "const": "column" },
+        "width_ratio": { "type": "number", "minimum": 0.1, "maximum": 10 },
+        "children": {
+          "type": "array",
+          "items": { "$ref": "#/$defs/block" }
+        }
+      }
+    },
+    "buttonAction": {
+      "oneOf": [
+        { "$ref": "#/$defs/buttonInsertBlocksAction" },
+        { "$ref": "#/$defs/buttonUpdateRecordAction" },
+        { "$ref": "#/$defs/buttonNotificationAction" },
+        { "$ref": "#/$defs/buttonWebhookAction" }
+      ]
+    },
+    "buttonInsertBlocksAction": {
+      "type": "object",
+      "required": ["type", "target_page_id", "blocks"],
+      "additionalProperties": false,
+      "properties": {
+        "type": { "const": "insert_blocks" },
+        "target_page_id": { "type": "string", "format": "uuid" },
+        "blocks": {
+          "type": "array",
+          "minItems": 1,
+          "maxItems": 20,
+          "items": { "$ref": "#/$defs/block" }
+        }
+      }
+    },
+    "buttonUpdateRecordAction": {
+      "type": "object",
+      "required": ["type", "record_id", "values"],
+      "additionalProperties": false,
+      "properties": {
+        "type": { "const": "update_dataset_record" },
+        "record_id": { "type": "string", "format": "uuid" },
+        "entity_id": { "type": ["string", "null"], "format": "uuid" },
+        "values": { "type": "object" }
+      }
+    },
+    "buttonNotificationAction": {
+      "type": "object",
+      "required": ["type", "message"],
+      "additionalProperties": false,
+      "properties": {
+        "type": { "const": "notification" },
+        "message": { "type": "string", "minLength": 1, "maxLength": 500 },
+        "tone": { "enum": ["default", "success", "info", "warning", "error"] }
+      }
+    },
+    "buttonWebhookAction": {
+      "description": "Webhook 由受控服务端出口发送；正文渲染器不直接访问外部网络。",
+      "type": "object",
+      "required": ["type", "url", "payload"],
+      "additionalProperties": false,
+      "properties": {
+        "type": { "const": "webhook" },
+        "url": {
+          "type": "string",
+          "format": "uri",
+          "pattern": "^https://"
+        },
+        "payload": { "type": "object" }
+      }
+    },
+    "buttonBlock": {
+      "type": "object",
+      "required": ["id", "type", "label", "actions"],
+      "additionalProperties": false,
+      "properties": {
+        "id": { "$ref": "#/$defs/blockId" },
+        "type": { "const": "button" },
+        "label": { "type": "string", "minLength": 1, "maxLength": 120 },
+        "confirmation": { "type": "string", "minLength": 1, "maxLength": 500 },
+        "actions": {
+          "type": "array",
+          "minItems": 1,
+          "maxItems": 10,
+          "items": { "$ref": "#/$defs/buttonAction" }
+        }
+      }
+    },
+    "htmlBlock": {
+      "description": "隔离展示上传 HTML。渲染器必须使用无脚本、无网络、无表单能力的 sandbox iframe。",
+      "type": "object",
+      "required": ["id", "type", "html", "height"],
+      "additionalProperties": false,
+      "properties": {
+        "id": { "$ref": "#/$defs/blockId" },
+        "type": { "const": "html" },
+        "html": { "type": "string", "maxLength": 200000 },
+        "height": { "type": "integer", "minimum": 120, "maximum": 1200 },
+        "caption": { "type": "string", "maxLength": 1000 }
       }
     },
     "quoteBlock": {
@@ -183,6 +422,10 @@
         "id": { "$ref": "#/$defs/blockId" },
         "type": { "const": "callout" },
         "kind": { "enum": ["info", "warning", "danger"] },
+        "icon": { "type": "string", "minLength": 1, "maxLength": 64 },
+        "color": {
+          "enum": ["default", "gray", "brown", "orange", "yellow", "green", "blue", "purple", "pink", "red"]
+        },
         "children": {
           "type": "array",
           "items": { "$ref": "#/$defs/block" }
@@ -233,6 +476,79 @@
         "caption": { "type": "string" }
       }
     },
+    "audioBlock": {
+      "description": "音频引用不可变 AssetRevision；正文保存可读标题与可选音频展示元数据。",
+      "type": "object",
+      "required": ["id", "type", "asset_revision_id", "title"],
+      "additionalProperties": false,
+      "properties": {
+        "id": { "$ref": "#/$defs/blockId" },
+        "type": { "const": "audio" },
+        "asset_revision_id": { "type": "string", "format": "uuid" },
+        "title": { "type": "string", "minLength": 1, "maxLength": 500 },
+        "artist": { "type": "string", "maxLength": 500 },
+        "album": { "type": "string", "maxLength": 500 },
+        "duration_seconds": { "type": "number", "minimum": 0 },
+        "caption": { "type": "string", "maxLength": 1000 }
+      }
+    },
+    "fileBlock": {
+      "description": "正文文件卡片固定到不可变 AssetRevision，并提供同源下载入口。",
+      "type": "object",
+      "required": ["id", "type", "asset_revision_id", "name"],
+      "additionalProperties": false,
+      "properties": {
+        "id": { "$ref": "#/$defs/blockId" },
+        "type": { "const": "file" },
+        "asset_revision_id": { "type": "string", "format": "uuid" },
+        "name": { "type": "string", "minLength": 1, "maxLength": 500 },
+        "caption": { "type": "string", "maxLength": 1000 }
+      }
+    },
+    "pdfBlock": {
+      "description": "PDF 阅读块固定到不可变 AssetRevision；start_page 与 height 仅控制展示。",
+      "type": "object",
+      "required": ["id", "type", "asset_revision_id", "height"],
+      "additionalProperties": false,
+      "properties": {
+        "id": { "$ref": "#/$defs/blockId" },
+        "type": { "const": "pdf" },
+        "asset_revision_id": { "type": "string", "format": "uuid" },
+        "title": { "type": "string", "maxLength": 500 },
+        "start_page": { "type": "integer", "minimum": 1 },
+        "height": { "type": "integer", "minimum": 320, "maximum": 1200 },
+        "caption": { "type": "string", "maxLength": 1000 }
+      }
+    },
+    "bookmarkBlock": {
+      "description": "独立书签卡片；展示元数据在作者解析时冻结，不在阅读请求中回源。",
+      "type": "object",
+      "required": ["id", "type", "url", "title"],
+      "additionalProperties": false,
+      "properties": {
+        "id": { "$ref": "#/$defs/blockId" },
+        "type": { "const": "bookmark" },
+        "url": { "type": "string", "format": "uri" },
+        "title": { "type": "string", "minLength": 1, "maxLength": 500 },
+        "description": { "type": "string", "maxLength": 1000 },
+        "site_name": { "type": "string", "maxLength": 255 },
+        "caption": { "type": "string", "maxLength": 1000 }
+      }
+    },
+    "linkPreviewBlock": {
+      "description": "Notion 式第三方链接预览；元数据由受控服务端抓取后冻结进 Revision。",
+      "type": "object",
+      "required": ["id", "type", "url", "title"],
+      "additionalProperties": false,
+      "properties": {
+        "id": { "$ref": "#/$defs/blockId" },
+        "type": { "const": "link_preview" },
+        "url": { "type": "string", "format": "uri" },
+        "title": { "type": "string", "minLength": 1, "maxLength": 500 },
+        "description": { "type": "string", "maxLength": 1000 },
+        "site_name": { "type": "string", "maxLength": 255 }
+      }
+    },
     "datasetViewBlock": {
       "description": "可查询数据不复制进 AST；页面引用冻结的 DatasetView 定义。",
       "type": "object",
@@ -245,15 +561,20 @@
       }
     },
     "embedBlock": {
-      "description": "外部嵌入仅保存 http/https URL；渲染器以安全链接卡片降级，不执行第三方脚本。",
+      "description": "外部嵌入保存 http/https URL；provider 命中白名单时以受限 sandbox iframe 交互，否则降级为安全链接。",
       "type": "object",
       "required": ["id", "type", "url"],
       "additionalProperties": false,
       "properties": {
         "id": { "$ref": "#/$defs/blockId" },
         "type": { "const": "embed" },
-        "url": { "type": "string", "format": "uri" },
-        "title": { "type": "string" }
+"url": {
+          "type": "string",
+          "format": "uri"
+        },
+        "title": { "type": "string", "maxLength": 500 },
+        "provider": { "enum": ["youtube", "vimeo", "figma"] },
+        "caption": { "type": "string", "maxLength": 1000 }
       }
     },
     "dividerBlock": {
@@ -278,11 +599,16 @@
         { "$ref": "#/$defs/claimReferenceNode" },
         { "$ref": "#/$defs/citationReferenceNode" },
         { "$ref": "#/$defs/mathNode" },
-        { "$ref": "#/$defs/mentionNode" }
+        { "$ref": "#/$defs/mentionNode" },
+        { "$ref": "#/$defs/dateMentionNode" },
+        { "$ref": "#/$defs/databaseMentionNode" }
       ]
     },
     "mark": {
-      "enum": ["bold", "italic", "strikethrough", "code"]
+      "enum": ["bold", "italic", "underline", "strikethrough", "code"]
+    },
+    "inlineColor": {
+      "enum": ["gray", "brown", "red", "orange", "yellow", "green", "blue", "purple", "pink"]
     },
     "textNode": {
       "type": "object",
@@ -295,7 +621,9 @@
           "type": "array",
           "items": { "$ref": "#/$defs/mark" },
           "uniqueItems": true
-        }
+        },
+        "text_color": { "$ref": "#/$defs/inlineColor" },
+        "background_color": { "$ref": "#/$defs/inlineColor" }
       }
     },
     "inlineCodeNode": {
@@ -418,6 +746,29 @@
       "properties": {
         "type": { "const": "mention" },
         "actor_id": { "type": "string", "format": "uuid" },
+        "display_text": { "type": "string" }
+      }
+    },
+    "dateMentionNode": {
+      "description": "日期或闭区间日期提及；display_text 保留作者选择的展示文本。",
+      "type": "object",
+      "required": ["type", "date", "display_text"],
+      "additionalProperties": false,
+      "properties": {
+        "type": { "const": "date_mention" },
+        "date": { "type": "string", "format": "date" },
+        "end_date": { "type": "string", "format": "date" },
+        "display_text": { "type": "string" }
+      }
+    },
+    "databaseMentionNode": {
+      "description": "对稳定 Dataset 的行内提及。",
+      "type": "object",
+      "required": ["type", "dataset_id", "display_text"],
+      "additionalProperties": false,
+      "properties": {
+        "type": { "const": "database_mention" },
+        "dataset_id": { "type": "string", "format": "uuid" },
         "display_text": { "type": "string" }
       }
     }

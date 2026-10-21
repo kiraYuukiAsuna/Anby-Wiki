@@ -11,7 +11,19 @@ Name | Type
 `targetBlockId` | string
 `text` | string
 `level` | number
+`isToggleable` | boolean
+`checked` | boolean
+`kind` | string
+`icon` | string
+`color` | string
+`language` | string
+`caption` | string
+`expression` | string
 `items` | Array&lt;string&gt;
+`rows` | Array&lt;Array&lt;string&gt;&gt;
+`hasColumnHeader` | boolean
+`hasRowHeader` | boolean
+`children` | [Array&lt;ImportPlannedBlock&gt;](ImportPlannedBlock.md)
 `evidence` | [Array&lt;ImportPlanEvidence&gt;](ImportPlanEvidence.md)
 
 ## Example
@@ -26,7 +38,19 @@ const example = {
   "targetBlockId": null,
   "text": null,
   "level": null,
+  "isToggleable": null,
+  "checked": null,
+  "kind": null,
+  "icon": null,
+  "color": null,
+  "language": null,
+  "caption": null,
+  "expression": null,
   "items": null,
+  "rows": null,
+  "hasColumnHeader": null,
+  "hasRowHeader": null,
+  "children": null,
   "evidence": null,
 } satisfies ImportPlannedBlock
 

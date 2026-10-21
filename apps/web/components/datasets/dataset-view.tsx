@@ -4,10 +4,17 @@ import Link from "next/link";
 import {
   ArrowLeft,
   BarChart3,
+  CalendarDays,
   Check,
+  ClipboardList,
+  Clock3,
   Copy,
+  Images,
   LayoutGrid,
+  LayoutDashboard,
+  List,
   LoaderCircle,
+  PanelsTopLeft,
   SlidersHorizontal,
   Table2,
 } from "lucide-react";
@@ -23,12 +30,15 @@ import type {
 } from "../../../../contracts/generated/typescript";
 
 import {
-  DatasetGroupChart,
-  DatasetRecordCards,
-  DatasetRecordTable,
-} from "@/components/datasets/dataset-records";
+  DatasetDashboard,
+} from "@/components/datasets/dataset-dashboard";
+import {
+  DatasetViewRenderer,
+  effectiveGroups,
+} from "@/components/datasets/dataset-view-renderer";
 import { Button } from "@/components/ui/button";
 import { datasetsApi } from "@/lib/api";
+import { useSession } from "@/lib/auth";
 import { datasetFields } from "@/lib/datasets";
 
 const PAGE_SIZE = 50;
@@ -37,6 +47,13 @@ const VIEW_ICON = {
   table: Table2,
   cards: LayoutGrid,
   chart: BarChart3,
+  board: PanelsTopLeft,
+  timeline: Clock3,
+  calendar: CalendarDays,
+  list: List,
+  gallery: Images,
+  form: ClipboardList,
+  dashboard: LayoutDashboard,
 } as const;
 
 const OPERATOR_LABEL: Record<string, string> = {
@@ -51,6 +68,7 @@ const OPERATOR_LABEL: Record<string, string> = {
 
 export function DatasetViewPage({ id }: { id: string }) {
   const [copied, setCopied] = useState(false);
+  const { isAuthenticated } = useSession();
   const viewState = useSWR<DatasetView>(["dataset-view", id], () =>
     datasetsApi().getDatasetView({ id }),
   );
@@ -61,6 +79,12 @@ export function DatasetViewPage({ id }: { id: string }) {
   const recordState = useSWRInfinite<DatasetRecordPage>(
     (pageIndex, previousPage) => {
       if (!viewState.data) return null;
+      if (
+        viewState.data.viewType === "dashboard" ||
+        viewState.data.viewType === "form"
+      ) {
+        return null;
+      }
       if (pageIndex > 0 && !previousPage?.nextCursor) return null;
       return [
         "dataset-view-records",
@@ -103,27 +127,43 @@ export function DatasetViewPage({ id }: { id: string }) {
   const view = viewState.data;
   const dataset = datasetState.data;
   const allFields = datasetFields(dataset);
-  const configuredColumns = view.config.columns
-    ? new Set(view.config.columns)
-    : null;
-  const visibleFields =
-    configuredColumns && configuredColumns.size > 0
-      ? allFields.filter((field) => configuredColumns.has(field.key))
-      : allFields;
   const records = recordState.data?.flatMap((page) => page.items) ?? [];
   const groups = recordState.data?.[0]?.groups ?? [];
   const lastPage = recordState.data?.[recordState.data.length - 1];
   const canLoadMore = Boolean(recordState.data && lastPage?.nextCursor);
   const Icon = VIEW_ICON[view.viewType];
-  const groupField = allFields.find(
-    (field) => field.key === view.config.groupBy,
-  );
+  const viewGroups = effectiveGroups(view);
 
   const copyID = async () => {
     await navigator.clipboard.writeText(view.id);
     setCopied(true);
     toast.success("DatasetView ID 已复制");
     window.setTimeout(() => setCopied(false), 1600);
+  };
+
+  const moveBoardRecord = async (
+    record: (typeof records)[number],
+    field: string,
+    value: unknown,
+  ) => {
+    try {
+      const values = { ...record.values };
+      if (value == null || value === "") delete values[field];
+      else values[field] = value;
+      await datasetsApi().updateDatasetRecord({
+        id: record.id,
+        writeDatasetRecordRequest: {
+          entityId: record.entityId ?? undefined,
+          values,
+        },
+      });
+      await recordState.mutate();
+      toast.success("记录已移动");
+    } catch {
+      toast.error("移动记录失败", {
+        description: "目标组值必须通过 Dataset Schema 校验。",
+      });
+    }
   };
 
   return (
@@ -155,26 +195,31 @@ export function DatasetViewPage({ id }: { id: string }) {
         <div className="mt-5 flex flex-wrap gap-2 text-xs text-muted-foreground">
           {view.config.filter ? (
             <span className="rounded-full border bg-card px-3 py-1.5">
-              筛选：{view.config.filter.field}{" "}
-              {OPERATOR_LABEL[view.config.filter.operator] ??
-                view.config.filter.operator}
-              {view.config.filter.value == null
-                ? ""
-                : ` ${String(view.config.filter.value)}`}
+              {view.config.filter.conditions
+                ? `高级筛选：${view.config.filter.conditions.length} 组`
+                : `筛选：${view.config.filter.field ?? ""} ${
+                    view.config.filter.operator
+                      ? (OPERATOR_LABEL[view.config.filter.operator] ??
+                        view.config.filter.operator)
+                      : ""
+                  }`}
             </span>
           ) : null}
-          {view.config.sort ? (
+          {(view.config.sorts?.length ?? 0) > 0 || view.config.sort ? (
             <span className="rounded-full border bg-card px-3 py-1.5">
-              排序：{view.config.sort.field} ·{" "}
-              {view.config.sort.direction === "asc" ? "升序" : "降序"}
+              排序链：
+              {view.config.sorts?.length ?? (view.config.sort ? 1 : 0)} 项
             </span>
           ) : null}
-          {view.config.groupBy ? (
+          {viewGroups.length > 0 ? (
             <span className="rounded-full border bg-card px-3 py-1.5">
-              分组：{groupField?.title ?? view.config.groupBy}
+              分组：{viewGroups.map((group) => group.field).join(" / ")}
             </span>
           ) : null}
-          {!view.config.filter && !view.config.sort && !view.config.groupBy ? (
+          {!view.config.filter &&
+          !view.config.sort &&
+          !view.config.sorts?.length &&
+          viewGroups.length === 0 ? (
             <span className="flex items-center gap-1.5 rounded-full border bg-card px-3 py-1.5">
               <SlidersHorizontal className="size-3.5" aria-hidden />
               无附加查询条件
@@ -184,23 +229,33 @@ export function DatasetViewPage({ id }: { id: string }) {
       </header>
 
       <section className="mt-7" aria-label="保存视图结果">
-        {recordState.error ? (
+        {view.viewType === "dashboard" ? (
+          <DatasetDashboard view={view} fields={allFields} />
+        ) : recordState.error ? (
           <div className="rounded-2xl border border-destructive/20 bg-destructive/5 p-5 text-sm text-destructive">
             视图查询暂时失败。
           </div>
-        ) : recordState.isLoading && !recordState.data ? (
+        ) : recordState.isLoading &&
+          !recordState.data &&
+          view.viewType !== "form" ? (
           <div className="h-56 animate-pulse rounded-2xl border bg-muted/35" />
-        ) : view.viewType === "cards" ? (
-          <DatasetRecordCards fields={visibleFields} records={records} />
-        ) : view.viewType === "chart" ? (
-          <DatasetGroupChart
-            groups={groups}
-            label={groupField?.title ?? view.config.groupBy ?? "字段"}
-          />
         ) : (
-          <DatasetRecordTable fields={visibleFields} records={records} />
+          <DatasetViewRenderer
+            view={view}
+            fields={allFields}
+            records={records}
+            groupCounts={groups}
+            onBoardMove={
+              view.viewType === "board" && isAuthenticated
+                ? moveBoardRecord
+                : undefined
+            }
+          />
         )}
-        {canLoadMore && view.viewType !== "chart" ? (
+        {canLoadMore &&
+        view.viewType !== "chart" &&
+        view.viewType !== "dashboard" &&
+        view.viewType !== "form" ? (
           <Button
             type="button"
             variant="outline"

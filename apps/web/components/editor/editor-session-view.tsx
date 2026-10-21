@@ -28,7 +28,7 @@ import {
 } from "@/components/ui/dialog";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
-import { pagesApi, readingApi } from "@/lib/api";
+import { pagesApi, readingApi, sourcesApi } from "@/lib/api";
 import { parseDocument, type Document } from "@/lib/ast/schema";
 import { isUnauthorized, LOGIN_PATH } from "@/lib/auth";
 import {
@@ -109,6 +109,14 @@ export function EditorSessionView({
     presenceCursorRef.current = cursor;
     collaborationRef.current?.sendPresence(cursor);
   }, []);
+
+  const resolveLinkPreview = useCallback(
+    (url: string) =>
+      sourcesApi().resolveLinkPreview({
+        resolveLinkPreviewRequest: { url },
+      }),
+    [],
+  );
 
   useEffect(() => {
     const timer = setInterval(() => {
@@ -383,6 +391,7 @@ export function EditorSessionView({
           <BlockEditor
             key={editorEpoch}
             pageId={pageId}
+            resolveLinkPreview={resolveLinkPreview}
             initialAst={session.ast}
             onChange={(ast) => {
               session.setAst(ast);

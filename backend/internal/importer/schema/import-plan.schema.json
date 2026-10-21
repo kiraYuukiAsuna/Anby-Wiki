@@ -194,8 +194,15 @@
         { "$ref": "#/$defs/heading_block" },
         { "$ref": "#/$defs/paragraph_block" },
         { "$ref": "#/$defs/bullet_list_block" },
+        { "$ref": "#/$defs/ordered_list_block" },
         { "$ref": "#/$defs/quote_block" },
-        { "$ref": "#/$defs/code_block" }
+        { "$ref": "#/$defs/code_block" },
+        { "$ref": "#/$defs/preformatted_block" },
+        { "$ref": "#/$defs/equation_block" },
+        { "$ref": "#/$defs/todo_block" },
+        { "$ref": "#/$defs/toggle_block" },
+        { "$ref": "#/$defs/callout_block" },
+        { "$ref": "#/$defs/table_block" }
       ]
     },
     "heading_block": {
@@ -208,6 +215,12 @@
         "target_block_id": { "type": ["string", "null"], "format": "uuid" },
         "text": { "type": "string", "minLength": 1, "maxLength": 500 },
         "level": { "type": "integer", "minimum": 1, "maximum": 6 },
+        "is_toggleable": { "type": "boolean" },
+        "children": {
+          "type": "array",
+          "maxItems": 50,
+          "items": { "$ref": "#/$defs/block" }
+        },
         "evidence": {
           "type": "array",
           "minItems": 1,
@@ -297,6 +310,42 @@
         }
       ]
     },
+    "ordered_list_block": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["type", "mode", "target_block_id", "items", "evidence"],
+      "properties": {
+        "type": { "const": "ordered_list" },
+        "mode": { "enum": ["append", "replace"] },
+        "target_block_id": { "type": ["string", "null"], "format": "uuid" },
+        "items": {
+          "type": "array",
+          "minItems": 1,
+          "maxItems": 50,
+          "items": { "type": "string", "minLength": 1, "maxLength": 2000 }
+        },
+        "evidence": {
+          "type": "array",
+          "minItems": 1,
+          "maxItems": 8,
+          "items": { "$ref": "#/$defs/evidence" }
+        }
+      },
+      "oneOf": [
+        {
+          "properties": {
+            "mode": { "const": "append" },
+            "target_block_id": { "type": "null" }
+          }
+        },
+        {
+          "properties": {
+            "mode": { "const": "replace" },
+            "target_block_id": { "$ref": "#/$defs/uuid" }
+          }
+        }
+      ]
+    },
     "quote_block": {
       "type": "object",
       "additionalProperties": false,
@@ -337,6 +386,8 @@
         "mode": { "enum": ["append", "replace"] },
         "target_block_id": { "type": ["string", "null"], "format": "uuid" },
         "text": { "type": "string", "minLength": 1, "maxLength": 12000 },
+        "language": { "type": "string", "maxLength": 64 },
+        "caption": { "type": "string", "maxLength": 1000 },
         "evidence": {
           "type": "array",
           "minItems": 1,
@@ -357,6 +408,169 @@
             "target_block_id": { "$ref": "#/$defs/uuid" }
           }
         }
+      ]
+    },
+    "preformatted_block": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["type", "mode", "target_block_id", "text", "kind", "evidence"],
+      "properties": {
+        "type": { "const": "preformatted" },
+        "mode": { "enum": ["append", "replace"] },
+        "target_block_id": { "type": ["string", "null"], "format": "uuid" },
+        "text": { "type": "string", "minLength": 1, "maxLength": 12000 },
+        "kind": { "enum": ["ascii_diagram", "fixed_table", "protocol_trace", "formula_text", "plain"] },
+        "caption": { "type": "string", "maxLength": 1000 },
+        "evidence": {
+          "type": "array",
+          "minItems": 1,
+          "maxItems": 8,
+          "items": { "$ref": "#/$defs/evidence" }
+        }
+      },
+      "oneOf": [
+        { "properties": { "mode": { "const": "append" }, "target_block_id": { "type": "null" } } },
+        { "properties": { "mode": { "const": "replace" }, "target_block_id": { "$ref": "#/$defs/uuid" } } }
+      ]
+    },
+    "equation_block": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["type", "mode", "target_block_id", "expression", "evidence"],
+      "properties": {
+        "type": { "const": "equation" },
+        "mode": { "enum": ["append", "replace"] },
+        "target_block_id": { "type": ["string", "null"], "format": "uuid" },
+        "expression": { "type": "string", "minLength": 1, "maxLength": 12000 },
+        "caption": { "type": "string", "maxLength": 1000 },
+        "evidence": {
+          "type": "array",
+          "minItems": 1,
+          "maxItems": 8,
+          "items": { "$ref": "#/$defs/evidence" }
+        }
+      },
+      "oneOf": [
+        { "properties": { "mode": { "const": "append" }, "target_block_id": { "type": "null" } } },
+        { "properties": { "mode": { "const": "replace" }, "target_block_id": { "$ref": "#/$defs/uuid" } } }
+      ]
+    },
+    "todo_block": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["type", "mode", "target_block_id", "text", "checked", "evidence"],
+      "properties": {
+        "type": { "const": "todo" },
+        "mode": { "enum": ["append", "replace"] },
+        "target_block_id": { "type": ["string", "null"], "format": "uuid" },
+        "text": { "type": "string", "minLength": 1, "maxLength": 12000 },
+        "checked": { "type": "boolean" },
+        "children": {
+          "type": "array",
+          "maxItems": 50,
+          "items": { "$ref": "#/$defs/block" }
+        },
+        "evidence": {
+          "type": "array",
+          "minItems": 1,
+          "maxItems": 8,
+          "items": { "$ref": "#/$defs/evidence" }
+        }
+      },
+      "oneOf": [
+        { "properties": { "mode": { "const": "append" }, "target_block_id": { "type": "null" } } },
+        { "properties": { "mode": { "const": "replace" }, "target_block_id": { "$ref": "#/$defs/uuid" } } }
+      ]
+    },
+    "toggle_block": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["type", "mode", "target_block_id", "text", "evidence"],
+      "properties": {
+        "type": { "const": "toggle" },
+        "mode": { "enum": ["append", "replace"] },
+        "target_block_id": { "type": ["string", "null"], "format": "uuid" },
+        "text": { "type": "string", "minLength": 1, "maxLength": 12000 },
+        "children": {
+          "type": "array",
+          "maxItems": 50,
+          "items": { "$ref": "#/$defs/block" }
+        },
+        "evidence": {
+          "type": "array",
+          "minItems": 1,
+          "maxItems": 8,
+          "items": { "$ref": "#/$defs/evidence" }
+        }
+      },
+      "oneOf": [
+        { "properties": { "mode": { "const": "append" }, "target_block_id": { "type": "null" } } },
+        { "properties": { "mode": { "const": "replace" }, "target_block_id": { "$ref": "#/$defs/uuid" } } }
+      ]
+    },
+    "callout_block": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["type", "mode", "target_block_id", "text", "kind", "evidence"],
+      "properties": {
+        "type": { "const": "callout" },
+        "mode": { "enum": ["append", "replace"] },
+        "target_block_id": { "type": ["string", "null"], "format": "uuid" },
+        "text": { "type": "string", "minLength": 1, "maxLength": 12000 },
+        "kind": { "enum": ["info", "warning", "danger"] },
+        "icon": { "type": "string", "minLength": 1, "maxLength": 64 },
+        "color": {
+          "enum": ["default", "gray", "brown", "orange", "yellow", "green", "blue", "purple", "pink", "red"]
+        },
+        "children": {
+          "type": "array",
+          "maxItems": 50,
+          "items": { "$ref": "#/$defs/block" }
+        },
+        "evidence": {
+          "type": "array",
+          "minItems": 1,
+          "maxItems": 8,
+          "items": { "$ref": "#/$defs/evidence" }
+        }
+      },
+      "oneOf": [
+        { "properties": { "mode": { "const": "append" }, "target_block_id": { "type": "null" } } },
+        { "properties": { "mode": { "const": "replace" }, "target_block_id": { "$ref": "#/$defs/uuid" } } }
+      ]
+    },
+    "table_block": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["type", "mode", "target_block_id", "rows", "evidence"],
+      "properties": {
+        "type": { "const": "table" },
+        "mode": { "enum": ["append", "replace"] },
+        "target_block_id": { "type": ["string", "null"], "format": "uuid" },
+        "caption": { "type": "string", "maxLength": 1000 },
+        "has_column_header": { "type": "boolean" },
+        "has_row_header": { "type": "boolean" },
+        "rows": {
+          "type": "array",
+          "minItems": 1,
+          "maxItems": 200,
+          "items": {
+            "type": "array",
+            "minItems": 1,
+            "maxItems": 100,
+            "items": { "type": "string", "maxLength": 4000 }
+          }
+        },
+        "evidence": {
+          "type": "array",
+          "minItems": 1,
+          "maxItems": 8,
+          "items": { "$ref": "#/$defs/evidence" }
+        }
+      },
+      "oneOf": [
+        { "properties": { "mode": { "const": "append" }, "target_block_id": { "type": "null" } } },
+        { "properties": { "mode": { "const": "replace" }, "target_block_id": { "$ref": "#/$defs/uuid" } } }
       ]
     }
   }

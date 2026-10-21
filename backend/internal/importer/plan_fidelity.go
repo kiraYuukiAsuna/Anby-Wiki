@@ -414,14 +414,20 @@ func planFidelityDraftView(plan *ImportPlan) []planFidelityRouteView {
 			switch block.Type {
 			case string(ast.BlockHeading):
 				blocks = append(blocks, strings.Repeat("#", max(1, block.Level))+" "+block.Text)
-			case string(ast.BlockBulletList):
+			case string(ast.BlockBulletList), string(ast.BlockOrderedList):
 				for _, item := range block.Items {
 					blocks = append(blocks, "- "+item)
 				}
 			case string(ast.BlockCode):
-				blocks = append(blocks, "```\n"+block.Text+"\n```")
+				blocks = append(blocks, "```"+block.Language+"\n"+block.Text+"\n```")
+			case string(ast.BlockPreformatted):
+				blocks = append(blocks, "<preformatted kind=\""+block.Kind+"\">\n"+block.Text+"\n</preformatted>")
+			case string(ast.BlockEquation):
+				blocks = append(blocks, "$$\n"+block.Expression+"\n$$")
+			case string(ast.BlockTable):
+				blocks = append(blocks, plannedBlockText(block))
 			default:
-				blocks = append(blocks, block.Text)
+				blocks = append(blocks, plannedBlockText(block))
 			}
 		}
 		result = append(result, planFidelityRouteView{
@@ -525,10 +531,7 @@ func routeContainsEquivalentProse(route PageRoute, incoming string) bool {
 		if block.Type == string(ast.BlockHeading) {
 			continue
 		}
-		text := block.Text
-		if block.Type == string(ast.BlockBulletList) {
-			text = strings.Join(block.Items, " ")
-		}
+		text := plannedBlockText(block)
 		if proseEquivalent(text, incoming) {
 			return true
 		}
@@ -711,20 +714,22 @@ func planMinimumGroundingScore(plan *ImportPlan) float64 {
 }
 
 func plannedBlockGroundingScore(block PlannedBlock) float64 {
-	if len(block.Evidence) == 0 {
+	evidence := plannedBlockEvidence(block)
+	if len(evidence) == 0 {
 		return 0
 	}
-	if block.Type == string(ast.BlockCode) {
+	if block.Type == string(ast.BlockCode) || block.Type == string(ast.BlockPreformatted) {
 		wanted := preformattedKey(block.Text)
-		for _, item := range block.Evidence {
+		for _, item := range evidence {
 			if wanted != "" && preformattedKey(item.Quotation) == wanted {
 				return 1
 			}
 		}
 		return 0
 	}
-	statements := splitPlanSentences(block.Text)
-	if block.Type == string(ast.BlockBulletList) {
+	statements := splitPlanSentences(plannedBlockText(block))
+	if block.Type == string(ast.BlockBulletList) ||
+		block.Type == string(ast.BlockOrderedList) {
 		statements = block.Items
 	}
 	if len(statements) == 0 {
@@ -732,7 +737,7 @@ func plannedBlockGroundingScore(block PlannedBlock) float64 {
 	}
 	quotedRunes := 0
 	seen := map[string]bool{}
-	for _, item := range block.Evidence {
+	for _, item := range evidence {
 		key := evidenceKey(item)
 		if !seen[key] {
 			seen[key] = true
@@ -814,11 +819,7 @@ func planStructureScore(plan *ImportPlan, sourceRunes int) float64 {
 				continue
 			}
 			contentBlocks++
-			if block.Type == string(ast.BlockBulletList) {
-				contentRunes += utf8.RuneCountInString(strings.Join(block.Items, " "))
-			} else {
-				contentRunes += utf8.RuneCountInString(block.Text)
-			}
+			contentRunes += utf8.RuneCountInString(plannedBlockText(block))
 		}
 		headingDensity := 1.0
 		if contentBlocks == 0 {
@@ -871,14 +872,16 @@ func planConcisionScore(plan *ImportPlan) float64 {
 				}
 				continue
 			}
-			if block.Type == string(ast.BlockBulletList) {
+			if block.Type == string(ast.BlockBulletList) ||
+				block.Type == string(ast.BlockOrderedList) {
 				for _, item := range block.Items {
 					texts = append(texts, content{text: item})
 				}
-			} else if block.Type == string(ast.BlockCode) {
+			} else if block.Type == string(ast.BlockCode) ||
+				block.Type == string(ast.BlockPreformatted) {
 				texts = append(texts, content{text: preformattedKey(block.Text), exact: true})
 			} else {
-				for _, sentence := range splitPlanSentences(block.Text) {
+				for _, sentence := range splitPlanSentences(plannedBlockText(block)) {
 					texts = append(texts, content{text: sentence})
 				}
 			}

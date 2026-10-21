@@ -9,10 +9,13 @@ All URIs are relative to *http://localhost:3000*
 | [**createDatasetView**](DatasetsApi.md#createdatasetviewoperation) | **POST** /api/v1/datasets/{id}/views | 创建筛选、排序与分组视图 |
 | [**getDataset**](DatasetsApi.md#getdataset) | **GET** /api/v1/datasets/{id} | 读取 Dataset 定义 |
 | [**getDatasetView**](DatasetsApi.md#getdatasetview) | **GET** /api/v1/dataset-views/{id} | 读取保存的 DatasetView |
+| [**getPublicDatasetForm**](DatasetsApi.md#getpublicdatasetform) | **GET** /api/v1/public/dataset-forms/{id} | 读取公开 Dataset Form 定义 |
 | [**listDatasetRecords**](DatasetsApi.md#listdatasetrecords) | **GET** /api/v1/datasets/{id}/records | 按稳定默认顺序列出 DatasetRecord |
 | [**listDatasetViews**](DatasetsApi.md#listdatasetviews) | **GET** /api/v1/datasets/{id}/views | 列出 Dataset 的保存视图 |
 | [**listDatasets**](DatasetsApi.md#listdatasets) | **GET** /api/v1/datasets | 列出站点 Dataset |
 | [**queryDatasetView**](DatasetsApi.md#querydatasetview) | **GET** /api/v1/dataset-views/{id}/records | 执行保存视图的筛选、排序与分组 |
+| [**queryDatasetViewWithFilter**](DatasetsApi.md#querydatasetviewwithfilter) | **POST** /api/v1/dataset-views/{id}/query | 使用运行时过滤器执行保存视图 |
+| [**submitPublicDatasetForm**](DatasetsApi.md#submitpublicdatasetformoperation) | **POST** /api/v1/public/dataset-forms/{id}/submissions | 公开提交经 Dataset Schema 校验的记录 |
 | [**updateDatasetRecord**](DatasetsApi.md#updatedatasetrecord) | **PUT** /api/v1/dataset-records/{id} | 更新记录并重新执行 Dataset Schema 校验 |
 
 
@@ -381,6 +384,72 @@ No authorization required
 [[Back to top]](#) [[Back to API list]](../README.md#api-endpoints) [[Back to Model list]](../README.md#models) [[Back to README]](../README.md)
 
 
+## getPublicDatasetForm
+
+> PublicDatasetForm getPublicDatasetForm(id)
+
+读取公开 Dataset Form 定义
+
+### Example
+
+```ts
+import {
+  Configuration,
+  DatasetsApi,
+} from '';
+import type { GetPublicDatasetFormRequest } from '';
+
+async function example() {
+  console.log("🚀 Testing  SDK...");
+  const api = new DatasetsApi();
+
+  const body = {
+    // string | Proposal、ReviewTask 或 ChangeBatch ID
+    id: 38400000-8cf0-11bd-b23e-10b96e4ef00d,
+  } satisfies GetPublicDatasetFormRequest;
+
+  try {
+    const data = await api.getPublicDatasetForm(body);
+    console.log(data);
+  } catch (error) {
+    console.error(error);
+  }
+}
+
+// Run the test
+example().catch(console.error);
+```
+
+### Parameters
+
+
+| Name | Type | Description  | Notes |
+|------------- | ------------- | ------------- | -------------|
+| **id** | `string` | Proposal、ReviewTask 或 ChangeBatch ID | [Defaults to `undefined`] |
+
+### Return type
+
+[**PublicDatasetForm**](PublicDatasetForm.md)
+
+### Authorization
+
+No authorization required
+
+### HTTP request headers
+
+- **Content-Type**: Not defined
+- **Accept**: `application/json`
+
+
+### HTTP response details
+| Status code | Description | Response headers |
+|-------------|-------------|------------------|
+| **200** | 公开表单定义 |  -  |
+| **404** | 资源不存在 |  -  |
+
+[[Back to top]](#) [[Back to API list]](../README.md#api-endpoints) [[Back to Model list]](../README.md#models) [[Back to README]](../README.md)
+
+
 ## listDatasetRecords
 
 > DatasetRecordPage listDatasetRecords(id, cursor, pageSize)
@@ -658,6 +727,153 @@ No authorization required
 | **200** | DatasetView 查询结果 |  -  |
 | **400** | 请求格式错误 |  -  |
 | **404** | 资源不存在 |  -  |
+
+[[Back to top]](#) [[Back to API list]](../README.md#api-endpoints) [[Back to Model list]](../README.md#models) [[Back to README]](../README.md)
+
+
+## queryDatasetViewWithFilter
+
+> DatasetRecordPage queryDatasetViewWithFilter(id, datasetViewRuntimeQuery, cursor, pageSize)
+
+使用运行时过滤器执行保存视图
+
+### Example
+
+```ts
+import {
+  Configuration,
+  DatasetsApi,
+} from '';
+import type { QueryDatasetViewWithFilterRequest } from '';
+
+async function example() {
+  console.log("🚀 Testing  SDK...");
+  const api = new DatasetsApi();
+
+  const body = {
+    // string | Proposal、ReviewTask 或 ChangeBatch ID
+    id: 38400000-8cf0-11bd-b23e-10b96e4ef00d,
+    // DatasetViewRuntimeQuery
+    datasetViewRuntimeQuery: ...,
+    // string | 上一页响应返回的 next_cursor；首页不传 (optional)
+    cursor: cursor_example,
+    // number | 每页条数，默认 20，最大 100 (optional)
+    pageSize: 56,
+  } satisfies QueryDatasetViewWithFilterRequest;
+
+  try {
+    const data = await api.queryDatasetViewWithFilter(body);
+    console.log(data);
+  } catch (error) {
+    console.error(error);
+  }
+}
+
+// Run the test
+example().catch(console.error);
+```
+
+### Parameters
+
+
+| Name | Type | Description  | Notes |
+|------------- | ------------- | ------------- | -------------|
+| **id** | `string` | Proposal、ReviewTask 或 ChangeBatch ID | [Defaults to `undefined`] |
+| **datasetViewRuntimeQuery** | [DatasetViewRuntimeQuery](DatasetViewRuntimeQuery.md) |  | |
+| **cursor** | `string` | 上一页响应返回的 next_cursor；首页不传 | [Optional] [Defaults to `undefined`] |
+| **pageSize** | `number` | 每页条数，默认 20，最大 100 | [Optional] [Defaults to `20`] |
+
+### Return type
+
+[**DatasetRecordPage**](DatasetRecordPage.md)
+
+### Authorization
+
+No authorization required
+
+### HTTP request headers
+
+- **Content-Type**: `application/json`
+- **Accept**: `application/json`
+
+
+### HTTP response details
+| Status code | Description | Response headers |
+|-------------|-------------|------------------|
+| **200** | DatasetView 查询结果 |  -  |
+| **400** | 请求格式错误 |  -  |
+| **404** | 资源不存在 |  -  |
+| **422** | 请求语义可理解但无法处理（如重定向环/重定向链过深） |  -  |
+
+[[Back to top]](#) [[Back to API list]](../README.md#api-endpoints) [[Back to Model list]](../README.md#models) [[Back to README]](../README.md)
+
+
+## submitPublicDatasetForm
+
+> DatasetRecord submitPublicDatasetForm(id, submitPublicDatasetFormRequest)
+
+公开提交经 Dataset Schema 校验的记录
+
+### Example
+
+```ts
+import {
+  Configuration,
+  DatasetsApi,
+} from '';
+import type { SubmitPublicDatasetFormOperationRequest } from '';
+
+async function example() {
+  console.log("🚀 Testing  SDK...");
+  const api = new DatasetsApi();
+
+  const body = {
+    // string | Proposal、ReviewTask 或 ChangeBatch ID
+    id: 38400000-8cf0-11bd-b23e-10b96e4ef00d,
+    // SubmitPublicDatasetFormRequest
+    submitPublicDatasetFormRequest: ...,
+  } satisfies SubmitPublicDatasetFormOperationRequest;
+
+  try {
+    const data = await api.submitPublicDatasetForm(body);
+    console.log(data);
+  } catch (error) {
+    console.error(error);
+  }
+}
+
+// Run the test
+example().catch(console.error);
+```
+
+### Parameters
+
+
+| Name | Type | Description  | Notes |
+|------------- | ------------- | ------------- | -------------|
+| **id** | `string` | Proposal、ReviewTask 或 ChangeBatch ID | [Defaults to `undefined`] |
+| **submitPublicDatasetFormRequest** | [SubmitPublicDatasetFormRequest](SubmitPublicDatasetFormRequest.md) |  | |
+
+### Return type
+
+[**DatasetRecord**](DatasetRecord.md)
+
+### Authorization
+
+No authorization required
+
+### HTTP request headers
+
+- **Content-Type**: `application/json`
+- **Accept**: `application/json`
+
+
+### HTTP response details
+| Status code | Description | Response headers |
+|-------------|-------------|------------------|
+| **201** | 已创建的 DatasetRecord |  -  |
+| **404** | 资源不存在 |  -  |
+| **422** | 请求语义可理解但无法处理（如重定向环/重定向链过深） |  -  |
 
 [[Back to top]](#) [[Back to API list]](../README.md#api-endpoints) [[Back to Model list]](../README.md#models) [[Back to README]](../README.md)
 

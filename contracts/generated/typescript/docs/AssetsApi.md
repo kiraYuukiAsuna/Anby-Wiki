@@ -84,6 +84,8 @@ No authorization required
 
 流式读取不可变资产版本内容
 
+按真实 MIME 与不可变缓存头返回原始字节；application/pdf 额外允许同源 frame， 供正文 PDF 阅读块使用，其他响应保持禁止嵌入。
+
 ### Example
 
 ```ts
@@ -171,7 +173,7 @@ async function example() {
     cursor: cursor_example,
     // number | 每页条数，默认 20，最大 100 (optional)
     pageSize: 56,
-    // 'image' | 'video' | 'other' (optional)
+    // 'image' | 'video' | 'audio' | 'pdf' | 'other' (optional)
     kind: kind_example,
   } satisfies ListAssetsRequest;
 
@@ -194,7 +196,7 @@ example().catch(console.error);
 |------------- | ------------- | ------------- | -------------|
 | **cursor** | `string` | 上一页响应返回的 next_cursor；首页不传 | [Optional] [Defaults to `undefined`] |
 | **pageSize** | `number` | 每页条数，默认 20，最大 100 | [Optional] [Defaults to `20`] |
-| **kind** | `image`, `video`, `other` |  | [Optional] [Defaults to `undefined`] [Enum: image, video, other] |
+| **kind** | `image`, `video`, `audio`, `pdf`, `other` |  | [Optional] [Defaults to `undefined`] [Enum: image, video, audio, pdf, other] |
 
 ### Return type
 

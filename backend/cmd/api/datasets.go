@@ -210,13 +210,77 @@ func (a *DatasetAPI) queryView(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	result, err := a.service.QueryView(
-		r.Context(), a.wikiID, viewID, r.URL.Query().Get("cursor"), limit,
+		r.Context(), a.wikiID, viewID, r.URL.Query().Get("cursor"), limit, nil,
 	)
 	if err != nil {
 		datasetError(w, r, err)
 		return
 	}
 	httpx.WriteJSON(w, http.StatusOK, result)
+}
+
+type queryViewRequest struct {
+	Filter *dataset.ViewFilter `json:"filter"`
+}
+
+func (a *DatasetAPI) queryViewWithFilter(w http.ResponseWriter, r *http.Request) {
+	viewID, ok := datasetPathID(w, r, "id")
+	if !ok {
+		return
+	}
+	limit, ok := pageSizeFrom(w, r)
+	if !ok {
+		return
+	}
+	var request queryViewRequest
+	if !decodeJSON(w, r, &request) {
+		return
+	}
+	result, err := a.service.QueryView(
+		r.Context(), a.wikiID, viewID, r.URL.Query().Get("cursor"), limit,
+		request.Filter,
+	)
+	if err != nil {
+		datasetError(w, r, err)
+		return
+	}
+	httpx.WriteJSON(w, http.StatusOK, result)
+}
+
+func (a *DatasetAPI) getPublicForm(w http.ResponseWriter, r *http.Request) {
+	viewID, ok := datasetPathID(w, r, "id")
+	if !ok {
+		return
+	}
+	result, err := a.service.GetPublicForm(r.Context(), a.wikiID, viewID)
+	if err != nil {
+		datasetError(w, r, err)
+		return
+	}
+	httpx.WriteJSON(w, http.StatusOK, result)
+}
+
+type publicFormSubmissionRequest struct {
+	Values json.RawMessage `json:"values"`
+}
+
+func (a *DatasetAPI) submitPublicForm(w http.ResponseWriter, r *http.Request) {
+	viewID, ok := datasetPathID(w, r, "id")
+	if !ok {
+		return
+	}
+	var request publicFormSubmissionRequest
+	if !decodeJSON(w, r, &request) {
+		return
+	}
+	result, err := a.service.SubmitPublicForm(
+		r.Context(), a.wikiID, viewID, request.Values,
+	)
+	if err != nil {
+		datasetError(w, r, err)
+		return
+	}
+	httpx.WriteJSON(w, http.StatusCreated, result)
 }
 
 func datasetPathID(w http.ResponseWriter, r *http.Request, name string) (uuid.UUID, bool) {

@@ -1,6 +1,11 @@
 import type { Dataset } from "../../../contracts/generated/typescript";
 
-export type DatasetFieldType = "string" | "number" | "integer" | "boolean";
+export type DatasetFieldType =
+  | "string"
+  | "number"
+  | "integer"
+  | "boolean"
+  | "date";
 
 export interface DatasetField {
   key: string;
@@ -27,12 +32,15 @@ export function datasetFields(dataset: Dataset): DatasetField[] {
   );
   return Object.entries(properties).flatMap(([key, raw]) => {
     const property = objectValue(raw);
-    const type = property?.type;
+    const rawType = property?.type;
+    const type =
+      rawType === "string" && property?.format === "date" ? "date" : rawType;
     if (
       type !== "string" &&
       type !== "number" &&
       type !== "integer" &&
-      type !== "boolean"
+      type !== "boolean" &&
+      type !== "date"
     ) {
       return [];
     }

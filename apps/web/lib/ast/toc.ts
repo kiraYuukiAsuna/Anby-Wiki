@@ -27,6 +27,8 @@ export function inlineToPlainText(nodes: InlineNode[]): string {
         case "claim_reference":
         case "citation_reference":
         case "mention":
+        case "date_mention":
+        case "database_mention":
           return node.display_text;
         case "math":
           return node.expression;
@@ -43,10 +45,9 @@ function collectHeadings(blocks: Block[], out: TocEntry[]): void {
         level: block.level,
         text: inlineToPlainText(block.content),
       });
-      continue;
     }
     if ("children" in block) {
-      collectHeadings(block.children, out);
+      collectHeadings(block.children ?? [], out);
     }
   }
 }

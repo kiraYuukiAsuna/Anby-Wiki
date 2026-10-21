@@ -13,6 +13,8 @@ package render
 
 import (
 	"context"
+	"encoding/base64"
+	"encoding/json"
 	"fmt"
 	"html"
 	"net/url"
@@ -23,7 +25,7 @@ import (
 
 // RendererVersion 渲染器版本。渲染规则发生任何影响输出的变更时必须升版
 // （M3 的 RenderedPage 投影按此版本判断缓存是否需要重建）。变更规则见 README。
-const RendererVersion = "v8"
+const RendererVersion = "v12"
 
 type renderContext struct {
 	citationNumbers map[string]int
@@ -155,6 +157,19 @@ func renderBlock(b *strings.Builder, blk *ast.Block, ctx *renderContext) error {
 		if level < 1 || level > 6 {
 			return fmt.Errorf("render: heading Block %s level=%d 越界", blk.ID, level)
 		}
+		if blk.IsToggleable {
+			fmt.Fprintf(b, `<details class="toggleable-heading"><summary id="%s"><span role="heading" aria-level="%d">`,
+				html.EscapeString(blk.ID), level)
+			if err := renderInlines(b, blk, ctx); err != nil {
+				return err
+			}
+			b.WriteString("</span></summary>")
+			if err := renderBlocks(b, blk.Children, ctx); err != nil {
+				return err
+			}
+			b.WriteString("</details>")
+			return nil
+		}
 		tag := fmt.Sprintf("h%d", level)
 		fmt.Fprintf(b, `<%s id="%s">`, tag, html.EscapeString(blk.ID))
 		if err := renderInlines(b, blk, ctx); err != nil {
@@ -171,6 +186,100 @@ func renderBlock(b *strings.Builder, blk *ast.Block, ctx *renderContext) error {
 		b.WriteString("</p>")
 		return nil
 
+	case ast.BlockTodo:
+		checked := blk.Checked != nil && *blk.Checked
+		fmt.Fprintf(b, `<div class="todo" data-checked="%t"><input type="checkbox" disabled`, checked)
+		if checked {
+			b.WriteString(" checked")
+		}
+		b.WriteString(` aria-hidden="true"><span class="todo-content">`)
+		if err := renderInlines(b, blk, ctx); err != nil {
+			return err
+		}
+		b.WriteString("</span>")
+		if err := renderBlocks(b, blk.Children, ctx); err != nil {
+			return err
+		}
+		b.WriteString("</div>")
+		return nil
+
+	case ast.BlockToggle:
+		b.WriteString(`<details class="toggle"><summary>`)
+		if err := renderInlines(b, blk, ctx); err != nil {
+			return err
+		}
+		b.WriteString("</summary>")
+		if err := renderBlocks(b, blk.Children, ctx); err != nil {
+			return err
+		}
+		b.WriteString("</details>")
+		return nil
+
+	case ast.BlockBreadcrumb:
+		b.WriteString(`<nav class="wiki-breadcrumb" aria-label="Breadcrumb"><ol>`)
+		for index, item := range blk.Items {
+			b.WriteString("<li>")
+			if item.TargetPageID != "" {
+				fmt.Fprintf(b, `<a href="/pages/%s">%s</a>`,
+					html.EscapeString(item.TargetPageID), html.EscapeString(item.DisplayText))
+			} else {
+				fmt.Fprintf(b, `<span aria-current="page">%s</span>`, html.EscapeString(item.DisplayText))
+			}
+			b.WriteString("</li>")
+			if index < len(blk.Items)-1 {
+				b.WriteString(`<li class="breadcrumb-separator" aria-hidden="true">/</li>`)
+			}
+		}
+		b.WriteString("</ol></nav>")
+		return nil
+
+	case ast.BlockColumnList:
+		b.WriteString(`<div class="column-list">`)
+		if err := renderBlocks(b, blk.Children, ctx); err != nil {
+			return err
+		}
+		b.WriteString("</div>")
+		return nil
+
+	case ast.BlockColumn:
+		fmt.Fprintf(b, `<section class="column" style="--column-ratio:%g">`, blk.WidthRatio)
+		if err := renderBlocks(b, blk.Children, ctx); err != nil {
+			return err
+		}
+		b.WriteString("</section>")
+		return nil
+
+	case ast.BlockButton:
+		actions, err := json.Marshal(blk.Actions)
+		if err != nil {
+			return fmt.Errorf("render: ButtonBlock %s 动作序列化失败: %w", blk.ID, err)
+		}
+		fmt.Fprintf(b,
+			`<button class="wiki-button" type="button" data-page-button data-block-id="%s" data-actions="%s"`,
+			html.EscapeString(blk.ID),
+			html.EscapeString(base64.RawURLEncoding.EncodeToString(actions)),
+		)
+		if blk.Confirmation != "" {
+			fmt.Fprintf(b, ` data-confirmation="%s"`, html.EscapeString(blk.Confirmation))
+		}
+		fmt.Fprintf(b, ">%s</button>", html.EscapeString(blk.Label))
+		return nil
+
+	case ast.BlockHTML:
+		title := blk.Caption
+		if title == "" {
+			title = "HTML content"
+		}
+		srcdoc := isolatedHTMLDocument(blk.HTML)
+		fmt.Fprintf(b,
+			`<figure class="html-block"><iframe sandbox="" loading="lazy" referrerpolicy="no-referrer" title="%s" height="%d" srcdoc="%s"></iframe>`,
+			html.EscapeString(title), blk.Height, html.EscapeString(srcdoc))
+		if blk.Caption != "" {
+			fmt.Fprintf(b, `<figcaption>%s</figcaption>`, html.EscapeString(blk.Caption))
+		}
+		b.WriteString("</figure>")
+		return nil
+
 	case ast.BlockBulletList:
 		return renderContainer(b, blk, "ul", ctx)
 	case ast.BlockOrderedList:
@@ -185,17 +294,23 @@ func renderBlock(b *strings.Builder, blk *ast.Block, ctx *renderContext) error {
 		return renderContainer(b, blk, "blockquote", ctx)
 
 	case ast.BlockTable:
-		b.WriteString("<table><tbody>")
-		if err := renderBlocks(b, blk.Children, ctx); err != nil {
-			return err
-		}
-		b.WriteString("</tbody></table>")
-		return nil
+		return renderTable(b, blk, ctx)
 
 	case ast.BlockCode:
 		code, err := blk.TextContent()
 		if err != nil {
 			return err
+		}
+		b.WriteString(`<figure class="wiki-code">`)
+		if blk.Caption != "" || blk.Language != "" {
+			b.WriteString("<figcaption>")
+			if blk.Caption != "" {
+				fmt.Fprintf(b, `<span class="code-caption">%s</span>`, html.EscapeString(blk.Caption))
+			}
+			if blk.Language != "" {
+				fmt.Fprintf(b, `<span class="code-language">%s</span>`, html.EscapeString(blk.Language))
+			}
+			b.WriteString("</figcaption>")
 		}
 		b.WriteString("<pre><code")
 		if blk.Language != "" {
@@ -203,13 +318,46 @@ func renderBlock(b *strings.Builder, blk *ast.Block, ctx *renderContext) error {
 		}
 		b.WriteString(">")
 		b.WriteString(html.EscapeString(code))
-		b.WriteString("</code></pre>")
+		b.WriteString("</code></pre></figure>")
+		return nil
+
+	case ast.BlockPreformatted:
+		text, err := blk.TextContent()
+		if err != nil {
+			return err
+		}
+		fmt.Fprintf(b, `<figure class="preformatted" data-preformatted-kind="%s">`,
+			html.EscapeString(blk.Kind))
+		if blk.Caption != "" {
+			fmt.Fprintf(b, `<figcaption>%s</figcaption>`, html.EscapeString(blk.Caption))
+		}
+		b.WriteString("<pre><code>")
+		b.WriteString(html.EscapeString(text))
+		b.WriteString("</code></pre></figure>")
+		return nil
+
+	case ast.BlockEquation:
+		fmt.Fprintf(b, `<figure class="equation-block" data-math-expression="%s"><div class="math">%s</div>`,
+			html.EscapeString(blk.Expression), html.EscapeString(blk.Expression))
+		if blk.Caption != "" {
+			fmt.Fprintf(b, `<figcaption>%s</figcaption>`, html.EscapeString(blk.Caption))
+		}
+		b.WriteString("</figure>")
 		return nil
 
 	case ast.BlockCallout:
 		kind := string(blk.Kind)
-		fmt.Fprintf(b, `<div class="callout" data-callout="%s">`, html.EscapeString(kind))
-		fmt.Fprintf(b, `<div class="callout-title">%s</div>`, html.EscapeString(kind))
+		fmt.Fprintf(b, `<div class="callout" data-callout="%s"`, html.EscapeString(kind))
+		if blk.Color != "" {
+			fmt.Fprintf(b, ` data-callout-color="%s"`, html.EscapeString(string(blk.Color)))
+		}
+		b.WriteString(">")
+		b.WriteString(`<div class="callout-title">`)
+		if blk.Icon != "" {
+			fmt.Fprintf(b, `<span class="callout-icon" aria-hidden="true">%s</span>`, html.EscapeString(blk.Icon))
+		}
+		b.WriteString(html.EscapeString(kind))
+		b.WriteString("</div>")
 		if err := renderBlocks(b, blk.Children, ctx); err != nil {
 			return err
 		}
@@ -257,16 +405,89 @@ func renderBlock(b *strings.Builder, blk *ast.Block, ctx *renderContext) error {
 		b.WriteString("</figure>")
 		return nil
 
+	case ast.BlockAudio:
+		fmt.Fprintf(b,
+			`<figure class="wiki-audio"><div class="audio-metadata"><strong>%s</strong>`,
+			html.EscapeString(blk.Title))
+		if blk.Artist != "" {
+			fmt.Fprintf(b, `<span>%s</span>`, html.EscapeString(blk.Artist))
+		}
+		if blk.Album != "" {
+			fmt.Fprintf(b, `<span>%s</span>`, html.EscapeString(blk.Album))
+		}
+		if blk.DurationSeconds != nil {
+			fmt.Fprintf(b, `<span class="audio-duration" data-duration-seconds="%g">%s</span>`,
+				*blk.DurationSeconds, html.EscapeString(formatDurationSeconds(*blk.DurationSeconds)))
+		}
+		b.WriteString(`</div><audio controls preload="metadata" src="/api/v1/assets/revisions/`)
+		b.WriteString(html.EscapeString(blk.AssetRevisionID))
+		b.WriteString(`/content"></audio>`)
+		if blk.Caption != "" {
+			fmt.Fprintf(b, `<figcaption>%s</figcaption>`, html.EscapeString(blk.Caption))
+		}
+		b.WriteString("</figure>")
+		return nil
+
+	case ast.BlockFile:
+		fmt.Fprintf(b,
+			`<aside class="wiki-file"><a href="/api/v1/assets/revisions/%s/content" download="%s"><span class="file-name">%s</span><span class="file-action">Download</span></a>`,
+			html.EscapeString(blk.AssetRevisionID), html.EscapeString(blk.Name),
+			html.EscapeString(blk.Name))
+		if blk.Caption != "" {
+			fmt.Fprintf(b, `<p>%s</p>`, html.EscapeString(blk.Caption))
+		}
+		b.WriteString("</aside>")
+		return nil
+
+	case ast.BlockPDF:
+		title := blk.Title
+		if title == "" {
+			title = "PDF document"
+		}
+		startPage := blk.StartPage
+		if startPage < 1 {
+			startPage = 1
+		}
+		source := fmt.Sprintf(
+			"/api/v1/assets/revisions/%s/content#page=%d&view=FitH",
+			blk.AssetRevisionID, startPage,
+		)
+		fmt.Fprintf(b,
+			`<figure class="wiki-pdf"><iframe src="%s" title="%s" height="%d" loading="lazy"></iframe>`,
+			html.EscapeString(source), html.EscapeString(title), blk.Height)
+		if blk.Caption != "" {
+			fmt.Fprintf(b, `<figcaption>%s</figcaption>`, html.EscapeString(blk.Caption))
+		}
+		b.WriteString("</figure>")
+		return nil
+
 	case ast.BlockDatasetView:
 		fmt.Fprintf(b,
 			`<div class="dataset-view" data-dataset-view-id="%s"><a href="/datasets/views/%s">打开数据视图</a></div>`,
 			html.EscapeString(blk.DatasetViewID), html.EscapeString(blk.DatasetViewID))
 		return nil
 
+	case ast.BlockBookmark:
+		return renderExternalCard(b, blk, "wiki-bookmark")
+
+	case ast.BlockLinkPreview:
+		return renderExternalCard(b, blk, "wiki-link-preview")
+
 	case ast.BlockEmbed:
 		title := blk.Title
 		if title == "" {
 			title = blk.URL
+		}
+		if embedURL, ok := interactiveEmbedURL(blk.Provider, blk.URL); ok {
+			fmt.Fprintf(b,
+				`<figure class="interactive-embed" data-embed-provider="%s"><iframe src="%s" title="%s" loading="lazy" referrerpolicy="strict-origin-when-cross-origin" sandbox="allow-scripts allow-same-origin allow-presentation" allow="accelerometer; autoplay; encrypted-media; gyroscope; picture-in-picture; fullscreen" allowfullscreen></iframe>`,
+				html.EscapeString(blk.Provider), html.EscapeString(embedURL),
+				html.EscapeString(title))
+			if blk.Caption != "" {
+				fmt.Fprintf(b, `<figcaption>%s</figcaption>`, html.EscapeString(blk.Caption))
+			}
+			b.WriteString("</figure>")
+			return nil
 		}
 		if !isSafeExternalURL(blk.URL) {
 			b.WriteString(html.EscapeString(title))
@@ -284,6 +505,165 @@ func renderBlock(b *strings.Builder, blk *ast.Block, ctx *renderContext) error {
 	default:
 		return fmt.Errorf("render: 未知 Block 类型 %q（Block %s）", blk.Type, blk.ID)
 	}
+}
+
+func renderExternalCard(b *strings.Builder, blk *ast.Block, className string) error {
+	if !isSafeExternalURL(blk.URL) {
+		b.WriteString(html.EscapeString(blk.Title))
+		return nil
+	}
+	siteName := blk.SiteName
+	if siteName == "" {
+		if parsed, err := url.Parse(blk.URL); err == nil {
+			siteName = parsed.Hostname()
+		}
+	}
+	fmt.Fprintf(b,
+		`<figure class="%s"><a href="%s" rel="noopener noreferrer nofollow" target="_blank">`,
+		className, html.EscapeString(blk.URL))
+	if siteName != "" {
+		fmt.Fprintf(b, `<span class="preview-site">%s</span>`, html.EscapeString(siteName))
+	}
+	fmt.Fprintf(b, `<strong>%s</strong>`, html.EscapeString(blk.Title))
+	if blk.Description != "" {
+		fmt.Fprintf(b, `<span class="preview-description">%s</span>`,
+			html.EscapeString(blk.Description))
+	}
+	b.WriteString("</a>")
+	if blk.Caption != "" {
+		fmt.Fprintf(b, `<figcaption>%s</figcaption>`, html.EscapeString(blk.Caption))
+	}
+	b.WriteString("</figure>")
+	return nil
+}
+
+func interactiveEmbedURL(provider, rawURL string) (string, bool) {
+	if provider == "" || !isSafeExternalURL(rawURL) {
+		return "", false
+	}
+	parsed, err := url.Parse(rawURL)
+	if err != nil {
+		return "", false
+	}
+	host := strings.TrimPrefix(strings.ToLower(parsed.Hostname()), "www.")
+	switch provider {
+	case "youtube":
+		var videoID string
+		switch host {
+		case "youtu.be":
+			videoID = strings.Split(strings.TrimPrefix(parsed.Path, "/"), "/")[0]
+		case "youtube.com", "m.youtube.com":
+			videoID = parsed.Query().Get("v")
+			if videoID == "" && strings.HasPrefix(parsed.Path, "/embed/") {
+				videoID = strings.TrimPrefix(parsed.Path, "/embed/")
+			}
+		}
+		if safeEmbedToken(videoID) {
+			return "https://www.youtube-nocookie.com/embed/" + videoID, true
+		}
+	case "vimeo":
+		if host == "vimeo.com" || host == "player.vimeo.com" {
+			parts := strings.Split(strings.Trim(parsed.Path, "/"), "/")
+			videoID := parts[len(parts)-1]
+			if videoID != "" && strings.IndexFunc(videoID, func(r rune) bool {
+				return r < '0' || r > '9'
+			}) == -1 {
+				return "https://player.vimeo.com/video/" + videoID, true
+			}
+		}
+	case "figma":
+		if host == "figma.com" &&
+			(strings.HasPrefix(parsed.Path, "/design/") ||
+				strings.HasPrefix(parsed.Path, "/file/") ||
+				strings.HasPrefix(parsed.Path, "/proto/")) {
+			return "https://www.figma.com/embed?embed_host=anby&url=" +
+				url.QueryEscape(parsed.String()), true
+		}
+	}
+	return "", false
+}
+
+func safeEmbedToken(value string) bool {
+	value = strings.Trim(value, "/")
+	if len(value) < 6 || len(value) > 32 {
+		return false
+	}
+	return strings.IndexFunc(value, func(r rune) bool {
+		return !((r >= 'a' && r <= 'z') || (r >= 'A' && r <= 'Z') ||
+			(r >= '0' && r <= '9') || r == '_' || r == '-')
+	}) == -1
+}
+
+func formatDurationSeconds(value float64) string {
+	total := int(value + 0.5)
+	if total < 0 {
+		total = 0
+	}
+	return fmt.Sprintf("%d:%02d", total/60, total%60)
+}
+
+func isolatedHTMLDocument(content string) string {
+	const policy = "default-src 'none'; img-src data:; font-src data:; style-src 'unsafe-inline'; form-action 'none'; base-uri 'none'"
+	return `<!doctype html><html><head><meta charset="utf-8"><meta http-equiv="Content-Security-Policy" content="` +
+		policy +
+		`"><meta name="viewport" content="width=device-width,initial-scale=1"><style>html{color-scheme:light}body{margin:0;padding:12px;font:14px/1.5 system-ui,sans-serif;overflow-wrap:anywhere}img,video,canvas,svg{max-width:100%;height:auto}table{max-width:100%;border-collapse:collapse}pre{max-width:100%;overflow:auto}</style></head><body>` +
+		content + `</body></html>`
+}
+
+func renderTable(b *strings.Builder, table *ast.Block, ctx *renderContext) error {
+	b.WriteString(`<figure class="wiki-table"><table>`)
+	if table.Caption != "" {
+		fmt.Fprintf(b, "<caption>%s</caption>", html.EscapeString(table.Caption))
+	}
+	bodyStart := 0
+	if table.HasColumnHeader && len(table.Children) > 0 {
+		b.WriteString("<thead>")
+		if err := renderTableRow(b, table.Children[0], 0, true, table.HasRowHeader, ctx); err != nil {
+			return err
+		}
+		b.WriteString("</thead>")
+		bodyStart = 1
+	}
+	b.WriteString("<tbody>")
+	for rowIndex := bodyStart; rowIndex < len(table.Children); rowIndex++ {
+		if err := renderTableRow(
+			b, table.Children[rowIndex], rowIndex, false, table.HasRowHeader, ctx,
+		); err != nil {
+			return err
+		}
+	}
+	b.WriteString("</tbody></table></figure>")
+	return nil
+}
+
+func renderTableRow(
+	b *strings.Builder,
+	row *ast.Block,
+	rowIndex int,
+	columnHeader bool,
+	rowHeader bool,
+	ctx *renderContext,
+) error {
+	b.WriteString("<tr>")
+	for cellIndex, cell := range row.Children {
+		tag, scope := "td", ""
+		if columnHeader {
+			tag, scope = "th", "col"
+		} else if rowHeader && cellIndex == 0 {
+			tag, scope = "th", "row"
+		}
+		fmt.Fprintf(b, "<%s", tag)
+		if scope != "" {
+			fmt.Fprintf(b, ` scope="%s"`, scope)
+		}
+		fmt.Fprintf(b, ` data-row="%d" data-column="%d">`, rowIndex, cellIndex)
+		if err := renderBlocks(b, cell.Children, ctx); err != nil {
+			return err
+		}
+		fmt.Fprintf(b, "</%s>", tag)
+	}
+	b.WriteString("</tr>")
+	return nil
 }
 
 // renderContainer 渲染「开标签 + children Blocks + 闭标签」的简单容器。
@@ -326,6 +706,16 @@ func renderInline(
 				return fmt.Errorf("render: 未知 mark %q", n.Marks[i])
 			}
 			text = "<" + tag + ">" + text + "</" + tag + ">"
+		}
+		if n.TextColor != "" || n.BackgroundColor != "" {
+			var attrs strings.Builder
+			if n.TextColor != "" {
+				fmt.Fprintf(&attrs, ` data-text-color="%s"`, html.EscapeString(string(n.TextColor)))
+			}
+			if n.BackgroundColor != "" {
+				fmt.Fprintf(&attrs, ` data-background-color="%s"`, html.EscapeString(string(n.BackgroundColor)))
+			}
+			text = "<span" + attrs.String() + ">" + text + "</span>"
 		}
 		b.WriteString(text)
 		return nil
@@ -413,6 +803,21 @@ func renderInline(
 			html.EscapeString(n.ActorID), html.EscapeString(n.DisplayText))
 		return nil
 
+	case ast.InlineDateMention:
+		if n.EndDate != "" {
+			fmt.Fprintf(b, `<time datetime="%s" data-date-mention data-end-date="%s">%s</time>`,
+				html.EscapeString(n.Date), html.EscapeString(n.EndDate), html.EscapeString(n.DisplayText))
+			return nil
+		}
+		fmt.Fprintf(b, `<time datetime="%s" data-date-mention>%s</time>`,
+			html.EscapeString(n.Date), html.EscapeString(n.DisplayText))
+		return nil
+
+	case ast.InlineDatabaseMention:
+		fmt.Fprintf(b, `<a href="/datasets/%s" data-database-mention>%s</a>`,
+			html.EscapeString(n.DatasetID), html.EscapeString(n.DisplayText))
+		return nil
+
 	default:
 		return fmt.Errorf("render: 未知 Inline 类型 %q", n.Type)
 	}
@@ -422,6 +827,7 @@ func renderInline(
 var markTags = map[ast.Mark]string{
 	ast.MarkBold:          "strong",
 	ast.MarkItalic:        "em",
+	ast.MarkUnderline:     "u",
 	ast.MarkStrikethrough: "del",
 	ast.MarkCode:          "code",
 }

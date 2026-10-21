@@ -176,6 +176,13 @@ func (a *AssetAPI) content(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Cache-Control", "public, max-age=31536000, immutable")
 	w.Header().Set("ETag", etag)
 	w.Header().Set("X-Content-Type-Options", "nosniff")
+	if revision.MimeType == "application/pdf" {
+		w.Header().Set("X-Frame-Options", "SAMEORIGIN")
+		w.Header().Set(
+			"Content-Security-Policy",
+			"default-src 'none'; frame-ancestors 'self'; base-uri 'none'",
+		)
+	}
 	if disposition := mime.FormatMediaType("inline", map[string]string{
 		"filename": result.Value.Asset.Name,
 	}); disposition != "" {

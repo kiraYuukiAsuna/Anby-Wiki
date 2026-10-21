@@ -76,7 +76,12 @@ func (r *Repository) ListAssets(
 		    $2='' OR
 		    ($2='image' AND ar.mime_type LIKE 'image/%') OR
 		    ($2='video' AND ar.mime_type LIKE 'video/%') OR
-		    ($2='other' AND ar.mime_type NOT LIKE 'image/%' AND ar.mime_type NOT LIKE 'video/%')
+		    ($2='audio' AND ar.mime_type LIKE 'audio/%') OR
+		    ($2='pdf' AND ar.mime_type='application/pdf') OR
+		    ($2='other' AND ar.mime_type NOT LIKE 'image/%'
+		      AND ar.mime_type NOT LIKE 'video/%'
+		      AND ar.mime_type NOT LIKE 'audio/%'
+		      AND ar.mime_type<>'application/pdf')
 		  )
 		  AND ($3::timestamptz IS NULL OR (a.updated_at,a.id)<($3,$4))
 		ORDER BY a.updated_at DESC,a.id DESC

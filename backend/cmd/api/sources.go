@@ -11,15 +11,22 @@ import (
 	"github.com/google/uuid"
 
 	"github.com/anby/wiki/backend/internal/evidence"
+	"github.com/anby/wiki/backend/internal/linkhealth"
 	"github.com/anby/wiki/backend/internal/platform/httpx"
 )
 
 type SourceAPI struct {
 	service *evidence.Service
+	preview *linkhealth.HTTPProber
 }
 
 func NewSourceAPI(service *evidence.Service) *SourceAPI {
 	return &SourceAPI{service: service}
+}
+
+func (a *SourceAPI) WithLinkPreview(preview *linkhealth.HTTPProber) *SourceAPI {
+	a.preview = preview
+	return a
 }
 
 type sourceListResponse struct {
@@ -113,6 +120,41 @@ type createCitationRequest struct {
 	SourceChunkID   *uuid.UUID      `json:"source_chunk_id"`
 	Locator         *locatorRequest `json:"locator"`
 	Quotation       string          `json:"quotation"`
+}
+
+type resolveLinkPreviewRequest struct {
+	URL string `json:"url"`
+}
+
+func (a *SourceAPI) resolveLinkPreview(w http.ResponseWriter, r *http.Request) {
+	if _, ok := actorIDFrom(w, r); !ok {
+		return
+	}
+	var body resolveLinkPreviewRequest
+	if !decodeJSON(w, r, &body) {
+		return
+	}
+	if a.preview == nil {
+		httpx.WriteError(w, r, http.StatusServiceUnavailable, httpx.CodeInternal,
+			"链接预览服务未装配")
+		return
+	}
+	result, err := a.preview.ResolvePreview(r.Context(), body.URL)
+	if err != nil {
+		switch {
+		case errors.Is(err, linkhealth.ErrUnsafeURL):
+			httpx.WriteError(w, r, http.StatusUnprocessableEntity,
+				httpx.CodeValidationFailed, "链接不是可公开访问的 http/https 地址")
+		case errors.Is(err, linkhealth.ErrPreviewTooLarge):
+			httpx.WriteError(w, r, http.StatusUnprocessableEntity,
+				httpx.CodeValidationFailed, "页面预览元数据超过 512 KiB")
+		default:
+			httpx.WriteError(w, r, http.StatusBadGateway, httpx.CodeInternal,
+				"第三方链接预览暂时不可用")
+		}
+		return
+	}
+	httpx.WriteJSON(w, http.StatusOK, result)
 }
 
 func toSourceResponse(value evidence.Source) sourceResponse {

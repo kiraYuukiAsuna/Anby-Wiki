@@ -227,7 +227,12 @@ function referenceNodeType(operationType: string): InlineNode["type"] {
 function requireInlineContent(document: Document, blockId: unknown): InlineNode[] {
   const location = requireBlock(document, blockId);
   const block = location.container.children[location.index];
-  if (block.type !== "heading" && block.type !== "paragraph") {
+  if (
+    block.type !== "heading" &&
+    block.type !== "paragraph" &&
+    block.type !== "todo" &&
+    block.type !== "toggle"
+  ) {
     throw new Error(`目标 Block 不支持行内引用: ${block.id}`);
   }
   return block.content;

@@ -20,12 +20,24 @@ type generatedPlanEvidence struct {
 }
 
 type generatedPlannedBlock struct {
-	Type           string                  `json:"type"`
-	Text           string                  `json:"text,omitempty"`
-	Level          int                     `json:"level,omitempty"`
-	Items          []string                `json:"items,omitempty"`
-	ReplaceBlockID *string                 `json:"replace_block_id,omitempty"`
-	Evidence       []generatedPlanEvidence `json:"evidence"`
+	Type            string                  `json:"type"`
+	Text            string                  `json:"text,omitempty"`
+	Level           int                     `json:"level,omitempty"`
+	IsToggleable    bool                    `json:"is_toggleable,omitempty"`
+	Checked         *bool                   `json:"checked,omitempty"`
+	Kind            string                  `json:"kind,omitempty"`
+	Icon            string                  `json:"icon,omitempty"`
+	Color           string                  `json:"color,omitempty"`
+	Language        string                  `json:"language,omitempty"`
+	Caption         string                  `json:"caption,omitempty"`
+	Expression      string                  `json:"expression,omitempty"`
+	Items           []string                `json:"items,omitempty"`
+	Rows            [][]string              `json:"rows,omitempty"`
+	HasColumnHeader bool                    `json:"has_column_header,omitempty"`
+	HasRowHeader    bool                    `json:"has_row_header,omitempty"`
+	Children        []generatedPlannedBlock `json:"children,omitempty"`
+	ReplaceBlockID  *string                 `json:"replace_block_id,omitempty"`
+	Evidence        []generatedPlanEvidence `json:"evidence"`
 }
 
 type generatedPageRoute struct {
@@ -137,22 +149,14 @@ func DecodeGeneratedImportPlan(raw []byte, sourceVersionID uuid.UUID, chunks []e
 
 		for _, sourceBlock := range sourceRoute.Blocks {
 			originalBlocks++
-			block := PlannedBlock{
-				Type: sourceBlock.Type, Mode: BlockAppend, TargetBlockID: nil,
-				Text: normalizePlannedBlockText(sourceBlock.Type, sourceBlock.Text), Level: sourceBlock.Level,
-				Items:    normalizedGeneratedItems(sourceBlock.Items),
-				Evidence: catalog.normalize(generatedEvidenceCandidates(sourceBlock.Evidence)),
-			}
-			if len(block.Evidence) == 0 {
+			block, ok := decodeGeneratedPlannedBlock(sourceBlock, catalog, 0)
+			if !ok {
 				continue
 			}
 			if route.Action == RouteUpdate && sourceBlock.ReplaceBlockID != nil &&
 				blockOwner[*sourceBlock.ReplaceBlockID] == *route.PageID {
 				block.Mode = BlockReplace
 				block.TargetBlockID = sourceBlock.ReplaceBlockID
-			}
-			if !validPlannedBlockContent(block) {
-				continue
 			}
 			retainedBlocks++
 			route.Blocks = append(route.Blocks, block)
@@ -175,6 +179,42 @@ func DecodeGeneratedImportPlan(raw []byte, sourceVersionID uuid.UUID, chunks []e
 		return nil, nil, err
 	}
 	return plan, canonical, nil
+}
+
+func decodeGeneratedPlannedBlock(
+	source generatedPlannedBlock,
+	catalog evidenceCatalog,
+	depth int,
+) (PlannedBlock, bool) {
+	if depth > 6 {
+		return PlannedBlock{}, false
+	}
+	block := PlannedBlock{
+		Type: source.Type, Mode: BlockAppend,
+		Text:  normalizePlannedBlockText(source.Type, source.Text),
+		Level: source.Level, IsToggleable: source.IsToggleable,
+		Checked: source.Checked, Kind: strings.TrimSpace(source.Kind),
+		Icon: strings.TrimSpace(source.Icon), Color: strings.TrimSpace(source.Color),
+		Language: strings.TrimSpace(source.Language), Caption: strings.TrimSpace(source.Caption),
+		Expression: strings.TrimSpace(source.Expression),
+		Items:      normalizedGeneratedItems(source.Items), Rows: normalizedGeneratedRows(source.Rows),
+		HasColumnHeader: source.HasColumnHeader, HasRowHeader: source.HasRowHeader,
+		Children: []PlannedBlock{},
+		Evidence: catalog.normalize(generatedEvidenceCandidates(source.Evidence)),
+	}
+	if len(block.Evidence) == 0 {
+		return PlannedBlock{}, false
+	}
+	for _, sourceChild := range source.Children {
+		child, ok := decodeGeneratedPlannedBlock(sourceChild, catalog, depth+1)
+		if ok {
+			block.Children = append(block.Children, child)
+		}
+	}
+	if !validPlannedBlockContent(block) {
+		return PlannedBlock{}, false
+	}
+	return block, true
 }
 
 func generatedEvidenceCandidates(items []generatedPlanEvidence) []CandidateEvidence {
@@ -209,6 +249,22 @@ func normalizedGeneratedItems(items []string) []string {
 	for _, item := range items {
 		if item = strings.TrimSpace(item); item != "" {
 			result = append(result, item)
+		}
+	}
+	return result
+}
+
+func normalizedGeneratedRows(rows [][]string) [][]string {
+	result := make([][]string, 0, len(rows))
+	for _, row := range rows {
+		normalized := make([]string, len(row))
+		nonEmpty := false
+		for index, cell := range row {
+			normalized[index] = strings.TrimSpace(cell)
+			nonEmpty = nonEmpty || normalized[index] != ""
+		}
+		if nonEmpty {
+			result = append(result, normalized)
 		}
 	}
 	return result

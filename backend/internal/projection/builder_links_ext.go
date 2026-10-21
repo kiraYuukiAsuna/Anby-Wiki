@@ -1,6 +1,6 @@
 // 外链使用投影 Builder（M3-T06，设计 §8、§18.9）。
 //
-// ExternalLinksBuilder Walk 当前 Revision AST 中的 external_link，交给 Evidence
+// ExternalLinksBuilder Walk 当前 Revision AST 中的 external_link 与外部内容 Block，交给 Evidence
 // 系统级领域服务规范化并 upsert external_resource，再按页全删重插
 // external_link_usage。资源行独立于页面生命周期：usage 消失时不删除资源。
 package projection
@@ -101,6 +101,22 @@ func collectExternalLinks(doc *ast.Document) ([]externalLinkCandidate, error) {
 	var candidates []externalLinkCandidate
 	var candidateErr error
 	walkErr := ast.Walk(doc, func(node ast.WalkNode) bool {
+		if node.Block != nil &&
+			(node.Block.Type == ast.BlockBookmark ||
+				node.Block.Type == ast.BlockLinkPreview ||
+				node.Block.Type == ast.BlockEmbed) {
+			blockID, err := uuid.Parse(node.Block.ID)
+			if err != nil {
+				candidateErr = fmt.Errorf(
+					"projection: 外部内容 Block ID %q 非法: %w", node.Block.ID, err,
+				)
+				return false
+			}
+			candidates = append(candidates, externalLinkCandidate{
+				blockID: blockID, nodeID: "url", url: node.Block.URL,
+			})
+			return true
+		}
 		if node.Inline == nil || node.Inline.Type != ast.InlineExternalLink {
 			return true
 		}

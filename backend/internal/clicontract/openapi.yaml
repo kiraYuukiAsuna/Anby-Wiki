@@ -321,7 +321,7 @@ paths:
           in: query
           schema:
             type: string
-            enum: [image, video, other]
+            enum: [image, video, audio, pdf, other]
       responses:
         "200":
           description: 资产目录游标分页结果
@@ -386,6 +386,9 @@ paths:
       operationId: getAssetRevisionContent
       tags: [assets]
       summary: 流式读取不可变资产版本内容
+      description: >-
+        按真实 MIME 与不可变缓存头返回原始字节；application/pdf 额外允许同源 frame，
+        供正文 PDF 阅读块使用，其他响应保持禁止嵌入。
       parameters:
         - $ref: "#/components/parameters/AssetRevisionId"
       responses:
@@ -458,6 +461,32 @@ paths:
         "403": { $ref: "#/components/responses/Forbidden" }
         "404": { $ref: "#/components/responses/NotFound" }
         "500": { $ref: "#/components/responses/Internal" }
+  /api/v1/link-previews/resolve:
+    post:
+      operationId: resolveLinkPreview
+      tags: [sources]
+      summary: 安全解析第三方页面的冻结预览元数据
+      description: >-
+        仅允许登录用户发起。服务端拒绝私网、回环、保留地址与不安全重定向，
+        最多读取 512 KiB HTML，并只返回净化后的 URL、标题、描述和站点名。
+      security:
+        - sessionCookie: []
+        - cliBearer: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/ResolveLinkPreviewRequest" }
+      responses:
+        "200":
+          description: 已净化的链接预览元数据
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/LinkPreviewMetadata" }
+        "400": { $ref: "#/components/responses/BadRequest" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "422": { $ref: "#/components/responses/UnprocessableEntity" }
+        "502": { $ref: "#/components/responses/Internal" }
   /api/v1/sources/{id}:
     get:
       operationId: getSource
@@ -732,6 +761,63 @@ paths:
               schema: { $ref: "#/components/schemas/DatasetRecordPage" }
         "400": { $ref: "#/components/responses/BadRequest" }
         "404": { $ref: "#/components/responses/NotFound" }
+  /api/v1/dataset-views/{id}/query:
+    post:
+      operationId: queryDatasetViewWithFilter
+      tags: [datasets]
+      summary: 使用运行时过滤器执行保存视图
+      parameters:
+        - $ref: "#/components/parameters/GovernanceId"
+        - $ref: "#/components/parameters/Cursor"
+        - $ref: "#/components/parameters/PageSize"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/DatasetViewRuntimeQuery" }
+      responses:
+        "200":
+          description: DatasetView 查询结果
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/DatasetRecordPage" }
+        "400": { $ref: "#/components/responses/BadRequest" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "422": { $ref: "#/components/responses/UnprocessableEntity" }
+  /api/v1/public/dataset-forms/{id}:
+    get:
+      operationId: getPublicDatasetForm
+      tags: [datasets]
+      summary: 读取公开 Dataset Form 定义
+      parameters:
+        - $ref: "#/components/parameters/GovernanceId"
+      responses:
+        "200":
+          description: 公开表单定义
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/PublicDatasetForm" }
+        "404": { $ref: "#/components/responses/NotFound" }
+  /api/v1/public/dataset-forms/{id}/submissions:
+    post:
+      operationId: submitPublicDatasetForm
+      tags: [datasets]
+      summary: 公开提交经 Dataset Schema 校验的记录
+      parameters:
+        - $ref: "#/components/parameters/GovernanceId"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/SubmitPublicDatasetFormRequest" }
+      responses:
+        "201":
+          description: 已创建的 DatasetRecord
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/DatasetRecord" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "422": { $ref: "#/components/responses/UnprocessableEntity" }
   /api/v1/components:
     get:
       operationId: listWikiComponents
@@ -2561,6 +2647,41 @@ paths:
                 request_id: 9f1c2ab3d4e5f607
         "500":
           $ref: "#/components/responses/Internal"
+  /api/v1/pages/{id}/buttons/{block_id}/webhooks:
+    post:
+      operationId: executePageButtonWebhook
+      tags: [pages]
+      summary: 执行当前 Revision 中页面按钮的受控 Webhook 动作
+      description: >-
+        仅按 page_id、稳定 Block ID 与动作下标读取当前不可变 AST；请求体不能覆盖 URL
+        或 payload。出口只允许公网 HTTPS，拒绝私网、回环、重定向到非 HTTPS，
+        并向接收端传递 execution_id 作为 Idempotency-Key。
+      security:
+        - sessionCookie: []
+        - cliBearer: []
+      parameters:
+        - $ref: "#/components/parameters/PageId"
+        - name: block_id
+          in: path
+          required: true
+          schema: { type: string, format: uuid }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/ExecutePageButtonWebhookRequest" }
+      responses:
+        "200":
+          description: Webhook 接收端返回 2xx
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/ExecutePageButtonWebhookResult" }
+        "400": { $ref: "#/components/responses/BadRequest" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "422": { $ref: "#/components/responses/UnprocessableEntity" }
+        "502": { $ref: "#/components/responses/Internal" }
   /api/v1/pages/{id}/revisions/{rid}:
     get:
       operationId: getRevision
@@ -4553,6 +4674,21 @@ components:
         publisher: { type: string, maxLength: 500 }
         published_at: { type: string, format: date-time }
         metadata: { type: object, additionalProperties: true }
+    ResolveLinkPreviewRequest:
+      type: object
+      additionalProperties: false
+      required: [url]
+      properties:
+        url: { type: string, format: uri, maxLength: 4096 }
+    LinkPreviewMetadata:
+      type: object
+      additionalProperties: false
+      required: [url, title]
+      properties:
+        url: { type: string, format: uri }
+        title: { type: string, minLength: 1, maxLength: 500 }
+        description: { type: string, maxLength: 1000 }
+        site_name: { type: string, maxLength: 255 }
     ExternalResourceDetail:
       type: object
       required:
@@ -4731,16 +4867,42 @@ components:
       properties:
         entity_id: { type: string, format: uuid, nullable: true }
         values: { type: object, additionalProperties: true }
+    ExecutePageButtonWebhookRequest:
+      type: object
+      additionalProperties: false
+      required: [action_index, execution_id]
+      properties:
+        action_index: { type: integer, minimum: 0, maximum: 9 }
+        execution_id:
+          type: string
+          format: uuid
+          description: 客户端为一次显式确认生成；作为下游 Idempotency-Key 透传。
+    ExecutePageButtonWebhookResult:
+      type: object
+      additionalProperties: false
+      required: [execution_id, status_code]
+      properties:
+        execution_id: { type: string, format: uuid }
+        status_code: { type: integer, minimum: 200, maximum: 299 }
     DatasetViewFilter:
       type: object
       additionalProperties: false
-      required: [field, operator]
+      description: 叶子条件使用 field/operator；组合条件使用 logic/conditions，服务端限制最多三层。
       properties:
         field: { type: string }
         operator:
           type: string
-          enum: [eq, contains, gt, gte, lt, lte, exists]
+          enum:
+            [eq, neq, contains, not_contains, gt, gte, lt, lte, before,
+             after, on_or_before, on_or_after, exists, not_exists, is_empty,
+             not_empty]
         value: {}
+        logic: { type: string, enum: [and, or] }
+        conditions:
+          type: array
+          minItems: 1
+          maxItems: 20
+          items: { $ref: "#/components/schemas/DatasetViewFilter" }
     DatasetViewSort:
       type: object
       additionalProperties: false
@@ -4748,6 +4910,19 @@ components:
       properties:
         field: { type: string }
         direction: { type: string, enum: [asc, desc] }
+    DatasetViewGroup:
+      type: object
+      additionalProperties: false
+      required: [field]
+      properties:
+        field: { type: string }
+        display: { type: string, enum: [expanded, collapsed] }
+        hide_empty: { type: boolean }
+        sort_direction: { type: string, enum: [asc, desc] }
+        options:
+          type: array
+          maxItems: 100
+          items: {}
     DatasetViewConfig:
       type: object
       additionalProperties: false
@@ -4759,13 +4934,54 @@ components:
         filter: { $ref: "#/components/schemas/DatasetViewFilter" }
         sort: { $ref: "#/components/schemas/DatasetViewSort" }
         group_by: { type: string }
+        view_mode:
+          type: string
+          readOnly: true
+          enum: [board, timeline, calendar, list, gallery, form, dashboard]
+          description: 新视图类型的持久化兼容判别值；创建时由服务端写入。
+        sorts:
+          type: array
+          maxItems: 5
+          items: { $ref: "#/components/schemas/DatasetViewSort" }
+        groups:
+          type: array
+          maxItems: 2
+          items: { $ref: "#/components/schemas/DatasetViewGroup" }
+        title_field: { type: string }
+        description_field: { type: string }
+        cover_field: { type: string }
+        date_field: { type: string }
+        end_date_field: { type: string }
+        card_size: { type: string, enum: [small, medium, large] }
+        form_fields:
+          type: array
+          uniqueItems: true
+          items: { type: string }
+        public: { type: boolean }
+        submit_label: { type: string, maxLength: 80 }
+        success_message: { type: string, maxLength: 500 }
+        view_ids:
+          type: array
+          minItems: 1
+          maxItems: 12
+          uniqueItems: true
+          items: { type: string, format: uuid }
+        global_filter_fields:
+          type: array
+          uniqueItems: true
+          items: { type: string }
+        layout_columns: { type: integer, minimum: 1, maximum: 3 }
     DatasetView:
       type: object
       required: [id, dataset_id, view_type, name, config, created_by, created_at]
       properties:
         id: { type: string, format: uuid }
         dataset_id: { type: string, format: uuid }
-        view_type: { type: string, enum: [table, cards, chart] }
+        view_type:
+          type: string
+          enum:
+            [table, cards, chart, board, timeline, calendar, list, gallery,
+             form, dashboard]
         name: { type: string }
         config: { $ref: "#/components/schemas/DatasetViewConfig" }
         created_by: { type: string, format: uuid }
@@ -4775,7 +4991,11 @@ components:
       additionalProperties: false
       required: [view_type, name, config]
       properties:
-        view_type: { type: string, enum: [table, cards, chart] }
+        view_type:
+          type: string
+          enum:
+            [table, cards, chart, board, timeline, calendar, list, gallery,
+             form, dashboard]
         name: { type: string, minLength: 1 }
         config: { $ref: "#/components/schemas/DatasetViewConfig" }
     DatasetViewList:
@@ -4790,6 +5010,9 @@ components:
       required: [value, count]
       properties:
         value: { type: string }
+        path:
+          type: array
+          items: { type: string }
         count: { type: integer, minimum: 0 }
     DatasetRecordPage:
       type: object
@@ -4802,6 +5025,40 @@ components:
         groups:
           type: array
           items: { $ref: "#/components/schemas/DatasetGroupCount" }
+    DatasetViewRuntimeQuery:
+      type: object
+      additionalProperties: false
+      properties:
+        filter: { $ref: "#/components/schemas/DatasetViewFilter" }
+    PublicDatasetFormField:
+      type: object
+      additionalProperties: false
+      required: [key, title, type, required]
+      properties:
+        key: { type: string }
+        title: { type: string }
+        type: { type: string, enum: [string, number, integer, boolean] }
+        format: { type: string }
+        required: { type: boolean }
+    PublicDatasetForm:
+      type: object
+      additionalProperties: false
+      required: [id, dataset_id, name, fields, submit_label, success_message]
+      properties:
+        id: { type: string, format: uuid }
+        dataset_id: { type: string, format: uuid }
+        name: { type: string }
+        fields:
+          type: array
+          items: { $ref: "#/components/schemas/PublicDatasetFormField" }
+        submit_label: { type: string }
+        success_message: { type: string }
+    SubmitPublicDatasetFormRequest:
+      type: object
+      additionalProperties: false
+      required: [values]
+      properties:
+        values: { type: object, additionalProperties: true }
     WikiComponent:
       type: object
       required: [id, component_key, name, created_by, created_at, updated_at]
@@ -5044,12 +5301,34 @@ components:
       additionalProperties: false
       required: [type, mode, target_block_id, evidence]
       properties:
-        type: { type: string, enum: [heading, paragraph, bullet_list, quote, code] }
+        type:
+          type: string
+          enum:
+            [heading, paragraph, bullet_list, ordered_list, quote, code,
+             preformatted, equation, todo, toggle, callout, table]
         mode: { type: string, enum: [append, replace] }
         target_block_id: { type: string, format: uuid, nullable: true }
         text: { type: string }
         level: { type: integer, minimum: 1, maximum: 6 }
+        is_toggleable: { type: boolean }
+        checked: { type: boolean }
+        kind: { type: string }
+        icon: { type: string }
+        color: { type: string }
+        language: { type: string }
+        caption: { type: string }
+        expression: { type: string }
         items: { type: array, items: { type: string } }
+        rows:
+          type: array
+          items:
+            type: array
+            items: { type: string }
+        has_column_header: { type: boolean }
+        has_row_header: { type: boolean }
+        children:
+          type: array
+          items: { $ref: "#/components/schemas/ImportPlannedBlock" }
         evidence:
           type: array
           items: { $ref: "#/components/schemas/ImportPlanEvidence" }

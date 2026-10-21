@@ -25,6 +25,7 @@ import useSWRMutation from "swr/mutation";
 
 import {
   ResponseError,
+  type ImportPlannedBlock,
   type ImportPlanningInput,
 } from "../../../../contracts/generated/typescript";
 
@@ -86,6 +87,17 @@ const STAGE_STATUS_META = {
     className: "bg-amber-50 text-amber-700 ring-amber-200 dark:bg-amber-950/50 dark:text-amber-300 dark:ring-amber-800",
   },
 } as const;
+
+function plannedBlockPreview(block: ImportPlannedBlock): string {
+  if (block.text) return block.text;
+  if (block.expression) return block.expression;
+  if (block.items?.length) return block.items.join("；");
+  if (block.rows?.length) {
+    return block.rows.map((row) => row.join(" | ")).join("\n");
+  }
+  if (block.caption) return block.caption;
+  return block.type;
+}
 
 function StageStatusIcon({ status }: { status: keyof typeof STAGE_STATUS_META }) {
   const meta = STAGE_STATUS_META[status];
@@ -498,7 +510,7 @@ export function ImportJobProgress({ id }: { id: string }) {
                       {route.blocks.slice(0, 3).map((block, blockIndex) => (
                         <div key={`${block.type}:${block.targetBlockId ?? blockIndex}`} className="text-xs leading-5">
                           <p className="line-clamp-3 text-foreground">
-                            {block.text || block.items?.join("；")}
+                            {plannedBlockPreview(block)}
                           </p>
                           {block.evidence[0] ? (
                             <blockquote className="mt-1 border-l-2 border-border pl-2 text-muted-foreground">

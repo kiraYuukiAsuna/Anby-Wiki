@@ -119,6 +119,7 @@ func NewRouter(logger *slog.Logger, deps Deps, writeAPI *WriteAPI, readAPI *Read
 				r.Get("/pages/{id}/block-redirects", writeAPI.listBlockRedirects)
 				r.Put("/pages/{id}/block-redirects/{block_id}", writeAPI.upsertBlockRedirect)
 				r.Delete("/pages/{id}/block-redirects/{block_id}", writeAPI.deleteBlockRedirect)
+				r.Post("/pages/{id}/buttons/{block_id}/webhooks", writeAPI.executeButtonWebhook)
 				r.Post("/pages/{id}/revisions", writeAPI.publishRevision)
 			}
 			if collaborationAPI != nil {
@@ -215,6 +216,9 @@ func NewRouter(logger *slog.Logger, deps Deps, writeAPI *WriteAPI, readAPI *Read
 				r.Put("/dataset-records/{id}", datasetAPI.updateRecord)
 				r.Get("/dataset-views/{id}", datasetAPI.getView)
 				r.Get("/dataset-views/{id}/records", datasetAPI.queryView)
+				r.Post("/dataset-views/{id}/query", datasetAPI.queryViewWithFilter)
+				r.Get("/public/dataset-forms/{id}", datasetAPI.getPublicForm)
+				r.Post("/public/dataset-forms/{id}/submissions", datasetAPI.submitPublicForm)
 			}
 			if componentAPI != nil {
 				r.Get("/components", componentAPI.list)
@@ -228,6 +232,7 @@ func NewRouter(logger *slog.Logger, deps Deps, writeAPI *WriteAPI, readAPI *Read
 				r.Post("/components/{id}/versions/{version}/preview", componentAPI.preview)
 			}
 			if sourceAPI != nil {
+				r.Post("/link-previews/resolve", sourceAPI.resolveLinkPreview)
 				r.Get("/sources", sourceAPI.list)
 				r.Post("/sources", sourceAPI.create)
 				r.Get("/sources/{id}", sourceAPI.get)

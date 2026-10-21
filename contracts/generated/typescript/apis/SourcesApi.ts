@@ -53,6 +53,16 @@ import {
     EvidenceSourceVersionListPageFromJSON,
     EvidenceSourceVersionListPageToJSON,
 } from '../models/EvidenceSourceVersionListPage';
+import {
+    type LinkPreviewMetadata,
+    LinkPreviewMetadataFromJSON,
+    LinkPreviewMetadataToJSON,
+} from '../models/LinkPreviewMetadata';
+import {
+    type ResolveLinkPreviewRequest,
+    ResolveLinkPreviewRequestFromJSON,
+    ResolveLinkPreviewRequestToJSON,
+} from '../models/ResolveLinkPreviewRequest';
 
 export interface CreateCitationOperationRequest {
     createCitationRequest: CreateCitationRequest;
@@ -83,6 +93,10 @@ export interface ListSourcesRequest {
     pageSize?: number;
     sourceType?: ListSourcesSourceTypeEnum;
     q?: string;
+}
+
+export interface ResolveLinkPreviewOperationRequest {
+    resolveLinkPreviewRequest: ResolveLinkPreviewRequest;
 }
 
 /**
@@ -409,6 +423,63 @@ export class SourcesApi extends runtime.BaseAPI {
      */
     async listSources(requestParameters: ListSourcesRequest = {}, initOverrides?: RequestInit | runtime.InitOverrideFunction): Promise<EvidenceSourceListPage> {
         const response = await this.listSourcesRaw(requestParameters, initOverrides);
+        return await response.value();
+    }
+
+    /**
+     * Creates request options for resolveLinkPreview without sending the request
+     */
+    async resolveLinkPreviewRequestOpts(requestParameters: ResolveLinkPreviewOperationRequest): Promise<runtime.RequestOpts> {
+        if (requestParameters['resolveLinkPreviewRequest'] == null) {
+            throw new runtime.RequiredError(
+                'resolveLinkPreviewRequest',
+                'Required parameter "resolveLinkPreviewRequest" was null or undefined when calling resolveLinkPreview().'
+            );
+        }
+
+        const queryParameters: any = {};
+
+        const headerParameters: runtime.HTTPHeaders = {};
+
+        headerParameters['Content-Type'] = 'application/json';
+
+        if (this.configuration && this.configuration.accessToken) {
+            const token = this.configuration.accessToken;
+            const tokenString = await token("cliBearer", []);
+
+            if (tokenString) {
+                headerParameters["Authorization"] = `Bearer ${tokenString}`;
+            }
+        }
+
+        let urlPath = `/api/v1/link-previews/resolve`;
+
+        return {
+            path: urlPath,
+            method: 'POST',
+            headers: headerParameters,
+            query: queryParameters,
+            body: ResolveLinkPreviewRequestToJSON(requestParameters['resolveLinkPreviewRequest']),
+        };
+    }
+
+    /**
+     * 仅允许登录用户发起。服务端拒绝私网、回环、保留地址与不安全重定向， 最多读取 512 KiB HTML，并只返回净化后的 URL、标题、描述和站点名。
+     * 安全解析第三方页面的冻结预览元数据
+     */
+    async resolveLinkPreviewRaw(requestParameters: ResolveLinkPreviewOperationRequest, initOverrides?: RequestInit | runtime.InitOverrideFunction): Promise<runtime.ApiResponse<LinkPreviewMetadata>> {
+        const requestOptions = await this.resolveLinkPreviewRequestOpts(requestParameters);
+        const response = await this.request(requestOptions, initOverrides);
+
+        return new runtime.JSONApiResponse(response, (jsonValue) => LinkPreviewMetadataFromJSON(jsonValue));
+    }
+
+    /**
+     * 仅允许登录用户发起。服务端拒绝私网、回环、保留地址与不安全重定向， 最多读取 512 KiB HTML，并只返回净化后的 URL、标题、描述和站点名。
+     * 安全解析第三方页面的冻结预览元数据
+     */
+    async resolveLinkPreview(requestParameters: ResolveLinkPreviewOperationRequest, initOverrides?: RequestInit | runtime.InitOverrideFunction): Promise<LinkPreviewMetadata> {
+        const response = await this.resolveLinkPreviewRaw(requestParameters, initOverrides);
         return await response.value();
     }
 

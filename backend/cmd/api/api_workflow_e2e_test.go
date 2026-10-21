@@ -930,9 +930,14 @@ func testDatasetWorkflow(t *testing.T, client *http.Client, baseURL, runID strin
 		baseURL+"/api/v1/datasets", map[string]any{
 			"name": "API E2E Dataset " + runID,
 			"schema": map[string]any{
-				"type":       "object",
-				"properties": map[string]any{"name": map[string]any{"type": "string"}},
-				"required":   []string{"name"}, "additionalProperties": false,
+				"type": "object",
+				"properties": map[string]any{
+					"name":   map[string]any{"type": "string"},
+					"status": map[string]any{"type": "string"},
+					"score":  map[string]any{"type": "number"},
+					"due":    map[string]any{"type": "string", "format": "date"},
+				},
+				"required": []string{"name"}, "additionalProperties": false,
 			},
 		}, http.StatusCreated)
 	datasetID := e2eUUID(t, dataset, "id")
@@ -950,6 +955,65 @@ func testDatasetWorkflow(t *testing.T, client *http.Client, baseURL, runID strin
 			"config": map[string]any{"columns": []string{"name"}},
 		}, http.StatusCreated)
 	viewID := e2eUUID(t, view, "id")
+	board := requestE2EMap(t, client, http.MethodPost,
+		fmt.Sprintf("%s/api/v1/datasets/%s/views", baseURL, datasetID),
+		map[string]any{
+			"name": "API E2E Board", "view_type": "board",
+			"config": map[string]any{
+				"columns": []string{"name", "status", "score", "due"},
+				"filter": map[string]any{
+					"logic": "and",
+					"conditions": []any{
+						map[string]any{"field": "name", "operator": "contains", "value": "up"},
+						map[string]any{
+							"logic": "or",
+							"conditions": []any{
+								map[string]any{"field": "score", "operator": "gte", "value": 0},
+								map[string]any{"field": "due", "operator": "before", "value": "2030-01-01"},
+							},
+						},
+					},
+				},
+				"sorts": []any{
+					map[string]any{"field": "score", "direction": "desc"},
+					map[string]any{"field": "name", "direction": "asc"},
+				},
+				"groups": []any{
+					map[string]any{
+						"field": "status", "display": "expanded",
+						"sort_direction": "asc", "options": []any{"todo", "done"},
+					},
+				},
+				"title_field": "name",
+			},
+		}, http.StatusCreated)
+	boardID := e2eUUID(t, board, "id")
+	requestE2EMap(t, client, http.MethodPost,
+		fmt.Sprintf("%s/api/v1/dataset-views/%s/query?page_size=10", baseURL, boardID),
+		map[string]any{
+			"filter": map[string]any{
+				"field": "name", "operator": "not_empty",
+			},
+		}, http.StatusOK)
+	form := requestE2EMap(t, client, http.MethodPost,
+		fmt.Sprintf("%s/api/v1/datasets/%s/views", baseURL, datasetID),
+		map[string]any{
+			"name": "API E2E Form", "view_type": "form",
+			"config": map[string]any{
+				"columns":     []string{"name", "status", "due"},
+				"form_fields": []string{"name", "status", "due"},
+				"public":      true,
+			},
+		}, http.StatusCreated)
+	formID := e2eUUID(t, form, "id")
+	requestE2EMap(t, client, http.MethodGet,
+		fmt.Sprintf("%s/api/v1/public/dataset-forms/%s", baseURL, formID),
+		nil, http.StatusOK)
+	requestE2EMap(t, client, http.MethodPost,
+		fmt.Sprintf("%s/api/v1/public/dataset-forms/%s/submissions", baseURL, formID),
+		map[string]any{"values": map[string]any{
+			"name": "public", "status": "todo", "due": "2029-01-02",
+		}}, http.StatusCreated)
 	for _, endpoint := range []string{
 		"/api/v1/datasets?page_size=10",
 		fmt.Sprintf("/api/v1/datasets/%s", datasetID),

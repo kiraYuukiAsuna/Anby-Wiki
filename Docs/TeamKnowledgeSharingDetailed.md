@@ -3225,7 +3225,7 @@ Claim 独立后：
 - 正式域名由宿主机 Nginx 终结 HTTPS；页面代理到回环 Web，`/api/*` 与健康检查
   直送回环 Go API，HTTPS 首页/API 与 WSS 协作 E2E 已通过。API location 关闭请求
   缓冲，避免大文件经 Next.js 默认 10 MiB 缓冲后被截断。
-- 157/157 个 OpenAPI operation 均有明确 Web 或 CLI owner；155 个 Web-owned
+- 162/162 个 OpenAPI operation 均有明确 Web 或 CLI owner；160 个 Web-owned
   operation 可追踪到页面/global layout，2 个授权兑换/自撤销 operation 属于 CLI transport，
   并由 `make web-api-coverage` 持续检查。
 - 独立数据库、对象存储 bucket、Meilisearch index 和 Redis DB 上动态命中 149/149

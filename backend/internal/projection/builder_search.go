@@ -10,6 +10,7 @@ import (
 	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgxpool"
+	nethtml "golang.org/x/net/html"
 
 	"github.com/anby/wiki/backend/internal/ast"
 	wikisearch "github.com/anby/wiki/backend/internal/search"
@@ -275,21 +276,56 @@ func searchBodyText(doc *ast.Document) (string, error) {
 	err := ast.Walk(doc, func(node ast.WalkNode) bool {
 		if node.Block != nil {
 			switch node.Block.Type {
-			case ast.BlockCode:
+			case ast.BlockCode, ast.BlockPreformatted:
 				text, err := node.Block.TextContent()
 				if err != nil {
 					collectErr = err
 					return false
 				}
 				appendSearchText(&parts, text)
+				appendSearchText(&parts, node.Block.Caption)
+			case ast.BlockEquation:
+				appendSearchText(&parts, node.Block.Expression)
+				appendSearchText(&parts, node.Block.Caption)
+			case ast.BlockBreadcrumb:
+				for _, item := range node.Block.Items {
+					appendSearchText(&parts, item.DisplayText)
+				}
+			case ast.BlockButton:
+				appendSearchText(&parts, node.Block.Label)
+				for _, action := range node.Block.Actions {
+					if action.Type == ast.ButtonActionNotification {
+						appendSearchText(&parts, action.Message)
+					}
+				}
+			case ast.BlockHTML:
+				appendSearchText(&parts, visibleHTMLText(node.Block.HTML))
+				appendSearchText(&parts, node.Block.Caption)
 			case ast.BlockImage:
 				appendSearchText(&parts, node.Block.AltText)
 				appendSearchText(&parts, node.Block.Caption)
 			case ast.BlockVideo:
 				appendSearchText(&parts, node.Block.Title)
 				appendSearchText(&parts, node.Block.Caption)
+			case ast.BlockAudio:
+				appendSearchText(&parts, node.Block.Title)
+				appendSearchText(&parts, node.Block.Artist)
+				appendSearchText(&parts, node.Block.Album)
+				appendSearchText(&parts, node.Block.Caption)
+			case ast.BlockFile:
+				appendSearchText(&parts, node.Block.Name)
+				appendSearchText(&parts, node.Block.Caption)
+			case ast.BlockPDF:
+				appendSearchText(&parts, node.Block.Title)
+				appendSearchText(&parts, node.Block.Caption)
+			case ast.BlockBookmark, ast.BlockLinkPreview:
+				appendSearchText(&parts, node.Block.Title)
+				appendSearchText(&parts, node.Block.Description)
+				appendSearchText(&parts, node.Block.SiteName)
+				appendSearchText(&parts, node.Block.Caption)
 			case ast.BlockEmbed:
 				appendSearchText(&parts, node.Block.Title)
+				appendSearchText(&parts, node.Block.Caption)
 			}
 			return true
 		}
@@ -305,7 +341,8 @@ func searchBodyText(doc *ast.Document) (string, error) {
 			} else {
 				appendSearchText(&parts, node.Inline.DisplayText)
 			}
-		case ast.InlinePageAnchorReference, ast.InlineMention:
+		case ast.InlinePageAnchorReference, ast.InlineMention, ast.InlineDateMention,
+			ast.InlineDatabaseMention:
 			appendSearchText(&parts, node.Inline.DisplayText)
 		case ast.InlineExternalLink, ast.InlineEntityReference, ast.InlineClaimReference,
 			ast.InlineCitationReference:
@@ -328,6 +365,31 @@ func appendSearchText(parts *[]string, text string) {
 	if text = strings.TrimSpace(text); text != "" {
 		*parts = append(*parts, text)
 	}
+}
+
+func visibleHTMLText(raw string) string {
+	root, err := nethtml.Parse(strings.NewReader(raw))
+	if err != nil {
+		return ""
+	}
+	parts := make([]string, 0)
+	var visit func(*nethtml.Node)
+	visit = func(node *nethtml.Node) {
+		if node.Type == nethtml.ElementNode {
+			switch strings.ToLower(node.Data) {
+			case "script", "style", "template", "head":
+				return
+			}
+		}
+		if node.Type == nethtml.TextNode {
+			appendSearchText(&parts, node.Data)
+		}
+		for child := node.FirstChild; child != nil; child = child.NextSibling {
+			visit(child)
+		}
+	}
+	visit(root)
+	return strings.Join(parts, " ")
 }
 
 var _ Builder = (*SearchBuilder)(nil)
