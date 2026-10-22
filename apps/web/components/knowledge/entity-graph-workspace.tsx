@@ -677,9 +677,6 @@ export function EntityGraphWorkspace({
             <Network className="size-6" aria-hidden />
           </span>
           <h2 className="mt-5 text-xl font-semibold">选择一个 Entity 开始</h2>
-          <p className="mx-auto mt-2 max-w-xl text-sm leading-6 text-muted-foreground">
-            关系图中的每条有向边都对应一个已发布 Claim；点击节点可以连续换中心探索。
-          </p>
         </section>
       ) : null}
 

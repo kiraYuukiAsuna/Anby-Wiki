@@ -223,9 +223,6 @@ export function ArticleEndMatter({
           >
             Related outlines
           </h2>
-          <p className="mt-3 text-sm text-muted-foreground">
-            收录本文的专题与结构化条目集合。
-          </p>
           <div className="mt-4 flex flex-wrap gap-2">
             {collections.map((collection) => (
               <Link

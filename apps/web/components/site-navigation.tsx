@@ -24,6 +24,7 @@ import {
   Settings2,
   SquarePen,
   TerminalSquare,
+  UserRound,
   UsersRound,
   Waypoints,
 } from "lucide-react";
@@ -109,6 +110,11 @@ const GROUPS = [
     label: "管理",
     items: [
       {
+        href: "/account",
+        label: "个人中心",
+        icon: UserRound,
+      },
+      {
         href: "/settings/cli",
         label: "Agent CLI 授权",
         icon: TerminalSquare,
@@ -120,7 +126,7 @@ const GROUPS = [
       },
       {
         href: "/admin/ai",
-        label: "AI 模型配置",
+        label: "管理员模型配置",
         icon: Settings2,
       },
     ],
@@ -176,15 +182,6 @@ export function SiteNavigation() {
           ))}
         </nav>
 
-        <div className="mt-auto rounded-2xl border border-sidebar-border bg-background/75 p-3.5">
-          <span className="flex size-8 items-center justify-center rounded-xl bg-primary/9 text-primary">
-            <BookOpenText className="size-4" aria-hidden />
-          </span>
-          <p className="mt-3 text-xs font-semibold">可验证的共同知识</p>
-          <p className="mt-1 text-[11px] leading-5 text-muted-foreground">
-            每次修改都有版本，每条事实都能回到来源。
-          </p>
-        </div>
       </div>
     </aside>
   );

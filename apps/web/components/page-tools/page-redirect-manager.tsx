@@ -150,9 +150,6 @@ export function PageRedirectManager({
               <Route className="size-4 text-violet-700" aria-hidden />
               页面重定向
             </p>
-            <p className="mt-1 max-w-2xl text-xs leading-5 text-muted-foreground">
-              一个稳定 Page ID 对应一个判别式目标。未解析标题会在未来动态落地，外部目标始终显示离站提示。
-            </p>
           </div>
           <RedirectPageButton
             sourcePageId={pageId}
@@ -247,9 +244,6 @@ export function PageRedirectManager({
             <div className="rounded-xl border border-dashed border-border px-5 py-9 text-center">
               <Route className="mx-auto size-5 text-muted-foreground" aria-hidden />
               <p className="mt-3 text-sm font-medium">当前没有页面重定向</p>
-              <p className="mt-1 text-xs text-muted-foreground">
-                访问这个 Page ID 时会直接展示其当前 Revision。
-              </p>
             </div>
           )}
         </div>

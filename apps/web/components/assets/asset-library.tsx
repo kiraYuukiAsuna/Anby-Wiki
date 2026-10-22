@@ -208,15 +208,10 @@ export function AssetLibrary() {
   return (
     <div className="grid gap-8 xl:grid-cols-[minmax(0,1fr)_20rem]">
       <section aria-labelledby="asset-list-title">
-        <div className="flex flex-wrap items-end justify-between gap-3">
-          <div>
-            <h2 id="asset-list-title" className="text-xl font-semibold">
-              资产目录
-            </h2>
-            <p className="mt-1 text-sm text-muted-foreground">
-              页面引用不可变版本，替换同名文件不会悄悄改变历史 Revision。
-            </p>
-          </div>
+        <div className="flex flex-wrap items-center justify-between gap-3">
+          <h2 id="asset-list-title" className="text-xl font-semibold">
+            资产目录
+          </h2>
           <Button
             type="button"
             size="sm"
@@ -274,9 +269,6 @@ export function AssetLibrary() {
           <div className="mt-4 rounded-2xl border border-dashed px-6 py-14 text-center">
             <Inbox className="mx-auto size-8 text-muted-foreground" aria-hidden />
             <h3 className="mt-4 font-semibold">还没有符合条件的资产</h3>
-            <p className="mt-2 text-sm text-muted-foreground">
-              登录后从右侧上传第一张图片、视频或附件。
-            </p>
           </div>
         ) : null}
 
@@ -310,9 +302,6 @@ export function AssetLibrary() {
             <Upload className="size-4.5" aria-hidden />
           </span>
           <h2 className="mt-4 font-semibold">上传新资产</h2>
-          <p className="mt-1 text-xs leading-5 text-muted-foreground">
-            同名同内容自动去重；同名新内容会创建新版本。
-          </p>
           <div className="mt-5 space-y-4">
             <div className="space-y-2">
               <Label htmlFor="asset-file">文件</Label>
@@ -348,7 +337,7 @@ export function AssetLibrary() {
             </Button>
           </div>
           <p className="mt-4 text-[11px] leading-5 text-muted-foreground">
-            最大 50 MiB。资产内容按摘要寻址，公开页面可稳定读取历史版本。
+            最大 50 MiB
           </p>
         </div>
       </aside>

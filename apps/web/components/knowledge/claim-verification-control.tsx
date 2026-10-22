@@ -116,15 +116,10 @@ export function ClaimVerificationControl({
   return (
     <div className="rounded-xl border bg-muted/15 p-4">
       <div className="flex flex-wrap items-start justify-between gap-4">
-        <div>
-          <p className="flex items-center gap-2 text-sm font-semibold">
-            <ShieldCheck className="size-4 text-emerald-700" aria-hidden />
-            独立核验状态
-          </p>
-          <p className="mt-1 max-w-2xl text-xs leading-5 text-muted-foreground">
-            核验与 Claim 的业务生命周期正交；结论会进入审计，但不会改写不可变事实版本。
-          </p>
-        </div>
+        <p className="flex items-center gap-2 text-sm font-semibold">
+          <ShieldCheck className="size-4 text-emerald-700" aria-hidden />
+          核验状态
+        </p>
         {!session.isAuthenticated ? (
           <Button asChild type="button" size="sm">
             <Link href={LOGIN_PATH}>登录后核验</Link>

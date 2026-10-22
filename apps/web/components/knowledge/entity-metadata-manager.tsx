@@ -198,15 +198,10 @@ export function EntityMetadataManager({
   return (
     <div className="space-y-4">
       <div className="flex flex-wrap items-start justify-between gap-4 rounded-xl border bg-muted/20 p-4">
-        <div>
-          <p className="flex items-center gap-2 text-sm font-semibold">
-            <Languages className="size-4 text-fuchsia-700" aria-hidden />
-            多语言名称
-          </p>
-          <p className="mt-1 max-w-2xl text-xs leading-5 text-muted-foreground">
-            标签决定各语言的首选显示；别名用于检索与旧名称发现。每笔写入都会进入不可变审计。
-          </p>
-        </div>
+        <p className="flex items-center gap-2 text-sm font-semibold">
+          <Languages className="size-4 text-fuchsia-700" aria-hidden />
+          多语言名称
+        </p>
         {canWrite ? (
           <div className="flex gap-2">
             <Button

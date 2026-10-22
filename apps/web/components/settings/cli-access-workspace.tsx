@@ -5,7 +5,6 @@ import {
   Copy,
   KeyRound,
   LoaderCircle,
-  ShieldCheck,
   TerminalSquare,
   Trash2,
 } from "lucide-react";
@@ -309,7 +308,7 @@ export function CLIAccessWorkspace() {
 
   return (
     <div className="space-y-10">
-      <section className="grid gap-8 border-y py-7 lg:grid-cols-[minmax(0,1fr)_20rem]">
+      <section className="border-y py-7">
         <div>
           <div className="flex items-center gap-2">
             <TerminalSquare className="size-4 text-emerald-700" aria-hidden />
@@ -351,13 +350,6 @@ export function CLIAccessWorkspace() {
             </Button>
           </div>
         </div>
-        <div className="border-l-0 pt-0 lg:border-l lg:pl-7">
-          <ShieldCheck className="size-4 text-emerald-700" aria-hidden />
-          <p className="mt-3 text-sm font-semibold">权限随账号实时变化</p>
-          <p className="mt-1 text-xs leading-5 text-muted-foreground">
-            Agent 使用当前账号的角色和页面保护权限。停用账号或撤销 Token 后立即失效。
-          </p>
-        </div>
       </section>
 
       <section aria-labelledby="cli-token-list-title">
@@ -367,7 +359,7 @@ export function CLIAccessWorkspace() {
               已授权 Agent
             </h2>
             <p className="mt-1 text-sm text-muted-foreground">
-              Token 明文不会返回；这里只保留前缀、生命周期和最近使用时间。
+              Token 明文不会再次显示。
             </p>
           </div>
           <div className="flex flex-wrap items-center gap-3">

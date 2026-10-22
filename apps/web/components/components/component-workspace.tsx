@@ -6,7 +6,6 @@ import {
   ArrowLeft,
   Check,
   CircleDot,
-  Code2,
   Component,
   Copy,
   Eye,
@@ -470,26 +469,13 @@ export function ComponentWorkspace({ id }: { id: string }) {
             创建新版本
           </Button>
         </div>
-        <p className="mt-4 max-w-3xl text-sm leading-6 text-muted-foreground">
-          Component ID{" "}
-          <code className="rounded bg-muted px-1.5 py-0.5 text-[11px]">
-            {component.id}
-          </code>
-          。页面只保存 ID、版本、Entity 与显示配置；信息框事实始终从 Claim
-          权威模型读取。
-        </p>
       </header>
 
       <section className="mt-8" aria-labelledby="component-version-title">
         <div className="mb-4 flex items-center justify-between gap-3">
-          <div>
-            <h2 id="component-version-title" className="text-lg font-semibold">
-              版本时间线
-            </h2>
-            <p className="mt-1 text-xs text-muted-foreground">
-              新版本不会改写旧页面；每个已发布版本永久可重现。
-            </p>
-          </div>
+          <h2 id="component-version-title" className="text-lg font-semibold">
+            版本
+          </h2>
           <span className="flex items-center gap-1.5 text-xs text-muted-foreground">
             <LockKeyhole className="size-3.5" aria-hidden />
             发布即冻结
@@ -500,9 +486,6 @@ export function ComponentWorkspace({ id }: { id: string }) {
           <div className="rounded-2xl border border-dashed px-6 py-14 text-center">
             <FileJson2 className="mx-auto size-8 text-muted-foreground" aria-hidden />
             <h3 className="mt-4 font-semibold">还没有组件版本</h3>
-            <p className="mt-2 text-sm text-muted-foreground">
-              创建 Props Schema，预览后再发布第一个版本。
-            </p>
           </div>
         ) : (
           <ol className="space-y-4">
@@ -634,24 +617,6 @@ export function ComponentWorkspace({ id }: { id: string }) {
           </ol>
         )}
       </section>
-
-      <aside className="mt-8 grid gap-4 md:grid-cols-2">
-        <div className="rounded-2xl border bg-muted/25 p-5">
-          <Code2 className="size-4 text-violet-700" aria-hidden />
-          <h2 className="mt-3 text-sm font-semibold">可信执行边界</h2>
-          <p className="mt-1 text-xs leading-5 text-muted-foreground">
-            数据库只保存 renderer_ref，绝不加载用户脚本或模板；实际代码来自进程内白名单。
-          </p>
-        </div>
-        <div className="rounded-2xl border bg-muted/25 p-5">
-          <LockKeyhole className="size-4 text-violet-700" aria-hidden />
-          <h2 className="mt-3 text-sm font-semibold">可重现渲染</h2>
-          <p className="mt-1 text-xs leading-5 text-muted-foreground">
-            ComponentBlock 锁定组件版本，ClaimUsage 与 ComponentDependency
-            负责精确失效和重建。
-          </p>
-        </div>
-      </aside>
 
       <ComponentUsagePanel
         componentId={component.id}

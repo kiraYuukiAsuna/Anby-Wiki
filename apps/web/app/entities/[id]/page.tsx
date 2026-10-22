@@ -34,7 +34,6 @@ export default async function EntityDetailPage({
       title={title}
       status={detail.status}
       modeLabel={detail.status === "active" ? "可治理" : "身份映射"}
-      description="稳定身份仅在当前私人 Wiki 内可读；合并是受权限控制、单事务提交并写入不可变审计的治理动作。"
     >
       <DetailSection title="稳定身份">
         <DetailRows

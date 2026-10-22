@@ -267,9 +267,6 @@ export function ImportJobList() {
       <div className="rounded-2xl border border-dashed bg-muted/25 px-6 py-10 text-center">
         <Inbox className="mx-auto size-8 text-muted-foreground" aria-hidden />
         <h3 className="mt-4 font-semibold">登录后恢复你的导入队列</h3>
-        <p className="mx-auto mt-2 max-w-sm text-sm leading-6 text-muted-foreground">
-          所有历史任务、失败原因、重试记录和待审核提议都会保存在这里。
-        </p>
         <Button asChild className="mt-5">
           <a href={LOGIN_PATH}>登录并查看</a>
         </Button>
@@ -279,18 +276,10 @@ export function ImportJobList() {
 
   return (
     <section aria-labelledby="import-queue-title">
-      <div className="flex flex-wrap items-end justify-between gap-3">
-        <div>
-          <p className="text-xs font-semibold tracking-[0.16em] text-primary uppercase">
-            Your queue
-          </p>
-          <h2 id="import-queue-title" className="mt-1 text-xl font-semibold">
-            导入队列
-          </h2>
-          <p className="mt-1 text-sm text-muted-foreground">
-            任务永久保留，可随时回来继续处理。
-          </p>
-        </div>
+      <div className="flex flex-wrap items-center justify-between gap-3">
+        <h2 id="import-queue-title" className="text-xl font-semibold">
+          导入队列
+        </h2>
         <Button
           type="button"
           size="sm"
@@ -359,9 +348,6 @@ export function ImportJobList() {
         <div className="mt-4 rounded-2xl border border-dashed px-6 py-10 text-center">
           <Inbox className="mx-auto size-7 text-muted-foreground" aria-hidden />
           <p className="mt-3 text-sm font-medium">这个筛选条件下还没有任务</p>
-          <p className="mt-1 text-xs text-muted-foreground">
-            从右侧提交网页或文件，第一条任务会立即出现在这里。
-          </p>
         </div>
       ) : null}
 

@@ -62,15 +62,10 @@ export function PageDirectory() {
 
   return (
     <section aria-labelledby="page-directory-title">
-      <div className="flex flex-wrap items-end justify-between gap-3">
-        <div>
-          <h2 id="page-directory-title" className="text-xl font-semibold">
-            {typeof total === "number" ? `${total} 个已发布条目` : "已发布条目"}
-          </h2>
-          <p className="mt-1 text-sm text-muted-foreground">
-            目录只包含已正式发布的内容页面；草稿与软删除页面不会出现。
-          </p>
-        </div>
+      <div className="flex flex-wrap items-center justify-between gap-3">
+        <h2 id="page-directory-title" className="text-xl font-semibold">
+          {typeof total === "number" ? `${total} 个已发布条目` : "已发布条目"}
+        </h2>
         <div className="flex items-center gap-2">
           <div className="flex rounded-xl bg-muted p-1" aria-label="页面排序">
             <button
@@ -123,7 +118,6 @@ export function PageDirectory() {
         <div className="mt-5 rounded-2xl border border-dashed px-6 py-14 text-center">
           <BookOpenText className="mx-auto size-8 text-muted-foreground" aria-hidden />
           <h3 className="mt-4 font-semibold">还没有已发布页面</h3>
-          <p className="mt-2 text-sm text-muted-foreground">发布第一个百科页面后，它会进入此目录。</p>
           <Button asChild className="mt-5"><Link href="/new">创建页面</Link></Button>
         </div>
       ) : null}

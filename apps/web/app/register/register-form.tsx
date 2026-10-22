@@ -8,6 +8,7 @@ import { useSWRConfig } from "swr";
 import { z } from "zod";
 import { ResponseError } from "../../../../contracts/generated/typescript";
 
+import { AuthShell } from "@/components/auth-shell";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -93,78 +94,97 @@ export function RegisterForm() {
   };
 
   return (
-    <main className="mx-auto flex w-full max-w-sm flex-col gap-6 px-4 py-12">
-      <div className="flex flex-col gap-2">
-        <h1 className="text-2xl font-semibold tracking-tight">创建账号</h1>
-        <p className="text-sm text-muted-foreground">
-          注册后会创建你的私人 Wiki，并将你设为该 Wiki 的管理员。
-        </p>
-      </div>
-      <form className="flex flex-col gap-4" onSubmit={submit}>
-        <div className="flex flex-col gap-2">
+    <AuthShell
+      title="创建私人 Wiki"
+      wide
+      footer={
+        <>
+          已有账号？{" "}
+          <Link
+            className="font-semibold text-foreground underline-offset-4 hover:underline"
+            href={loginHref}
+          >
+            返回登录
+          </Link>
+        </>
+      }
+    >
+      <form
+        className="grid gap-5 sm:grid-cols-2"
+        onSubmit={submit}
+      >
+        <div className="flex flex-col gap-2 sm:col-span-1">
           <Label htmlFor="username">用户名</Label>
           <Input
             id="username"
             autoComplete="username"
+            className="h-12 rounded-[8px] px-3.5"
+            placeholder="至少 3 个字符"
             value={username}
             onChange={(event) => setUsername(event.target.value)}
             required
           />
         </div>
-        <div className="flex flex-col gap-2">
+        <div className="flex flex-col gap-2 sm:col-span-1">
           <Label htmlFor="email">邮箱</Label>
           <Input
             id="email"
             type="email"
             autoComplete="email"
+            className="h-12 rounded-[8px] px-3.5"
+            placeholder="name@example.com"
             value={email}
             onChange={(event) => setEmail(event.target.value)}
             required
           />
         </div>
-        <div className="flex flex-col gap-2">
+        <div className="flex flex-col gap-2 sm:col-span-2">
           <Label htmlFor="display-name">显示名（可选）</Label>
           <Input
             id="display-name"
             autoComplete="name"
+            className="h-12 rounded-[8px] px-3.5"
+            placeholder="你的显示名称"
             value={displayName}
             onChange={(event) => setDisplayName(event.target.value)}
           />
         </div>
-        <div className="flex flex-col gap-2">
+        <div className="flex flex-col gap-2 sm:col-span-1">
           <Label htmlFor="password">密码</Label>
           <Input
             id="password"
             type="password"
             autoComplete="new-password"
+            className="h-12 rounded-[8px] px-3.5"
+            placeholder="至少 12 个字符"
             value={password}
             onChange={(event) => setPassword(event.target.value)}
             minLength={12}
             required
           />
-          <p className="text-xs text-muted-foreground">至少 12 个字符。</p>
         </div>
-        <div className="flex flex-col gap-2">
+        <div className="flex flex-col gap-2 sm:col-span-1">
           <Label htmlFor="confirm-password">确认密码</Label>
           <Input
             id="confirm-password"
             type="password"
             autoComplete="new-password"
+            className="h-12 rounded-[8px] px-3.5"
+            placeholder="再次输入密码"
             value={confirmPassword}
             onChange={(event) => setConfirmPassword(event.target.value)}
             required
           />
         </div>
-        <Button type="submit" disabled={submitting}>
+        <Button
+          type="submit"
+          size="lg"
+          className="h-12 w-full rounded-[8px] text-sm font-semibold sm:col-span-2"
+          disabled={submitting}
+        >
           {submitting ? "创建中…" : "创建账号"}
         </Button>
       </form>
-      <p className="text-center text-sm text-muted-foreground">
-        已有账号？{" "}
-        <Link className="font-medium text-foreground underline-offset-4 hover:underline" href={loginHref}>
-          登录
-        </Link>
-      </p>
-    </main>
+    </AuthShell>
   );
 }

@@ -217,15 +217,10 @@ export function SourceLibrary() {
   return (
     <div className="grid gap-8 xl:grid-cols-[minmax(0,1fr)_21rem]">
       <section aria-labelledby="source-directory-title">
-        <div className="flex flex-wrap items-end justify-between gap-4">
-          <div>
-            <h2 id="source-directory-title" className="text-xl font-semibold">
-              来源目录
-            </h2>
-            <p className="mt-1 text-sm text-muted-foreground">
-              搜索只读取元数据，不在请求时扫描来源全文。
-            </p>
-          </div>
+        <div className="flex flex-wrap items-center justify-between gap-4">
+          <h2 id="source-directory-title" className="text-xl font-semibold">
+            来源目录
+          </h2>
           <Button
             type="button"
             variant="ghost"
@@ -303,9 +298,6 @@ export function SourceLibrary() {
           <div className="mt-5 rounded-2xl border border-dashed px-6 py-14 text-center">
             <Inbox className="mx-auto size-8 text-muted-foreground" aria-hidden />
             <h3 className="mt-4 font-semibold">没有匹配来源</h3>
-            <p className="mt-2 text-sm text-muted-foreground">
-              可从右侧登记来源，或前往 AI 导入中心抓取并生成版本。
-            </p>
             <Button asChild variant="outline" className="mt-5">
               <Link href="/imports">打开导入中心</Link>
             </Button>
@@ -340,9 +332,6 @@ export function SourceLibrary() {
             <Plus className="size-4" aria-hidden />
           </span>
           <h2 className="mt-4 font-semibold">登记逻辑来源</h2>
-          <p className="mt-1 text-xs leading-5 text-muted-foreground">
-            来源身份可长期复用；后续每次获取内容都会形成不可变 SourceVersion。
-          </p>
           <div className="mt-5 space-y-4">
             <div className="space-y-2">
               <Label htmlFor="source-type">类型</Label>

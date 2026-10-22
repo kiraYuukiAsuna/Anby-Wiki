@@ -27,20 +27,14 @@ export default async function PageToolsPage({
 
   return (
     <div className="mx-auto w-full max-w-7xl px-5 py-10 lg:px-8 lg:py-12">
-      <header className="mb-9 flex flex-wrap items-end justify-between gap-6 border-b border-border/75 pb-8">
-        <div>
+      <header className="mb-8 flex flex-wrap items-center justify-between gap-4 border-b border-border/75 pb-6">
+        <div className="flex items-center gap-3">
           <span className="flex size-11 items-center justify-center rounded-2xl bg-cyan-100 text-cyan-800">
             <Wrench className="size-5" aria-hidden />
           </span>
-          <p className="mt-5 text-xs font-semibold tracking-[0.18em] text-cyan-800 uppercase">
-            Page operations
-          </p>
-          <h1 className="mt-2 text-4xl font-semibold tracking-[-0.045em]">
-            页面工具
+          <h1 className="text-3xl font-semibold">
+            页面工具：{managedPage.displayTitle}
           </h1>
-          <p className="mt-3 max-w-3xl text-sm leading-7 text-muted-foreground">
-            管理「{managedPage.displayTitle}」的稳定地址与治理边界。正文内容仍通过版本化编辑器发布。
-          </p>
         </div>
         <Button asChild variant="outline">
           <Link href={`/pages/${managedPage.id}`}>
@@ -50,13 +44,9 @@ export default async function PageToolsPage({
         </Button>
       </header>
       <div className="space-y-6">
-        <BacklinksPanel
-          pageId={managedPage.id}
-          pageTitle={managedPage.displayTitle}
-        />
+        <BacklinksPanel pageId={managedPage.id} />
         <PageEntityBindingManager
           pageId={managedPage.id}
-          pageTitle={managedPage.displayTitle}
           pageLanguage={page.language}
         />
         <PageRedirectManager

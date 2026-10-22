@@ -8,9 +8,7 @@ import {
   Building2,
   CalendarDays,
   CircleUser,
-  FileText,
   Inbox,
-  Languages,
   Leaf,
   Lightbulb,
   LoaderCircle,
@@ -19,7 +17,6 @@ import {
   RefreshCw,
   Search,
   Sparkles,
-  Tags,
   Waypoints,
 } from "lucide-react";
 import { useEffect, useState } from "react";
@@ -214,17 +211,12 @@ export function EntityLibrary() {
     state.size > (state.data?.length ?? 0);
 
   return (
-    <div className="grid gap-8 xl:grid-cols-[minmax(0,1fr)_18rem]">
+    <div>
       <section aria-labelledby="entity-catalog-title">
-        <div className="flex flex-wrap items-end justify-between gap-3">
-          <div>
-            <h2 id="entity-catalog-title" className="text-xl font-semibold">
-              实体目录
-            </h2>
-            <p className="mt-1 text-sm text-muted-foreground">
-              名称相同不等于身份相同；合并必须由治理动作明确发生。
-            </p>
-          </div>
+        <div className="flex flex-wrap items-center justify-between gap-3">
+          <h2 id="entity-catalog-title" className="text-xl font-semibold">
+            实体目录
+          </h2>
           <Button
             type="button"
             size="sm"
@@ -314,10 +306,6 @@ export function EntityLibrary() {
           <div className="mt-5 rounded-2xl border border-dashed px-6 py-14 text-center">
             <Inbox className="mx-auto size-8 text-muted-foreground" aria-hidden />
             <h3 className="mt-4 font-semibold">没有符合条件的实体</h3>
-            <p className="mt-2 text-sm text-muted-foreground">
-              试试清除搜索词或切换类型；新 Entity 也会由审核后的 Proposal
-              与导入流程创建。
-            </p>
           </div>
         ) : null}
 
@@ -346,51 +334,6 @@ export function EntityLibrary() {
         ) : null}
       </section>
 
-      <aside className="space-y-4">
-        <div className="rounded-2xl border border-indigo-200/70 bg-indigo-50/70 p-5">
-          <Waypoints className="size-5 text-indigo-700" aria-hidden />
-          <h2 className="mt-4 font-semibold">稳定身份，不靠页面标题</h2>
-          <p className="mt-2 text-xs leading-6 text-muted-foreground">
-            Page 负责叙述，Entity 负责身份，Claim
-            负责结构化事实。页面改名不会改变事实引用的目标。
-          </p>
-        </div>
-        <div className="rounded-2xl border border-border/80 bg-card p-5">
-          <h2 className="text-sm font-semibold">目录里的数字</h2>
-          <dl className="mt-4 space-y-3 text-xs">
-            <div className="flex gap-3">
-              <FileText className="mt-0.5 size-3.5 text-muted-foreground" aria-hidden />
-              <div>
-                <dt className="font-medium">事实</dt>
-                <dd className="mt-0.5 text-muted-foreground">
-                  未被拒绝或取代的 Claim 数量
-                </dd>
-              </div>
-            </div>
-            <div className="flex gap-3">
-              <Languages
-                className="mt-0.5 size-3.5 text-muted-foreground"
-                aria-hidden
-              />
-              <div>
-                <dt className="font-medium">名称</dt>
-                <dd className="mt-0.5 text-muted-foreground">
-                  多语言标签与历史、缩写等别名
-                </dd>
-              </div>
-            </div>
-            <div className="flex gap-3">
-              <Tags className="mt-0.5 size-3.5 text-muted-foreground" aria-hidden />
-              <div>
-                <dt className="font-medium">页面</dt>
-                <dd className="mt-0.5 text-muted-foreground">
-                  通过稳定绑定关联的不同 Page
-                </dd>
-              </div>
-            </div>
-          </dl>
-        </div>
-      </aside>
     </div>
   );
 }

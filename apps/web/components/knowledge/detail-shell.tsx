@@ -5,7 +5,7 @@ export function DetailShell({
   title,
   status,
   modeLabel = "只读",
-  description = "当前详情属于你的私人 Wiki；所有权威写入仍须经过领域服务与授权工作流。",
+  description,
   children,
 }: {
   eyebrow: string;
@@ -26,7 +26,9 @@ export function DetailShell({
           </span>
         </div>
         <h1 className="text-3xl font-bold tracking-tight">{title}</h1>
-        <p className="mt-2 text-sm text-muted-foreground">{description}</p>
+        {description ? (
+          <p className="mt-2 text-sm text-muted-foreground">{description}</p>
+        ) : null}
       </header>
       {children}
     </main>

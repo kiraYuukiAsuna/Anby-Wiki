@@ -332,15 +332,10 @@ export function FactConsistencyWorkspace() {
       </section>
 
       <section>
-        <div className="flex flex-wrap items-end justify-between gap-4">
-          <div>
-            <h2 className="text-xl font-semibold tracking-tight">
-              一致性问题队列
-            </h2>
-            <p className="mt-1 text-sm text-muted-foreground">
-              Worker 随 Claim 变化增量重算；管理员也可随时执行全量扫描。
-            </p>
-          </div>
+        <div className="flex flex-wrap items-center justify-between gap-4">
+          <h2 className="text-xl font-semibold tracking-tight">
+            一致性问题队列
+          </h2>
           <div className="flex flex-wrap gap-2">
             <Button
               type="button"
@@ -430,9 +425,6 @@ export function FactConsistencyWorkspace() {
           <div className="mt-5 rounded-3xl border border-dashed px-6 py-14 text-center">
             <Inbox className="mx-auto size-8 text-emerald-700" aria-hidden />
             <h3 className="mt-4 font-semibold">当前筛选下没有问题</h3>
-            <p className="mt-2 text-sm text-muted-foreground">
-              这表示已扫描的权威事实满足当前一致性规则；仍可执行全量扫描复核。
-            </p>
           </div>
         ) : null}
         {items.length > 0 ? (

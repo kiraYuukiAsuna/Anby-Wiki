@@ -23,6 +23,8 @@ tags:
     description: 服务元信息与健康检查
   - name: auth
     description: 本地账号注册、密码登录与服务端会话
+  - name: account
+    description: 当前登录账号的个人资料与模型配置
   - name: pages
     description: 页面创建、改名与 Revision 发布（写 API）
   - name: reading
@@ -123,6 +125,104 @@ paths:
         "204":
           description: 已退出；无活动 session 时同样成功
         "500": { $ref: "#/components/responses/Internal" }
+  /api/v1/account/profile:
+    get:
+      operationId: getAccountProfile
+      tags: [account]
+      summary: 读取当前账号资料
+      security:
+        - sessionCookie: []
+      responses:
+        "200":
+          description: 当前账号资料
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/AccountProfile" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "500": { $ref: "#/components/responses/Internal" }
+    put:
+      operationId: updateAccountProfile
+      tags: [account]
+      summary: 更新当前账号资料
+      security:
+        - sessionCookie: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/UpdateAccountProfileRequest" }
+      responses:
+        "200":
+          description: 更新后的账号资料
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/AccountProfile" }
+        "400": { $ref: "#/components/responses/BadRequest" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "409": { $ref: "#/components/responses/Conflict" }
+        "500": { $ref: "#/components/responses/Internal" }
+  /api/v1/account/ai-config:
+    get:
+      operationId: getAccountAIConfig
+      tags: [account]
+      summary: 读取当前账号的模型配置
+      description: API Key 永不返回，只暴露是否已配置。
+      security:
+        - sessionCookie: []
+      responses:
+        "200":
+          description: 脱敏后的当前配置；未保存时返回安全默认值
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/AIConfig" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "500": { $ref: "#/components/responses/Internal" }
+    put:
+      operationId: updateAccountAIConfig
+      tags: [account]
+      summary: 保存当前账号的模型配置
+      description: >-
+        模型配置写入当前账号对应的私有 Wiki。首次保存必须提供 api_key；
+        后续省略或传空字符串表示保留现有密钥。密钥使用部署主密钥加密后持久化。
+      security:
+        - sessionCookie: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/UpdateAIConfigRequest" }
+      responses:
+        "200":
+          description: 脱敏后的已保存配置
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/AIConfig" }
+        "400": { $ref: "#/components/responses/BadRequest" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "500": { $ref: "#/components/responses/Internal" }
+  /api/v1/account/ai-config/test:
+    post:
+      operationId: testAccountAIConfig
+      tags: [account]
+      summary: 测试当前账号已保存的模型配置
+      description: 不接受临时密钥或 Prompt；仅返回供应商、模型与端到端耗时。
+      security:
+        - sessionCookie: []
+      responses:
+        "200":
+          description: Semantic Kernel 与模型供应商连通且结构化输出有效
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/AIConfigTestResult" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "409": { $ref: "#/components/responses/Conflict" }
+        "502": { $ref: "#/components/responses/Internal" }
+        "504": { $ref: "#/components/responses/Internal" }
   /api/v1/auth/cli/codes:
     post:
       operationId: createCLIAuthCode
@@ -4524,6 +4624,44 @@ components:
         method:
           type: string
           enum: [session, cli_token, development_header, test_header]
+    AccountProfile:
+      type: object
+      additionalProperties: false
+      required:
+        - actor_id
+        - wiki_id
+        - username
+        - email
+        - display_name
+        - wiki_name
+        - created_at
+        - updated_at
+      properties:
+        actor_id: { type: string, format: uuid }
+        wiki_id: { type: string, format: uuid }
+        username: { type: string }
+        email: { type: string, format: email }
+        display_name: { type: string }
+        wiki_name: { type: string }
+        created_at: { type: string, format: date-time }
+        updated_at: { type: string, format: date-time }
+    UpdateAccountProfileRequest:
+      type: object
+      additionalProperties: false
+      required: [email, display_name, wiki_name]
+      properties:
+        email:
+          type: string
+          format: email
+          maxLength: 254
+        display_name:
+          type: string
+          minLength: 1
+          maxLength: 128
+        wiki_name:
+          type: string
+          minLength: 1
+          maxLength: 128
     CreateCLIAuthCodeRequest:
       type: object
       additionalProperties: false

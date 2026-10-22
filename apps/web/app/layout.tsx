@@ -20,8 +20,7 @@ export const metadata: Metadata = {
     default: "Anby Wiki",
     template: "%s · Anby Wiki",
   },
-  description:
-    "一个由人工与 AI 共同维护、事实可验证、修改可审核的现代百科平台。",
+  description: "Anby Wiki",
 };
 
 export default function RootLayout({

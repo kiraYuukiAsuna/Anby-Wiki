@@ -13,7 +13,6 @@ import {
   Plus,
   RefreshCw,
   Search,
-  ShieldQuestion,
 } from "lucide-react";
 import Link from "next/link";
 import { useEffect, useMemo, useState } from "react";
@@ -524,15 +523,10 @@ export function FederationWorkspace() {
       </section>
 
       <section aria-labelledby="remote-wiki-title">
-        <div className="flex flex-wrap items-end justify-between gap-4">
-          <div>
-            <h2 id="remote-wiki-title" className="text-xl font-semibold">
-              远端 Wiki 目录
-            </h2>
-            <p className="mt-1 text-sm text-muted-foreground">
-              先登记身份源和信任边界，再把本地 Entity 显式映射过去。
-            </p>
-          </div>
+        <div className="flex flex-wrap items-center justify-between gap-4">
+          <h2 id="remote-wiki-title" className="text-xl font-semibold">
+            远端 Wiki
+          </h2>
           <div className="flex items-center gap-2">
             <Button
               type="button"
@@ -589,9 +583,6 @@ export function FederationWorkspace() {
           <div className="mt-5 rounded-2xl border border-dashed p-8 text-center">
             <Globe2 className="mx-auto size-7 text-muted-foreground" aria-hidden />
             <h3 className="mt-3 font-semibold">还没有登记远端 Wiki</h3>
-            <p className="mt-1 text-sm text-muted-foreground">
-              管理员登记第一个身份源后，Entity 详情页即可创建映射。
-            </p>
           </div>
         ) : null}
         {wikis.length > 0 ? (
@@ -609,14 +600,9 @@ export function FederationWorkspace() {
       </section>
 
       <section aria-labelledby="federation-links-title">
-        <div>
-          <h2 id="federation-links-title" className="text-xl font-semibold">
-            Entity 映射流
-          </h2>
-          <p className="mt-1 text-sm text-muted-foreground">
-            映射是独立、可审计的知识，不会把远端内容复制成本站事实。
-          </p>
-        </div>
+        <h2 id="federation-links-title" className="text-xl font-semibold">
+          Entity 映射
+        </h2>
         <div className="mt-5 grid gap-3 rounded-2xl border bg-card/70 p-4 md:grid-cols-[minmax(0,1fr)_13rem_10rem]">
           <label className="relative block">
             <span className="sr-only">搜索 Federation 映射</span>
@@ -685,9 +671,6 @@ export function FederationWorkspace() {
           <div className="mt-5 rounded-2xl border border-dashed px-6 py-12 text-center">
             <Inbox className="mx-auto size-8 text-muted-foreground" aria-hidden />
             <h3 className="mt-4 font-semibold">没有符合条件的映射</h3>
-            <p className="mt-2 text-sm text-muted-foreground">
-              从任意 Entity 详情页建立远端身份映射。
-            </p>
             <Button asChild variant="outline" className="mt-5">
               <Link href="/entities">浏览 Entity</Link>
             </Button>
@@ -716,17 +699,6 @@ export function FederationWorkspace() {
           </div>
         ) : null}
       </section>
-
-      <aside className="grid gap-4 rounded-3xl border border-indigo-200/70 bg-indigo-50/55 p-6 md:grid-cols-[auto_1fr]">
-        <ShieldQuestion className="size-5 text-indigo-700" aria-hidden />
-        <div>
-          <h2 className="font-semibold text-indigo-950">信任等级不是自动同步许可</h2>
-          <p className="mt-1 max-w-4xl text-xs leading-6 text-indigo-950/65">
-            Federation 只声明身份关系。远端事实仍需经过 Source、Citation、Claim
-            与 Proposal 治理链路才能进入本站权威状态。
-          </p>
-        </div>
-      </aside>
 
       <Dialog
         open={Boolean(wikiDraft)}

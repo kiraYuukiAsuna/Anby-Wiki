@@ -1,6 +1,6 @@
 # 当前实现状态
 
-> 更新时间：2026-10-21
+> 更新时间：2026-10-22
 > 产品与能力审计依据：[整体设计方案](WikiDesignOnePage.md)
 
 ## 总体结论
@@ -46,6 +46,21 @@ AI 配置和双会话协作 E2E。“实现完成”仍不等于“生产发布�
   私人 Wiki。Migration gate 为 `current=1 expected=1 dirty=false`，Doctor 为
   0 issue，八个常驻容器 healthy，API/Worker 最近日志无 error/panic/fatal。
 
+## 2026-10-22 个人中心与账号级模型配置
+
+- Web 新增 `/account` 个人中心，提供当前账号显示名、邮箱和知识空间名称编辑入口；
+  顶部账号菜单、左侧导航和命令面板均可重新进入。保存后刷新当前 Session，页眉显示名
+  与 Wiki 名称按最新资料展示。
+- 后端新增 `/api/v1/account/profile` 读写接口，资料更新继续经 `auth.Service`
+  事务写入 `actor`、`local_account` 与当前账号拥有的 `wiki_site`，不由 handler
+  直接改权威状态；邮箱仍保持全局唯一。
+- 新增 `/api/v1/account/ai-config` 与测试接口，个人中心直接管理当前账号对应私人
+  Wiki 的模型供应商、密钥、Token/Chunk 预算、超时和导入计划自动确认策略。底层复用
+  既有 `aiconfig.Service` 加密存储与 Worker 运行时读取路径，模型配置随账号私人 Wiki
+  隔离，不使用前端缓存或全局站点配置。
+- OpenAPI 权威契约、Agent CLI 内嵌契约和 TypeScript 生成客户端已同步；CLI operation
+  数量更新为 167。
+
 ## 2026-10-08 宿主机部署入口
 
 - API/Worker 提供 10 分钟启动宽限和 12 分钟部署等待，覆盖首次启动的
@@ -82,7 +97,7 @@ AI 配置和双会话协作 E2E。“实现完成”仍不等于“生产发布�
 | 投影与搜索 | Outbox 租约/重试/死信、链接/目录/锚点/章节/渲染/知识使用/References/相关推荐/组件依赖/图谱投影、可解释的链接+Collection+Entity 相关度、PostgreSQL fallback、Meilisearch 关键词/混合/语义检索 |
 | 规模与归档 | 章节懒加载、服务端可信 HTML 渲染、Revision 热冷分层与 S3 回源、Projection/Search 重建、容量基准命令 |
 | 协作 | Yjs WorkingDocument、持久增量 update、重连游标、普通发布与 AI 合并的 sequence CAS、未确认 update 幂等重发、自动 snapshot/compact、Block 级 Presence、三方合并与人工冲突决议；跨标签页离线恢复和多 API 实例广播仍待实现 |
-| 平台 | 每账号私人 Wiki、本地账号/Session/RBAC、一次性授权码与可撤销/可清理 Agent CLI Bearer Token、162 个 OpenAPI operation 和协作 WebSocket 的 JSON + 人类命令双模式 CLI、Redis 限流、安全头、OTel/Prometheus、备份恢复、Doctor、生产部署清单 |
+| 平台 | 每账号私人 Wiki、本地账号/Session/RBAC、个人中心资料与模型配置、一次性授权码与可撤销/可清理 Agent CLI Bearer Token、167 个 OpenAPI operation 和协作 WebSocket 的 JSON + 人类命令双模式 CLI、Redis 限流、安全头、OTel/Prometheus、备份恢复、Doctor、生产部署清单 |
 
 ## 关键不变量
 

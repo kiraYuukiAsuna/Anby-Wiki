@@ -176,15 +176,10 @@ export function CollectionHub() {
   return (
     <div className="grid gap-8 xl:grid-cols-[minmax(0,1fr)_24rem]">
       <section aria-labelledby="collection-catalog-title">
-        <div className="flex flex-wrap items-end justify-between gap-3">
-          <div>
-            <h2 id="collection-catalog-title" className="text-xl font-semibold">
-              专题目录
-            </h2>
-            <p className="mt-1 text-sm text-muted-foreground">
-              人工策展、规则物化与实时查询使用同一个稳定入口。
-            </p>
-          </div>
+        <div className="flex flex-wrap items-center justify-between gap-3">
+          <h2 id="collection-catalog-title" className="text-xl font-semibold">
+            专题目录
+          </h2>
           <Button
             type="button"
             size="sm"
@@ -215,9 +210,6 @@ export function CollectionHub() {
           <div className="mt-5 rounded-2xl border border-dashed px-6 py-14 text-center">
             <Layers3 className="mx-auto size-8 text-muted-foreground" aria-hidden />
             <h3 className="mt-4 font-semibold">还没有专题合集</h3>
-            <p className="mt-2 text-sm text-muted-foreground">
-              用右侧设计器创建第一个长期可发现的知识入口。
-            </p>
           </div>
         ) : null}
         {items.length > 0 ? (
@@ -245,9 +237,6 @@ export function CollectionHub() {
             <Plus className="size-4.5" aria-hidden />
           </span>
           <h2 className="mt-4 font-semibold">创建专题合集</h2>
-          <p className="mt-1 text-xs leading-5 text-muted-foreground">
-            Dynamic 查询只接受版本化字段，不允许任意 SQL。
-          </p>
           <div className="mt-5 space-y-4">
             <div className="space-y-2">
               <Label htmlFor="collection-title">标题</Label>

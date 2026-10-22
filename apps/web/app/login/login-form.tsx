@@ -8,6 +8,7 @@ import { useSWRConfig } from "swr";
 import { z } from "zod";
 import { ResponseError } from "../../../../contracts/generated/typescript";
 
+import { AuthShell } from "@/components/auth-shell";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -62,19 +63,28 @@ export function LoginForm() {
   };
 
   return (
-    <main className="mx-auto flex w-full max-w-sm flex-col gap-6 px-4 py-16">
-      <div className="flex flex-col gap-2">
-        <h1 className="text-2xl font-semibold tracking-tight">登录</h1>
-        <p className="text-sm text-muted-foreground">
-          使用你的用户名或邮箱登录 Anby Wiki。
-        </p>
-      </div>
-      <form className="flex flex-col gap-4" onSubmit={submit}>
+    <AuthShell
+      title="欢迎回来"
+      footer={
+        <>
+          还没有账号？{" "}
+          <Link
+            className="font-semibold text-foreground underline-offset-4 hover:underline"
+            href={registerHref}
+          >
+            创建私人 Wiki
+          </Link>
+        </>
+      }
+    >
+      <form className="flex flex-col gap-5" onSubmit={submit}>
         <div className="flex flex-col gap-2">
           <Label htmlFor="identifier">用户名或邮箱</Label>
           <Input
             id="identifier"
             autoComplete="username"
+            className="h-12 rounded-[8px] px-3.5"
+            placeholder="name@example.com"
             value={identifier}
             onChange={(event) => setIdentifier(event.target.value)}
             required
@@ -86,21 +96,22 @@ export function LoginForm() {
             id="password"
             type="password"
             autoComplete="current-password"
+            className="h-12 rounded-[8px] px-3.5"
+            placeholder="输入密码"
             value={password}
             onChange={(event) => setPassword(event.target.value)}
             required
           />
         </div>
-        <Button type="submit" disabled={submitting}>
+        <Button
+          type="submit"
+          size="lg"
+          className="mt-1 h-12 w-full rounded-[8px] text-sm font-semibold"
+          disabled={submitting}
+        >
           {submitting ? "登录中…" : "登录"}
         </Button>
       </form>
-      <p className="text-center text-sm text-muted-foreground">
-        还没有账号？{" "}
-        <Link className="font-medium text-foreground underline-offset-4 hover:underline" href={registerHref}>
-          注册
-        </Link>
-      </p>
-    </main>
+    </AuthShell>
   );
 }

@@ -394,15 +394,10 @@ export function AuditActivity() {
   return (
     <div className="grid gap-8 xl:grid-cols-[minmax(0,1fr)_21rem]">
       <section aria-labelledby="audit-stream-title">
-        <div className="flex flex-wrap items-end justify-between gap-4">
-          <div>
-            <h2 id="audit-stream-title" className="text-xl font-semibold">
-              不可变活动流
-            </h2>
-            <p className="mt-1 text-sm text-muted-foreground">
-              按创建时间倒序，游标分页不丢失并发写入。
-            </p>
-          </div>
+        <div className="flex flex-wrap items-center justify-between gap-4">
+          <h2 id="audit-stream-title" className="text-xl font-semibold">
+            活动流
+          </h2>
           <Button
             type="button"
             variant="ghost"
@@ -482,9 +477,6 @@ export function AuditActivity() {
           <div className="mt-5 rounded-2xl border border-dashed px-6 py-14 text-center">
             <Inbox className="mx-auto size-8 text-muted-foreground" aria-hidden />
             <h3 className="mt-4 font-semibold">没有匹配的审计事件</h3>
-            <p className="mt-2 text-sm text-muted-foreground">
-              调整过滤条件，或在完成第一笔权威变更后回来查看。
-            </p>
           </div>
         ) : null}
         {items.length > 0 ? (
@@ -521,9 +513,6 @@ export function AuditActivity() {
         <div className="rounded-2xl border bg-card p-5">
           <BadgeCheck className="size-5 text-violet-700" aria-hidden />
           <h2 className="mt-4 font-semibold">ChangeTag 词表</h2>
-          <p className="mt-1 text-xs leading-5 text-muted-foreground">
-            标签与关联都只增不改，便于统计、审计与长期策略判断。
-          </p>
           <div className="mt-4 flex flex-wrap gap-2">
             {(tagState.data?.items ?? []).map((tag) => (
               <TagPill key={tag.id} tag={tag} />
@@ -536,7 +525,7 @@ export function AuditActivity() {
           </span>
           <h2 className="mt-4 font-semibold">创建全局标签</h2>
           <p className="mt-1 text-xs leading-5 text-muted-foreground">
-            仅 admin 可扩展词表；创建后不可重命名或删除。
+            创建后不可重命名或删除。
           </p>
           <div className="mt-4 space-y-4">
             <div className="space-y-2">

@@ -213,12 +213,7 @@ export function BulkReviewHub() {
     <div className="grid gap-8 py-8 xl:grid-cols-[minmax(0,1fr)_23rem]">
       <section>
         <div className="flex flex-wrap items-center justify-between gap-3">
-          <div>
-            <h2 className="text-lg font-semibold">持续中的批次</h2>
-            <p className="mt-1 text-xs text-muted-foreground">
-              批次不会因离开页面而丢失，可随时恢复处理。
-            </p>
-          </div>
+          <h2 className="text-lg font-semibold">评审批次</h2>
           <div className="flex flex-wrap gap-1 rounded-xl border bg-muted/35 p-1">
             {(["all", "reviewing", "ready", "paused", "completed"] as const).map(
               (value) => (
@@ -256,9 +251,6 @@ export function BulkReviewHub() {
           <div className="mt-5 rounded-2xl border border-dashed bg-muted/20 p-10 text-center">
             <CheckCircle2 className="mx-auto size-6 text-muted-foreground" aria-hidden />
             <p className="mt-3 text-sm font-medium">这个视图里还没有批次</p>
-            <p className="mt-1 text-xs text-muted-foreground">
-              从右侧待审提案创建第一个可恢复的批次。
-            </p>
           </div>
         )}
       </section>
@@ -270,9 +262,6 @@ export function BulkReviewHub() {
               <Plus className="size-4" aria-hidden />
             </span>
             <h2 className="mt-4 font-semibold">创建评审批次</h2>
-            <p className="mt-1 text-xs leading-5 text-muted-foreground">
-              选中的成员、抽样结果和 wave 会在创建时冻结。
-            </p>
           </div>
 
           <div className="p-5">

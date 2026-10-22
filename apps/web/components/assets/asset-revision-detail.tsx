@@ -66,8 +66,8 @@ export function AssetRevisionDetail({
 
   return (
     <div className="mx-auto w-full max-w-7xl px-5 py-10 lg:px-8 lg:py-12">
-      <header className="flex flex-wrap items-end justify-between gap-6 border-b pb-8">
-        <div>
+      <header className="flex flex-wrap items-center justify-between gap-4 border-b pb-6">
+        <div className="flex items-center gap-3">
           <span className="flex size-11 items-center justify-center rounded-2xl bg-sky-100 text-sky-700">
             {image ? (
               <ImageIcon className="size-5" aria-hidden />
@@ -81,16 +81,7 @@ export function AssetRevisionDetail({
               <FileArchive className="size-5" aria-hidden />
             )}
           </span>
-          <p className="mt-5 text-xs font-semibold tracking-[0.18em] text-sky-700 uppercase">
-            Immutable asset revision
-          </p>
-          <h1 className="mt-2 text-4xl font-semibold tracking-[-0.045em]">
-            不可变媒体版本
-          </h1>
-          <p className="mt-3 max-w-3xl text-sm leading-7 text-muted-foreground">
-            这个稳定 URL 始终指向同一内容摘要。页面 Revision
-            引用它后，不会被未来的同名上传悄悄替换。
-          </p>
+          <h1 className="text-3xl font-semibold">媒体版本</h1>
         </div>
         <Button asChild variant="outline">
           <Link href="/assets">
@@ -137,10 +128,7 @@ export function AssetRevisionDetail({
               </div>
             )}
           </div>
-          <div className="flex flex-wrap items-center justify-between gap-3 border-t px-5 py-4">
-            <p className="text-xs text-muted-foreground">
-              服务端以 ETag 与一年 immutable cache 提供原始字节。
-            </p>
+          <div className="flex flex-wrap items-center justify-end gap-3 border-t px-5 py-4">
             <Button asChild size="sm" disabled={!content.url}>
               <a
                 href={content.url}

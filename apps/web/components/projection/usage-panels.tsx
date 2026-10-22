@@ -8,7 +8,6 @@ import {
   FileText,
   Inbox,
   LoaderCircle,
-  Network,
   Quote,
   Waypoints,
 } from "lucide-react";
@@ -103,17 +102,8 @@ export function SourceUsagePanel({ sourceId }: { sourceId: string }) {
 
   return (
     <section className="mt-9 border-t border-border/75 pt-8">
-      <div className="flex flex-wrap items-end justify-between gap-4">
-        <div>
-          <span className="inline-flex items-center gap-1.5 text-xs font-semibold tracking-[0.12em] text-emerald-700 uppercase">
-            <Network className="size-3.5" aria-hidden />
-            Citation usage projection
-          </span>
-          <h2 className="mt-2 text-xl font-semibold">哪些页面使用此来源</h2>
-          <p className="mt-1 text-sm text-muted-foreground">
-            按页面聚合 SourceVersion 与 Citation 身份链；展开后查看精确引用位置。
-          </p>
-        </div>
+      <div className="flex flex-wrap items-center justify-between gap-4">
+        <h2 className="text-xl font-semibold">页面引用</h2>
         {totals && totals.totalUsageCount > 0 ? (
           <span className="rounded-full border bg-muted/35 px-3 py-1 text-xs text-muted-foreground">
             {totals.totalUsageCount} 处引用 · {totals.totalPageCount} 个页面
@@ -133,9 +123,6 @@ export function SourceUsagePanel({ sourceId }: { sourceId: string }) {
         <div className="mt-5 rounded-2xl border border-dashed px-6 py-10 text-center">
           <Inbox className="mx-auto size-7 text-muted-foreground" aria-hidden />
           <p className="mt-3 text-sm font-semibold">尚未被当前页面引用</p>
-          <p className="mt-1 text-xs text-muted-foreground">
-            创建 Citation 后，还需在 Claim 或页面正文中实际使用才会出现。
-          </p>
         </div>
       ) : null}
       {items.length > 0 ? (
@@ -340,17 +327,8 @@ export function ComponentUsagePanel({
 
   return (
     <section className="mt-9 border-t border-border/75 pt-8">
-      <div className="flex flex-wrap items-end justify-between gap-4">
-        <div>
-          <span className="inline-flex items-center gap-1.5 text-xs font-semibold tracking-[0.12em] text-violet-700 uppercase">
-            <Network className="size-3.5" aria-hidden />
-            Component dependency
-          </span>
-          <h2 className="mt-2 text-xl font-semibold">页面依赖关系</h2>
-          <p className="mt-1 text-sm text-muted-foreground">
-            展示当前 Revision 中锁定的组件版本与 Entity 上下文。
-          </p>
-        </div>
+      <div className="flex flex-wrap items-center justify-between gap-4">
+        <h2 className="text-xl font-semibold">页面依赖</h2>
         <select
           value={version}
           onChange={(event) => {
@@ -392,9 +370,6 @@ export function ComponentUsagePanel({
         <div className="mt-5 rounded-2xl border border-dashed px-6 py-10 text-center">
           <Component className="mx-auto size-7 text-muted-foreground" aria-hidden />
           <p className="mt-3 text-sm font-semibold">没有匹配的页面依赖</p>
-          <p className="mt-1 text-xs text-muted-foreground">
-            在页面中插入已发布 ComponentBlock 后会自动建立投影。
-          </p>
         </div>
       ) : null}
       {items.length > 0 ? (

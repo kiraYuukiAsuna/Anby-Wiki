@@ -110,15 +110,10 @@ export function ComponentHub() {
   return (
     <div className="grid gap-8 xl:grid-cols-[minmax(0,1fr)_22rem]">
       <section aria-labelledby="component-catalog-title">
-        <div className="flex flex-wrap items-end justify-between gap-3">
-          <div>
-            <h2 id="component-catalog-title" className="text-xl font-semibold">
-              组件目录
-            </h2>
-            <p className="mt-1 text-sm text-muted-foreground">
-              稳定组件身份与不可变版本分离，旧 Revision 始终可重现。
-            </p>
-          </div>
+        <div className="flex flex-wrap items-center justify-between gap-3">
+          <h2 id="component-catalog-title" className="text-xl font-semibold">
+            组件目录
+          </h2>
           <Button
             type="button"
             size="sm"
@@ -150,9 +145,6 @@ export function ComponentHub() {
           <div className="mt-5 rounded-2xl border border-dashed px-6 py-14 text-center">
             <Boxes className="mx-auto size-8 text-muted-foreground" aria-hidden />
             <h3 className="mt-4 font-semibold">还没有组件</h3>
-            <p className="mt-2 text-sm text-muted-foreground">
-              注册第一个信息框或可信展示组件。
-            </p>
           </div>
         ) : null}
         {items.length > 0 ? (
@@ -180,9 +172,6 @@ export function ComponentHub() {
             <Plus className="size-4.5" aria-hidden />
           </span>
           <h2 className="mt-4 font-semibold">注册新组件</h2>
-          <p className="mt-1 text-xs leading-5 text-muted-foreground">
-            先注册稳定身份，再为它创建带 JSON Schema 与可信渲染器的不可变版本。
-          </p>
           <div className="mt-5 space-y-4">
             <div className="space-y-2">
               <Label htmlFor="component-key">组件键</Label>

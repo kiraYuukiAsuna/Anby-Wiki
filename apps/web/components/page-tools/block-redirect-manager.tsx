@@ -209,10 +209,6 @@ export function BlockRedirectManager({
               <h2 className="text-xl font-semibold tracking-tight">
                 稳定章节地址
               </h2>
-              <p className="mt-2 max-w-2xl text-sm leading-7 text-muted-foreground">
-                当标题章节被删除、拆分或移动后，把旧 Heading Block ID
-                显式映射到当前有效章节。服务端会折叠迁移链并拒绝环。
-              </p>
             </div>
           </div>
         </div>
@@ -434,12 +430,7 @@ export function BlockRedirectManager({
         </form>
 
         <section>
-          <div>
-            <h2 className="text-xl font-semibold tracking-tight">现有迁移</h2>
-            <p className="mt-1 text-sm text-muted-foreground">
-              只展示该页面作为旧地址来源的显式映射。
-            </p>
-          </div>
+          <h2 className="text-xl font-semibold tracking-tight">现有迁移</h2>
 
           {redirects.isLoading ? (
             <div className="mt-5 flex min-h-48 items-center justify-center gap-2 rounded-2xl border border-dashed text-sm text-muted-foreground">
@@ -516,9 +507,6 @@ export function BlockRedirectManager({
                 aria-hidden
               />
               <p className="mt-3 text-sm font-semibold">还没有章节迁移</p>
-              <p className="mt-1 text-xs leading-5 text-muted-foreground">
-                页面重构后如有旧稳定锚点失效，可在左侧建立第一条显式映射。
-              </p>
             </div>
           )}
         </section>

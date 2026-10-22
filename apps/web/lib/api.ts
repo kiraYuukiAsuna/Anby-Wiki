@@ -7,6 +7,7 @@
  * 远端数据缓存统一走 SWR。
  */
 import {
+  AccountApi,
   AdminApi,
   AssetsApi,
   AuthApi,
@@ -82,6 +83,11 @@ function makeConfig(overrides: ConfigurationParameters = {}): Configuration {
 /** 本地账号注册、密码登录与服务端 session 客户端。 */
 export function authApi(overrides: ConfigurationParameters = {}): AuthApi {
   return new AuthApi(makeConfig(overrides));
+}
+
+/** 当前登录账号资料与模型配置客户端。 */
+export function accountApi(overrides: ConfigurationParameters = {}): AccountApi {
+  return new AccountApi(makeConfig(overrides));
 }
 
 /** 管理员站点运行时配置客户端。 */

@@ -262,9 +262,6 @@ export function ProposalList() {
       <div className="rounded-2xl border border-dashed bg-muted/25 px-6 py-12 text-center">
         <Inbox className="mx-auto size-8 text-muted-foreground" aria-hidden />
         <h2 className="mt-4 text-lg font-semibold">登录后恢复你的全部提案</h2>
-        <p className="mx-auto mt-2 max-w-md text-sm leading-6 text-muted-foreground">
-          草稿、AI 导入结果、冲突和已生效记录都会长期保留在治理中心。
-        </p>
         <Button asChild className="mt-5">
           <Link href={LOGIN_PATH}>登录并查看</Link>
         </Button>
@@ -274,18 +271,10 @@ export function ProposalList() {
 
   return (
     <section className="min-w-0" aria-labelledby="my-proposals-title">
-      <div className="flex flex-wrap items-end justify-between gap-3">
-        <div>
-          <p className="text-xs font-semibold tracking-[0.16em] text-primary uppercase">
-            Your proposals
-          </p>
-          <h2 id="my-proposals-title" className="mt-1 text-xl font-semibold">
-            我的提案
-          </h2>
-          <p className="mt-1 text-sm text-muted-foreground">
-            从草稿到生效，每一步都可回来继续。
-          </p>
-        </div>
+      <div className="flex flex-wrap items-center justify-between gap-3">
+        <h2 id="my-proposals-title" className="text-xl font-semibold">
+          我的提案
+        </h2>
         <div className="flex gap-2">
           <Button asChild size="sm">
             <Link href="/governance/proposals/new">
@@ -359,9 +348,6 @@ export function ProposalList() {
           <h3 className="mt-4 font-semibold">
             {filter === "all" ? "还没有提案" : "这个状态下没有提案"}
           </h3>
-          <p className="mx-auto mt-2 max-w-sm text-sm leading-6 text-muted-foreground">
-            AI 导入形成的建议会自动出现在这里；页面编辑也可以创建可审核的变更。
-          </p>
           <div className="mt-5 flex justify-center gap-2">
             <Button asChild>
               <Link href="/governance/proposals/new">创建人工提案</Link>

@@ -1,3 +1,4 @@
+apis/AccountApi.ts
 apis/AdminApi.ts
 apis/AssetsApi.ts
 apis/AuthApi.ts
@@ -19,6 +20,8 @@ docs/AIConfig.md
 docs/AIConfigTestResult.md
 docs/AITrustProfile.md
 docs/AITrustProfileList.md
+docs/AccountApi.md
+docs/AccountProfile.md
 docs/AddEntityAliasRequest.md
 docs/AddEntityLabelRequest.md
 docs/AdminApi.md
@@ -300,6 +303,7 @@ docs/SubmitProposalResult.md
 docs/SubmitPublicDatasetFormRequest.md
 docs/UpdateAIConfigRequest.md
 docs/UpdateAITrustProfileRequest.md
+docs/UpdateAccountProfileRequest.md
 docs/UpdateClaimVerificationRequest.md
 docs/UpdateEntityFederationLinkRequest.md
 docs/UpdateFederatedWikiRequest.md
@@ -316,6 +320,7 @@ models/AIConfig.ts
 models/AIConfigTestResult.ts
 models/AITrustProfile.ts
 models/AITrustProfileList.ts
+models/AccountProfile.ts
 models/AddEntityAliasRequest.ts
 models/AddEntityLabelRequest.ts
 models/AdminRoleMutationResult.ts
@@ -581,6 +586,7 @@ models/SubmitProposalResult.ts
 models/SubmitPublicDatasetFormRequest.ts
 models/UpdateAIConfigRequest.ts
 models/UpdateAITrustProfileRequest.ts
+models/UpdateAccountProfileRequest.ts
 models/UpdateClaimVerificationRequest.ts
 models/UpdateEntityFederationLinkRequest.ts
 models/UpdateFederatedWikiRequest.ts

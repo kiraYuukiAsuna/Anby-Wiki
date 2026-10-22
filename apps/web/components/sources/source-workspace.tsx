@@ -499,10 +499,7 @@ export function SourceWorkspace({ id }: { id: string }) {
         </Button>
         <div className="flex flex-wrap items-end justify-between gap-5">
           <div className="max-w-3xl">
-            <p className="text-xs font-semibold tracking-[0.16em] text-emerald-700 uppercase">
-              {source.sourceType} source
-            </p>
-            <h1 className="mt-2 text-4xl font-semibold tracking-[-0.045em]">
+            <h1 className="text-4xl font-semibold tracking-[-0.045em]">
               {source.title}
             </h1>
             <p className="mt-3 text-sm text-muted-foreground">
@@ -586,15 +583,10 @@ export function SourceWorkspace({ id }: { id: string }) {
       ) : null}
 
       <section className="mt-9" aria-labelledby="source-versions-title">
-        <div className="mb-4 flex items-end justify-between gap-3">
-          <div>
-            <h2 id="source-versions-title" className="text-xl font-semibold">
-              不可变来源版本
-            </h2>
-            <p className="mt-1 text-sm text-muted-foreground">
-              每个版本按内容哈希去重；展开后可浏览定位分片并建立 Citation。
-            </p>
-          </div>
+        <div className="mb-4 flex items-center justify-between gap-3">
+          <h2 id="source-versions-title" className="text-xl font-semibold">
+            来源版本
+          </h2>
           <Button
             type="button"
             size="sm"
@@ -624,9 +616,6 @@ export function SourceWorkspace({ id }: { id: string }) {
           <div className="rounded-2xl border border-dashed px-6 py-12 text-center">
             <FileClock className="mx-auto size-8 text-muted-foreground" aria-hidden />
             <h3 className="mt-4 font-semibold">尚无来源版本</h3>
-            <p className="mt-2 text-sm text-muted-foreground">
-              通过导入管道获取内容后，这里会出现不可变版本与可定位分片。
-            </p>
             <Button asChild variant="outline" className="mt-5">
               <Link href="/imports">
                 前往导入中心

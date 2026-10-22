@@ -41,6 +41,23 @@ type loginRequest struct {
 	Password   string `json:"password"`
 }
 
+type updateAccountProfileRequest struct {
+	Email       string `json:"email"`
+	DisplayName string `json:"display_name"`
+	WikiName    string `json:"wiki_name"`
+}
+
+type accountProfileResponse struct {
+	ActorID     string    `json:"actor_id"`
+	WikiID      string    `json:"wiki_id"`
+	Username    string    `json:"username"`
+	Email       string    `json:"email"`
+	DisplayName string    `json:"display_name"`
+	WikiName    string    `json:"wiki_name"`
+	CreatedAt   time.Time `json:"created_at"`
+	UpdatedAt   time.Time `json:"updated_at"`
+}
+
 func (a *AuthAPI) register(w http.ResponseWriter, r *http.Request) {
 	if !a.registrationEnabled {
 		httpx.WriteError(w, r, http.StatusForbidden, httpx.CodeForbidden, "账号注册已关闭")
@@ -93,6 +110,39 @@ func (a *AuthAPI) login(w http.ResponseWriter, r *http.Request) {
 	writeAuthResult(w, http.StatusOK, session)
 }
 
+func (a *AuthAPI) getAccountProfile(w http.ResponseWriter, r *http.Request) {
+	actorID, ok := actorIDFrom(w, r)
+	if !ok {
+		return
+	}
+	profile, err := a.service.GetProfile(r.Context(), actorID, wikiIDFromRequest(r))
+	if err != nil {
+		accountProfileError(w, r, err)
+		return
+	}
+	httpx.WriteJSON(w, http.StatusOK, toAccountProfileResponse(profile))
+}
+
+func (a *AuthAPI) updateAccountProfile(w http.ResponseWriter, r *http.Request) {
+	actorID, ok := actorIDFrom(w, r)
+	if !ok {
+		return
+	}
+	var payload updateAccountProfileRequest
+	if !decodeAuthJSON(w, r, &payload) {
+		return
+	}
+	profile, err := a.service.UpdateProfile(r.Context(), authdomain.UpdateProfileInput{
+		ActorID: actorID, WikiID: wikiIDFromRequest(r),
+		Email: payload.Email, DisplayName: payload.DisplayName, WikiName: payload.WikiName,
+	})
+	if err != nil {
+		accountProfileError(w, r, err)
+		return
+	}
+	httpx.WriteJSON(w, http.StatusOK, toAccountProfileResponse(profile))
+}
+
 func (a *AuthAPI) session(w http.ResponseWriter, r *http.Request) {
 	principal, ok := authdomain.PrincipalFrom(r.Context())
 	if !ok {
@@ -126,6 +176,29 @@ func (a *AuthAPI) logout(w http.ResponseWriter, r *http.Request) {
 		MaxAge:   -1,
 	})
 	w.WriteHeader(http.StatusNoContent)
+}
+
+func toAccountProfileResponse(profile authdomain.Profile) accountProfileResponse {
+	return accountProfileResponse{
+		ActorID: profile.ActorID.String(), WikiID: profile.WikiID.String(),
+		Username: profile.Username, Email: profile.Email,
+		DisplayName: profile.DisplayName, WikiName: profile.WikiName,
+		CreatedAt: profile.CreatedAt, UpdatedAt: profile.UpdatedAt,
+	}
+}
+
+func accountProfileError(w http.ResponseWriter, r *http.Request, err error) {
+	var validationErr *authdomain.ValidationError
+	switch {
+	case errors.As(err, &validationErr):
+		httpx.WriteError(w, r, http.StatusBadRequest, httpx.CodeValidationFailed, validationErr.Message)
+	case errors.Is(err, authdomain.ErrAccountExists):
+		httpx.WriteError(w, r, http.StatusConflict, httpx.CodeConflict, "邮箱已被使用")
+	case errors.Is(err, authdomain.ErrAccountNotFound):
+		httpx.WriteError(w, r, http.StatusNotFound, httpx.CodeNotFound, "账号资料不存在")
+	default:
+		httpx.WriteError(w, r, http.StatusInternalServerError, httpx.CodeInternal, "无法处理账号资料")
+	}
 }
 
 func decodeAuthJSON(w http.ResponseWriter, r *http.Request, destination any) bool {

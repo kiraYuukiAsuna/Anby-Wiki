@@ -27,6 +27,7 @@ var (
 	ErrUnauthenticated    = errors.New("auth: unauthenticated")
 	ErrInvalidCredentials = errors.New("auth: invalid credentials")
 	ErrAccountExists      = errors.New("auth: account already exists")
+	ErrAccountNotFound    = errors.New("auth: account not found")
 )
 
 const (
@@ -79,6 +80,27 @@ type RegisterInput struct {
 type LoginInput struct {
 	Identifier string
 	Password   string
+}
+
+// Profile is the editable account profile for the current local account.
+type Profile struct {
+	ActorID     uuid.UUID
+	WikiID      uuid.UUID
+	Username    string
+	Email       string
+	DisplayName string
+	WikiName    string
+	CreatedAt   time.Time
+	UpdatedAt   time.Time
+}
+
+// UpdateProfileInput contains current-account profile fields.
+type UpdateProfileInput struct {
+	ActorID     uuid.UUID
+	WikiID      uuid.UUID
+	Email       string
+	DisplayName string
+	WikiName    string
 }
 
 // Session contains the opaque cookie value. Only its SHA-256 hash is stored.
@@ -428,6 +450,99 @@ func (s *Service) RevokeSession(ctx context.Context, token string) error {
 	return nil
 }
 
+// GetProfile returns the local account profile for the authenticated Actor.
+func (s *Service) GetProfile(ctx context.Context, actorID, wikiID uuid.UUID) (Profile, error) {
+	profile, err := s.scanProfile(ctx, s.pool, actorID, wikiID)
+	if err != nil {
+		return Profile{}, err
+	}
+	return profile, nil
+}
+
+// UpdateProfile updates only fields owned by the current local account.
+func (s *Service) UpdateProfile(ctx context.Context, input UpdateProfileInput) (Profile, error) {
+	email, normalizedEmail, displayName, wikiName, err := validateProfileUpdate(input)
+	if err != nil {
+		return Profile{}, err
+	}
+	var profile Profile
+	err = s.txm.InTx(ctx, func(tx pgx.Tx) error {
+		tag, err := tx.Exec(ctx, `UPDATE actor
+			SET display_name=$3
+			WHERE id=$1 AND wiki_id=$2 AND status='active'`,
+			input.ActorID, input.WikiID, displayName)
+		if err != nil {
+			return err
+		}
+		if tag.RowsAffected() != 1 {
+			return ErrAccountNotFound
+		}
+		tag, err = tx.Exec(ctx, `UPDATE local_account
+			SET email=$3, normalized_email=$4, updated_at=now()
+			WHERE actor_id=$1 AND status='active'
+				AND EXISTS (
+					SELECT 1 FROM actor a
+					WHERE a.id=local_account.actor_id
+						AND a.wiki_id=$2
+						AND a.status='active'
+				)`,
+			input.ActorID, input.WikiID, email, normalizedEmail)
+		if err != nil {
+			return err
+		}
+		if tag.RowsAffected() != 1 {
+			return ErrAccountNotFound
+		}
+		tag, err = tx.Exec(ctx, `UPDATE wiki_site
+			SET name=$3
+			WHERE id=$1 AND owner_actor_id=$2`,
+			input.WikiID, input.ActorID, wikiName)
+		if err != nil {
+			return err
+		}
+		if tag.RowsAffected() != 1 {
+			return ErrAccountNotFound
+		}
+		profile, err = s.scanProfile(ctx, tx, input.ActorID, input.WikiID)
+		return err
+	})
+	if err != nil {
+		var pgErr *pgconn.PgError
+		if errors.As(err, &pgErr) && pgErr.Code == "23505" {
+			return Profile{}, ErrAccountExists
+		}
+		return Profile{}, fmt.Errorf("auth: update profile: %w", err)
+	}
+	return profile, nil
+}
+
+func (s *Service) scanProfile(
+	ctx context.Context,
+	querier db.Querier,
+	actorID, wikiID uuid.UUID,
+) (Profile, error) {
+	var profile Profile
+	err := querier.QueryRow(ctx, `SELECT
+		a.id,a.wiki_id,la.username,la.email,a.display_name,w.name,
+		la.created_at,la.updated_at
+		FROM actor a
+		JOIN local_account la ON la.actor_id=a.id
+		JOIN wiki_site w ON w.id=a.wiki_id
+		WHERE a.id=$1 AND a.wiki_id=$2
+			AND a.status='active' AND la.status='active'`,
+		actorID, wikiID).Scan(
+		&profile.ActorID, &profile.WikiID, &profile.Username, &profile.Email,
+		&profile.DisplayName, &profile.WikiName, &profile.CreatedAt, &profile.UpdatedAt,
+	)
+	if errors.Is(err, pgx.ErrNoRows) {
+		return Profile{}, ErrAccountNotFound
+	}
+	if err != nil {
+		return Profile{}, fmt.Errorf("auth: read profile: %w", err)
+	}
+	return profile, nil
+}
+
 func (s *Service) newSession(
 	actorID, wikiID uuid.UUID,
 	wikiName string,
@@ -616,6 +731,32 @@ func validateRegistration(input RegisterInput) (string, string, string, error) {
 		return "", "", "", &ValidationError{Field: "display_name", Message: "显示名不得超过 128 个字符"}
 	}
 	return username, email, displayName, nil
+}
+
+func validateProfileUpdate(input UpdateProfileInput) (string, string, string, string, error) {
+	if input.ActorID == uuid.Nil || input.WikiID == uuid.Nil {
+		return "", "", "", "", ErrAccountNotFound
+	}
+	email := strings.TrimSpace(input.Email)
+	address, err := mail.ParseAddress(email)
+	if err != nil || !strings.EqualFold(address.Address, email) || len(email) > 254 {
+		return "", "", "", "", &ValidationError{Field: "email", Message: "邮箱格式无效"}
+	}
+	displayName := strings.TrimSpace(input.DisplayName)
+	if displayName == "" {
+		return "", "", "", "", &ValidationError{Field: "display_name", Message: "显示名不能为空"}
+	}
+	if utf8.RuneCountInString(displayName) > 128 {
+		return "", "", "", "", &ValidationError{Field: "display_name", Message: "显示名不得超过 128 个字符"}
+	}
+	wikiName := strings.TrimSpace(input.WikiName)
+	if wikiName == "" {
+		return "", "", "", "", &ValidationError{Field: "wiki_name", Message: "知识空间名称不能为空"}
+	}
+	if utf8.RuneCountInString(wikiName) > 128 {
+		return "", "", "", "", &ValidationError{Field: "wiki_name", Message: "知识空间名称不得超过 128 个字符"}
+	}
+	return email, strings.ToLower(email), displayName, wikiName, nil
 }
 
 func hashPassword(password string) (string, error) {

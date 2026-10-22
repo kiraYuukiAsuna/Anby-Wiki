@@ -58,3 +58,44 @@ func TestNewPersonalWikiIsIsolatedAndComplete(t *testing.T) {
 		}
 	}
 }
+
+func TestValidateProfileUpdate(t *testing.T) {
+	actorID := uuid.New()
+	wikiID := uuid.New()
+
+	email, normalizedEmail, displayName, wikiName, err := validateProfileUpdate(UpdateProfileInput{
+		ActorID: actorID, WikiID: wikiID,
+		Email:       " User@Example.COM ",
+		DisplayName: "  User Name  ",
+		WikiName:    "  Personal Wiki  ",
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if email != "User@Example.COM" || normalizedEmail != "user@example.com" {
+		t.Fatalf("email=%q normalized=%q", email, normalizedEmail)
+	}
+	if displayName != "User Name" || wikiName != "Personal Wiki" {
+		t.Fatalf("displayName=%q wikiName=%q", displayName, wikiName)
+	}
+
+	_, _, _, _, err = validateProfileUpdate(UpdateProfileInput{
+		ActorID: actorID, WikiID: wikiID,
+		Email:       "invalid",
+		DisplayName: "User",
+		WikiName:    "Wiki",
+	})
+	if err == nil {
+		t.Fatal("invalid email accepted")
+	}
+
+	_, _, _, _, err = validateProfileUpdate(UpdateProfileInput{
+		ActorID: actorID, WikiID: wikiID,
+		Email:       "user@example.com",
+		DisplayName: " ",
+		WikiName:    "Wiki",
+	})
+	if err == nil {
+		t.Fatal("blank display name accepted")
+	}
+}

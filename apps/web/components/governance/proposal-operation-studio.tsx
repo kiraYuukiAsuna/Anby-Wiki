@@ -2,7 +2,6 @@
 
 import {
   ArrowRight,
-  Braces,
   CheckCircle2,
   FileJson2,
   LoaderCircle,
@@ -551,9 +550,6 @@ export function ProposalOperationStudio() {
             </span>
             <div>
               <h2 className="text-xl font-semibold">提案边界</h2>
-              <p className="mt-1 text-sm leading-6 text-muted-foreground">
-                目标与基线在草稿创建后冻结；所有 Operation 只追加到治理域，不直接写入权威知识。
-              </p>
             </div>
           </div>
 
@@ -651,13 +647,8 @@ export function ProposalOperationStudio() {
         </section>
 
         <section className="rounded-3xl border bg-card p-6">
-          <div className="flex flex-wrap items-end justify-between gap-4">
-            <div>
-              <h2 className="text-xl font-semibold">Operation 序列</h2>
-              <p className="mt-1 text-sm text-muted-foreground">
-                按顺序原子应用；模板使用契约原生 snake_case JSON。
-              </p>
-            </div>
+          <div className="flex flex-wrap items-center justify-between gap-4">
+            <h2 className="text-xl font-semibold">Operation 序列</h2>
             <div className="flex gap-2">
               <select
                 value={selectedType}
@@ -741,9 +732,6 @@ export function ProposalOperationStudio() {
             <div className="mt-6 rounded-2xl border border-dashed bg-muted/20 px-6 py-14 text-center">
               <FileJson2 className="mx-auto size-8 text-muted-foreground" aria-hidden />
               <p className="mt-4 font-semibold">从一个契约模板开始</p>
-              <p className="mx-auto mt-2 max-w-md text-sm leading-6 text-muted-foreground">
-                选择上方操作类型。模板会预填结构与稳定 ID 位置，提交前请替换示例 UUID。
-              </p>
             </div>
           )}
         </section>
@@ -769,27 +757,6 @@ export function ProposalOperationStudio() {
       </div>
 
       <aside className="space-y-4 xl:sticky xl:top-24 xl:self-start">
-        <div className="rounded-2xl border bg-card p-5">
-          <Braces className="size-5 text-primary" aria-hidden />
-          <h2 className="mt-4 font-semibold">双层校验</h2>
-          <ol className="mt-4 space-y-3 text-xs leading-5 text-muted-foreground">
-            <li>
-              <span className="font-semibold text-foreground">1. 浏览器边界</span>
-              <br />
-              Zod 检查 envelope、风险、证据与 JSON 形态。
-            </li>
-            <li>
-              <span className="font-semibold text-foreground">2. 权威契约</span>
-              <br />
-              Go 服务用 ProposalOperation v1 JSON Schema 校验每种目标组合。
-            </li>
-            <li>
-              <span className="font-semibold text-foreground">3. 领域应用</span>
-              <br />
-              审核通过后仍由 Page / Knowledge / Collection 服务执行不变量。
-            </li>
-          </ol>
-        </div>
         <div className="rounded-2xl border border-amber-200 bg-amber-50/60 p-5">
           <TriangleAlert className="size-5 text-amber-700" aria-hidden />
           <p className="mt-3 text-sm font-semibold text-amber-950">

@@ -42,11 +42,6 @@ import { Label } from "@/components/ui/label";
 import { collectionsApi } from "@/lib/api";
 import { useSession } from "@/lib/auth";
 import { compactId } from "@/lib/display-id";
-import {
-  collectionSummary,
-  isDynamicCollectionQuery,
-  isRuleCollectionQuery,
-} from "@/lib/collections";
 import { cn } from "@/lib/utils";
 
 const PAGE_SIZE = 50;
@@ -547,9 +542,6 @@ export function CollectionWorkspace({ id }: { id: string }) {
             <h1 className="mt-1 text-4xl font-semibold tracking-[-0.045em]">
               {collection.title}
             </h1>
-            <p className="mt-3 max-w-3xl text-sm leading-6 text-muted-foreground">
-              {collectionSummary(collection)}
-            </p>
           </div>
           {collection.collectionType !== "dynamic" ? (
             <Button
@@ -605,39 +597,11 @@ export function CollectionWorkspace({ id }: { id: string }) {
         </details>
       ) : null}
 
-      {collection.collectionType === "dynamic" &&
-      isDynamicCollectionQuery(query) ? (
-        <aside className="mt-5 rounded-2xl border border-violet-200 bg-violet-50/55 p-5">
-          <h2 className="flex items-center gap-2 text-sm font-semibold text-violet-900">
-            <Sparkles className="size-4" aria-hidden />
-            安全实时查询
-          </h2>
-          <p className="mt-1 text-xs leading-5 text-violet-800/75">
-            查询只走 Page/Entity/Claim 索引，不接受 SQL，不扫描 Revision AST。
-            {query.memberType === "page"
-              ? " 页面改名或别名更新会即时反映。"
-              : " Entity 标签与 published Claim 更新会即时反映。"}
-          </p>
-        </aside>
-      ) : null}
-
-      {collection.collectionType === "rule" && isRuleCollectionQuery(query) ? (
-        <aside className="mt-5 rounded-2xl border border-amber-200 bg-amber-50/55 p-5 text-xs leading-5 text-amber-900/75">
-          Rule Collection 使用显式物化成员，读取稳定且可追溯；点击“重建规则”才会按最新
-          Entity / Claim 状态替换成员集。
-        </aside>
-      ) : null}
-
       <section className="mt-8" aria-labelledby="collection-members-title">
-        <div className="mb-4 flex items-end justify-between gap-3">
-          <div>
-            <h2 id="collection-members-title" className="text-lg font-semibold">
-              合集成员
-            </h2>
-            <p className="mt-1 text-xs text-muted-foreground">
-              按稳定 sort_key 与目标 ID 分页。
-            </p>
-          </div>
+        <div className="mb-4 flex items-center justify-between gap-3">
+          <h2 id="collection-members-title" className="text-lg font-semibold">
+            合集成员
+          </h2>
           <Button
             type="button"
             size="sm"

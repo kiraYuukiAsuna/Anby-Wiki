@@ -4,7 +4,7 @@ export function SiteFooter() {
   return (
     <footer className="mt-auto border-t border-border/70 bg-background/55">
       <div className="mx-auto flex w-full max-w-7xl flex-wrap items-center justify-between gap-3 px-5 py-5 text-xs text-muted-foreground lg:px-8">
-        <span>© Anby Wiki · 人工与 AI 共同维护</span>
+        <span>© Anby Wiki</span>
         <nav aria-label="页脚导航" className="flex items-center gap-4">
           <Link href="/collections" className="transition-colors hover:text-foreground">
             专题合集

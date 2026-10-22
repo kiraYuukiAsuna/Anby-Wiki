@@ -87,8 +87,8 @@ func TestLocalActionSurface(t *testing.T) {
 		}
 		if input.Action == "operations.list" && input.Tag == "" {
 			data := result.Data.(map[string]any)
-			if data["count"] != 162 {
-				t.Fatalf("operation count=%v want=162", data["count"])
+			if data["count"] != 167 {
+				t.Fatalf("operation count=%v want=167", data["count"])
 			}
 		}
 	}

@@ -51,11 +51,9 @@ const DATE_FORMATTER = new Intl.DateTimeFormat("zh-CN", {
 
 export function PageEntityBindingManager({
   pageId,
-  pageTitle,
   pageLanguage,
 }: {
   pageId: string;
-  pageTitle: string;
   pageLanguage: string;
 }) {
   const session = useSession();
@@ -193,13 +191,7 @@ export function PageEntityBindingManager({
             <span className="flex size-9 shrink-0 items-center justify-center rounded-xl bg-fuchsia-100 text-fuchsia-700">
               <Waypoints className="size-4" aria-hidden />
             </span>
-            <div>
-              <h2 className="font-semibold">页面与 Entity</h2>
-              <p className="mt-1 max-w-2xl text-xs leading-5 text-muted-foreground">
-                主实体为搜索和结构化入口提供语义身份；显式 mentioned 绑定仅用于上下文，
-                正文提及仍从 Current Revision 自动投影。
-              </p>
-            </div>
+            <h2 className="font-semibold">页面与 Entity</h2>
           </div>
           {session.isAuthenticated ? (
             <Button type="button" size="sm" onClick={startCreate}>
@@ -288,9 +280,6 @@ export function PageEntityBindingManager({
             <div className="rounded-xl border border-dashed bg-muted/20 px-6 py-9 text-center">
               <Waypoints className="mx-auto size-6 text-muted-foreground" aria-hidden />
               <p className="mt-3 text-sm font-semibold">尚未绑定稳定 Entity</p>
-              <p className="mt-1 text-xs text-muted-foreground">
-                为「{pageTitle}」设置主实体后，搜索结果可携带类型、标签与别名。
-              </p>
             </div>
           )}
         </div>

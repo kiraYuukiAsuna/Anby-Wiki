@@ -409,9 +409,6 @@ export function DatasetWorkspace({ id }: { id: string }) {
           <h2 id="saved-views-title" className="text-lg font-semibold">
             保存视图
           </h2>
-          <p className="mt-1 text-xs text-muted-foreground">
-            每个视图都有固定页面，不会在刷新或重新登录后消失。
-          </p>
         </div>
         {viewState.error ? (
           <div className="rounded-2xl border border-destructive/20 bg-destructive/5 p-5 text-sm text-destructive">
@@ -424,14 +421,9 @@ export function DatasetWorkspace({ id }: { id: string }) {
 
       <section className="mt-9" aria-labelledby="records-title">
         <div className="mb-4 flex items-end justify-between gap-3">
-          <div>
-            <h2 id="records-title" className="text-lg font-semibold">
-              全部记录
-            </h2>
-            <p className="mt-1 text-xs text-muted-foreground">
-              默认按创建时间稳定排序；编辑时服务端会再次执行 Schema 校验。
-            </p>
-          </div>
+          <h2 id="records-title" className="text-lg font-semibold">
+            全部记录
+          </h2>
         </div>
         {recordState.error ? (
           <div className="rounded-2xl border border-destructive/20 bg-destructive/5 p-5 text-sm text-destructive">

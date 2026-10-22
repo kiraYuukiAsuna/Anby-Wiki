@@ -9,7 +9,6 @@ import {
   FileText,
   Layers3,
   Search,
-  Sparkles,
   SquarePen,
   Waypoints,
 } from "lucide-react";
@@ -49,25 +48,14 @@ export function WikiHome() {
 
   return (
     <div className="w-full">
-      <section className="relative isolate overflow-hidden border-b border-border/70">
+      <section className="relative isolate border-b border-border/70">
         <div className="wiki-grid pointer-events-none absolute inset-0 -z-10 opacity-40" aria-hidden />
-        <div className="pointer-events-none absolute -top-32 right-[8%] -z-10 size-96 rounded-full bg-primary/10 blur-3xl" aria-hidden />
-        <div className="mx-auto grid w-full max-w-7xl gap-10 px-5 py-14 lg:grid-cols-[minmax(0,1fr)_20rem] lg:px-8 lg:py-18">
+        <div className="mx-auto grid w-full max-w-7xl gap-8 px-5 py-10 lg:grid-cols-[minmax(0,1fr)_20rem] lg:px-8 lg:py-12">
           <div className="max-w-3xl">
-            <p className="inline-flex items-center gap-2 rounded-full border border-primary/15 bg-background/75 px-3 py-1.5 text-xs font-semibold text-primary shadow-sm backdrop-blur">
-              <Sparkles className="size-3.5" aria-hidden />
-              Anby Wiki 百科
-            </p>
-            <h1 className="mt-5 text-[clamp(2.6rem,6vw,5rem)] leading-[0.98] font-semibold tracking-[-0.06em] text-balance">
-              从这里开始，
-              <span className="mt-2 block text-primary">发现正在生长的知识。</span>
-            </h1>
-            <p className="mt-6 max-w-2xl text-base leading-8 text-muted-foreground sm:text-lg">
-              阅读已发布条目，沿专题与稳定实体继续探索；每个页面都有版本，每条事实都能回到来源。
-            </p>
+            <h1 className="text-3xl font-semibold">Anby Wiki</h1>
             <form
               onSubmit={submitSearch}
-              className="mt-8 flex max-w-2xl gap-2 rounded-2xl border bg-background/90 p-2 shadow-[0_18px_55px_rgb(15_23_42/0.09)] backdrop-blur"
+              className="mt-6 flex max-w-2xl gap-2 rounded-[8px] border bg-background p-2 shadow-sm"
               role="search"
             >
               <label htmlFor="wiki-home-search" className="sr-only">搜索百科</label>
@@ -105,21 +93,21 @@ export function WikiHome() {
               </span>
               <div>
                 <p className="text-2xl font-semibold tabular-nums">{pages.data?.total ?? "—"}</p>
-                <p className="text-xs text-muted-foreground">已发布百科页面</p>
+                <p className="text-xs text-muted-foreground">已发布页面</p>
               </div>
             </div>
             <div className="mt-5 grid grid-cols-2 gap-2 border-t pt-4 text-center">
               <div className="rounded-xl bg-muted/55 p-3">
                 <p className="font-semibold tabular-nums">{collections.data?.items.length ?? "—"}</p>
-                <p className="mt-1 text-[10px] text-muted-foreground">首页专题</p>
+                <p className="mt-1 text-[10px] text-muted-foreground">专题</p>
               </div>
               <div className="rounded-xl bg-muted/55 p-3">
                 <p className="font-semibold tabular-nums">{entities.data?.items.length ?? "—"}</p>
-                <p className="mt-1 text-[10px] text-muted-foreground">实体索引</p>
+                <p className="mt-1 text-[10px] text-muted-foreground">实体</p>
               </div>
             </div>
             <Button asChild variant="outline" className="mt-4 w-full">
-              <Link href="/new"><SquarePen aria-hidden />创建百科页面</Link>
+              <Link href="/new"><SquarePen aria-hidden />创建页面</Link>
             </Button>
           </aside>
         </div>
@@ -128,11 +116,7 @@ export function WikiHome() {
       <div className="mx-auto w-full max-w-7xl px-5 py-10 lg:px-8 lg:py-12">
         <section aria-labelledby="recent-pages-title">
           <div className="flex items-end justify-between gap-4">
-            <div>
-              <p className="text-xs font-semibold tracking-[0.16em] text-primary uppercase">Latest knowledge</p>
-              <h2 id="recent-pages-title" className="mt-1 text-2xl font-semibold tracking-[-0.03em]">最近更新的百科页面</h2>
-              <p className="mt-1 text-sm text-muted-foreground">从正式发布的页面直接开始阅读，不必先知道要搜什么。</p>
-            </div>
+            <h2 id="recent-pages-title" className="text-2xl font-semibold">最近更新</h2>
             <Button variant="outline" size="sm" asChild>
               <Link href="/pages">浏览全部<ArrowRight aria-hidden /></Link>
             </Button>
@@ -170,7 +154,6 @@ export function WikiHome() {
             <div className="mt-5 rounded-2xl border border-dashed px-6 py-12 text-center">
               <BookOpenText className="mx-auto size-8 text-muted-foreground" aria-hidden />
               <h3 className="mt-4 font-semibold">还没有已发布页面</h3>
-              <p className="mt-2 text-sm text-muted-foreground">创建并发布第一个条目后，它会出现在这里。</p>
               <Button asChild className="mt-5"><Link href="/new">创建第一页</Link></Button>
             </div>
           )}
@@ -179,10 +162,7 @@ export function WikiHome() {
         <div className="mt-12 grid gap-8 border-t pt-10 lg:grid-cols-[minmax(0,1fr)_22rem]">
           <section aria-labelledby="collections-title">
             <div className="flex items-end justify-between gap-4">
-              <div>
-                <p className="text-xs font-semibold tracking-[0.16em] text-primary uppercase">Browse by topic</p>
-                <h2 id="collections-title" className="mt-1 text-xl font-semibold">按专题进入知识</h2>
-              </div>
+              <h2 id="collections-title" className="text-xl font-semibold">专题合集</h2>
               <Link href="/collections" className="text-sm font-medium text-primary hover:underline">全部专题</Link>
             </div>
             {collections.data?.items.length ? (
@@ -198,15 +178,14 @@ export function WikiHome() {
                 ))}
               </ul>
             ) : (
-              <p className="mt-4 rounded-2xl border border-dashed p-6 text-sm text-muted-foreground">还没有公开专题；可以先浏览全部页面。</p>
+              <p className="mt-4 rounded-2xl border border-dashed p-6 text-sm text-muted-foreground">暂无专题</p>
             )}
           </section>
 
           <section aria-labelledby="entities-title" className="rounded-2xl border bg-card p-5">
             <div className="flex items-center justify-between gap-3">
               <div>
-                <p className="text-xs font-semibold tracking-[0.14em] text-primary uppercase">Knowledge index</p>
-                <h2 id="entities-title" className="mt-1 font-semibold">稳定实体条目</h2>
+                <h2 id="entities-title" className="font-semibold">实体</h2>
               </div>
               <Waypoints className="size-5 text-primary" aria-hidden />
             </div>
@@ -220,7 +199,7 @@ export function WikiHome() {
                 </li>
               ))}
             </ul>
-            <Button asChild variant="outline" className="mt-3 w-full"><Link href="/entities">打开实体目录</Link></Button>
+            <Button asChild variant="outline" className="mt-3 w-full"><Link href="/entities">全部实体</Link></Button>
           </section>
         </div>
       </div>

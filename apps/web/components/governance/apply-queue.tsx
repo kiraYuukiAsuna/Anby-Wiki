@@ -165,7 +165,6 @@ export function ApplyQueue() {
       <div className="rounded-2xl border border-dashed bg-muted/25 px-6 py-12 text-center">
         <LockKeyhole className="mx-auto size-8 text-muted-foreground" aria-hidden />
         <h2 className="mt-4 text-lg font-semibold">登录后查看待应用队列</h2>
-        <p className="mx-auto mt-2 max-w-md text-sm leading-6 text-muted-foreground">这里包含审核已通过、但尚未写入权威知识的 Proposal。</p>
         <Button asChild className="mt-5"><Link href={LOGIN_PATH}>前往登录</Link></Button>
       </div>
     );
@@ -188,12 +187,8 @@ export function ApplyQueue() {
 
   return (
     <section aria-labelledby="apply-queue-title">
-      <div className="flex flex-wrap items-end justify-between gap-3">
-        <div>
-          <p className="text-xs font-semibold tracking-[0.16em] text-primary uppercase">Approved proposals</p>
-          <h2 id="apply-queue-title" className="mt-1 text-xl font-semibold">等待正式生效</h2>
-          <p className="mt-1 text-sm text-muted-foreground">一次操作会在同一事务中执行全部有序 Operation，并记录为一个 ChangeBatch；任何一步失败，整批都不会提交。</p>
-        </div>
+      <div className="flex flex-wrap items-center justify-between gap-3">
+        <h2 id="apply-queue-title" className="text-xl font-semibold">等待正式生效</h2>
         <Button variant="ghost" size="sm" disabled={state.isValidating} onClick={() => void state.mutate()}>
           <RefreshCw className={cn("size-3.5", state.isValidating && "animate-spin")} aria-hidden />刷新
         </Button>
@@ -205,7 +200,6 @@ export function ApplyQueue() {
         <div className="mt-5 rounded-2xl border border-dashed px-6 py-14 text-center">
           <CircleDashed className="mx-auto size-8 text-muted-foreground" aria-hidden />
           <h3 className="mt-4 font-semibold">当前没有待应用提案</h3>
-          <p className="mt-2 text-sm text-muted-foreground">审核通过的 Proposal 会自动进入这里，不需要再回头寻找原导入任务。</p>
           <Button asChild variant="outline" className="mt-5"><Link href="/governance/review">打开审核队列</Link></Button>
         </div>
       ) : null}

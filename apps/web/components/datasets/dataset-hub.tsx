@@ -187,15 +187,10 @@ export function DatasetHub() {
   return (
     <div className="grid gap-8 xl:grid-cols-[minmax(0,1fr)_24rem]">
       <section aria-labelledby="dataset-list-title">
-        <div className="flex flex-wrap items-end justify-between gap-3">
-          <div>
-            <h2 id="dataset-list-title" className="text-xl font-semibold">
-              数据目录
-            </h2>
-            <p className="mt-1 text-sm text-muted-foreground">
-              把需要筛选、排序和聚合的信息从排版表格中分离出来。
-            </p>
-          </div>
+        <div className="flex flex-wrap items-center justify-between gap-3">
+          <h2 id="dataset-list-title" className="text-xl font-semibold">
+            数据目录
+          </h2>
           <Button
             type="button"
             size="sm"
@@ -232,9 +227,6 @@ export function DatasetHub() {
           <div className="mt-5 rounded-2xl border border-dashed px-6 py-14 text-center">
             <Database className="mx-auto size-8 text-muted-foreground" aria-hidden />
             <h3 className="mt-4 font-semibold">还没有 Dataset</h3>
-            <p className="mt-2 text-sm text-muted-foreground">
-              用右侧结构设计器创建第一个可查询数据表。
-            </p>
           </div>
         ) : null}
 
@@ -264,9 +256,6 @@ export function DatasetHub() {
             <Braces className="size-4.5" aria-hidden />
           </span>
           <h2 className="mt-4 font-semibold">新建结构化数据</h2>
-          <p className="mt-1 text-xs leading-5 text-muted-foreground">
-            每条记录都会按这里生成的 JSON Schema 严格校验。
-          </p>
           <div className="mt-5 space-y-4">
             <div className="space-y-2">
               <Label htmlFor="dataset-name">Dataset 名称</Label>

@@ -361,9 +361,6 @@ export function ProtectionWorkspace({
             </span>
             <div>
               <h2 className="font-semibold">新建保护规则</h2>
-              <p className="mt-1 text-xs leading-5 text-muted-foreground">
-                规则叠加生效；满足全部最低角色要求才会放行。
-              </p>
             </div>
           </div>
 
@@ -548,13 +545,8 @@ export function ProtectionWorkspace({
         </form>
 
         <section>
-          <div className="flex flex-wrap items-end justify-between gap-4">
-            <div>
-              <h2 className="text-xl font-semibold tracking-tight">规则目录</h2>
-              <p className="mt-1 text-sm text-muted-foreground">
-                当前 Wiki 的页面与标题保护，按创建时间倒序排列。
-              </p>
-            </div>
+          <div className="flex flex-wrap items-center justify-between gap-4">
+            <h2 className="text-xl font-semibold tracking-tight">规则目录</h2>
             <Button
               type="button"
               size="sm"
@@ -656,9 +648,6 @@ export function ProtectionWorkspace({
                 aria-hidden
               />
               <p className="mt-3 text-sm font-semibold">暂无匹配保护规则</p>
-              <p className="mt-1 text-xs text-muted-foreground">
-                可在左侧为页面操作或尚未创建的标题添加第一条规则。
-              </p>
             </div>
           )}
         </section>

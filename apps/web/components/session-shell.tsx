@@ -16,7 +16,7 @@ export function SessionShell({ children }: { children: React.ReactNode }) {
   const pathname = usePathname();
 
   if (AUTH_PATHS.has(pathname)) {
-    return <main className="flex min-w-0 flex-1 flex-col">{children}</main>;
+    return children;
   }
 
   return (

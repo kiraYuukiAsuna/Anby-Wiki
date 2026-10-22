@@ -1,11 +1,8 @@
 "use client";
 
 import {
-  Activity,
-  KeyRound,
   LoaderCircle,
   LockKeyhole,
-  Network,
   Save,
   ShieldAlert,
   TestTube2,
@@ -19,6 +16,7 @@ import { z } from "zod";
 import {
   ResponseError,
   type AIConfig,
+  type AIConfigTestResult,
   type UpdateAIConfigRequest,
 } from "../../../../contracts/generated/typescript";
 
@@ -26,7 +24,7 @@ import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { adminApi } from "@/lib/api";
+import { accountApi, adminApi } from "@/lib/api";
 import { isUnauthorized, LOGIN_PATH, useSession } from "@/lib/auth";
 
 const configSchema = z
@@ -85,10 +83,16 @@ async function readAIConfigTestError(error: unknown) {
 
 function ConfigForm({
   config,
+  onSave,
+  onTest,
   onSaved,
+  forbiddenMessage,
 }: {
   config: AIConfig;
+  onSave: (request: UpdateAIConfigRequest) => Promise<AIConfig>;
+  onTest: () => Promise<AIConfigTestResult>;
   onSaved: (value: AIConfig) => Promise<void>;
+  forbiddenMessage: string;
 }) {
   const [enabled, setEnabled] = useState(config.enabled);
   const [provider, setProvider] = useState(config.provider);
@@ -144,9 +148,7 @@ function ConfigForm({
     };
     setSaving(true);
     try {
-      const value = await adminApi().updateAIConfig({
-        updateAIConfigRequest: request,
-      });
+      const value = await onSave(request);
       setAPIKey("");
       await onSaved(value);
       toast.success("AI 模型配置已保存", {
@@ -156,7 +158,7 @@ function ConfigForm({
       });
     } catch (error) {
       if (error instanceof ResponseError && error.response.status === 403) {
-        toast.error("只有站点管理员可以修改 AI 配置");
+        toast.error(forbiddenMessage);
       } else {
         toast.error("AI 配置保存失败");
       }
@@ -168,7 +170,7 @@ function ConfigForm({
   const test = async () => {
     setTesting(true);
     try {
-      const result = await adminApi().testAIConfig();
+      const result = await onTest();
       toast.success("模型连接与结构化输出正常", {
         description: `${result.provider} · ${result.model} · ${result.latencyMs} ms`,
       });
@@ -193,16 +195,13 @@ function ConfigForm({
   };
 
   return (
-    <div className="grid gap-6 lg:grid-cols-[minmax(0,1fr)_18rem]">
+    <div>
       <section className="rounded-3xl border bg-card p-6 shadow-[0_18px_50px_-42px_rgb(15_23_42/0.55)] sm:p-7">
         <div className="flex flex-wrap items-start justify-between gap-4 border-b pb-5">
           <div>
             <h2 className="text-xl font-semibold tracking-tight">
               文档理解模型
             </h2>
-            <p className="mt-1 text-sm leading-6 text-muted-foreground">
-              同一模型负责文本抽取与复杂 PDF 视觉分析，必须支持图片输入和结构化 JSON。
-            </p>
           </div>
           <label className="flex cursor-pointer items-center gap-2 rounded-full border bg-muted/30 px-3 py-2 text-xs font-medium">
             <Checkbox
@@ -376,50 +375,20 @@ function ConfigForm({
         </div>
       </section>
 
-      <aside className="space-y-3">
-        {[
-          {
-            icon: Network,
-            title: "Semantic Kernel",
-            detail: "独立内网 Sidecar，不接触数据库或站点会话。",
-          },
-          {
-            icon: KeyRound,
-            title: config.apiKeyConfigured ? "密钥已配置" : "等待密钥",
-            detail: "AES-256-GCM 加密落库；读取接口永不返回明文。",
-          },
-          {
-            icon: Activity,
-            title: enabled ? "导入消费者启用" : "导入消费者暂停",
-            detail: enabled
-              ? "保存后 Worker 会领取队列任务。"
-              : "排队任务保留，启用后继续处理。",
-          },
-        ].map(({ icon: Icon, title, detail }) => (
-          <div key={title} className="rounded-2xl border bg-card p-4">
-            <Icon className="size-4 text-violet-700" aria-hidden />
-            <h3 className="mt-3 text-sm font-semibold">{title}</h3>
-            <p className="mt-1 text-xs leading-5 text-muted-foreground">{detail}</p>
-          </div>
-        ))}
-        {config.updatedAt ? (
-          <p className="px-1 text-[10px] leading-5 text-muted-foreground">
-            最近保存：{new Intl.DateTimeFormat("zh-CN", {
-              dateStyle: "medium",
-              timeStyle: "short",
-            }).format(config.updatedAt)}
-          </p>
-        ) : null}
-      </aside>
     </div>
   );
 }
 
-export function AIConfigWorkspace() {
+export function AIConfigWorkspace({
+  mode = "admin",
+}: {
+  mode?: "admin" | "account";
+}) {
   const session = useSession();
+  const personal = mode === "account";
   const config = useSWR(
-    session.isAuthenticated ? "admin:ai-config" : null,
-    () => adminApi().getAIConfig(),
+    session.isAuthenticated ? `${mode}:ai-config` : null,
+    () => personal ? accountApi().getAccountAIConfig() : adminApi().getAIConfig(),
     {
       revalidateOnFocus: false,
       shouldRetryOnError: (error) => !isUnauthorized(error),
@@ -430,7 +399,7 @@ export function AIConfigWorkspace() {
     return (
       <div className="flex min-h-72 items-center justify-center gap-2 text-sm text-muted-foreground">
         <LoaderCircle className="size-4 animate-spin" aria-hidden />
-        正在读取管理员配置…
+        正在读取模型配置…
       </div>
     );
   }
@@ -440,7 +409,7 @@ export function AIConfigWorkspace() {
         <LockKeyhole className="mx-auto size-8 text-muted-foreground" aria-hidden />
         <h2 className="mt-4 text-lg font-semibold">登录后管理 AI 配置</h2>
         <p className="mt-2 text-sm text-muted-foreground">
-          供应商密钥和导入运行策略只向站点管理员开放。
+          供应商密钥和导入运行策略保存在当前账号下。
         </p>
         <Button asChild className="mt-5">
           <Link href={LOGIN_PATH}>前往登录</Link>
@@ -454,7 +423,9 @@ export function AIConfigWorkspace() {
         <ShieldAlert className="size-7 text-amber-700" aria-hidden />
         <h2 className="mt-4 text-lg font-semibold text-amber-950">需要管理员权限</h2>
         <p className="mt-2 max-w-2xl text-sm leading-6 text-amber-900/70">
-          编辑者可以发起 AI 导入，但只有 admin 角色能修改模型、密钥和超时策略。
+          {personal
+            ? "当前账号不能修改这个 Wiki 的模型、密钥和超时策略。"
+            : "编辑者可以发起 AI 导入，但只有 admin 角色能修改模型、密钥和超时策略。"}
         </p>
       </div>
     );
@@ -475,9 +446,22 @@ export function AIConfigWorkspace() {
     <ConfigForm
       key={`${config.data.updatedAt?.toISOString() ?? "default"}:${config.data.apiKeyConfigured}`}
       config={config.data}
+      onSave={(request) =>
+        personal
+          ? accountApi().updateAccountAIConfig({ updateAIConfigRequest: request })
+          : adminApi().updateAIConfig({ updateAIConfigRequest: request })
+      }
+      onTest={() =>
+        personal ? accountApi().testAccountAIConfig() : adminApi().testAIConfig()
+      }
       onSaved={async (value) => {
         await config.mutate(value, { revalidate: false });
       }}
+      forbiddenMessage={
+        personal
+          ? "当前账号不能修改模型配置"
+          : "只有站点管理员可以修改 AI 配置"
+      }
     />
   );
 }

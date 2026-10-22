@@ -1,6 +1,7 @@
 "use client";
 
 import { LogIn, LogOut, UserRound } from "lucide-react";
+import Link from "next/link";
 import { toast } from "sonner";
 import { useSWRConfig } from "swr";
 
@@ -60,12 +61,28 @@ export function AccountMenu() {
 
   return (
     <div className="flex shrink-0 items-center gap-1">
-      <span
-        className="hidden max-w-32 truncate text-sm text-muted-foreground md:inline"
-        title={`${session.displayName} (${session.actorType})`}
+      <Button
+        size="sm"
+        variant="ghost"
+        asChild
+        className="hidden max-w-36 gap-1 px-2 md:inline-flex"
       >
-        {session.displayName}
-      </span>
+        <Link href="/account" title={`${session.displayName} (${session.actorType})`}>
+          <UserRound aria-hidden />
+          <span className="truncate">{session.displayName}</span>
+        </Link>
+      </Button>
+      <Button
+        size="sm"
+        variant="ghost"
+        asChild
+        className="px-2 md:hidden"
+        aria-label="个人中心"
+      >
+        <Link href="/account">
+          <UserRound aria-hidden />
+        </Link>
+      </Button>
       <Button
         size="sm"
         variant="ghost"

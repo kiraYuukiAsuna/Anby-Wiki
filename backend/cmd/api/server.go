@@ -103,6 +103,8 @@ func NewRouter(logger *slog.Logger, deps Deps, writeAPI *WriteAPI, readAPI *Read
 				r.Post("/auth/login", authAPI.login)
 				r.Get("/auth/session", authAPI.session)
 				r.Post("/auth/logout", authAPI.logout)
+				r.Get("/account/profile", authAPI.getAccountProfile)
+				r.Put("/account/profile", authAPI.updateAccountProfile)
 				r.Post("/auth/cli/codes", authAPI.createCLIAuthCode)
 				r.Post("/auth/cli/exchange", authAPI.exchangeCLIAuthCode)
 				r.Get("/auth/cli/tokens", authAPI.listCLITokens)
@@ -317,6 +319,9 @@ func NewRouter(logger *slog.Logger, deps Deps, writeAPI *WriteAPI, readAPI *Read
 				r.Get("/admin/ai-config", aiConfigAPI.get)
 				r.Put("/admin/ai-config", aiConfigAPI.update)
 				r.Post("/admin/ai-config/test", aiConfigAPI.test)
+				r.Get("/account/ai-config", aiConfigAPI.get)
+				r.Put("/account/ai-config", aiConfigAPI.update)
+				r.Post("/account/ai-config/test", aiConfigAPI.test)
 			}
 		})
 	}

@@ -497,10 +497,6 @@ export function SearchExplorer({
               <Search className="size-5" aria-hidden />
             </span>
             <h2 className="mt-4 text-lg font-semibold">从一个问题或主题开始</h2>
-            <p className="mx-auto mt-2 max-w-lg text-sm leading-6 text-muted-foreground">
-              结果会带来源字段、Entity 入口和可组合聚合；所有命中都来自当前已发布 Revision
-              的可重建搜索投影。
-            </p>
           </div>
         ) : null}
 

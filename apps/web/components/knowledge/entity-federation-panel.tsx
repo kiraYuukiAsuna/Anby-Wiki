@@ -363,15 +363,10 @@ export function EntityFederationPanel({
   return (
     <div>
       <div className="flex flex-wrap items-start justify-between gap-4 rounded-xl border bg-muted/20 p-4">
-        <div>
-          <p className="flex items-center gap-2 text-sm font-semibold">
-            <Globe2 className="size-4 text-indigo-700" aria-hidden />
-            跨 Wiki 身份
-          </p>
-          <p className="mt-1 max-w-xl text-xs leading-5 text-muted-foreground">
-            映射只连接稳定身份；远端事实不会绕过本站的来源、提案与审核链路。
-          </p>
-        </div>
+        <p className="flex items-center gap-2 text-sm font-semibold">
+          <Globe2 className="size-4 text-indigo-700" aria-hidden />
+          跨 Wiki 身份
+        </p>
         <div className="flex gap-2">
           <Button asChild type="button" variant="outline" size="sm">
             <Link href="/federation">Federation 中心</Link>
@@ -426,9 +421,6 @@ export function EntityFederationPanel({
         <div className="mt-3 rounded-xl border border-dashed p-6 text-center">
           <Link2 className="mx-auto size-6 text-muted-foreground" aria-hidden />
           <p className="mt-3 text-sm font-medium">尚无远端身份映射</p>
-          <p className="mt-1 text-xs text-muted-foreground">
-            为「{entityTitle}」连接可信百科或专业知识库中的稳定 ID。
-          </p>
         </div>
       ) : null}
       {items.length > 0 ? (

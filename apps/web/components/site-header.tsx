@@ -24,16 +24,11 @@ export function SiteHeader() {
             <BookOpenText className="size-4.5" aria-hidden />
             <span className="absolute inset-x-1 bottom-0 h-px bg-white/35" />
           </span>
-          <span className="hidden sm:block">
-            <span
-              className="block max-w-40 truncate text-[15px] font-semibold"
-              title={wikiName}
-            >
-              {wikiName}
-            </span>
-            <span className="block text-[9px] font-semibold text-muted-foreground uppercase">
-              Private wiki
-            </span>
+          <span
+            className="hidden max-w-40 truncate text-[15px] font-semibold sm:block"
+            title={wikiName}
+          >
+            {wikiName}
           </span>
         </Link>
 
