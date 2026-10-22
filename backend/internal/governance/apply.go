@@ -179,8 +179,9 @@ func (s *ApplyService) Apply(ctx context.Context, proposalID, actorID uuid.UUID)
 		if err != nil {
 			return err
 		}
-		batch := &ChangeBatch{ID: batchID, ImportJobID: locked.ImportJobID,
-			ProposalID: proposalID, ActorID: actorID, Status: BatchApplying}
+		batch := &ChangeBatch{ID: batchID, WikiID: locked.WikiID,
+			ImportJobID: locked.ImportJobID,
+			ProposalID:  proposalID, ActorID: actorID, Status: BatchApplying}
 		if err := s.repo.InsertChangeBatch(ctx, tx, batch); err != nil {
 			return err
 		}

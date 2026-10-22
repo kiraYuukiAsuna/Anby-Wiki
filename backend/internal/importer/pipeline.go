@@ -478,6 +478,7 @@ func (p *Pipeline) prepareParsedSource(
 	}
 	if sourceID == nil {
 		params := evidence.CreateSourceParams{
+			WikiID:     request.WikiID,
 			SourceType: inferredSourceType(acquired), AssetID: &asset.Asset.ID,
 			Title: sourceLabel, Author: bibliography.Author,
 			Publisher: bibliography.Publisher, PublishedAt: bibliography.PublishedAt,
@@ -541,8 +542,9 @@ func (p *Pipeline) prepareParsedSource(
 		return nil, "", failed
 	}
 	version, err := p.evidence.AddSourceVersion(ctx, evidence.AddSourceVersionParams{
-		SourceID: *sourceID, VersionHash: acquired.ContentHash,
-		RawAssetID: &asset.Revision.ID, ExtractedAssetID: &extractedAsset.Revision.ID,
+		WikiID: request.WikiID, SourceID: *sourceID,
+		VersionHash: acquired.ContentHash,
+		RawAssetID:  &asset.Revision.ID, ExtractedAssetID: &extractedAsset.Revision.ID,
 		ParseTrack: parsed.Track, ParserName: parsed.ParserName,
 		ParserVersion: parsed.ParserVersion, ParserFingerprint: parsed.ParserFingerprint,
 		ParseMetadata: parsed.MetadataJSON(),
@@ -565,7 +567,9 @@ func (p *Pipeline) loadParseCheckpoint(ctx context.Context, request PipelineRequ
 	if err != nil || resume == nil {
 		return nil, err
 	}
-	checkpoint, err := p.evidence.LoadSourceVersionContent(ctx, resume.SourceVersionID)
+	checkpoint, err := p.evidence.LoadSourceVersionContent(
+		ctx, request.WikiID, resume.SourceVersionID,
+	)
 	if errors.Is(err, evidence.ErrSourceVersionNotFound) || errors.Is(err, evidence.ErrSourceNotFound) {
 		// A missing immutable artifact cannot be resumed safely; reacquire it.
 		return nil, nil

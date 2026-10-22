@@ -30,6 +30,24 @@ export interface AuthSession {
      * @type {string}
      * @memberof AuthSession
      */
+    wikiId: string;
+    /**
+     *
+     * @type {string}
+     * @memberof AuthSession
+     */
+    wikiName: string;
+    /**
+     *
+     * @type {string}
+     * @memberof AuthSession
+     */
+    mainNamespaceId: string;
+    /**
+     *
+     * @type {string}
+     * @memberof AuthSession
+     */
     actorType: string;
     /**
      *
@@ -63,6 +81,9 @@ export type AuthSessionMethodEnum = typeof AuthSessionMethodEnum[keyof typeof Au
  */
 export function instanceOfAuthSession(value: object): value is AuthSession {
     if ((!('actorId' in (value as Record<string, any>)) && !('actor_id' in (value as Record<string, any>))) || ((value as Record<string, any>)['actorId'] === undefined && (value as Record<string, any>)['actor_id'] === undefined)) return false;
+    if ((!('wikiId' in (value as Record<string, any>)) && !('wiki_id' in (value as Record<string, any>))) || ((value as Record<string, any>)['wikiId'] === undefined && (value as Record<string, any>)['wiki_id'] === undefined)) return false;
+    if ((!('wikiName' in (value as Record<string, any>)) && !('wiki_name' in (value as Record<string, any>))) || ((value as Record<string, any>)['wikiName'] === undefined && (value as Record<string, any>)['wiki_name'] === undefined)) return false;
+    if ((!('mainNamespaceId' in (value as Record<string, any>)) && !('main_namespace_id' in (value as Record<string, any>))) || ((value as Record<string, any>)['mainNamespaceId'] === undefined && (value as Record<string, any>)['main_namespace_id'] === undefined)) return false;
     if ((!('actorType' in (value as Record<string, any>)) && !('actor_type' in (value as Record<string, any>))) || ((value as Record<string, any>)['actorType'] === undefined && (value as Record<string, any>)['actor_type'] === undefined)) return false;
     if ((!('displayName' in (value as Record<string, any>)) && !('display_name' in (value as Record<string, any>))) || ((value as Record<string, any>)['displayName'] === undefined && (value as Record<string, any>)['display_name'] === undefined)) return false;
     if (!('method' in value) || value['method'] === undefined) return false;
@@ -80,6 +101,9 @@ export function AuthSessionFromJSONTyped(json: any, ignoreDiscriminator: boolean
     return {
 
         'actorId': json['actor_id'],
+        'wikiId': json['wiki_id'],
+        'wikiName': json['wiki_name'],
+        'mainNamespaceId': json['main_namespace_id'],
         'actorType': json['actor_type'],
         'displayName': json['display_name'],
         'method': json['method'],
@@ -98,6 +122,9 @@ export function AuthSessionToJSONTyped(value?: AuthSession | null, ignoreDiscrim
     return {
 
         'actor_id': value['actorId'],
+        'wiki_id': value['wikiId'],
+        'wiki_name': value['wikiName'],
+        'main_namespace_id': value['mainNamespaceId'],
         'actor_type': value['actorType'],
         'display_name': value['displayName'],
         'method': value['method'],

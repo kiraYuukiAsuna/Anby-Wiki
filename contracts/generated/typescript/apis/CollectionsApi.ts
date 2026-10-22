@@ -162,6 +162,14 @@ export class CollectionsApi extends runtime.BaseAPI {
 
         const headerParameters: runtime.HTTPHeaders = {};
 
+        if (this.configuration && this.configuration.accessToken) {
+            const token = this.configuration.accessToken;
+            const tokenString = await token("cliBearer", []);
+
+            if (tokenString) {
+                headerParameters["Authorization"] = `Bearer ${tokenString}`;
+            }
+        }
 
         let urlPath = `/api/v1/collections/{id}`;
         urlPath = urlPath.replace('{id}', encodeURIComponent(String(requestParameters['id'])));
@@ -175,7 +183,7 @@ export class CollectionsApi extends runtime.BaseAPI {
     }
 
     /**
-     * 匿名读取 Collection 定义；Manual 的 query 为 null，其余类型使用版本化安全查询。
+     * 读取当前登录 Wiki 的 Collection 定义；Manual 的 query 为 null，其余类型使用版本化安全查询。
      * Collection 详情
      */
     async getCollectionRaw(requestParameters: GetCollectionRequest, initOverrides?: RequestInit | runtime.InitOverrideFunction): Promise<runtime.ApiResponse<Collection>> {
@@ -186,7 +194,7 @@ export class CollectionsApi extends runtime.BaseAPI {
     }
 
     /**
-     * 匿名读取 Collection 定义；Manual 的 query 为 null，其余类型使用版本化安全查询。
+     * 读取当前登录 Wiki 的 Collection 定义；Manual 的 query 为 null，其余类型使用版本化安全查询。
      * Collection 详情
      */
     async getCollection(requestParameters: GetCollectionRequest, initOverrides?: RequestInit | runtime.InitOverrideFunction): Promise<Collection> {
@@ -217,6 +225,14 @@ export class CollectionsApi extends runtime.BaseAPI {
 
         const headerParameters: runtime.HTTPHeaders = {};
 
+        if (this.configuration && this.configuration.accessToken) {
+            const token = this.configuration.accessToken;
+            const tokenString = await token("cliBearer", []);
+
+            if (tokenString) {
+                headerParameters["Authorization"] = `Bearer ${tokenString}`;
+            }
+        }
 
         let urlPath = `/api/v1/collections/{id}/members`;
         urlPath = urlPath.replace('{id}', encodeURIComponent(String(requestParameters['id'])));
@@ -230,7 +246,7 @@ export class CollectionsApi extends runtime.BaseAPI {
     }
 
     /**
-     * Manual/Rule 匿名读取物化 Membership；Dynamic 执行受限版本化查询。 两者均按 sort_key、member_type、target id 稳定游标分页，绝不扫描 AST。
+     * Manual/Rule 读取当前登录 Wiki 的物化 Membership；Dynamic 执行受限版本化查询。 两者均按 sort_key、member_type、target id 稳定游标分页，绝不扫描 AST。
      * Collection 物化成员
      */
     async listCollectionMembersRaw(requestParameters: ListCollectionMembersRequest, initOverrides?: RequestInit | runtime.InitOverrideFunction): Promise<runtime.ApiResponse<CollectionMembershipListPage>> {
@@ -241,7 +257,7 @@ export class CollectionsApi extends runtime.BaseAPI {
     }
 
     /**
-     * Manual/Rule 匿名读取物化 Membership；Dynamic 执行受限版本化查询。 两者均按 sort_key、member_type、target id 稳定游标分页，绝不扫描 AST。
+     * Manual/Rule 读取当前登录 Wiki 的物化 Membership；Dynamic 执行受限版本化查询。 两者均按 sort_key、member_type、target id 稳定游标分页，绝不扫描 AST。
      * Collection 物化成员
      */
     async listCollectionMembers(requestParameters: ListCollectionMembersRequest, initOverrides?: RequestInit | runtime.InitOverrideFunction): Promise<CollectionMembershipListPage> {
@@ -265,6 +281,14 @@ export class CollectionsApi extends runtime.BaseAPI {
 
         const headerParameters: runtime.HTTPHeaders = {};
 
+        if (this.configuration && this.configuration.accessToken) {
+            const token = this.configuration.accessToken;
+            const tokenString = await token("cliBearer", []);
+
+            if (tokenString) {
+                headerParameters["Authorization"] = `Bearer ${tokenString}`;
+            }
+        }
 
         let urlPath = `/api/v1/collections`;
 
@@ -277,7 +301,7 @@ export class CollectionsApi extends runtime.BaseAPI {
     }
 
     /**
-     * 匿名读取当前 Wiki 的 Manual/Rule/Dynamic Collection，按 title、id 稳定游标分页。列表只读权威定义，不执行查询。
+     * 读取当前登录 Wiki 的 Manual/Rule/Dynamic Collection，按 title、id 稳定游标分页。列表只读权威定义，不执行查询。
      * Collection 列表
      */
     async listCollectionsRaw(requestParameters: ListCollectionsRequest, initOverrides?: RequestInit | runtime.InitOverrideFunction): Promise<runtime.ApiResponse<CollectionListPage>> {
@@ -288,7 +312,7 @@ export class CollectionsApi extends runtime.BaseAPI {
     }
 
     /**
-     * 匿名读取当前 Wiki 的 Manual/Rule/Dynamic Collection，按 title、id 稳定游标分页。列表只读权威定义，不执行查询。
+     * 读取当前登录 Wiki 的 Manual/Rule/Dynamic Collection，按 title、id 稳定游标分页。列表只读权威定义，不执行查询。
      * Collection 列表
      */
     async listCollections(requestParameters: ListCollectionsRequest = {}, initOverrides?: RequestInit | runtime.InitOverrideFunction): Promise<CollectionListPage> {
@@ -311,6 +335,14 @@ export class CollectionsApi extends runtime.BaseAPI {
 
         const headerParameters: runtime.HTTPHeaders = {};
 
+        if (this.configuration && this.configuration.accessToken) {
+            const token = this.configuration.accessToken;
+            const tokenString = await token("cliBearer", []);
+
+            if (tokenString) {
+                headerParameters["Authorization"] = `Bearer ${tokenString}`;
+            }
+        }
 
         let urlPath = `/api/v1/pages/{id}/collections`;
         urlPath = urlPath.replace('{id}', encodeURIComponent(String(requestParameters['id'])));
@@ -324,7 +356,7 @@ export class CollectionsApi extends runtime.BaseAPI {
     }
 
     /**
-     * 匿名反向读取页面直接所属、其主 Entity 所属以及 Dynamic 查询命中的 Collection。 membership_source 解释命中来源，不复制服务端 Collection 状态到客户端缓存。
+     * 读取当前登录 Wiki 中页面直接所属、其主 Entity 所属以及 Dynamic 查询命中的 Collection。 membership_source 解释命中来源，不复制服务端 Collection 状态到客户端缓存。
      * 页面所属 Collection
      */
     async listPageCollectionsRaw(requestParameters: ListPageCollectionsRequest, initOverrides?: RequestInit | runtime.InitOverrideFunction): Promise<runtime.ApiResponse<PageCollectionList>> {
@@ -335,7 +367,7 @@ export class CollectionsApi extends runtime.BaseAPI {
     }
 
     /**
-     * 匿名反向读取页面直接所属、其主 Entity 所属以及 Dynamic 查询命中的 Collection。 membership_source 解释命中来源，不复制服务端 Collection 状态到客户端缓存。
+     * 读取当前登录 Wiki 中页面直接所属、其主 Entity 所属以及 Dynamic 查询命中的 Collection。 membership_source 解释命中来源，不复制服务端 Collection 状态到客户端缓存。
      * 页面所属 Collection
      */
     async listPageCollections(requestParameters: ListPageCollectionsRequest, initOverrides?: RequestInit | runtime.InitOverrideFunction): Promise<PageCollectionList> {

@@ -4,8 +4,8 @@
 
 production 启动前必须满足：
 
-- 注册默认关闭。首次受控部署时显式设置 `AUTH_REGISTRATION_ENABLED=true`，
-  首个注册账号自动获得管理员角色；完成初始化后立即改回 `false`。
+- 注册默认关闭。受控创建账号时显式设置 `AUTH_REGISTRATION_ENABLED=true`；
+  每个账号创建独立私人 Wiki 并成为其管理员，完成后立即改回 `false`。
 - `AUTH_DEV_HEADER_ENABLED=false`。外层实际提供 HTTPS 时必须设置 `SESSION_COOKIE_SECURE=true`；明文本地/封闭部署才允许 `false`。
 - `S3_ACCESS_KEY`/`S3_SECRET_KEY` 与 `MEILI_MASTER_KEY` 不使用开发值或模板中的
   `replace-with-*` 占位值；机密长度至少 12 字符。

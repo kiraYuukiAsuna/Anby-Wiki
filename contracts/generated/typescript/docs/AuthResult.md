@@ -7,6 +7,9 @@
 Name | Type
 ------------ | -------------
 `actorId` | string
+`wikiId` | string
+`wikiName` | string
+`mainNamespaceId` | string
 `displayName` | string
 
 ## Example
@@ -17,6 +20,9 @@ import type { AuthResult } from ''
 // TODO: Update the object below with actual values
 const example = {
   "actorId": null,
+  "wikiId": null,
+  "wikiName": null,
+  "mainNamespaceId": null,
   "displayName": null,
 } satisfies AuthResult
 

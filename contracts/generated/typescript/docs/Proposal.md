@@ -7,6 +7,7 @@
 Name | Type
 ------------ | -------------
 `id` | string
+`wikiId` | string
 `importJobId` | string
 `targetType` | string
 `targetId` | string
@@ -33,6 +34,7 @@ import type { Proposal } from ''
 // TODO: Update the object below with actual values
 const example = {
   "id": null,
+  "wikiId": null,
   "importJobId": null,
   "targetType": null,
   "targetId": null,

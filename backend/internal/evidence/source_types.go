@@ -290,6 +290,7 @@ type ExternalResource struct {
 // external_resource_id / asset_id 允许皆空（先登记元数据后关联）。
 type Source struct {
 	ID                 uuid.UUID
+	WikiID             uuid.UUID
 	SourceType         string
 	ExternalResourceID *uuid.UUID
 	AssetID            *uuid.UUID

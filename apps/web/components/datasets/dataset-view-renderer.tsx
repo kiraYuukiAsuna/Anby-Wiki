@@ -134,7 +134,7 @@ export function DatasetViewRenderer({
     case "form":
       return (
         <div className="rounded-md border border-dashed px-6 py-10 text-center">
-          <p className="text-sm font-medium">公开表单已就绪</p>
+          <p className="text-sm font-medium">填写入口已就绪</p>
           <Button asChild variant="outline" className="mt-4">
             <Link href={`/forms/${view.id}`} target="_blank">
               <ExternalLink />

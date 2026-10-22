@@ -22,7 +22,7 @@ type assignChangeTagRequest struct {
 }
 
 func (a *GovernanceAPI) listChangeTags(w http.ResponseWriter, r *http.Request) {
-	tags, err := a.audit.ListTags(r.Context())
+	tags, err := a.audit.ListTags(r.Context(), wikiIDFromRequest(r))
 	if err != nil {
 		governanceError(w, r, err)
 		return
@@ -40,7 +40,8 @@ func (a *GovernanceAPI) createChangeTag(w http.ResponseWriter, r *http.Request) 
 		return
 	}
 	tag, err := a.audit.CreateTag(
-		r.Context(), actorID, body.TagKey, body.Name, body.Description,
+		r.Context(), wikiIDFromRequest(r), actorID,
+		body.TagKey, body.Name, body.Description,
 	)
 	if err != nil {
 		governanceError(w, r, err)
@@ -63,7 +64,8 @@ func (a *GovernanceAPI) assignChangeTag(w http.ResponseWriter, r *http.Request) 
 		return
 	}
 	inserted, err := a.audit.AssignTag(
-		r.Context(), actorID, tagID, body.TargetType, body.TargetID,
+		r.Context(), wikiIDFromRequest(r), actorID, tagID,
+		body.TargetType, body.TargetID,
 	)
 	if err != nil {
 		governanceError(w, r, err)
@@ -94,14 +96,15 @@ func (a *GovernanceAPI) listAuditEvents(w http.ResponseWriter, r *http.Request) 
 		}
 		changeBatchID = &value
 	}
-	page, err := a.audit.List(r.Context(), actorID, governance.AuditListFilter{
-		EventType:     r.URL.Query().Get("event_type"),
-		AggregateType: r.URL.Query().Get("aggregate_type"),
-		ChangeBatchID: changeBatchID,
-		TagKey:        r.URL.Query().Get("tag_key"),
-		Cursor:        r.URL.Query().Get("cursor"),
-		Limit:         limit,
-	})
+	page, err := a.audit.List(
+		r.Context(), wikiIDFromRequest(r), actorID, governance.AuditListFilter{
+			EventType:     r.URL.Query().Get("event_type"),
+			AggregateType: r.URL.Query().Get("aggregate_type"),
+			ChangeBatchID: changeBatchID,
+			TagKey:        r.URL.Query().Get("tag_key"),
+			Cursor:        r.URL.Query().Get("cursor"),
+			Limit:         limit,
+		})
 	if err != nil {
 		governanceError(w, r, err)
 		return

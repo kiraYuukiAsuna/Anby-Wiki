@@ -25,7 +25,7 @@ func (r *Repository) q(tx pgx.Tx) db.Querier {
 	return r.pool
 }
 
-const proposalColumns = `id, import_job_id, target_type, target_id, base_revision_id,
+const proposalColumns = `id, wiki_id, import_job_id, target_type, target_id, base_revision_id,
 	base_state_version, status, risk_level, risk_reasons_json, policy_decision_json,
 	created_by, idempotency_key,
 	(SELECT cb.id FROM change_batch cb WHERE cb.proposal_id=proposal.id LIMIT 1),
@@ -34,7 +34,7 @@ const proposalColumns = `id, import_job_id, target_type, target_id, base_revisio
 
 func scanProposal(row pgx.Row) (*Proposal, error) {
 	var p Proposal
-	if err := row.Scan(&p.ID, &p.ImportJobID, &p.TargetType, &p.TargetID, &p.BaseRevisionID,
+	if err := row.Scan(&p.ID, &p.WikiID, &p.ImportJobID, &p.TargetType, &p.TargetID, &p.BaseRevisionID,
 		&p.BaseStateVersion, &p.Status, &p.RiskLevel, &p.RiskReasons, &p.PolicyDecision,
 		&p.CreatedBy, &p.IdempotencyKey, &p.ChangeBatchID, &p.ChangeBatchStatus,
 		&p.CreatedAt, &p.UpdatedAt); err != nil {
@@ -100,7 +100,8 @@ func decodeProposalCursor(cursor string) (proposalListCursor, error) {
 }
 
 func (r *Repository) ListOwnedProposals(
-	ctx context.Context, actorID uuid.UUID, status, targetType, cursor string, limit int,
+	ctx context.Context, wikiID, actorID uuid.UUID,
+	status, targetType, cursor string, limit int,
 ) (*ProposalPage, error) {
 	var afterTime *time.Time
 	afterID := uuid.Nil
@@ -113,12 +114,12 @@ func (r *Repository) ListOwnedProposals(
 		afterID = after.ID
 	}
 	rows, err := r.pool.Query(ctx, `SELECT `+proposalColumns+` FROM proposal
-		WHERE created_by=$1
-		  AND ($2='' OR status=$2)
-		  AND ($3='' OR target_type=$3)
-		  AND ($4::timestamptz IS NULL OR (proposal.created_at,proposal.id) < ($4,$5))
+		WHERE wiki_id=$1 AND created_by=$2
+		  AND ($3='' OR status=$3)
+		  AND ($4='' OR target_type=$4)
+		  AND ($5::timestamptz IS NULL OR (proposal.created_at,proposal.id) < ($5,$6))
 		ORDER BY proposal.created_at DESC,proposal.id DESC
-		LIMIT $6`, actorID, status, targetType, afterTime, afterID, limit+1)
+		LIMIT $7`, wikiID, actorID, status, targetType, afterTime, afterID, limit+1)
 	if err != nil {
 		return nil, fmt.Errorf("governance: 列出 Proposal 失败: %w", err)
 	}
@@ -157,32 +158,8 @@ func (r *Repository) ListPendingApplyProposals(
 		afterID = after.ID
 	}
 	rows, err := r.pool.Query(ctx, `SELECT `+proposalColumns+` FROM proposal
-		WHERE proposal.status='approved'
+		WHERE proposal.wiki_id=$1 AND proposal.status='approved'
 		  AND ($2::timestamptz IS NULL OR (proposal.updated_at,proposal.id)<($2,$3))
-		  AND (
-			(proposal.target_type='wiki' AND proposal.target_id=$1)
-			OR (proposal.target_type='page' AND EXISTS (
-				SELECT 1 FROM page p WHERE p.id=proposal.target_id AND p.wiki_id=$1
-			))
-			OR (proposal.target_type='entity' AND EXISTS (
-				SELECT 1 FROM entity e WHERE e.id=proposal.target_id AND e.wiki_id=$1
-			))
-			OR (proposal.target_type='claim' AND EXISTS (
-				SELECT 1 FROM claim c JOIN entity e ON e.id=c.subject_entity_id
-				WHERE c.id=proposal.target_id AND e.wiki_id=$1
-			))
-			OR (proposal.target_type='collection' AND EXISTS (
-				SELECT 1 FROM collection c WHERE c.id=proposal.target_id AND c.wiki_id=$1
-			))
-			OR (proposal.target_type='external_resource' AND EXISTS (
-				SELECT 1 FROM proposal_operation po WHERE po.proposal_id=proposal.id
-				  AND po.target_json->>'wiki_id'=$1::text
-			))
-			OR (proposal.target_id IS NULL AND EXISTS (
-				SELECT 1 FROM proposal_operation po WHERE po.proposal_id=proposal.id
-				  AND po.target_json->>'wiki_id'=$1::text
-			))
-		  )
 		ORDER BY proposal.updated_at DESC,proposal.id DESC
 		LIMIT $4`, wikiID, afterTime, afterID, limit+1)
 	if err != nil {
@@ -211,11 +188,11 @@ func (r *Repository) ListPendingApplyProposals(
 
 func (r *Repository) InsertProposal(ctx context.Context, tx pgx.Tx, p *Proposal) (bool, error) {
 	tag, err := r.q(tx).Exec(ctx, `
-		INSERT INTO proposal (id, import_job_id, target_type, target_id, base_revision_id,
+		INSERT INTO proposal (id, wiki_id, import_job_id, target_type, target_id, base_revision_id,
 			base_state_version, status, risk_level, created_by, idempotency_key)
-		VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10)
+		VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11)
 		ON CONFLICT (created_by, idempotency_key) DO NOTHING`,
-		p.ID, p.ImportJobID, p.TargetType, p.TargetID, p.BaseRevisionID, p.BaseStateVersion,
+		p.ID, p.WikiID, p.ImportJobID, p.TargetType, p.TargetID, p.BaseRevisionID, p.BaseStateVersion,
 		p.Status, p.RiskLevel, p.CreatedBy, p.IdempotencyKey)
 	if err != nil {
 		return false, fmt.Errorf("governance: 插入 Proposal 失败: %w", err)
@@ -340,9 +317,18 @@ func (r *Repository) DecideReviewTask(ctx context.Context, tx pgx.Tx, id, review
 	return nil
 }
 
-func (r *Repository) ListPendingReviewTasks(ctx context.Context, limit int) ([]ReviewTask, error) {
-	rows, err := r.pool.Query(ctx, `SELECT `+reviewTaskColumns+` FROM review_task
-		WHERE status='pending' ORDER BY created_at,id LIMIT $1`, limit)
+func (r *Repository) ListPendingReviewTasks(
+	ctx context.Context,
+	wikiID uuid.UUID,
+	limit int,
+) ([]ReviewTask, error) {
+	rows, err := r.pool.Query(ctx, `SELECT
+		rt.id,rt.proposal_id,rt.status,rt.reviewer_id,rt.decision_reason,
+		rt.created_at,rt.reviewed_at
+		FROM review_task rt
+		JOIN proposal p ON p.id=rt.proposal_id
+		WHERE p.wiki_id=$1 AND rt.status='pending'
+		ORDER BY rt.created_at,rt.id LIMIT $2`, wikiID, limit)
 	if err != nil {
 		return nil, fmt.Errorf("governance: 查询审核队列失败: %w", err)
 	}
@@ -431,9 +417,12 @@ func (r *Repository) CountOpenMergeConflicts(
 
 func (r *Repository) GetChangeBatchByProposal(ctx context.Context, tx pgx.Tx, proposalID uuid.UUID) (*ChangeBatch, error) {
 	var b ChangeBatch
-	err := r.q(tx).QueryRow(ctx, `SELECT id,import_job_id,proposal_id,actor_id,status,created_at,rolled_back_at
-		FROM change_batch WHERE proposal_id=$1`, proposalID).Scan(&b.ID, &b.ImportJobID, &b.ProposalID,
-		&b.ActorID, &b.Status, &b.CreatedAt, &b.RolledBackAt)
+	err := r.q(tx).QueryRow(ctx, `SELECT
+		id,wiki_id,import_job_id,proposal_id,actor_id,status,created_at,rolled_back_at
+		FROM change_batch WHERE proposal_id=$1`, proposalID).Scan(
+		&b.ID, &b.WikiID, &b.ImportJobID, &b.ProposalID,
+		&b.ActorID, &b.Status, &b.CreatedAt, &b.RolledBackAt,
+	)
 	if errors.Is(err, pgx.ErrNoRows) {
 		return nil, nil
 	}
@@ -443,10 +432,30 @@ func (r *Repository) GetChangeBatchByProposal(ctx context.Context, tx pgx.Tx, pr
 	return &b, nil
 }
 
+func (r *Repository) GetChangeBatch(
+	ctx context.Context,
+	tx pgx.Tx,
+	id uuid.UUID,
+) (*ChangeBatch, error) {
+	var b ChangeBatch
+	err := r.q(tx).QueryRow(ctx, `SELECT
+		id,wiki_id,import_job_id,proposal_id,actor_id,status,created_at,rolled_back_at
+		FROM change_batch WHERE id=$1`, id).Scan(
+		&b.ID, &b.WikiID, &b.ImportJobID, &b.ProposalID,
+		&b.ActorID, &b.Status, &b.CreatedAt, &b.RolledBackAt,
+	)
+	if errors.Is(err, pgx.ErrNoRows) {
+		return nil, fmt.Errorf("%w: change_batch=%s", ErrProposalNotFound, id)
+	}
+	return &b, err
+}
+
 func (r *Repository) InsertChangeBatch(ctx context.Context, tx pgx.Tx, b *ChangeBatch) error {
 	return r.q(tx).QueryRow(ctx, `INSERT INTO change_batch
-		(id,import_job_id,proposal_id,actor_id,status) VALUES ($1,$2,$3,$4,$5) RETURNING created_at`,
-		b.ID, b.ImportJobID, b.ProposalID, b.ActorID, b.Status).Scan(&b.CreatedAt)
+		(id,wiki_id,import_job_id,proposal_id,actor_id,status)
+		VALUES ($1,$2,$3,$4,$5,$6) RETURNING created_at`,
+		b.ID, b.WikiID, b.ImportJobID, b.ProposalID, b.ActorID, b.Status,
+	).Scan(&b.CreatedAt)
 }
 
 func (r *Repository) UpdateChangeBatchStatus(ctx context.Context, tx pgx.Tx, id uuid.UUID, from, to string) error {
@@ -495,9 +504,12 @@ func (r *Repository) InsertOutbox(ctx context.Context, tx pgx.Tx, id uuid.UUID,
 
 func (r *Repository) GetChangeBatchForUpdate(ctx context.Context, tx pgx.Tx, id uuid.UUID) (*ChangeBatch, error) {
 	var b ChangeBatch
-	err := r.q(tx).QueryRow(ctx, `SELECT id,import_job_id,proposal_id,actor_id,status,created_at,rolled_back_at
-		FROM change_batch WHERE id=$1 FOR UPDATE`, id).Scan(&b.ID, &b.ImportJobID, &b.ProposalID,
-		&b.ActorID, &b.Status, &b.CreatedAt, &b.RolledBackAt)
+	err := r.q(tx).QueryRow(ctx, `SELECT
+		id,wiki_id,import_job_id,proposal_id,actor_id,status,created_at,rolled_back_at
+		FROM change_batch WHERE id=$1 FOR UPDATE`, id).Scan(
+		&b.ID, &b.WikiID, &b.ImportJobID, &b.ProposalID,
+		&b.ActorID, &b.Status, &b.CreatedAt, &b.RolledBackAt,
+	)
 	if errors.Is(err, pgx.ErrNoRows) {
 		return nil, fmt.Errorf("%w: change_batch=%s", ErrProposalNotFound, id)
 	}

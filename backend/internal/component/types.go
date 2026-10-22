@@ -29,6 +29,7 @@ var (
 
 type Component struct {
 	ID           uuid.UUID
+	WikiID       uuid.UUID
 	ComponentKey string
 	Name         string
 	CreatedBy    uuid.UUID
@@ -57,12 +58,14 @@ type VersionList struct {
 }
 
 type CreateParams struct {
+	WikiID       uuid.UUID
 	ComponentKey string
 	Name         string
 	ActorID      uuid.UUID
 }
 
 type CreateVersionParams struct {
+	WikiID      uuid.UUID
 	ComponentID uuid.UUID
 	PropsSchema json.RawMessage
 	RendererRef string

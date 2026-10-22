@@ -162,50 +162,5 @@ func wikiIDForProposal(ctx context.Context, tx pgx.Tx, repo *Repository, p *Prop
 	if p == nil {
 		return uuid.Nil
 	}
-	if p.TargetID == nil {
-		// Create operations have no stable aggregate ID before Apply. Resolve
-		// their Wiki from the frozen operation target.
-		operations, err := repo.ListOperations(ctx, tx, p.ID)
-		if err == nil {
-			for i := range operations {
-				op, parseErr := OperationFromRecord(&operations[i])
-				if parseErr == nil && op.Target.WikiID != nil {
-					return *op.Target.WikiID
-				}
-			}
-		}
-		return uuid.Nil
-	}
-	var wikiID uuid.UUID
-	var err error
-	switch p.TargetType {
-	case TargetWiki:
-		wikiID = *p.TargetID
-	case TargetPage:
-		err = repo.q(tx).QueryRow(ctx, `SELECT wiki_id FROM page WHERE id=$1`, *p.TargetID).Scan(&wikiID)
-	case TargetEntity:
-		err = repo.q(tx).QueryRow(ctx, `SELECT wiki_id FROM entity WHERE id=$1`, *p.TargetID).Scan(&wikiID)
-	case TargetClaim:
-		err = repo.q(tx).QueryRow(ctx, `SELECT e.wiki_id FROM claim c JOIN entity e ON e.id=c.subject_entity_id WHERE c.id=$1`, *p.TargetID).Scan(&wikiID)
-	case TargetCollection:
-		err = repo.q(tx).QueryRow(ctx, `SELECT wiki_id FROM collection WHERE id=$1`, *p.TargetID).Scan(&wikiID)
-	case TargetExternalResource:
-		operations, opErr := repo.ListOperations(ctx, tx, p.ID)
-		if opErr != nil {
-			return uuid.Nil
-		}
-		for i := range operations {
-			op, parseErr := OperationFromRecord(&operations[i])
-			if parseErr == nil && op.Target.WikiID != nil {
-				return *op.Target.WikiID
-			}
-		}
-		return uuid.Nil
-	default:
-		return uuid.Nil
-	}
-	if err != nil {
-		return uuid.Nil
-	}
-	return wikiID
+	return p.WikiID
 }

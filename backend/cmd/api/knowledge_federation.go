@@ -107,7 +107,7 @@ func (a *KnowledgeReadAPI) listFederatedWikis(
 ) {
 	includeDisabled := r.URL.Query().Get("include_disabled") == "true"
 	items, err := a.knowledge.ListFederatedWikis(
-		r.Context(), a.wikiID, includeDisabled,
+		r.Context(), wikiIDFromRequest(r), includeDisabled,
 	)
 	if err != nil {
 		a.writeError(w, r, err)
@@ -136,7 +136,7 @@ func (a *KnowledgeReadAPI) registerFederatedWiki(
 	}
 	item, err := a.knowledge.RegisterFederatedWiki(
 		r.Context(), knowledge.RegisterFederatedWikiParams{
-			WikiID: a.wikiID, WikiKey: request.WikiKey,
+			WikiID: wikiIDFromRequest(r), WikiKey: request.WikiKey,
 			DisplayName: request.DisplayName, BaseURL: request.BaseURL,
 			EntityURLTemplate: request.EntityURLTemplate,
 			TrustLevel:        request.TrustLevel, Status: request.Status,
@@ -167,7 +167,7 @@ func (a *KnowledgeReadAPI) updateFederatedWiki(
 		return
 	}
 	item, err := a.knowledge.UpdateFederatedWiki(
-		r.Context(), a.wikiID, remoteWikiID,
+		r.Context(), wikiIDFromRequest(r), remoteWikiID,
 		knowledge.UpdateFederatedWikiParams{
 			DisplayName: request.DisplayName, BaseURL: request.BaseURL,
 			EntityURLTemplate: request.EntityURLTemplate,
@@ -204,7 +204,7 @@ func (a *KnowledgeReadAPI) listFederationLinks(
 	}
 	page, err := a.knowledge.ListFederationLinks(
 		r.Context(), knowledge.FederationLinkListParams{
-			WikiID: a.wikiID, RemoteWikiID: remoteWikiID,
+			WikiID: wikiIDFromRequest(r), RemoteWikiID: remoteWikiID,
 			Status: r.URL.Query().Get("status"), Query: r.URL.Query().Get("q"),
 			Cursor: r.URL.Query().Get("cursor"), Limit: limit,
 		},
@@ -225,7 +225,7 @@ func (a *KnowledgeReadAPI) listEntityFederationLinks(
 		return
 	}
 	items, err := a.knowledge.ListEntityFederationLinks(
-		r.Context(), a.wikiID, entityID, r.URL.Query().Get("status"),
+		r.Context(), wikiIDFromRequest(r), entityID, r.URL.Query().Get("status"),
 	)
 	if err != nil {
 		a.writeError(w, r, err)
@@ -258,7 +258,7 @@ func (a *KnowledgeReadAPI) createFederationLink(
 	}
 	item, err := a.knowledge.CreateFederationLink(
 		r.Context(), knowledge.CreateFederationLinkParams{
-			WikiID: a.wikiID, LocalEntityID: entityID,
+			WikiID: wikiIDFromRequest(r), LocalEntityID: entityID,
 			RemoteWikiID:       request.RemoteWikiID,
 			RemoteEntityID:     request.RemoteEntityID,
 			RemoteCanonicalKey: request.RemoteCanonicalKey,
@@ -292,7 +292,7 @@ func (a *KnowledgeReadAPI) updateFederationLink(
 		return
 	}
 	item, err := a.knowledge.UpdateFederationLink(
-		r.Context(), a.wikiID, linkID,
+		r.Context(), wikiIDFromRequest(r), linkID,
 		knowledge.UpdateFederationLinkParams{
 			RemoteCanonicalKey: request.RemoteCanonicalKey,
 			RemoteLabel:        request.RemoteLabel,
@@ -322,7 +322,7 @@ func (a *KnowledgeReadAPI) requireFederationManager(
 		return uuid.Nil, false
 	}
 	if err := a.authorization.Check(
-		r.Context(), actorID, a.wikiID, governance.ActionManage, nil,
+		r.Context(), actorID, wikiIDFromRequest(r), governance.ActionManage, nil,
 	); err != nil {
 		a.writeError(w, r, err)
 		return uuid.Nil, false

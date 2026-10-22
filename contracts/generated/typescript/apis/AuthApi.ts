@@ -284,14 +284,6 @@ export class AuthApi extends runtime.BaseAPI {
 
         const headerParameters: runtime.HTTPHeaders = {};
 
-        if (this.configuration && this.configuration.accessToken) {
-            const token = this.configuration.accessToken;
-            const tokenString = await token("cliBearer", []);
-
-            if (tokenString) {
-                headerParameters["Authorization"] = `Bearer ${tokenString}`;
-            }
-        }
 
         let urlPath = `/api/v1/auth/session`;
 
@@ -471,7 +463,7 @@ export class AuthApi extends runtime.BaseAPI {
     }
 
     /**
-     * 用户名和邮箱均不区分大小写且全站唯一。首个本地账号获得管理员角色， 后续账号默认获得编辑者角色；注册默认关闭，部署方须通过 AUTH_REGISTRATION_ENABLED 显式开启。
+     * 用户名和邮箱均不区分大小写且全局唯一。每个账号会创建独立私有 Wiki， 并成为该 Wiki 的管理员；注册默认关闭，部署方须通过 AUTH_REGISTRATION_ENABLED 显式开启。
      * 注册本地账号并建立会话
      */
     async registerRaw(requestParameters: RegisterOperationRequest, initOverrides?: RequestInit | runtime.InitOverrideFunction): Promise<runtime.ApiResponse<AuthResult>> {
@@ -482,7 +474,7 @@ export class AuthApi extends runtime.BaseAPI {
     }
 
     /**
-     * 用户名和邮箱均不区分大小写且全站唯一。首个本地账号获得管理员角色， 后续账号默认获得编辑者角色；注册默认关闭，部署方须通过 AUTH_REGISTRATION_ENABLED 显式开启。
+     * 用户名和邮箱均不区分大小写且全局唯一。每个账号会创建独立私有 Wiki， 并成为该 Wiki 的管理员；注册默认关闭，部署方须通过 AUTH_REGISTRATION_ENABLED 显式开启。
      * 注册本地账号并建立会话
      */
     async register(requestParameters: RegisterOperationRequest, initOverrides?: RequestInit | runtime.InitOverrideFunction): Promise<AuthResult> {

@@ -1,6 +1,6 @@
 # 当前实现状态
 
-> 更新时间：2026-10-12
+> 更新时间：2026-10-21
 > 产品与能力审计依据：[整体设计方案](WikiDesignOnePage.md)
 
 ## 总体结论
@@ -21,9 +21,27 @@ PostgreSQL、Redis、RustFS、Meilisearch、API、Linux Worker 与 Next.js Web �
 跨页表格、恶意附件隔离、密码加密拒绝及 128/298 MiB 上传边界验收。另一个完全隔离的
 远端数据库/bucket/index/Redis DB 已执行
 149/149 OpenAPI operation handler 探针、核心成功工作流、治理、批量审核、导入、
-AI 配置和双用户协作 E2E。“实现完成”仍不等于“生产发布就绪”：目标规模容量、正式域名
+AI 配置和双会话协作 E2E。“实现完成”仍不等于“生产发布就绪”：目标规模容量、正式域名
 安全边界、账号恢复、备份恢复与人工可访问性等仍须验收。详见
 [待解决问题](OutstandingIssues.md)。
+
+## 2026-10-21 私人 Wiki 多用户隔离
+
+- 统一 Wiki 已替换为账号级私人 Wiki。注册事务原子创建 `wiki_site`、七个
+  Namespace、默认 ChangeTag、内置信息框、human Actor、admin 角色和首个 Session；
+  Session 与 CLI Principal 都携带 `wiki_id`、Wiki 名称和主 Namespace ID。
+- 除注册、登录、Session 查询、退出和 CLI 授权码兑换外，所有 `/api/v1` 路由都要求
+  已认证 Principal 和显式 Wiki。Page、Entity、Claim、Source、Citation、Component、
+  Dataset、Collection、Governance、Audit、AI 配置和 ImportJob 均按当前 Wiki 查询；
+  外部 UUID 命中其他 Wiki 时统一按 404 处理。
+- `source`、`component`、`change_tag` 和 `import_job` 已补齐 `wiki_id`；导入 Worker
+  从 Job 解析 Wiki，并以该 Wiki 选择 AI 运行时配置。数据库用复合外键禁止把 human
+  Actor 的角色授予其他 Wiki。
+- Web 在无 Session Cookie 时先跳转登录页，失效会话只显示登录提示，不渲染 Wiki
+  页眉、搜索、导航或正文。登录后页眉展示当前 Wiki 名称，人工 Proposal 模板使用
+  Session 返回的真实 Wiki/主 Namespace ID。
+- 本变更按预发布策略直接改写唯一初始化 Schema，不迁移旧统一 Wiki 数据。生产部署
+  必须先备份再重建空库，并重新注册账号、签发 CLI Token、配置每个 Wiki 的 AI 设置。
 
 ## 2026-10-08 宿主机部署入口
 
@@ -61,7 +79,7 @@ AI 配置和双用户协作 E2E。“实现完成”仍不等于“生产发布�
 | 投影与搜索 | Outbox 租约/重试/死信、链接/目录/锚点/章节/渲染/知识使用/References/相关推荐/组件依赖/图谱投影、可解释的链接+Collection+Entity 相关度、PostgreSQL fallback、Meilisearch 关键词/混合/语义检索 |
 | 规模与归档 | 章节懒加载、服务端可信 HTML 渲染、Revision 热冷分层与 S3 回源、Projection/Search 重建、容量基准命令 |
 | 协作 | Yjs WorkingDocument、持久增量 update、重连游标、普通发布与 AI 合并的 sequence CAS、未确认 update 幂等重发、自动 snapshot/compact、Block 级 Presence、三方合并与人工冲突决议；跨标签页离线恢复和多 API 实例广播仍待实现 |
-| 平台 | 本地账号/Session/RBAC、管理员用户角色授予/撤销与注册账号删除、一次性授权码与可撤销/可清理 Agent CLI Bearer Token、162 个 OpenAPI operation 和协作 WebSocket 的 JSON + 人类命令双模式 CLI、Redis 限流、安全头、OTel/Prometheus、备份恢复、Doctor、多 Wiki 读取隔离、生产部署清单 |
+| 平台 | 每账号私人 Wiki、本地账号/Session/RBAC、一次性授权码与可撤销/可清理 Agent CLI Bearer Token、162 个 OpenAPI operation 和协作 WebSocket 的 JSON + 人类命令双模式 CLI、Redis 限流、安全头、OTel/Prometheus、备份恢复、Doctor、生产部署清单 |
 
 ## 关键不变量
 
@@ -71,9 +89,8 @@ AI 配置和双用户协作 E2E。“实现完成”仍不等于“生产发布�
   投影可删除并由 Outbox 重建。
 - Proposal 的客户端合并只提供交互预览；服务端会按权威 AST 重新计算并拒绝不一致
   结果。24 种 Operation 的 Apply/rollback 都有领域语义。
-- Page、History、Knowledge 和 Projection 的 UUID 读取路径校验当前 Wiki，避免跨
-  Wiki ID 枚举泄漏；Source/Citation/Component 等共享目录的 Page 使用结果也按
-  当前 Wiki 过滤。
+- Page、History、Knowledge、Evidence、Component、Collection、Dataset、Governance
+  和 Projection 的 UUID 读取路径校验当前 Wiki，避免跨 Wiki ID 枚举泄漏。
 - Claim 值按 Property 的完整 JSON Schema 校验；Entity label/alias 的语言、长度和
   alias type 同时有服务层与数据库约束；当前内置 Entity 属性禁止 subject=target，
   导入过滤、领域服务和数据库 CHECK 三层兜底。
@@ -516,7 +533,7 @@ outlines。References/Related 是 Current Revision
   `.invalid` 模型地址的 AI 连通性检查按契约返回 502 外，没有非预期 5xx；页面、
   Asset、Source/Citation、Dataset、Component、Collection、Entity/Claim/联邦、
   Proposal/Review/Apply、BulkReview、审计/保护/回滚、Import cancel/retry/upload、
-  AI 配置脱敏、Revision 归档和双用户协作成功工作流均通过；
+  AI 配置脱敏、Revision 归档和双会话协作成功工作流均通过；
 - Doctor 健康退出（0 error/critical；仅报告两条刻意未附 Citation 的测试 Claim
   证据警告）；
 - gitleaks v8.28.0。

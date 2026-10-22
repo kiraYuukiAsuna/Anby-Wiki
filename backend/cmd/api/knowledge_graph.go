@@ -85,7 +85,7 @@ func (a *KnowledgeReadAPI) getEntityGraph(
 	}
 	result, err := a.entityGraph.Query(
 		r.Context(), projection.EntityGraphQuery{
-			WikiID: a.wikiID, RootID: entityID,
+			WikiID: wikiIDFromRequest(r), RootID: entityID,
 			Direction:   r.URL.Query().Get("direction"),
 			PropertyKey: r.URL.Query().Get("property_key"),
 			Depth:       depth, MaxNodes: maxNodes,
@@ -141,12 +141,12 @@ func (a *KnowledgeReadAPI) rebuildEntityGraph(
 		return
 	}
 	if err := a.authorization.Check(
-		r.Context(), actorID, a.wikiID, governance.ActionManage, nil,
+		r.Context(), actorID, wikiIDFromRequest(r), governance.ActionManage, nil,
 	); err != nil {
 		a.writeError(w, r, err)
 		return
 	}
-	result, err := a.entityGraph.RebuildWiki(r.Context(), a.wikiID)
+	result, err := a.entityGraph.RebuildWiki(r.Context(), wikiIDFromRequest(r))
 	if err != nil {
 		a.writeError(w, r, err)
 		return

@@ -311,15 +311,18 @@ func (s *Service) ResolveCLIToken(
 	hash := tokenHash(token)
 	var principal Principal
 	err := s.pool.QueryRow(ctx, `SELECT
-		t.id,a.id,a.actor_type,a.display_name
+		t.id,a.id,a.wiki_id,w.name,n.id,a.actor_type,a.display_name
 		FROM cli_access_token t
 		JOIN actor a ON a.id=t.actor_id
+		JOIN wiki_site w ON w.id=a.wiki_id
+		JOIN namespace n ON n.wiki_id=a.wiki_id AND n.namespace_key='main'
 		LEFT JOIN local_account la ON la.actor_id=a.id
 		WHERE t.token_hash=$1 AND t.revoked_at IS NULL AND t.expires_at>now()
 		  AND a.status='active' AND (la.id IS NULL OR la.status='active')`,
 		hash[:],
 	).Scan(
-		&principal.CredentialID, &principal.ActorID,
+		&principal.CredentialID, &principal.ActorID, &principal.WikiID,
+		&principal.WikiName, &principal.MainNamespaceID,
 		&principal.ActorType, &principal.DisplayName,
 	)
 	if errors.Is(err, pgx.ErrNoRows) {

@@ -14,11 +14,10 @@ import (
 
 type DatasetAPI struct {
 	service *dataset.Service
-	wikiID  uuid.UUID
 }
 
-func NewDatasetAPI(service *dataset.Service, wikiID uuid.UUID) *DatasetAPI {
-	return &DatasetAPI{service: service, wikiID: wikiID}
+func NewDatasetAPI(service *dataset.Service) *DatasetAPI {
+	return &DatasetAPI{service: service}
 }
 
 type createDatasetRequest struct {
@@ -32,7 +31,7 @@ func (a *DatasetAPI) list(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	result, err := a.service.ListDatasets(
-		r.Context(), a.wikiID, r.URL.Query().Get("cursor"), limit,
+		r.Context(), wikiIDFromRequest(r), r.URL.Query().Get("cursor"), limit,
 	)
 	if err != nil {
 		datasetError(w, r, err)
@@ -51,7 +50,7 @@ func (a *DatasetAPI) create(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	value, err := a.service.CreateDataset(r.Context(), dataset.CreateDatasetParams{
-		WikiID: a.wikiID, Name: request.Name, Schema: request.Schema, ActorID: actorID,
+		WikiID: wikiIDFromRequest(r), Name: request.Name, Schema: request.Schema, ActorID: actorID,
 	})
 	if err != nil {
 		datasetError(w, r, err)
@@ -65,7 +64,7 @@ func (a *DatasetAPI) get(w http.ResponseWriter, r *http.Request) {
 	if !ok {
 		return
 	}
-	value, err := a.service.GetDataset(r.Context(), a.wikiID, id)
+	value, err := a.service.GetDataset(r.Context(), wikiIDFromRequest(r), id)
 	if err != nil {
 		datasetError(w, r, err)
 		return
@@ -88,7 +87,7 @@ func (a *DatasetAPI) listRecords(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	result, err := a.service.ListRecords(
-		r.Context(), a.wikiID, datasetID, r.URL.Query().Get("cursor"), limit,
+		r.Context(), wikiIDFromRequest(r), datasetID, r.URL.Query().Get("cursor"), limit,
 	)
 	if err != nil {
 		datasetError(w, r, err)
@@ -111,7 +110,7 @@ func (a *DatasetAPI) createRecord(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	value, err := a.service.CreateRecord(r.Context(), dataset.CreateRecordParams{
-		WikiID: a.wikiID, DatasetID: datasetID, EntityID: request.EntityID,
+		WikiID: wikiIDFromRequest(r), DatasetID: datasetID, EntityID: request.EntityID,
 		Values: request.Values, ActorID: actorID,
 	})
 	if err != nil {
@@ -135,7 +134,7 @@ func (a *DatasetAPI) updateRecord(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	value, err := a.service.UpdateRecord(
-		r.Context(), a.wikiID, recordID, actorID, request.EntityID, request.Values,
+		r.Context(), wikiIDFromRequest(r), recordID, actorID, request.EntityID, request.Values,
 	)
 	if err != nil {
 		datasetError(w, r, err)
@@ -155,7 +154,7 @@ func (a *DatasetAPI) listViews(w http.ResponseWriter, r *http.Request) {
 	if !ok {
 		return
 	}
-	result, err := a.service.ListViews(r.Context(), a.wikiID, datasetID)
+	result, err := a.service.ListViews(r.Context(), wikiIDFromRequest(r), datasetID)
 	if err != nil {
 		datasetError(w, r, err)
 		return
@@ -177,7 +176,7 @@ func (a *DatasetAPI) createView(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	value, err := a.service.CreateView(r.Context(), dataset.CreateViewParams{
-		WikiID: a.wikiID, DatasetID: datasetID, ViewType: request.ViewType,
+		WikiID: wikiIDFromRequest(r), DatasetID: datasetID, ViewType: request.ViewType,
 		Name: request.Name, Config: request.Config, ActorID: actorID,
 	})
 	if err != nil {
@@ -192,7 +191,7 @@ func (a *DatasetAPI) getView(w http.ResponseWriter, r *http.Request) {
 	if !ok {
 		return
 	}
-	value, err := a.service.GetView(r.Context(), a.wikiID, viewID)
+	value, err := a.service.GetView(r.Context(), wikiIDFromRequest(r), viewID)
 	if err != nil {
 		datasetError(w, r, err)
 		return
@@ -210,7 +209,7 @@ func (a *DatasetAPI) queryView(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	result, err := a.service.QueryView(
-		r.Context(), a.wikiID, viewID, r.URL.Query().Get("cursor"), limit, nil,
+		r.Context(), wikiIDFromRequest(r), viewID, r.URL.Query().Get("cursor"), limit, nil,
 	)
 	if err != nil {
 		datasetError(w, r, err)
@@ -237,7 +236,7 @@ func (a *DatasetAPI) queryViewWithFilter(w http.ResponseWriter, r *http.Request)
 		return
 	}
 	result, err := a.service.QueryView(
-		r.Context(), a.wikiID, viewID, r.URL.Query().Get("cursor"), limit,
+		r.Context(), wikiIDFromRequest(r), viewID, r.URL.Query().Get("cursor"), limit,
 		request.Filter,
 	)
 	if err != nil {
@@ -252,7 +251,7 @@ func (a *DatasetAPI) getPublicForm(w http.ResponseWriter, r *http.Request) {
 	if !ok {
 		return
 	}
-	result, err := a.service.GetPublicForm(r.Context(), a.wikiID, viewID)
+	result, err := a.service.GetPublicForm(r.Context(), wikiIDFromRequest(r), viewID)
 	if err != nil {
 		datasetError(w, r, err)
 		return
@@ -274,7 +273,7 @@ func (a *DatasetAPI) submitPublicForm(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	result, err := a.service.SubmitPublicForm(
-		r.Context(), a.wikiID, viewID, request.Values,
+		r.Context(), wikiIDFromRequest(r), viewID, request.Values,
 	)
 	if err != nil {
 		datasetError(w, r, err)

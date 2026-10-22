@@ -32,7 +32,7 @@ func (r *Repository) q(tx pgx.Tx) db.Querier {
 
 func scanComponent(row pgx.Row) (*Component, error) {
 	var value Component
-	if err := row.Scan(&value.ID, &value.ComponentKey, &value.Name,
+	if err := row.Scan(&value.ID, &value.WikiID, &value.ComponentKey, &value.Name,
 		&value.CreatedBy, &value.CreatedAt, &value.UpdatedAt); err != nil {
 		return nil, err
 	}
@@ -51,9 +51,9 @@ func scanVersion(row pgx.Row) (*Version, error) {
 
 func (r *Repository) Insert(ctx context.Context, tx pgx.Tx, value *Component) error {
 	err := r.q(tx).QueryRow(ctx, `INSERT INTO component
-		(id,component_key,name,created_by) VALUES ($1,$2,$3,$4)
+		(id,wiki_id,component_key,name,created_by) VALUES ($1,$2,$3,$4,$5)
 		RETURNING created_at,updated_at`,
-		value.ID, value.ComponentKey, value.Name, value.CreatedBy).
+		value.ID, value.WikiID, value.ComponentKey, value.Name, value.CreatedBy).
 		Scan(&value.CreatedAt, &value.UpdatedAt)
 	if err != nil {
 		var pgErr *pgconn.PgError
@@ -65,14 +65,58 @@ func (r *Repository) Insert(ctx context.Context, tx pgx.Tx, value *Component) er
 	return nil
 }
 
-func (r *Repository) Get(ctx context.Context, tx pgx.Tx, id uuid.UUID) (*Component, error) {
+func (r *Repository) Get(
+	ctx context.Context,
+	tx pgx.Tx,
+	wikiID, id uuid.UUID,
+) (*Component, error) {
 	value, err := scanComponent(r.q(tx).QueryRow(ctx, `SELECT
-		id,component_key,name,created_by,created_at,updated_at
-		FROM component WHERE id=$1`, id))
+		id,wiki_id,component_key,name,created_by,created_at,updated_at
+		FROM component WHERE wiki_id=$1 AND id=$2`, wikiID, id))
 	if errors.Is(err, pgx.ErrNoRows) {
 		return nil, fmt.Errorf("%w: id=%s", ErrNotFound, id)
 	}
 	return value, err
+}
+
+func (r *Repository) GetPublishedByKey(
+	ctx context.Context,
+	wikiID uuid.UUID,
+	key string,
+) (*Component, *Version, error) {
+	componentValue, err := scanComponent(r.pool.QueryRow(ctx, `SELECT
+		id,wiki_id,component_key,name,created_by,created_at,updated_at
+		FROM component WHERE wiki_id=$1 AND component_key=$2`,
+		wikiID, key))
+	if errors.Is(err, pgx.ErrNoRows) {
+		return nil, nil, fmt.Errorf("%w: key=%s", ErrNotFound, key)
+	}
+	if err != nil {
+		return nil, nil, err
+	}
+	version, err := scanVersion(r.pool.QueryRow(ctx, `SELECT
+		component_id,version,props_schema_json,renderer_ref,status,created_by,
+		created_at,published_at
+		FROM component_version
+		WHERE component_id=$1 AND status='published'
+		ORDER BY version DESC LIMIT 1`, componentValue.ID))
+	if errors.Is(err, pgx.ErrNoRows) {
+		return nil, nil, ErrVersionNotFound
+	}
+	return componentValue, version, err
+}
+
+func (r *Repository) EntityWikiID(
+	ctx context.Context,
+	entityID uuid.UUID,
+) (uuid.UUID, error) {
+	var wikiID uuid.UUID
+	err := r.pool.QueryRow(ctx, `SELECT wiki_id FROM entity WHERE id=$1`, entityID).
+		Scan(&wikiID)
+	if errors.Is(err, pgx.ErrNoRows) {
+		return uuid.Nil, ErrNotFound
+	}
+	return wikiID, err
 }
 
 type componentCursor struct {
@@ -96,7 +140,7 @@ func decodeComponentCursor(raw string) (componentCursor, error) {
 }
 
 func (r *Repository) List(
-	ctx context.Context, cursor string, limit int,
+	ctx context.Context, wikiID uuid.UUID, cursor string, limit int,
 ) (*ComponentPage, error) {
 	var afterTime *time.Time
 	afterID := uuid.Nil
@@ -108,11 +152,12 @@ func (r *Repository) List(
 		afterTime, afterID = &after.CreatedAt, after.ID
 	}
 	rows, err := r.pool.Query(ctx, `SELECT
-		id,component_key,name,created_by,created_at,updated_at
+		id,wiki_id,component_key,name,created_by,created_at,updated_at
 		FROM component
-		WHERE ($1::timestamptz IS NULL OR (created_at,id)<($1,$2))
-		ORDER BY created_at DESC,id DESC LIMIT $3`,
-		afterTime, afterID, limit+1)
+		WHERE wiki_id=$1
+		  AND ($2::timestamptz IS NULL OR (created_at,id)<($2,$3))
+		ORDER BY created_at DESC,id DESC LIMIT $4`,
+		wikiID, afterTime, afterID, limit+1)
 	if err != nil {
 		return nil, fmt.Errorf("component: list: %w", err)
 	}
@@ -139,10 +184,14 @@ func (r *Repository) List(
 	return result, nil
 }
 
-func (r *Repository) Lock(ctx context.Context, tx pgx.Tx, id uuid.UUID) (*Component, error) {
+func (r *Repository) Lock(
+	ctx context.Context,
+	tx pgx.Tx,
+	wikiID, id uuid.UUID,
+) (*Component, error) {
 	value, err := scanComponent(tx.QueryRow(ctx, `SELECT
-		id,component_key,name,created_by,created_at,updated_at
-		FROM component WHERE id=$1 FOR UPDATE`, id))
+		id,wiki_id,component_key,name,created_by,created_at,updated_at
+		FROM component WHERE wiki_id=$1 AND id=$2 FOR UPDATE`, wikiID, id))
 	if errors.Is(err, pgx.ErrNoRows) {
 		return nil, fmt.Errorf("%w: id=%s", ErrNotFound, id)
 	}
@@ -181,9 +230,9 @@ func (r *Repository) GetVersion(
 }
 
 func (r *Repository) ListVersions(
-	ctx context.Context, componentID uuid.UUID,
+	ctx context.Context, wikiID, componentID uuid.UUID,
 ) (*VersionList, error) {
-	if _, err := r.Get(ctx, nil, componentID); err != nil {
+	if _, err := r.Get(ctx, nil, wikiID, componentID); err != nil {
 		return nil, err
 	}
 	rows, err := r.pool.Query(ctx, `SELECT

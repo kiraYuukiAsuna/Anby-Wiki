@@ -65,6 +65,7 @@ var stageProgress = map[string]int{
 
 type Job struct {
 	ID                     uuid.UUID       `json:"id"`
+	WikiID                 uuid.UUID       `json:"wiki_id"`
 	JobType                string          `json:"job_type"`
 	Status                 string          `json:"status"`
 	InitiatedBy            uuid.UUID       `json:"initiated_by"`

@@ -165,7 +165,7 @@ export class PagesApi extends runtime.BaseAPI {
     }
 
     /**
-     * 在默认站点（wiki 固定为种子里 site_key=\'default\' 的站点）创建页面。 标题经服务端规范化（NFC、大小写折叠、空白折叠），与同 wiki+namespace 的 活页面或别名冲突时返回 409。 Actor 身份由服务端 session cookie 解析；客户端不能声明 Actor。
+     * 在当前登录账号的私有 Wiki 中创建页面。 标题经服务端规范化（NFC、大小写折叠、空白折叠），与同 wiki+namespace 的 活页面或别名冲突时返回 409。 Actor 身份由服务端 session cookie 解析；客户端不能声明 Actor。
      * 创建页面
      */
     async createPageRaw(requestParameters: CreatePageOperationRequest, initOverrides?: RequestInit | runtime.InitOverrideFunction): Promise<runtime.ApiResponse<Page>> {
@@ -176,7 +176,7 @@ export class PagesApi extends runtime.BaseAPI {
     }
 
     /**
-     * 在默认站点（wiki 固定为种子里 site_key=\'default\' 的站点）创建页面。 标题经服务端规范化（NFC、大小写折叠、空白折叠），与同 wiki+namespace 的 活页面或别名冲突时返回 409。 Actor 身份由服务端 session cookie 解析；客户端不能声明 Actor。
+     * 在当前登录账号的私有 Wiki 中创建页面。 标题经服务端规范化（NFC、大小写折叠、空白折叠），与同 wiki+namespace 的 活页面或别名冲突时返回 409。 Actor 身份由服务端 session cookie 解析；客户端不能声明 Actor。
      * 创建页面
      */
     async createPage(requestParameters: CreatePageOperationRequest, initOverrides?: RequestInit | runtime.InitOverrideFunction): Promise<Page> {
@@ -449,6 +449,14 @@ export class PagesApi extends runtime.BaseAPI {
 
         const headerParameters: runtime.HTTPHeaders = {};
 
+        if (this.configuration && this.configuration.accessToken) {
+            const token = this.configuration.accessToken;
+            const tokenString = await token("cliBearer", []);
+
+            if (tokenString) {
+                headerParameters["Authorization"] = `Bearer ${tokenString}`;
+            }
+        }
 
         let urlPath = `/api/v1/pages/{id}/redirect`;
         urlPath = urlPath.replace('{id}', encodeURIComponent(String(requestParameters['id'])));
@@ -494,6 +502,14 @@ export class PagesApi extends runtime.BaseAPI {
 
         const headerParameters: runtime.HTTPHeaders = {};
 
+        if (this.configuration && this.configuration.accessToken) {
+            const token = this.configuration.accessToken;
+            const tokenString = await token("cliBearer", []);
+
+            if (tokenString) {
+                headerParameters["Authorization"] = `Bearer ${tokenString}`;
+            }
+        }
 
         let urlPath = `/api/v1/pages/{id}/block-redirects`;
         urlPath = urlPath.replace('{id}', encodeURIComponent(String(requestParameters['id'])));

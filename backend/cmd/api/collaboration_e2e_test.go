@@ -64,13 +64,24 @@ func TestCollaborationE2E(t *testing.T) {
 
 	runID := fmt.Sprintf("%d", time.Now().UnixNano())
 	firstUsername := "collab_e2e_a_" + runID
-	secondUsername := "collab_e2e_b_" + runID
 	firstClient, firstActor := registerE2EUser(
 		t, baseURL, firstUsername, firstUsername+"@example.invalid", password,
 	)
-	secondClient, secondActor := registerE2EUser(
-		t, baseURL, secondUsername, secondUsername+"@example.invalid", password,
+	secondJar, err := cookiejar.New(nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	secondClient := &http.Client{
+		Jar: secondJar, Timeout: collaborationE2ETimeout,
+	}
+	secondLogin := postE2EJSON[e2eAuthResult](
+		t, secondClient, baseURL+"/api/v1/auth/login",
+		map[string]any{"identifier": firstUsername, "password": password},
+		http.StatusOK,
 	)
+	if secondLogin.ActorID != firstActor {
+		t.Fatalf("second client actor=%s want=%s", secondLogin.ActorID, firstActor)
+	}
 
 	page := postE2EJSON[e2ePage](t, firstClient, baseURL+"/api/v1/pages", map[string]any{
 		"namespace":     "main",
@@ -111,7 +122,7 @@ func TestCollaborationE2E(t *testing.T) {
 	if presence.ActorID != firstActor {
 		t.Fatalf("presence actor = %s, want %s", presence.ActorID, firstActor)
 	}
-	if presence.ActorID == secondActor || presence.Cursor["selection"] != "text" {
+	if presence.Cursor["selection"] != "text" {
 		t.Fatalf("unexpected presence: %#v", presence)
 	}
 

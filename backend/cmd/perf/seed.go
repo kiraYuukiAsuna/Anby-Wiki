@@ -22,6 +22,7 @@ var (
 	defaultWikiID      = uuid.MustParse("00000000-0000-7000-8000-000000000001")
 	mainNamespaceID    = uuid.MustParse("00000000-0000-7000-8000-000000000101")
 	defaultSystemActor = uuid.MustParse("00000000-0000-7000-8000-000000000201")
+	performanceOwner   = uuid.MustParse("00000000-0000-7000-8000-000000000202")
 )
 
 type fixture struct {
@@ -31,6 +32,33 @@ type fixture struct {
 }
 
 func seed(ctx context.Context, pool *pgxpool.Pool, cfg config) ([]fixture, error) {
+	tx, err := pool.Begin(ctx)
+	if err != nil {
+		return nil, fmt.Errorf("seed performance wiki: %w", err)
+	}
+	defer func() { _ = tx.Rollback(ctx) }()
+	if _, err := tx.Exec(ctx, `INSERT INTO wiki_site
+		(id,site_key,name,default_language,owner_actor_id)
+		VALUES ($1,'performance','Performance Wiki','zh-Hans',$2)
+		ON CONFLICT (id) DO NOTHING`, defaultWikiID, performanceOwner); err != nil {
+		return nil, fmt.Errorf("seed performance wiki: %w", err)
+	}
+	if _, err := tx.Exec(ctx, `INSERT INTO actor
+		(id,actor_type,wiki_id,display_name,status)
+		VALUES ($1,'human',$2,'Performance owner','active')
+		ON CONFLICT (id) DO NOTHING`, performanceOwner, defaultWikiID); err != nil {
+		return nil, fmt.Errorf("seed performance owner: %w", err)
+	}
+	if _, err := tx.Exec(ctx, `INSERT INTO namespace
+		(id,wiki_id,namespace_key,canonical_name,display_name,is_content)
+		VALUES ($1,$2,'main','Main','条目',true)
+		ON CONFLICT (id) DO NOTHING`, mainNamespaceID, defaultWikiID); err != nil {
+		return nil, fmt.Errorf("seed performance namespace: %w", err)
+	}
+	if err := tx.Commit(ctx); err != nil {
+		return nil, fmt.Errorf("commit performance wiki: %w", err)
+	}
+
 	pages := page.NewService(page.NewRepository(pool), db.NewTxManager(pool), id.NewGenerator())
 	search := wikisearch.NewPostgresAdapter(pool)
 	fixtures := make([]fixture, cfg.Pages)
@@ -69,7 +97,7 @@ func seed(ctx context.Context, pool *pgxpool.Pool, cfg config) ([]fixture, error
 	if err := seedRelations(ctx, pool, fixtures); err != nil {
 		return nil, err
 	}
-	_, err := pool.Exec(ctx, `ANALYZE`)
+	_, err = pool.Exec(ctx, `ANALYZE`)
 	return fixtures, err
 }
 

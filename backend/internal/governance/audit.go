@@ -78,23 +78,25 @@ type auditCursor struct {
 }
 
 type AuditService struct {
-	repo   *Repository
-	auth   *AuthorizationService
-	txm    *db.TxManager
-	ids    *id.Generator
-	wikiID uuid.UUID
+	repo *Repository
+	auth *AuthorizationService
+	txm  *db.TxManager
+	ids  *id.Generator
 }
 
 func NewAuditService(
 	repo *Repository, auth *AuthorizationService, txm *db.TxManager,
-	ids *id.Generator, wikiID uuid.UUID,
+	ids *id.Generator,
 ) *AuditService {
-	return &AuditService{repo: repo, auth: auth, txm: txm, ids: ids, wikiID: wikiID}
+	return &AuditService{repo: repo, auth: auth, txm: txm, ids: ids}
 }
 
-func (s *AuditService) ListTags(ctx context.Context) ([]ChangeTag, error) {
+func (s *AuditService) ListTags(
+	ctx context.Context,
+	wikiID uuid.UUID,
+) ([]ChangeTag, error) {
 	rows, err := s.repo.q(nil).Query(ctx, `SELECT id,tag_key,name,description,created_at
-		FROM change_tag ORDER BY tag_key,id`)
+		FROM change_tag WHERE wiki_id=$1 ORDER BY tag_key,id`, wikiID)
 	if err != nil {
 		return nil, err
 	}
@@ -111,7 +113,9 @@ func (s *AuditService) ListTags(ctx context.Context) ([]ChangeTag, error) {
 }
 
 func (s *AuditService) CreateTag(
-	ctx context.Context, actorID uuid.UUID, key, name, description string,
+	ctx context.Context,
+	wikiID, actorID uuid.UUID,
+	key, name, description string,
 ) (*ChangeTag, error) {
 	key = strings.TrimSpace(key)
 	name = strings.TrimSpace(name)
@@ -122,7 +126,7 @@ func (s *AuditService) CreateTag(
 	}
 	var result *ChangeTag
 	err := s.txm.InTx(ctx, func(tx pgx.Tx) error {
-		if err := s.auth.CheckTx(ctx, tx, actorID, s.wikiID, ActionManage, nil); err != nil {
+		if err := s.auth.CheckTx(ctx, tx, actorID, wikiID, ActionManage, nil); err != nil {
 			return err
 		}
 		tagID, err := s.ids.New()
@@ -130,9 +134,10 @@ func (s *AuditService) CreateTag(
 			return err
 		}
 		tag := &ChangeTag{ID: tagID, TagKey: key, Name: name, Description: description}
-		if err := tx.QueryRow(ctx, `INSERT INTO change_tag (id,tag_key,name,description)
-			VALUES ($1,$2,$3,$4) RETURNING created_at`,
-			tag.ID, tag.TagKey, tag.Name, tag.Description,
+		if err := tx.QueryRow(ctx, `INSERT INTO change_tag
+			(id,wiki_id,tag_key,name,description)
+			VALUES ($1,$2,$3,$4,$5) RETURNING created_at`,
+			tag.ID, wikiID, tag.TagKey, tag.Name, tag.Description,
 		).Scan(&tag.CreatedAt); err != nil {
 			var pgErr *pgconn.PgError
 			if errors.As(err, &pgErr) && pgErr.Code == "23505" {
@@ -151,7 +156,10 @@ func (s *AuditService) CreateTag(
 }
 
 func (s *AuditService) AssignTag(
-	ctx context.Context, actorID, tagID uuid.UUID, targetType string, targetID uuid.UUID,
+	ctx context.Context,
+	wikiID, actorID, tagID uuid.UUID,
+	targetType string,
+	targetID uuid.UUID,
 ) (bool, error) {
 	if tagID == uuid.Nil || targetID == uuid.Nil {
 		return false, ErrInvalidChangeTag
@@ -164,18 +172,19 @@ func (s *AuditService) AssignTag(
 	inserted := false
 	err := s.txm.InTx(ctx, func(tx pgx.Tx) error {
 		var tagExists bool
-		if err := tx.QueryRow(ctx, `SELECT EXISTS(SELECT 1 FROM change_tag WHERE id=$1)`,
-			tagID).Scan(&tagExists); err != nil {
+		if err := tx.QueryRow(ctx, `SELECT EXISTS(
+			SELECT 1 FROM change_tag WHERE id=$1 AND wiki_id=$2
+		)`, tagID, wikiID).Scan(&tagExists); err != nil {
 			return err
 		}
 		if !tagExists {
 			return ErrChangeTagNotFound
 		}
-		pageID, err := s.validateTagTarget(ctx, tx, targetType, targetID)
+		pageID, err := s.validateTagTarget(ctx, tx, wikiID, targetType, targetID)
 		if err != nil {
 			return err
 		}
-		if err := s.auth.CheckTx(ctx, tx, actorID, s.wikiID, ActionReview, pageID); err != nil {
+		if err := s.auth.CheckTx(ctx, tx, actorID, wikiID, ActionReview, pageID); err != nil {
 			return err
 		}
 		var revisionID, proposalID, auditID *uuid.UUID
@@ -205,20 +214,25 @@ func (s *AuditService) AssignTag(
 }
 
 func (s *AuditService) validateTagTarget(
-	ctx context.Context, tx pgx.Tx, targetType string, targetID uuid.UUID,
+	ctx context.Context,
+	tx pgx.Tx,
+	wikiID uuid.UUID,
+	targetType string,
+	targetID uuid.UUID,
 ) (*uuid.UUID, error) {
 	switch targetType {
 	case TagTargetRevision:
-		var pageID, wikiID uuid.UUID
+		var pageID, targetWikiID uuid.UUID
 		err := tx.QueryRow(ctx, `SELECT r.page_id,p.wiki_id FROM revision r
-			JOIN page p ON p.id=r.page_id WHERE r.id=$1`, targetID).Scan(&pageID, &wikiID)
+			JOIN page p ON p.id=r.page_id WHERE r.id=$1`, targetID).
+			Scan(&pageID, &targetWikiID)
 		if errors.Is(err, pgx.ErrNoRows) {
 			return nil, ErrAuditTargetNotFound
 		}
 		if err != nil {
 			return nil, err
 		}
-		if wikiID != s.wikiID {
+		if targetWikiID != wikiID {
 			return nil, ErrAuditTargetNotFound
 		}
 		return &pageID, nil
@@ -227,7 +241,7 @@ func (s *AuditService) validateTagTarget(
 		if err != nil {
 			return nil, err
 		}
-		if wikiIDForProposal(ctx, tx, s.repo, proposal) != s.wikiID {
+		if wikiIDForProposal(ctx, tx, s.repo, proposal) != wikiID {
 			return nil, ErrProposalNotFound
 		}
 		if proposal.TargetType == TargetPage {
@@ -235,7 +249,7 @@ func (s *AuditService) validateTagTarget(
 		}
 		return nil, nil
 	case TagTargetAudit:
-		belongs, err := s.auditEventBelongsToWiki(ctx, tx, targetID)
+		belongs, err := s.auditEventBelongsToWiki(ctx, tx, wikiID, targetID)
 		if err != nil {
 			return nil, err
 		}
@@ -249,7 +263,9 @@ func (s *AuditService) validateTagTarget(
 }
 
 func (s *AuditService) auditEventBelongsToWiki(
-	ctx context.Context, tx pgx.Tx, eventID uuid.UUID,
+	ctx context.Context,
+	tx pgx.Tx,
+	wikiID, eventID uuid.UUID,
 ) (bool, error) {
 	visited := map[uuid.UUID]bool{}
 	for hops := 0; hops < 8; hops++ {
@@ -267,48 +283,58 @@ func (s *AuditService) auditEventBelongsToWiki(
 		if err != nil {
 			return false, err
 		}
-		var wikiID uuid.UUID
+		var aggregateWikiID uuid.UUID
 		switch aggregateType {
 		case "page":
-			err = tx.QueryRow(ctx, `SELECT wiki_id FROM page WHERE id=$1`, aggregateID).Scan(&wikiID)
+			err = tx.QueryRow(ctx, `SELECT wiki_id FROM page WHERE id=$1`, aggregateID).
+				Scan(&aggregateWikiID)
 		case "revision":
 			err = tx.QueryRow(ctx, `SELECT p.wiki_id FROM revision r
-				JOIN page p ON p.id=r.page_id WHERE r.id=$1`, aggregateID).Scan(&wikiID)
+				JOIN page p ON p.id=r.page_id WHERE r.id=$1`, aggregateID).
+				Scan(&aggregateWikiID)
 		case "working_document":
 			err = tx.QueryRow(ctx, `SELECT p.wiki_id FROM working_document wd
-				JOIN page p ON p.id=wd.page_id WHERE wd.id=$1`, aggregateID).Scan(&wikiID)
+				JOIN page p ON p.id=wd.page_id WHERE wd.id=$1`, aggregateID).
+				Scan(&aggregateWikiID)
 		case "entity":
-			err = tx.QueryRow(ctx, `SELECT wiki_id FROM entity WHERE id=$1`, aggregateID).Scan(&wikiID)
+			err = tx.QueryRow(ctx, `SELECT wiki_id FROM entity WHERE id=$1`, aggregateID).
+				Scan(&aggregateWikiID)
 		case "claim":
 			err = tx.QueryRow(ctx, `SELECT e.wiki_id FROM claim c
-				JOIN entity e ON e.id=c.subject_entity_id WHERE c.id=$1`, aggregateID).Scan(&wikiID)
+				JOIN entity e ON e.id=c.subject_entity_id WHERE c.id=$1`, aggregateID).
+				Scan(&aggregateWikiID)
 		case "entity_merge":
 			err = tx.QueryRow(ctx, `SELECT e.wiki_id FROM entity_merge em
-				JOIN entity e ON e.id=em.source_entity_id WHERE em.id=$1`, aggregateID).Scan(&wikiID)
+				JOIN entity e ON e.id=em.source_entity_id WHERE em.id=$1`, aggregateID).
+				Scan(&aggregateWikiID)
 		case "collection":
 			err = tx.QueryRow(
 				ctx, `SELECT wiki_id FROM collection WHERE id=$1`,
 				aggregateID,
-			).Scan(&wikiID)
+			).Scan(&aggregateWikiID)
+		case "actor":
+			err = tx.QueryRow(
+				ctx, `SELECT wiki_id FROM actor WHERE id=$1`,
+				aggregateID,
+			).Scan(&aggregateWikiID)
 		case "page_protection":
 			err = tx.QueryRow(ctx, `SELECT COALESCE(p.wiki_id,n.wiki_id)
 				FROM page_protection pp
 				LEFT JOIN page p ON p.id=pp.page_id
 				LEFT JOIN namespace n ON n.id=pp.namespace_id
-				WHERE pp.id=$1`, aggregateID).Scan(&wikiID)
+				WHERE pp.id=$1`, aggregateID).Scan(&aggregateWikiID)
 		case "proposal":
 			proposal, proposalErr := s.repo.GetProposal(ctx, tx, aggregateID)
 			if proposalErr != nil {
 				return false, nil
 			}
-			return wikiIDForProposal(ctx, tx, s.repo, proposal) == s.wikiID, nil
+			return wikiIDForProposal(ctx, tx, s.repo, proposal) == wikiID, nil
 		case "audit_event":
 			eventID = aggregateID
 			continue
 		case "change_tag":
-			// Tags are intentionally global in the design and may be viewed by
-			// reviewers in every Wiki.
-			return true, nil
+			err = tx.QueryRow(ctx, `SELECT wiki_id FROM change_tag WHERE id=$1`, aggregateID).
+				Scan(&aggregateWikiID)
 		default:
 			return false, nil
 		}
@@ -318,15 +344,17 @@ func (s *AuditService) auditEventBelongsToWiki(
 		if err != nil {
 			return false, err
 		}
-		return wikiID == s.wikiID, nil
+		return aggregateWikiID == wikiID, nil
 	}
 	return false, nil
 }
 
 func (s *AuditService) List(
-	ctx context.Context, actorID uuid.UUID, filter AuditListFilter,
+	ctx context.Context,
+	wikiID, actorID uuid.UUID,
+	filter AuditListFilter,
 ) (*AuditEventPage, error) {
-	if err := s.auth.Check(ctx, actorID, s.wikiID, ActionReview, nil); err != nil {
+	if err := s.auth.Check(ctx, actorID, wikiID, ActionReview, nil); err != nil {
 		return nil, err
 	}
 	filter.EventType = strings.TrimSpace(filter.EventType)
@@ -364,7 +392,7 @@ func (s *AuditService) List(
 				) ORDER BY ct.tag_key,ct.id)
 				FROM change_tag_assignment cta
 				JOIN change_tag ct ON ct.id=cta.tag_id
-				WHERE cta.audit_event_id=ae.id
+				WHERE cta.audit_event_id=ae.id AND ct.wiki_id=$7
 			),'[]'::jsonb)
 		FROM audit_event ae
 		JOIN actor a ON a.id=ae.actor_id
@@ -374,7 +402,7 @@ func (s *AuditService) List(
 		  AND ($4='' OR EXISTS (
 			SELECT 1 FROM change_tag_assignment cta
 			JOIN change_tag ct ON ct.id=cta.tag_id
-			WHERE cta.audit_event_id=ae.id AND ct.tag_key=$4
+			WHERE cta.audit_event_id=ae.id AND ct.wiki_id=$7 AND ct.tag_key=$4
 		  ))
 		  AND ($5::timestamptz IS NULL OR (ae.created_at,ae.id)<($5,$6))
 		  AND (
@@ -413,35 +441,26 @@ func (s *AuditService) List(
 			))
 			OR (ae.aggregate_type='proposal' AND EXISTS (
 				SELECT 1 FROM proposal pr
-				WHERE pr.id=ae.aggregate_id AND (
-					(pr.target_type='wiki' AND pr.target_id=$7)
-					OR (pr.target_type='page' AND EXISTS (
-						SELECT 1 FROM page p WHERE p.id=pr.target_id AND p.wiki_id=$7
-					))
-					OR (pr.target_type='entity' AND EXISTS (
-						SELECT 1 FROM entity e WHERE e.id=pr.target_id AND e.wiki_id=$7
-					))
-					OR (pr.target_type='claim' AND EXISTS (
-						SELECT 1 FROM claim c JOIN entity e ON e.id=c.subject_entity_id
-						WHERE c.id=pr.target_id AND e.wiki_id=$7
-					))
-					OR (pr.target_type='collection' AND EXISTS (
-						SELECT 1 FROM collection c WHERE c.id=pr.target_id AND c.wiki_id=$7
-					))
-					OR pr.target_type='external_resource'
-					OR (pr.target_id IS NULL AND EXISTS (
-						SELECT 1 FROM proposal_operation po
-						WHERE po.proposal_id=pr.id
-						  AND po.target_json->>'wiki_id'=$7::text
-					))
-				)
+				WHERE pr.id=ae.aggregate_id AND pr.wiki_id=$7
 			))
-			OR ae.aggregate_type IN ('change_tag','audit_event')
+			OR (ae.aggregate_type='actor' AND EXISTS (
+				SELECT 1 FROM actor target
+				WHERE target.id=ae.aggregate_id AND target.wiki_id=$7
+			))
+			OR (ae.aggregate_type='change_tag' AND EXISTS (
+				SELECT 1 FROM change_tag ct
+				WHERE ct.id=ae.aggregate_id AND ct.wiki_id=$7
+			))
+			OR (ae.aggregate_type='audit_event' AND EXISTS (
+				SELECT 1 FROM change_tag_assignment cta
+				JOIN change_tag ct ON ct.id=cta.tag_id
+				WHERE cta.audit_event_id=ae.aggregate_id AND ct.wiki_id=$7
+			))
 		  )
 		ORDER BY ae.created_at DESC,ae.id DESC
 		LIMIT $8`,
 		filter.EventType, filter.AggregateType, filter.ChangeBatchID, filter.TagKey,
-		afterTime, afterID, s.wikiID, filter.Limit+1)
+		afterTime, afterID, wikiID, filter.Limit+1)
 	if err != nil {
 		return nil, err
 	}

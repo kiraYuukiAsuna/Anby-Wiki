@@ -1,5 +1,4 @@
-// 页面搜索 API handler（M2-T04）：编辑器引用选择器（cmdk）的后端，
-// 活页面标题/别名 ILIKE 匹配，匿名可读，无需 X-Actor-ID。
+// 页面搜索 API handler（M2-T04）：当前登录 Wiki 的标题、别名与正文搜索。
 package main
 
 import (
@@ -14,16 +13,14 @@ import (
 	wikisearch "github.com/anby/wiki/backend/internal/search"
 )
 
-// SearchAPI 搜索 API 依赖集合：可替换 SearchAdapter 与默认站点 ID。
 type SearchAPI struct {
 	search             wikisearch.SearchAdapter
 	titleAliasFallback wikisearch.SearchAdapter
-	wikiID             uuid.UUID
 }
 
 // NewSearchAPI 装配搜索 API。
-func NewSearchAPI(adapter wikisearch.SearchAdapter, wikiID uuid.UUID) *SearchAPI {
-	return &SearchAPI{search: adapter, wikiID: wikiID}
+func NewSearchAPI(adapter wikisearch.SearchAdapter) *SearchAPI {
+	return &SearchAPI{search: adapter}
 }
 
 // WithTitleAliasFallback preserves synchronous title/alias lookup for
@@ -118,7 +115,7 @@ func (a *SearchAPI) searchPages(w http.ResponseWriter, r *http.Request) {
 	}
 	result, err := adapter.Search(r.Context(), wikisearch.Query{
 		Text:          r.URL.Query().Get("q"),
-		WikiID:        a.wikiID,
+		WikiID:        wikiIDFromRequest(r),
 		Namespace:     namespace,
 		Language:      r.URL.Query().Get("language"),
 		EntityType:    r.URL.Query().Get("entity_type"),

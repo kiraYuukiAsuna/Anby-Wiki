@@ -1,5 +1,5 @@
-// 页面历史 API handlers（M1-T07）：Revision 列表/详情、两版结构 Diff、回滚。
-// 读端点匿名可读；回滚是写操作，需认证 Actor（ai 不允许直接写）。
+// 页面历史 API handlers（M1-T07）：当前登录 Wiki 的 Revision
+// 列表/详情、两版结构 Diff、回滚。
 package main
 
 import (
@@ -16,13 +16,12 @@ import (
 
 // HistoryAPI 历史 API 依赖集合：Page 领域服务。
 type HistoryAPI struct {
-	pages  *page.Service
-	wikiID uuid.UUID
+	pages *page.Service
 }
 
 // NewHistoryAPI 装配历史 API。
-func NewHistoryAPI(pages *page.Service, wikiID uuid.UUID) *HistoryAPI {
-	return &HistoryAPI{pages: pages, wikiID: wikiID}
+func NewHistoryAPI(pages *page.Service) *HistoryAPI {
+	return &HistoryAPI{pages: pages}
 }
 
 // ---- 请求/响应 DTO（与 contracts/openapi/openapi.yaml 对应，契约为准）----
@@ -53,7 +52,7 @@ type rollbackResponse struct {
 // ---- handlers ----
 
 // listRevisions GET /api/v1/pages/{id}/revisions?cursor=&page_size=：
-// 按 created_at DESC, id DESC 游标分页（匿名可读）。
+// 按 created_at DESC, id DESC 游标分页，仅查询当前登录 Wiki。
 func (a *HistoryAPI) listRevisions(w http.ResponseWriter, r *http.Request) {
 	pageID, ok := a.currentPageID(w, r)
 	if !ok {
@@ -75,7 +74,7 @@ func (a *HistoryAPI) listRevisions(w http.ResponseWriter, r *http.Request) {
 	httpx.WriteJSON(w, http.StatusOK, resp)
 }
 
-// getRevision GET /api/v1/pages/{id}/revisions/{rid}：单版详情（含 ast_json，匿名可读）。
+// getRevision GET /api/v1/pages/{id}/revisions/{rid}：当前登录 Wiki 的单版详情（含 ast_json）。
 func (a *HistoryAPI) getRevision(w http.ResponseWriter, r *http.Request) {
 	pageID, ok := a.currentPageID(w, r)
 	if !ok {
@@ -97,7 +96,7 @@ func (a *HistoryAPI) getRevision(w http.ResponseWriter, r *http.Request) {
 	})
 }
 
-// diffRevisions GET /api/v1/pages/{id}/diff?from=&to=：两版结构 Diff（匿名可读）。
+// diffRevisions GET /api/v1/pages/{id}/diff?from=&to=：当前登录 Wiki 的两版结构 Diff。
 // 响应直接序列化 ast.DocumentDiff（changes: added/removed/changed/moved）。
 func (a *HistoryAPI) diffRevisions(w http.ResponseWriter, r *http.Request) {
 	pageID, ok := a.currentPageID(w, r)
@@ -167,7 +166,7 @@ func (a *HistoryAPI) currentPageID(
 		return uuid.Nil, false
 	}
 	if _, err := getPageInWiki(
-		r.Context(), a.pages, a.wikiID, pageID,
+		r.Context(), a.pages, wikiIDFromRequest(r), pageID,
 	); err != nil {
 		serviceError(w, r, err)
 		return uuid.Nil, false

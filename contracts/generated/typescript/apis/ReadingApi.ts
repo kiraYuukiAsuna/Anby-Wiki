@@ -65,6 +65,14 @@ export class ReadingApi extends runtime.BaseAPI {
 
         const headerParameters: runtime.HTTPHeaders = {};
 
+        if (this.configuration && this.configuration.accessToken) {
+            const token = this.configuration.accessToken;
+            const tokenString = await token("cliBearer", []);
+
+            if (tokenString) {
+                headerParameters["Authorization"] = `Bearer ${tokenString}`;
+            }
+        }
 
         let urlPath = `/api/v1/pages/{id}`;
         urlPath = urlPath.replace('{id}', encodeURIComponent(String(requestParameters['id'])));
@@ -78,7 +86,7 @@ export class ReadingApi extends runtime.BaseAPI {
     }
 
     /**
-     * 阅读端点（匿名可读，无需登录）。按页面 ID 读取当前 Revision 与渲染 HTML， 响应结构与行为同 getPageByTitle（重定向同样跟随；软删除页返回 410 gone； 未发布过 content 为 null）。
+     * 按页面 ID 读取当前登录 Wiki 的当前 Revision 与渲染 HTML， 响应结构与行为同 getPageByTitle（重定向同样跟随；软删除页返回 410 gone； 未发布过 content 为 null）。
      * 按 ID 读取页面当前版本
      */
     async getPageByIDRaw(requestParameters: GetPageByIDRequest, initOverrides?: RequestInit | runtime.InitOverrideFunction): Promise<runtime.ApiResponse<PageWithContent>> {
@@ -89,7 +97,7 @@ export class ReadingApi extends runtime.BaseAPI {
     }
 
     /**
-     * 阅读端点（匿名可读，无需登录）。按页面 ID 读取当前 Revision 与渲染 HTML， 响应结构与行为同 getPageByTitle（重定向同样跟随；软删除页返回 410 gone； 未发布过 content 为 null）。
+     * 按页面 ID 读取当前登录 Wiki 的当前 Revision 与渲染 HTML， 响应结构与行为同 getPageByTitle（重定向同样跟随；软删除页返回 410 gone； 未发布过 content 为 null）。
      * 按 ID 读取页面当前版本
      */
     async getPageByID(requestParameters: GetPageByIDRequest, initOverrides?: RequestInit | runtime.InitOverrideFunction): Promise<PageWithContent> {
@@ -131,6 +139,14 @@ export class ReadingApi extends runtime.BaseAPI {
 
         const headerParameters: runtime.HTTPHeaders = {};
 
+        if (this.configuration && this.configuration.accessToken) {
+            const token = this.configuration.accessToken;
+            const tokenString = await token("cliBearer", []);
+
+            if (tokenString) {
+                headerParameters["Authorization"] = `Bearer ${tokenString}`;
+            }
+        }
 
         let urlPath = `/api/v1/pages/by-title`;
 
@@ -143,7 +159,7 @@ export class ReadingApi extends runtime.BaseAPI {
     }
 
     /**
-     * 阅读端点（匿名可读，无需登录）。渲染直连 ContentSnapshot， M3 才引入 RenderedPage 投影与缓存。 标题经服务端规范化（NFC、大小写折叠、空白折叠）后先匹配活页面，再匹配 page_alias： - 活页面命中：200 PageWithContent，via_alias=false； - 别名命中：200 PageWithContent，via_alias=true 且 alias_title 回显请求标题； - 不存在：404 not_found。 页面是站内重定向源（page_redirect 有行）时跟随到落地页并返回其内容， 响应带 redirect: {from_page_id, from_title}；重定向环/超过最大跳数返回 422； 重定向目标已软删除返回 410 gone（资源曾存在、现已删除，语义区别于 404）。 页面已创建但未发布过时 200 且 content 为 null。
+     * 读取当前登录 Wiki。渲染直连 ContentSnapshot， M3 才引入 RenderedPage 投影与缓存。 标题经服务端规范化（NFC、大小写折叠、空白折叠）后先匹配活页面，再匹配 page_alias： - 活页面命中：200 PageWithContent，via_alias=false； - 别名命中：200 PageWithContent，via_alias=true 且 alias_title 回显请求标题； - 不存在：404 not_found。 页面是站内重定向源（page_redirect 有行）时跟随到落地页并返回其内容， 响应带 redirect: {from_page_id, from_title}；重定向环/超过最大跳数返回 422； 重定向目标已软删除返回 410 gone（资源曾存在、现已删除，语义区别于 404）。 页面已创建但未发布过时 200 且 content 为 null。
      * 按标题/别名读取页面当前版本
      */
     async getPageByTitleRaw(requestParameters: GetPageByTitleRequest, initOverrides?: RequestInit | runtime.InitOverrideFunction): Promise<runtime.ApiResponse<PageWithContent>> {
@@ -154,7 +170,7 @@ export class ReadingApi extends runtime.BaseAPI {
     }
 
     /**
-     * 阅读端点（匿名可读，无需登录）。渲染直连 ContentSnapshot， M3 才引入 RenderedPage 投影与缓存。 标题经服务端规范化（NFC、大小写折叠、空白折叠）后先匹配活页面，再匹配 page_alias： - 活页面命中：200 PageWithContent，via_alias=false； - 别名命中：200 PageWithContent，via_alias=true 且 alias_title 回显请求标题； - 不存在：404 not_found。 页面是站内重定向源（page_redirect 有行）时跟随到落地页并返回其内容， 响应带 redirect: {from_page_id, from_title}；重定向环/超过最大跳数返回 422； 重定向目标已软删除返回 410 gone（资源曾存在、现已删除，语义区别于 404）。 页面已创建但未发布过时 200 且 content 为 null。
+     * 读取当前登录 Wiki。渲染直连 ContentSnapshot， M3 才引入 RenderedPage 投影与缓存。 标题经服务端规范化（NFC、大小写折叠、空白折叠）后先匹配活页面，再匹配 page_alias： - 活页面命中：200 PageWithContent，via_alias=false； - 别名命中：200 PageWithContent，via_alias=true 且 alias_title 回显请求标题； - 不存在：404 not_found。 页面是站内重定向源（page_redirect 有行）时跟随到落地页并返回其内容， 响应带 redirect: {from_page_id, from_title}；重定向环/超过最大跳数返回 422； 重定向目标已软删除返回 410 gone（资源曾存在、现已删除，语义区别于 404）。 页面已创建但未发布过时 200 且 content 为 null。
      * 按标题/别名读取页面当前版本
      */
     async getPageByTitle(requestParameters: GetPageByTitleRequest, initOverrides?: RequestInit | runtime.InitOverrideFunction): Promise<PageWithContent> {
@@ -182,6 +198,14 @@ export class ReadingApi extends runtime.BaseAPI {
 
         const headerParameters: runtime.HTTPHeaders = {};
 
+        if (this.configuration && this.configuration.accessToken) {
+            const token = this.configuration.accessToken;
+            const tokenString = await token("cliBearer", []);
+
+            if (tokenString) {
+                headerParameters["Authorization"] = `Bearer ${tokenString}`;
+            }
+        }
 
         let urlPath = `/api/v1/pages`;
 
@@ -194,7 +218,7 @@ export class ReadingApi extends runtime.BaseAPI {
     }
 
     /**
-     * 匿名可读。只返回未删除、属于内容命名空间且已有 Current Revision 的页面； recent 按最近更新倒序，title 按规范化标题升序，均使用稳定游标分页。
+     * 只返回当前登录 Wiki 中未删除、属于内容命名空间且已有 Current Revision 的页面； recent 按最近更新倒序，title 按规范化标题升序，均使用稳定游标分页。
      * 浏览已发布百科页面目录
      */
     async listPublishedPagesRaw(requestParameters: ListPublishedPagesRequest, initOverrides?: RequestInit | runtime.InitOverrideFunction): Promise<runtime.ApiResponse<PageCatalogPage>> {
@@ -205,7 +229,7 @@ export class ReadingApi extends runtime.BaseAPI {
     }
 
     /**
-     * 匿名可读。只返回未删除、属于内容命名空间且已有 Current Revision 的页面； recent 按最近更新倒序，title 按规范化标题升序，均使用稳定游标分页。
+     * 只返回当前登录 Wiki 中未删除、属于内容命名空间且已有 Current Revision 的页面； recent 按最近更新倒序，title 按规范化标题升序，均使用稳定游标分页。
      * 浏览已发布百科页面目录
      */
     async listPublishedPages(requestParameters: ListPublishedPagesRequest = {}, initOverrides?: RequestInit | runtime.InitOverrideFunction): Promise<PageCatalogPage> {

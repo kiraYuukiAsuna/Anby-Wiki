@@ -16,7 +16,7 @@ All URIs are relative to *http://localhost:3000*
 
 按 ID 读取页面当前版本
 
-阅读端点（匿名可读，无需登录）。按页面 ID 读取当前 Revision 与渲染 HTML， 响应结构与行为同 getPageByTitle（重定向同样跟随；软删除页返回 410 gone； 未发布过 content 为 null）。
+按页面 ID 读取当前登录 Wiki 的当前 Revision 与渲染 HTML， 响应结构与行为同 getPageByTitle（重定向同样跟随；软删除页返回 410 gone； 未发布过 content 为 null）。
 
 ### Example
 
@@ -29,7 +29,13 @@ import type { GetPageByIDRequest } from '';
 
 async function example() {
   console.log("🚀 Testing  SDK...");
-  const api = new ReadingApi();
+  const config = new Configuration({
+    // Configure HTTP bearer authorization: cliBearer
+    accessToken: "YOUR BEARER TOKEN",
+    // To configure API key authorization: sessionCookie
+    apiKey: "YOUR API KEY",
+  });
+  const api = new ReadingApi(config);
 
   const body = {
     // string | 页面 ID（UUIDv7）
@@ -64,7 +70,7 @@ example().catch(console.error);
 
 ### Authorization
 
-No authorization required
+[cliBearer](../README.md#cliBearer), [sessionCookie](../README.md#sessionCookie)
 
 ### HTTP request headers
 
@@ -91,7 +97,7 @@ No authorization required
 
 按标题/别名读取页面当前版本
 
-阅读端点（匿名可读，无需登录）。渲染直连 ContentSnapshot， M3 才引入 RenderedPage 投影与缓存。 标题经服务端规范化（NFC、大小写折叠、空白折叠）后先匹配活页面，再匹配 page_alias： - 活页面命中：200 PageWithContent，via_alias&#x3D;false； - 别名命中：200 PageWithContent，via_alias&#x3D;true 且 alias_title 回显请求标题； - 不存在：404 not_found。 页面是站内重定向源（page_redirect 有行）时跟随到落地页并返回其内容， 响应带 redirect: {from_page_id, from_title}；重定向环/超过最大跳数返回 422； 重定向目标已软删除返回 410 gone（资源曾存在、现已删除，语义区别于 404）。 页面已创建但未发布过时 200 且 content 为 null。
+读取当前登录 Wiki。渲染直连 ContentSnapshot， M3 才引入 RenderedPage 投影与缓存。 标题经服务端规范化（NFC、大小写折叠、空白折叠）后先匹配活页面，再匹配 page_alias： - 活页面命中：200 PageWithContent，via_alias&#x3D;false； - 别名命中：200 PageWithContent，via_alias&#x3D;true 且 alias_title 回显请求标题； - 不存在：404 not_found。 页面是站内重定向源（page_redirect 有行）时跟随到落地页并返回其内容， 响应带 redirect: {from_page_id, from_title}；重定向环/超过最大跳数返回 422； 重定向目标已软删除返回 410 gone（资源曾存在、现已删除，语义区别于 404）。 页面已创建但未发布过时 200 且 content 为 null。
 
 ### Example
 
@@ -104,7 +110,13 @@ import type { GetPageByTitleRequest } from '';
 
 async function example() {
   console.log("🚀 Testing  SDK...");
-  const api = new ReadingApi();
+  const config = new Configuration({
+    // Configure HTTP bearer authorization: cliBearer
+    accessToken: "YOUR BEARER TOKEN",
+    // To configure API key authorization: sessionCookie
+    apiKey: "YOUR API KEY",
+  });
+  const api = new ReadingApi(config);
 
   const body = {
     // string | 命名空间 key（如 main）
@@ -142,7 +154,7 @@ example().catch(console.error);
 
 ### Authorization
 
-No authorization required
+[cliBearer](../README.md#cliBearer), [sessionCookie](../README.md#sessionCookie)
 
 ### HTTP request headers
 
@@ -169,7 +181,7 @@ No authorization required
 
 浏览已发布百科页面目录
 
-匿名可读。只返回未删除、属于内容命名空间且已有 Current Revision 的页面； recent 按最近更新倒序，title 按规范化标题升序，均使用稳定游标分页。
+只返回当前登录 Wiki 中未删除、属于内容命名空间且已有 Current Revision 的页面； recent 按最近更新倒序，title 按规范化标题升序，均使用稳定游标分页。
 
 ### Example
 
@@ -182,7 +194,13 @@ import type { ListPublishedPagesRequest } from '';
 
 async function example() {
   console.log("🚀 Testing  SDK...");
-  const api = new ReadingApi();
+  const config = new Configuration({
+    // Configure HTTP bearer authorization: cliBearer
+    accessToken: "YOUR BEARER TOKEN",
+    // To configure API key authorization: sessionCookie
+    apiKey: "YOUR API KEY",
+  });
+  const api = new ReadingApi(config);
 
   const body = {
     // string | 上一页响应返回的 next_cursor；首页不传 (optional)
@@ -220,7 +238,7 @@ example().catch(console.error);
 
 ### Authorization
 
-No authorization required
+[cliBearer](../README.md#cliBearer), [sessionCookie](../README.md#sessionCookie)
 
 ### HTTP request headers
 

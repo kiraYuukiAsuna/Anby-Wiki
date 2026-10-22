@@ -35,8 +35,6 @@ import { clientUUID } from "@/lib/client-uuid";
 import { cn } from "@/lib/utils";
 
 const UUID = "00000000-0000-4000-8000-000000000001";
-const SITE_ID = "00000000-0000-7000-8000-000000000001";
-const MAIN_NAMESPACE_ID = "00000000-0000-7000-8000-000000000101";
 
 const OPERATION_TYPES = [
   "create_page",
@@ -169,14 +167,18 @@ function common(type: OperationType, target: Record<string, unknown>) {
   };
 }
 
-function template(type: OperationType): Record<string, unknown> {
+function template(
+  type: OperationType,
+  wikiID: string,
+  mainNamespaceID: string,
+): Record<string, unknown> {
   const blockId = clientUUID();
   switch (type) {
     case "create_page":
       return {
         ...common(type, {
-          wiki_id: SITE_ID,
-          namespace_id: MAIN_NAMESPACE_ID,
+          wiki_id: wikiID,
+          namespace_id: mainNamespaceID,
           page_id: clientUUID(),
         }),
         payload: {
@@ -279,7 +281,7 @@ function template(type: OperationType): Record<string, unknown> {
       };
     case "create_entity":
       return {
-        ...common(type, { wiki_id: SITE_ID, entity_id: clientUUID() }),
+        ...common(type, { wiki_id: wikiID, entity_id: clientUUID() }),
         payload: {
           type_key: "concept",
           canonical_key: "new-concept",
@@ -341,8 +343,12 @@ function template(type: OperationType): Record<string, unknown> {
   }
 }
 
-function suggestedProposal(type: OperationType) {
-  const raw = template(type);
+function suggestedProposal(
+  type: OperationType,
+  wikiID: string,
+  mainNamespaceID: string,
+) {
+  const raw = template(type, wikiID, mainNamespaceID);
   const target = raw.target as Record<string, string>;
   if (type === "create_page") return { targetType: "page" as const, targetId: "" };
   if (type === "create_entity") return { targetType: "entity" as const, targetId: "" };
@@ -363,11 +369,15 @@ function suggestedProposal(type: OperationType) {
   return { targetType: "page" as const, targetId: target.page_id };
 }
 
-function newDraftOperation(type: OperationType): DraftOperation {
+function newDraftOperation(
+  type: OperationType,
+  wikiID: string,
+  mainNamespaceID: string,
+): DraftOperation {
   return {
     id: clientUUID(),
     type,
-    json: JSON.stringify(template(type), null, 2),
+    json: JSON.stringify(template(type, wikiID, mainNamespaceID), null, 2),
   };
 }
 
@@ -390,15 +400,31 @@ export function ProposalOperationStudio() {
   const [saving, setSaving] = useState(false);
 
   const addTemplate = () => {
+    const currentSession = session.session;
+    if (!currentSession) {
+      toast.error("请先登录后创建人工提案");
+      return;
+    }
     if (createdProposalId && appendedCount === operations.length) {
       toast.message("可继续向当前草稿追加 Operation");
     }
     if (operations.length === 0 && !createdProposalId) {
-      const suggestion = suggestedProposal(selectedType);
+      const suggestion = suggestedProposal(
+        selectedType,
+        currentSession.wikiId,
+        currentSession.mainNamespaceId,
+      );
       setTargetType(suggestion.targetType);
       setTargetId(suggestion.targetId ?? "");
     }
-    setOperations((current) => [...current, newDraftOperation(selectedType)]);
+    setOperations((current) => [
+      ...current,
+      newDraftOperation(
+        selectedType,
+        currentSession.wikiId,
+        currentSession.mainNamespaceId,
+      ),
+    ]);
   };
 
   const updateOperation = (id: string, json: string) => {
@@ -770,7 +796,7 @@ export function ProposalOperationStudio() {
             示例 UUID 不是实际对象
           </p>
           <p className="mt-1 text-xs leading-5 text-amber-900/75">
-            站点与主命名空间已使用预发布种子 ID；其余以 0000 开头的 UUID 必须替换。
+            当前 Wiki 与主命名空间会自动填入；其余以 0000 开头的 UUID 必须替换。
           </p>
         </div>
         <Link

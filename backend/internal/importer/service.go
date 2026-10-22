@@ -57,12 +57,15 @@ func canonicalObject(value json.RawMessage) (json.RawMessage, error) {
 
 func (s *Service) Create(
 	ctx context.Context,
-	actorID uuid.UUID,
+	actorID, wikiID uuid.UUID,
 	jobType, key string,
 	config json.RawMessage,
 ) (*Job, error) {
-	actorType, status, err := s.repo.Actor(ctx, actorID)
+	actorType, status, actorWikiID, err := s.repo.Actor(ctx, actorID)
 	if err != nil || status != "active" || (actorType != "human" && actorType != "system") {
+		return nil, ErrInvalidJob
+	}
+	if wikiID == uuid.Nil || actorType != "system" && actorWikiID != wikiID {
 		return nil, ErrInvalidJob
 	}
 	jobType, key = strings.TrimSpace(jobType), strings.TrimSpace(key)
@@ -95,7 +98,7 @@ func (s *Service) Create(
 	if err != nil {
 		return nil, err
 	}
-	job := &Job{ID: jobID, JobType: jobType, Status: JobQueued, InitiatedBy: actorID,
+	job := &Job{ID: jobID, WikiID: wikiID, JobType: jobType, Status: JobQueued, InitiatedBy: actorID,
 		IdempotencyKey: key, Config: canonical, PlanningInput: planningInput,
 		CurrentStage: StageQueued}
 	inserted, err := s.repo.InsertJobIfAbsent(ctx, job)
@@ -109,7 +112,8 @@ func (s *Service) Create(
 	if err != nil {
 		return nil, err
 	}
-	if existing.JobType != jobType || !jsonEqual(existing.Config, canonical) {
+	if existing.WikiID != wikiID || existing.JobType != jobType ||
+		!jsonEqual(existing.Config, canonical) {
 		return nil, ErrIdempotencyMismatch
 	}
 	return existing, nil
@@ -157,7 +161,7 @@ func (s *Service) FindUploadByKey(
 func (s *Service) ListOwned(
 	ctx context.Context, actorID uuid.UUID, status, cursor string, limit int,
 ) (*JobPage, error) {
-	actorType, actorStatus, err := s.repo.Actor(ctx, actorID)
+	actorType, actorStatus, _, err := s.repo.Actor(ctx, actorID)
 	if err != nil || actorStatus != "active" || (actorType != "human" && actorType != "system") {
 		return nil, ErrInvalidJob
 	}
@@ -229,21 +233,39 @@ func (s *Service) BeginRun(ctx context.Context, jobID uuid.UUID, key string) (*R
 // SKIP LOCKED lets multiple Worker processes share a queue without duplicate
 // model calls. Pipeline.BeginRun later reuses the returned idempotency key.
 func (s *Service) ClaimNext(ctx context.Context) (*Job, *Run, error) {
-	return s.claimNext(ctx, false)
+	return s.claimNext(ctx, false, nil)
+}
+
+func (s *Service) ClaimNextForWiki(
+	ctx context.Context,
+	wikiID uuid.UUID,
+) (*Job, *Run, error) {
+	if wikiID == uuid.Nil {
+		return nil, nil, ErrInvalidJob
+	}
+	return s.claimNext(ctx, false, &wikiID)
 }
 
 // ClaimNextSourceOnly claims source-only work before consulting model runtime
 // configuration. These jobs stop after immutable source parsing.
 func (s *Service) ClaimNextSourceOnly(ctx context.Context) (*Job, *Run, error) {
-	return s.claimNext(ctx, true)
+	return s.claimNext(ctx, true, nil)
 }
 
-func (s *Service) claimNext(ctx context.Context, sourceOnly bool) (*Job, *Run, error) {
+func (s *Service) NextQueuedAIWikiID(ctx context.Context) (uuid.UUID, error) {
+	return s.repo.NextQueuedAIWikiID(ctx)
+}
+
+func (s *Service) claimNext(
+	ctx context.Context,
+	sourceOnly bool,
+	wikiID *uuid.UUID,
+) (*Job, *Run, error) {
 	var job *Job
 	var run *Run
 	err := s.txm.InTx(ctx, func(tx pgx.Tx) error {
 		var err error
-		job, err = s.repo.NextQueuedJobForUpdate(ctx, tx, sourceOnly)
+		job, err = s.repo.NextQueuedJobForUpdate(ctx, tx, sourceOnly, wikiID)
 		if err != nil {
 			return err
 		}

@@ -1576,7 +1576,13 @@ import type { ListChangeTagsRequest } from '';
 
 async function example() {
   console.log("🚀 Testing  SDK...");
-  const api = new GovernanceApi();
+  const config = new Configuration({
+    // Configure HTTP bearer authorization: cliBearer
+    accessToken: "YOUR BEARER TOKEN",
+    // To configure API key authorization: sessionCookie
+    apiKey: "YOUR API KEY",
+  });
+  const api = new GovernanceApi(config);
 
   try {
     const data = await api.listChangeTags();
@@ -1600,7 +1606,7 @@ This endpoint does not need any parameter.
 
 ### Authorization
 
-No authorization required
+[cliBearer](../README.md#cliBearer), [sessionCookie](../README.md#sessionCookie)
 
 ### HTTP request headers
 

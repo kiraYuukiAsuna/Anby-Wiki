@@ -187,7 +187,13 @@ import type { GetSourceRequest } from '';
 
 async function example() {
   console.log("🚀 Testing  SDK...");
-  const api = new SourcesApi();
+  const config = new Configuration({
+    // Configure HTTP bearer authorization: cliBearer
+    accessToken: "YOUR BEARER TOKEN",
+    // To configure API key authorization: sessionCookie
+    apiKey: "YOUR API KEY",
+  });
+  const api = new SourcesApi(config);
 
   const body = {
     // string
@@ -219,7 +225,7 @@ example().catch(console.error);
 
 ### Authorization
 
-No authorization required
+[cliBearer](../README.md#cliBearer), [sessionCookie](../README.md#sessionCookie)
 
 ### HTTP request headers
 
@@ -257,7 +263,13 @@ import type { ListSourceChunksRequest } from '';
 
 async function example() {
   console.log("🚀 Testing  SDK...");
-  const api = new SourcesApi();
+  const config = new Configuration({
+    // Configure HTTP bearer authorization: cliBearer
+    accessToken: "YOUR BEARER TOKEN",
+    // To configure API key authorization: sessionCookie
+    apiKey: "YOUR API KEY",
+  });
+  const api = new SourcesApi(config);
 
   const body = {
     // string
@@ -295,7 +307,7 @@ example().catch(console.error);
 
 ### Authorization
 
-No authorization required
+[cliBearer](../README.md#cliBearer), [sessionCookie](../README.md#sessionCookie)
 
 ### HTTP request headers
 
@@ -331,7 +343,13 @@ import type { ListSourceVersionsRequest } from '';
 
 async function example() {
   console.log("🚀 Testing  SDK...");
-  const api = new SourcesApi();
+  const config = new Configuration({
+    // Configure HTTP bearer authorization: cliBearer
+    accessToken: "YOUR BEARER TOKEN",
+    // To configure API key authorization: sessionCookie
+    apiKey: "YOUR API KEY",
+  });
+  const api = new SourcesApi(config);
 
   const body = {
     // string
@@ -369,7 +387,7 @@ example().catch(console.error);
 
 ### Authorization
 
-No authorization required
+[cliBearer](../README.md#cliBearer), [sessionCookie](../README.md#sessionCookie)
 
 ### HTTP request headers
 
@@ -407,7 +425,13 @@ import type { ListSourcesRequest } from '';
 
 async function example() {
   console.log("🚀 Testing  SDK...");
-  const api = new SourcesApi();
+  const config = new Configuration({
+    // Configure HTTP bearer authorization: cliBearer
+    accessToken: "YOUR BEARER TOKEN",
+    // To configure API key authorization: sessionCookie
+    apiKey: "YOUR API KEY",
+  });
+  const api = new SourcesApi(config);
 
   const body = {
     // string | 上一页响应返回的 next_cursor；首页不传 (optional)
@@ -448,7 +472,7 @@ example().catch(console.error);
 
 ### Authorization
 
-No authorization required
+[cliBearer](../README.md#cliBearer), [sessionCookie](../README.md#sessionCookie)
 
 ### HTTP request headers
 

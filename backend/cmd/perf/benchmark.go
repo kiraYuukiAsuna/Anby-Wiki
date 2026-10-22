@@ -181,7 +181,7 @@ func seedWorkflowFixtures(ctx context.Context, pool *pgxpool.Pool, imports *impo
 	reviews := governance.NewReviewService(repo, txm, ids, governance.NewRiskEvaluator(nil))
 	var firstImport *importer.Job
 	for index := 0; index < count; index++ {
-		job, err := imports.Create(ctx, defaultSystemActor, "performance",
+		job, err := imports.Create(ctx, defaultSystemActor, defaultWikiID, "performance",
 			fmt.Sprintf("perf-import-%06d", index), json.RawMessage(`{"source":"synthetic"}`))
 		if err != nil {
 			return nil, err
@@ -191,7 +191,8 @@ func seedWorkflowFixtures(ctx context.Context, pool *pgxpool.Pool, imports *impo
 		}
 		target := fixtures[index%len(fixtures)]
 		proposal, err := proposals.CreateProposal(ctx, governance.CreateProposalParams{
-			TargetType: governance.TargetPage, TargetID: &target.PageID,
+			WikiID: defaultWikiID, TargetType: governance.TargetPage,
+			TargetID:       &target.PageID,
 			BaseRevisionID: &target.RevisionID, CreatedBy: defaultSystemActor,
 			IdempotencyKey: fmt.Sprintf("perf-review-%06d", index),
 		})

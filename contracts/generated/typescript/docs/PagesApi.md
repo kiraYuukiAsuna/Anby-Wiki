@@ -23,7 +23,7 @@ All URIs are relative to *http://localhost:3000*
 
 创建页面
 
-在默认站点（wiki 固定为种子里 site_key&#x3D;\&#39;default\&#39; 的站点）创建页面。 标题经服务端规范化（NFC、大小写折叠、空白折叠），与同 wiki+namespace 的 活页面或别名冲突时返回 409。 Actor 身份由服务端 session cookie 解析；客户端不能声明 Actor。
+在当前登录账号的私有 Wiki 中创建页面。 标题经服务端规范化（NFC、大小写折叠、空白折叠），与同 wiki+namespace 的 活页面或别名冲突时返回 409。 Actor 身份由服务端 session cookie 解析；客户端不能声明 Actor。
 
 ### Example
 
@@ -435,7 +435,13 @@ import type { GetPageRedirectRequest } from '';
 
 async function example() {
   console.log("🚀 Testing  SDK...");
-  const api = new PagesApi();
+  const config = new Configuration({
+    // Configure HTTP bearer authorization: cliBearer
+    accessToken: "YOUR BEARER TOKEN",
+    // To configure API key authorization: sessionCookie
+    apiKey: "YOUR API KEY",
+  });
+  const api = new PagesApi(config);
 
   const body = {
     // string | 页面 ID（UUIDv7）
@@ -467,7 +473,7 @@ example().catch(console.error);
 
 ### Authorization
 
-No authorization required
+[cliBearer](../README.md#cliBearer), [sessionCookie](../README.md#sessionCookie)
 
 ### HTTP request headers
 
@@ -503,7 +509,13 @@ import type { ListBlockRedirectsRequest } from '';
 
 async function example() {
   console.log("🚀 Testing  SDK...");
-  const api = new PagesApi();
+  const config = new Configuration({
+    // Configure HTTP bearer authorization: cliBearer
+    accessToken: "YOUR BEARER TOKEN",
+    // To configure API key authorization: sessionCookie
+    apiKey: "YOUR API KEY",
+  });
+  const api = new PagesApi(config);
 
   const body = {
     // string | 页面 ID（UUIDv7）
@@ -535,7 +547,7 @@ example().catch(console.error);
 
 ### Authorization
 
-No authorization required
+[cliBearer](../README.md#cliBearer), [sessionCookie](../README.md#sessionCookie)
 
 ### HTTP request headers
 

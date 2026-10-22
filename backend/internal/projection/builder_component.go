@@ -57,6 +57,11 @@ func (b *ComponentDependencyBuilder) Rebuild(
 		`DELETE FROM component_dependency WHERE page_id = $1`, pageID); err != nil {
 		return fmt.Errorf("projection: clear component dependencies for page %s: %w", pageID, err)
 	}
+	var wikiID uuid.UUID
+	if err := tx.QueryRow(ctx, `SELECT wiki_id FROM page WHERE id=$1`, pageID).
+		Scan(&wikiID); err != nil {
+		return err
+	}
 	var collectErr error
 	if err := ast.Walk(doc, func(node ast.WalkNode) bool {
 		if node.Block == nil || node.Block.Type != ast.BlockComponent {
@@ -79,7 +84,7 @@ func (b *ComponentDependencyBuilder) Rebuild(
 			return false
 		}
 		if _, err := b.components.ValidateProps(
-			ctx, componentID, block.ComponentVersion, block.DisplayConfig,
+			ctx, wikiID, componentID, block.ComponentVersion, block.DisplayConfig,
 		); err != nil {
 			collectErr = fmt.Errorf("projection: validate ComponentBlock %s: %w", block.ID, err)
 			return false

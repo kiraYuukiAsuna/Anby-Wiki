@@ -128,7 +128,12 @@ func (s *ReviewService) submit(
 }
 
 // Decide 仅 active human 可完成人工审核；拒绝必须提供原因。
-func (s *ReviewService) Decide(ctx context.Context, taskID, reviewerID uuid.UUID, approve bool, reason string) (*Proposal, error) {
+func (s *ReviewService) Decide(
+	ctx context.Context,
+	wikiID, taskID, reviewerID uuid.UUID,
+	approve bool,
+	reason string,
+) (*Proposal, error) {
 	actorType, status, err := s.repo.GetActor(ctx, nil, reviewerID)
 	if err != nil || status != "active" {
 		return nil, ErrInvalidActor
@@ -156,6 +161,9 @@ func (s *ReviewService) Decide(ctx context.Context, taskID, reviewerID uuid.UUID
 		if p.Status != ProposalInReview {
 			return ErrInvalidTransition
 		}
+		if p.WikiID != wikiID {
+			return ErrProposalNotFound
+		}
 		if s.auth != nil {
 			if err := s.auth.CheckTx(ctx, tx, reviewerID, wikiIDForProposal(ctx, tx, s.repo, p), ActionReview, p.TargetID); err != nil {
 				return err
@@ -177,9 +185,13 @@ func (s *ReviewService) Decide(ctx context.Context, taskID, reviewerID uuid.UUID
 	return proposal, err
 }
 
-func (s *ReviewService) Pending(ctx context.Context, limit int) ([]ReviewTask, error) {
+func (s *ReviewService) Pending(
+	ctx context.Context,
+	wikiID uuid.UUID,
+	limit int,
+) ([]ReviewTask, error) {
 	if limit <= 0 || limit > 100 {
 		limit = 20
 	}
-	return s.repo.ListPendingReviewTasks(ctx, limit)
+	return s.repo.ListPendingReviewTasks(ctx, wikiID, limit)
 }

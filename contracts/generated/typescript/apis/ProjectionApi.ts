@@ -169,6 +169,14 @@ export class ProjectionApi extends runtime.BaseAPI {
 
         const headerParameters: runtime.HTTPHeaders = {};
 
+        if (this.configuration && this.configuration.accessToken) {
+            const token = this.configuration.accessToken;
+            const tokenString = await token("cliBearer", []);
+
+            if (tokenString) {
+                headerParameters["Authorization"] = `Bearer ${tokenString}`;
+            }
+        }
 
         let urlPath = `/api/v1/pages/{id}/outline`;
         urlPath = urlPath.replace('{id}', encodeURIComponent(String(requestParameters['id'])));
@@ -182,7 +190,7 @@ export class ProjectionApi extends runtime.BaseAPI {
     }
 
     /**
-     * 投影查询端点（匿名可读，无需登录）。返回文档大纲（heading 层级树）， 含层级、纯文本标题、锚点 slug 与序号路径 position_key，供阅读页 TOC 与锚点跳转。 数据来自 document_outline_projection / page_anchor 投影表（Worker 异步构建，最终一致）。 页面不存在返回 404；软删除页返回 410 gone；页面未发布过返回 200 且 items 为空数组。
+     * 返回当前登录 Wiki 页面文档大纲（heading 层级树）， 含层级、纯文本标题、锚点 slug 与序号路径 position_key，供阅读页 TOC 与锚点跳转。 数据来自 document_outline_projection / page_anchor 投影表（Worker 异步构建，最终一致）。 页面不存在返回 404；软删除页返回 410 gone；页面未发布过返回 200 且 items 为空数组。
      * 页面文档目录
      */
     async getPageOutlineRaw(requestParameters: GetPageOutlineRequest, initOverrides?: RequestInit | runtime.InitOverrideFunction): Promise<runtime.ApiResponse<DocumentOutline>> {
@@ -193,7 +201,7 @@ export class ProjectionApi extends runtime.BaseAPI {
     }
 
     /**
-     * 投影查询端点（匿名可读，无需登录）。返回文档大纲（heading 层级树）， 含层级、纯文本标题、锚点 slug 与序号路径 position_key，供阅读页 TOC 与锚点跳转。 数据来自 document_outline_projection / page_anchor 投影表（Worker 异步构建，最终一致）。 页面不存在返回 404；软删除页返回 410 gone；页面未发布过返回 200 且 items 为空数组。
+     * 返回当前登录 Wiki 页面文档大纲（heading 层级树）， 含层级、纯文本标题、锚点 slug 与序号路径 position_key，供阅读页 TOC 与锚点跳转。 数据来自 document_outline_projection / page_anchor 投影表（Worker 异步构建，最终一致）。 页面不存在返回 404；软删除页返回 410 gone；页面未发布过返回 200 且 items 为空数组。
      * 页面文档目录
      */
     async getPageOutline(requestParameters: GetPageOutlineRequest, initOverrides?: RequestInit | runtime.InitOverrideFunction): Promise<DocumentOutline> {
@@ -216,6 +224,14 @@ export class ProjectionApi extends runtime.BaseAPI {
 
         const headerParameters: runtime.HTTPHeaders = {};
 
+        if (this.configuration && this.configuration.accessToken) {
+            const token = this.configuration.accessToken;
+            const tokenString = await token("cliBearer", []);
+
+            if (tokenString) {
+                headerParameters["Authorization"] = `Bearer ${tokenString}`;
+            }
+        }
 
         let urlPath = `/api/v1/pages/{id}/references`;
         urlPath = urlPath.replace('{id}', encodeURIComponent(String(requestParameters['id'])));
@@ -229,7 +245,7 @@ export class ProjectionApi extends runtime.BaseAPI {
     }
 
     /**
-     * 匿名读取由 CitationUsage 投影生成的参考文献列表。编号按 Citation 在当前 Revision 中首次出现的文档顺序生成，相同 Citation 的多次引用共享编号。 ready=false 表示 Worker 尚未完成当前 Revision 的投影，客户端不得将其解释为空引用。
+     * 读取当前登录 Wiki 中由 CitationUsage 投影生成的参考文献列表。编号按 Citation 在当前 Revision 中首次出现的文档顺序生成，相同 Citation 的多次引用共享编号。 ready=false 表示 Worker 尚未完成当前 Revision 的投影，客户端不得将其解释为空引用。
      * 当前 Revision 的参考文献
      */
     async getPageReferencesRaw(requestParameters: GetPageReferencesRequest, initOverrides?: RequestInit | runtime.InitOverrideFunction): Promise<runtime.ApiResponse<PageReferenceList>> {
@@ -240,7 +256,7 @@ export class ProjectionApi extends runtime.BaseAPI {
     }
 
     /**
-     * 匿名读取由 CitationUsage 投影生成的参考文献列表。编号按 Citation 在当前 Revision 中首次出现的文档顺序生成，相同 Citation 的多次引用共享编号。 ready=false 表示 Worker 尚未完成当前 Revision 的投影，客户端不得将其解释为空引用。
+     * 读取当前登录 Wiki 中由 CitationUsage 投影生成的参考文献列表。编号按 Citation 在当前 Revision 中首次出现的文档顺序生成，相同 Citation 的多次引用共享编号。 ready=false 表示 Worker 尚未完成当前 Revision 的投影，客户端不得将其解释为空引用。
      * 当前 Revision 的参考文献
      */
     async getPageReferences(requestParameters: GetPageReferencesRequest, initOverrides?: RequestInit | runtime.InitOverrideFunction): Promise<PageReferenceList> {
@@ -270,6 +286,14 @@ export class ProjectionApi extends runtime.BaseAPI {
 
         const headerParameters: runtime.HTTPHeaders = {};
 
+        if (this.configuration && this.configuration.accessToken) {
+            const token = this.configuration.accessToken;
+            const tokenString = await token("cliBearer", []);
+
+            if (tokenString) {
+                headerParameters["Authorization"] = `Bearer ${tokenString}`;
+            }
+        }
 
         let urlPath = `/api/v1/pages/{id}/sections/{section_key}`;
         urlPath = urlPath.replace('{id}', encodeURIComponent(String(requestParameters['id'])));
@@ -316,6 +340,14 @@ export class ProjectionApi extends runtime.BaseAPI {
 
         const headerParameters: runtime.HTTPHeaders = {};
 
+        if (this.configuration && this.configuration.accessToken) {
+            const token = this.configuration.accessToken;
+            const tokenString = await token("cliBearer", []);
+
+            if (tokenString) {
+                headerParameters["Authorization"] = `Bearer ${tokenString}`;
+            }
+        }
 
         let urlPath = `/api/v1/pages/{id}/sections`;
         urlPath = urlPath.replace('{id}', encodeURIComponent(String(requestParameters['id'])));
@@ -329,7 +361,7 @@ export class ProjectionApi extends runtime.BaseAPI {
     }
 
     /**
-     * 匿名读取可重建的章节投影。仅当所有行匹配 Page.current_revision_id 与当前 renderer_version 时 ready=true；否则返回 ready=false，客户端应使用全文阅读。
+     * 读取当前登录 Wiki 中可重建的章节投影。仅当所有行匹配 Page.current_revision_id 与当前 renderer_version 时 ready=true；否则返回 ready=false，客户端应使用全文阅读。
      * 读取当前 Revision 的章节分片清单
      */
     async getPageSectionsRaw(requestParameters: GetPageSectionsRequest, initOverrides?: RequestInit | runtime.InitOverrideFunction): Promise<runtime.ApiResponse<PageSectionManifest>> {
@@ -340,7 +372,7 @@ export class ProjectionApi extends runtime.BaseAPI {
     }
 
     /**
-     * 匿名读取可重建的章节投影。仅当所有行匹配 Page.current_revision_id 与当前 renderer_version 时 ready=true；否则返回 ready=false，客户端应使用全文阅读。
+     * 读取当前登录 Wiki 中可重建的章节投影。仅当所有行匹配 Page.current_revision_id 与当前 renderer_version 时 ready=true；否则返回 ready=false，客户端应使用全文阅读。
      * 读取当前 Revision 的章节分片清单
      */
     async getPageSections(requestParameters: GetPageSectionsRequest, initOverrides?: RequestInit | runtime.InitOverrideFunction): Promise<PageSectionManifest> {
@@ -363,6 +395,14 @@ export class ProjectionApi extends runtime.BaseAPI {
 
         const headerParameters: runtime.HTTPHeaders = {};
 
+        if (this.configuration && this.configuration.accessToken) {
+            const token = this.configuration.accessToken;
+            const tokenString = await token("cliBearer", []);
+
+            if (tokenString) {
+                headerParameters["Authorization"] = `Bearer ${tokenString}`;
+            }
+        }
 
         let urlPath = `/api/v1/pages/{id}/related`;
         urlPath = urlPath.replace('{id}', encodeURIComponent(String(requestParameters['id'])));
@@ -376,7 +416,7 @@ export class ProjectionApi extends runtime.BaseAPI {
     }
 
     /**
-     * 匿名读取可重建的相关文章投影。排序综合正文链接、反向链接、双向链接、 Collection、主 Entity 与 Entity 图谱关系，并返回可解释的匹配原因。
+     * 读取当前登录 Wiki 中可重建的相关文章投影。排序综合正文链接、反向链接、双向链接、 Collection、主 Entity 与 Entity 图谱关系，并返回可解释的匹配原因。
      * 当前页面的相关文章
      */
     async getRelatedPagesRaw(requestParameters: GetRelatedPagesRequest, initOverrides?: RequestInit | runtime.InitOverrideFunction): Promise<runtime.ApiResponse<RelatedPageList>> {
@@ -387,7 +427,7 @@ export class ProjectionApi extends runtime.BaseAPI {
     }
 
     /**
-     * 匿名读取可重建的相关文章投影。排序综合正文链接、反向链接、双向链接、 Collection、主 Entity 与 Entity 图谱关系，并返回可解释的匹配原因。
+     * 读取当前登录 Wiki 中可重建的相关文章投影。排序综合正文链接、反向链接、双向链接、 Collection、主 Entity 与 Entity 图谱关系，并返回可解释的匹配原因。
      * 当前页面的相关文章
      */
     async getRelatedPages(requestParameters: GetRelatedPagesRequest, initOverrides?: RequestInit | runtime.InitOverrideFunction): Promise<RelatedPageList> {
@@ -418,6 +458,14 @@ export class ProjectionApi extends runtime.BaseAPI {
 
         const headerParameters: runtime.HTTPHeaders = {};
 
+        if (this.configuration && this.configuration.accessToken) {
+            const token = this.configuration.accessToken;
+            const tokenString = await token("cliBearer", []);
+
+            if (tokenString) {
+                headerParameters["Authorization"] = `Bearer ${tokenString}`;
+            }
+        }
 
         let urlPath = `/api/v1/pages/{id}/backlinks`;
         urlPath = urlPath.replace('{id}', encodeURIComponent(String(requestParameters['id'])));
@@ -431,7 +479,7 @@ export class ProjectionApi extends runtime.BaseAPI {
     }
 
     /**
-     * 投影查询端点（匿名可读，无需登录）。列出指向该页面的已解析页面引用来源： 来源页（id/标题）+ 所在 Block/Node + 展示文本。数据来自 page_link_projection 投影表 （设计 §17.3：关系查询走投影表，不扫 AST），由 Worker 异步构建， 新发布内容与投影之间存在最终一致窗口。 按 (source_page_id, source_block_id, source_node_id) 升序游标分页： 首页不传 cursor；后续页传上一页响应的 next_cursor；next_cursor 为 null 表示没有更多。 游标无法解析返回 400 validation_failed；页面不存在返回 404；软删除页返回 410 gone。
+     * 列出当前登录 Wiki 中指向该页面的已解析页面引用来源： 来源页（id/标题）+ 所在 Block/Node + 展示文本。数据来自 page_link_projection 投影表 （设计 §17.3：关系查询走投影表，不扫 AST），由 Worker 异步构建， 新发布内容与投影之间存在最终一致窗口。 按 (source_page_id, source_block_id, source_node_id) 升序游标分页： 首页不传 cursor；后续页传上一页响应的 next_cursor；next_cursor 为 null 表示没有更多。 游标无法解析返回 400 validation_failed；页面不存在返回 404；软删除页返回 410 gone。
      * 页面反向链接
      */
     async listBacklinksRaw(requestParameters: ListBacklinksRequest, initOverrides?: RequestInit | runtime.InitOverrideFunction): Promise<runtime.ApiResponse<BacklinkListPage>> {
@@ -442,7 +490,7 @@ export class ProjectionApi extends runtime.BaseAPI {
     }
 
     /**
-     * 投影查询端点（匿名可读，无需登录）。列出指向该页面的已解析页面引用来源： 来源页（id/标题）+ 所在 Block/Node + 展示文本。数据来自 page_link_projection 投影表 （设计 §17.3：关系查询走投影表，不扫 AST），由 Worker 异步构建， 新发布内容与投影之间存在最终一致窗口。 按 (source_page_id, source_block_id, source_node_id) 升序游标分页： 首页不传 cursor；后续页传上一页响应的 next_cursor；next_cursor 为 null 表示没有更多。 游标无法解析返回 400 validation_failed；页面不存在返回 404；软删除页返回 410 gone。
+     * 列出当前登录 Wiki 中指向该页面的已解析页面引用来源： 来源页（id/标题）+ 所在 Block/Node + 展示文本。数据来自 page_link_projection 投影表 （设计 §17.3：关系查询走投影表，不扫 AST），由 Worker 异步构建， 新发布内容与投影之间存在最终一致窗口。 按 (source_page_id, source_block_id, source_node_id) 升序游标分页： 首页不传 cursor；后续页传上一页响应的 next_cursor；next_cursor 为 null 表示没有更多。 游标无法解析返回 400 validation_failed；页面不存在返回 404；软删除页返回 410 gone。
      * 页面反向链接
      */
     async listBacklinks(requestParameters: ListBacklinksRequest, initOverrides?: RequestInit | runtime.InitOverrideFunction): Promise<BacklinkListPage> {
@@ -473,6 +521,14 @@ export class ProjectionApi extends runtime.BaseAPI {
 
         const headerParameters: runtime.HTTPHeaders = {};
 
+        if (this.configuration && this.configuration.accessToken) {
+            const token = this.configuration.accessToken;
+            const tokenString = await token("cliBearer", []);
+
+            if (tokenString) {
+                headerParameters["Authorization"] = `Bearer ${tokenString}`;
+            }
+        }
 
         let urlPath = `/api/v1/citations/{id}/usages`;
         urlPath = urlPath.replace('{id}', encodeURIComponent(String(requestParameters['id'])));
@@ -486,7 +542,7 @@ export class ProjectionApi extends runtime.BaseAPI {
     }
 
     /**
-     * 匿名反向查询 CitationReference 的页面使用位置。只读 citation_usage，不扫描 AST JSON； 每条结果携带来源 Revision、Block、Node 与可选 Claim 上下文。
+     * 在当前登录 Wiki 内反向查询 CitationReference 的页面使用位置。只读 citation_usage，不扫描 AST JSON； 每条结果携带来源 Revision、Block、Node 与可选 Claim 上下文。
      * Citation 页面使用位置
      */
     async listCitationUsagesRaw(requestParameters: ListCitationUsagesRequest, initOverrides?: RequestInit | runtime.InitOverrideFunction): Promise<runtime.ApiResponse<ReferenceUsageListPage>> {
@@ -497,7 +553,7 @@ export class ProjectionApi extends runtime.BaseAPI {
     }
 
     /**
-     * 匿名反向查询 CitationReference 的页面使用位置。只读 citation_usage，不扫描 AST JSON； 每条结果携带来源 Revision、Block、Node 与可选 Claim 上下文。
+     * 在当前登录 Wiki 内反向查询 CitationReference 的页面使用位置。只读 citation_usage，不扫描 AST JSON； 每条结果携带来源 Revision、Block、Node 与可选 Claim 上下文。
      * Citation 页面使用位置
      */
     async listCitationUsages(requestParameters: ListCitationUsagesRequest, initOverrides?: RequestInit | runtime.InitOverrideFunction): Promise<ReferenceUsageListPage> {
@@ -528,6 +584,14 @@ export class ProjectionApi extends runtime.BaseAPI {
 
         const headerParameters: runtime.HTTPHeaders = {};
 
+        if (this.configuration && this.configuration.accessToken) {
+            const token = this.configuration.accessToken;
+            const tokenString = await token("cliBearer", []);
+
+            if (tokenString) {
+                headerParameters["Authorization"] = `Bearer ${tokenString}`;
+            }
+        }
 
         let urlPath = `/api/v1/claims/{id}/usages`;
         urlPath = urlPath.replace('{id}', encodeURIComponent(String(requestParameters['id'])));
@@ -541,7 +605,7 @@ export class ProjectionApi extends runtime.BaseAPI {
     }
 
     /**
-     * 匿名反向查询 ClaimReference 的页面使用位置。只读 claim_usage，不扫描 AST JSON； 每条结果携带来源 Revision、Block 与 Node。
+     * 在当前登录 Wiki 内反向查询 ClaimReference 的页面使用位置。只读 claim_usage，不扫描 AST JSON； 每条结果携带来源 Revision、Block 与 Node。
      * Claim 页面使用位置
      */
     async listClaimUsagesRaw(requestParameters: ListClaimUsagesRequest, initOverrides?: RequestInit | runtime.InitOverrideFunction): Promise<runtime.ApiResponse<ReferenceUsageListPage>> {
@@ -552,7 +616,7 @@ export class ProjectionApi extends runtime.BaseAPI {
     }
 
     /**
-     * 匿名反向查询 ClaimReference 的页面使用位置。只读 claim_usage，不扫描 AST JSON； 每条结果携带来源 Revision、Block 与 Node。
+     * 在当前登录 Wiki 内反向查询 ClaimReference 的页面使用位置。只读 claim_usage，不扫描 AST JSON； 每条结果携带来源 Revision、Block 与 Node。
      * Claim 页面使用位置
      */
     async listClaimUsages(requestParameters: ListClaimUsagesRequest, initOverrides?: RequestInit | runtime.InitOverrideFunction): Promise<ReferenceUsageListPage> {
@@ -587,6 +651,14 @@ export class ProjectionApi extends runtime.BaseAPI {
 
         const headerParameters: runtime.HTTPHeaders = {};
 
+        if (this.configuration && this.configuration.accessToken) {
+            const token = this.configuration.accessToken;
+            const tokenString = await token("cliBearer", []);
+
+            if (tokenString) {
+                headerParameters["Authorization"] = `Bearer ${tokenString}`;
+            }
+        }
 
         let urlPath = `/api/v1/components/{id}/usages`;
         urlPath = urlPath.replace('{id}', encodeURIComponent(String(requestParameters['id'])));
@@ -600,7 +672,7 @@ export class ProjectionApi extends runtime.BaseAPI {
     }
 
     /**
-     * 匿名反向查询当前页面引用一个 Component 的位置。只读 component_dependency，不扫描 AST JSON；可按不可变版本过滤。
+     * 在当前登录 Wiki 内反向查询页面引用一个 Component 的位置。只读 component_dependency，不扫描 AST JSON；可按不可变版本过滤。
      * Component 页面依赖位置
      */
     async listComponentUsagesRaw(requestParameters: ListComponentUsagesRequest, initOverrides?: RequestInit | runtime.InitOverrideFunction): Promise<runtime.ApiResponse<ComponentUsageListPage>> {
@@ -611,7 +683,7 @@ export class ProjectionApi extends runtime.BaseAPI {
     }
 
     /**
-     * 匿名反向查询当前页面引用一个 Component 的位置。只读 component_dependency，不扫描 AST JSON；可按不可变版本过滤。
+     * 在当前登录 Wiki 内反向查询页面引用一个 Component 的位置。只读 component_dependency，不扫描 AST JSON；可按不可变版本过滤。
      * Component 页面依赖位置
      */
     async listComponentUsages(requestParameters: ListComponentUsagesRequest, initOverrides?: RequestInit | runtime.InitOverrideFunction): Promise<ComponentUsageListPage> {
@@ -642,6 +714,14 @@ export class ProjectionApi extends runtime.BaseAPI {
 
         const headerParameters: runtime.HTTPHeaders = {};
 
+        if (this.configuration && this.configuration.accessToken) {
+            const token = this.configuration.accessToken;
+            const tokenString = await token("cliBearer", []);
+
+            if (tokenString) {
+                headerParameters["Authorization"] = `Bearer ${tokenString}`;
+            }
+        }
 
         let urlPath = `/api/v1/entities/{id}/mentions`;
         urlPath = urlPath.replace('{id}', encodeURIComponent(String(requestParameters['id'])));
@@ -655,7 +735,7 @@ export class ProjectionApi extends runtime.BaseAPI {
     }
 
     /**
-     * 匿名反向查询 EntityReference 的页面使用位置。只读 entity_mention_projection， 不扫描 AST JSON；每条结果携带来源 Revision、Block、Node 与 mention_text。
+     * 在当前登录 Wiki 内反向查询 EntityReference 的页面使用位置。只读 entity_mention_projection， 不扫描 AST JSON；每条结果携带来源 Revision、Block、Node 与 mention_text。
      * Entity 页面提及位置
      */
     async listEntityMentionsRaw(requestParameters: ListEntityMentionsRequest, initOverrides?: RequestInit | runtime.InitOverrideFunction): Promise<runtime.ApiResponse<ReferenceUsageListPage>> {
@@ -666,7 +746,7 @@ export class ProjectionApi extends runtime.BaseAPI {
     }
 
     /**
-     * 匿名反向查询 EntityReference 的页面使用位置。只读 entity_mention_projection， 不扫描 AST JSON；每条结果携带来源 Revision、Block、Node 与 mention_text。
+     * 在当前登录 Wiki 内反向查询 EntityReference 的页面使用位置。只读 entity_mention_projection， 不扫描 AST JSON；每条结果携带来源 Revision、Block、Node 与 mention_text。
      * Entity 页面提及位置
      */
     async listEntityMentions(requestParameters: ListEntityMentionsRequest, initOverrides?: RequestInit | runtime.InitOverrideFunction): Promise<ReferenceUsageListPage> {
@@ -704,6 +784,14 @@ export class ProjectionApi extends runtime.BaseAPI {
 
         const headerParameters: runtime.HTTPHeaders = {};
 
+        if (this.configuration && this.configuration.accessToken) {
+            const token = this.configuration.accessToken;
+            const tokenString = await token("cliBearer", []);
+
+            if (tokenString) {
+                headerParameters["Authorization"] = `Bearer ${tokenString}`;
+            }
+        }
 
         let urlPath = `/api/v1/sources/{id}/usages/{page_id}`;
         urlPath = urlPath.replace('{id}', encodeURIComponent(String(requestParameters['id'])));
@@ -718,7 +806,7 @@ export class ProjectionApi extends runtime.BaseAPI {
     }
 
     /**
-     * 匿名分页读取一个 Source 在指定当前页面中的 Block、Node、Citation 与可选 Claim 上下文。页面必须属于当前 Wiki，只读 citation_usage，不扫描 AST JSON。
+     * 在当前登录 Wiki 内分页读取一个 Source 在指定当前页面中的 Block、Node、Citation 与可选 Claim 上下文。页面必须属于当前 Wiki，只读 citation_usage，不扫描 AST JSON。
      * Source 在指定页面的使用明细
      */
     async listSourceUsageLocationsRaw(requestParameters: ListSourceUsageLocationsRequest, initOverrides?: RequestInit | runtime.InitOverrideFunction): Promise<runtime.ApiResponse<SourceUsageLocationListPage>> {
@@ -729,7 +817,7 @@ export class ProjectionApi extends runtime.BaseAPI {
     }
 
     /**
-     * 匿名分页读取一个 Source 在指定当前页面中的 Block、Node、Citation 与可选 Claim 上下文。页面必须属于当前 Wiki，只读 citation_usage，不扫描 AST JSON。
+     * 在当前登录 Wiki 内分页读取一个 Source 在指定当前页面中的 Block、Node、Citation 与可选 Claim 上下文。页面必须属于当前 Wiki，只读 citation_usage，不扫描 AST JSON。
      * Source 在指定页面的使用明细
      */
     async listSourceUsageLocations(requestParameters: ListSourceUsageLocationsRequest, initOverrides?: RequestInit | runtime.InitOverrideFunction): Promise<SourceUsageLocationListPage> {
@@ -760,6 +848,14 @@ export class ProjectionApi extends runtime.BaseAPI {
 
         const headerParameters: runtime.HTTPHeaders = {};
 
+        if (this.configuration && this.configuration.accessToken) {
+            const token = this.configuration.accessToken;
+            const tokenString = await token("cliBearer", []);
+
+            if (tokenString) {
+                headerParameters["Authorization"] = `Bearer ${tokenString}`;
+            }
+        }
 
         let urlPath = `/api/v1/sources/{id}/usages`;
         urlPath = urlPath.replace('{id}', encodeURIComponent(String(requestParameters['id'])));
@@ -773,7 +869,7 @@ export class ProjectionApi extends runtime.BaseAPI {
     }
 
     /**
-     * 匿名按当前页面聚合一个 Source 经 SourceVersion、Citation 被使用的次数、 区块数与 Citation 数。总数描述完整结果而非当前分页，只读投影且不扫描 AST JSON。
+     * 在当前登录 Wiki 内按页面聚合一个 Source 经 SourceVersion、Citation 被使用的次数、 区块数与 Citation 数。总数描述完整结果而非当前分页，只读投影且不扫描 AST JSON。
      * Source 页面使用聚合
      */
     async listSourceUsagesRaw(requestParameters: ListSourceUsagesRequest, initOverrides?: RequestInit | runtime.InitOverrideFunction): Promise<runtime.ApiResponse<SourceUsageListPage>> {
@@ -784,7 +880,7 @@ export class ProjectionApi extends runtime.BaseAPI {
     }
 
     /**
-     * 匿名按当前页面聚合一个 Source 经 SourceVersion、Citation 被使用的次数、 区块数与 Citation 数。总数描述完整结果而非当前分页，只读投影且不扫描 AST JSON。
+     * 在当前登录 Wiki 内按页面聚合一个 Source 经 SourceVersion、Citation 被使用的次数、 区块数与 Citation 数。总数描述完整结果而非当前分页，只读投影且不扫描 AST JSON。
      * Source 页面使用聚合
      */
     async listSourceUsages(requestParameters: ListSourceUsagesRequest, initOverrides?: RequestInit | runtime.InitOverrideFunction): Promise<SourceUsageListPage> {
@@ -814,6 +910,14 @@ export class ProjectionApi extends runtime.BaseAPI {
 
         const headerParameters: runtime.HTTPHeaders = {};
 
+        if (this.configuration && this.configuration.accessToken) {
+            const token = this.configuration.accessToken;
+            const tokenString = await token("cliBearer", []);
+
+            if (tokenString) {
+                headerParameters["Authorization"] = `Bearer ${tokenString}`;
+            }
+        }
 
         let urlPath = `/api/v1/pages/{id}/section-locator/{block_id}`;
         urlPath = urlPath.replace('{id}', encodeURIComponent(String(requestParameters['id'])));
@@ -867,6 +971,14 @@ export class ProjectionApi extends runtime.BaseAPI {
 
         const headerParameters: runtime.HTTPHeaders = {};
 
+        if (this.configuration && this.configuration.accessToken) {
+            const token = this.configuration.accessToken;
+            const tokenString = await token("cliBearer", []);
+
+            if (tokenString) {
+                headerParameters["Authorization"] = `Bearer ${tokenString}`;
+            }
+        }
 
         let urlPath = `/api/v1/pages/{id}/anchors/{slug}`;
         urlPath = urlPath.replace('{id}', encodeURIComponent(String(requestParameters['id'])));
@@ -881,7 +993,7 @@ export class ProjectionApi extends runtime.BaseAPI {
     }
 
     /**
-     * 匿名读取端点。先匹配当前 page_anchor slug，再匹配持久 page_anchor_alias， 最后跟随显式 BlockRedirect，返回目标页面的当前 slug 与稳定 Heading Block ID。 该端点用于章节改名或跨页面移动后的旧链接兼容，不扫描历史 AST。
+     * 在当前登录 Wiki 内先匹配当前 page_anchor slug，再匹配持久 page_anchor_alias， 最后跟随显式 BlockRedirect，返回目标页面的当前 slug 与稳定 Heading Block ID。 该端点用于章节改名或跨页面移动后的旧链接兼容，不扫描历史 AST。
      * 解析当前或历史章节锚点
      */
     async resolvePageAnchorRaw(requestParameters: ResolvePageAnchorRequest, initOverrides?: RequestInit | runtime.InitOverrideFunction): Promise<runtime.ApiResponse<AnchorTarget>> {
@@ -892,7 +1004,7 @@ export class ProjectionApi extends runtime.BaseAPI {
     }
 
     /**
-     * 匿名读取端点。先匹配当前 page_anchor slug，再匹配持久 page_anchor_alias， 最后跟随显式 BlockRedirect，返回目标页面的当前 slug 与稳定 Heading Block ID。 该端点用于章节改名或跨页面移动后的旧链接兼容，不扫描历史 AST。
+     * 在当前登录 Wiki 内先匹配当前 page_anchor slug，再匹配持久 page_anchor_alias， 最后跟随显式 BlockRedirect，返回目标页面的当前 slug 与稳定 Heading Block ID。 该端点用于章节改名或跨页面移动后的旧链接兼容，不扫描历史 AST。
      * 解析当前或历史章节锚点
      */
     async resolvePageAnchor(requestParameters: ResolvePageAnchorRequest, initOverrides?: RequestInit | runtime.InitOverrideFunction): Promise<AnchorTarget> {

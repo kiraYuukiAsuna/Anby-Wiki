@@ -14,7 +14,6 @@ import (
 
 	"github.com/anby/wiki/backend/internal/aiconfig"
 	"github.com/anby/wiki/backend/internal/governance"
-	"github.com/anby/wiki/backend/internal/page"
 	"github.com/anby/wiki/backend/internal/platform/db"
 	"github.com/anby/wiki/backend/internal/platform/id"
 )
@@ -35,8 +34,13 @@ func run(ctx context.Context) error {
 	baseURL := strings.TrimSpace(os.Getenv("AI_BASE_URL"))
 	apiKey := strings.TrimSpace(os.Getenv("AI_API_KEY"))
 	model := strings.TrimSpace(os.Getenv("AI_MODEL"))
-	if databaseURL == "" || masterKey == "" || provider == "" || baseURL == "" || apiKey == "" || model == "" {
-		return fmt.Errorf("缺少 DATABASE_URL、AI_CONFIG_MASTER_KEY 或 legacy AI Provider 配置")
+	wikiID, err := uuid.Parse(strings.TrimSpace(os.Getenv("ANBY_WIKI_ID")))
+	if databaseURL == "" || masterKey == "" || provider == "" ||
+		baseURL == "" || apiKey == "" || model == "" || err != nil ||
+		wikiID == uuid.Nil {
+		return fmt.Errorf(
+			"缺少 DATABASE_URL、AI_CONFIG_MASTER_KEY、ANBY_WIKI_ID 或 legacy AI Provider 配置",
+		)
 	}
 	enabled := true
 	if raw := strings.TrimSpace(os.Getenv("AI_IMPORT_ENABLED")); raw != "" {
@@ -56,10 +60,6 @@ func run(ctx context.Context) error {
 		return err
 	}
 	defer pool.Close()
-	wikiID, err := page.NewRepository(pool).GetWikiIDBySiteKey(ctx, nil, "default")
-	if err != nil {
-		return err
-	}
 	service, err := aiconfig.NewService(
 		aiconfig.NewRepository(pool), db.NewTxManager(pool), id.NewGenerator(),
 		governance.NewAuthorizationService(pool), masterKey,

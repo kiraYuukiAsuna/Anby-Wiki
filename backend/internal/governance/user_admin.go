@@ -93,7 +93,7 @@ func (s *UserAdminService) List(
 		JOIN local_account la ON la.actor_id=a.id
 		LEFT JOIN actor_role ar ON ar.actor_id=a.id AND ar.wiki_id=$1
 		LEFT JOIN role r ON r.id=ar.role_id
-		WHERE a.actor_type='human'
+		WHERE a.actor_type='human' AND a.wiki_id=$1
 		  AND ($2 OR a.status='active')
 		  AND (
 		    $3=''
@@ -141,7 +141,9 @@ func (s *UserAdminService) GrantRole(
 		if err := s.lockAdminRoleMutation(ctx, tx, roleKey); err != nil {
 			return err
 		}
-		if _, err := s.ensureLocalHumanUser(ctx, tx, targetActorID); err != nil {
+		if _, err := s.ensureLocalHumanUser(
+			ctx, tx, wikiID, targetActorID,
+		); err != nil {
 			return err
 		}
 		role, err := s.roleByKey(ctx, tx, roleKey)
@@ -193,7 +195,9 @@ func (s *UserAdminService) RevokeRole(
 		if err := s.lockAdminRoleMutation(ctx, tx, roleKey); err != nil {
 			return err
 		}
-		targetStatus, err := s.ensureLocalHumanUser(ctx, tx, targetActorID)
+		targetStatus, err := s.ensureLocalHumanUser(
+			ctx, tx, wikiID, targetActorID,
+		)
 		if err != nil {
 			return err
 		}
@@ -261,7 +265,9 @@ func (s *UserAdminService) DeleteUser(
 		if err := s.lockAdminRoleMutation(ctx, tx, "admin"); err != nil {
 			return err
 		}
-		targetStatus, err := s.lockLocalHumanUser(ctx, tx, targetActorID)
+		targetStatus, err := s.lockLocalHumanUser(
+			ctx, tx, wikiID, targetActorID,
+		)
 		if err != nil {
 			return err
 		}
@@ -333,12 +339,13 @@ func (s *UserAdminService) DeleteUser(
 func (s *UserAdminService) ensureLocalHumanUser(
 	ctx context.Context,
 	tx pgx.Tx,
-	actorID uuid.UUID,
+	wikiID, actorID uuid.UUID,
 ) (string, error) {
 	var status string
 	err := tx.QueryRow(ctx, `SELECT a.status
 		FROM actor a JOIN local_account la ON la.actor_id=a.id
-		WHERE a.id=$1 AND a.actor_type='human'`, actorID).Scan(&status)
+		WHERE a.id=$1 AND a.wiki_id=$2 AND a.actor_type='human'`,
+		actorID, wikiID).Scan(&status)
 	if errors.Is(err, pgx.ErrNoRows) {
 		return "", ErrAdminUserNotFound
 	}
@@ -348,13 +355,13 @@ func (s *UserAdminService) ensureLocalHumanUser(
 func (s *UserAdminService) lockLocalHumanUser(
 	ctx context.Context,
 	tx pgx.Tx,
-	actorID uuid.UUID,
+	wikiID, actorID uuid.UUID,
 ) (string, error) {
 	var status string
 	err := tx.QueryRow(ctx, `SELECT a.status
 		FROM actor a JOIN local_account la ON la.actor_id=a.id
-		WHERE a.id=$1 AND a.actor_type='human'
-		FOR UPDATE OF a, la`, actorID).Scan(&status)
+		WHERE a.id=$1 AND a.wiki_id=$2 AND a.actor_type='human'
+		FOR UPDATE OF a, la`, actorID, wikiID).Scan(&status)
 	if errors.Is(err, pgx.ErrNoRows) {
 		return "", ErrAdminUserNotFound
 	}
@@ -393,7 +400,7 @@ func (s *UserAdminService) getUser(
 		JOIN local_account la ON la.actor_id=a.id
 		LEFT JOIN actor_role ar ON ar.actor_id=a.id AND ar.wiki_id=$1
 		LEFT JOIN role r ON r.id=ar.role_id
-		WHERE a.id=$2 AND a.actor_type='human'
+		WHERE a.id=$2 AND a.wiki_id=$1 AND a.actor_type='human'
 		GROUP BY a.id,la.username,la.email,a.display_name,a.status,a.created_at`,
 		wikiID, actorID)
 	user, err := scanAdminUser(row)

@@ -38,6 +38,12 @@ export interface ImportJob {
      * @type {string}
      * @memberof ImportJob
      */
+    wikiId: string;
+    /**
+     *
+     * @type {string}
+     * @memberof ImportJob
+     */
     jobType: string;
     /**
      *
@@ -194,6 +200,7 @@ export type ImportJobCurrentStageEnum = typeof ImportJobCurrentStageEnum[keyof t
  */
 export function instanceOfImportJob(value: object): value is ImportJob {
     if (!('id' in value) || value['id'] === undefined) return false;
+    if ((!('wikiId' in (value as Record<string, any>)) && !('wiki_id' in (value as Record<string, any>))) || ((value as Record<string, any>)['wikiId'] === undefined && (value as Record<string, any>)['wiki_id'] === undefined)) return false;
     if ((!('jobType' in (value as Record<string, any>)) && !('job_type' in (value as Record<string, any>))) || ((value as Record<string, any>)['jobType'] === undefined && (value as Record<string, any>)['job_type'] === undefined)) return false;
     if (!('status' in value) || value['status'] === undefined) return false;
     if ((!('initiatedBy' in (value as Record<string, any>)) && !('initiated_by' in (value as Record<string, any>))) || ((value as Record<string, any>)['initiatedBy'] === undefined && (value as Record<string, any>)['initiated_by'] === undefined)) return false;
@@ -218,6 +225,7 @@ export function ImportJobFromJSONTyped(json: any, ignoreDiscriminator: boolean):
     return {
 
         'id': json['id'],
+        'wikiId': json['wiki_id'],
         'jobType': json['job_type'],
         'status': json['status'],
         'initiatedBy': json['initiated_by'],
@@ -252,6 +260,7 @@ export function ImportJobToJSONTyped(value?: ImportJob | null, ignoreDiscriminat
     return {
 
         'id': value['id'],
+        'wiki_id': value['wikiId'],
         'job_type': value['jobType'],
         'status': value['status'],
         'initiated_by': value['initiatedBy'],

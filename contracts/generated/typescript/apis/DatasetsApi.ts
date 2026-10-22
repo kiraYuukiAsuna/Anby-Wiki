@@ -339,6 +339,14 @@ export class DatasetsApi extends runtime.BaseAPI {
 
         const headerParameters: runtime.HTTPHeaders = {};
 
+        if (this.configuration && this.configuration.accessToken) {
+            const token = this.configuration.accessToken;
+            const tokenString = await token("cliBearer", []);
+
+            if (tokenString) {
+                headerParameters["Authorization"] = `Bearer ${tokenString}`;
+            }
+        }
 
         let urlPath = `/api/v1/datasets/{id}`;
         urlPath = urlPath.replace('{id}', encodeURIComponent(String(requestParameters['id'])));
@@ -384,6 +392,14 @@ export class DatasetsApi extends runtime.BaseAPI {
 
         const headerParameters: runtime.HTTPHeaders = {};
 
+        if (this.configuration && this.configuration.accessToken) {
+            const token = this.configuration.accessToken;
+            const tokenString = await token("cliBearer", []);
+
+            if (tokenString) {
+                headerParameters["Authorization"] = `Bearer ${tokenString}`;
+            }
+        }
 
         let urlPath = `/api/v1/dataset-views/{id}`;
         urlPath = urlPath.replace('{id}', encodeURIComponent(String(requestParameters['id'])));
@@ -429,6 +445,14 @@ export class DatasetsApi extends runtime.BaseAPI {
 
         const headerParameters: runtime.HTTPHeaders = {};
 
+        if (this.configuration && this.configuration.accessToken) {
+            const token = this.configuration.accessToken;
+            const tokenString = await token("cliBearer", []);
+
+            if (tokenString) {
+                headerParameters["Authorization"] = `Bearer ${tokenString}`;
+            }
+        }
 
         let urlPath = `/api/v1/public/dataset-forms/{id}`;
         urlPath = urlPath.replace('{id}', encodeURIComponent(String(requestParameters['id'])));
@@ -442,7 +466,7 @@ export class DatasetsApi extends runtime.BaseAPI {
     }
 
     /**
-     * 读取公开 Dataset Form 定义
+     * 读取当前 Wiki 已启用的 Dataset Form 定义
      */
     async getPublicDatasetFormRaw(requestParameters: GetPublicDatasetFormRequest, initOverrides?: RequestInit | runtime.InitOverrideFunction): Promise<runtime.ApiResponse<PublicDatasetForm>> {
         const requestOptions = await this.getPublicDatasetFormRequestOpts(requestParameters);
@@ -452,7 +476,7 @@ export class DatasetsApi extends runtime.BaseAPI {
     }
 
     /**
-     * 读取公开 Dataset Form 定义
+     * 读取当前 Wiki 已启用的 Dataset Form 定义
      */
     async getPublicDatasetForm(requestParameters: GetPublicDatasetFormRequest, initOverrides?: RequestInit | runtime.InitOverrideFunction): Promise<PublicDatasetForm> {
         const response = await this.getPublicDatasetFormRaw(requestParameters, initOverrides);
@@ -482,6 +506,14 @@ export class DatasetsApi extends runtime.BaseAPI {
 
         const headerParameters: runtime.HTTPHeaders = {};
 
+        if (this.configuration && this.configuration.accessToken) {
+            const token = this.configuration.accessToken;
+            const tokenString = await token("cliBearer", []);
+
+            if (tokenString) {
+                headerParameters["Authorization"] = `Bearer ${tokenString}`;
+            }
+        }
 
         let urlPath = `/api/v1/datasets/{id}/records`;
         urlPath = urlPath.replace('{id}', encodeURIComponent(String(requestParameters['id'])));
@@ -527,6 +559,14 @@ export class DatasetsApi extends runtime.BaseAPI {
 
         const headerParameters: runtime.HTTPHeaders = {};
 
+        if (this.configuration && this.configuration.accessToken) {
+            const token = this.configuration.accessToken;
+            const tokenString = await token("cliBearer", []);
+
+            if (tokenString) {
+                headerParameters["Authorization"] = `Bearer ${tokenString}`;
+            }
+        }
 
         let urlPath = `/api/v1/datasets/{id}/views`;
         urlPath = urlPath.replace('{id}', encodeURIComponent(String(requestParameters['id'])));
@@ -573,6 +613,14 @@ export class DatasetsApi extends runtime.BaseAPI {
 
         const headerParameters: runtime.HTTPHeaders = {};
 
+        if (this.configuration && this.configuration.accessToken) {
+            const token = this.configuration.accessToken;
+            const tokenString = await token("cliBearer", []);
+
+            if (tokenString) {
+                headerParameters["Authorization"] = `Bearer ${tokenString}`;
+            }
+        }
 
         let urlPath = `/api/v1/datasets`;
 
@@ -625,6 +673,14 @@ export class DatasetsApi extends runtime.BaseAPI {
 
         const headerParameters: runtime.HTTPHeaders = {};
 
+        if (this.configuration && this.configuration.accessToken) {
+            const token = this.configuration.accessToken;
+            const tokenString = await token("cliBearer", []);
+
+            if (tokenString) {
+                headerParameters["Authorization"] = `Bearer ${tokenString}`;
+            }
+        }
 
         let urlPath = `/api/v1/dataset-views/{id}/records`;
         urlPath = urlPath.replace('{id}', encodeURIComponent(String(requestParameters['id'])));
@@ -687,6 +743,14 @@ export class DatasetsApi extends runtime.BaseAPI {
 
         headerParameters['Content-Type'] = 'application/json';
 
+        if (this.configuration && this.configuration.accessToken) {
+            const token = this.configuration.accessToken;
+            const tokenString = await token("cliBearer", []);
+
+            if (tokenString) {
+                headerParameters["Authorization"] = `Bearer ${tokenString}`;
+            }
+        }
 
         let urlPath = `/api/v1/dataset-views/{id}/query`;
         urlPath = urlPath.replace('{id}', encodeURIComponent(String(requestParameters['id'])));
@@ -742,6 +806,14 @@ export class DatasetsApi extends runtime.BaseAPI {
 
         headerParameters['Content-Type'] = 'application/json';
 
+        if (this.configuration && this.configuration.accessToken) {
+            const token = this.configuration.accessToken;
+            const tokenString = await token("cliBearer", []);
+
+            if (tokenString) {
+                headerParameters["Authorization"] = `Bearer ${tokenString}`;
+            }
+        }
 
         let urlPath = `/api/v1/public/dataset-forms/{id}/submissions`;
         urlPath = urlPath.replace('{id}', encodeURIComponent(String(requestParameters['id'])));
@@ -756,7 +828,7 @@ export class DatasetsApi extends runtime.BaseAPI {
     }
 
     /**
-     * 公开提交经 Dataset Schema 校验的记录
+     * 向当前 Wiki 已启用的 Form 提交记录
      */
     async submitPublicDatasetFormRaw(requestParameters: SubmitPublicDatasetFormOperationRequest, initOverrides?: RequestInit | runtime.InitOverrideFunction): Promise<runtime.ApiResponse<DatasetRecord>> {
         const requestOptions = await this.submitPublicDatasetFormRequestOpts(requestParameters);
@@ -766,7 +838,7 @@ export class DatasetsApi extends runtime.BaseAPI {
     }
 
     /**
-     * 公开提交经 Dataset Schema 校验的记录
+     * 向当前 Wiki 已启用的 Form 提交记录
      */
     async submitPublicDatasetForm(requestParameters: SubmitPublicDatasetFormOperationRequest, initOverrides?: RequestInit | runtime.InitOverrideFunction): Promise<DatasetRecord> {
         const response = await this.submitPublicDatasetFormRaw(requestParameters, initOverrides);

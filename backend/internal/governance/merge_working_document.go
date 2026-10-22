@@ -190,7 +190,8 @@ func (s *MergeWorkingDocumentService) Merge(
 			return err
 		}
 		batch := &ChangeBatch{
-			ID: batchID, ImportJobID: locked.ImportJobID, ProposalID: locked.ID,
+			ID: batchID, WikiID: locked.WikiID,
+			ImportJobID: locked.ImportJobID, ProposalID: locked.ID,
 			ActorID: params.ActorID, Status: BatchApplying,
 		}
 		if err := s.repo.InsertChangeBatch(ctx, tx, batch); err != nil {

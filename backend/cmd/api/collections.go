@@ -14,11 +14,10 @@ import (
 
 type CollectionAPI struct {
 	service *collection.Service
-	wikiID  uuid.UUID
 }
 
-func NewCollectionAPI(service *collection.Service, wikiID uuid.UUID) *CollectionAPI {
-	return &CollectionAPI{service: service, wikiID: wikiID}
+func NewCollectionAPI(service *collection.Service) *CollectionAPI {
+	return &CollectionAPI{service: service}
 }
 
 type collectionResponse struct {
@@ -79,7 +78,7 @@ func (a *CollectionAPI) list(w http.ResponseWriter, r *http.Request) {
 	if !ok {
 		return
 	}
-	result, err := a.service.List(r.Context(), a.wikiID, r.URL.Query().Get("cursor"), limit)
+	result, err := a.service.List(r.Context(), wikiIDFromRequest(r), r.URL.Query().Get("cursor"), limit)
 	if err != nil {
 		a.writeError(w, r, err)
 		return
@@ -98,7 +97,7 @@ func (a *CollectionAPI) listForPage(w http.ResponseWriter, r *http.Request) {
 	if !ok {
 		return
 	}
-	items, err := a.service.ListForPage(r.Context(), a.wikiID, pageID)
+	items, err := a.service.ListForPage(r.Context(), wikiIDFromRequest(r), pageID)
 	if err != nil {
 		a.writeError(w, r, err)
 		return
@@ -132,7 +131,7 @@ func (a *CollectionAPI) create(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	value, err := a.service.Create(r.Context(), collection.CreateParams{
-		WikiID: a.wikiID, CollectionType: request.CollectionType,
+		WikiID: wikiIDFromRequest(r), CollectionType: request.CollectionType,
 		Title: request.Title, DescriptionPageID: request.DescriptionPageID,
 		Rule: request.Query, ActorID: actorID,
 	})
@@ -148,7 +147,7 @@ func (a *CollectionAPI) get(w http.ResponseWriter, r *http.Request) {
 	if !ok {
 		return
 	}
-	value, err := a.service.Get(r.Context(), a.wikiID, id)
+	value, err := a.service.Get(r.Context(), wikiIDFromRequest(r), id)
 	if err != nil {
 		a.writeError(w, r, err)
 		return
@@ -166,7 +165,7 @@ func (a *CollectionAPI) members(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	result, err := a.service.ListMembers(
-		r.Context(), a.wikiID, id, r.URL.Query().Get("cursor"), limit,
+		r.Context(), wikiIDFromRequest(r), id, r.URL.Query().Get("cursor"), limit,
 	)
 	if err != nil {
 		a.writeError(w, r, err)
@@ -219,7 +218,7 @@ func (a *CollectionAPI) replaceMembers(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 	if err := a.service.ReplaceManualMembers(
-		r.Context(), a.wikiID, id, actorID, inputs,
+		r.Context(), wikiIDFromRequest(r), id, actorID, inputs,
 	); err != nil {
 		a.writeError(w, r, err)
 		return
@@ -245,7 +244,7 @@ func (a *CollectionAPI) rebuild(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	count, err := a.service.RebuildRule(
-		r.Context(), a.wikiID, id, request.SourceRevisionID, actorID,
+		r.Context(), wikiIDFromRequest(r), id, request.SourceRevisionID, actorID,
 	)
 	if err != nil {
 		a.writeError(w, r, err)

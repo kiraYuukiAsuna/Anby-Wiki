@@ -18,7 +18,7 @@ func (a *GovernanceAPI) listAdminUsers(w http.ResponseWriter, r *http.Request) {
 	}
 	items, err := a.userAdmin.List(
 		r.Context(),
-		a.wikiID,
+		wikiIDFromRequest(r),
 		actorID,
 		governance.AdminUserListFilter{
 			Search:          r.URL.Query().Get("search"),
@@ -44,7 +44,7 @@ func (a *GovernanceAPI) grantAdminUserRole(w http.ResponseWriter, r *http.Reques
 	roleKey := strings.TrimSpace(chi.URLParam(r, "role_key"))
 	result, err := a.userAdmin.GrantRole(
 		r.Context(),
-		a.wikiID,
+		wikiIDFromRequest(r),
 		actorID,
 		targetActorID,
 		roleKey,
@@ -68,7 +68,7 @@ func (a *GovernanceAPI) revokeAdminUserRole(w http.ResponseWriter, r *http.Reque
 	roleKey := strings.TrimSpace(chi.URLParam(r, "role_key"))
 	result, err := a.userAdmin.RevokeRole(
 		r.Context(),
-		a.wikiID,
+		wikiIDFromRequest(r),
 		actorID,
 		targetActorID,
 		roleKey,
@@ -91,7 +91,7 @@ func (a *GovernanceAPI) deleteAdminUser(w http.ResponseWriter, r *http.Request) 
 	}
 	result, err := a.userAdmin.DeleteUser(
 		r.Context(),
-		a.wikiID,
+		wikiIDFromRequest(r),
 		actorID,
 		targetActorID,
 	)

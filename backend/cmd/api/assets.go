@@ -23,11 +23,10 @@ const (
 
 type AssetAPI struct {
 	service *evidence.Service
-	wikiID  uuid.UUID
 }
 
-func NewAssetAPI(service *evidence.Service, wikiID uuid.UUID) *AssetAPI {
-	return &AssetAPI{service: service, wikiID: wikiID}
+func NewAssetAPI(service *evidence.Service) *AssetAPI {
+	return &AssetAPI{service: service}
 }
 
 type assetRevisionResponse struct {
@@ -76,7 +75,7 @@ func (a *AssetAPI) list(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	page, err := a.service.ListAssets(
-		r.Context(), a.wikiID, r.URL.Query().Get("kind"),
+		r.Context(), wikiIDFromRequest(r), r.URL.Query().Get("kind"),
 		r.URL.Query().Get("cursor"), limit,
 	)
 	if err != nil {
@@ -126,7 +125,7 @@ func (a *AssetAPI) upload(w http.ResponseWriter, r *http.Request) {
 		mimeType = "application/octet-stream"
 	}
 	result, err := a.service.StoreAsset(r.Context(), evidence.StoreAssetParams{
-		WikiID: a.wikiID, Name: name, Content: file,
+		WikiID: wikiIDFromRequest(r), Name: name, Content: file,
 		MimeType: mimeType, ActorID: actorID,
 	})
 	if err != nil {
@@ -146,7 +145,7 @@ func (a *AssetAPI) getRevision(w http.ResponseWriter, r *http.Request) {
 	if !ok {
 		return
 	}
-	value, err := a.service.GetAssetRevision(r.Context(), a.wikiID, revisionID)
+	value, err := a.service.GetAssetRevision(r.Context(), wikiIDFromRequest(r), revisionID)
 	if err != nil {
 		assetError(w, r, err)
 		return
@@ -159,7 +158,7 @@ func (a *AssetAPI) content(w http.ResponseWriter, r *http.Request) {
 	if !ok {
 		return
 	}
-	result, err := a.service.OpenAssetRevision(r.Context(), a.wikiID, revisionID)
+	result, err := a.service.OpenAssetRevision(r.Context(), wikiIDFromRequest(r), revisionID)
 	if err != nil {
 		assetError(w, r, err)
 		return

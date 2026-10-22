@@ -28,12 +28,26 @@ CREATE UNIQUE INDEX namespace_wiki_key_key ON namespace (wiki_id, namespace_key)
 CREATE TABLE actor (
     id           uuid        PRIMARY KEY,
     actor_type   text        NOT NULL CHECK (actor_type IN ('human', 'anonymous', 'bot', 'ai', 'import', 'system')),
+    wiki_id      uuid        REFERENCES wiki_site (id),
     user_id      uuid,
     display_name text        NOT NULL,
     external_key text,
     status       text        NOT NULL DEFAULT 'active',
-    created_at   timestamptz NOT NULL DEFAULT now()
+    created_at   timestamptz NOT NULL DEFAULT now(),
+    CONSTRAINT actor_personal_wiki_check CHECK (
+        actor_type <> 'human' OR wiki_id IS NOT NULL
+    ),
+    UNIQUE (id, wiki_id)
 );
+
+ALTER TABLE wiki_site
+    ADD COLUMN owner_actor_id uuid NOT NULL,
+    ADD CONSTRAINT wiki_site_owner_actor_fk
+        FOREIGN KEY (owner_actor_id, id) REFERENCES actor (id, wiki_id)
+        DEFERRABLE INITIALLY DEFERRED;
+
+CREATE UNIQUE INDEX wiki_site_owner_actor_key ON wiki_site (owner_actor_id);
+CREATE INDEX actor_wiki_idx ON actor (wiki_id) WHERE wiki_id IS NOT NULL;
 
 CREATE TABLE page (
     id                  uuid        PRIMARY KEY,
@@ -284,18 +298,6 @@ CREATE TRIGGER audit_event_immutable
 COMMIT;
 
 BEGIN;
-
-INSERT INTO wiki_site (id, site_key, name, default_language, settings_json)
-VALUES ('00000000-0000-7000-8000-000000000001', 'default', 'Anby Wiki', 'zh-Hans', '{}'::jsonb);
-
-INSERT INTO namespace (id, wiki_id, namespace_key, canonical_name, display_name, is_content) VALUES
-    ('00000000-0000-7000-8000-000000000101', '00000000-0000-7000-8000-000000000001', 'main',       'Main',       '条目',   true),
-    ('00000000-0000-7000-8000-000000000102', '00000000-0000-7000-8000-000000000001', 'talk',       'Talk',       '讨论',   false),
-    ('00000000-0000-7000-8000-000000000103', '00000000-0000-7000-8000-000000000001', 'user',       'User',       '用户',   false),
-    ('00000000-0000-7000-8000-000000000104', '00000000-0000-7000-8000-000000000001', 'project',    'Project',    '项目',   false),
-    ('00000000-0000-7000-8000-000000000105', '00000000-0000-7000-8000-000000000001', 'component',  'Component',  '组件',   true),
-    ('00000000-0000-7000-8000-000000000106', '00000000-0000-7000-8000-000000000001', 'collection', 'Collection', '合集',   true),
-    ('00000000-0000-7000-8000-000000000107', '00000000-0000-7000-8000-000000000001', 'file',       'File',       '文件',   true);
 
 INSERT INTO actor (id, actor_type, display_name, status)
 VALUES ('00000000-0000-7000-8000-000000000201', 'system', 'system', 'active');
@@ -737,6 +739,7 @@ ALTER TABLE asset
 
 CREATE TABLE source (
     id                   uuid        PRIMARY KEY,
+    wiki_id              uuid        NOT NULL REFERENCES wiki_site (id),
     source_type          text        NOT NULL
                                      CHECK (source_type IN ('webpage', 'pdf', 'book', 'image', 'video', 'api', 'database')),
     external_resource_id uuid        REFERENCES external_resource (id),
@@ -751,6 +754,7 @@ CREATE TABLE source (
 
 CREATE INDEX source_external_resource_idx ON source (external_resource_id);
 CREATE INDEX source_asset_idx ON source (asset_id);
+CREATE INDEX source_wiki_created_idx ON source (wiki_id, created_at DESC, id DESC);
 
 CREATE TABLE source_version (
     id                 uuid        PRIMARY KEY,
@@ -956,6 +960,7 @@ BEGIN;
 
 CREATE TABLE import_job (
     id              uuid        PRIMARY KEY,
+    wiki_id         uuid        NOT NULL REFERENCES wiki_site (id),
     job_type        text        NOT NULL,
     status          text        NOT NULL DEFAULT 'queued'
                                 CHECK (status IN ('queued', 'running', 'action_required', 'succeeded', 'failed', 'cancelled')),
@@ -972,9 +977,12 @@ CREATE UNIQUE INDEX import_job_idempotency_key
     ON import_job (initiated_by, idempotency_key);
 CREATE INDEX import_job_status_created_idx
     ON import_job (status, created_at);
+CREATE INDEX import_job_wiki_status_created_idx
+    ON import_job (wiki_id, status, created_at);
 
 CREATE TABLE proposal (
     id                 uuid        PRIMARY KEY,
+    wiki_id            uuid        NOT NULL REFERENCES wiki_site (id),
     import_job_id      uuid        REFERENCES import_job (id),
     target_type        text        NOT NULL
                                    CHECK (target_type IN ('wiki', 'page', 'entity', 'claim', 'collection', 'external_resource')),
@@ -1005,9 +1013,9 @@ CREATE TABLE proposal (
 CREATE UNIQUE INDEX proposal_creator_idempotency_key
     ON proposal (created_by, idempotency_key);
 CREATE INDEX proposal_creator_created_idx
-    ON proposal (created_by, created_at DESC, id DESC);
+    ON proposal (wiki_id, created_by, created_at DESC, id DESC);
 CREATE INDEX proposal_status_risk_created_idx
-    ON proposal (status, risk_level, created_at);
+    ON proposal (wiki_id, status, risk_level, created_at);
 CREATE INDEX proposal_target_idx
     ON proposal (target_type, target_id);
 CREATE INDEX proposal_import_job_idx
@@ -1103,6 +1111,7 @@ CREATE INDEX merge_conflict_open_idx
 
 CREATE TABLE change_batch (
     id             uuid        PRIMARY KEY,
+    wiki_id        uuid        NOT NULL REFERENCES wiki_site (id),
     import_job_id  uuid        REFERENCES import_job (id),
     proposal_id    uuid        NOT NULL UNIQUE REFERENCES proposal (id),
     actor_id       uuid        NOT NULL REFERENCES actor (id),
@@ -1113,7 +1122,7 @@ CREATE TABLE change_batch (
 );
 
 CREATE INDEX change_batch_import_job_idx ON change_batch (import_job_id);
-CREATE INDEX change_batch_actor_created_idx ON change_batch (actor_id, created_at);
+CREATE INDEX change_batch_actor_created_idx ON change_batch (wiki_id, actor_id, created_at);
 
 ALTER TABLE revision
     ADD CONSTRAINT revision_change_batch_fk
@@ -1161,11 +1170,12 @@ CREATE TABLE role (
 );
 
 CREATE TABLE actor_role (
-    actor_id  uuid        NOT NULL REFERENCES actor (id),
+    actor_id  uuid        NOT NULL,
     role_id   uuid        NOT NULL REFERENCES role (id),
     wiki_id   uuid        NOT NULL REFERENCES wiki_site (id),
     created_at timestamptz NOT NULL DEFAULT now(),
-    PRIMARY KEY (actor_id, role_id, wiki_id)
+    PRIMARY KEY (actor_id, role_id, wiki_id),
+    FOREIGN KEY (actor_id, wiki_id) REFERENCES actor (id, wiki_id)
 );
 
 CREATE INDEX actor_role_wiki_actor_idx ON actor_role (wiki_id, actor_id);
@@ -1577,13 +1587,15 @@ BEGIN;
 
 CREATE TABLE component (
     id            uuid        PRIMARY KEY,
-    component_key text        NOT NULL UNIQUE,
+    wiki_id       uuid        NOT NULL REFERENCES wiki_site (id),
+    component_key text        NOT NULL,
     name          text        NOT NULL,
     created_by    uuid        NOT NULL REFERENCES actor (id),
     created_at    timestamptz NOT NULL DEFAULT now(),
     updated_at    timestamptz NOT NULL DEFAULT now(),
     CHECK (component_key ~ '^[a-z][a-z0-9._-]{0,63}$'),
-    CHECK (btrim(name) <> '')
+    CHECK (btrim(name) <> ''),
+    UNIQUE (wiki_id, component_key)
 );
 
 CREATE TABLE component_version (
@@ -1640,30 +1652,6 @@ $$ LANGUAGE plpgsql;
 CREATE TRIGGER component_version_freeze
 BEFORE UPDATE OR DELETE ON component_version
 FOR EACH ROW EXECUTE FUNCTION enforce_component_version_freeze();
-
--- The article importer and editor share one frozen, trusted information-box
--- component. Display configuration selects labels/properties; Claim values are
--- always resolved at render time and are never copied into the page AST.
-INSERT INTO component (id, component_key, name, created_by)
-VALUES (
-    '00000000-0000-7000-8000-000000000901',
-    'article-infobox',
-    'Article information box',
-    '00000000-0000-7000-8000-000000000201'
-);
-
-INSERT INTO component_version (
-    component_id, version, props_schema_json, renderer_ref, status,
-    created_by, published_at
-) VALUES (
-    '00000000-0000-7000-8000-000000000901',
-    1,
-    '{"type":"object","properties":{"title":{"type":"string"},"language":{"type":"string"},"property_keys":{"type":"array","items":{"type":"string"},"uniqueItems":true}},"additionalProperties":false}'::jsonb,
-    'builtin.entity_claim_infobox',
-    'published',
-    '00000000-0000-7000-8000-000000000201',
-    now()
-);
 
 COMMIT;
 
@@ -1949,11 +1937,13 @@ BEGIN;
 
 CREATE TABLE change_tag (
     id          uuid        PRIMARY KEY,
-    tag_key     text        NOT NULL UNIQUE
+    wiki_id     uuid        NOT NULL REFERENCES wiki_site (id),
+    tag_key     text        NOT NULL
                             CHECK (tag_key ~ '^[a-z][a-z0-9._-]{0,63}$'),
     name        text        NOT NULL CHECK (btrim(name) <> ''),
     description text        NOT NULL DEFAULT '',
-    created_at  timestamptz NOT NULL DEFAULT now()
+    created_at  timestamptz NOT NULL DEFAULT now(),
+    UNIQUE (wiki_id, tag_key)
 );
 
 CREATE TABLE change_tag_assignment (
@@ -1991,14 +1981,6 @@ CREATE TRIGGER change_tag_assignment_immutable
     BEFORE UPDATE OR DELETE ON change_tag_assignment
     FOR EACH ROW
     EXECUTE FUNCTION reject_immutable_mutation();
-
-INSERT INTO change_tag (id, tag_key, name, description) VALUES
-    ('00000000-0000-7000-8000-000000000701', 'minor', '小修改', '不改变核心语义的小型整理'),
-    ('00000000-0000-7000-8000-000000000702', 'ai-assisted', 'AI 协助', '由 AI 生成或协助完成的变更'),
-    ('00000000-0000-7000-8000-000000000703', 'imported', '批量导入', '由来源导入管道生成的变更'),
-    ('00000000-0000-7000-8000-000000000704', 'reverted', '已回滚', '已通过补偿版本撤销的变更'),
-    ('00000000-0000-7000-8000-000000000705', 'high-risk', '高风险', '需完整人工审核的高风险变更'),
-    ('00000000-0000-7000-8000-000000000706', 'human-verified', '人工核验', '已由人工复核证据或事实');
 
 COMMIT;
 

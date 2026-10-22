@@ -14,6 +14,7 @@ import (
 	"go.opentelemetry.io/otel/attribute"
 	"go.opentelemetry.io/otel/codes"
 
+	"github.com/anby/wiki/backend/internal/ai"
 	"github.com/anby/wiki/backend/internal/platform/storage"
 )
 
@@ -36,10 +37,9 @@ type SourceImportConfig struct {
 }
 
 type RunnerConfig struct {
-	WikiID       uuid.UUID
 	Provider     string
 	Model        string
-	Runtime      func(context.Context) (RunnerRuntime, error)
+	Runtime      func(context.Context, uuid.UUID) (RunnerRuntime, error)
 	Availability func(context.Context) (bool, error)
 	PollInterval time.Duration
 	JobTimeout   time.Duration
@@ -117,7 +117,17 @@ func (r *Runner) ProcessOne(ctx context.Context) (bool, error) {
 	span.SetAttributes(attribute.Bool("import.stale_job_recovered", recovered))
 	job, run, err := r.jobs.ClaimNextSourceOnly(ctx)
 	if errors.Is(err, ErrNoQueuedJob) && r.config.Runtime != nil {
-		runtime, runtimeErr := r.config.Runtime(ctx)
+		wikiID, wikiErr := r.jobs.NextQueuedAIWikiID(ctx)
+		if errors.Is(wikiErr, ErrNoQueuedJob) {
+			span.SetAttributes(attribute.Bool("import.job_claimed", false))
+			return false, nil
+		}
+		if wikiErr != nil {
+			span.RecordError(wikiErr)
+			span.SetStatus(codes.Error, "queue_inspection_failed")
+			return false, wikiErr
+		}
+		runtime, runtimeErr := r.config.Runtime(ctx, wikiID)
 		if runtimeErr != nil {
 			span.RecordError(runtimeErr)
 			span.SetStatus(codes.Error, "ai_configuration_unavailable")
@@ -137,7 +147,7 @@ func (r *Runner) ProcessOne(ctx context.Context) (bool, error) {
 			chunkCharacters = runtime.ChunkCharacters
 		}
 		autoApprovePlans = runtime.AutoApprovePlans
-		job, run, err = r.jobs.ClaimNext(ctx)
+		job, run, err = r.jobs.ClaimNextForWiki(ctx, wikiID)
 	} else if errors.Is(err, ErrNoQueuedJob) && r.config.Availability != nil {
 		available, availabilityErr := r.config.Availability(ctx)
 		if availabilityErr != nil {
@@ -162,6 +172,7 @@ func (r *Runner) ProcessOne(ctx context.Context) (bool, error) {
 		span.SetStatus(codes.Error, "claim_failed")
 		return false, err
 	}
+	ctx = ai.WithWikiID(ctx, job.WikiID)
 	span.SetAttributes(attribute.Bool("import.job_claimed", true))
 	config, err := decodeSourceImportConfig(job.Config)
 	if err != nil {
@@ -178,7 +189,7 @@ func (r *Runner) ProcessOne(ctx context.Context) (bool, error) {
 		attribute.String("import.ingestion_mode", config.IngestionMode),
 	)
 	request := PipelineRequest{
-		JobID: job.ID, RunKey: run.IdempotencyKey, WikiID: r.config.WikiID,
+		JobID: job.ID, RunKey: run.IdempotencyKey, WikiID: job.WikiID,
 		ActorID: job.InitiatedBy, PageID: planning.PageID, SourceID: config.SourceID,
 		Title: planning.Title, Instructions: planning.Instructions,
 		RouteMode: planning.RouteMode, PlanningInput: job.PlanningInput,

@@ -49,6 +49,14 @@ export class SearchApi extends runtime.BaseAPI {
 
         const headerParameters: runtime.HTTPHeaders = {};
 
+        if (this.configuration && this.configuration.accessToken) {
+            const token = this.configuration.accessToken;
+            const tokenString = await token("cliBearer", []);
+
+            if (tokenString) {
+                headerParameters["Authorization"] = `Bearer ${tokenString}`;
+            }
+        }
 
         let urlPath = `/api/v1/search/capabilities`;
 
@@ -61,7 +69,7 @@ export class SearchApi extends runtime.BaseAPI {
     }
 
     /**
-     * 匿名可读。返回当前 SearchAdapter 的真实后端、可用排序模式和聚合维度； 未配置向量 Embedder 时不会宣称支持 hybrid / semantic。
+     * 返回当前登录 Wiki 的 SearchAdapter 真实后端、可用排序模式和聚合维度； 未配置向量 Embedder 时不会宣称支持 hybrid / semantic。
      * 获取搜索引擎能力
      */
     async getSearchCapabilitiesRaw(initOverrides?: RequestInit | runtime.InitOverrideFunction): Promise<runtime.ApiResponse<SearchCapabilities>> {
@@ -72,7 +80,7 @@ export class SearchApi extends runtime.BaseAPI {
     }
 
     /**
-     * 匿名可读。返回当前 SearchAdapter 的真实后端、可用排序模式和聚合维度； 未配置向量 Embedder 时不会宣称支持 hybrid / semantic。
+     * 返回当前登录 Wiki 的 SearchAdapter 真实后端、可用排序模式和聚合维度； 未配置向量 Embedder 时不会宣称支持 hybrid / semantic。
      * 获取搜索引擎能力
      */
     async getSearchCapabilities(initOverrides?: RequestInit | runtime.InitOverrideFunction): Promise<SearchCapabilities> {
@@ -124,6 +132,14 @@ export class SearchApi extends runtime.BaseAPI {
 
         const headerParameters: runtime.HTTPHeaders = {};
 
+        if (this.configuration && this.configuration.accessToken) {
+            const token = this.configuration.accessToken;
+            const tokenString = await token("cliBearer", []);
+
+            if (tokenString) {
+                headerParameters["Authorization"] = `Bearer ${tokenString}`;
+            }
+        }
 
         let urlPath = `/api/v1/pages/search`;
 
@@ -136,7 +152,7 @@ export class SearchApi extends runtime.BaseAPI {
     }
 
     /**
-     * 独立搜索引擎 SearchAdapter 的匿名查询端点（无需登录）。 搜索文档由 Outbox 驱动的 Current Revision 投影生成，覆盖标题、旧别名、 正文和主 Entity 文本；支持关键词、混合、纯语义搜索，以及字段、 命名空间、语言与 Entity 类型过滤和聚合。 PostgreSQL 仅作为可重建权威 staging 与开发回退；回退环境只支持 keyword。 高亮使用 [[ 与 ]] 标记，调用方必须按纯文本处理，不能作为 HTML 注入。 q 为空（trim 后）返回空列表；limit 缺省 10、最大 50。
+     * 查询当前登录 Wiki 的独立搜索引擎 SearchAdapter。 搜索文档由 Outbox 驱动的 Current Revision 投影生成，覆盖标题、旧别名、 正文和主 Entity 文本；支持关键词、混合、纯语义搜索，以及字段、 命名空间、语言与 Entity 类型过滤和聚合。 PostgreSQL 仅作为可重建权威 staging 与开发回退；回退环境只支持 keyword。 高亮使用 [[ 与 ]] 标记，调用方必须按纯文本处理，不能作为 HTML 注入。 q 为空（trim 后）返回空列表；limit 缺省 10、最大 50。
      * 搜索活页面
      */
     async searchPagesRaw(requestParameters: SearchPagesRequest, initOverrides?: RequestInit | runtime.InitOverrideFunction): Promise<runtime.ApiResponse<PageSearchResults>> {
@@ -147,7 +163,7 @@ export class SearchApi extends runtime.BaseAPI {
     }
 
     /**
-     * 独立搜索引擎 SearchAdapter 的匿名查询端点（无需登录）。 搜索文档由 Outbox 驱动的 Current Revision 投影生成，覆盖标题、旧别名、 正文和主 Entity 文本；支持关键词、混合、纯语义搜索，以及字段、 命名空间、语言与 Entity 类型过滤和聚合。 PostgreSQL 仅作为可重建权威 staging 与开发回退；回退环境只支持 keyword。 高亮使用 [[ 与 ]] 标记，调用方必须按纯文本处理，不能作为 HTML 注入。 q 为空（trim 后）返回空列表；limit 缺省 10、最大 50。
+     * 查询当前登录 Wiki 的独立搜索引擎 SearchAdapter。 搜索文档由 Outbox 驱动的 Current Revision 投影生成，覆盖标题、旧别名、 正文和主 Entity 文本；支持关键词、混合、纯语义搜索，以及字段、 命名空间、语言与 Entity 类型过滤和聚合。 PostgreSQL 仅作为可重建权威 staging 与开发回退；回退环境只支持 keyword。 高亮使用 [[ 与 ]] 标记，调用方必须按纯文本处理，不能作为 HTML 注入。 q 为空（trim 后）返回空列表；limit 缺省 10、最大 50。
      * 搜索活页面
      */
     async searchPages(requestParameters: SearchPagesRequest = {}, initOverrides?: RequestInit | runtime.InitOverrideFunction): Promise<PageSearchResults> {

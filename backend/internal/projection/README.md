@@ -211,7 +211,7 @@ Block content 内的序号路径字符串——v1 行内层是扁平数组，即
 
 ## 投影查询 API（`query.go` + cmd/api，设计 §17.3）
 
-匿名可读（tag `projection`），走投影表不扫 AST，内容与投影最终一致：
+仅查询当前登录 Wiki（tag `projection`），走投影表不扫 AST，内容与投影最终一致：
 
 - `GET /api/v1/pages/{id}/backlinks?cursor=&page_size=`：指向该页的已解析引用
   来源（来源页 id/标题 + source_block_id + display_text），

@@ -5,7 +5,7 @@ export function DetailShell({
   title,
   status,
   modeLabel = "只读",
-  description = "当前详情页匿名可读；所有权威写入仍须经过领域服务与授权工作流。",
+  description = "当前详情属于你的私人 Wiki；所有权威写入仍须经过领域服务与授权工作流。",
   children,
 }: {
   eyebrow: string;

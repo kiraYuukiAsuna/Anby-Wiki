@@ -103,6 +103,14 @@ export class HistoryApi extends runtime.BaseAPI {
 
         const headerParameters: runtime.HTTPHeaders = {};
 
+        if (this.configuration && this.configuration.accessToken) {
+            const token = this.configuration.accessToken;
+            const tokenString = await token("cliBearer", []);
+
+            if (tokenString) {
+                headerParameters["Authorization"] = `Bearer ${tokenString}`;
+            }
+        }
 
         let urlPath = `/api/v1/pages/{id}/diff`;
         urlPath = urlPath.replace('{id}', encodeURIComponent(String(requestParameters['id'])));
@@ -116,7 +124,7 @@ export class HistoryApi extends runtime.BaseAPI {
     }
 
     /**
-     * 阅读端点（匿名可读，无需登录）。以 from 为 base、to 为 current， 用后端 AST Diff（按 Block ID 对齐）计算结构差异：added/removed/changed/moved。 from == to 返回空 changes。任一 Revision 不存在或不属于该页面返回 404。
+     * 在当前登录 Wiki 内以 from 为 base、to 为 current， 用后端 AST Diff（按 Block ID 对齐）计算结构差异：added/removed/changed/moved。 from == to 返回空 changes。任一 Revision 不存在或不属于该页面返回 404。
      * 两版结构 Diff
      */
     async diffRevisionsRaw(requestParameters: DiffRevisionsRequest, initOverrides?: RequestInit | runtime.InitOverrideFunction): Promise<runtime.ApiResponse<DocumentDiff>> {
@@ -127,7 +135,7 @@ export class HistoryApi extends runtime.BaseAPI {
     }
 
     /**
-     * 阅读端点（匿名可读，无需登录）。以 from 为 base、to 为 current， 用后端 AST Diff（按 Block ID 对齐）计算结构差异：added/removed/changed/moved。 from == to 返回空 changes。任一 Revision 不存在或不属于该页面返回 404。
+     * 在当前登录 Wiki 内以 from 为 base、to 为 current， 用后端 AST Diff（按 Block ID 对齐）计算结构差异：added/removed/changed/moved。 from == to 返回空 changes。任一 Revision 不存在或不属于该页面返回 404。
      * 两版结构 Diff
      */
     async diffRevisions(requestParameters: DiffRevisionsRequest, initOverrides?: RequestInit | runtime.InitOverrideFunction): Promise<DocumentDiff> {
@@ -157,6 +165,14 @@ export class HistoryApi extends runtime.BaseAPI {
 
         const headerParameters: runtime.HTTPHeaders = {};
 
+        if (this.configuration && this.configuration.accessToken) {
+            const token = this.configuration.accessToken;
+            const tokenString = await token("cliBearer", []);
+
+            if (tokenString) {
+                headerParameters["Authorization"] = `Bearer ${tokenString}`;
+            }
+        }
 
         let urlPath = `/api/v1/pages/{id}/revisions/{rid}`;
         urlPath = urlPath.replace('{id}', encodeURIComponent(String(requestParameters['id'])));
@@ -171,7 +187,7 @@ export class HistoryApi extends runtime.BaseAPI {
     }
 
     /**
-     * 阅读端点（匿名可读，无需登录）。读取页面指定 Revision 的元信息与 canonical AST（不含 html）。Revision 不存在或不属于该页面返回 404 （跨页访问不泄露存在性）。
+     * 读取当前登录 Wiki 页面指定 Revision 的元信息与 canonical AST（不含 html）。Revision 不存在或不属于该页面返回 404 （跨页访问不泄露存在性）。
      * 单版详情
      */
     async getRevisionRaw(requestParameters: GetRevisionRequest, initOverrides?: RequestInit | runtime.InitOverrideFunction): Promise<runtime.ApiResponse<RevisionDetail>> {
@@ -182,7 +198,7 @@ export class HistoryApi extends runtime.BaseAPI {
     }
 
     /**
-     * 阅读端点（匿名可读，无需登录）。读取页面指定 Revision 的元信息与 canonical AST（不含 html）。Revision 不存在或不属于该页面返回 404 （跨页访问不泄露存在性）。
+     * 读取当前登录 Wiki 页面指定 Revision 的元信息与 canonical AST（不含 html）。Revision 不存在或不属于该页面返回 404 （跨页访问不泄露存在性）。
      * 单版详情
      */
     async getRevision(requestParameters: GetRevisionRequest, initOverrides?: RequestInit | runtime.InitOverrideFunction): Promise<RevisionDetail> {
@@ -213,6 +229,14 @@ export class HistoryApi extends runtime.BaseAPI {
 
         const headerParameters: runtime.HTTPHeaders = {};
 
+        if (this.configuration && this.configuration.accessToken) {
+            const token = this.configuration.accessToken;
+            const tokenString = await token("cliBearer", []);
+
+            if (tokenString) {
+                headerParameters["Authorization"] = `Bearer ${tokenString}`;
+            }
+        }
 
         let urlPath = `/api/v1/pages/{id}/revisions`;
         urlPath = urlPath.replace('{id}', encodeURIComponent(String(requestParameters['id'])));
@@ -226,7 +250,7 @@ export class HistoryApi extends runtime.BaseAPI {
     }
 
     /**
-     * 阅读端点（匿名可读，无需登录）。按 (created_at DESC, id DESC) 游标分页 列出页面 Revision 元信息（含冗余自快照的 content_hash/schema_version，不含 AST）。 首页不传 cursor；后续页传上一页响应的 next_cursor；next_cursor 为 null 表示没有更多。 游标无法解析返回 400 validation_failed；页面不存在返回 404。
+     * 按 (created_at DESC, id DESC) 游标分页 列出页面 Revision 元信息（含冗余自快照的 content_hash/schema_version，不含 AST）。 首页不传 cursor；后续页传上一页响应的 next_cursor；next_cursor 为 null 表示没有更多。 游标无法解析返回 400 validation_failed；页面不存在返回 404。
      * Revision 历史列表
      */
     async listRevisionsRaw(requestParameters: ListRevisionsRequest, initOverrides?: RequestInit | runtime.InitOverrideFunction): Promise<runtime.ApiResponse<RevisionListPage>> {
@@ -237,7 +261,7 @@ export class HistoryApi extends runtime.BaseAPI {
     }
 
     /**
-     * 阅读端点（匿名可读，无需登录）。按 (created_at DESC, id DESC) 游标分页 列出页面 Revision 元信息（含冗余自快照的 content_hash/schema_version，不含 AST）。 首页不传 cursor；后续页传上一页响应的 next_cursor；next_cursor 为 null 表示没有更多。 游标无法解析返回 400 validation_failed；页面不存在返回 404。
+     * 按 (created_at DESC, id DESC) 游标分页 列出页面 Revision 元信息（含冗余自快照的 content_hash/schema_version，不含 AST）。 首页不传 cursor；后续页传上一页响应的 next_cursor；next_cursor 为 null 表示没有更多。 游标无法解析返回 400 validation_failed；页面不存在返回 404。
      * Revision 历史列表
      */
     async listRevisions(requestParameters: ListRevisionsRequest, initOverrides?: RequestInit | runtime.InitOverrideFunction): Promise<RevisionListPage> {

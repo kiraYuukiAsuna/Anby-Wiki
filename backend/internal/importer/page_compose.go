@@ -72,8 +72,15 @@ func (c *ProposalComposer) buildCreatePageOperations(
 	evidenceItems := make([]governance.OperationEvidence, 0)
 	primaryEntity := primaryEntityForRoute(params, route)
 	if primaryEntity != nil {
+		componentID, componentVersion, err := c.articleInfoboxDefinition(
+			ctx, params.WikiID,
+		)
+		if err != nil {
+			return nil, err
+		}
 		infobox, err := c.newArticleInfoboxBlock(
-			primaryEntity.EntityID, params.Plan.Profile.Language,
+			componentID, componentVersion, primaryEntity.EntityID,
+			params.Plan.Profile.Language,
 		)
 		if err != nil {
 			return nil, err
@@ -300,10 +307,17 @@ func (c *ProposalComposer) buildUpdatePageOperations(
 		}
 	}
 	if primaryEntity != nil {
-		existingInfobox := articleInfobox(document)
+		componentID, componentVersion, err := c.articleInfoboxDefinition(
+			ctx, params.WikiID,
+		)
+		if err != nil {
+			return nil, err
+		}
+		existingInfobox := articleInfobox(document, componentID)
 		if existingInfobox == nil {
 			infobox, err := c.newArticleInfoboxBlock(
-				primaryEntity.EntityID, params.Plan.Profile.Language,
+				componentID, componentVersion, primaryEntity.EntityID,
+				params.Plan.Profile.Language,
 			)
 			if err != nil {
 				return nil, err
@@ -319,7 +333,8 @@ func (c *ProposalComposer) buildUpdatePageOperations(
 			operations = append(operations, operation)
 		} else if existingInfobox.EntityID != primaryEntity.EntityID.String() {
 			infobox, err := c.newArticleInfoboxBlock(
-				primaryEntity.EntityID, params.Plan.Profile.Language,
+				componentID, componentVersion, primaryEntity.EntityID,
+				params.Plan.Profile.Language,
 			)
 			if err != nil {
 				return nil, err
@@ -509,6 +524,8 @@ func (c *ProposalComposer) compileRelatedPagesBlocks(
 }
 
 func (c *ProposalComposer) newArticleInfoboxBlock(
+	componentID uuid.UUID,
+	componentVersion int,
 	entityID uuid.UUID,
 	language string,
 ) (*ast.Block, error) {
@@ -525,8 +542,8 @@ func (c *ProposalComposer) newArticleInfoboxBlock(
 	}
 	block := &ast.Block{
 		ID: blockID, Type: ast.BlockComponent,
-		ComponentID:      component.BuiltinArticleInfoboxID.String(),
-		ComponentVersion: component.BuiltinArticleInfoboxVersion,
+		ComponentID:      componentID.String(),
+		ComponentVersion: componentVersion,
 		EntityID:         entityID.String(), DisplayConfig: displayConfig,
 	}
 	if err := ast.Validate(&ast.Document{
@@ -538,13 +555,26 @@ func (c *ProposalComposer) newArticleInfoboxBlock(
 	return block, nil
 }
 
-func articleInfobox(document *ast.Document) *ast.Block {
+func (c *ProposalComposer) articleInfoboxDefinition(
+	ctx context.Context,
+	wikiID uuid.UUID,
+) (uuid.UUID, int, error) {
+	value, version, err := c.components.PublishedByKey(
+		ctx, wikiID, component.BuiltinArticleInfoboxKey,
+	)
+	if err != nil {
+		return uuid.Nil, 0, err
+	}
+	return value.ID, version.Version, nil
+}
+
+func articleInfobox(document *ast.Document, componentID uuid.UUID) *ast.Block {
 	if document == nil {
 		return nil
 	}
 	for _, block := range document.Children {
 		if block.Type == ast.BlockComponent &&
-			block.ComponentID == component.BuiltinArticleInfoboxID.String() {
+			block.ComponentID == componentID.String() {
 			return block
 		}
 	}

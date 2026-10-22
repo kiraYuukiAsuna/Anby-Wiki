@@ -31,7 +31,6 @@ type CollaborationAPI struct {
 	service        *collaboration.Service
 	authorization  *governance.AuthorizationService
 	hub            *collaboration.Hub
-	wikiID         uuid.UUID
 	originPatterns []string
 }
 
@@ -39,11 +38,10 @@ func NewCollaborationAPI(
 	service *collaboration.Service,
 	authorization *governance.AuthorizationService,
 	hub *collaboration.Hub,
-	wikiID uuid.UUID,
 	originPatterns []string,
 ) *CollaborationAPI {
 	return &CollaborationAPI{
-		service: service, authorization: authorization, hub: hub, wikiID: wikiID,
+		service: service, authorization: authorization, hub: hub,
 		originPatterns: append([]string(nil), originPatterns...),
 	}
 }
@@ -70,7 +68,7 @@ func (a *CollaborationAPI) connect(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if authErr := a.authorization.Check(
-		r.Context(), principal.ActorID, a.wikiID, governance.ActionEdit, &pageID,
+		r.Context(), principal.ActorID, wikiIDFromRequest(r), governance.ActionEdit, &pageID,
 	); authErr != nil {
 		serviceError(w, r, authErr)
 		return
@@ -117,7 +115,7 @@ func (a *CollaborationAPI) connect(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 		if authErr := a.authorization.Check(
-			ctx, principal.ActorID, a.wikiID, governance.ActionEdit, &pageID,
+			ctx, principal.ActorID, wikiIDFromRequest(r), governance.ActionEdit, &pageID,
 		); authErr != nil {
 			_ = conn.Close(websocket.StatusPolicyViolation, "edit permission revoked")
 			return

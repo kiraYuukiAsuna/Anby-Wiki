@@ -7,6 +7,7 @@
 Name | Type
 ------------ | -------------
 `id` | string
+`wikiId` | string
 `jobType` | string
 `status` | string
 `initiatedBy` | string
@@ -35,6 +36,7 @@ import type { ImportJob } from ''
 // TODO: Update the object below with actual values
 const example = {
   "id": null,
+  "wikiId": null,
   "jobType": null,
   "status": null,
   "initiatedBy": null,

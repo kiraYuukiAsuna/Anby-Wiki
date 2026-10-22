@@ -284,7 +284,7 @@ example().catch(console.error);
 
 Citation 详情与证据定位链
 
-匿名读取不可变 Citation，并沿 SourceVersion 定位到 Source、可选 Chunk 与外部资源 URL。
+读取当前登录 Wiki 的不可变 Citation，并沿 SourceVersion 定位到 Source、可选 Chunk 与外部资源 URL。
 
 ### Example
 
@@ -297,7 +297,13 @@ import type { GetCitationRequest } from '';
 
 async function example() {
   console.log("🚀 Testing  SDK...");
-  const api = new KnowledgeApi();
+  const config = new Configuration({
+    // Configure HTTP bearer authorization: cliBearer
+    accessToken: "YOUR BEARER TOKEN",
+    // To configure API key authorization: sessionCookie
+    apiKey: "YOUR API KEY",
+  });
+  const api = new KnowledgeApi(config);
 
   const body = {
     // string | Entity、Claim 或 Citation 稳定 ID
@@ -329,7 +335,7 @@ example().catch(console.error);
 
 ### Authorization
 
-No authorization required
+[cliBearer](../README.md#cliBearer), [sessionCookie](../README.md#sessionCookie)
 
 ### HTTP request headers
 
@@ -354,7 +360,7 @@ No authorization required
 
 Claim 详情
 
-匿名读取 Claim 的谓词、结构化值、业务/验证状态、取代链及 Citation 绑定。
+读取当前登录 Wiki 中 Claim 的谓词、结构化值、业务/验证状态、取代链及 Citation 绑定。
 
 ### Example
 
@@ -367,7 +373,13 @@ import type { GetClaimRequest } from '';
 
 async function example() {
   console.log("🚀 Testing  SDK...");
-  const api = new KnowledgeApi();
+  const config = new Configuration({
+    // Configure HTTP bearer authorization: cliBearer
+    accessToken: "YOUR BEARER TOKEN",
+    // To configure API key authorization: sessionCookie
+    apiKey: "YOUR API KEY",
+  });
+  const api = new KnowledgeApi(config);
 
   const body = {
     // string | Entity、Claim 或 Citation 稳定 ID
@@ -399,7 +411,7 @@ example().catch(console.error);
 
 ### Authorization
 
-No authorization required
+[cliBearer](../README.md#cliBearer), [sessionCookie](../README.md#sessionCookie)
 
 ### HTTP request headers
 
@@ -425,7 +437,7 @@ No authorization required
 
 Entity 详情
 
-匿名读取 Entity 的稳定身份、类型、状态、标签与别名；本端点不提供写操作。
+读取当前登录 Wiki 中 Entity 的稳定身份、类型、状态、标签与别名；本端点不提供写操作。
 
 ### Example
 
@@ -438,7 +450,13 @@ import type { GetEntityRequest } from '';
 
 async function example() {
   console.log("🚀 Testing  SDK...");
-  const api = new KnowledgeApi();
+  const config = new Configuration({
+    // Configure HTTP bearer authorization: cliBearer
+    accessToken: "YOUR BEARER TOKEN",
+    // To configure API key authorization: sessionCookie
+    apiKey: "YOUR API KEY",
+  });
+  const api = new KnowledgeApi(config);
 
   const body = {
     // string | Entity、Claim 或 Citation 稳定 ID
@@ -470,7 +488,7 @@ example().catch(console.error);
 
 ### Authorization
 
-No authorization required
+[cliBearer](../README.md#cliBearer), [sessionCookie](../README.md#sessionCookie)
 
 ### HTTP request headers
 
@@ -495,7 +513,7 @@ No authorization required
 
 查询 Entity 关系图
 
-匿名读取由当前已发布 entity-valued Claim 派生的关系边投影。 查询不扫描 Claim 或页面 AST；遍历深度最多 3、节点最多 100、边最多 250， 并在达到硬上限时返回 truncated&#x3D;true。
+读取当前登录 Wiki 中由已发布 entity-valued Claim 派生的关系边投影。 查询不扫描 Claim 或页面 AST；遍历深度最多 3、节点最多 100、边最多 250， 并在达到硬上限时返回 truncated&#x3D;true。
 
 ### Example
 
@@ -508,7 +526,13 @@ import type { GetEntityGraphRequest } from '';
 
 async function example() {
   console.log("🚀 Testing  SDK...");
-  const api = new KnowledgeApi();
+  const config = new Configuration({
+    // Configure HTTP bearer authorization: cliBearer
+    accessToken: "YOUR BEARER TOKEN",
+    // To configure API key authorization: sessionCookie
+    apiKey: "YOUR API KEY",
+  });
+  const api = new KnowledgeApi(config);
 
   const body = {
     // string | Entity、Claim 或 Citation 稳定 ID
@@ -552,7 +576,7 @@ example().catch(console.error);
 
 ### Authorization
 
-No authorization required
+[cliBearer](../README.md#cliBearer), [sessionCookie](../README.md#sessionCookie)
 
 ### HTTP request headers
 
@@ -577,7 +601,7 @@ No authorization required
 
 读取 Entity 的最近合并记录
 
-匿名读取源 Entity 的最近一次合并及其不可变标签、Claim 映射账本。
+读取当前登录 Wiki 中源 Entity 的最近一次合并及其不可变标签、Claim 映射账本。
 
 ### Example
 
@@ -590,7 +614,13 @@ import type { GetEntityMergeRequest } from '';
 
 async function example() {
   console.log("🚀 Testing  SDK...");
-  const api = new KnowledgeApi();
+  const config = new Configuration({
+    // Configure HTTP bearer authorization: cliBearer
+    accessToken: "YOUR BEARER TOKEN",
+    // To configure API key authorization: sessionCookie
+    apiKey: "YOUR API KEY",
+  });
+  const api = new KnowledgeApi(config);
 
   const body = {
     // string | Entity、Claim 或 Citation 稳定 ID
@@ -622,7 +652,7 @@ example().catch(console.error);
 
 ### Authorization
 
-No authorization required
+[cliBearer](../README.md#cliBearer), [sessionCookie](../README.md#sessionCookie)
 
 ### HTTP request headers
 
@@ -647,7 +677,7 @@ No authorization required
 
 浏览与检索 Entity 目录
 
-匿名读取当前 Wiki 的稳定 Entity 身份。查询匹配 canonical key、标签与别名； 游标按 updated_at、id 稳定排序。all 状态含 active 与 merged，但始终排除 deleted。
+读取当前登录 Wiki 的稳定 Entity 身份。查询匹配 canonical key、标签与别名； 游标按 updated_at、id 稳定排序。all 状态含 active 与 merged，但始终排除 deleted。
 
 ### Example
 
@@ -660,7 +690,13 @@ import type { ListEntitiesRequest } from '';
 
 async function example() {
   console.log("🚀 Testing  SDK...");
-  const api = new KnowledgeApi();
+  const config = new Configuration({
+    // Configure HTTP bearer authorization: cliBearer
+    accessToken: "YOUR BEARER TOKEN",
+    // To configure API key authorization: sessionCookie
+    apiKey: "YOUR API KEY",
+  });
+  const api = new KnowledgeApi(config);
 
   const body = {
     // string | 上一页响应返回的 next_cursor；首页不传 (optional)
@@ -704,7 +740,7 @@ example().catch(console.error);
 
 ### Authorization
 
-No authorization required
+[cliBearer](../README.md#cliBearer), [sessionCookie](../README.md#sessionCookie)
 
 ### HTTP request headers
 
@@ -739,7 +775,13 @@ import type { ListEntityFederationLinksRequest } from '';
 
 async function example() {
   console.log("🚀 Testing  SDK...");
-  const api = new KnowledgeApi();
+  const config = new Configuration({
+    // Configure HTTP bearer authorization: cliBearer
+    accessToken: "YOUR BEARER TOKEN",
+    // To configure API key authorization: sessionCookie
+    apiKey: "YOUR API KEY",
+  });
+  const api = new KnowledgeApi(config);
 
   const body = {
     // string | Entity、Claim 或 Citation 稳定 ID
@@ -774,7 +816,7 @@ example().catch(console.error);
 
 ### Authorization
 
-No authorization required
+[cliBearer](../README.md#cliBearer), [sessionCookie](../README.md#sessionCookie)
 
 ### HTTP request headers
 
@@ -885,7 +927,7 @@ example().catch(console.error);
 
 列出跨 Wiki 联邦目录
 
-匿名读取当前 Wiki 已登记的远端 Wiki、信任等级与 Entity 链接模板。
+读取当前登录 Wiki 已登记的远端 Wiki、信任等级与 Entity 链接模板。
 
 ### Example
 
@@ -898,7 +940,13 @@ import type { ListFederatedWikisRequest } from '';
 
 async function example() {
   console.log("🚀 Testing  SDK...");
-  const api = new KnowledgeApi();
+  const config = new Configuration({
+    // Configure HTTP bearer authorization: cliBearer
+    accessToken: "YOUR BEARER TOKEN",
+    // To configure API key authorization: sessionCookie
+    apiKey: "YOUR API KEY",
+  });
+  const api = new KnowledgeApi(config);
 
   const body = {
     // boolean | 是否包含已停用的远端 Wiki (optional)
@@ -930,7 +978,7 @@ example().catch(console.error);
 
 ### Authorization
 
-No authorization required
+[cliBearer](../README.md#cliBearer), [sessionCookie](../README.md#sessionCookie)
 
 ### HTTP request headers
 
@@ -953,7 +1001,7 @@ No authorization required
 
 浏览跨 Wiki Entity 映射
 
-匿名分页读取本地 Entity 与远端 Entity 的可追溯映射。
+分页读取当前登录 Wiki 的本地 Entity 与远端 Entity 可追溯映射。
 
 ### Example
 
@@ -966,7 +1014,13 @@ import type { ListFederationLinksRequest } from '';
 
 async function example() {
   console.log("🚀 Testing  SDK...");
-  const api = new KnowledgeApi();
+  const config = new Configuration({
+    // Configure HTTP bearer authorization: cliBearer
+    accessToken: "YOUR BEARER TOKEN",
+    // To configure API key authorization: sessionCookie
+    apiKey: "YOUR API KEY",
+  });
+  const api = new KnowledgeApi(config);
 
   const body = {
     // string | 上一页响应返回的 next_cursor；首页不传 (optional)
@@ -1010,7 +1064,7 @@ example().catch(console.error);
 
 ### Authorization
 
-No authorization required
+[cliBearer](../README.md#cliBearer), [sessionCookie](../README.md#sessionCookie)
 
 ### HTTP request headers
 
@@ -1034,7 +1088,7 @@ No authorization required
 
 列出 Page 的 Entity 绑定
 
-匿名读取主实体与显式提及绑定；primary 与 page.primary_entity_id 由数据库延迟约束保证一致。
+读取当前登录 Wiki 的主实体与显式提及绑定；primary 与 page.primary_entity_id 由数据库延迟约束保证一致。
 
 ### Example
 
@@ -1047,7 +1101,13 @@ import type { ListPageEntityBindingsRequest } from '';
 
 async function example() {
   console.log("🚀 Testing  SDK...");
-  const api = new KnowledgeApi();
+  const config = new Configuration({
+    // Configure HTTP bearer authorization: cliBearer
+    accessToken: "YOUR BEARER TOKEN",
+    // To configure API key authorization: sessionCookie
+    apiKey: "YOUR API KEY",
+  });
+  const api = new KnowledgeApi(config);
 
   const body = {
     // string | 页面 ID（UUIDv7）
@@ -1079,7 +1139,7 @@ example().catch(console.error);
 
 ### Authorization
 
-No authorization required
+[cliBearer](../README.md#cliBearer), [sessionCookie](../README.md#sessionCookie)
 
 ### HTTP request headers
 

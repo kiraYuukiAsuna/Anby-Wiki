@@ -46,7 +46,10 @@ func escapeSourceLikePattern(value string) string {
 // ListSources returns logical evidence sources without reading any source chunk
 // body. Filtering is deliberately limited to indexed metadata fields.
 func (r *Repository) ListSources(
-	ctx context.Context, sourceType, query, cursor string, limit int,
+	ctx context.Context,
+	wikiID uuid.UUID,
+	sourceType, query, cursor string,
+	limit int,
 ) (*SourcePage, error) {
 	var afterTime *time.Time
 	afterID := uuid.Nil
@@ -65,13 +68,14 @@ func (r *Repository) ListSources(
 	}
 	rows, err := r.pool.Query(ctx, `SELECT `+sourceColumns+`
 		FROM source
-		WHERE ($1='' OR source_type=$1)
-		  AND ($2='' OR title ILIKE $2 ESCAPE '\'
-		    OR COALESCE(author,'') ILIKE $2 ESCAPE '\'
-		    OR COALESCE(publisher,'') ILIKE $2 ESCAPE '\')
-		  AND ($3::timestamptz IS NULL OR (created_at,id)<($3,$4))
+		WHERE wiki_id=$1
+		  AND ($2='' OR source_type=$2)
+		  AND ($3='' OR title ILIKE $3 ESCAPE '\'
+		    OR COALESCE(author,'') ILIKE $3 ESCAPE '\'
+		    OR COALESCE(publisher,'') ILIKE $3 ESCAPE '\')
+		  AND ($4::timestamptz IS NULL OR (created_at,id)<($4,$5))
 		ORDER BY created_at DESC,id DESC
-		LIMIT $5`, sourceType, pattern, afterTime, afterID, limit+1)
+		LIMIT $6`, wikiID, sourceType, pattern, afterTime, afterID, limit+1)
 	if err != nil {
 		return nil, fmt.Errorf("evidence: 查询来源目录失败: %w", err)
 	}
@@ -189,7 +193,10 @@ func (r *Repository) ListSourceChunksPage(
 }
 
 func (s *Service) ListSources(
-	ctx context.Context, sourceType, query, cursor string, limit int,
+	ctx context.Context,
+	wikiID uuid.UUID,
+	sourceType, query, cursor string,
+	limit int,
 ) (*SourcePage, error) {
 	sourceType = strings.TrimSpace(sourceType)
 	query = strings.TrimSpace(query)
@@ -205,11 +212,14 @@ func (s *Service) ListSources(
 	if limit > MaxSourcePageSize {
 		limit = MaxSourcePageSize
 	}
-	return s.repo.ListSources(ctx, sourceType, query, cursor, limit)
+	return s.repo.ListSources(ctx, wikiID, sourceType, query, cursor, limit)
 }
 
-func (s *Service) GetSourceDetail(ctx context.Context, sourceID uuid.UUID) (*SourceDetail, error) {
-	source, err := s.repo.GetSourceByID(ctx, nil, sourceID)
+func (s *Service) GetSourceDetail(
+	ctx context.Context,
+	wikiID, sourceID uuid.UUID,
+) (*SourceDetail, error) {
+	source, err := s.repo.GetSourceByID(ctx, nil, wikiID, sourceID)
 	if err != nil {
 		return nil, err
 	}
@@ -225,9 +235,12 @@ func (s *Service) GetSourceDetail(ctx context.Context, sourceID uuid.UUID) (*Sou
 }
 
 func (s *Service) ListSourceVersions(
-	ctx context.Context, sourceID uuid.UUID, cursor string, limit int,
+	ctx context.Context,
+	wikiID, sourceID uuid.UUID,
+	cursor string,
+	limit int,
 ) (*SourceVersionPage, error) {
-	if _, err := s.repo.GetSourceByID(ctx, nil, sourceID); err != nil {
+	if _, err := s.repo.GetSourceByID(ctx, nil, wikiID, sourceID); err != nil {
 		return nil, err
 	}
 	if limit <= 0 {
@@ -240,9 +253,16 @@ func (s *Service) ListSourceVersions(
 }
 
 func (s *Service) ListSourceChunksPage(
-	ctx context.Context, sourceVersionID uuid.UUID, cursor string, limit int,
+	ctx context.Context,
+	wikiID, sourceVersionID uuid.UUID,
+	cursor string,
+	limit int,
 ) (*SourceChunkPage, error) {
-	if _, err := s.repo.GetSourceVersionByID(ctx, nil, sourceVersionID); err != nil {
+	version, err := s.repo.GetSourceVersionByID(ctx, nil, sourceVersionID)
+	if err != nil {
+		return nil, err
+	}
+	if _, err := s.repo.GetSourceByID(ctx, nil, wikiID, version.SourceID); err != nil {
 		return nil, err
 	}
 	if limit <= 0 {

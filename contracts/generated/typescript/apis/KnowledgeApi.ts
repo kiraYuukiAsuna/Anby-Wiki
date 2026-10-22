@@ -497,6 +497,14 @@ export class KnowledgeApi extends runtime.BaseAPI {
 
         const headerParameters: runtime.HTTPHeaders = {};
 
+        if (this.configuration && this.configuration.accessToken) {
+            const token = this.configuration.accessToken;
+            const tokenString = await token("cliBearer", []);
+
+            if (tokenString) {
+                headerParameters["Authorization"] = `Bearer ${tokenString}`;
+            }
+        }
 
         let urlPath = `/api/v1/citations/{id}`;
         urlPath = urlPath.replace('{id}', encodeURIComponent(String(requestParameters['id'])));
@@ -510,7 +518,7 @@ export class KnowledgeApi extends runtime.BaseAPI {
     }
 
     /**
-     * 匿名读取不可变 Citation，并沿 SourceVersion 定位到 Source、可选 Chunk 与外部资源 URL。
+     * 读取当前登录 Wiki 的不可变 Citation，并沿 SourceVersion 定位到 Source、可选 Chunk 与外部资源 URL。
      * Citation 详情与证据定位链
      */
     async getCitationRaw(requestParameters: GetCitationRequest, initOverrides?: RequestInit | runtime.InitOverrideFunction): Promise<runtime.ApiResponse<CitationDetail>> {
@@ -521,7 +529,7 @@ export class KnowledgeApi extends runtime.BaseAPI {
     }
 
     /**
-     * 匿名读取不可变 Citation，并沿 SourceVersion 定位到 Source、可选 Chunk 与外部资源 URL。
+     * 读取当前登录 Wiki 的不可变 Citation，并沿 SourceVersion 定位到 Source、可选 Chunk 与外部资源 URL。
      * Citation 详情与证据定位链
      */
     async getCitation(requestParameters: GetCitationRequest, initOverrides?: RequestInit | runtime.InitOverrideFunction): Promise<CitationDetail> {
@@ -544,6 +552,14 @@ export class KnowledgeApi extends runtime.BaseAPI {
 
         const headerParameters: runtime.HTTPHeaders = {};
 
+        if (this.configuration && this.configuration.accessToken) {
+            const token = this.configuration.accessToken;
+            const tokenString = await token("cliBearer", []);
+
+            if (tokenString) {
+                headerParameters["Authorization"] = `Bearer ${tokenString}`;
+            }
+        }
 
         let urlPath = `/api/v1/claims/{id}`;
         urlPath = urlPath.replace('{id}', encodeURIComponent(String(requestParameters['id'])));
@@ -557,7 +573,7 @@ export class KnowledgeApi extends runtime.BaseAPI {
     }
 
     /**
-     * 匿名读取 Claim 的谓词、结构化值、业务/验证状态、取代链及 Citation 绑定。
+     * 读取当前登录 Wiki 中 Claim 的谓词、结构化值、业务/验证状态、取代链及 Citation 绑定。
      * Claim 详情
      */
     async getClaimRaw(requestParameters: GetClaimRequest, initOverrides?: RequestInit | runtime.InitOverrideFunction): Promise<runtime.ApiResponse<ClaimDetail>> {
@@ -568,7 +584,7 @@ export class KnowledgeApi extends runtime.BaseAPI {
     }
 
     /**
-     * 匿名读取 Claim 的谓词、结构化值、业务/验证状态、取代链及 Citation 绑定。
+     * 读取当前登录 Wiki 中 Claim 的谓词、结构化值、业务/验证状态、取代链及 Citation 绑定。
      * Claim 详情
      */
     async getClaim(requestParameters: GetClaimRequest, initOverrides?: RequestInit | runtime.InitOverrideFunction): Promise<ClaimDetail> {
@@ -591,6 +607,14 @@ export class KnowledgeApi extends runtime.BaseAPI {
 
         const headerParameters: runtime.HTTPHeaders = {};
 
+        if (this.configuration && this.configuration.accessToken) {
+            const token = this.configuration.accessToken;
+            const tokenString = await token("cliBearer", []);
+
+            if (tokenString) {
+                headerParameters["Authorization"] = `Bearer ${tokenString}`;
+            }
+        }
 
         let urlPath = `/api/v1/entities/{id}`;
         urlPath = urlPath.replace('{id}', encodeURIComponent(String(requestParameters['id'])));
@@ -604,7 +628,7 @@ export class KnowledgeApi extends runtime.BaseAPI {
     }
 
     /**
-     * 匿名读取 Entity 的稳定身份、类型、状态、标签与别名；本端点不提供写操作。
+     * 读取当前登录 Wiki 中 Entity 的稳定身份、类型、状态、标签与别名；本端点不提供写操作。
      * Entity 详情
      */
     async getEntityRaw(requestParameters: GetEntityRequest, initOverrides?: RequestInit | runtime.InitOverrideFunction): Promise<runtime.ApiResponse<EntityDetail>> {
@@ -615,7 +639,7 @@ export class KnowledgeApi extends runtime.BaseAPI {
     }
 
     /**
-     * 匿名读取 Entity 的稳定身份、类型、状态、标签与别名；本端点不提供写操作。
+     * 读取当前登录 Wiki 中 Entity 的稳定身份、类型、状态、标签与别名；本端点不提供写操作。
      * Entity 详情
      */
     async getEntity(requestParameters: GetEntityRequest, initOverrides?: RequestInit | runtime.InitOverrideFunction): Promise<EntityDetail> {
@@ -654,6 +678,14 @@ export class KnowledgeApi extends runtime.BaseAPI {
 
         const headerParameters: runtime.HTTPHeaders = {};
 
+        if (this.configuration && this.configuration.accessToken) {
+            const token = this.configuration.accessToken;
+            const tokenString = await token("cliBearer", []);
+
+            if (tokenString) {
+                headerParameters["Authorization"] = `Bearer ${tokenString}`;
+            }
+        }
 
         let urlPath = `/api/v1/entities/{id}/graph`;
         urlPath = urlPath.replace('{id}', encodeURIComponent(String(requestParameters['id'])));
@@ -667,7 +699,7 @@ export class KnowledgeApi extends runtime.BaseAPI {
     }
 
     /**
-     * 匿名读取由当前已发布 entity-valued Claim 派生的关系边投影。 查询不扫描 Claim 或页面 AST；遍历深度最多 3、节点最多 100、边最多 250， 并在达到硬上限时返回 truncated=true。
+     * 读取当前登录 Wiki 中由已发布 entity-valued Claim 派生的关系边投影。 查询不扫描 Claim 或页面 AST；遍历深度最多 3、节点最多 100、边最多 250， 并在达到硬上限时返回 truncated=true。
      * 查询 Entity 关系图
      */
     async getEntityGraphRaw(requestParameters: GetEntityGraphRequest, initOverrides?: RequestInit | runtime.InitOverrideFunction): Promise<runtime.ApiResponse<EntityGraph>> {
@@ -678,7 +710,7 @@ export class KnowledgeApi extends runtime.BaseAPI {
     }
 
     /**
-     * 匿名读取由当前已发布 entity-valued Claim 派生的关系边投影。 查询不扫描 Claim 或页面 AST；遍历深度最多 3、节点最多 100、边最多 250， 并在达到硬上限时返回 truncated=true。
+     * 读取当前登录 Wiki 中由已发布 entity-valued Claim 派生的关系边投影。 查询不扫描 Claim 或页面 AST；遍历深度最多 3、节点最多 100、边最多 250， 并在达到硬上限时返回 truncated=true。
      * 查询 Entity 关系图
      */
     async getEntityGraph(requestParameters: GetEntityGraphRequest, initOverrides?: RequestInit | runtime.InitOverrideFunction): Promise<EntityGraph> {
@@ -701,6 +733,14 @@ export class KnowledgeApi extends runtime.BaseAPI {
 
         const headerParameters: runtime.HTTPHeaders = {};
 
+        if (this.configuration && this.configuration.accessToken) {
+            const token = this.configuration.accessToken;
+            const tokenString = await token("cliBearer", []);
+
+            if (tokenString) {
+                headerParameters["Authorization"] = `Bearer ${tokenString}`;
+            }
+        }
 
         let urlPath = `/api/v1/entities/{id}/merge`;
         urlPath = urlPath.replace('{id}', encodeURIComponent(String(requestParameters['id'])));
@@ -714,7 +754,7 @@ export class KnowledgeApi extends runtime.BaseAPI {
     }
 
     /**
-     * 匿名读取源 Entity 的最近一次合并及其不可变标签、Claim 映射账本。
+     * 读取当前登录 Wiki 中源 Entity 的最近一次合并及其不可变标签、Claim 映射账本。
      * 读取 Entity 的最近合并记录
      */
     async getEntityMergeRaw(requestParameters: GetEntityMergeRequest, initOverrides?: RequestInit | runtime.InitOverrideFunction): Promise<runtime.ApiResponse<EntityMergeResult>> {
@@ -725,7 +765,7 @@ export class KnowledgeApi extends runtime.BaseAPI {
     }
 
     /**
-     * 匿名读取源 Entity 的最近一次合并及其不可变标签、Claim 映射账本。
+     * 读取当前登录 Wiki 中源 Entity 的最近一次合并及其不可变标签、Claim 映射账本。
      * 读取 Entity 的最近合并记录
      */
     async getEntityMerge(requestParameters: GetEntityMergeRequest, initOverrides?: RequestInit | runtime.InitOverrideFunction): Promise<EntityMergeResult> {
@@ -761,6 +801,14 @@ export class KnowledgeApi extends runtime.BaseAPI {
 
         const headerParameters: runtime.HTTPHeaders = {};
 
+        if (this.configuration && this.configuration.accessToken) {
+            const token = this.configuration.accessToken;
+            const tokenString = await token("cliBearer", []);
+
+            if (tokenString) {
+                headerParameters["Authorization"] = `Bearer ${tokenString}`;
+            }
+        }
 
         let urlPath = `/api/v1/entities`;
 
@@ -773,7 +821,7 @@ export class KnowledgeApi extends runtime.BaseAPI {
     }
 
     /**
-     * 匿名读取当前 Wiki 的稳定 Entity 身份。查询匹配 canonical key、标签与别名； 游标按 updated_at、id 稳定排序。all 状态含 active 与 merged，但始终排除 deleted。
+     * 读取当前登录 Wiki 的稳定 Entity 身份。查询匹配 canonical key、标签与别名； 游标按 updated_at、id 稳定排序。all 状态含 active 与 merged，但始终排除 deleted。
      * 浏览与检索 Entity 目录
      */
     async listEntitiesRaw(requestParameters: ListEntitiesRequest, initOverrides?: RequestInit | runtime.InitOverrideFunction): Promise<runtime.ApiResponse<EntityListPage>> {
@@ -784,7 +832,7 @@ export class KnowledgeApi extends runtime.BaseAPI {
     }
 
     /**
-     * 匿名读取当前 Wiki 的稳定 Entity 身份。查询匹配 canonical key、标签与别名； 游标按 updated_at、id 稳定排序。all 状态含 active 与 merged，但始终排除 deleted。
+     * 读取当前登录 Wiki 的稳定 Entity 身份。查询匹配 canonical key、标签与别名； 游标按 updated_at、id 稳定排序。all 状态含 active 与 merged，但始终排除 deleted。
      * 浏览与检索 Entity 目录
      */
     async listEntities(requestParameters: ListEntitiesRequest = {}, initOverrides?: RequestInit | runtime.InitOverrideFunction): Promise<EntityListPage> {
@@ -811,6 +859,14 @@ export class KnowledgeApi extends runtime.BaseAPI {
 
         const headerParameters: runtime.HTTPHeaders = {};
 
+        if (this.configuration && this.configuration.accessToken) {
+            const token = this.configuration.accessToken;
+            const tokenString = await token("cliBearer", []);
+
+            if (tokenString) {
+                headerParameters["Authorization"] = `Bearer ${tokenString}`;
+            }
+        }
 
         let urlPath = `/api/v1/entities/{id}/federation-links`;
         urlPath = urlPath.replace('{id}', encodeURIComponent(String(requestParameters['id'])));
@@ -916,6 +972,14 @@ export class KnowledgeApi extends runtime.BaseAPI {
 
         const headerParameters: runtime.HTTPHeaders = {};
 
+        if (this.configuration && this.configuration.accessToken) {
+            const token = this.configuration.accessToken;
+            const tokenString = await token("cliBearer", []);
+
+            if (tokenString) {
+                headerParameters["Authorization"] = `Bearer ${tokenString}`;
+            }
+        }
 
         let urlPath = `/api/v1/federated-wikis`;
 
@@ -928,7 +992,7 @@ export class KnowledgeApi extends runtime.BaseAPI {
     }
 
     /**
-     * 匿名读取当前 Wiki 已登记的远端 Wiki、信任等级与 Entity 链接模板。
+     * 读取当前登录 Wiki 已登记的远端 Wiki、信任等级与 Entity 链接模板。
      * 列出跨 Wiki 联邦目录
      */
     async listFederatedWikisRaw(requestParameters: ListFederatedWikisRequest, initOverrides?: RequestInit | runtime.InitOverrideFunction): Promise<runtime.ApiResponse<FederatedWikiList>> {
@@ -939,7 +1003,7 @@ export class KnowledgeApi extends runtime.BaseAPI {
     }
 
     /**
-     * 匿名读取当前 Wiki 已登记的远端 Wiki、信任等级与 Entity 链接模板。
+     * 读取当前登录 Wiki 已登记的远端 Wiki、信任等级与 Entity 链接模板。
      * 列出跨 Wiki 联邦目录
      */
     async listFederatedWikis(requestParameters: ListFederatedWikisRequest = {}, initOverrides?: RequestInit | runtime.InitOverrideFunction): Promise<FederatedWikiList> {
@@ -975,6 +1039,14 @@ export class KnowledgeApi extends runtime.BaseAPI {
 
         const headerParameters: runtime.HTTPHeaders = {};
 
+        if (this.configuration && this.configuration.accessToken) {
+            const token = this.configuration.accessToken;
+            const tokenString = await token("cliBearer", []);
+
+            if (tokenString) {
+                headerParameters["Authorization"] = `Bearer ${tokenString}`;
+            }
+        }
 
         let urlPath = `/api/v1/federation-links`;
 
@@ -987,7 +1059,7 @@ export class KnowledgeApi extends runtime.BaseAPI {
     }
 
     /**
-     * 匿名分页读取本地 Entity 与远端 Entity 的可追溯映射。
+     * 分页读取当前登录 Wiki 的本地 Entity 与远端 Entity 可追溯映射。
      * 浏览跨 Wiki Entity 映射
      */
     async listFederationLinksRaw(requestParameters: ListFederationLinksRequest, initOverrides?: RequestInit | runtime.InitOverrideFunction): Promise<runtime.ApiResponse<EntityFederationLinkListPage>> {
@@ -998,7 +1070,7 @@ export class KnowledgeApi extends runtime.BaseAPI {
     }
 
     /**
-     * 匿名分页读取本地 Entity 与远端 Entity 的可追溯映射。
+     * 分页读取当前登录 Wiki 的本地 Entity 与远端 Entity 可追溯映射。
      * 浏览跨 Wiki Entity 映射
      */
     async listFederationLinks(requestParameters: ListFederationLinksRequest = {}, initOverrides?: RequestInit | runtime.InitOverrideFunction): Promise<EntityFederationLinkListPage> {
@@ -1021,6 +1093,14 @@ export class KnowledgeApi extends runtime.BaseAPI {
 
         const headerParameters: runtime.HTTPHeaders = {};
 
+        if (this.configuration && this.configuration.accessToken) {
+            const token = this.configuration.accessToken;
+            const tokenString = await token("cliBearer", []);
+
+            if (tokenString) {
+                headerParameters["Authorization"] = `Bearer ${tokenString}`;
+            }
+        }
 
         let urlPath = `/api/v1/pages/{id}/entity-bindings`;
         urlPath = urlPath.replace('{id}', encodeURIComponent(String(requestParameters['id'])));
@@ -1034,7 +1114,7 @@ export class KnowledgeApi extends runtime.BaseAPI {
     }
 
     /**
-     * 匿名读取主实体与显式提及绑定；primary 与 page.primary_entity_id 由数据库延迟约束保证一致。
+     * 读取当前登录 Wiki 的主实体与显式提及绑定；primary 与 page.primary_entity_id 由数据库延迟约束保证一致。
      * 列出 Page 的 Entity 绑定
      */
     async listPageEntityBindingsRaw(requestParameters: ListPageEntityBindingsRequest, initOverrides?: RequestInit | runtime.InitOverrideFunction): Promise<runtime.ApiResponse<PageEntityBindingList>> {
@@ -1045,7 +1125,7 @@ export class KnowledgeApi extends runtime.BaseAPI {
     }
 
     /**
-     * 匿名读取主实体与显式提及绑定；primary 与 page.primary_entity_id 由数据库延迟约束保证一致。
+     * 读取当前登录 Wiki 的主实体与显式提及绑定；primary 与 page.primary_entity_id 由数据库延迟约束保证一致。
      * 列出 Page 的 Entity 绑定
      */
     async listPageEntityBindings(requestParameters: ListPageEntityBindingsRequest, initOverrides?: RequestInit | runtime.InitOverrideFunction): Promise<PageEntityBindingList> {

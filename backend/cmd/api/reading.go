@@ -1,6 +1,7 @@
-// 页面阅读 API handlers（M1-T06）：按标题/别名/ID 读取当前 Revision；
+// 页面阅读 API handlers（M1-T06）：按当前登录 Wiki 的标题/别名/ID
+// 读取当前 Revision；
 // HTML 优先取 RenderedPage 投影（M3-T05），未命中时直连 ContentSnapshot 实时渲染兜底。
-// 阅读端点匿名可读，无需 X-Actor-ID；重定向跟随与错误语义见契约 openapi.yaml。
+// 重定向跟随与错误语义见契约 openapi.yaml。
 package main
 
 import (
@@ -16,21 +17,17 @@ import (
 	"github.com/anby/wiki/backend/internal/render"
 )
 
-// ReadAPI 读 API 依赖集合：Page 领域服务与启动时解析缓存的默认站点 ID。
 type ReadAPI struct {
 	pages    *page.Service
-	wikiID   uuid.UUID
 	sections *projection.Queries
 	dynamic  render.DynamicRenderer
 }
 
-// NewReadAPI 装配读 API。wikiID 与写 API 同为种子里 site_key='default' 的站点。
 func NewReadAPI(
 	pages *page.Service,
-	wikiID uuid.UUID,
 	sectionQueries ...*projection.Queries,
 ) *ReadAPI {
-	api := &ReadAPI{pages: pages, wikiID: wikiID}
+	api := &ReadAPI{pages: pages}
 	if len(sectionQueries) > 0 {
 		api.sections = sectionQueries[0]
 	}
@@ -98,7 +95,7 @@ func (a *ReadAPI) listPages(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	result, err := a.pages.ListPublishedPages(
-		r.Context(), a.wikiID, r.URL.Query().Get("sort"),
+		r.Context(), wikiIDFromRequest(r), r.URL.Query().Get("sort"),
 		r.URL.Query().Get("cursor"), limit,
 	)
 	if err != nil {
@@ -126,7 +123,7 @@ func (a *ReadAPI) getPageByTitle(w http.ResponseWriter, r *http.Request) {
 		httpx.WriteError(w, r, http.StatusBadRequest, httpx.CodeBadRequest, "namespace 与 title 为必填查询参数")
 		return
 	}
-	resolved, err := a.pages.ResolveTitle(r.Context(), a.wikiID, namespace, title)
+	resolved, err := a.pages.ResolveTitle(r.Context(), wikiIDFromRequest(r), namespace, title)
 	if err != nil {
 		serviceError(w, r, err)
 		return
@@ -145,7 +142,7 @@ func (a *ReadAPI) getPageByID(w http.ResponseWriter, r *http.Request) {
 	if !ok {
 		return
 	}
-	p, err := getPageInWiki(r.Context(), a.pages, a.wikiID, pageID)
+	p, err := getPageInWiki(r.Context(), a.pages, wikiIDFromRequest(r), pageID)
 	if err != nil {
 		serviceError(w, r, err)
 		return

@@ -85,6 +85,38 @@ func Authentication(authenticator *authdomain.Authenticator, testHeaderFallback 
 	}
 }
 
+// RequireAuthenticatedWiki prevents every knowledge route from falling back
+// to a process-wide Wiki. Only account bootstrap and credential exchange stay
+// public; all other API calls require a Principal with an explicit Wiki.
+func RequireAuthenticatedWiki(next http.Handler) http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		public := false
+		switch {
+		case r.Method == http.MethodPost &&
+			(r.URL.Path == "/api/v1/auth/register" ||
+				r.URL.Path == "/api/v1/auth/login" ||
+				r.URL.Path == "/api/v1/auth/cli/exchange"):
+			public = true
+		case r.Method == http.MethodGet && r.URL.Path == "/api/v1/auth/session":
+			public = true
+		case r.Method == http.MethodPost && r.URL.Path == "/api/v1/auth/logout":
+			public = true
+		}
+		if public {
+			next.ServeHTTP(w, r)
+			return
+		}
+		principal, ok := authdomain.PrincipalFrom(r.Context())
+		if !ok || principal.ActorID == uuid.Nil || principal.WikiID == uuid.Nil {
+			httpx.WriteError(
+				w, r, http.StatusUnauthorized, httpx.CodeUnauthorized, "需要登录",
+			)
+			return
+		}
+		next.ServeHTTP(w, r)
+	})
+}
+
 // Recoverer 中间件：恢复 panic，返回 500 并记录日志。
 func Recoverer(logger *slog.Logger, options ...any) func(http.Handler) http.Handler {
 	var service string

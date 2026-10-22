@@ -272,6 +272,9 @@ func TestAuthExchangePersistsTokenWithoutReturningSecret(t *testing.T) {
 			writer.Header().Set("Content-Type", "application/json")
 			_, _ = writer.Write([]byte(`{
 				"actor_id":"0198a1b2-c3d4-7e5f-8a9b-0c1d2e3f4a01",
+					"wiki_id":"0198a1b2-c3d4-7e5f-8a9b-0c1d2e3f4a02",
+					"wiki_name":"CLI Test Wiki",
+					"main_namespace_id":"0198a1b2-c3d4-7e5f-8a9b-0c1d2e3f4a03",
 				"actor_type":"human",
 				"display_name":"CLI Test",
 				"method":"cli_token"

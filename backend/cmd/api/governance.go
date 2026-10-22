@@ -37,7 +37,6 @@ type GovernanceAPI struct {
 	userAdmin  *governance.UserAdminService
 	auth       *governance.AuthorizationService
 	revisions  *page.Service
-	wikiID     uuid.UUID
 }
 
 func (a *GovernanceAPI) WithBulkReview(service *governance.BulkReviewService) *GovernanceAPI {
@@ -80,10 +79,8 @@ func (a *GovernanceAPI) WithRevisionStorage(
 
 func (a *GovernanceAPI) WithProtection(
 	service *governance.ProtectionService,
-	wikiID uuid.UUID,
 ) *GovernanceAPI {
 	a.protection = service
-	a.wikiID = wikiID
 	return a
 }
 
@@ -121,6 +118,7 @@ type createProposalRequest struct {
 
 type proposalResponse struct {
 	ID                uuid.UUID                  `json:"id"`
+	WikiID            uuid.UUID                  `json:"wiki_id"`
 	ImportJobID       *uuid.UUID                 `json:"import_job_id"`
 	TargetType        string                     `json:"target_type"`
 	TargetID          *uuid.UUID                 `json:"target_id"`
@@ -170,7 +168,7 @@ func (a *GovernanceAPI) listProposals(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	page, err := a.proposals.ListOwnedProposals(
-		r.Context(), actorID, r.URL.Query().Get("status"),
+		r.Context(), wikiIDFromRequest(r), actorID, r.URL.Query().Get("status"),
 		r.URL.Query().Get("target_type"), r.URL.Query().Get("cursor"), limit,
 	)
 	if err != nil {
@@ -196,7 +194,7 @@ func (a *GovernanceAPI) listPendingApplyProposals(w http.ResponseWriter, r *http
 		return
 	}
 	if err := a.auth.Check(
-		r.Context(), actorID, a.wikiID, governance.ActionApply, nil,
+		r.Context(), actorID, wikiIDFromRequest(r), governance.ActionApply, nil,
 	); err != nil {
 		governanceError(w, r, err)
 		return
@@ -206,7 +204,7 @@ func (a *GovernanceAPI) listPendingApplyProposals(w http.ResponseWriter, r *http
 		return
 	}
 	page, err := a.proposals.ListPendingApplyProposals(
-		r.Context(), a.wikiID, r.URL.Query().Get("cursor"), limit,
+		r.Context(), wikiIDFromRequest(r), r.URL.Query().Get("cursor"), limit,
 	)
 	if err != nil {
 		governanceError(w, r, err)
@@ -236,7 +234,8 @@ func (a *GovernanceAPI) createProposal(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	p, err := a.proposals.CreateProposal(r.Context(), governance.CreateProposalParams{
-		ImportJobID: req.ImportJobID, TargetType: req.TargetType, TargetID: req.TargetID,
+		WikiID: wikiIDFromRequest(r), ImportJobID: req.ImportJobID,
+		TargetType: req.TargetType, TargetID: req.TargetID,
 		BaseRevisionID: req.BaseRevisionID, BaseStateVersion: req.BaseStateVersion,
 		RiskLevel: req.RiskLevel, CreatedBy: actorID, IdempotencyKey: key,
 	})
@@ -261,7 +260,13 @@ func (a *GovernanceAPI) getProposal(w http.ResponseWriter, r *http.Request) {
 		governanceError(w, r, err)
 		return
 	}
-	if err := a.authorizeProposalRead(r.Context(), p, actorID); err != nil {
+	if p.WikiID != wikiIDFromRequest(r) {
+		governanceError(w, r, governance.ErrProposalNotFound)
+		return
+	}
+	if err := a.authorizeProposalRead(
+		r.Context(), p, actorID, wikiIDFromRequest(r),
+	); err != nil {
 		governanceError(w, r, err)
 		return
 	}
@@ -296,6 +301,9 @@ func (a *GovernanceAPI) addOperation(w http.ResponseWriter, r *http.Request) {
 	if !ok {
 		return
 	}
+	if !a.requireProposalInWiki(w, r, id) {
+		return
+	}
 	raw, err := io.ReadAll(http.MaxBytesReader(w, r.Body, 2<<20))
 	if err != nil {
 		httpx.WriteError(w, r, http.StatusBadRequest, httpx.CodeBadRequest, "Operation 请求体过大或不可读")
@@ -317,6 +325,9 @@ func (a *GovernanceAPI) submitProposal(w http.ResponseWriter, r *http.Request) {
 	}
 	id, ok := governancePathID(w, r, "id")
 	if !ok {
+		return
+	}
+	if !a.requireProposalInWiki(w, r, id) {
 		return
 	}
 	result, err := a.reviews.SubmitAs(r.Context(), id, actorID)
@@ -341,8 +352,12 @@ func (a *GovernanceAPI) previewProposal(w http.ResponseWriter, r *http.Request) 
 		governanceError(w, r, err)
 		return
 	}
+	if proposal.WikiID != wikiIDFromRequest(r) {
+		governanceError(w, r, governance.ErrProposalNotFound)
+		return
+	}
 	if err := a.authorizeProposalRead(
-		r.Context(), proposal, actorID,
+		r.Context(), proposal, actorID, wikiIDFromRequest(r),
 	); err != nil {
 		governanceError(w, r, err)
 		return
@@ -365,13 +380,15 @@ func (a *GovernanceAPI) pendingReviews(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if err := a.auth.Check(
-		r.Context(), actorID, a.wikiID, governance.ActionReview, nil,
+		r.Context(), actorID, wikiIDFromRequest(r), governance.ActionReview, nil,
 	); err != nil {
 		governanceError(w, r, err)
 		return
 	}
 	limit, _ := strconv.Atoi(r.URL.Query().Get("page_size"))
-	tasks, err := a.reviews.Pending(r.Context(), limit)
+	tasks, err := a.reviews.Pending(
+		r.Context(), wikiIDFromRequest(r), limit,
+	)
 	if err != nil {
 		governanceError(w, r, err)
 		return
@@ -397,7 +414,10 @@ func (a *GovernanceAPI) decideReview(w http.ResponseWriter, r *http.Request) {
 	if !decodeJSON(w, r, &req) {
 		return
 	}
-	p, err := a.reviews.Decide(r.Context(), id, actorID, req.Approve, req.Reason)
+	p, err := a.reviews.Decide(
+		r.Context(), wikiIDFromRequest(r), id, actorID,
+		req.Approve, req.Reason,
+	)
 	if err != nil {
 		governanceError(w, r, err)
 		return
@@ -412,6 +432,9 @@ func (a *GovernanceAPI) applyProposal(w http.ResponseWriter, r *http.Request) {
 	}
 	id, ok := governancePathID(w, r, "id")
 	if !ok {
+		return
+	}
+	if !a.requireProposalInWiki(w, r, id) {
 		return
 	}
 	result, err := a.apply.Apply(r.Context(), id, actorID)
@@ -439,6 +462,9 @@ func (a *GovernanceAPI) mergeToWorkingDocument(w http.ResponseWriter, r *http.Re
 	}
 	proposalID, ok := governancePathID(w, r, "id")
 	if !ok {
+		return
+	}
+	if !a.requireProposalInWiki(w, r, proposalID) {
 		return
 	}
 	if a.merge == nil {
@@ -492,6 +518,9 @@ func (a *GovernanceAPI) resolveConflict(w http.ResponseWriter, r *http.Request) 
 	if !ok {
 		return
 	}
+	if !a.requireProposalInWiki(w, r, proposalID) {
+		return
+	}
 	conflictID, ok := governancePathID(w, r, "conflict_id")
 	if !ok {
 		return
@@ -524,6 +553,15 @@ func (a *GovernanceAPI) rollbackBatch(w http.ResponseWriter, r *http.Request) {
 	if !ok {
 		return
 	}
+	batch, err := a.repo.GetChangeBatch(r.Context(), nil, id)
+	if err != nil {
+		governanceError(w, r, err)
+		return
+	}
+	if batch.WikiID != wikiIDFromRequest(r) {
+		governanceError(w, r, governance.ErrProposalNotFound)
+		return
+	}
 	result, err := a.rollback.Rollback(r.Context(), id, actorID)
 	if err != nil {
 		governanceError(w, r, err)
@@ -549,7 +587,8 @@ func (a *GovernanceAPI) createBulkReview(w http.ResponseWriter, r *http.Request)
 		return
 	}
 	batch, err := a.bulkReview.Create(r.Context(), governance.CreateBulkReviewParams{
-		ProposalIDs: req.ProposalIDs, CreatedBy: actorID, SamplePercent: req.SamplePercent,
+		WikiID: wikiIDFromRequest(r), ProposalIDs: req.ProposalIDs,
+		CreatedBy: actorID, SamplePercent: req.SamplePercent,
 		ForceFull: req.ForceFull, WaveSize: req.WaveSize,
 	})
 	if err != nil {
@@ -569,7 +608,7 @@ func (a *GovernanceAPI) listBulkReviews(w http.ResponseWriter, r *http.Request) 
 		return
 	}
 	page, err := a.bulkReview.List(
-		r.Context(), actorID, r.URL.Query().Get("status"),
+		r.Context(), wikiIDFromRequest(r), actorID, r.URL.Query().Get("status"),
 		r.URL.Query().Get("cursor"), limit,
 	)
 	if err != nil {
@@ -588,7 +627,9 @@ func (a *GovernanceAPI) getBulkReview(w http.ResponseWriter, r *http.Request) {
 	if !ok {
 		return
 	}
-	batch, err := a.bulkReview.Get(r.Context(), id, actorID)
+	batch, err := a.bulkReview.Get(
+		r.Context(), wikiIDFromRequest(r), id, actorID,
+	)
 	if err != nil {
 		governanceError(w, r, err)
 		return
@@ -618,7 +659,10 @@ func (a *GovernanceAPI) decideBulkReview(w http.ResponseWriter, r *http.Request)
 	if !decodeJSON(w, r, &req) {
 		return
 	}
-	batch, err := a.bulkReview.Decide(r.Context(), batchID, proposalID, actorID, req.Approve, req.Reason)
+	batch, err := a.bulkReview.Decide(
+		r.Context(), wikiIDFromRequest(r), batchID, proposalID,
+		actorID, req.Approve, req.Reason,
+	)
 	if err != nil {
 		governanceError(w, r, err)
 		return
@@ -639,7 +683,12 @@ func (a *GovernanceAPI) resumeBulkReview(w http.ResponseWriter, r *http.Request)
 }
 
 func (a *GovernanceAPI) bulkReviewActorAction(w http.ResponseWriter, r *http.Request,
-	action func(context.Context, uuid.UUID, uuid.UUID) (*governance.BulkReviewBatch, error)) {
+	action func(
+		context.Context,
+		uuid.UUID,
+		uuid.UUID,
+		uuid.UUID,
+	) (*governance.BulkReviewBatch, error)) {
 	actorID, ok := actorIDFrom(w, r)
 	if !ok {
 		return
@@ -648,7 +697,9 @@ func (a *GovernanceAPI) bulkReviewActorAction(w http.ResponseWriter, r *http.Req
 	if !ok {
 		return
 	}
-	batch, err := action(r.Context(), batchID, actorID)
+	batch, err := action(
+		r.Context(), wikiIDFromRequest(r), batchID, actorID,
+	)
 	if err != nil {
 		governanceError(w, r, err)
 		return
@@ -665,7 +716,9 @@ func (a *GovernanceAPI) applyBulkReviewWave(w http.ResponseWriter, r *http.Reque
 	if !ok {
 		return
 	}
-	result, err := a.bulkReview.ApplyNextWave(r.Context(), batchID, actorID)
+	result, err := a.bulkReview.ApplyNextWave(
+		r.Context(), wikiIDFromRequest(r), batchID, actorID,
+	)
 	if err != nil {
 		governanceError(w, r, err)
 		return
@@ -682,7 +735,9 @@ func (a *GovernanceAPI) bulkReviewAudit(w http.ResponseWriter, r *http.Request) 
 	if !ok {
 		return
 	}
-	events, err := a.bulkReview.Audit(r.Context(), batchID, actorID)
+	events, err := a.bulkReview.Audit(
+		r.Context(), wikiIDFromRequest(r), batchID, actorID,
+	)
 	if err != nil {
 		governanceError(w, r, err)
 		return
@@ -712,7 +767,7 @@ func (a *GovernanceAPI) listPageProtections(
 	}
 	includeExpired := r.URL.Query().Get("include_expired") == "true"
 	items, err := a.protection.List(
-		r.Context(), a.wikiID, actorID, pageID, includeExpired,
+		r.Context(), wikiIDFromRequest(r), actorID, pageID, includeExpired,
 	)
 	if err != nil {
 		governanceError(w, r, err)
@@ -735,7 +790,7 @@ func (a *GovernanceAPI) createPageProtection(
 	}
 	item, err := a.protection.Create(
 		r.Context(), governance.CreatePageProtectionParams{
-			WikiID: a.wikiID, PageID: req.PageID,
+			WikiID: wikiIDFromRequest(r), PageID: req.PageID,
 			NamespaceKey:    req.NamespaceKey,
 			NormalizedTitle: req.NormalizedTitle,
 			ActionType:      req.ActionType,
@@ -763,7 +818,7 @@ func (a *GovernanceAPI) deletePageProtection(
 		return
 	}
 	if err := a.protection.Delete(
-		r.Context(), a.wikiID, id, actorID,
+		r.Context(), wikiIDFromRequest(r), id, actorID,
 	); err != nil {
 		governanceError(w, r, err)
 		return
@@ -777,7 +832,7 @@ func (a *GovernanceAPI) listRoles(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	items, err := a.protection.ListRoles(
-		r.Context(), a.wikiID, actorID,
+		r.Context(), wikiIDFromRequest(r), actorID,
 	)
 	if err != nil {
 		governanceError(w, r, err)
@@ -799,7 +854,7 @@ func (a *GovernanceAPI) listAITrustProfiles(
 	if !ok {
 		return
 	}
-	items, err := a.aiTrust.List(r.Context(), a.wikiID, actorID)
+	items, err := a.aiTrust.List(r.Context(), wikiIDFromRequest(r), actorID)
 	if err != nil {
 		governanceError(w, r, err)
 		return
@@ -825,7 +880,7 @@ func (a *GovernanceAPI) updateAITrustProfile(
 	}
 	item, err := a.aiTrust.Update(
 		r.Context(), governance.UpdateAITrustProfileParams{
-			WikiID: a.wikiID, ActorID: actorID,
+			WikiID: wikiIDFromRequest(r), ActorID: actorID,
 			TrustLevel:            req.TrustLevel,
 			RequiredSamplePercent: req.RequiredSamplePercent,
 			UpdatedBy:             updatedBy,
@@ -841,8 +896,11 @@ func (a *GovernanceAPI) updateAITrustProfile(
 func (a *GovernanceAPI) authorizeProposalRead(
 	ctx context.Context,
 	proposal *governance.Proposal,
-	actorID uuid.UUID,
+	actorID, wikiID uuid.UUID,
 ) error {
+	if proposal == nil || proposal.WikiID != wikiID {
+		return governance.ErrProposalNotFound
+	}
 	if proposal != nil && proposal.CreatedBy == actorID {
 		return nil
 	}
@@ -850,16 +908,33 @@ func (a *GovernanceAPI) authorizeProposalRead(
 		return governance.ErrPermissionDenied
 	}
 	if err := a.auth.Check(
-		ctx, actorID, a.wikiID, governance.ActionReview, nil,
+		ctx, actorID, wikiID, governance.ActionReview, nil,
 	); err == nil {
 		return nil
 	}
 	if err := a.auth.Check(
-		ctx, actorID, a.wikiID, governance.ActionApply, nil,
+		ctx, actorID, wikiID, governance.ActionApply, nil,
 	); err == nil {
 		return nil
 	}
 	return governance.ErrPermissionDenied
+}
+
+func (a *GovernanceAPI) requireProposalInWiki(
+	w http.ResponseWriter,
+	r *http.Request,
+	proposalID uuid.UUID,
+) bool {
+	proposal, err := a.repo.GetProposal(r.Context(), nil, proposalID)
+	if err != nil {
+		governanceError(w, r, err)
+		return false
+	}
+	if proposal.WikiID != wikiIDFromRequest(r) {
+		governanceError(w, r, governance.ErrProposalNotFound)
+		return false
+	}
+	return true
 }
 
 func governancePathID(w http.ResponseWriter, r *http.Request, name string) (uuid.UUID, bool) {
@@ -879,7 +954,8 @@ func toProposalResponse(p *governance.Proposal, operations []operationRecordResp
 		conflicts = []governance.MergeConflict{}
 	}
 	return proposalResponse{
-		ID: p.ID, ImportJobID: p.ImportJobID, TargetType: p.TargetType, TargetID: p.TargetID,
+		ID: p.ID, WikiID: p.WikiID, ImportJobID: p.ImportJobID,
+		TargetType: p.TargetType, TargetID: p.TargetID,
 		BaseRevisionID: p.BaseRevisionID, BaseStateVersion: p.BaseStateVersion,
 		Status: p.Status, RiskLevel: p.RiskLevel, RiskReasons: p.RiskReasons,
 		PolicyDecision: p.PolicyDecision, CreatedBy: p.CreatedBy, IdempotencyKey: p.IdempotencyKey,

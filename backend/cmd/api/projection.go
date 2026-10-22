@@ -1,4 +1,4 @@
-// 投影查询 API handlers（M3-T03）：反向链接与文档目录，匿名可读。
+// 投影查询 API handlers（M3-T03）：当前登录 Wiki 的反向链接与文档目录。
 // 数据来自 page_link_projection / document_outline_projection / page_anchor
 // 投影表（设计 §17.3：关系查询走投影表，不扫 AST），投影由 Worker 异步构建，
 // 新发布内容与投影之间存在最终一致窗口。
@@ -25,16 +25,14 @@ import (
 type ProjectionAPI struct {
 	pages   *page.Service
 	queries *projection.Queries
-	wikiID  uuid.UUID
 }
 
 // NewProjectionAPI 装配投影查询 API。
 func NewProjectionAPI(
 	pages *page.Service,
 	queries *projection.Queries,
-	wikiID uuid.UUID,
 ) *ProjectionAPI {
-	return &ProjectionAPI{pages: pages, queries: queries, wikiID: wikiID}
+	return &ProjectionAPI{pages: pages, queries: queries}
 }
 
 // ---- 响应 DTO（与 contracts/openapi/openapi.yaml 对应，契约为准）----
@@ -224,7 +222,7 @@ type componentUsageListResponse struct {
 // ---- handlers ----
 
 // listBacklinks GET /api/v1/pages/{id}/backlinks?cursor=&page_size=：
-// 指向该页的已解析引用来源，游标分页（匿名可读）。软删除页返回 410 gone。
+// 指向当前登录 Wiki 页面中的已解析引用来源，游标分页。软删除页返回 410 gone。
 func (a *ProjectionAPI) listBacklinks(w http.ResponseWriter, r *http.Request) {
 	pageID, ok := a.livePageIDFrom(w, r)
 	if !ok {
@@ -235,7 +233,7 @@ func (a *ProjectionAPI) listBacklinks(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	result, err := a.queries.Backlinks(
-		r.Context(), a.wikiID, pageID,
+		r.Context(), wikiIDFromRequest(r), pageID,
 		r.URL.Query().Get("cursor"), limit,
 	)
 	if err != nil {
@@ -258,7 +256,7 @@ func (a *ProjectionAPI) listBacklinks(w http.ResponseWriter, r *http.Request) {
 	httpx.WriteJSON(w, http.StatusOK, resp)
 }
 
-// getOutline GET /api/v1/pages/{id}/outline：文档目录（匿名可读），
+// getOutline GET /api/v1/pages/{id}/outline：当前登录 Wiki 的文档目录，
 // 含层级、纯文本标题、锚点 slug 与 position_key，供阅读页 TOC。软删除页返回 410 gone。
 func (a *ProjectionAPI) getOutline(w http.ResponseWriter, r *http.Request) {
 	pageID, ok := a.livePageIDFrom(w, r)
@@ -484,7 +482,7 @@ func (a *ProjectionAPI) listEntityMentions(w http.ResponseWriter, r *http.Reques
 	}
 	a.listReferenceUsages(w, r, func(limit int) (*projection.ReferenceUsagePage, error) {
 		return a.queries.EntityMentions(
-			r.Context(), a.wikiID, id, r.URL.Query().Get("cursor"), limit,
+			r.Context(), wikiIDFromRequest(r), id, r.URL.Query().Get("cursor"), limit,
 		)
 	})
 }
@@ -497,7 +495,7 @@ func (a *ProjectionAPI) listClaimUsages(w http.ResponseWriter, r *http.Request) 
 	}
 	a.listReferenceUsages(w, r, func(limit int) (*projection.ReferenceUsagePage, error) {
 		return a.queries.ClaimUsages(
-			r.Context(), a.wikiID, id, r.URL.Query().Get("cursor"), limit,
+			r.Context(), wikiIDFromRequest(r), id, r.URL.Query().Get("cursor"), limit,
 		)
 	})
 }
@@ -510,7 +508,7 @@ func (a *ProjectionAPI) listCitationUsages(w http.ResponseWriter, r *http.Reques
 	}
 	a.listReferenceUsages(w, r, func(limit int) (*projection.ReferenceUsagePage, error) {
 		return a.queries.CitationUsages(
-			r.Context(), a.wikiID, id, r.URL.Query().Get("cursor"), limit,
+			r.Context(), wikiIDFromRequest(r), id, r.URL.Query().Get("cursor"), limit,
 		)
 	})
 }
@@ -529,7 +527,7 @@ func (a *ProjectionAPI) listSourceUsages(
 		return
 	}
 	result, err := a.queries.SourceUsages(
-		r.Context(), a.wikiID, id, r.URL.Query().Get("cursor"), limit,
+		r.Context(), wikiIDFromRequest(r), id, r.URL.Query().Get("cursor"), limit,
 	)
 	if errors.Is(err, projection.ErrReferenceTargetNotFound) {
 		httpx.WriteError(
@@ -572,7 +570,7 @@ func (a *ProjectionAPI) listSourceUsageLocations(w http.ResponseWriter, r *http.
 		return
 	}
 	result, err := a.queries.SourceUsageLocations(
-		r.Context(), a.wikiID, sourceID, pageID,
+		r.Context(), wikiIDFromRequest(r), sourceID, pageID,
 		r.URL.Query().Get("cursor"), limit,
 	)
 	if errors.Is(err, projection.ErrReferenceTargetNotFound) {
@@ -621,7 +619,7 @@ func (a *ProjectionAPI) listComponentUsages(
 		return
 	}
 	result, err := a.queries.ComponentUsages(
-		r.Context(), a.wikiID, id, version,
+		r.Context(), wikiIDFromRequest(r), id, version,
 		r.URL.Query().Get("cursor"), limit,
 	)
 	if errors.Is(err, projection.ErrReferenceTargetNotFound) {
@@ -697,7 +695,7 @@ func (a *ProjectionAPI) livePageIDFrom(w http.ResponseWriter, r *http.Request) (
 		return uuid.Nil, false
 	}
 	p, err := getPageInWiki(
-		r.Context(), a.pages, a.wikiID, pageID,
+		r.Context(), a.pages, wikiIDFromRequest(r), pageID,
 	)
 	if err != nil {
 		serviceError(w, r, err)

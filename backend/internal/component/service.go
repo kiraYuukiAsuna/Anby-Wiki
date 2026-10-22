@@ -52,7 +52,9 @@ func (s *Service) Create(ctx context.Context, params CreateParams) (*Component, 
 	}
 	var value *Component
 	err := s.txm.InTx(ctx, func(tx pgx.Tx) error {
-		if err := s.actors.CheckWriteActor(ctx, tx, params.ActorID); err != nil {
+		if err := s.actors.CheckWriteActorInWiki(
+			ctx, tx, params.ActorID, params.WikiID,
+		); err != nil {
 			return err
 		}
 		componentID, err := s.ids.New()
@@ -60,19 +62,26 @@ func (s *Service) Create(ctx context.Context, params CreateParams) (*Component, 
 			return err
 		}
 		value = &Component{
-			ID: componentID, ComponentKey: key, Name: name, CreatedBy: params.ActorID,
+			ID: componentID, WikiID: params.WikiID,
+			ComponentKey: key, Name: name, CreatedBy: params.ActorID,
 		}
 		return s.repo.Insert(ctx, tx, value)
 	})
 	return value, err
 }
 
-func (s *Service) Get(ctx context.Context, id uuid.UUID) (*Component, error) {
-	return s.repo.Get(ctx, nil, id)
+func (s *Service) Get(
+	ctx context.Context,
+	wikiID, id uuid.UUID,
+) (*Component, error) {
+	return s.repo.Get(ctx, nil, wikiID, id)
 }
 
 func (s *Service) List(
-	ctx context.Context, cursor string, limit int,
+	ctx context.Context,
+	wikiID uuid.UUID,
+	cursor string,
+	limit int,
 ) (*ComponentPage, error) {
 	if limit <= 0 {
 		limit = DefaultPageSize
@@ -80,13 +89,14 @@ func (s *Service) List(
 	if limit > MaxPageSize {
 		limit = MaxPageSize
 	}
-	return s.repo.List(ctx, cursor, limit)
+	return s.repo.List(ctx, wikiID, cursor, limit)
 }
 
 func (s *Service) ListVersions(
-	ctx context.Context, componentID uuid.UUID,
+	ctx context.Context,
+	wikiID, componentID uuid.UUID,
 ) (*VersionList, error) {
-	return s.repo.ListVersions(ctx, componentID)
+	return s.repo.ListVersions(ctx, wikiID, componentID)
 }
 
 func (s *Service) CreateVersion(
@@ -104,10 +114,14 @@ func (s *Service) CreateVersion(
 
 	var value *Version
 	err = s.txm.InTx(ctx, func(tx pgx.Tx) error {
-		if err := s.actors.CheckWriteActor(ctx, tx, params.ActorID); err != nil {
+		if err := s.actors.CheckWriteActorInWiki(
+			ctx, tx, params.ActorID, params.WikiID,
+		); err != nil {
 			return err
 		}
-		if _, err := s.repo.Lock(ctx, tx, params.ComponentID); err != nil {
+		if _, err := s.repo.Lock(
+			ctx, tx, params.WikiID, params.ComponentID,
+		); err != nil {
 			return err
 		}
 		version, err := s.repo.NextVersion(ctx, tx, params.ComponentID)
@@ -126,6 +140,7 @@ func (s *Service) CreateVersion(
 
 func (s *Service) UpdateDraft(
 	ctx context.Context,
+	wikiID uuid.UUID,
 	componentID uuid.UUID,
 	version int,
 	propsSchema json.RawMessage,
@@ -141,7 +156,12 @@ func (s *Service) UpdateDraft(
 	}
 	var value *Version
 	err := s.txm.InTx(ctx, func(tx pgx.Tx) error {
-		if err := s.actors.CheckWriteActor(ctx, tx, actorID); err != nil {
+		if err := s.actors.CheckWriteActorInWiki(
+			ctx, tx, actorID, wikiID,
+		); err != nil {
+			return err
+		}
+		if _, err := s.repo.Lock(ctx, tx, wikiID, componentID); err != nil {
 			return err
 		}
 		current, err := s.repo.LockVersion(ctx, tx, componentID, version)
@@ -163,19 +183,26 @@ func (s *Service) UpdateDraft(
 }
 
 func (s *Service) Publish(
-	ctx context.Context, componentID uuid.UUID, version int, actorID uuid.UUID,
+	ctx context.Context,
+	wikiID, componentID uuid.UUID,
+	version int,
+	actorID uuid.UUID,
 ) (*Version, error) {
-	return s.transition(ctx, componentID, version, actorID, StatusPublished)
+	return s.transition(ctx, wikiID, componentID, version, actorID, StatusPublished)
 }
 
 func (s *Service) Deprecate(
-	ctx context.Context, componentID uuid.UUID, version int, actorID uuid.UUID,
+	ctx context.Context,
+	wikiID, componentID uuid.UUID,
+	version int,
+	actorID uuid.UUID,
 ) (*Version, error) {
-	return s.transition(ctx, componentID, version, actorID, StatusDeprecated)
+	return s.transition(ctx, wikiID, componentID, version, actorID, StatusDeprecated)
 }
 
 func (s *Service) transition(
 	ctx context.Context,
+	wikiID uuid.UUID,
 	componentID uuid.UUID,
 	version int,
 	actorID uuid.UUID,
@@ -183,7 +210,12 @@ func (s *Service) transition(
 ) (*Version, error) {
 	var value *Version
 	err := s.txm.InTx(ctx, func(tx pgx.Tx) error {
-		if err := s.actors.CheckWriteActor(ctx, tx, actorID); err != nil {
+		if err := s.actors.CheckWriteActorInWiki(
+			ctx, tx, actorID, wikiID,
+		); err != nil {
+			return err
+		}
+		if _, err := s.repo.Lock(ctx, tx, wikiID, componentID); err != nil {
 			return err
 		}
 		current, err := s.repo.LockVersion(ctx, tx, componentID, version)
@@ -214,10 +246,14 @@ func (s *Service) transition(
 
 func (s *Service) ValidateProps(
 	ctx context.Context,
+	wikiID uuid.UUID,
 	componentID uuid.UUID,
 	version int,
 	props json.RawMessage,
 ) (*Version, error) {
+	if _, err := s.repo.Get(ctx, nil, wikiID, componentID); err != nil {
+		return nil, err
+	}
 	value, err := s.repo.GetVersion(ctx, nil, componentID, version)
 	if err != nil {
 		return nil, err
@@ -250,11 +286,15 @@ func validatePropsInstance(schemaJSON, props json.RawMessage) error {
 // Renderer refs still resolve only through the trusted in-process registry.
 func (s *Service) Preview(
 	ctx context.Context,
+	wikiID uuid.UUID,
 	componentID uuid.UUID,
 	version int,
 	entityID *uuid.UUID,
 	props json.RawMessage,
 ) (string, error) {
+	if _, err := s.repo.Get(ctx, nil, wikiID, componentID); err != nil {
+		return "", err
+	}
 	value, err := s.repo.GetVersion(ctx, nil, componentID, version)
 	if err != nil {
 		return "", err
@@ -270,11 +310,12 @@ func (s *Service) Preview(
 
 func (s *Service) Render(
 	ctx context.Context,
+	wikiID uuid.UUID,
 	componentID uuid.UUID,
 	version int,
 	props json.RawMessage,
 ) (string, error) {
-	value, err := s.ValidateProps(ctx, componentID, version, props)
+	value, err := s.ValidateProps(ctx, wikiID, componentID, version, props)
 	if err != nil {
 		return "", err
 	}
@@ -289,11 +330,37 @@ func (s *Service) RenderEntity(
 	entityID uuid.UUID,
 	displayConfig json.RawMessage,
 ) (string, error) {
-	value, err := s.ValidateProps(ctx, componentID, version, displayConfig)
+	wikiID, err := s.repo.EntityWikiID(ctx, entityID)
+	if err != nil {
+		return "", err
+	}
+	return s.RenderEntityInWiki(
+		ctx, wikiID, componentID, version, entityID, displayConfig,
+	)
+}
+
+func (s *Service) RenderEntityInWiki(
+	ctx context.Context,
+	wikiID, componentID uuid.UUID,
+	version int,
+	entityID uuid.UUID,
+	displayConfig json.RawMessage,
+) (string, error) {
+	value, err := s.ValidateProps(
+		ctx, wikiID, componentID, version, displayConfig,
+	)
 	if err != nil {
 		return "", err
 	}
 	return s.registry.RenderEntity(ctx, value.RendererRef, entityID, displayConfig)
+}
+
+func (s *Service) PublishedByKey(
+	ctx context.Context,
+	wikiID uuid.UUID,
+	key string,
+) (*Component, *Version, error) {
+	return s.repo.GetPublishedByKey(ctx, wikiID, strings.TrimSpace(key))
 }
 
 func compilePropsSchema(raw json.RawMessage) (*jsonschema.Schema, error) {

@@ -61,7 +61,9 @@ func (a *KnowledgeReadAPI) getEntityMerge(
 	if !ok {
 		return
 	}
-	if _, err := a.currentWikiEntity(r.Context(), sourceID); err != nil {
+	if _, err := a.currentWikiEntity(
+		r.Context(), wikiIDFromRequest(r), sourceID,
+	); err != nil {
 		entityMergeError(w, r, err)
 		return
 	}
@@ -86,12 +88,14 @@ func (a *KnowledgeReadAPI) mergeEntity(w http.ResponseWriter, r *http.Request) {
 	if !decodeJSON(w, r, &request) {
 		return
 	}
-	if _, err := a.currentWikiEntity(r.Context(), sourceID); err != nil {
+	if _, err := a.currentWikiEntity(
+		r.Context(), wikiIDFromRequest(r), sourceID,
+	); err != nil {
 		entityMergeError(w, r, err)
 		return
 	}
 	if _, err := a.currentWikiEntity(
-		r.Context(), request.TargetEntityID,
+		r.Context(), wikiIDFromRequest(r), request.TargetEntityID,
 	); err != nil {
 		entityMergeError(w, r, err)
 		return
@@ -101,7 +105,7 @@ func (a *KnowledgeReadAPI) mergeEntity(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if err := a.authorization.Check(
-		r.Context(), actorID, a.wikiID, governance.ActionEntityMerge, nil,
+		r.Context(), actorID, wikiIDFromRequest(r), governance.ActionEntityMerge, nil,
 	); err != nil {
 		governanceError(w, r, err)
 		return
@@ -137,7 +141,7 @@ func (a *KnowledgeReadAPI) rollbackEntityMerge(
 		return
 	}
 	if _, err := a.currentWikiEntity(
-		r.Context(), merge.SourceEntityID,
+		r.Context(), wikiIDFromRequest(r), merge.SourceEntityID,
 	); err != nil {
 		entityMergeError(w, r, knowledge.ErrEntityMergeNotFound)
 		return
@@ -150,7 +154,7 @@ func (a *KnowledgeReadAPI) rollbackEntityMerge(
 		return
 	}
 	if err := a.authorization.Check(
-		r.Context(), actorID, a.wikiID,
+		r.Context(), actorID, wikiIDFromRequest(r),
 		governance.ActionEntityMerge, nil,
 	); err != nil {
 		governanceError(w, r, err)

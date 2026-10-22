@@ -201,7 +201,7 @@ func (a *KnowledgeReadAPI) listPageEntityBindings(
 		return
 	}
 	items, err := a.knowledge.ListPageBindings(
-		r.Context(), a.wikiID, pageID,
+		r.Context(), wikiIDFromRequest(r), pageID,
 	)
 	if err != nil {
 		knowledgeMutationError(w, r, err)
@@ -233,7 +233,7 @@ func (a *KnowledgeReadAPI) writePageEntityBinding(
 	binding, err := a.knowledge.BindPage(
 		r.Context(),
 		knowledge.BindPageParams{
-			WikiID: a.wikiID, PageID: pageID, EntityID: request.EntityID,
+			WikiID: wikiIDFromRequest(r), PageID: pageID, EntityID: request.EntityID,
 			Role: request.Role, Language: request.Language, ActorID: actorID,
 		},
 	)
@@ -262,7 +262,7 @@ func (a *KnowledgeReadAPI) removePageEntityBinding(
 	}
 	if err := a.knowledge.UnbindPage(
 		r.Context(),
-		a.wikiID,
+		wikiIDFromRequest(r),
 		pageID,
 		entityID,
 		r.URL.Query().Get("role"),
@@ -290,7 +290,7 @@ func (a *KnowledgeReadAPI) updateClaimVerification(
 		return
 	}
 	if _, err := a.currentWikiEntity(
-		r.Context(), claim.SubjectEntityID,
+		r.Context(), wikiIDFromRequest(r), claim.SubjectEntityID,
 	); err != nil {
 		httpx.WriteError(
 			w, r, http.StatusNotFound, httpx.CodeNotFound, "Claim 不存在",
@@ -325,7 +325,9 @@ func (a *KnowledgeReadAPI) requireEntityMutation(
 	if !ok {
 		return uuid.Nil, uuid.Nil, false
 	}
-	_, err := a.currentWikiEntity(r.Context(), entityID)
+	_, err := a.currentWikiEntity(
+		r.Context(), wikiIDFromRequest(r), entityID,
+	)
 	if err != nil {
 		knowledgeMutationError(w, r, err)
 		return uuid.Nil, uuid.Nil, false
@@ -356,7 +358,7 @@ func (a *KnowledgeReadAPI) requireKnowledgeMutation(
 		pageID = &targetID
 	}
 	if err := a.authorization.Check(
-		r.Context(), actorID, a.wikiID, action, pageID,
+		r.Context(), actorID, wikiIDFromRequest(r), action, pageID,
 	); err != nil {
 		a.writeError(w, r, err)
 		return uuid.Nil, uuid.Nil, false

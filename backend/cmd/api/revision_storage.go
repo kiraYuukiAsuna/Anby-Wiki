@@ -45,7 +45,7 @@ func (a *GovernanceAPI) revisionStorageStats(
 		return
 	}
 	if err := a.auth.Check(
-		r.Context(), actorID, a.wikiID, governance.ActionManage, nil,
+		r.Context(), actorID, wikiIDFromRequest(r), governance.ActionManage, nil,
 	); err != nil {
 		governanceError(w, r, err)
 		return
@@ -71,7 +71,7 @@ func (a *GovernanceAPI) archiveRevisionSnapshots(
 		return
 	}
 	if err := a.auth.Check(
-		r.Context(), actorID, a.wikiID, governance.ActionManage, nil,
+		r.Context(), actorID, wikiIDFromRequest(r), governance.ActionManage, nil,
 	); err != nil {
 		governanceError(w, r, err)
 		return

@@ -1061,7 +1061,7 @@ export function DatasetViewCreator({
                 checked={publicForm}
                 onCheckedChange={(checked) => setPublicForm(checked === true)}
               />
-              允许公开填写
+              启用填写入口
             </label>
             <div className="space-y-2">
               <Label htmlFor="form-submit-label">提交按钮</Label>

@@ -22,19 +22,15 @@ import (
 	"github.com/anby/wiki/backend/internal/platform/httpx"
 )
 
-// WriteAPI 写 API 依赖集合：Page 领域服务与启动时解析缓存的默认站点 ID。
 type WriteAPI struct {
 	pages                  *page.Service
-	wikiID                 uuid.UUID
 	auth                   *governance.AuthorizationService
 	collaborationPublisher *collaboration.Publisher
 	buttonActions          *pageaction.Service
 }
 
-// NewWriteAPI 装配写 API。wikiID 为种子里 site_key='default' 的站点，
-// 由 main 启动时解析一次并缓存。
-func NewWriteAPI(pages *page.Service, wikiID uuid.UUID) *WriteAPI {
-	return &WriteAPI{pages: pages, wikiID: wikiID}
+func NewWriteAPI(pages *page.Service) *WriteAPI {
+	return &WriteAPI{pages: pages}
 }
 
 // WithAuthorization 在生产装配中启用 Role 与 PageProtection 检查。
@@ -57,7 +53,7 @@ func (a *WriteAPI) WithButtonActions(service *pageaction.Service) *WriteAPI {
 func (a *WriteAPI) authorize(w http.ResponseWriter, r *http.Request, actorID uuid.UUID, action string, pageID *uuid.UUID) bool {
 	if pageID != nil {
 		if _, err := getPageInWiki(
-			r.Context(), a.pages, a.wikiID, *pageID,
+			r.Context(), a.pages, wikiIDFromRequest(r), *pageID,
 		); err != nil {
 			serviceError(w, r, err)
 			return false
@@ -66,7 +62,7 @@ func (a *WriteAPI) authorize(w http.ResponseWriter, r *http.Request, actorID uui
 	if a.auth == nil {
 		return true
 	}
-	if err := a.auth.Check(r.Context(), actorID, a.wikiID, action, pageID); err != nil {
+	if err := a.auth.Check(r.Context(), actorID, wikiIDFromRequest(r), action, pageID); err != nil {
 		governanceError(w, r, err)
 		return false
 	}
@@ -77,7 +73,7 @@ func (a *WriteAPI) authorizeCreate(w http.ResponseWriter, r *http.Request, actor
 	if a.auth == nil {
 		return true
 	}
-	if err := a.auth.CheckCreate(r.Context(), actorID, a.wikiID, namespaceID, normalizedTitle); err != nil {
+	if err := a.auth.CheckCreate(r.Context(), actorID, wikiIDFromRequest(r), namespaceID, normalizedTitle); err != nil {
 		governanceError(w, r, err)
 		return false
 	}
@@ -281,7 +277,7 @@ func toPageRedirectResponse(item *page.PageRedirect) pageRedirectResponse {
 
 // ---- handlers ----
 
-// createPage POST /api/v1/pages：在默认站点创建页面（201 Page）。
+// createPage POST /api/v1/pages：在当前登录 Wiki 创建页面（201 Page）。
 func (a *WriteAPI) createPage(w http.ResponseWriter, r *http.Request) {
 	actorID, ok := actorIDFrom(w, r)
 	if !ok {
@@ -295,7 +291,7 @@ func (a *WriteAPI) createPage(w http.ResponseWriter, r *http.Request) {
 		httpx.WriteError(w, r, http.StatusBadRequest, httpx.CodeBadRequest, "namespace 与 title 为必填字段")
 		return
 	}
-	namespaceID, err := a.pages.NamespaceID(r.Context(), a.wikiID, req.Namespace)
+	namespaceID, err := a.pages.NamespaceID(r.Context(), wikiIDFromRequest(r), req.Namespace)
 	if err != nil {
 		serviceError(w, r, err)
 		return
@@ -309,7 +305,7 @@ func (a *WriteAPI) createPage(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	p, err := a.pages.CreatePage(r.Context(), page.CreatePageParams{
-		WikiID:       a.wikiID,
+		WikiID:       wikiIDFromRequest(r),
 		NamespaceID:  namespaceID,
 		Title:        req.Title,
 		Language:     req.Language,
@@ -359,7 +355,7 @@ func (a *WriteAPI) getRedirect(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if _, err := getPageInWiki(
-		r.Context(), a.pages, a.wikiID, sourcePageID,
+		r.Context(), a.pages, wikiIDFromRequest(r), sourcePageID,
 	); err != nil {
 		serviceError(w, r, err)
 		return
@@ -404,7 +400,7 @@ func (a *WriteAPI) createRedirect(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 		namespaceID, err := a.pages.NamespaceID(
-			r.Context(), a.wikiID, req.Target.Namespace,
+			r.Context(), wikiIDFromRequest(r), req.Target.Namespace,
 		)
 		if err != nil {
 			serviceError(w, r, err)
@@ -448,7 +444,7 @@ func (a *WriteAPI) listBlockRedirects(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if _, err := getPageInWiki(
-		r.Context(), a.pages, a.wikiID, pageID,
+		r.Context(), a.pages, wikiIDFromRequest(r), pageID,
 	); err != nil {
 		serviceError(w, r, err)
 		return
@@ -594,11 +590,19 @@ func validWorkingDocumentCursor(documentID *uuid.UUID, sequence *int64) bool {
 // actorIDFrom 读取认证中间件写入的 Actor；未认证时写 401。
 func actorIDFrom(w http.ResponseWriter, r *http.Request) (uuid.UUID, bool) {
 	principal, ok := authdomain.PrincipalFrom(r.Context())
-	if !ok || principal.ActorID == uuid.Nil {
+	if !ok || principal.ActorID == uuid.Nil || principal.WikiID == uuid.Nil {
 		httpx.WriteError(w, r, http.StatusUnauthorized, httpx.CodeUnauthorized, "需要登录")
 		return uuid.Nil, false
 	}
 	return principal.ActorID, true
+}
+
+func wikiIDFromRequest(r *http.Request) uuid.UUID {
+	principal, ok := authdomain.PrincipalFrom(r.Context())
+	if !ok {
+		return uuid.Nil
+	}
+	return principal.WikiID
 }
 
 // pageIDFrom 解析路径参数 {id}；非法时写 400 并返回 false。

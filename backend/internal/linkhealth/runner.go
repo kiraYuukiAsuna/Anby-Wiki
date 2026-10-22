@@ -161,6 +161,7 @@ func (r *Runner) process(ctx context.Context, resource evidence.ExternalResource
 }
 
 type linkUsage struct {
+	WikiID     uuid.UUID
 	PageID     uuid.UUID
 	RevisionID uuid.UUID
 	BlockID    uuid.UUID
@@ -170,7 +171,8 @@ type linkUsage struct {
 
 func (r *Runner) composeRetargetProposals(ctx context.Context, sourceID uuid.UUID, target evidence.ExternalResource, targetURL string) (int, error) {
 	rows, err := r.pool.Query(ctx, `
-		SELECT usage.page_id, usage.revision_id, usage.block_id, usage.node_id, snapshot.ast_json
+		SELECT page.wiki_id,usage.page_id,usage.revision_id,usage.block_id,
+			usage.node_id,snapshot.ast_json
 		FROM external_link_usage AS usage
 		JOIN page ON page.id = usage.page_id
 			AND page.current_revision_id = usage.revision_id
@@ -186,7 +188,10 @@ func (r *Runner) composeRetargetProposals(ctx context.Context, sourceID uuid.UUI
 	var usages []linkUsage
 	for rows.Next() {
 		var usage linkUsage
-		if err := rows.Scan(&usage.PageID, &usage.RevisionID, &usage.BlockID, &usage.NodeID, &usage.ASTJSON); err != nil {
+		if err := rows.Scan(
+			&usage.WikiID, &usage.PageID, &usage.RevisionID,
+			&usage.BlockID, &usage.NodeID, &usage.ASTJSON,
+		); err != nil {
 			return 0, fmt.Errorf("linkhealth: 扫描外链 usage 失败: %w", err)
 		}
 		usages = append(usages, usage)
@@ -236,7 +241,8 @@ func (r *Runner) composeUsageProposal(ctx context.Context, sourceID uuid.UUID, t
 	key := fmt.Sprintf("link-health:%s:%s:%s:%s:%s",
 		sourceID, target.ID, usage.RevisionID, usage.BlockID, usage.NodeID)
 	proposal, err := r.governance.CreateProposal(ctx, governance.CreateProposalParams{
-		TargetType: governance.TargetPage, TargetID: &usage.PageID, BaseRevisionID: &usage.RevisionID,
+		WikiID: usage.WikiID, TargetType: governance.TargetPage,
+		TargetID: &usage.PageID, BaseRevisionID: &usage.RevisionID,
 		RiskLevel: governance.RiskMedium, CreatedBy: systemActorID, IdempotencyKey: key,
 	})
 	if err != nil {
@@ -286,7 +292,8 @@ func (r *Runner) composeUsageProposal(ctx context.Context, sourceID uuid.UUID, t
 		// A concurrent retry may have committed Submit after this worker read
 		// draft. Re-read through the idempotent create path before failing.
 		current, currentErr := r.governance.CreateProposal(ctx, governance.CreateProposalParams{
-			TargetType: governance.TargetPage, TargetID: &usage.PageID, BaseRevisionID: &usage.RevisionID,
+			WikiID: usage.WikiID, TargetType: governance.TargetPage,
+			TargetID: &usage.PageID, BaseRevisionID: &usage.RevisionID,
 			RiskLevel: governance.RiskMedium, CreatedBy: systemActorID, IdempotencyKey: key,
 		})
 		if currentErr == nil && current.Status != governance.ProposalDraft {

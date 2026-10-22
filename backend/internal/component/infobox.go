@@ -16,14 +16,8 @@ import (
 const (
 	// RendererEntityClaimInfobox 是 M9-T03 内置信息框渲染器的白名单引用。
 	RendererEntityClaimInfobox = "builtin.entity_claim_infobox"
-	// BuiltinArticleInfoboxVersion is the frozen version seeded by the initial
-	// schema. Import proposals may safely embed this stable dependency.
-	BuiltinArticleInfoboxVersion = 1
-)
-
-// BuiltinArticleInfoboxID is deliberately stable across fresh installations.
-var BuiltinArticleInfoboxID = uuid.MustParse(
-	"00000000-0000-7000-8000-000000000901",
+	// BuiltinArticleInfoboxKey identifies the per-Wiki frozen information box.
+	BuiltinArticleInfoboxKey = "article-infobox"
 )
 
 type infoboxConfig struct {

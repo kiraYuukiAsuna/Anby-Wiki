@@ -77,6 +77,7 @@ var proposalTransitions = map[string]map[string]bool{
 // Proposal 是一组尚未正式生效的有序变更建议。
 type Proposal struct {
 	ID                uuid.UUID       `json:"id"`
+	WikiID            uuid.UUID       `json:"wiki_id"`
 	ImportJobID       *uuid.UUID      `json:"import_job_id"`
 	TargetType        string          `json:"target_type"`
 	TargetID          *uuid.UUID      `json:"target_id"`
@@ -123,6 +124,7 @@ type OperationRecord struct {
 
 // CreateProposalParams 以 (CreatedBy, IdempotencyKey) 幂等创建 Proposal。
 type CreateProposalParams struct {
+	WikiID           uuid.UUID
 	ImportJobID      *uuid.UUID
 	TargetType       string
 	TargetID         *uuid.UUID
@@ -211,6 +213,7 @@ const (
 
 type ChangeBatch struct {
 	ID           uuid.UUID
+	WikiID       uuid.UUID
 	ImportJobID  *uuid.UUID
 	ProposalID   uuid.UUID
 	ActorID      uuid.UUID

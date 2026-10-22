@@ -19,7 +19,6 @@ import (
 type ImportAPI struct {
 	jobs        *importer.Service
 	evidence    *evidence.Service
-	wikiID      uuid.UUID
 	uploadSlots chan struct{}
 }
 
@@ -27,13 +26,12 @@ func NewImportAPI(jobs *importer.Service) *ImportAPI { return &ImportAPI{jobs: j
 
 func (a *ImportAPI) WithUploads(
 	evidenceService *evidence.Service,
-	wikiID uuid.UUID,
 	maxConcurrentUploads int,
 ) *ImportAPI {
 	if maxConcurrentUploads < 1 {
 		maxConcurrentUploads = 1
 	}
-	a.evidence, a.wikiID = evidenceService, wikiID
+	a.evidence = evidenceService
 	a.uploadSlots = make(chan struct{}, maxConcurrentUploads)
 	return a
 }
@@ -65,7 +63,10 @@ func (a *ImportAPI) createJob(w http.ResponseWriter, r *http.Request) {
 	if request.JobType == "" {
 		request.JobType = "source_import"
 	}
-	job, err := a.jobs.Create(r.Context(), actorID, request.JobType, key, request.Config)
+	job, err := a.jobs.Create(
+		r.Context(), actorID, wikiIDFromRequest(r),
+		request.JobType, key, request.Config,
+	)
 	if err != nil {
 		importError(w, r, err)
 		return
@@ -103,7 +104,7 @@ func (a *ImportAPI) createUploadJob(w http.ResponseWriter, r *http.Request) {
 		httpx.WriteError(w, r, http.StatusBadRequest, httpx.CodeBadRequest, "缺少 Idempotency-Key 请求头")
 		return
 	}
-	if a.evidence == nil || a.wikiID == uuid.Nil {
+	if a.evidence == nil {
 		httpx.WriteError(w, r, http.StatusServiceUnavailable, httpx.CodeInternal, "上传存储未配置")
 		return
 	}
@@ -200,7 +201,7 @@ func (a *ImportAPI) createUploadJob(w http.ResponseWriter, r *http.Request) {
 		importError(w, r, err)
 		return
 	}
-	asset, err := a.evidence.StoreAsset(r.Context(), evidence.StoreAssetParams{WikiID: a.wikiID,
+	asset, err := a.evidence.StoreAsset(r.Context(), evidence.StoreAssetParams{WikiID: wikiIDFromRequest(r),
 		Name: acquired.Filename, Content: file, MimeType: acquired.MIMEType, ActorID: actorID})
 	if err != nil {
 		serviceError(w, r, err)
@@ -212,7 +213,10 @@ func (a *ImportAPI) createUploadJob(w http.ResponseWriter, r *http.Request) {
 	}, "ingestion_mode": ingestionMode, "title": title,
 		"instructions": instructions, "route_mode": routeMode,
 		"page_id": pageID})
-	job, err := a.jobs.Create(r.Context(), actorID, "source_import", key, config)
+	job, err := a.jobs.Create(
+		r.Context(), actorID, wikiIDFromRequest(r),
+		"source_import", key, config,
+	)
 	if err != nil {
 		importError(w, r, err)
 		return
@@ -243,8 +247,9 @@ func (a *ImportAPI) getJob(w http.ResponseWriter, r *http.Request) {
 		importError(w, r, err)
 		return
 	}
-	if detail.Job.InitiatedBy != actorID {
-		httpx.WriteError(w, r, http.StatusForbidden, httpx.CodeForbidden, "只能读取自己创建的导入任务")
+	if detail.Job.WikiID != wikiIDFromRequest(r) ||
+		detail.Job.InitiatedBy != actorID {
+		importError(w, r, importer.ErrJobNotFound)
 		return
 	}
 	httpx.WriteJSON(w, http.StatusOK, detail)
@@ -272,8 +277,8 @@ func (a *ImportAPI) confirmPlan(w http.ResponseWriter, r *http.Request) {
 		importError(w, r, err)
 		return
 	}
-	if job.InitiatedBy != actorID {
-		httpx.WriteError(w, r, http.StatusForbidden, httpx.CodeForbidden, "只能操作自己创建的导入任务")
+	if job.WikiID != wikiIDFromRequest(r) || job.InitiatedBy != actorID {
+		importError(w, r, importer.ErrJobNotFound)
 		return
 	}
 	var request confirmImportPlanRequest
@@ -318,8 +323,8 @@ func (a *ImportAPI) replanJob(w http.ResponseWriter, r *http.Request) {
 		importError(w, r, err)
 		return
 	}
-	if parent.InitiatedBy != actorID {
-		httpx.WriteError(w, r, http.StatusForbidden, httpx.CodeForbidden, "只能基于自己创建的导入任务重新规划")
+	if parent.WikiID != wikiIDFromRequest(r) || parent.InitiatedBy != actorID {
+		importError(w, r, importer.ErrJobNotFound)
 		return
 	}
 	var request replanImportJobRequest
@@ -352,8 +357,8 @@ func (a *ImportAPI) mutateOwnedJob(w http.ResponseWriter, r *http.Request, mutat
 		importError(w, r, err)
 		return
 	}
-	if job.InitiatedBy != actorID {
-		httpx.WriteError(w, r, http.StatusForbidden, httpx.CodeForbidden, "只能操作自己创建的导入任务")
+	if job.WikiID != wikiIDFromRequest(r) || job.InitiatedBy != actorID {
+		importError(w, r, importer.ErrJobNotFound)
 		return
 	}
 	if err := mutate(r.Context(), id); err != nil {

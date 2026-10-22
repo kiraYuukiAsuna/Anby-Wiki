@@ -79,10 +79,10 @@ sh scripts/dev.sh web            # 只起前端
 
 ### 1.4 登录
 
-打开 <http://localhost:3000/register> 创建本地账号。首个注册账号自动成为站点
-管理员，后续账号默认为编辑者；已有账号从 <http://localhost:3000/login>
+打开 <http://localhost:3000/register> 创建本地账号。每个账号会原子创建一个独立
+私人 Wiki，并成为该 Wiki 的管理员；已有账号从 <http://localhost:3000/login>
 使用用户名或邮箱和密码登录。建立所需账号后可设置
-`AUTH_REGISTRATION_ENABLED=false` 关闭公开注册。
+`AUTH_REGISTRATION_ENABLED=false` 关闭注册；需要新增账号时再受控开启。
 
 调试也可用 `AUTH_DEV_HEADER_ENABLED=true` + 请求头 `X-Actor-ID: <actor uuid>`，
 该开关在 `production` 下被配置校验强制拒绝。
@@ -112,6 +112,11 @@ make ci                 # check + 生成物漂移 + 安全扫描
 
 ## 2. 生产部署
 
+当前私人 Wiki Schema 不兼容旧的统一 Wiki 数据。首次部署此版本前必须停止写入并完成
+备份，然后删除旧 PostgreSQL 数据库并从空库执行 `000001_initial_schema`；旧页面、
+账号、Session、AI 配置和投影不做迁移。部署后重新生成
+`Secret/bootstrap-admin.json`、注册所需账号，并分别配置各自 Wiki 的 AI 设置。
+
 ### 一键部署与更新（推荐）
 
 Linux 宿主机需要 Git、Docker Compose v2+、Python 3、Nginx、Certbot、OpenSSL、curl
@@ -139,7 +144,7 @@ Git 工作区并 `git pull --ff-only`，使用提交 SHA 标记镜像，然后�
 ```text
 Anby-Wiki/
   .env                         # 配置与机密，0600，Git/Docker 排除
-  Secret/bootstrap-admin.json  # 首个管理员凭据，0600
+  Secret/bootstrap-admin.json  # 引导账号及其私人 Wiki 凭据，0600
   Secret/current-release       # 当前成功发布的提交标识
   Secret/deploy-backups/       # 历史配置、Nginx 和回滚诊断
   data/postgres/               # 权威数据库
@@ -150,9 +155,10 @@ Anby-Wiki/
   data/deploy.lock             # flock 锁，文件存在不等于仍被占用
 ```
 
-首个管理员由脚本通过本机 API 创建，验证管理员权限后关闭公开注册。密码只保存在
-`Secret/bootstrap-admin.json`，不会出现在日志中；已有管理员及配置不会重新生成。
-AI 供应商、模型和 Key 仍在登录后的 `/admin/ai` 配置。
+引导账号由脚本通过本机 API 创建，同时获得自己的私人 Wiki；验证管理员权限后脚本会
+关闭注册。密码只保存在 `Secret/bootstrap-admin.json`，不会出现在日志中。新增用户
+需受控重新开启注册，每个用户的 AI 供应商、模型和 Key 分别在其登录后的
+`/admin/ai` 配置。
 
 公网入口为 `https://anbywiki.momiya.cloud/`。宿主机默认把 Web 容器 `3000`
 映射到 `127.0.0.1:60019`，把 API 容器 `8080` 映射到
@@ -231,7 +237,7 @@ Compose 会把机密注入容器环境，因此具有 Docker 管理权限的人�
 | `S3_ACCESS_KEY` `S3_SECRET_KEY` | 同时作为 RustFS 凭据与应用 S3 凭据 |
 | `MEILI_MASTER_KEY` | 同时作为 Meilisearch Master Key 与应用内部 API Key，必须替换模板占位值 |
 | `SEARCH_BACKEND` | 生产保持 `meilisearch`；PostgreSQL 只作为开发 fallback |
-| `AUTH_REGISTRATION_ENABLED` | 是否允许公开注册；首个管理员建立后建议设为 `false` |
+| `AUTH_REGISTRATION_ENABLED` | 是否允许创建账号及其私人 Wiki；完成受控账号创建后建议设为 `false` |
 | `AI_CONFIG_MASTER_KEY` | 32 字节随机密钥的 base64，用于 AES-256-GCM 加密管理员保存的 Provider 密钥；建议 `openssl rand -base64 32` |
 | `AI_KERNEL_INTERNAL_TOKEN` | API/Worker 与私网 Semantic Kernel Sidecar 的共享随机令牌 |
 | `S3_BUCKET` | 对象存储桶名 |
@@ -374,7 +380,7 @@ sh scripts/deploy.sh rollback   # 切回 RELEASE_ID 对应的已有本地镜像
 
 全 API 测试会创建、审核、应用、回滚和归档数据，并覆盖站点 AI 配置，只能指向独立的
 PostgreSQL database、MinIO bucket、Meilisearch index 和 Redis DB，禁止对生产数据运行。
-测试管理员必须是空隔离库迁移后的首个注册账号。
+测试账号必须在空隔离库迁移后重新注册；每个账号会使用独立 Wiki。
 
 ```sh
 cd backend
@@ -390,7 +396,7 @@ go test ./cmd/api -run TestCollaborationE2E -count=1 -v
 
 `TestAPIContractE2E` 从 OpenAPI 动态读取全部 operation；除故意不可达模型配置产生的
 契约内 502/504 外，任何 5xx 都失败。成功工作流另行验证权威写入、异步投影、治理状态机、
-Import 恢复点和双用户协作语义。
+Import 恢复点和同账号双会话协作语义。
 
 同一隔离环境还应使用专用 CLI Token 验证全部 operation 确实经过 CLI 的参数、请求体
 与响应 Schema 校验：

@@ -42,12 +42,14 @@ func seedM9(ctx context.Context, pool *pgxpool.Pool, pages []fixture) (m9Fixture
 	pageService := page.NewService(pageRepo, txm, ids)
 
 	definition, err := componentService.Create(ctx, component.CreateParams{
-		ComponentKey: "perf.card", Name: "Performance Card", ActorID: defaultSystemActor,
+		WikiID: defaultWikiID, ComponentKey: "perf.card",
+		Name: "Performance Card", ActorID: defaultSystemActor,
 	})
 	if err != nil {
 		return m9Fixtures{}, err
 	}
 	version, err := componentService.CreateVersion(ctx, component.CreateVersionParams{
+		WikiID:      defaultWikiID,
 		ComponentID: definition.ID,
 		PropsSchema: json.RawMessage(`{"type":"object","additionalProperties":{"type":"string"}}`),
 		RendererRef: "builtin.key_value",
@@ -56,7 +58,9 @@ func seedM9(ctx context.Context, pool *pgxpool.Pool, pages []fixture) (m9Fixture
 	if err != nil {
 		return m9Fixtures{}, err
 	}
-	if _, err := componentService.Publish(ctx, definition.ID, version.Version, defaultSystemActor); err != nil {
+	if _, err := componentService.Publish(
+		ctx, defaultWikiID, definition.ID, version.Version, defaultSystemActor,
+	); err != nil {
 		return m9Fixtures{}, err
 	}
 

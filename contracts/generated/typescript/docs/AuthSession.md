@@ -7,6 +7,9 @@
 Name | Type
 ------------ | -------------
 `actorId` | string
+`wikiId` | string
+`wikiName` | string
+`mainNamespaceId` | string
 `actorType` | string
 `displayName` | string
 `method` | string
@@ -19,6 +22,9 @@ import type { AuthSession } from ''
 // TODO: Update the object below with actual values
 const example = {
   "actorId": null,
+  "wikiId": null,
+  "wikiName": null,
+  "mainNamespaceId": null,
   "actorType": null,
   "displayName": null,
   "method": null,

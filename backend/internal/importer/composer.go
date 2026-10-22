@@ -12,6 +12,7 @@ import (
 
 	"github.com/google/uuid"
 
+	"github.com/anby/wiki/backend/internal/component"
 	"github.com/anby/wiki/backend/internal/evidence"
 	"github.com/anby/wiki/backend/internal/governance"
 	"github.com/anby/wiki/backend/internal/knowledge"
@@ -24,13 +25,20 @@ type ProposalComposer struct {
 	governance *governance.Service
 	knowledge  *knowledge.Service
 	pages      *page.Service
+	components *component.Service
 	ids        *id.Generator
 }
 
-func NewProposalComposer(evidenceService *evidence.Service, governanceService *governance.Service,
-	knowledgeService *knowledge.Service, pageService *page.Service, ids *id.Generator) *ProposalComposer {
+func NewProposalComposer(
+	evidenceService *evidence.Service,
+	governanceService *governance.Service,
+	knowledgeService *knowledge.Service,
+	pageService *page.Service,
+	componentService *component.Service,
+	ids *id.Generator,
+) *ProposalComposer {
 	return &ProposalComposer{evidence: evidenceService, governance: governanceService,
-		knowledge: knowledgeService, pages: pageService, ids: ids}
+		knowledge: knowledgeService, pages: pageService, components: componentService, ids: ids}
 }
 
 type ComposeParams struct {
@@ -54,7 +62,8 @@ type ComposeResult struct {
 // as the final Entity ID; all CreateEntity operations precede Claim operations,
 // allowing the entire import to apply as one atomic ChangeBatch.
 func (c *ProposalComposer) Compose(ctx context.Context, params ComposeParams) (*ComposeResult, error) {
-	if c == nil || c.evidence == nil || c.governance == nil || c.knowledge == nil || c.pages == nil || c.ids == nil ||
+	if c == nil || c.evidence == nil || c.governance == nil ||
+		c.knowledge == nil || c.pages == nil || c.components == nil || c.ids == nil ||
 		params.Candidates == nil || params.Plan == nil || params.ImportJobID == uuid.Nil ||
 		params.SourceVersionID == uuid.Nil || params.WikiID == uuid.Nil || params.ActorID == uuid.Nil {
 		return nil, ErrInvalidJob
@@ -110,7 +119,8 @@ func (c *ProposalComposer) Compose(ctx context.Context, params ComposeParams) (*
 		risk = maxImportRisk(risk, decision.Risk)
 	}
 	proposal, err := c.governance.CreateProposal(ctx, governance.CreateProposalParams{
-		ImportJobID: &params.ImportJobID, TargetType: governance.TargetWiki, TargetID: &params.WikiID,
+		WikiID: params.WikiID, ImportJobID: &params.ImportJobID,
+		TargetType: governance.TargetWiki, TargetID: &params.WikiID,
 		BaseStateVersion: &baseVersion, RiskLevel: risk, CreatedBy: params.ActorID,
 		IdempotencyKey: fmt.Sprintf("import:%s:composite:source-version:%s", params.ImportJobID, params.SourceVersionID),
 	})
@@ -305,8 +315,9 @@ func (c *ProposalComposer) createCitations(ctx context.Context, params ComposePa
 			locator.Page = &page
 		}
 		citation, err := c.evidence.CreateCitation(ctx, evidence.CreateCitationParams{
-			SourceVersionID: params.SourceVersionID, SourceChunkID: &item.ChunkID,
-			Locator: locator, Quotation: item.Quotation, ActorID: params.ActorID,
+			WikiID: params.WikiID, SourceVersionID: params.SourceVersionID,
+			SourceChunkID: &item.ChunkID,
+			Locator:       locator, Quotation: item.Quotation, ActorID: params.ActorID,
 		})
 		if err != nil {
 			return nil, nil, err

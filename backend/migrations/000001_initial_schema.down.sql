@@ -277,6 +277,7 @@ DROP TABLE IF EXISTS page_redirect;
 DROP TABLE IF EXISTS page_alias;
 DROP TABLE IF EXISTS page;
 
+ALTER TABLE wiki_site DROP CONSTRAINT IF EXISTS wiki_site_owner_actor_fk;
 DROP TABLE IF EXISTS actor;
 DROP TABLE IF EXISTS namespace;
 DROP TABLE IF EXISTS wiki_site;

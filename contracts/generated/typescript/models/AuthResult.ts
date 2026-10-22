@@ -30,6 +30,24 @@ export interface AuthResult {
      * @type {string}
      * @memberof AuthResult
      */
+    wikiId: string;
+    /**
+     *
+     * @type {string}
+     * @memberof AuthResult
+     */
+    wikiName: string;
+    /**
+     *
+     * @type {string}
+     * @memberof AuthResult
+     */
+    mainNamespaceId: string;
+    /**
+     *
+     * @type {string}
+     * @memberof AuthResult
+     */
     displayName: string;
 }
 
@@ -38,6 +56,9 @@ export interface AuthResult {
  */
 export function instanceOfAuthResult(value: object): value is AuthResult {
     if ((!('actorId' in (value as Record<string, any>)) && !('actor_id' in (value as Record<string, any>))) || ((value as Record<string, any>)['actorId'] === undefined && (value as Record<string, any>)['actor_id'] === undefined)) return false;
+    if ((!('wikiId' in (value as Record<string, any>)) && !('wiki_id' in (value as Record<string, any>))) || ((value as Record<string, any>)['wikiId'] === undefined && (value as Record<string, any>)['wiki_id'] === undefined)) return false;
+    if ((!('wikiName' in (value as Record<string, any>)) && !('wiki_name' in (value as Record<string, any>))) || ((value as Record<string, any>)['wikiName'] === undefined && (value as Record<string, any>)['wiki_name'] === undefined)) return false;
+    if ((!('mainNamespaceId' in (value as Record<string, any>)) && !('main_namespace_id' in (value as Record<string, any>))) || ((value as Record<string, any>)['mainNamespaceId'] === undefined && (value as Record<string, any>)['main_namespace_id'] === undefined)) return false;
     if ((!('displayName' in (value as Record<string, any>)) && !('display_name' in (value as Record<string, any>))) || ((value as Record<string, any>)['displayName'] === undefined && (value as Record<string, any>)['display_name'] === undefined)) return false;
     return true;
 }
@@ -53,6 +74,9 @@ export function AuthResultFromJSONTyped(json: any, ignoreDiscriminator: boolean)
     return {
 
         'actorId': json['actor_id'],
+        'wikiId': json['wiki_id'],
+        'wikiName': json['wiki_name'],
+        'mainNamespaceId': json['main_namespace_id'],
         'displayName': json['display_name'],
     };
 }
@@ -69,6 +93,9 @@ export function AuthResultToJSONTyped(value?: AuthResult | null, ignoreDiscrimin
     return {
 
         'actor_id': value['actorId'],
+        'wiki_id': value['wikiId'],
+        'wiki_name': value['wikiName'],
+        'main_namespace_id': value['mainNamespaceId'],
         'display_name': value['displayName'],
     };
 }

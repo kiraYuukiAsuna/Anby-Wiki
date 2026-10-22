@@ -1,29 +1,38 @@
+"use client";
+
 import Link from "next/link";
 import { Bot, BookOpenText, Plus } from "lucide-react";
 
 import { AccountMenu } from "@/components/account-menu";
 import { GlobalSearchCommand } from "@/components/global-search-command";
 import { Button } from "@/components/ui/button";
+import { useSession } from "@/lib/auth";
 
 export function SiteHeader() {
+  const { session } = useSession();
+  const wikiName = session?.wikiName ?? "Anby Wiki";
+
   return (
     <header className="sticky top-0 z-40 min-w-0 border-b border-border/80 bg-background/88 backdrop-blur-xl">
       <div className="flex h-16 w-full min-w-0 items-center gap-3 px-4 sm:px-5 lg:px-6">
         <Link
           href="/"
           className="flex shrink-0 items-center gap-2.5 rounded-xl focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
-          aria-label="Anby Wiki 首页"
+          aria-label={`${wikiName} 首页`}
         >
           <span className="relative flex size-9 items-center justify-center overflow-hidden rounded-xl bg-primary text-primary-foreground shadow-[0_8px_20px_color-mix(in_oklch,var(--primary),transparent_72%)]">
             <BookOpenText className="size-4.5" aria-hidden />
             <span className="absolute inset-x-1 bottom-0 h-px bg-white/35" />
           </span>
           <span className="hidden sm:block">
-            <span className="block text-[15px] font-semibold tracking-[-0.02em]">
-              Anby Wiki
+            <span
+              className="block max-w-40 truncate text-[15px] font-semibold"
+              title={wikiName}
+            >
+              {wikiName}
             </span>
-            <span className="block text-[9px] font-semibold tracking-[0.18em] text-muted-foreground uppercase">
-              Living knowledge
+            <span className="block text-[9px] font-semibold text-muted-foreground uppercase">
+              Private wiki
             </span>
           </span>
         </Link>

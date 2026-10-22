@@ -154,55 +154,36 @@ func TestAPIGovernanceKnowledgeE2E(t *testing.T) {
 	}
 	runID := strconv.FormatInt(time.Now().UnixNano(), 36)
 	admin, adminActor := apiE2EAdmin(t, baseURL, password)
-	editor, editorActor := registerE2EUser(
+	adminSession := requestE2EMap(t, admin, http.MethodGet,
+		baseURL+"/api/v1/auth/session", nil, http.StatusOK)
+	adminWikiID := e2eUUID(t, adminSession, "wiki_id")
+	isolatedUser, _ := registerE2EUser(
 		t, baseURL, "gov_editor_"+runID,
 		"gov_editor_"+runID+"@example.invalid", password,
 	)
+	isolatedSession := requestE2EMap(t, isolatedUser, http.MethodGet,
+		baseURL+"/api/v1/auth/session", nil, http.StatusOK)
+	if isolatedWikiID := e2eUUID(t, isolatedSession, "wiki_id"); isolatedWikiID == adminWikiID {
+		t.Fatalf("registered accounts share Wiki %s", isolatedWikiID)
+	}
+	if e2eUUID(t, adminSession, "main_namespace_id") == uuid.Nil ||
+		e2eUUID(t, isolatedSession, "main_namespace_id") == uuid.Nil {
+		t.Fatal("session is missing a main namespace")
+	}
 
 	users := requestE2EMap(t, admin, http.MethodGet,
 		baseURL+"/api/v1/admin/users?search=gov_editor_"+runID,
 		nil, http.StatusOK)
 	items, ok := users["items"].([]any)
-	if !ok || len(items) != 1 {
-		t.Fatalf("admin user list did not find editor: %#v", users)
-	}
-	granted := requestE2EMap(t, admin, http.MethodPut,
-		fmt.Sprintf("%s/api/v1/admin/users/%s/roles/reviewer", baseURL, editorActor),
-		nil, http.StatusOK)
-	if changed, _ := granted["changed"].(bool); !changed {
-		t.Fatalf("grant reviewer was not reported as changed: %#v", granted)
-	}
-	revoked := requestE2EMap(t, admin, http.MethodDelete,
-		fmt.Sprintf("%s/api/v1/admin/users/%s/roles/reviewer", baseURL, editorActor),
-		nil, http.StatusOK)
-	if changed, _ := revoked["changed"].(bool); !changed {
-		t.Fatalf("revoke reviewer was not reported as changed: %#v", revoked)
-	}
-	deletedClient, deletedActor := registerE2EUser(
-		t, baseURL, "gov_deleted_"+runID,
-		"gov_deleted_"+runID+"@example.invalid", password,
-	)
-	deletion := requestE2EMap(t, admin, http.MethodDelete,
-		fmt.Sprintf("%s/api/v1/admin/users/%s", baseURL, deletedActor),
-		nil, http.StatusOK)
-	if deleted, _ := deletion["deleted"].(bool); !deleted {
-		t.Fatalf("delete user was not reported as deleted: %#v", deletion)
-	}
-	assertE2EStatus(t, doE2ERequest(t, deletedClient, http.MethodGet,
-		baseURL+"/api/v1/auth/session", nil, nil), http.StatusUnauthorized)
-	deletedUsers := requestE2EMap(t, admin, http.MethodGet,
-		baseURL+"/api/v1/admin/users?search=gov_deleted_"+runID,
-		nil, http.StatusOK)
-	deletedItems, ok := deletedUsers["items"].([]any)
-	if !ok || len(deletedItems) != 0 {
-		t.Fatalf("deleted user still appears in default admin user list: %#v", deletedUsers)
+	if !ok || len(items) != 0 {
+		t.Fatalf("foreign Wiki account leaked into user list: %#v", users)
 	}
 
 	entityID, entityBatchID, entityProposalID := createEntityThroughProposalE2E(
-		t, editor, admin, baseURL, runID+"-primary",
+		t, admin, admin, baseURL, adminWikiID, runID+"-primary",
 	)
 	secondEntityID, _, _ := createEntityThroughProposalE2E(
-		t, editor, admin, baseURL, runID+"-duplicate",
+		t, admin, admin, baseURL, adminWikiID, runID+"-duplicate",
 	)
 
 	requestE2EMap(t, admin, http.MethodGet,
@@ -260,7 +241,7 @@ func TestAPIGovernanceKnowledgeE2E(t *testing.T) {
 			baseURL, pageID, entityID), http.StatusNoContent)
 
 	claimID, claimBatchID := createClaimThroughProposalE2E(
-		t, editor, admin, baseURL, entityID,
+		t, admin, admin, baseURL, entityID,
 	)
 	requestE2EMap(t, admin, http.MethodGet,
 		fmt.Sprintf("%s/api/v1/claims/%s", baseURL, claimID), nil, http.StatusOK)
@@ -390,6 +371,12 @@ func TestAPIGovernanceKnowledgeE2E(t *testing.T) {
 	requestE2EMap(t, admin, http.MethodPost,
 		baseURL+"/api/v1/revision-storage/archive",
 		map[string]any{"limit": 10}, http.StatusOK)
+	requestE2EMap(t, isolatedUser, http.MethodGet,
+		fmt.Sprintf("%s/api/v1/pages/%s", baseURL, pageID),
+		nil, http.StatusNotFound)
+	requestE2EMap(t, isolatedUser, http.MethodGet,
+		fmt.Sprintf("%s/api/v1/entities/%s", baseURL, entityID),
+		nil, http.StatusNotFound)
 	_ = adminActor
 }
 
@@ -401,14 +388,12 @@ func TestAPIBulkReviewE2E(t *testing.T) {
 	}
 	runID := strconv.FormatInt(time.Now().UnixNano(), 36)
 	admin, _ := apiE2EAdmin(t, baseURL, password)
-	editor, _ := registerE2EUser(
-		t, baseURL, "bulk_editor_"+runID,
-		"bulk_editor_"+runID+"@example.invalid", password,
-	)
+	session := requestE2EMap(t, admin, http.MethodGet,
+		baseURL+"/api/v1/auth/session", nil, http.StatusOK)
 	proposalID, _ := createEntityProposalE2E(
-		t, editor, baseURL, "bulk-"+runID,
+		t, admin, baseURL, e2eUUID(t, session, "wiki_id"), "bulk-"+runID,
 	)
-	requestE2EMap(t, editor, http.MethodPost,
+	requestE2EMap(t, admin, http.MethodPost,
 		fmt.Sprintf("%s/api/v1/proposals/%s/submit", baseURL, proposalID),
 		map[string]any{}, http.StatusOK)
 
@@ -1114,11 +1099,13 @@ func testCollectionWorkflow(t *testing.T, client *http.Client, baseURL, runID st
 func createEntityThroughProposalE2E(
 	t *testing.T,
 	proposer, reviewer *http.Client,
-	baseURL, suffix string,
+	baseURL string,
+	wikiID uuid.UUID,
+	suffix string,
 ) (uuid.UUID, uuid.UUID, uuid.UUID) {
 	t.Helper()
 	proposalID, entityID := createEntityProposalE2E(
-		t, proposer, baseURL, suffix,
+		t, proposer, baseURL, wikiID, suffix,
 	)
 	result := approveAndApplyProposalE2E(
 		t, proposer, reviewer, baseURL, proposalID,
@@ -1182,7 +1169,9 @@ func testPageProposalPreviewE2E(
 func createEntityProposalE2E(
 	t *testing.T,
 	proposer *http.Client,
-	baseURL, suffix string,
+	baseURL string,
+	wikiID uuid.UUID,
+	suffix string,
 ) (uuid.UUID, uuid.UUID) {
 	t.Helper()
 	entityID := uuid.New()
@@ -1202,7 +1191,7 @@ func createEntityProposalE2E(
 			"schema_version": 1, "operation_type": "create_entity",
 			"base": map[string]any{"state_version": 0},
 			"target": map[string]any{
-				"wiki_id":   "00000000-0000-7000-8000-000000000001",
+				"wiki_id":   wikiID,
 				"entity_id": entityID,
 			},
 			"expected_hash": nil,

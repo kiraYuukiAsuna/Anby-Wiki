@@ -15,7 +15,7 @@ All URIs are relative to *http://localhost:3000*
 
 获取搜索引擎能力
 
-匿名可读。返回当前 SearchAdapter 的真实后端、可用排序模式和聚合维度； 未配置向量 Embedder 时不会宣称支持 hybrid / semantic。
+返回当前登录 Wiki 的 SearchAdapter 真实后端、可用排序模式和聚合维度； 未配置向量 Embedder 时不会宣称支持 hybrid / semantic。
 
 ### Example
 
@@ -28,7 +28,13 @@ import type { GetSearchCapabilitiesRequest } from '';
 
 async function example() {
   console.log("🚀 Testing  SDK...");
-  const api = new SearchApi();
+  const config = new Configuration({
+    // Configure HTTP bearer authorization: cliBearer
+    accessToken: "YOUR BEARER TOKEN",
+    // To configure API key authorization: sessionCookie
+    apiKey: "YOUR API KEY",
+  });
+  const api = new SearchApi(config);
 
   try {
     const data = await api.getSearchCapabilities();
@@ -52,7 +58,7 @@ This endpoint does not need any parameter.
 
 ### Authorization
 
-No authorization required
+[cliBearer](../README.md#cliBearer), [sessionCookie](../README.md#sessionCookie)
 
 ### HTTP request headers
 
@@ -75,7 +81,7 @@ No authorization required
 
 搜索活页面
 
-独立搜索引擎 SearchAdapter 的匿名查询端点（无需登录）。 搜索文档由 Outbox 驱动的 Current Revision 投影生成，覆盖标题、旧别名、 正文和主 Entity 文本；支持关键词、混合、纯语义搜索，以及字段、 命名空间、语言与 Entity 类型过滤和聚合。 PostgreSQL 仅作为可重建权威 staging 与开发回退；回退环境只支持 keyword。 高亮使用 [[ 与 ]] 标记，调用方必须按纯文本处理，不能作为 HTML 注入。 q 为空（trim 后）返回空列表；limit 缺省 10、最大 50。
+查询当前登录 Wiki 的独立搜索引擎 SearchAdapter。 搜索文档由 Outbox 驱动的 Current Revision 投影生成，覆盖标题、旧别名、 正文和主 Entity 文本；支持关键词、混合、纯语义搜索，以及字段、 命名空间、语言与 Entity 类型过滤和聚合。 PostgreSQL 仅作为可重建权威 staging 与开发回退；回退环境只支持 keyword。 高亮使用 [[ 与 ]] 标记，调用方必须按纯文本处理，不能作为 HTML 注入。 q 为空（trim 后）返回空列表；limit 缺省 10、最大 50。
 
 ### Example
 
@@ -88,7 +94,13 @@ import type { SearchPagesRequest } from '';
 
 async function example() {
   console.log("🚀 Testing  SDK...");
-  const api = new SearchApi();
+  const config = new Configuration({
+    // Configure HTTP bearer authorization: cliBearer
+    accessToken: "YOUR BEARER TOKEN",
+    // To configure API key authorization: sessionCookie
+    apiKey: "YOUR API KEY",
+  });
+  const api = new SearchApi(config);
 
   const body = {
     // string | 查询词（空白裁剪后为空则返回空列表） (optional)
@@ -144,7 +156,7 @@ example().catch(console.error);
 
 ### Authorization
 
-No authorization required
+[cliBearer](../README.md#cliBearer), [sessionCookie](../README.md#sessionCookie)
 
 ### HTTP request headers
 

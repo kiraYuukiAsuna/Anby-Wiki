@@ -45,6 +45,12 @@ export interface Proposal {
      * @type {string}
      * @memberof Proposal
      */
+    wikiId: string;
+    /**
+     *
+     * @type {string}
+     * @memberof Proposal
+     */
     importJobId?: string;
     /**
      *
@@ -204,6 +210,7 @@ export type ProposalChangeBatchStatusEnum = typeof ProposalChangeBatchStatusEnum
  */
 export function instanceOfProposal(value: object): value is Proposal {
     if (!('id' in value) || value['id'] === undefined) return false;
+    if ((!('wikiId' in (value as Record<string, any>)) && !('wiki_id' in (value as Record<string, any>))) || ((value as Record<string, any>)['wikiId'] === undefined && (value as Record<string, any>)['wiki_id'] === undefined)) return false;
     if ((!('targetType' in (value as Record<string, any>)) && !('target_type' in (value as Record<string, any>))) || ((value as Record<string, any>)['targetType'] === undefined && (value as Record<string, any>)['target_type'] === undefined)) return false;
     if (!('status' in value) || value['status'] === undefined) return false;
     if ((!('riskLevel' in (value as Record<string, any>)) && !('risk_level' in (value as Record<string, any>))) || ((value as Record<string, any>)['riskLevel'] === undefined && (value as Record<string, any>)['risk_level'] === undefined)) return false;
@@ -229,6 +236,7 @@ export function ProposalFromJSONTyped(json: any, ignoreDiscriminator: boolean): 
     return {
 
         'id': json['id'],
+        'wikiId': json['wiki_id'],
         'importJobId': json['import_job_id'] == null ? undefined : json['import_job_id'],
         'targetType': json['target_type'],
         'targetId': json['target_id'] == null ? undefined : json['target_id'],
@@ -261,6 +269,7 @@ export function ProposalToJSONTyped(value?: Proposal | null, ignoreDiscriminator
     return {
 
         'id': value['id'],
+        'wiki_id': value['wikiId'],
         'import_job_id': value['importJobId'],
         'target_type': value['targetType'],
         'target_id': value['targetId'],

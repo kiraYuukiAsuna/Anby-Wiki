@@ -264,7 +264,13 @@ import type { GetWikiComponentRequest } from '';
 
 async function example() {
   console.log("🚀 Testing  SDK...");
-  const api = new ComponentsApi();
+  const config = new Configuration({
+    // Configure HTTP bearer authorization: cliBearer
+    accessToken: "YOUR BEARER TOKEN",
+    // To configure API key authorization: sessionCookie
+    apiKey: "YOUR API KEY",
+  });
+  const api = new ComponentsApi(config);
 
   const body = {
     // string | Proposal、ReviewTask 或 ChangeBatch ID
@@ -296,7 +302,7 @@ example().catch(console.error);
 
 ### Authorization
 
-No authorization required
+[cliBearer](../README.md#cliBearer), [sessionCookie](../README.md#sessionCookie)
 
 ### HTTP request headers
 
@@ -331,7 +337,13 @@ import type { ListWikiComponentVersionsRequest } from '';
 
 async function example() {
   console.log("🚀 Testing  SDK...");
-  const api = new ComponentsApi();
+  const config = new Configuration({
+    // Configure HTTP bearer authorization: cliBearer
+    accessToken: "YOUR BEARER TOKEN",
+    // To configure API key authorization: sessionCookie
+    apiKey: "YOUR API KEY",
+  });
+  const api = new ComponentsApi(config);
 
   const body = {
     // string | Proposal、ReviewTask 或 ChangeBatch ID
@@ -363,7 +375,7 @@ example().catch(console.error);
 
 ### Authorization
 
-No authorization required
+[cliBearer](../README.md#cliBearer), [sessionCookie](../README.md#sessionCookie)
 
 ### HTTP request headers
 
@@ -397,7 +409,13 @@ import type { ListWikiComponentsRequest } from '';
 
 async function example() {
   console.log("🚀 Testing  SDK...");
-  const api = new ComponentsApi();
+  const config = new Configuration({
+    // Configure HTTP bearer authorization: cliBearer
+    accessToken: "YOUR BEARER TOKEN",
+    // To configure API key authorization: sessionCookie
+    apiKey: "YOUR API KEY",
+  });
+  const api = new ComponentsApi(config);
 
   const body = {
     // string | 上一页响应返回的 next_cursor；首页不传 (optional)
@@ -432,7 +450,7 @@ example().catch(console.error);
 
 ### Authorization
 
-No authorization required
+[cliBearer](../README.md#cliBearer), [sessionCookie](../README.md#sessionCookie)
 
 ### HTTP request headers
 
@@ -466,7 +484,13 @@ import type { PreviewWikiComponentVersionRequest } from '';
 
 async function example() {
   console.log("🚀 Testing  SDK...");
-  const api = new ComponentsApi();
+  const config = new Configuration({
+    // Configure HTTP bearer authorization: cliBearer
+    accessToken: "YOUR BEARER TOKEN",
+    // To configure API key authorization: sessionCookie
+    apiKey: "YOUR API KEY",
+  });
+  const api = new ComponentsApi(config);
 
   const body = {
     // string | Proposal、ReviewTask 或 ChangeBatch ID
@@ -504,7 +528,7 @@ example().catch(console.error);
 
 ### Authorization
 
-No authorization required
+[cliBearer](../README.md#cliBearer), [sessionCookie](../README.md#sessionCookie)
 
 ### HTTP request headers
 

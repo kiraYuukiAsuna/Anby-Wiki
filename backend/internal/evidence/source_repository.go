@@ -230,13 +230,13 @@ func (r *Repository) RetryExternalResourceCheck(
 	return nil
 }
 
-const sourceColumns = `id, source_type, external_resource_id, asset_id, title,
+const sourceColumns = `id, wiki_id, source_type, external_resource_id, asset_id, title,
 	author, publisher, published_at, metadata_json, created_at`
 
 func scanSource(row pgx.Row) (*Source, error) {
 	var s Source
 	err := row.Scan(
-		&s.ID, &s.SourceType, &s.ExternalResourceID, &s.AssetID, &s.Title,
+		&s.ID, &s.WikiID, &s.SourceType, &s.ExternalResourceID, &s.AssetID, &s.Title,
 		&s.Author, &s.Publisher, &s.PublishedAt, &s.MetadataJSON, &s.CreatedAt,
 	)
 	if err != nil {
@@ -246,9 +246,14 @@ func scanSource(row pgx.Row) (*Source, error) {
 }
 
 // GetSourceByID 按 ID 查 source，未命中返回 ErrSourceNotFound。
-func (r *Repository) GetSourceByID(ctx context.Context, tx pgx.Tx, id uuid.UUID) (*Source, error) {
+func (r *Repository) GetSourceByID(
+	ctx context.Context,
+	tx pgx.Tx,
+	wikiID, id uuid.UUID,
+) (*Source, error) {
 	s, err := scanSource(r.q(tx).QueryRow(ctx, `
-		SELECT `+sourceColumns+` FROM source WHERE id = $1`, id))
+		SELECT `+sourceColumns+` FROM source WHERE wiki_id=$1 AND id=$2`,
+		wikiID, id))
 	if errors.Is(err, pgx.ErrNoRows) {
 		return nil, fmt.Errorf("%w: id=%s", ErrSourceNotFound, id)
 	}
@@ -266,11 +271,11 @@ func (r *Repository) InsertSource(ctx context.Context, tx pgx.Tx, s *Source) err
 		metadata = []byte("{}")
 	}
 	err := r.q(tx).QueryRow(ctx, `
-		INSERT INTO source (id, source_type, external_resource_id, asset_id, title,
+		INSERT INTO source (id, wiki_id, source_type, external_resource_id, asset_id, title,
 			author, publisher, published_at, metadata_json)
-		VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9::jsonb)
+		VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10::jsonb)
 		RETURNING created_at`,
-		s.ID, s.SourceType, s.ExternalResourceID, s.AssetID, s.Title,
+		s.ID, s.WikiID, s.SourceType, s.ExternalResourceID, s.AssetID, s.Title,
 		s.Author, s.Publisher, s.PublishedAt, metadata,
 	).Scan(&s.CreatedAt)
 	if err != nil {

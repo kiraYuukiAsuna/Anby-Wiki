@@ -21,11 +21,10 @@ import (
 type AIConfigAPI struct {
 	service  *aiconfig.Service
 	provider ai.Provider
-	wikiID   uuid.UUID
 }
 
-func NewAIConfigAPI(service *aiconfig.Service, provider ai.Provider, wikiID uuid.UUID) *AIConfigAPI {
-	return &AIConfigAPI{service: service, provider: provider, wikiID: wikiID}
+func NewAIConfigAPI(service *aiconfig.Service, provider ai.Provider) *AIConfigAPI {
+	return &AIConfigAPI{service: service, provider: provider}
 }
 
 type updateAIConfigRequest struct {
@@ -71,7 +70,7 @@ func (a *AIConfigAPI) get(w http.ResponseWriter, r *http.Request) {
 	if !ok {
 		return
 	}
-	value, err := a.service.Get(r.Context(), a.wikiID, actorID)
+	value, err := a.service.Get(r.Context(), wikiIDFromRequest(r), actorID)
 	if err != nil {
 		aiConfigError(w, r, err)
 		return
@@ -89,7 +88,7 @@ func (a *AIConfigAPI) update(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	value, err := a.service.Update(r.Context(), aiconfig.UpdateParams{
-		WikiID: a.wikiID, ActorID: actorID, Enabled: request.Enabled,
+		WikiID: wikiIDFromRequest(r), ActorID: actorID, Enabled: request.Enabled,
 		Provider: request.Provider, BaseURL: request.BaseURL, Model: request.Model,
 		ResponseFormat:         request.ResponseFormat,
 		MaxInputTokens:         request.MaxInputTokens,
@@ -110,11 +109,11 @@ func (a *AIConfigAPI) test(w http.ResponseWriter, r *http.Request) {
 	if !ok {
 		return
 	}
-	if _, err := a.service.Get(r.Context(), a.wikiID, actorID); err != nil {
+	if _, err := a.service.Get(r.Context(), wikiIDFromRequest(r), actorID); err != nil {
 		aiConfigError(w, r, err)
 		return
 	}
-	runtime, err := a.service.Runtime(r.Context(), a.wikiID)
+	runtime, err := a.service.Runtime(r.Context(), wikiIDFromRequest(r))
 	if err != nil {
 		aiConfigError(w, r, err)
 		return
@@ -125,6 +124,7 @@ func (a *AIConfigAPI) test(w http.ResponseWriter, r *http.Request) {
 	}
 	ctx, cancel := context.WithTimeout(r.Context(), timeout)
 	defer cancel()
+	ctx = ai.WithWikiID(ctx, wikiIDFromRequest(r))
 	started := time.Now()
 	sourceVersionID := uuid.MustParse("00000000-0000-4000-8000-000000000001")
 	result, err := a.provider.Generate(ctx, ai.ProviderRequest{

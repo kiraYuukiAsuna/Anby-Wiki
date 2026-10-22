@@ -97,6 +97,7 @@ func NewRouter(logger *slog.Logger, deps Deps, writeAPI *WriteAPI, readAPI *Read
 
 	if writeAPI != nil || readAPI != nil || historyAPI != nil || projectionAPI != nil || searchAPI != nil || knowledgeReadAPI != nil || governanceAPI != nil || importAPI != nil || authAPI != nil || collaborationAPI != nil || collectionAPI != nil || assetAPI != nil || datasetAPI != nil || componentAPI != nil || sourceAPI != nil || aiConfigAPI != nil {
 		r.Route("/api/v1", func(r chi.Router) {
+			r.Use(RequireAuthenticatedWiki)
 			if authAPI != nil {
 				r.Post("/auth/register", authAPI.register)
 				r.Post("/auth/login", authAPI.login)

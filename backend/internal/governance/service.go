@@ -33,9 +33,12 @@ func NewService(repo *Repository, txm *db.TxManager, ids *id.Generator) *Service
 
 // ListOwnedProposals 返回当前 Actor 创建的全部提案，供工作台恢复历史任务。
 func (s *Service) ListOwnedProposals(
-	ctx context.Context, actorID uuid.UUID, status, targetType, cursor string, limit int,
+	ctx context.Context,
+	wikiID, actorID uuid.UUID,
+	status, targetType, cursor string,
+	limit int,
 ) (*ProposalPage, error) {
-	if actorID == uuid.Nil {
+	if wikiID == uuid.Nil || actorID == uuid.Nil {
 		return nil, ErrInvalidActor
 	}
 	if err := s.checkProposalActor(ctx, nil, actorID); err != nil {
@@ -55,7 +58,9 @@ func (s *Service) ListOwnedProposals(
 	if limit > MaxProposalPageSize {
 		limit = MaxProposalPageSize
 	}
-	return s.repo.ListOwnedProposals(ctx, actorID, status, targetType, cursor, limit)
+	return s.repo.ListOwnedProposals(
+		ctx, wikiID, actorID, status, targetType, cursor, limit,
+	)
 }
 
 // ListPendingApplyProposals returns approved proposals for one Wiki after the
@@ -91,7 +96,9 @@ func validProposalStatus(status string) bool {
 // 此入口只写治理草稿，不触碰 Revision、Claim 或 Projection。
 func (s *Service) CreateProposal(ctx context.Context, in CreateProposalParams) (*Proposal, error) {
 	in.IdempotencyKey = strings.TrimSpace(in.IdempotencyKey)
-	if !validTargets[in.TargetType] || in.CreatedBy == uuid.Nil || in.IdempotencyKey == "" || len(in.IdempotencyKey) > 200 {
+	if in.WikiID == uuid.Nil || !validTargets[in.TargetType] ||
+		in.CreatedBy == uuid.Nil || in.IdempotencyKey == "" ||
+		len(in.IdempotencyKey) > 200 {
 		return nil, ErrInvalidProposal
 	}
 	if in.BaseStateVersion != nil && *in.BaseStateVersion < 0 {
@@ -103,19 +110,25 @@ func (s *Service) CreateProposal(ctx context.Context, in CreateProposalParams) (
 	if !validRiskLevels[in.RiskLevel] {
 		return nil, ErrInvalidProposal
 	}
-	if err := s.checkProposalActor(ctx, nil, in.CreatedBy); err != nil {
+	if err := s.checkProposalActorInWiki(
+		ctx, nil, in.CreatedBy, in.WikiID,
+	); err != nil {
 		return nil, err
 	}
 
 	var result *Proposal
 	err := s.txm.InTx(ctx, func(tx pgx.Tx) error {
+		if err := s.validateProposalScope(ctx, tx, in); err != nil {
+			return err
+		}
 		proposalID, err := s.ids.New()
 		if err != nil {
 			return err
 		}
 		candidate := &Proposal{
-			ID: proposalID, ImportJobID: in.ImportJobID, TargetType: in.TargetType,
-			TargetID: in.TargetID, BaseRevisionID: in.BaseRevisionID,
+			ID: proposalID, WikiID: in.WikiID, ImportJobID: in.ImportJobID,
+			TargetType: in.TargetType,
+			TargetID:   in.TargetID, BaseRevisionID: in.BaseRevisionID,
 			BaseStateVersion: in.BaseStateVersion, Status: ProposalDraft,
 			RiskLevel: in.RiskLevel, CreatedBy: in.CreatedBy, IdempotencyKey: in.IdempotencyKey,
 		}
@@ -141,7 +154,8 @@ func (s *Service) CreateProposal(ctx context.Context, in CreateProposalParams) (
 }
 
 func sameProposalRequest(p *Proposal, in CreateProposalParams) bool {
-	return p.TargetType == in.TargetType && equalUUID(p.ImportJobID, in.ImportJobID) &&
+	return p.WikiID == in.WikiID &&
+		p.TargetType == in.TargetType && equalUUID(p.ImportJobID, in.ImportJobID) &&
 		equalUUID(p.TargetID, in.TargetID) && equalUUID(p.BaseRevisionID, in.BaseRevisionID) &&
 		reflect.DeepEqual(p.BaseStateVersion, in.BaseStateVersion) &&
 		// risk_level is replaced by the policy evaluator at Submit. Once frozen,
@@ -239,6 +253,15 @@ func (s *Service) addOperations(
 		if p.Status != ProposalDraft {
 			return fmt.Errorf("%w: status=%s", ErrProposalNotDraft, p.Status)
 		}
+		for index := range inputs {
+			var target OperationTarget
+			if err := json.Unmarshal(inputs[index].Target, &target); err != nil {
+				return ErrInvalidOperation
+			}
+			if target.WikiID != nil && *target.WikiID != p.WikiID {
+				return ErrInvalidOperation
+			}
+		}
 		n, err := s.repo.CountOperations(ctx, tx, proposalID)
 		if err != nil {
 			return err
@@ -317,6 +340,104 @@ func (s *Service) checkProposalActor(ctx context.Context, tx pgx.Tx, actorID uui
 	}
 	if actorType == "anonymous" {
 		return ErrActorNotAllowed
+	}
+	return nil
+}
+
+func (s *Service) checkProposalActorInWiki(
+	ctx context.Context,
+	tx pgx.Tx,
+	actorID, wikiID uuid.UUID,
+) error {
+	var actorType, status string
+	var actorWikiID *uuid.UUID
+	err := s.repo.q(tx).QueryRow(ctx, `SELECT actor_type,status,wiki_id
+		FROM actor WHERE id=$1`, actorID).
+		Scan(&actorType, &status, &actorWikiID)
+	if errors.Is(err, pgx.ErrNoRows) {
+		return ErrInvalidActor
+	}
+	if err != nil {
+		return err
+	}
+	if status != "active" {
+		return ErrInvalidActor
+	}
+	if actorType == "anonymous" {
+		return ErrActorNotAllowed
+	}
+	if actorType == "human" &&
+		(actorWikiID == nil || *actorWikiID != wikiID) {
+		return ErrActorNotAllowed
+	}
+	return nil
+}
+
+func (s *Service) validateProposalScope(
+	ctx context.Context,
+	tx pgx.Tx,
+	in CreateProposalParams,
+) error {
+	if in.ImportJobID != nil {
+		var exists bool
+		if err := tx.QueryRow(ctx, `SELECT EXISTS(
+			SELECT 1 FROM import_job WHERE id=$1 AND wiki_id=$2
+		)`, *in.ImportJobID, in.WikiID).Scan(&exists); err != nil {
+			return err
+		}
+		if !exists {
+			return ErrInvalidProposal
+		}
+	}
+	if in.BaseRevisionID != nil {
+		var exists bool
+		if err := tx.QueryRow(ctx, `SELECT EXISTS(
+			SELECT 1 FROM revision r JOIN page p ON p.id=r.page_id
+			WHERE r.id=$1 AND p.wiki_id=$2
+		)`, *in.BaseRevisionID, in.WikiID).Scan(&exists); err != nil {
+			return err
+		}
+		if !exists {
+			return ErrInvalidProposal
+		}
+	}
+	if in.TargetID == nil {
+		return nil
+	}
+	var exists bool
+	var err error
+	switch in.TargetType {
+	case TargetWiki:
+		exists = *in.TargetID == in.WikiID
+	case TargetPage:
+		err = tx.QueryRow(ctx, `SELECT EXISTS(
+			SELECT 1 FROM page WHERE id=$1 AND wiki_id=$2
+		)`, *in.TargetID, in.WikiID).Scan(&exists)
+	case TargetEntity:
+		err = tx.QueryRow(ctx, `SELECT EXISTS(
+			SELECT 1 FROM entity WHERE id=$1 AND wiki_id=$2
+		)`, *in.TargetID, in.WikiID).Scan(&exists)
+	case TargetClaim:
+		err = tx.QueryRow(ctx, `SELECT EXISTS(
+			SELECT 1 FROM claim c JOIN entity e ON e.id=c.subject_entity_id
+			WHERE c.id=$1 AND e.wiki_id=$2
+		)`, *in.TargetID, in.WikiID).Scan(&exists)
+	case TargetCollection:
+		err = tx.QueryRow(ctx, `SELECT EXISTS(
+			SELECT 1 FROM collection WHERE id=$1 AND wiki_id=$2
+		)`, *in.TargetID, in.WikiID).Scan(&exists)
+	case TargetExternalResource:
+		err = tx.QueryRow(ctx, `SELECT EXISTS(
+			SELECT 1 FROM external_resource WHERE id=$1
+		)`, *in.TargetID).Scan(&exists)
+	default:
+		return ErrInvalidProposal
+	}
+	if err != nil {
+		return err
+	}
+	if !exists {
+		return ErrInvalidProposal
 	}
 	return nil
 }

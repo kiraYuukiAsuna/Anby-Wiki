@@ -27,14 +27,14 @@ func (r *Repository) q(tx pgx.Tx) db.Querier {
 	return r.pool
 }
 
-const jobColumns = `id,job_type,status,initiated_by,idempotency_key,config_json,
+const jobColumns = `id,wiki_id,job_type,status,initiated_by,idempotency_key,config_json,
 	planning_input_json,planning_idempotency_key,source_version_id,proposal_id,
 	action_required,current_plan_id,confirmed_plan_id,plan_confirmed_at,
 	current_stage,progress,error_json,created_at,started_at,finished_at,updated_at`
 
 func scanJob(row pgx.Row) (*Job, error) {
 	var job Job
-	err := row.Scan(&job.ID, &job.JobType, &job.Status, &job.InitiatedBy,
+	err := row.Scan(&job.ID, &job.WikiID, &job.JobType, &job.Status, &job.InitiatedBy,
 		&job.IdempotencyKey, &job.Config, &job.PlanningInput,
 		&job.PlanningIdempotencyKey, &job.SourceVersionID, &job.ProposalID,
 		&job.ActionRequired, &job.CurrentPlanID, &job.ConfirmedPlanID,
@@ -63,16 +63,33 @@ func (r *Repository) NextQueuedJobForUpdate(
 	ctx context.Context,
 	tx pgx.Tx,
 	sourceOnly bool,
+	wikiID *uuid.UUID,
 ) (*Job, error) {
 	job, err := scanJob(r.q(tx).QueryRow(ctx, `SELECT `+jobColumns+` FROM import_job
 		WHERE status='queued' AND job_type='source_import'
 		  AND (NOT $1 OR config_json->>'ingestion_mode'=$2)
+		  AND ($3::uuid IS NULL OR wiki_id=$3)
 		ORDER BY created_at,id FOR UPDATE SKIP LOCKED LIMIT 1`,
-		sourceOnly, IngestionModeSourceOnly))
+		sourceOnly, IngestionModeSourceOnly, wikiID))
 	if errors.Is(err, pgx.ErrNoRows) {
 		return nil, ErrNoQueuedJob
 	}
 	return job, err
+}
+
+func (r *Repository) NextQueuedAIWikiID(
+	ctx context.Context,
+) (uuid.UUID, error) {
+	var wikiID uuid.UUID
+	err := r.pool.QueryRow(ctx, `SELECT wiki_id FROM import_job
+		WHERE status='queued' AND job_type='source_import'
+		  AND COALESCE(config_json->>'ingestion_mode',$1)<>$2
+		ORDER BY created_at,id LIMIT 1`,
+		IngestionModeWiki, IngestionModeSourceOnly).Scan(&wikiID)
+	if errors.Is(err, pgx.ErrNoRows) {
+		return uuid.Nil, ErrNoQueuedJob
+	}
+	return wikiID, err
 }
 
 func (r *Repository) NextStaleRunningJobForUpdate(
@@ -172,11 +189,14 @@ func (r *Repository) ListOwnedJobs(
 
 func (r *Repository) InsertJobIfAbsent(ctx context.Context, job *Job) (bool, error) {
 	err := r.pool.QueryRow(ctx, `INSERT INTO import_job
-		(id,job_type,status,initiated_by,idempotency_key,config_json,planning_input_json,current_stage,progress)
-		VALUES ($1,$2,'queued',$3,$4,$5::jsonb,$6::jsonb,'queued',0)
+		(id,wiki_id,job_type,status,initiated_by,idempotency_key,
+		 config_json,planning_input_json,current_stage,progress)
+		VALUES ($1,$2,$3,'queued',$4,$5,$6::jsonb,$7::jsonb,'queued',0)
 		ON CONFLICT (initiated_by,idempotency_key) DO NOTHING
-		RETURNING created_at,updated_at`, job.ID, job.JobType, job.InitiatedBy,
-		job.IdempotencyKey, job.Config, job.PlanningInput).Scan(&job.CreatedAt, &job.UpdatedAt)
+		RETURNING created_at,updated_at`,
+		job.ID, job.WikiID, job.JobType, job.InitiatedBy,
+		job.IdempotencyKey, job.Config, job.PlanningInput).
+		Scan(&job.CreatedAt, &job.UpdatedAt)
 	if errors.Is(err, pgx.ErrNoRows) {
 		return false, nil
 	}
@@ -474,13 +494,21 @@ func (r *Repository) ListStages(ctx context.Context, jobID uuid.UUID) ([]StageRu
 	return result, rows.Err()
 }
 
-func (r *Repository) Actor(ctx context.Context, id uuid.UUID) (string, string, error) {
+func (r *Repository) Actor(
+	ctx context.Context,
+	id uuid.UUID,
+) (string, string, uuid.UUID, error) {
 	var actorType, status string
-	err := r.pool.QueryRow(ctx, `SELECT actor_type,status FROM actor WHERE id=$1`, id).Scan(&actorType, &status)
+	var wikiID *uuid.UUID
+	err := r.pool.QueryRow(ctx, `SELECT actor_type,status,wiki_id FROM actor WHERE id=$1`, id).
+		Scan(&actorType, &status, &wikiID)
 	if errors.Is(err, pgx.ErrNoRows) {
-		return "", "", fmt.Errorf("%w: actor", ErrInvalidJob)
+		return "", "", uuid.Nil, fmt.Errorf("%w: actor", ErrInvalidJob)
 	}
-	return actorType, status, err
+	if err != nil || wikiID == nil {
+		return actorType, status, uuid.Nil, err
+	}
+	return actorType, status, *wikiID, nil
 }
 
 func (r *Repository) GetExtraction(ctx context.Context, sourceVersionID uuid.UUID) (*Extraction, error) {

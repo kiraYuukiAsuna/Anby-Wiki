@@ -100,6 +100,7 @@ type BulkReviewAuditEvent struct {
 }
 
 type CreateBulkReviewParams struct {
+	WikiID        uuid.UUID
 	ProposalIDs   []uuid.UUID
 	CreatedBy     uuid.UUID
 	SamplePercent int
@@ -145,12 +146,11 @@ type bulkReviewCursor struct {
 }
 
 type BulkReviewService struct {
-	repo   *Repository
-	apply  *ApplyService
-	txm    *db.TxManager
-	ids    *id.Generator
-	auth   *AuthorizationService
-	wikiID uuid.UUID
+	repo  *Repository
+	apply *ApplyService
+	txm   *db.TxManager
+	ids   *id.Generator
+	auth  *AuthorizationService
 }
 
 func NewBulkReviewService(repo *Repository, apply *ApplyService, txm *db.TxManager, ids *id.Generator) *BulkReviewService {
@@ -162,14 +162,9 @@ func (s *BulkReviewService) WithAuthorization(auth *AuthorizationService) *BulkR
 	return s
 }
 
-func (s *BulkReviewService) WithWikiID(wikiID uuid.UUID) *BulkReviewService {
-	s.wikiID = wikiID
-	return s
-}
-
 // Create freezes membership, deterministic sampling and wave assignment.
 func (s *BulkReviewService) Create(ctx context.Context, in CreateBulkReviewParams) (*BulkReviewBatch, error) {
-	if s.wikiID == uuid.Nil || in.CreatedBy == uuid.Nil ||
+	if in.WikiID == uuid.Nil || in.CreatedBy == uuid.Nil ||
 		len(in.ProposalIDs) == 0 || len(in.ProposalIDs) > 1000 {
 		return nil, ErrInvalidProposal
 	}
@@ -206,7 +201,7 @@ func (s *BulkReviewService) Create(ctx context.Context, in CreateBulkReviewParam
 			if proposal.Status != ProposalInReview {
 				return fmt.Errorf("%w: proposal=%s status=%s", ErrInvalidTransition, proposalID, proposal.Status)
 			}
-			if wikiIDForProposal(ctx, tx, s.repo, proposal) != s.wikiID {
+			if wikiIDForProposal(ctx, tx, s.repo, proposal) != in.WikiID {
 				return ErrPermissionDenied
 			}
 			if err := s.checkReviewAuthorization(ctx, tx, in.CreatedBy, proposal); err != nil {
@@ -232,7 +227,7 @@ func (s *BulkReviewService) Create(ctx context.Context, in CreateBulkReviewParam
 		if _, err := tx.Exec(ctx, `INSERT INTO bulk_review_batch
 			(id,wiki_id,created_by,status,sampling_mode,sample_percent,force_full_reason,wave_size)
 			VALUES ($1,$2,$3,$4,$5,$6,$7,$8)`,
-			batchID, s.wikiID, in.CreatedBy, BulkReviewReviewing, mode,
+			batchID, in.WikiID, in.CreatedBy, BulkReviewReviewing, mode,
 			in.SamplePercent, reasonPtr, in.WaveSize); err != nil {
 			return err
 		}
@@ -259,16 +254,17 @@ func (s *BulkReviewService) Create(ctx context.Context, in CreateBulkReviewParam
 }
 
 func (s *BulkReviewService) List(
-	ctx context.Context, actorID uuid.UUID, status, cursor string, limit int,
+	ctx context.Context, wikiID, actorID uuid.UUID,
+	status, cursor string, limit int,
 ) (*BulkReviewBatchPage, error) {
-	if s.wikiID == uuid.Nil {
+	if wikiID == uuid.Nil {
 		return nil, ErrPermissionDenied
 	}
 	if err := s.requireHuman(ctx, actorID); err != nil {
 		return nil, err
 	}
 	if s.auth != nil {
-		if err := s.auth.Check(ctx, actorID, s.wikiID, ActionReview, nil); err != nil {
+		if err := s.auth.Check(ctx, actorID, wikiID, ActionReview, nil); err != nil {
 			return nil, err
 		}
 	}
@@ -311,7 +307,7 @@ func (s *BulkReviewService) List(
 		  AND ($3::timestamptz IS NULL OR (b.created_at,b.id)<($3,$4))
 		GROUP BY b.id
 		ORDER BY b.created_at DESC,b.id DESC
-		LIMIT $5`, s.wikiID, status, afterTime, afterID, limit+1)
+		LIMIT $5`, wikiID, status, afterTime, afterID, limit+1)
 	if err != nil {
 		return nil, err
 	}
@@ -372,14 +368,19 @@ func sampledProposalIDs(batchID uuid.UUID, proposalIDs []uuid.UUID, percent int,
 	return selected
 }
 
-func (s *BulkReviewService) Get(ctx context.Context, batchID, actorID uuid.UUID) (*BulkReviewBatch, error) {
+func (s *BulkReviewService) Get(
+	ctx context.Context,
+	wikiID, batchID, actorID uuid.UUID,
+) (*BulkReviewBatch, error) {
 	var result *BulkReviewBatch
 	err := s.txm.InTx(ctx, func(tx pgx.Tx) error {
 		batch, err := s.getTx(ctx, tx, batchID, false)
 		if err != nil {
 			return err
 		}
-		if err := s.checkBatchAuthorization(ctx, tx, actorID, batch, ActionReview); err != nil {
+		if err := s.checkBatchAuthorization(
+			ctx, tx, wikiID, actorID, batch, ActionReview,
+		); err != nil {
 			return err
 		}
 		result = batch
@@ -389,7 +390,12 @@ func (s *BulkReviewService) Get(ctx context.Context, batchID, actorID uuid.UUID)
 }
 
 // Decide records an explicit Proposal-granular decision. Sampled items must all be decided before Finalize.
-func (s *BulkReviewService) Decide(ctx context.Context, batchID, proposalID, reviewerID uuid.UUID, approve bool, reason string) (*BulkReviewBatch, error) {
+func (s *BulkReviewService) Decide(
+	ctx context.Context,
+	wikiID, batchID, proposalID, reviewerID uuid.UUID,
+	approve bool,
+	reason string,
+) (*BulkReviewBatch, error) {
 	if err := s.requireHuman(ctx, reviewerID); err != nil {
 		return nil, err
 	}
@@ -405,6 +411,9 @@ func (s *BulkReviewService) Decide(ctx context.Context, batchID, proposalID, rev
 		}
 		if batch.Status != BulkReviewReviewing {
 			return ErrInvalidTransition
+		}
+		if batch.WikiID != wikiID {
+			return ErrBulkReviewNotFound
 		}
 		item := findBulkItem(batch.Items, proposalID)
 		if item == nil || item.Decision != BulkDecisionPending {
@@ -444,7 +453,10 @@ func (s *BulkReviewService) Decide(ctx context.Context, batchID, proposalID, rev
 }
 
 // Finalize approves unsampled proposals only after every sampled proposal has an explicit decision.
-func (s *BulkReviewService) Finalize(ctx context.Context, batchID, reviewerID uuid.UUID) (*BulkReviewBatch, error) {
+func (s *BulkReviewService) Finalize(
+	ctx context.Context,
+	wikiID, batchID, reviewerID uuid.UUID,
+) (*BulkReviewBatch, error) {
 	if err := s.requireHuman(ctx, reviewerID); err != nil {
 		return nil, err
 	}
@@ -456,6 +468,9 @@ func (s *BulkReviewService) Finalize(ctx context.Context, batchID, reviewerID uu
 		}
 		if batch.Status != BulkReviewReviewing {
 			return ErrInvalidTransition
+		}
+		if batch.WikiID != wikiID {
+			return ErrBulkReviewNotFound
 		}
 		for i := range batch.Items {
 			if batch.Items[i].SelectedForReview && batch.Items[i].Decision == BulkDecisionPending {
@@ -505,15 +520,25 @@ func (s *BulkReviewService) Finalize(ctx context.Context, batchID, reviewerID uu
 	return result, err
 }
 
-func (s *BulkReviewService) Pause(ctx context.Context, batchID, actorID uuid.UUID) (*BulkReviewBatch, error) {
-	return s.setPaused(ctx, batchID, actorID, true)
+func (s *BulkReviewService) Pause(
+	ctx context.Context,
+	wikiID, batchID, actorID uuid.UUID,
+) (*BulkReviewBatch, error) {
+	return s.setPaused(ctx, wikiID, batchID, actorID, true)
 }
 
-func (s *BulkReviewService) Resume(ctx context.Context, batchID, actorID uuid.UUID) (*BulkReviewBatch, error) {
-	return s.setPaused(ctx, batchID, actorID, false)
+func (s *BulkReviewService) Resume(
+	ctx context.Context,
+	wikiID, batchID, actorID uuid.UUID,
+) (*BulkReviewBatch, error) {
+	return s.setPaused(ctx, wikiID, batchID, actorID, false)
 }
 
-func (s *BulkReviewService) setPaused(ctx context.Context, batchID, actorID uuid.UUID, pause bool) (*BulkReviewBatch, error) {
+func (s *BulkReviewService) setPaused(
+	ctx context.Context,
+	wikiID, batchID, actorID uuid.UUID,
+	pause bool,
+) (*BulkReviewBatch, error) {
 	if err := s.requireHuman(ctx, actorID); err != nil {
 		return nil, err
 	}
@@ -523,7 +548,9 @@ func (s *BulkReviewService) setPaused(ctx context.Context, batchID, actorID uuid
 		if err != nil {
 			return err
 		}
-		if err := s.checkBatchAuthorization(ctx, tx, actorID, batch, ActionApply); err != nil {
+		if err := s.checkBatchAuthorization(
+			ctx, tx, wikiID, actorID, batch, ActionApply,
+		); err != nil {
 			return err
 		}
 		from, to, eventType := batch.Status, BulkReviewPaused, "bulk_review.paused"
@@ -551,7 +578,10 @@ func (s *BulkReviewService) setPaused(ctx context.Context, batchID, actorID uuid
 }
 
 // ApplyNextWave invokes the existing single-Proposal Apply boundary for one immutable wave.
-func (s *BulkReviewService) ApplyNextWave(ctx context.Context, batchID, actorID uuid.UUID) (*BulkReviewWaveResult, error) {
+func (s *BulkReviewService) ApplyNextWave(
+	ctx context.Context,
+	wikiID, batchID, actorID uuid.UUID,
+) (*BulkReviewWaveResult, error) {
 	if s.apply == nil {
 		return nil, errors.New("governance: 批量审核 Apply 服务未配置")
 	}
@@ -561,7 +591,9 @@ func (s *BulkReviewService) ApplyNextWave(ctx context.Context, batchID, actorID 
 		if err != nil {
 			return err
 		}
-		if err := s.checkBatchAuthorization(ctx, tx, actorID, batch, ActionApply); err != nil {
+		if err := s.checkBatchAuthorization(
+			ctx, tx, wikiID, actorID, batch, ActionApply,
+		); err != nil {
 			return err
 		}
 		if batch.Status == BulkReviewPaused {
@@ -719,14 +751,19 @@ func (s *BulkReviewService) recordApply(ctx context.Context, batchID, actorID uu
 	})
 }
 
-func (s *BulkReviewService) Audit(ctx context.Context, batchID, actorID uuid.UUID) ([]BulkReviewAuditEvent, error) {
+func (s *BulkReviewService) Audit(
+	ctx context.Context,
+	wikiID, batchID, actorID uuid.UUID,
+) ([]BulkReviewAuditEvent, error) {
 	var events []BulkReviewAuditEvent
 	err := s.txm.InTx(ctx, func(tx pgx.Tx) error {
 		batch, err := s.getTx(ctx, tx, batchID, false)
 		if err != nil {
 			return err
 		}
-		if err := s.checkBatchAuthorization(ctx, tx, actorID, batch, ActionReview); err != nil {
+		if err := s.checkBatchAuthorization(
+			ctx, tx, wikiID, actorID, batch, ActionReview,
+		); err != nil {
 			return err
 		}
 		rows, err := tx.Query(ctx, `SELECT id,batch_id,actor_id,event_type,proposal_id,wave,payload_json,created_at
@@ -826,9 +863,14 @@ func (s *BulkReviewService) checkReviewAuthorization(ctx context.Context, tx pgx
 	return s.checkProposalAuthorization(ctx, tx, actorID, proposal, ActionReview)
 }
 
-func (s *BulkReviewService) checkBatchAuthorization(ctx context.Context, tx pgx.Tx, actorID uuid.UUID,
-	batch *BulkReviewBatch, action string) error {
-	if s.wikiID == uuid.Nil || batch.WikiID != s.wikiID {
+func (s *BulkReviewService) checkBatchAuthorization(
+	ctx context.Context,
+	tx pgx.Tx,
+	wikiID, actorID uuid.UUID,
+	batch *BulkReviewBatch,
+	action string,
+) error {
+	if wikiID == uuid.Nil || batch.WikiID != wikiID {
 		return ErrBulkReviewNotFound
 	}
 	if s.auth == nil {

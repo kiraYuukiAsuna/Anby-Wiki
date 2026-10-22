@@ -6,10 +6,12 @@ import (
 	"log/slog"
 	"time"
 
+	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5/pgxpool"
 
 	"github.com/anby/wiki/backend/internal/ai"
 	"github.com/anby/wiki/backend/internal/aiconfig"
+	"github.com/anby/wiki/backend/internal/component"
 	"github.com/anby/wiki/backend/internal/evidence"
 	"github.com/anby/wiki/backend/internal/governance"
 	"github.com/anby/wiki/backend/internal/importer"
@@ -92,10 +94,6 @@ func assembleImportRunner(ctx context.Context, pool *pgxpool.Pool, cfg config.Co
 	ids := id.NewGenerator()
 	txm := db.NewTxManager(pool)
 	pageRepo := page.NewRepository(pool)
-	wikiID, err := pageRepo.GetWikiIDBySiteKey(ctx, nil, "default")
-	if err != nil {
-		return nil, err
-	}
 	objectStore := storage.NewS3Store(storage.S3Config{Endpoint: cfg.S3Endpoint, Region: cfg.S3Region,
 		Bucket: cfg.S3Bucket, AccessKey: cfg.S3AccessKey, SecretKey: cfg.S3SecretKey})
 	pageService := page.NewService(pageRepo, txm, ids).WithSnapshotStorage(page.SnapshotStorageConfig{
@@ -110,6 +108,10 @@ func assembleImportRunner(ctx context.Context, pool *pgxpool.Pool, cfg config.Co
 	governanceRepo := governance.NewRepository(pool)
 	governanceService := governance.NewService(governanceRepo, txm, ids)
 	reviews := governance.NewReviewService(governanceRepo, txm, ids, governance.NewRiskEvaluator(knowledgeService))
+	componentService := component.NewService(
+		component.NewRepository(pool), pageRepo, txm, ids,
+		component.NewKnowledgeRegistry(pool),
+	)
 
 	aiConfig, err := aiconfig.NewService(
 		aiconfig.NewRepository(pool), txm, ids,
@@ -121,6 +123,10 @@ func assembleImportRunner(ctx context.Context, pool *pgxpool.Pool, cfg config.Co
 	provider, err := ai.NewSemanticKernelProvider(
 		cfg.AIKernelURL, cfg.AIKernelInternalToken,
 		ai.SemanticKernelConfigResolverFunc(func(ctx context.Context) (*ai.SemanticKernelConfig, error) {
+			wikiID, ok := ai.WikiIDFromContext(ctx)
+			if !ok {
+				return nil, errors.New("ai: Wiki 上下文缺失")
+			}
 			runtime, err := aiConfig.Runtime(ctx, wikiID)
 			if err != nil {
 				return nil, err
@@ -172,13 +178,16 @@ func assembleImportRunner(ctx context.Context, pool *pgxpool.Pool, cfg config.Co
 		Extraction: importer.NewExtractionService(importRepo, evidenceRepo, gateway, ids),
 		Planner:    importer.NewPagePlanner(importRepo, pageService, gateway, ids),
 		Matcher:    importer.NewEntityMatcher(knowledgeService), Classifier: importer.NewClaimClassifier(knowledgeService),
-		Composer: importer.NewProposalComposer(evidenceService, governanceService, knowledgeService, pageService, ids),
-		Reviews:  reviews, Fetcher: importer.NewFetcher(importer.DefaultURLPolicy(), nil, nil),
+		Composer: importer.NewProposalComposer(
+			evidenceService, governanceService, knowledgeService,
+			pageService, componentService, ids,
+		),
+		Reviews: reviews, Fetcher: importer.NewFetcher(importer.DefaultURLPolicy(), nil, nil),
 	})
-	return importer.NewRunner(jobs, pipeline, importer.RunnerConfig{WikiID: wikiID,
+	return importer.NewRunner(jobs, pipeline, importer.RunnerConfig{
 		Provider: "semantic-kernel", Model: "managed", Logger: logger,
 		UploadStore: objectStore, JobTimeout: 2 * time.Hour,
-		Runtime: func(ctx context.Context) (importer.RunnerRuntime, error) {
+		Runtime: func(ctx context.Context, wikiID uuid.UUID) (importer.RunnerRuntime, error) {
 			runtime, err := aiConfig.Runtime(ctx, wikiID)
 			if errors.Is(err, aiconfig.ErrNotConfigured) || errors.Is(err, aiconfig.ErrDisabled) {
 				return importer.RunnerRuntime{Available: false}, nil

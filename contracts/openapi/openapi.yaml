@@ -15,6 +15,9 @@ servers:
     description: 本地 Web 入口（Next.js 将 /api/* 转发到 Go API）
   - url: http://localhost:8080
     description: 本地直连 Go API
+security:
+  - sessionCookie: []
+  - cliBearer: []
 tags:
   - name: meta
     description: 服务元信息与健康检查
@@ -23,15 +26,15 @@ tags:
   - name: pages
     description: 页面创建、改名与 Revision 发布（写 API）
   - name: reading
-    description: 页面阅读（按标题/别名/ID 读取当前 Revision 与渲染 HTML，匿名可读）
+    description: 当前登录 Wiki 的页面阅读（按标题/别名/ID 读取当前 Revision 与渲染 HTML）
   - name: history
-    description: Revision 历史、两版结构 Diff 与回滚（读匿名，回滚需登录）
+    description: 当前登录 Wiki 的 Revision 历史、两版结构 Diff 与回滚
   - name: projection
-    description: 页面与知识/证据关系投影查询（反链、目录、Entity/Claim/Citation 使用位置；匿名可读，最终一致）
+    description: 当前登录 Wiki 的页面与知识/证据关系投影查询（最终一致）
   - name: search
-    description: 页面搜索（编辑器引用选择器，匿名可读）
+    description: 当前登录 Wiki 的页面搜索（含编辑器引用选择器）
   - name: knowledge
-    description: Entity、Claim 与 Citation 稳定 ID 详情（匿名只读）
+    description: 当前登录 Wiki 的 Entity、Claim 与 Citation 稳定 ID 详情
   - name: assets
     description: 媒体资产目录、不可变版本与内容读取
   - name: sources
@@ -55,9 +58,10 @@ paths:
       tags: [auth]
       summary: 注册本地账号并建立会话
       description: >-
-        用户名和邮箱均不区分大小写且全站唯一。首个本地账号获得管理员角色，
-        后续账号默认获得编辑者角色；注册默认关闭，部署方须通过
+        用户名和邮箱均不区分大小写且全局唯一。每个账号会创建独立私有 Wiki，
+        并成为该 Wiki 的管理员；注册默认关闭，部署方须通过
         AUTH_REGISTRATION_ENABLED 显式开启。
+      security: []
       requestBody:
         required: true
         content:
@@ -79,6 +83,7 @@ paths:
       operationId: login
       tags: [auth]
       summary: 使用用户名或邮箱和密码登录
+      security: []
       requestBody:
         required: true
         content:
@@ -99,9 +104,7 @@ paths:
       operationId: getSession
       tags: [auth]
       summary: 获取当前登录 Actor
-      security:
-        - sessionCookie: []
-        - cliBearer: []
+      security: []
       responses:
         "200":
           description: 当前登录会话
@@ -115,8 +118,7 @@ paths:
       operationId: logout
       tags: [auth]
       summary: 吊销当前服务端 session 并清除 cookie
-      security:
-        - sessionCookie: []
+      security: []
       responses:
         "204":
           description: 已退出；无活动 session 时同样成功
@@ -153,6 +155,7 @@ paths:
       summary: 兑换一次性授权码
       description: CLI 用短时授权码换取只显示一次的 Bearer Token。
       x-anby-cli-only: true
+      security: []
       requestBody:
         required: true
         content:
@@ -788,12 +791,12 @@ paths:
     get:
       operationId: getPublicDatasetForm
       tags: [datasets]
-      summary: 读取公开 Dataset Form 定义
+      summary: 读取当前 Wiki 已启用的 Dataset Form 定义
       parameters:
         - $ref: "#/components/parameters/GovernanceId"
       responses:
         "200":
-          description: 公开表单定义
+          description: 当前 Wiki 的已启用表单定义
           content:
             application/json:
               schema: { $ref: "#/components/schemas/PublicDatasetForm" }
@@ -802,7 +805,7 @@ paths:
     post:
       operationId: submitPublicDatasetForm
       tags: [datasets]
-      summary: 公开提交经 Dataset Schema 校验的记录
+      summary: 向当前 Wiki 已启用的 Form 提交记录
       parameters:
         - $ref: "#/components/parameters/GovernanceId"
       requestBody:
@@ -2125,7 +2128,7 @@ paths:
       operationId: getSearchCapabilities
       summary: 获取搜索引擎能力
       description: |
-        匿名可读。返回当前 SearchAdapter 的真实后端、可用排序模式和聚合维度；
+        返回当前登录 Wiki 的 SearchAdapter 真实后端、可用排序模式和聚合维度；
         未配置向量 Embedder 时不会宣称支持 hybrid / semantic。
       tags: [search]
       responses:
@@ -2142,7 +2145,7 @@ paths:
       operationId: searchPages
       summary: 搜索活页面
       description: |
-        独立搜索引擎 SearchAdapter 的匿名查询端点（无需登录）。
+        查询当前登录 Wiki 的独立搜索引擎 SearchAdapter。
         搜索文档由 Outbox 驱动的 Current Revision 投影生成，覆盖标题、旧别名、
         正文和主 Entity 文本；支持关键词、混合、纯语义搜索，以及字段、
         命名空间、语言与 Entity 类型过滤和聚合。
@@ -2246,7 +2249,7 @@ paths:
       operationId: getPageByTitle
       summary: 按标题/别名读取页面当前版本
       description: |
-        阅读端点（匿名可读，无需登录）。渲染直连 ContentSnapshot，
+        读取当前登录 Wiki。渲染直连 ContentSnapshot，
         M3 才引入 RenderedPage 投影与缓存。
         标题经服务端规范化（NFC、大小写折叠、空白折叠）后先匹配活页面，再匹配 page_alias：
         - 活页面命中：200 PageWithContent，via_alias=false；
@@ -2298,7 +2301,7 @@ paths:
       operationId: getPageByID
       summary: 按 ID 读取页面当前版本
       description: |
-        阅读端点（匿名可读，无需登录）。按页面 ID 读取当前 Revision 与渲染 HTML，
+        按页面 ID 读取当前登录 Wiki 的当前 Revision 与渲染 HTML，
         响应结构与行为同 getPageByTitle（重定向同样跟随；软删除页返回 410 gone；
         未发布过 content 为 null）。
       tags: [reading]
@@ -2330,7 +2333,7 @@ paths:
       operationId: listPublishedPages
       summary: 浏览已发布百科页面目录
       description: |
-        匿名可读。只返回未删除、属于内容命名空间且已有 Current Revision 的页面；
+        只返回当前登录 Wiki 中未删除、属于内容命名空间且已有 Current Revision 的页面；
         recent 按最近更新倒序，title 按规范化标题升序，均使用稳定游标分页。
       tags: [reading]
       parameters:
@@ -2355,7 +2358,7 @@ paths:
       operationId: createPage
       summary: 创建页面
       description: |
-        在默认站点（wiki 固定为种子里 site_key='default' 的站点）创建页面。
+        在当前登录账号的私有 Wiki 中创建页面。
         标题经服务端规范化（NFC、大小写折叠、空白折叠），与同 wiki+namespace 的
         活页面或别名冲突时返回 409。
         Actor 身份由服务端 session cookie 解析；客户端不能声明 Actor。
@@ -2568,7 +2571,7 @@ paths:
       operationId: listRevisions
       summary: Revision 历史列表
       description: |
-        阅读端点（匿名可读，无需登录）。按 (created_at DESC, id DESC) 游标分页
+        按 (created_at DESC, id DESC) 游标分页
         列出页面 Revision 元信息（含冗余自快照的 content_hash/schema_version，不含 AST）。
         首页不传 cursor；后续页传上一页响应的 next_cursor；next_cursor 为 null 表示没有更多。
         游标无法解析返回 400 validation_failed；页面不存在返回 404。
@@ -2687,7 +2690,7 @@ paths:
       operationId: getRevision
       summary: 单版详情
       description: |
-        阅读端点（匿名可读，无需登录）。读取页面指定 Revision 的元信息与
+        读取当前登录 Wiki 页面指定 Revision 的元信息与
         canonical AST（不含 html）。Revision 不存在或不属于该页面返回 404
         （跨页访问不泄露存在性）。
       tags: [history]
@@ -2715,7 +2718,7 @@ paths:
       operationId: diffRevisions
       summary: 两版结构 Diff
       description: |
-        阅读端点（匿名可读，无需登录）。以 from 为 base、to 为 current，
+        在当前登录 Wiki 内以 from 为 base、to 为 current，
         用后端 AST Diff（按 Block ID 对齐）计算结构差异：added/removed/changed/moved。
         from == to 返回空 changes。任一 Revision 不存在或不属于该页面返回 404。
       tags: [history]
@@ -2801,7 +2804,7 @@ paths:
       operationId: listBacklinks
       summary: 页面反向链接
       description: |
-        投影查询端点（匿名可读，无需登录）。列出指向该页面的已解析页面引用来源：
+        列出当前登录 Wiki 中指向该页面的已解析页面引用来源：
         来源页（id/标题）+ 所在 Block/Node + 展示文本。数据来自 page_link_projection 投影表
         （设计 §17.3：关系查询走投影表，不扫 AST），由 Worker 异步构建，
         新发布内容与投影之间存在最终一致窗口。
@@ -2836,7 +2839,7 @@ paths:
       operationId: getPageOutline
       summary: 页面文档目录
       description: |
-        投影查询端点（匿名可读，无需登录）。返回文档大纲（heading 层级树），
+        返回当前登录 Wiki 页面文档大纲（heading 层级树），
         含层级、纯文本标题、锚点 slug 与序号路径 position_key，供阅读页 TOC 与锚点跳转。
         数据来自 document_outline_projection / page_anchor 投影表（Worker 异步构建，最终一致）。
         页面不存在返回 404；软删除页返回 410 gone；页面未发布过返回 200 且 items 为空数组。
@@ -2866,7 +2869,7 @@ paths:
       operationId: getPageReferences
       summary: 当前 Revision 的参考文献
       description: |
-        匿名读取由 CitationUsage 投影生成的参考文献列表。编号按 Citation 在当前
+        读取当前登录 Wiki 中由 CitationUsage 投影生成的参考文献列表。编号按 Citation 在当前
         Revision 中首次出现的文档顺序生成，相同 Citation 的多次引用共享编号。
         ready=false 表示 Worker 尚未完成当前 Revision 的投影，客户端不得将其解释为空引用。
       tags: [projection]
@@ -2891,7 +2894,7 @@ paths:
       operationId: getRelatedPages
       summary: 当前页面的相关文章
       description: |
-        匿名读取可重建的相关文章投影。排序综合正文链接、反向链接、双向链接、
+        读取当前登录 Wiki 中可重建的相关文章投影。排序综合正文链接、反向链接、双向链接、
         Collection、主 Entity 与 Entity 图谱关系，并返回可解释的匹配原因。
       tags: [projection]
       parameters:
@@ -2915,7 +2918,7 @@ paths:
       operationId: getPageSections
       summary: 读取当前 Revision 的章节分片清单
       description: >-
-        匿名读取可重建的章节投影。仅当所有行匹配 Page.current_revision_id 与当前
+        读取当前登录 Wiki 中可重建的章节投影。仅当所有行匹配 Page.current_revision_id 与当前
         renderer_version 时 ready=true；否则返回 ready=false，客户端应使用全文阅读。
       tags: [projection]
       parameters:
@@ -2977,7 +2980,7 @@ paths:
       operationId: resolvePageAnchor
       summary: 解析当前或历史章节锚点
       description: |
-        匿名读取端点。先匹配当前 page_anchor slug，再匹配持久 page_anchor_alias，
+        在当前登录 Wiki 内先匹配当前 page_anchor slug，再匹配持久 page_anchor_alias，
         最后跟随显式 BlockRedirect，返回目标页面的当前 slug 与稳定 Heading Block ID。
         该端点用于章节改名或跨页面移动后的旧链接兼容，不扫描历史 AST。
       tags: [projection]
@@ -3014,7 +3017,7 @@ paths:
     get:
       operationId: listPageEntityBindings
       summary: 列出 Page 的 Entity 绑定
-      description: 匿名读取主实体与显式提及绑定；primary 与 page.primary_entity_id 由数据库延迟约束保证一致。
+      description: 读取当前登录 Wiki 的主实体与显式提及绑定；primary 与 page.primary_entity_id 由数据库延迟约束保证一致。
       tags: [knowledge]
       parameters:
         - $ref: "#/components/parameters/PageId"
@@ -3118,7 +3121,7 @@ paths:
       operationId: listEntities
       summary: 浏览与检索 Entity 目录
       description: |
-        匿名读取当前 Wiki 的稳定 Entity 身份。查询匹配 canonical key、标签与别名；
+        读取当前登录 Wiki 的稳定 Entity 身份。查询匹配 canonical key、标签与别名；
         游标按 updated_at、id 稳定排序。all 状态含 active 与 merged，但始终排除 deleted。
       tags: [knowledge]
       parameters:
@@ -3163,7 +3166,7 @@ paths:
     get:
       operationId: getEntity
       summary: Entity 详情
-      description: 匿名读取 Entity 的稳定身份、类型、状态、标签与别名；本端点不提供写操作。
+      description: 读取当前登录 Wiki 中 Entity 的稳定身份、类型、状态、标签与别名；本端点不提供写操作。
       tags: [knowledge]
       parameters:
         - $ref: "#/components/parameters/ReferenceTargetId"
@@ -3375,7 +3378,7 @@ paths:
     get:
       operationId: listFederatedWikis
       summary: 列出跨 Wiki 联邦目录
-      description: 匿名读取当前 Wiki 已登记的远端 Wiki、信任等级与 Entity 链接模板。
+      description: 读取当前登录 Wiki 已登记的远端 Wiki、信任等级与 Entity 链接模板。
       tags: [knowledge]
       parameters:
         - name: include_disabled
@@ -3474,7 +3477,7 @@ paths:
     get:
       operationId: listFederationLinks
       summary: 浏览跨 Wiki Entity 映射
-      description: 匿名分页读取本地 Entity 与远端 Entity 的可追溯映射。
+      description: 分页读取当前登录 Wiki 的本地 Entity 与远端 Entity 可追溯映射。
       tags: [knowledge]
       parameters:
         - $ref: "#/components/parameters/Cursor"
@@ -3623,7 +3626,7 @@ paths:
       operationId: getEntityGraph
       summary: 查询 Entity 关系图
       description: |
-        匿名读取由当前已发布 entity-valued Claim 派生的关系边投影。
+        读取当前登录 Wiki 中由已发布 entity-valued Claim 派生的关系边投影。
         查询不扫描 Claim 或页面 AST；遍历深度最多 3、节点最多 100、边最多 250，
         并在达到硬上限时返回 truncated=true。
       tags: [knowledge]
@@ -3697,7 +3700,7 @@ paths:
     get:
       operationId: getEntityMerge
       summary: 读取 Entity 的最近合并记录
-      description: 匿名读取源 Entity 的最近一次合并及其不可变标签、Claim 映射账本。
+      description: 读取当前登录 Wiki 中源 Entity 的最近一次合并及其不可变标签、Claim 映射账本。
       tags: [knowledge]
       parameters:
         - $ref: "#/components/parameters/ReferenceTargetId"
@@ -3794,7 +3797,7 @@ paths:
     get:
       operationId: getClaim
       summary: Claim 详情
-      description: 匿名读取 Claim 的谓词、结构化值、业务/验证状态、取代链及 Citation 绑定。
+      description: 读取当前登录 Wiki 中 Claim 的谓词、结构化值、业务/验证状态、取代链及 Citation 绑定。
       tags: [knowledge]
       parameters:
         - $ref: "#/components/parameters/ReferenceTargetId"
@@ -3930,7 +3933,7 @@ paths:
     get:
       operationId: getCitation
       summary: Citation 详情与证据定位链
-      description: 匿名读取不可变 Citation，并沿 SourceVersion 定位到 Source、可选 Chunk 与外部资源 URL。
+      description: 读取当前登录 Wiki 的不可变 Citation，并沿 SourceVersion 定位到 Source、可选 Chunk 与外部资源 URL。
       tags: [knowledge]
       parameters:
         - $ref: "#/components/parameters/ReferenceTargetId"
@@ -3955,7 +3958,7 @@ paths:
       operationId: listPageCollections
       summary: 页面所属 Collection
       description: |
-        匿名反向读取页面直接所属、其主 Entity 所属以及 Dynamic 查询命中的 Collection。
+        读取当前登录 Wiki 中页面直接所属、其主 Entity 所属以及 Dynamic 查询命中的 Collection。
         membership_source 解释命中来源，不复制服务端 Collection 状态到客户端缓存。
       tags: [collections]
       parameters:
@@ -3978,7 +3981,7 @@ paths:
       operationId: listCollections
       summary: Collection 列表
       description: |
-        匿名读取当前 Wiki 的 Manual/Rule/Dynamic Collection，按 title、id
+        读取当前登录 Wiki 的 Manual/Rule/Dynamic Collection，按 title、id
         稳定游标分页。列表只读权威定义，不执行查询。
       tags: [collections]
       parameters:
@@ -4023,7 +4026,7 @@ paths:
     get:
       operationId: getCollection
       summary: Collection 详情
-      description: 匿名读取 Collection 定义；Manual 的 query 为 null，其余类型使用版本化安全查询。
+      description: 读取当前登录 Wiki 的 Collection 定义；Manual 的 query 为 null，其余类型使用版本化安全查询。
       tags: [collections]
       parameters:
         - $ref: "#/components/parameters/ReferenceTargetId"
@@ -4048,7 +4051,7 @@ paths:
       operationId: listCollectionMembers
       summary: Collection 物化成员
       description: |
-        Manual/Rule 匿名读取物化 Membership；Dynamic 执行受限版本化查询。
+        Manual/Rule 读取当前登录 Wiki 的物化 Membership；Dynamic 执行受限版本化查询。
         两者均按 sort_key、member_type、target id 稳定游标分页，绝不扫描 AST。
       tags: [collections]
       parameters:
@@ -4122,7 +4125,7 @@ paths:
       operationId: listEntityMentions
       summary: Entity 页面提及位置
       description: |
-        匿名反向查询 EntityReference 的页面使用位置。只读 entity_mention_projection，
+        在当前登录 Wiki 内反向查询 EntityReference 的页面使用位置。只读 entity_mention_projection，
         不扫描 AST JSON；每条结果携带来源 Revision、Block、Node 与 mention_text。
       tags: [projection]
       parameters:
@@ -4150,7 +4153,7 @@ paths:
       operationId: listClaimUsages
       summary: Claim 页面使用位置
       description: |
-        匿名反向查询 ClaimReference 的页面使用位置。只读 claim_usage，不扫描 AST JSON；
+        在当前登录 Wiki 内反向查询 ClaimReference 的页面使用位置。只读 claim_usage，不扫描 AST JSON；
         每条结果携带来源 Revision、Block 与 Node。
       tags: [projection]
       parameters:
@@ -4178,7 +4181,7 @@ paths:
       operationId: listCitationUsages
       summary: Citation 页面使用位置
       description: |
-        匿名反向查询 CitationReference 的页面使用位置。只读 citation_usage，不扫描 AST JSON；
+        在当前登录 Wiki 内反向查询 CitationReference 的页面使用位置。只读 citation_usage，不扫描 AST JSON；
         每条结果携带来源 Revision、Block、Node 与可选 Claim 上下文。
       tags: [projection]
       parameters:
@@ -4206,7 +4209,7 @@ paths:
       operationId: listSourceUsages
       summary: Source 页面使用聚合
       description: |
-        匿名按当前页面聚合一个 Source 经 SourceVersion、Citation 被使用的次数、
+        在当前登录 Wiki 内按页面聚合一个 Source 经 SourceVersion、Citation 被使用的次数、
         区块数与 Citation 数。总数描述完整结果而非当前分页，只读投影且不扫描 AST JSON。
       tags: [projection]
       parameters:
@@ -4234,7 +4237,7 @@ paths:
       operationId: listSourceUsageLocations
       summary: Source 在指定页面的使用明细
       description: |
-        匿名分页读取一个 Source 在指定当前页面中的 Block、Node、Citation 与可选 Claim
+        在当前登录 Wiki 内分页读取一个 Source 在指定当前页面中的 Block、Node、Citation 与可选 Claim
         上下文。页面必须属于当前 Wiki，只读 citation_usage，不扫描 AST JSON。
       tags: [projection]
       parameters:
@@ -4266,7 +4269,7 @@ paths:
       operationId: listComponentUsages
       summary: Component 页面依赖位置
       description: |
-        匿名反向查询当前页面引用一个 Component 的位置。只读
+        在当前登录 Wiki 内反向查询页面引用一个 Component 的位置。只读
         component_dependency，不扫描 AST JSON；可按不可变版本过滤。
       tags: [projection]
       parameters:
@@ -4300,6 +4303,7 @@ paths:
       summary: 存活探针
       description: 恒 200，仅表示进程存活，不检查任何依赖。
       tags: [meta]
+      security: []
       responses:
         "200":
           description: 进程存活
@@ -4316,6 +4320,7 @@ paths:
       summary: 就绪探针
       description: 逐项检查依赖（postgres、redis 等）；任一不可达或未配置返回 503。
       tags: [meta]
+      security: []
       responses:
         "200":
           description: 全部依赖就绪
@@ -4482,18 +4487,34 @@ components:
           maxLength: 128
     AuthResult:
       type: object
-      required: [actor_id, display_name]
+      required: [actor_id, wiki_id, wiki_name, main_namespace_id, display_name]
       properties:
         actor_id:
+          type: string
+          format: uuid
+        wiki_id:
+          type: string
+          format: uuid
+        wiki_name:
+          type: string
+        main_namespace_id:
           type: string
           format: uuid
         display_name:
           type: string
     AuthSession:
       type: object
-      required: [actor_id, actor_type, display_name, method]
+      required: [actor_id, wiki_id, wiki_name, main_namespace_id, actor_type, display_name, method]
       properties:
         actor_id:
+          type: string
+          format: uuid
+        wiki_id:
+          type: string
+          format: uuid
+        wiki_name:
+          type: string
+        main_namespace_id:
           type: string
           format: uuid
         actor_type:
@@ -5202,9 +5223,10 @@ components:
         quality_threshold: { type: number, minimum: 0, maximum: 1 }
     ImportJob:
       type: object
-      required: [id, job_type, status, initiated_by, idempotency_key, config, planning_input, current_stage, progress, created_at, updated_at]
+      required: [id, wiki_id, job_type, status, initiated_by, idempotency_key, config, planning_input, current_stage, progress, created_at, updated_at]
       properties:
         id: { type: string, format: uuid }
+        wiki_id: { type: string, format: uuid }
         job_type: { type: string }
         status: { type: string, enum: [queued, running, action_required, succeeded, failed, cancelled] }
         initiated_by: { type: string, format: uuid }
@@ -6071,9 +6093,10 @@ components:
         archived_bytes: { type: integer, format: int64, minimum: 0 }
     Proposal:
       type: object
-      required: [id, target_type, status, risk_level, risk_reasons, policy_decision, created_by, idempotency_key, created_at, updated_at, operations, conflicts]
+      required: [id, wiki_id, target_type, status, risk_level, risk_reasons, policy_decision, created_by, idempotency_key, created_at, updated_at, operations, conflicts]
       properties:
         id: { type: string, format: uuid }
+        wiki_id: { type: string, format: uuid }
         import_job_id: { type: string, format: uuid, nullable: true }
         target_type: { type: string, enum: [wiki, page, entity, claim, collection, external_resource] }
         target_id: { type: string, format: uuid, nullable: true }

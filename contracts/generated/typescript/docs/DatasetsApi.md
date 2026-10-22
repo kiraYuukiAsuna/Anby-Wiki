@@ -9,13 +9,13 @@ All URIs are relative to *http://localhost:3000*
 | [**createDatasetView**](DatasetsApi.md#createdatasetviewoperation) | **POST** /api/v1/datasets/{id}/views | 创建筛选、排序与分组视图 |
 | [**getDataset**](DatasetsApi.md#getdataset) | **GET** /api/v1/datasets/{id} | 读取 Dataset 定义 |
 | [**getDatasetView**](DatasetsApi.md#getdatasetview) | **GET** /api/v1/dataset-views/{id} | 读取保存的 DatasetView |
-| [**getPublicDatasetForm**](DatasetsApi.md#getpublicdatasetform) | **GET** /api/v1/public/dataset-forms/{id} | 读取公开 Dataset Form 定义 |
+| [**getPublicDatasetForm**](DatasetsApi.md#getpublicdatasetform) | **GET** /api/v1/public/dataset-forms/{id} | 读取当前 Wiki 已启用的 Dataset Form 定义 |
 | [**listDatasetRecords**](DatasetsApi.md#listdatasetrecords) | **GET** /api/v1/datasets/{id}/records | 按稳定默认顺序列出 DatasetRecord |
 | [**listDatasetViews**](DatasetsApi.md#listdatasetviews) | **GET** /api/v1/datasets/{id}/views | 列出 Dataset 的保存视图 |
 | [**listDatasets**](DatasetsApi.md#listdatasets) | **GET** /api/v1/datasets | 列出站点 Dataset |
 | [**queryDatasetView**](DatasetsApi.md#querydatasetview) | **GET** /api/v1/dataset-views/{id}/records | 执行保存视图的筛选、排序与分组 |
 | [**queryDatasetViewWithFilter**](DatasetsApi.md#querydatasetviewwithfilter) | **POST** /api/v1/dataset-views/{id}/query | 使用运行时过滤器执行保存视图 |
-| [**submitPublicDatasetForm**](DatasetsApi.md#submitpublicdatasetformoperation) | **POST** /api/v1/public/dataset-forms/{id}/submissions | 公开提交经 Dataset Schema 校验的记录 |
+| [**submitPublicDatasetForm**](DatasetsApi.md#submitpublicdatasetformoperation) | **POST** /api/v1/public/dataset-forms/{id}/submissions | 向当前 Wiki 已启用的 Form 提交记录 |
 | [**updateDatasetRecord**](DatasetsApi.md#updatedatasetrecord) | **PUT** /api/v1/dataset-records/{id} | 更新记录并重新执行 Dataset Schema 校验 |
 
 
@@ -268,7 +268,13 @@ import type { GetDatasetRequest } from '';
 
 async function example() {
   console.log("🚀 Testing  SDK...");
-  const api = new DatasetsApi();
+  const config = new Configuration({
+    // Configure HTTP bearer authorization: cliBearer
+    accessToken: "YOUR BEARER TOKEN",
+    // To configure API key authorization: sessionCookie
+    apiKey: "YOUR API KEY",
+  });
+  const api = new DatasetsApi(config);
 
   const body = {
     // string | Proposal、ReviewTask 或 ChangeBatch ID
@@ -300,7 +306,7 @@ example().catch(console.error);
 
 ### Authorization
 
-No authorization required
+[cliBearer](../README.md#cliBearer), [sessionCookie](../README.md#sessionCookie)
 
 ### HTTP request headers
 
@@ -335,7 +341,13 @@ import type { GetDatasetViewRequest } from '';
 
 async function example() {
   console.log("🚀 Testing  SDK...");
-  const api = new DatasetsApi();
+  const config = new Configuration({
+    // Configure HTTP bearer authorization: cliBearer
+    accessToken: "YOUR BEARER TOKEN",
+    // To configure API key authorization: sessionCookie
+    apiKey: "YOUR API KEY",
+  });
+  const api = new DatasetsApi(config);
 
   const body = {
     // string | Proposal、ReviewTask 或 ChangeBatch ID
@@ -367,7 +379,7 @@ example().catch(console.error);
 
 ### Authorization
 
-No authorization required
+[cliBearer](../README.md#cliBearer), [sessionCookie](../README.md#sessionCookie)
 
 ### HTTP request headers
 
@@ -388,7 +400,7 @@ No authorization required
 
 > PublicDatasetForm getPublicDatasetForm(id)
 
-读取公开 Dataset Form 定义
+读取当前 Wiki 已启用的 Dataset Form 定义
 
 ### Example
 
@@ -401,7 +413,13 @@ import type { GetPublicDatasetFormRequest } from '';
 
 async function example() {
   console.log("🚀 Testing  SDK...");
-  const api = new DatasetsApi();
+  const config = new Configuration({
+    // Configure HTTP bearer authorization: cliBearer
+    accessToken: "YOUR BEARER TOKEN",
+    // To configure API key authorization: sessionCookie
+    apiKey: "YOUR API KEY",
+  });
+  const api = new DatasetsApi(config);
 
   const body = {
     // string | Proposal、ReviewTask 或 ChangeBatch ID
@@ -433,7 +451,7 @@ example().catch(console.error);
 
 ### Authorization
 
-No authorization required
+[cliBearer](../README.md#cliBearer), [sessionCookie](../README.md#sessionCookie)
 
 ### HTTP request headers
 
@@ -444,7 +462,7 @@ No authorization required
 ### HTTP response details
 | Status code | Description | Response headers |
 |-------------|-------------|------------------|
-| **200** | 公开表单定义 |  -  |
+| **200** | 当前 Wiki 的已启用表单定义 |  -  |
 | **404** | 资源不存在 |  -  |
 
 [[Back to top]](#) [[Back to API list]](../README.md#api-endpoints) [[Back to Model list]](../README.md#models) [[Back to README]](../README.md)
@@ -467,7 +485,13 @@ import type { ListDatasetRecordsRequest } from '';
 
 async function example() {
   console.log("🚀 Testing  SDK...");
-  const api = new DatasetsApi();
+  const config = new Configuration({
+    // Configure HTTP bearer authorization: cliBearer
+    accessToken: "YOUR BEARER TOKEN",
+    // To configure API key authorization: sessionCookie
+    apiKey: "YOUR API KEY",
+  });
+  const api = new DatasetsApi(config);
 
   const body = {
     // string | Proposal、ReviewTask 或 ChangeBatch ID
@@ -505,7 +529,7 @@ example().catch(console.error);
 
 ### Authorization
 
-No authorization required
+[cliBearer](../README.md#cliBearer), [sessionCookie](../README.md#sessionCookie)
 
 ### HTTP request headers
 
@@ -540,7 +564,13 @@ import type { ListDatasetViewsRequest } from '';
 
 async function example() {
   console.log("🚀 Testing  SDK...");
-  const api = new DatasetsApi();
+  const config = new Configuration({
+    // Configure HTTP bearer authorization: cliBearer
+    accessToken: "YOUR BEARER TOKEN",
+    // To configure API key authorization: sessionCookie
+    apiKey: "YOUR API KEY",
+  });
+  const api = new DatasetsApi(config);
 
   const body = {
     // string | Proposal、ReviewTask 或 ChangeBatch ID
@@ -572,7 +602,7 @@ example().catch(console.error);
 
 ### Authorization
 
-No authorization required
+[cliBearer](../README.md#cliBearer), [sessionCookie](../README.md#sessionCookie)
 
 ### HTTP request headers
 
@@ -606,7 +636,13 @@ import type { ListDatasetsRequest } from '';
 
 async function example() {
   console.log("🚀 Testing  SDK...");
-  const api = new DatasetsApi();
+  const config = new Configuration({
+    // Configure HTTP bearer authorization: cliBearer
+    accessToken: "YOUR BEARER TOKEN",
+    // To configure API key authorization: sessionCookie
+    apiKey: "YOUR API KEY",
+  });
+  const api = new DatasetsApi(config);
 
   const body = {
     // string | 上一页响应返回的 next_cursor；首页不传 (optional)
@@ -641,7 +677,7 @@ example().catch(console.error);
 
 ### Authorization
 
-No authorization required
+[cliBearer](../README.md#cliBearer), [sessionCookie](../README.md#sessionCookie)
 
 ### HTTP request headers
 
@@ -675,7 +711,13 @@ import type { QueryDatasetViewRequest } from '';
 
 async function example() {
   console.log("🚀 Testing  SDK...");
-  const api = new DatasetsApi();
+  const config = new Configuration({
+    // Configure HTTP bearer authorization: cliBearer
+    accessToken: "YOUR BEARER TOKEN",
+    // To configure API key authorization: sessionCookie
+    apiKey: "YOUR API KEY",
+  });
+  const api = new DatasetsApi(config);
 
   const body = {
     // string | Proposal、ReviewTask 或 ChangeBatch ID
@@ -713,7 +755,7 @@ example().catch(console.error);
 
 ### Authorization
 
-No authorization required
+[cliBearer](../README.md#cliBearer), [sessionCookie](../README.md#sessionCookie)
 
 ### HTTP request headers
 
@@ -748,7 +790,13 @@ import type { QueryDatasetViewWithFilterRequest } from '';
 
 async function example() {
   console.log("🚀 Testing  SDK...");
-  const api = new DatasetsApi();
+  const config = new Configuration({
+    // Configure HTTP bearer authorization: cliBearer
+    accessToken: "YOUR BEARER TOKEN",
+    // To configure API key authorization: sessionCookie
+    apiKey: "YOUR API KEY",
+  });
+  const api = new DatasetsApi(config);
 
   const body = {
     // string | Proposal、ReviewTask 或 ChangeBatch ID
@@ -789,7 +837,7 @@ example().catch(console.error);
 
 ### Authorization
 
-No authorization required
+[cliBearer](../README.md#cliBearer), [sessionCookie](../README.md#sessionCookie)
 
 ### HTTP request headers
 
@@ -812,7 +860,7 @@ No authorization required
 
 > DatasetRecord submitPublicDatasetForm(id, submitPublicDatasetFormRequest)
 
-公开提交经 Dataset Schema 校验的记录
+向当前 Wiki 已启用的 Form 提交记录
 
 ### Example
 
@@ -825,7 +873,13 @@ import type { SubmitPublicDatasetFormOperationRequest } from '';
 
 async function example() {
   console.log("🚀 Testing  SDK...");
-  const api = new DatasetsApi();
+  const config = new Configuration({
+    // Configure HTTP bearer authorization: cliBearer
+    accessToken: "YOUR BEARER TOKEN",
+    // To configure API key authorization: sessionCookie
+    apiKey: "YOUR API KEY",
+  });
+  const api = new DatasetsApi(config);
 
   const body = {
     // string | Proposal、ReviewTask 或 ChangeBatch ID
@@ -860,7 +914,7 @@ example().catch(console.error);
 
 ### Authorization
 
-No authorization required
+[cliBearer](../README.md#cliBearer), [sessionCookie](../README.md#sessionCookie)
 
 ### HTTP request headers
 

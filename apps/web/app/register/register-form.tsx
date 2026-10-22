@@ -97,7 +97,7 @@ export function RegisterForm() {
       <div className="flex flex-col gap-2">
         <h1 className="text-2xl font-semibold tracking-tight">创建账号</h1>
         <p className="text-sm text-muted-foreground">
-          首个注册账号会成为站点管理员，后续账号默认为编辑者。
+          注册后会创建你的私人 Wiki，并将你设为该 Wiki 的管理员。
         </p>
       </div>
       <form className="flex flex-col gap-4" onSubmit={submit}>

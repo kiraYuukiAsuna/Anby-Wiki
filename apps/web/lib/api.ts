@@ -111,34 +111,34 @@ export function pagesApi(overrides: ConfigurationParameters = {}): PagesApi {
   return new PagesApi(makeConfig(overrides));
 }
 
-/** 页面阅读 API 客户端（按标题/别名/ID 读取当前 Revision 与渲染 HTML，匿名可读）。 */
+/** 当前登录 Wiki 的页面阅读 API 客户端。 */
 export function readingApi(overrides: ConfigurationParameters = {}): ReadingApi {
   return new ReadingApi(makeConfig(overrides));
 }
 
-/** 页面历史 API 客户端（Revision 列表/详情/结构 Diff/回滚；读匿名，回滚需登录）。 */
+/** 当前登录 Wiki 的 Revision 列表、详情、结构 Diff 与回滚客户端。 */
 export function historyApi(overrides: ConfigurationParameters = {}): HistoryApi {
   return new HistoryApi(makeConfig(overrides));
 }
 
-/** 投影查询 API 客户端（反向链接/文档目录，走投影表，匿名可读，最终一致）。 */
+/** 当前登录 Wiki 的反向链接与文档目录投影客户端。 */
 export function projectionApi(overrides: ConfigurationParameters = {}): ProjectionApi {
   return new ProjectionApi(makeConfig(overrides));
 }
 
-/** 全局页面搜索客户端（标题/别名/正文/Entity，支持过滤与高亮，匿名可读）。 */
+/** 当前登录 Wiki 的页面搜索客户端。 */
 export function searchApi(overrides: ConfigurationParameters = {}): SearchApi {
   return new SearchApi(makeConfig(overrides));
 }
 
-/** Knowledge 客户端：详情匿名可读，Entity 合并需要管理员会话。 */
+/** 当前登录 Wiki 的 Knowledge 客户端；Entity 合并需要管理员权限。 */
 export function knowledgeApi(
   overrides: ConfigurationParameters = {},
 ): KnowledgeApi {
   return new KnowledgeApi(makeConfig(overrides));
 }
 
-/** Manual/Rule Collection 定义与物化成员查询客户端（匿名只读）。 */
+/** 当前登录 Wiki 的 Manual/Rule Collection 与物化成员客户端。 */
 export function collectionsApi(
   overrides: ConfigurationParameters = {},
 ): CollectionsApi {

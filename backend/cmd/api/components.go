@@ -62,7 +62,9 @@ func (a *ComponentAPI) list(w http.ResponseWriter, r *http.Request) {
 	if !ok {
 		return
 	}
-	result, err := a.service.List(r.Context(), r.URL.Query().Get("cursor"), limit)
+	result, err := a.service.List(
+		r.Context(), wikiIDFromRequest(r), r.URL.Query().Get("cursor"), limit,
+	)
 	if err != nil {
 		componentError(w, r, err)
 		return
@@ -91,7 +93,8 @@ func (a *ComponentAPI) create(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	value, err := a.service.Create(r.Context(), component.CreateParams{
-		ComponentKey: request.ComponentKey, Name: request.Name, ActorID: actorID,
+		WikiID: wikiIDFromRequest(r), ComponentKey: request.ComponentKey,
+		Name: request.Name, ActorID: actorID,
 	})
 	if err != nil {
 		componentError(w, r, err)
@@ -105,7 +108,7 @@ func (a *ComponentAPI) get(w http.ResponseWriter, r *http.Request) {
 	if !ok {
 		return
 	}
-	value, err := a.service.Get(r.Context(), id)
+	value, err := a.service.Get(r.Context(), wikiIDFromRequest(r), id)
 	if err != nil {
 		componentError(w, r, err)
 		return
@@ -123,7 +126,9 @@ func (a *ComponentAPI) listVersions(w http.ResponseWriter, r *http.Request) {
 	if !ok {
 		return
 	}
-	result, err := a.service.ListVersions(r.Context(), id)
+	result, err := a.service.ListVersions(
+		r.Context(), wikiIDFromRequest(r), id,
+	)
 	if err != nil {
 		componentError(w, r, err)
 		return
@@ -149,7 +154,8 @@ func (a *ComponentAPI) createVersion(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	value, err := a.service.CreateVersion(r.Context(), component.CreateVersionParams{
-		ComponentID: id, PropsSchema: request.PropsSchema,
+		WikiID: wikiIDFromRequest(r), ComponentID: id,
+		PropsSchema: request.PropsSchema,
 		RendererRef: request.RendererRef, ActorID: actorID,
 	})
 	if err != nil {
@@ -177,7 +183,8 @@ func (a *ComponentAPI) updateVersion(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	value, err := a.service.UpdateDraft(
-		r.Context(), id, version, request.PropsSchema, request.RendererRef, actorID,
+		r.Context(), wikiIDFromRequest(r), id, version,
+		request.PropsSchema, request.RendererRef, actorID,
 	)
 	if err != nil {
 		componentError(w, r, err)
@@ -214,9 +221,13 @@ func (a *ComponentAPI) transitionVersion(
 		err   error
 	)
 	if publish {
-		value, err = a.service.Publish(r.Context(), id, version, actorID)
+		value, err = a.service.Publish(
+			r.Context(), wikiIDFromRequest(r), id, version, actorID,
+		)
 	} else {
-		value, err = a.service.Deprecate(r.Context(), id, version, actorID)
+		value, err = a.service.Deprecate(
+			r.Context(), wikiIDFromRequest(r), id, version, actorID,
+		)
 	}
 	if err != nil {
 		componentError(w, r, err)
@@ -244,7 +255,8 @@ func (a *ComponentAPI) preview(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	html, err := a.service.Preview(
-		r.Context(), id, version, request.EntityID, request.Props,
+		r.Context(), wikiIDFromRequest(r), id, version,
+		request.EntityID, request.Props,
 	)
 	if err != nil {
 		componentError(w, r, err)

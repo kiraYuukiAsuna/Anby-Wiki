@@ -17,7 +17,7 @@ All URIs are relative to *http://localhost:3000*
 
 两版结构 Diff
 
-阅读端点（匿名可读，无需登录）。以 from 为 base、to 为 current， 用后端 AST Diff（按 Block ID 对齐）计算结构差异：added/removed/changed/moved。 from &#x3D;&#x3D; to 返回空 changes。任一 Revision 不存在或不属于该页面返回 404。
+在当前登录 Wiki 内以 from 为 base、to 为 current， 用后端 AST Diff（按 Block ID 对齐）计算结构差异：added/removed/changed/moved。 from &#x3D;&#x3D; to 返回空 changes。任一 Revision 不存在或不属于该页面返回 404。
 
 ### Example
 
@@ -30,7 +30,13 @@ import type { DiffRevisionsRequest } from '';
 
 async function example() {
   console.log("🚀 Testing  SDK...");
-  const api = new HistoryApi();
+  const config = new Configuration({
+    // Configure HTTP bearer authorization: cliBearer
+    accessToken: "YOUR BEARER TOKEN",
+    // To configure API key authorization: sessionCookie
+    apiKey: "YOUR API KEY",
+  });
+  const api = new HistoryApi(config);
 
   const body = {
     // string | 页面 ID（UUIDv7）
@@ -68,7 +74,7 @@ example().catch(console.error);
 
 ### Authorization
 
-No authorization required
+[cliBearer](../README.md#cliBearer), [sessionCookie](../README.md#sessionCookie)
 
 ### HTTP request headers
 
@@ -93,7 +99,7 @@ No authorization required
 
 单版详情
 
-阅读端点（匿名可读，无需登录）。读取页面指定 Revision 的元信息与 canonical AST（不含 html）。Revision 不存在或不属于该页面返回 404 （跨页访问不泄露存在性）。
+读取当前登录 Wiki 页面指定 Revision 的元信息与 canonical AST（不含 html）。Revision 不存在或不属于该页面返回 404 （跨页访问不泄露存在性）。
 
 ### Example
 
@@ -106,7 +112,13 @@ import type { GetRevisionRequest } from '';
 
 async function example() {
   console.log("🚀 Testing  SDK...");
-  const api = new HistoryApi();
+  const config = new Configuration({
+    // Configure HTTP bearer authorization: cliBearer
+    accessToken: "YOUR BEARER TOKEN",
+    // To configure API key authorization: sessionCookie
+    apiKey: "YOUR API KEY",
+  });
+  const api = new HistoryApi(config);
 
   const body = {
     // string | 页面 ID（UUIDv7）
@@ -141,7 +153,7 @@ example().catch(console.error);
 
 ### Authorization
 
-No authorization required
+[cliBearer](../README.md#cliBearer), [sessionCookie](../README.md#sessionCookie)
 
 ### HTTP request headers
 
@@ -166,7 +178,7 @@ No authorization required
 
 Revision 历史列表
 
-阅读端点（匿名可读，无需登录）。按 (created_at DESC, id DESC) 游标分页 列出页面 Revision 元信息（含冗余自快照的 content_hash/schema_version，不含 AST）。 首页不传 cursor；后续页传上一页响应的 next_cursor；next_cursor 为 null 表示没有更多。 游标无法解析返回 400 validation_failed；页面不存在返回 404。
+按 (created_at DESC, id DESC) 游标分页 列出页面 Revision 元信息（含冗余自快照的 content_hash/schema_version，不含 AST）。 首页不传 cursor；后续页传上一页响应的 next_cursor；next_cursor 为 null 表示没有更多。 游标无法解析返回 400 validation_failed；页面不存在返回 404。
 
 ### Example
 
@@ -179,7 +191,13 @@ import type { ListRevisionsRequest } from '';
 
 async function example() {
   console.log("🚀 Testing  SDK...");
-  const api = new HistoryApi();
+  const config = new Configuration({
+    // Configure HTTP bearer authorization: cliBearer
+    accessToken: "YOUR BEARER TOKEN",
+    // To configure API key authorization: sessionCookie
+    apiKey: "YOUR API KEY",
+  });
+  const api = new HistoryApi(config);
 
   const body = {
     // string | 页面 ID（UUIDv7）
@@ -217,7 +235,7 @@ example().catch(console.error);
 
 ### Authorization
 
-No authorization required
+[cliBearer](../README.md#cliBearer), [sessionCookie](../README.md#sessionCookie)
 
 ### HTTP request headers
 

@@ -100,10 +100,13 @@ func (a *AuthAPI) session(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	httpx.WriteJSON(w, http.StatusOK, map[string]string{
-		"actor_id":     principal.ActorID.String(),
-		"actor_type":   principal.ActorType,
-		"display_name": principal.DisplayName,
-		"method":       principal.Method,
+		"actor_id":          principal.ActorID.String(),
+		"wiki_id":           principal.WikiID.String(),
+		"wiki_name":         principal.WikiName,
+		"main_namespace_id": principal.MainNamespaceID.String(),
+		"actor_type":        principal.ActorType,
+		"display_name":      principal.DisplayName,
+		"method":            principal.Method,
 	})
 }
 
@@ -154,7 +157,10 @@ func (a *AuthAPI) setSessionCookie(w http.ResponseWriter, session authdomain.Ses
 
 func writeAuthResult(w http.ResponseWriter, status int, session authdomain.Session) {
 	httpx.WriteJSON(w, status, map[string]string{
-		"actor_id":     session.ActorID.String(),
-		"display_name": session.DisplayName,
+		"actor_id":          session.ActorID.String(),
+		"wiki_id":           session.WikiID.String(),
+		"wiki_name":         session.WikiName,
+		"main_namespace_id": session.MainNamespaceID.String(),
+		"display_name":      session.DisplayName,
 	})
 }

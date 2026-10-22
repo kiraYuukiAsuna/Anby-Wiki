@@ -44,7 +44,7 @@ var (
 	ErrRevisionNotFound = errors.New("page: Revision 不存在")
 	// ErrInvalidCursor 历史列表的分页游标无法解析。
 	ErrInvalidCursor = errors.New("page: 分页游标非法")
-	// ErrWikiNotFound 站点不存在（如默认站点 site_key='default' 未种子）。
+	// ErrWikiNotFound Wiki 站点不存在。
 	ErrWikiNotFound = errors.New("page: 站点不存在")
 	// ErrPageLifecycleStale 页面创建、改名或重定向之后已有其他变更，不能静默补偿。
 	ErrPageLifecycleStale = errors.New("page: 生命周期状态已变化")
@@ -72,10 +72,12 @@ const (
 
 // 允许创建/改名页面的 Actor 类型。
 // ai 直接创建页面在 M5 治理落地前不允许；anonymous/import 同样不直接写页面。
+const ActorTypeSystem = "system"
+
 var allowedWriteActorTypes = map[string]bool{
-	"human":  true,
-	"bot":    true,
-	"system": true,
+	"human":         true,
+	"bot":           true,
+	ActorTypeSystem: true,
 }
 
 // Page 页面身份（对应 page 表）。
@@ -110,6 +112,7 @@ type Alias struct {
 // Actor 行为主体（对应 actor 表，仅本模块校验所需字段）。
 type Actor struct {
 	ID          uuid.UUID
+	WikiID      *uuid.UUID
 	ActorType   string
 	DisplayName string
 	Status      string

@@ -279,12 +279,32 @@ func (r *Repository) CheckWriteActor(ctx context.Context, tx pgx.Tx, actorID uui
 	return nil
 }
 
+func (r *Repository) CheckWriteActorInWiki(
+	ctx context.Context,
+	tx pgx.Tx,
+	actorID, wikiID uuid.UUID,
+) error {
+	if err := r.CheckWriteActor(ctx, tx, actorID); err != nil {
+		return err
+	}
+	actor, err := r.GetActorByID(ctx, tx, actorID)
+	if err != nil {
+		return err
+	}
+	if actor.ActorType != ActorTypeSystem &&
+		(actor.WikiID == nil || *actor.WikiID != wikiID) {
+		return fmt.Errorf("%w: actor 不属于目标 Wiki", ErrActorNotAllowed)
+	}
+	return nil
+}
+
 // GetActorByID 按 ID 查 Actor，未命中返回 errActorNotFound。
 func (r *Repository) GetActorByID(ctx context.Context, tx pgx.Tx, id uuid.UUID) (*Actor, error) {
 	var a Actor
 	err := r.q(tx).QueryRow(ctx, `
-		SELECT id, actor_type, display_name, status FROM actor WHERE id = $1`, id,
-	).Scan(&a.ID, &a.ActorType, &a.DisplayName, &a.Status)
+		SELECT id, wiki_id, actor_type, display_name, status
+		FROM actor WHERE id = $1`, id,
+	).Scan(&a.ID, &a.WikiID, &a.ActorType, &a.DisplayName, &a.Status)
 	if errors.Is(err, pgx.ErrNoRows) {
 		return nil, errActorNotFound
 	}
@@ -416,8 +436,7 @@ func (r *Repository) NamespaceBelongsToWiki(
 	return exists, nil
 }
 
-// GetWikiIDBySiteKey 按 site_key 查站点 ID（API 启动时解析默认站点并缓存），
-// 未命中返回 ErrWikiNotFound。
+// GetWikiIDBySiteKey 按稳定 site_key 查 Wiki ID，未命中返回 ErrWikiNotFound。
 func (r *Repository) GetWikiIDBySiteKey(ctx context.Context, tx pgx.Tx, siteKey string) (uuid.UUID, error) {
 	var id uuid.UUID
 	err := r.q(tx).QueryRow(ctx, `

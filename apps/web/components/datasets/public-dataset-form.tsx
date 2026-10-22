@@ -56,7 +56,7 @@ export function PublicDatasetFormView({ id }: { id: string }) {
       <div className="rounded-md border border-destructive/20 bg-destructive/5 p-8">
         <h1 className="text-xl font-semibold">表单不可用</h1>
         <p className="mt-2 text-sm text-muted-foreground">
-          表单可能未公开或已被移除。
+          表单可能未启用或已被移除。
         </p>
       </div>
     );

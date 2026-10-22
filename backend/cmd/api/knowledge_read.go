@@ -25,15 +25,13 @@ type KnowledgeReadAPI struct {
 	authorization *governance.AuthorizationService
 	consistency   *knowledge.FactConsistencyService
 	entityGraph   *projection.EntityGraphService
-	wikiID        uuid.UUID
 }
 
 func NewKnowledgeReadAPI(
 	knowledgeService *knowledge.Service,
 	evidenceService *evidence.Service,
-	wikiID uuid.UUID,
 ) *KnowledgeReadAPI {
-	return &KnowledgeReadAPI{knowledge: knowledgeService, evidence: evidenceService, wikiID: wikiID}
+	return &KnowledgeReadAPI{knowledge: knowledgeService, evidence: evidenceService}
 }
 
 func (a *KnowledgeReadAPI) WithMergeAuthorization(
@@ -209,7 +207,7 @@ func (a *KnowledgeReadAPI) listEntities(w http.ResponseWriter, r *http.Request) 
 		return
 	}
 	page, err := a.knowledge.ListEntities(r.Context(), knowledge.EntityCatalogParams{
-		WikiID: a.wikiID, Query: r.URL.Query().Get("q"),
+		WikiID: wikiIDFromRequest(r), Query: r.URL.Query().Get("q"),
 		TypeKey: r.URL.Query().Get("type_key"), Status: r.URL.Query().Get("status"),
 		Cursor: r.URL.Query().Get("cursor"), Limit: limit,
 	})
@@ -241,7 +239,9 @@ func (a *KnowledgeReadAPI) getEntity(w http.ResponseWriter, r *http.Request) {
 	if !ok {
 		return
 	}
-	entity, err := a.currentWikiEntity(r.Context(), id)
+	entity, err := a.currentWikiEntity(
+		r.Context(), wikiIDFromRequest(r), id,
+	)
 	if err != nil {
 		a.writeError(w, r, err)
 		return
@@ -290,7 +290,7 @@ func (a *KnowledgeReadAPI) getClaim(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if _, err := a.currentWikiEntity(
-		r.Context(), claim.SubjectEntityID,
+		r.Context(), wikiIDFromRequest(r), claim.SubjectEntityID,
 	); err != nil {
 		a.writeError(w, r, knowledge.ErrClaimNotFound)
 		return
@@ -327,13 +327,13 @@ func (a *KnowledgeReadAPI) getClaim(w http.ResponseWriter, r *http.Request) {
 // A foreign-Wiki ID is deliberately indistinguishable from a missing ID.
 func (a *KnowledgeReadAPI) currentWikiEntity(
 	ctx context.Context,
-	id uuid.UUID,
+	wikiID, id uuid.UUID,
 ) (*knowledge.Entity, error) {
 	entity, err := a.knowledge.GetEntity(ctx, id)
 	if err != nil {
 		return nil, err
 	}
-	if entity.WikiID != a.wikiID {
+	if entity.WikiID != wikiID {
 		return nil, fmt.Errorf("%w: id=%s", knowledge.ErrEntityNotFound, id)
 	}
 	return entity, nil
@@ -344,7 +344,9 @@ func (a *KnowledgeReadAPI) getCitation(w http.ResponseWriter, r *http.Request) {
 	if !ok {
 		return
 	}
-	detail, err := a.evidence.GetCitationDetail(r.Context(), id)
+	detail, err := a.evidence.GetCitationDetail(
+		r.Context(), wikiIDFromRequest(r), id,
+	)
 	if err != nil {
 		a.writeError(w, r, err)
 		return
@@ -397,7 +399,7 @@ func (a *KnowledgeReadAPI) listFactConsistencyIssues(
 		return
 	}
 	if err := a.authorization.Check(
-		r.Context(), actorID, a.wikiID, governance.ActionReview, nil,
+		r.Context(), actorID, wikiIDFromRequest(r), governance.ActionReview, nil,
 	); err != nil {
 		a.writeError(w, r, err)
 		return
@@ -408,7 +410,7 @@ func (a *KnowledgeReadAPI) listFactConsistencyIssues(
 	}
 	result, err := a.consistency.List(
 		r.Context(), knowledge.FactConsistencyListParams{
-			WikiID: a.wikiID, Status: r.URL.Query().Get("status"),
+			WikiID: wikiIDFromRequest(r), Status: r.URL.Query().Get("status"),
 			IssueType: r.URL.Query().Get("issue_type"),
 			Cursor:    r.URL.Query().Get("cursor"), Limit: limit,
 		},
@@ -433,12 +435,12 @@ func (a *KnowledgeReadAPI) scanFactConsistency(
 		return
 	}
 	if err := a.authorization.Check(
-		r.Context(), actorID, a.wikiID, governance.ActionManage, nil,
+		r.Context(), actorID, wikiIDFromRequest(r), governance.ActionManage, nil,
 	); err != nil {
 		a.writeError(w, r, err)
 		return
 	}
-	result, err := a.consistency.ScanWiki(r.Context(), a.wikiID)
+	result, err := a.consistency.ScanWiki(r.Context(), wikiIDFromRequest(r))
 	if err != nil {
 		a.writeError(w, r, err)
 		return

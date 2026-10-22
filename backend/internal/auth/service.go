@@ -83,10 +83,13 @@ type LoginInput struct {
 
 // Session contains the opaque cookie value. Only its SHA-256 hash is stored.
 type Session struct {
-	Token       string
-	ActorID     uuid.UUID
-	DisplayName string
-	ExpiresAt   time.Time
+	Token           string
+	ActorID         uuid.UUID
+	WikiID          uuid.UUID
+	WikiName        string
+	MainNamespaceID uuid.UUID
+	DisplayName     string
+	ExpiresAt       time.Time
 }
 
 // Service is the sole write path for accounts, external identities and
@@ -109,9 +112,8 @@ func NewService(pool db.Querier, txm *db.TxManager, ids idGenerator, sessionTTL 
 	}
 }
 
-// Register creates a local account, its Actor, its initial wiki role and the
-// first session in one transaction. The first local account is the site admin;
-// later accounts receive the editor role.
+// Register creates a local account, its private Wiki, owner Actor, admin role
+// and first session in one transaction.
 func (s *Service) Register(ctx context.Context, input RegisterInput) (Session, error) {
 	username, email, displayName, err := validateRegistration(input)
 	if err != nil {
@@ -129,26 +131,28 @@ func (s *Service) Register(ctx context.Context, input RegisterInput) (Session, e
 	if err != nil {
 		return Session{}, fmt.Errorf("auth: generate actor id: %w", err)
 	}
-	sessionID, session, hash, err := s.newSession(actorID, displayName)
+	wiki, err := s.newPersonalWiki(actorID, displayName)
+	if err != nil {
+		return Session{}, err
+	}
+	sessionID, session, hash, err := s.newSession(
+		actorID, wiki.ID, wiki.Name, wiki.MainNamespaceID, displayName,
+	)
 	if err != nil {
 		return Session{}, err
 	}
 
 	err = s.txm.InTx(ctx, func(tx pgx.Tx) error {
-		// Serialize first-account selection so exactly one registrant receives
-		// the bootstrap admin role.
-		if _, err := tx.Exec(ctx,
-			`SELECT pg_advisory_xact_lock(hashtextextended('anby-wiki:first-local-account', 0))`); err != nil {
-			return err
-		}
-		var firstAccount bool
-		if err := tx.QueryRow(ctx, `SELECT NOT EXISTS (SELECT 1 FROM local_account)`).
-			Scan(&firstAccount); err != nil {
+		if err := insertPersonalWiki(ctx, tx, wiki); err != nil {
 			return err
 		}
 		if _, err := tx.Exec(ctx, `INSERT INTO actor
-			(id,actor_type,display_name,status) VALUES ($1,'human',$2,'active')`,
-			actorID, displayName); err != nil {
+			(id,actor_type,wiki_id,display_name,status)
+			VALUES ($1,'human',$2,$3,'active')`,
+			actorID, wiki.ID, displayName); err != nil {
+			return err
+		}
+		if err := insertPersonalWikiDefaults(ctx, tx, wiki); err != nil {
 			return err
 		}
 		if _, err := tx.Exec(ctx, `INSERT INTO local_account
@@ -161,18 +165,14 @@ func (s *Service) Register(ctx context.Context, input RegisterInput) (Session, e
 			accountID, actorID); err != nil {
 			return err
 		}
-		roleKey := "editor"
-		if firstAccount {
-			roleKey = "admin"
-		}
 		tag, err := tx.Exec(ctx, `INSERT INTO actor_role (actor_id,role_id,wiki_id)
-			SELECT $1,r.id,w.id FROM role r CROSS JOIN wiki_site w
-			WHERE r.role_key=$2 AND w.site_key='default'`, actorID, roleKey)
+			SELECT $1,r.id,$2 FROM role r WHERE r.role_key='admin'`,
+			actorID, wiki.ID)
 		if err != nil {
 			return err
 		}
 		if tag.RowsAffected() != 1 {
-			return fmt.Errorf("auth: default wiki or role %q is missing", roleKey)
+			return errors.New("auth: admin role is missing")
 		}
 		_, err = tx.Exec(ctx, `INSERT INTO auth_session
 			(id,token_hash,actor_id,expires_at) VALUES ($1,$2,$3,$4)`,
@@ -198,13 +198,20 @@ func (s *Service) Login(ctx context.Context, input LoginInput) (Session, error) 
 		return Session{}, ErrInvalidCredentials
 	}
 
-	var accountID, actorID uuid.UUID
-	var passwordHash, displayName, accountStatus, actorStatus string
-	err := s.pool.QueryRow(ctx, `SELECT la.id,la.actor_id,la.password_hash,a.display_name,la.status,a.status
-		FROM local_account la JOIN actor a ON a.id=la.actor_id
+	var accountID, actorID, wikiID, mainNamespaceID uuid.UUID
+	var passwordHash, displayName, wikiName, accountStatus, actorStatus string
+	err := s.pool.QueryRow(ctx, `SELECT
+		la.id,la.actor_id,a.wiki_id,n.id,la.password_hash,a.display_name,w.name,
+		la.status,a.status
+		FROM local_account la
+		JOIN actor a ON a.id=la.actor_id
+		JOIN wiki_site w ON w.id=a.wiki_id
+		JOIN namespace n ON n.wiki_id=a.wiki_id AND n.namespace_key='main'
 		WHERE la.normalized_username=$1 OR la.normalized_email=$1`,
 		identifier).Scan(
-		&accountID, &actorID, &passwordHash, &displayName, &accountStatus, &actorStatus,
+		&accountID, &actorID, &wikiID, &mainNamespaceID,
+		&passwordHash, &displayName, &wikiName,
+		&accountStatus, &actorStatus,
 	)
 	if errors.Is(err, pgx.ErrNoRows) {
 		verifyDummyPassword(input.Password)
@@ -221,7 +228,9 @@ func (s *Service) Login(ctx context.Context, input LoginInput) (Session, error) 
 		return Session{}, ErrInvalidCredentials
 	}
 
-	sessionID, session, hash, err := s.newSession(actorID, displayName)
+	sessionID, session, hash, err := s.newSession(
+		actorID, wikiID, wikiName, mainNamespaceID, displayName,
+	)
 	if err != nil {
 		return Session{}, err
 	}
@@ -266,7 +275,9 @@ func (s *Service) EstablishSession(ctx context.Context, identity Identity) (Sess
 	if identity.DisplayName == "" {
 		identity.DisplayName = "Unnamed user"
 	}
-	sessionID, session, hash, err := s.newSession(uuid.Nil, identity.DisplayName)
+	sessionID, session, hash, err := s.newSession(
+		uuid.Nil, uuid.Nil, "", uuid.Nil, identity.DisplayName,
+	)
 	if err != nil {
 		return Session{}, err
 	}
@@ -276,11 +287,17 @@ func (s *Service) EstablishSession(ctx context.Context, identity Identity) (Sess
 			return err
 		}
 		var actorStatus string
-		err := tx.QueryRow(ctx, `SELECT ei.actor_id,a.status,a.display_name FROM external_identity ei
+		err := tx.QueryRow(ctx, `SELECT
+			ei.actor_id,a.wiki_id,w.name,n.id,a.status,a.display_name
+			FROM external_identity ei
 			JOIN actor a ON a.id=ei.actor_id
+			JOIN wiki_site w ON w.id=a.wiki_id
+			JOIN namespace n ON n.wiki_id=a.wiki_id AND n.namespace_key='main'
 			WHERE ei.issuer=$1 AND ei.subject=$2`,
 			identity.Issuer, identity.Subject).Scan(
-			&session.ActorID, &actorStatus, &session.DisplayName,
+			&session.ActorID, &session.WikiID, &session.WikiName,
+			&session.MainNamespaceID,
+			&actorStatus, &session.DisplayName,
 		)
 		switch {
 		case err == nil:
@@ -296,16 +313,39 @@ func (s *Service) EstablishSession(ctx context.Context, identity Identity) (Sess
 			if err != nil {
 				return err
 			}
+			wiki, err := s.newPersonalWiki(session.ActorID, identity.DisplayName)
+			if err != nil {
+				return err
+			}
+			if err := insertPersonalWiki(ctx, tx, wiki); err != nil {
+				return err
+			}
 			if _, err := tx.Exec(ctx, `INSERT INTO actor
-				(id,actor_type,display_name,status) VALUES ($1,'human',$2,'active')`,
-				session.ActorID, identity.DisplayName); err != nil {
+				(id,actor_type,wiki_id,display_name,status)
+				VALUES ($1,'human',$2,$3,'active')`,
+				session.ActorID, wiki.ID, identity.DisplayName); err != nil {
+				return err
+			}
+			if err := insertPersonalWikiDefaults(ctx, tx, wiki); err != nil {
 				return err
 			}
 			session.DisplayName = identity.DisplayName
+			session.WikiID = wiki.ID
+			session.WikiName = wiki.Name
+			session.MainNamespaceID = wiki.MainNamespaceID
 			if _, err := tx.Exec(ctx, `INSERT INTO external_identity
 				(issuer,subject,actor_id) VALUES ($1,$2,$3)`,
 				identity.Issuer, identity.Subject, session.ActorID); err != nil {
 				return err
+			}
+			tag, err := tx.Exec(ctx, `INSERT INTO actor_role (actor_id,role_id,wiki_id)
+				SELECT $1,r.id,$2 FROM role r WHERE r.role_key='admin'`,
+				session.ActorID, wiki.ID)
+			if err != nil {
+				return err
+			}
+			if tag.RowsAffected() != 1 {
+				return errors.New("auth: admin role is missing")
 			}
 		default:
 			return err
@@ -329,12 +369,18 @@ func (s *Service) ResolveSession(ctx context.Context, token string) (Principal, 
 	}
 	hash := tokenHash(token)
 	var principal Principal
-	err := s.pool.QueryRow(ctx, `SELECT a.id,a.actor_type,a.display_name FROM auth_session s
+	err := s.pool.QueryRow(ctx, `SELECT
+		a.id,a.wiki_id,w.name,n.id,a.actor_type,a.display_name
+		FROM auth_session s
 		JOIN actor a ON a.id=s.actor_id
+		JOIN wiki_site w ON w.id=a.wiki_id
+		JOIN namespace n ON n.wiki_id=a.wiki_id AND n.namespace_key='main'
 		LEFT JOIN local_account la ON la.actor_id=a.id
 		WHERE s.token_hash=$1 AND s.revoked_at IS NULL AND s.expires_at>now()
 			AND a.status='active' AND (la.id IS NULL OR la.status='active')`, hash[:]).Scan(
-		&principal.ActorID, &principal.ActorType, &principal.DisplayName,
+		&principal.ActorID, &principal.WikiID, &principal.WikiName,
+		&principal.MainNamespaceID,
+		&principal.ActorType, &principal.DisplayName,
 	)
 	if errors.Is(err, pgx.ErrNoRows) {
 		return Principal{}, ErrUnauthenticated
@@ -349,9 +395,15 @@ func (s *Service) ResolveSession(ctx context.Context, token string) (Principal, 
 // ResolveDevActor validates an explicitly supplied development/test Actor.
 func (s *Service) ResolveDevActor(ctx context.Context, actorID uuid.UUID) (Principal, error) {
 	var principal Principal
-	err := s.pool.QueryRow(ctx, `SELECT id,actor_type,display_name FROM actor
-		WHERE id=$1 AND status='active'`, actorID).Scan(
-		&principal.ActorID, &principal.ActorType, &principal.DisplayName,
+	err := s.pool.QueryRow(ctx, `SELECT
+		a.id,a.wiki_id,w.name,n.id,a.actor_type,a.display_name
+		FROM actor a
+		JOIN wiki_site w ON w.id=a.wiki_id
+		JOIN namespace n ON n.wiki_id=a.wiki_id AND n.namespace_key='main'
+		WHERE a.id=$1 AND a.status='active'`, actorID).Scan(
+		&principal.ActorID, &principal.WikiID, &principal.WikiName,
+		&principal.MainNamespaceID,
+		&principal.ActorType, &principal.DisplayName,
 	)
 	if errors.Is(err, pgx.ErrNoRows) {
 		return Principal{}, ErrUnauthenticated
@@ -376,7 +428,12 @@ func (s *Service) RevokeSession(ctx context.Context, token string) error {
 	return nil
 }
 
-func (s *Service) newSession(actorID uuid.UUID, displayName string) (uuid.UUID, Session, [sha256.Size]byte, error) {
+func (s *Service) newSession(
+	actorID, wikiID uuid.UUID,
+	wikiName string,
+	mainNamespaceID uuid.UUID,
+	displayName string,
+) (uuid.UUID, Session, [sha256.Size]byte, error) {
 	token, err := randomToken(32)
 	if err != nil {
 		return uuid.Nil, Session{}, [sha256.Size]byte{}, err
@@ -386,12 +443,151 @@ func (s *Service) newSession(actorID uuid.UUID, displayName string) (uuid.UUID, 
 		return uuid.Nil, Session{}, [sha256.Size]byte{}, fmt.Errorf("auth: generate session id: %w", err)
 	}
 	session := Session{
-		Token:       token,
-		ActorID:     actorID,
-		DisplayName: displayName,
-		ExpiresAt:   s.now().Add(s.sessionTTL),
+		Token:           token,
+		ActorID:         actorID,
+		WikiID:          wikiID,
+		WikiName:        wikiName,
+		MainNamespaceID: mainNamespaceID,
+		DisplayName:     displayName,
+		ExpiresAt:       s.now().Add(s.sessionTTL),
 	}
 	return sessionID, session, tokenHash(token), nil
+}
+
+type personalWiki struct {
+	ID              uuid.UUID
+	OwnerID         uuid.UUID
+	SiteKey         string
+	Name            string
+	MainNamespaceID uuid.UUID
+	Namespaces      []personalNamespace
+	Tags            []personalChangeTag
+	ComponentID     uuid.UUID
+}
+
+type personalNamespace struct {
+	ID            uuid.UUID
+	Key           string
+	CanonicalName string
+	DisplayName   string
+	IsContent     bool
+}
+
+type personalChangeTag struct {
+	ID          uuid.UUID
+	Key         string
+	Name        string
+	Description string
+}
+
+var personalNamespaceDefinitions = []personalNamespace{
+	{Key: "main", CanonicalName: "Main", DisplayName: "条目", IsContent: true},
+	{Key: "talk", CanonicalName: "Talk", DisplayName: "讨论"},
+	{Key: "user", CanonicalName: "User", DisplayName: "用户"},
+	{Key: "project", CanonicalName: "Project", DisplayName: "项目"},
+	{Key: "component", CanonicalName: "Component", DisplayName: "组件", IsContent: true},
+	{Key: "collection", CanonicalName: "Collection", DisplayName: "合集", IsContent: true},
+	{Key: "file", CanonicalName: "File", DisplayName: "文件", IsContent: true},
+}
+
+var personalChangeTagDefinitions = []personalChangeTag{
+	{Key: "minor", Name: "小修改", Description: "不改变核心语义的小型整理"},
+	{Key: "ai-assisted", Name: "AI 协助", Description: "由 AI 生成或协助完成的变更"},
+	{Key: "imported", Name: "批量导入", Description: "由来源导入管道生成的变更"},
+	{Key: "reverted", Name: "已回滚", Description: "已通过补偿版本撤销的变更"},
+	{Key: "high-risk", Name: "高风险", Description: "需完整人工审核的高风险变更"},
+	{Key: "human-verified", Name: "人工核验", Description: "已由人工复核证据或事实"},
+}
+
+func (s *Service) newPersonalWiki(
+	ownerID uuid.UUID,
+	displayName string,
+) (personalWiki, error) {
+	wikiID, err := s.ids.New()
+	if err != nil {
+		return personalWiki{}, fmt.Errorf("auth: generate wiki id: %w", err)
+	}
+	result := personalWiki{
+		ID: wikiID, OwnerID: ownerID, SiteKey: "user-" + ownerID.String(),
+		Name:       strings.TrimSpace(displayName) + " 的 Wiki",
+		Namespaces: make([]personalNamespace, len(personalNamespaceDefinitions)),
+		Tags:       make([]personalChangeTag, len(personalChangeTagDefinitions)),
+	}
+	result.ComponentID, err = s.ids.New()
+	if err != nil {
+		return personalWiki{}, fmt.Errorf("auth: generate component id: %w", err)
+	}
+	for index, definition := range personalNamespaceDefinitions {
+		namespaceID, err := s.ids.New()
+		if err != nil {
+			return personalWiki{}, fmt.Errorf("auth: generate namespace id: %w", err)
+		}
+		result.Namespaces[index] = definition
+		result.Namespaces[index].ID = namespaceID
+		if definition.Key == "main" {
+			result.MainNamespaceID = namespaceID
+		}
+	}
+	for index, definition := range personalChangeTagDefinitions {
+		tagID, err := s.ids.New()
+		if err != nil {
+			return personalWiki{}, fmt.Errorf("auth: generate change tag id: %w", err)
+		}
+		result.Tags[index] = definition
+		result.Tags[index].ID = tagID
+	}
+	return result, nil
+}
+
+func insertPersonalWiki(
+	ctx context.Context,
+	tx pgx.Tx,
+	wiki personalWiki,
+) error {
+	if _, err := tx.Exec(ctx, `INSERT INTO wiki_site
+		(id,site_key,name,default_language,owner_actor_id)
+		VALUES ($1,$2,$3,'zh-Hans',$4)`,
+		wiki.ID, wiki.SiteKey, wiki.Name, wiki.OwnerID); err != nil {
+		return err
+	}
+	for _, namespace := range wiki.Namespaces {
+		if _, err := tx.Exec(ctx, `INSERT INTO namespace
+			(id,wiki_id,namespace_key,canonical_name,display_name,is_content)
+			VALUES ($1,$2,$3,$4,$5,$6)`,
+			namespace.ID, wiki.ID, namespace.Key, namespace.CanonicalName,
+			namespace.DisplayName, namespace.IsContent); err != nil {
+			return err
+		}
+	}
+	for _, tag := range wiki.Tags {
+		if _, err := tx.Exec(ctx, `INSERT INTO change_tag
+			(id,wiki_id,tag_key,name,description) VALUES ($1,$2,$3,$4,$5)`,
+			tag.ID, wiki.ID, tag.Key, tag.Name, tag.Description); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+func insertPersonalWikiDefaults(
+	ctx context.Context,
+	tx pgx.Tx,
+	wiki personalWiki,
+) error {
+	if _, err := tx.Exec(ctx, `INSERT INTO component
+		(id,wiki_id,component_key,name,created_by)
+		VALUES ($1,$2,'article-infobox','Article information box',$3)`,
+		wiki.ComponentID, wiki.ID, wiki.OwnerID); err != nil {
+		return err
+	}
+	_, err := tx.Exec(ctx, `INSERT INTO component_version
+		(component_id,version,props_schema_json,renderer_ref,status,created_by,published_at)
+		VALUES (
+			$1,1,
+			'{"type":"object","properties":{"title":{"type":"string"},"language":{"type":"string"},"property_keys":{"type":"array","items":{"type":"string"},"uniqueItems":true}},"additionalProperties":false}'::jsonb,
+			'builtin.entity_claim_infobox','published',$2,now()
+		)`, wiki.ComponentID, wiki.OwnerID)
+	return err
 }
 
 func validateRegistration(input RegisterInput) (string, string, string, error) {

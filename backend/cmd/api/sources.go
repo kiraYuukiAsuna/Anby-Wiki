@@ -182,7 +182,8 @@ func (a *SourceAPI) list(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	result, err := a.service.ListSources(
-		r.Context(), r.URL.Query().Get("source_type"), r.URL.Query().Get("q"),
+		r.Context(), wikiIDFromRequest(r),
+		r.URL.Query().Get("source_type"), r.URL.Query().Get("q"),
 		r.URL.Query().Get("cursor"), limit,
 	)
 	if err != nil {
@@ -208,8 +209,9 @@ func (a *SourceAPI) create(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	value, err := a.service.CreateSource(r.Context(), evidence.CreateSourceParams{
-		SourceType: body.SourceType, ExternalResourceID: body.ExternalResourceID,
-		URL: body.URL, AssetID: body.AssetID, Title: body.Title,
+		WikiID: wikiIDFromRequest(r), SourceType: body.SourceType,
+		ExternalResourceID: body.ExternalResourceID,
+		URL:                body.URL, AssetID: body.AssetID, Title: body.Title,
 		Author: body.Author, Publisher: body.Publisher, PublishedAt: body.PublishedAt,
 		Metadata: body.Metadata, ActorID: actorID,
 	})
@@ -225,7 +227,9 @@ func (a *SourceAPI) get(w http.ResponseWriter, r *http.Request) {
 	if !ok {
 		return
 	}
-	value, err := a.service.GetSourceDetail(r.Context(), id)
+	value, err := a.service.GetSourceDetail(
+		r.Context(), wikiIDFromRequest(r), id,
+	)
 	if err != nil {
 		sourceError(w, r, err)
 		return
@@ -254,7 +258,8 @@ func (a *SourceAPI) versions(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	result, err := a.service.ListSourceVersions(
-		r.Context(), id, r.URL.Query().Get("cursor"), limit,
+		r.Context(), wikiIDFromRequest(r), id,
+		r.URL.Query().Get("cursor"), limit,
 	)
 	if err != nil {
 		sourceError(w, r, err)
@@ -279,7 +284,8 @@ func (a *SourceAPI) chunks(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	result, err := a.service.ListSourceChunksPage(
-		r.Context(), id, r.URL.Query().Get("cursor"), limit,
+		r.Context(), wikiIDFromRequest(r), id,
+		r.URL.Query().Get("cursor"), limit,
 	)
 	if err != nil {
 		sourceError(w, r, err)
@@ -332,8 +338,9 @@ func (a *SourceAPI) createCitation(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 	value, err := a.service.CreateCitation(r.Context(), evidence.CreateCitationParams{
-		SourceVersionID: body.SourceVersionID, SourceChunkID: body.SourceChunkID,
-		Locator: locator, Quotation: body.Quotation, ActorID: actorID,
+		WikiID: wikiIDFromRequest(r), SourceVersionID: body.SourceVersionID,
+		SourceChunkID: body.SourceChunkID,
+		Locator:       locator, Quotation: body.Quotation, ActorID: actorID,
 	})
 	if err != nil {
 		sourceError(w, r, err)

@@ -116,7 +116,7 @@ func main() {
 		logger.Warn("production 未启用限流，API 暴露在请求洪峰下")
 	}
 
-	// 读写 API 需要数据库：连接、装配领域服务并解析缓存默认站点 ID。
+	// 读写 API 需要数据库：连接并装配领域服务；Wiki 由认证请求决定。
 	// 未配置 DATABASE_URL 时降级为仅探针端点（与 /readyz 的 not_configured 语义一致）。
 	var writeAPI *WriteAPI
 	var readAPI *ReadAPI
@@ -188,7 +188,6 @@ func main() {
 			collaborationService,
 			governance.NewAuthorizationService(pool),
 			collaborationHub,
-			writeAPI.wikiID,
 			cfg.CollaborationOriginPatterns,
 		)
 		collectionAPI = NewCollectionAPI(
@@ -196,14 +195,12 @@ func main() {
 				collection.NewRepository(pool), page.NewRepository(pool),
 				db.NewTxManager(pool), id.NewGenerator(),
 			),
-			writeAPI.wikiID,
 		)
 		datasetAPI = NewDatasetAPI(
 			dataset.NewService(
 				dataset.NewRepository(pool), page.NewRepository(pool),
 				db.NewTxManager(pool), id.NewGenerator(),
 			),
-			writeAPI.wikiID,
 		)
 		componentAPI = NewComponentAPI(
 			component.NewService(
@@ -228,7 +225,11 @@ func main() {
 			kernelProvider, kernelErr := ai.NewSemanticKernelProvider(
 				cfg.AIKernelURL, cfg.AIKernelInternalToken,
 				ai.SemanticKernelConfigResolverFunc(func(ctx context.Context) (*ai.SemanticKernelConfig, error) {
-					runtime, err := aiConfigService.Runtime(ctx, writeAPI.wikiID)
+					wikiID, ok := ai.WikiIDFromContext(ctx)
+					if !ok {
+						return nil, errors.New("ai: Wiki 上下文缺失")
+					}
+					runtime, err := aiConfigService.Runtime(ctx, wikiID)
 					if err != nil {
 						return nil, err
 					}
@@ -244,7 +245,7 @@ func main() {
 				logger.Error("装配 Semantic Kernel 客户端失败", slog.Any("error", kernelErr))
 				os.Exit(1)
 			}
-			aiConfigAPI = NewAIConfigAPI(aiConfigService, kernelProvider, writeAPI.wikiID)
+			aiConfigAPI = NewAIConfigAPI(aiConfigService, kernelProvider)
 		}
 		governanceAPI.WithWorkingDocumentMerge(
 			governance.NewMergeWorkingDocumentService(
@@ -264,15 +265,10 @@ func main() {
 		)
 		if objectStore != nil {
 			pageRepo := page.NewRepository(pool)
-			wikiID, wikiErr := pageRepo.GetWikiIDBySiteKey(context.Background(), nil, "default")
-			if wikiErr != nil {
-				logger.Error("装配上传导入失败", slog.Any("error", wikiErr))
-				os.Exit(1)
-			}
 			evidenceService := evidence.NewService(evidence.NewRepository(pool), pageRepo, objectStore,
 				cfg.Env, db.NewTxManager(pool), id.NewGenerator())
-			importAPI.WithUploads(evidenceService, wikiID, cfg.ImportUploadMaxConcurrency)
-			assetAPI = NewAssetAPI(evidenceService, wikiID)
+			importAPI.WithUploads(evidenceService, cfg.ImportUploadMaxConcurrency)
+			assetAPI = NewAssetAPI(evidenceService)
 		}
 	}
 
@@ -310,17 +306,12 @@ func main() {
 	logger.Info("api 已退出")
 }
 
-// assembleAPIs 在连接池上装配 Page、Knowledge、Evidence 领域服务与 HTTP API，并解析缓存默认站点
-// （种子里 site_key='default'）的 ID——M1 单站点，所有 API 都落在该站点。
+// assembleAPIs 在连接池上装配领域服务。Wiki 作用域只从已认证请求读取。
 func assembleAPIs(pool *pgxpool.Pool, searchBackends ...wikisearch.SearchAdapter) (*WriteAPI, *ReadAPI, *HistoryAPI, *ProjectionAPI, *SearchAPI, *KnowledgeReadAPI, *GovernanceAPI, error) {
 	repo := page.NewRepository(pool)
 	txm := db.NewTxManager(pool)
 	ids := id.NewGenerator()
 	svc := page.NewService(repo, txm, ids)
-	wikiID, err := repo.GetWikiIDBySiteKey(context.Background(), nil, "default")
-	if err != nil {
-		return nil, nil, nil, nil, nil, nil, nil, fmt.Errorf("解析默认站点失败: %w", err)
-	}
 	evidenceRepo := evidence.NewRepository(pool)
 	evidenceService := evidence.NewService(evidenceRepo, repo, nil, "development", txm, ids)
 	knowledgeRepo := knowledge.NewRepository(pool)
@@ -356,15 +347,13 @@ func assembleAPIs(pool *pgxpool.Pool, searchBackends ...wikisearch.SearchAdapter
 		governance.NewPreviewService(governanceRepo, svc, pagePatch), reviewService,
 		applyService, rollbackService).WithBulkReview(
 		governance.NewBulkReviewService(governanceRepo, applyService, txm, ids).
-			WithAuthorization(authorization).
-			WithWikiID(wikiID),
+			WithAuthorization(authorization),
 	).WithAudit(governance.NewAuditService(
-		governanceRepo, authorization, txm, ids, wikiID,
+		governanceRepo, authorization, txm, ids,
 	)).WithAuthorization(authorization).WithAITrust(aiTrustService).WithProtection(
 		governance.NewProtectionService(
 			governanceRepo, authorization, txm, ids,
 		),
-		wikiID,
 	).WithUserAdmin(
 		governance.NewUserAdminService(
 			governanceRepo, authorization, txm, ids,
@@ -374,20 +363,20 @@ func assembleAPIs(pool *pgxpool.Pool, searchBackends ...wikisearch.SearchAdapter
 	if len(searchBackends) > 0 && searchBackends[0] != nil {
 		searchBackend = searchBackends[0]
 	}
-	searchAPI := NewSearchAPI(searchBackend, wikiID)
+	searchAPI := NewSearchAPI(searchBackend)
 	if _, postgres := searchBackend.(*wikisearch.PostgresAdapter); postgres {
 		searchAPI.WithTitleAliasFallback(wikisearch.NewPageAdapter(svc))
 	}
-	return NewWriteAPI(svc, wikiID).
+	return NewWriteAPI(svc).
 			WithAuthorization(authorization).
 			WithButtonActions(pageaction.NewService(svc)).
 			WithCollaborationPublisher(collaboration.NewPublisher(txm, ids, svc)),
-		NewReadAPI(svc, wikiID, projection.NewQueries(pool)).
+		NewReadAPI(svc, projection.NewQueries(pool)).
 			WithDynamicRenderer(projection.NewDynamicHTMLRenderer(pool)),
-		NewHistoryAPI(svc, wikiID),
-		NewProjectionAPI(svc, projection.NewQueries(pool), wikiID),
+		NewHistoryAPI(svc),
+		NewProjectionAPI(svc, projection.NewQueries(pool)),
 		searchAPI,
-		NewKnowledgeReadAPI(knowledgeService, evidenceService, wikiID).
+		NewKnowledgeReadAPI(knowledgeService, evidenceService).
 			WithMergeAuthorization(authorization).
 			WithFactConsistency(factConsistency).
 			WithEntityGraph(projection.NewEntityGraphService(pool)),

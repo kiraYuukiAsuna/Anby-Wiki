@@ -3,11 +3,29 @@
 主要业务链路与静态质量门禁已经闭环；以下项目仍阻塞生产发布或“全部设计能力已
 完成真实联调”的结论。
 
+## 0. 私人 Wiki Schema 尚未部署
+
+### 0.1 现状
+
+- 代码已从统一 Wiki 改为每账号一个私人 Wiki，并完成 API、Worker、OpenAPI、Web
+  登录门禁和跨 Wiki UUID 隔离改造。
+- 该版本直接改写预发布初始化 Schema，不兼容生产现有数据库。旧页面、账号、Session、
+  CLI Token、AI 配置和投影按需求不迁移，也不能在现有 migration version 1 上重放。
+- 当前生产仍运行旧统一 Wiki 数据；本轮没有执行部署或删除生产数据。
+
+### 0.2 关闭条件
+
+1. 停止生产写入并完成 PostgreSQL、对象存储和部署配置备份。
+2. 删除并重建 PostgreSQL 数据库，从空库完成 `up → down → up` 验证后保留最终 up。
+3. 重新生成引导账号凭据，注册所需账号，并分别配置每个 Wiki 的 AI 设置与 CLI Token。
+4. 用两个账号验证 Page、Component、Source、Dataset、Governance 和搜索互不可见，
+   未登录 Web 不渲染任何 Wiki 内容；随后完成 Doctor、HTTPS 和响应式浏览器回归。
+
 ## 1. 备份恢复与人工可访问性尚未在发布环境验收
 
 ### 1.1 现状
 
-- 本轮已在隔离环境启动 PostgreSQL、Redis、MinIO、Meilisearch、API、Linux Worker
+- 此前版本已在隔离环境启动 PostgreSQL、Redis、MinIO、Meilisearch、API、Linux Worker
   与 Web，并完成最新 Schema `up → down → up`、Doctor、真实数据联调、投影重建、
   dead 回放、Revision 冷归档回源和桌面/移动端浏览器回归。
 - 远端生产机已对提交 `0196ec6` 完成 Compose config、六个 OCI target 顺序构建、
@@ -36,8 +54,8 @@
 
 ### 2.1 现状
 
-- 已提供用户名/邮箱唯一、Argon2id 密码哈希、独立 Actor、服务端 Session、
-  注册/登录/退出、角色授予/撤销和注册账号删除即时生效。
+- 已提供用户名/邮箱唯一、Argon2id 密码哈希、每账号私人 Wiki、服务端 Session
+  及注册/登录/退出；账号恢复和私人 Wiki 转移尚未实现。
 - 当前没有邮件发送基础设施，尚未验证邮箱所有权，也不提供忘记密码流程。
 - 尚未提供 MFA、备用恢复码、登录设备列表与全部会话吊销。
 
@@ -46,7 +64,7 @@
 1. 接入邮件供应商，实现邮箱验证、验证状态与重发限流。
 2. 实现一次性、短时效、只存哈希的密码重置令牌，并在重置后吊销已有会话。
 3. 提供 TOTP 或 WebAuthn MFA、恢复码和登录设备/会话管理。
-4. 在正式域名验证注册关闭、登录、退出、角色授予/撤销和注册账号删除。
+4. 在正式域名验证注册关闭、登录、退出、私人 Wiki 隔离和账号停用。
 
 ## 3. TLS/HSTS 已终结，显式 CSRF 与证书恢复演练尚未完成
 
@@ -226,7 +244,7 @@
   API/Worker/Web/AI Kernel 滚动替换；缺失的 `WEB_BIND/WEB_PORT` 已持久化回部署
   环境文件，正式域名和 `127.0.0.1:4444` 绑定验证通过。
 - 149 个 OpenAPI operation 的动态审计：隔离全栈已逐个命中 handler，并完成核心、
-  治理、BulkReview、Import/AI 配置与双用户协作成功工作流；故意不可达模型地址按
+  治理、BulkReview、Import/AI 配置与双会话协作成功工作流；故意不可达模型地址按
   契约返回 502，其余没有非预期 5xx。
 - `create_entity` Schema 合法 payload 曾因严格解码结构缺少 `language/description`
   在 Apply 预检误报 422；运行时结构与 Schema 已对齐并增加回归测试。

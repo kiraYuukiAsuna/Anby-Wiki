@@ -31,6 +31,7 @@ func sha256Hex(s string) string {
 // ExternalResourceID（必须已存在）；两者皆空则先只登记元数据。
 // Author/Publisher 空白归 nil；Metadata 空落库 '{}'，非空必须是 JSON object。
 type CreateSourceParams struct {
+	WikiID             uuid.UUID
 	SourceType         string
 	ExternalResourceID *uuid.UUID
 	URL                string
@@ -47,7 +48,9 @@ type CreateSourceParams struct {
 // 校验链：Actor 准入 → source_type 枚举 → title 非空 → 关联对象存在性
 // （URL 自动 upsert / ExternalResourceID 存在 / AssetID 存在且 active）。
 func (s *Service) CreateSource(ctx context.Context, params CreateSourceParams) (*Source, error) {
-	if err := s.pages.CheckWriteActor(ctx, nil, params.ActorID); err != nil {
+	if err := s.pages.CheckWriteActorInWiki(
+		ctx, nil, params.ActorID, params.WikiID,
+	); err != nil {
 		return nil, err
 	}
 	if !IsValidSourceType(params.SourceType) {
@@ -72,8 +75,12 @@ func (s *Service) CreateSource(ctx context.Context, params CreateSourceParams) (
 		resourceID = params.ExternalResourceID
 	}
 	if params.AssetID != nil {
-		if _, err := s.repo.GetActiveAssetByID(ctx, nil, *params.AssetID); err != nil {
+		asset, err := s.repo.GetActiveAssetByID(ctx, nil, *params.AssetID)
+		if err != nil {
 			return nil, err
+		}
+		if asset.WikiID != params.WikiID {
+			return nil, ErrAssetNotFound
 		}
 	}
 
@@ -100,6 +107,7 @@ func (s *Service) CreateSource(ctx context.Context, params CreateSourceParams) (
 	}
 	src := &Source{
 		ID:                 sourceID,
+		WikiID:             params.WikiID,
 		SourceType:         params.SourceType,
 		ExternalResourceID: resourceID,
 		AssetID:            params.AssetID,
@@ -128,6 +136,7 @@ type ChunkInput struct {
 // AddSourceVersionParams 登记来源版本的入参。
 // VersionHash 是客户端内容哈希（如抓取内容的 SHA-256）。
 type AddSourceVersionParams struct {
+	WikiID            uuid.UUID
 	SourceID          uuid.UUID
 	VersionHash       string
 	RawAssetID        *uuid.UUID
@@ -174,7 +183,9 @@ func (s *Service) AddSourceVersion(ctx context.Context, params AddSourceVersionP
 	if params.FetchedAt.IsZero() {
 		return nil, fmt.Errorf("%w: fetched_at 为零值", ErrInvalidSourceInput)
 	}
-	if _, err := s.repo.GetSourceByID(ctx, nil, params.SourceID); err != nil {
+	if _, err := s.repo.GetSourceByID(
+		ctx, nil, params.WikiID, params.SourceID,
+	); err != nil {
 		return nil, err
 	}
 	if params.RawAssetID != nil {
@@ -326,12 +337,15 @@ func validSHA256(value string) bool {
 
 // LoadSourceVersionContent loads an already persisted parse artifact. It is a
 // read-only domain entry point so callers do not reach into Evidence tables.
-func (s *Service) LoadSourceVersionContent(ctx context.Context, sourceVersionID uuid.UUID) (*SourceVersionContent, error) {
+func (s *Service) LoadSourceVersionContent(
+	ctx context.Context,
+	wikiID, sourceVersionID uuid.UUID,
+) (*SourceVersionContent, error) {
 	version, err := s.repo.GetSourceVersionByID(ctx, nil, sourceVersionID)
 	if err != nil {
 		return nil, err
 	}
-	source, err := s.repo.GetSourceByID(ctx, nil, version.SourceID)
+	source, err := s.repo.GetSourceByID(ctx, nil, wikiID, version.SourceID)
 	if err != nil {
 		return nil, err
 	}
@@ -346,6 +360,7 @@ func (s *Service) LoadSourceVersionContent(ctx context.Context, sourceVersionID 
 // SourceChunkID 可选但必须属于 SourceVersionID；Locator 可选（与 chunk locator
 // 叠加的更细粒度定位）；Quotation 可选（空串视为未提供）。
 type CreateCitationParams struct {
+	WikiID          uuid.UUID
 	SourceVersionID uuid.UUID
 	SourceChunkID   *uuid.UUID
 	Locator         *Locator
@@ -363,10 +378,18 @@ type CreateCitationParams struct {
 // quotation 子串校验是严格拒绝而非警告：citation 是权威证据数据，
 // 无法在定位文本中复核的引文不应落库（宽松警告会把无法核验的引文变成权威数据）。
 func (s *Service) CreateCitation(ctx context.Context, params CreateCitationParams) (*Citation, error) {
-	if err := s.pages.CheckWriteActor(ctx, nil, params.ActorID); err != nil {
+	if err := s.pages.CheckWriteActorInWiki(
+		ctx, nil, params.ActorID, params.WikiID,
+	); err != nil {
 		return nil, err
 	}
-	if _, err := s.repo.GetSourceVersionByID(ctx, nil, params.SourceVersionID); err != nil {
+	version, err := s.repo.GetSourceVersionByID(ctx, nil, params.SourceVersionID)
+	if err != nil {
+		return nil, err
+	}
+	if _, err := s.repo.GetSourceByID(
+		ctx, nil, params.WikiID, version.SourceID,
+	); err != nil {
 		return nil, err
 	}
 	var chunk *SourceChunk
@@ -427,7 +450,10 @@ func (s *Service) CreateCitation(ctx context.Context, params CreateCitationParam
 
 // GetCitationDetail 沿不可变 Citation → SourceVersion → Source（→ Chunk/URL）
 // 读取完整定位链，供 API/UI 只读展示；不写任何权威或投影状态。
-func (s *Service) GetCitationDetail(ctx context.Context, citationID uuid.UUID) (*CitationDetail, error) {
+func (s *Service) GetCitationDetail(
+	ctx context.Context,
+	wikiID, citationID uuid.UUID,
+) (*CitationDetail, error) {
 	citation, err := s.repo.GetCitationByID(ctx, nil, citationID)
 	if err != nil {
 		return nil, err
@@ -436,7 +462,7 @@ func (s *Service) GetCitationDetail(ctx context.Context, citationID uuid.UUID) (
 	if err != nil {
 		return nil, err
 	}
-	source, err := s.repo.GetSourceByID(ctx, nil, version.SourceID)
+	source, err := s.repo.GetSourceByID(ctx, nil, wikiID, version.SourceID)
 	if err != nil {
 		return nil, err
 	}
