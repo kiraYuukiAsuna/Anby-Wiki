@@ -3,24 +3,6 @@
 主要业务链路与静态质量门禁已经闭环；以下项目仍阻塞生产发布或“全部设计能力已
 完成真实联调”的结论。
 
-## 0. 私人 Wiki Schema 尚未部署
-
-### 0.1 现状
-
-- 代码已从统一 Wiki 改为每账号一个私人 Wiki，并完成 API、Worker、OpenAPI、Web
-  登录门禁和跨 Wiki UUID 隔离改造。
-- 该版本直接改写预发布初始化 Schema，不兼容生产现有数据库。旧页面、账号、Session、
-  CLI Token、AI 配置和投影按需求不迁移，也不能在现有 migration version 1 上重放。
-- 当前生产仍运行旧统一 Wiki 数据；本轮没有执行部署或删除生产数据。
-
-### 0.2 关闭条件
-
-1. 停止生产写入并完成 PostgreSQL、对象存储和部署配置备份。
-2. 删除并重建 PostgreSQL 数据库，从空库完成 `up → down → up` 验证后保留最终 up。
-3. 重新生成引导账号凭据，注册所需账号，并分别配置每个 Wiki 的 AI 设置与 CLI Token。
-4. 用两个账号验证 Page、Component、Source、Dataset、Governance 和搜索互不可见，
-   未登录 Web 不渲染任何 Wiki 内容；随后完成 Doctor、HTTPS 和响应式浏览器回归。
-
 ## 1. 备份恢复与人工可访问性尚未在发布环境验收
 
 ### 1.1 现状
@@ -224,6 +206,12 @@
 
 ## 本轮已关闭
 
+- 私人 Wiki 多用户隔离：应用 release `962b8198425a` 已在生产从空库迁移并部署，
+  旧 PostgreSQL、对象存储、搜索索引与 Redis 数据已删除。双账号实测确认 Wiki 与
+  主 Namespace ID 不同、页面目录和内置 Component 隔离、外部 Page ID 返回 404、
+  CLI Token 继承原 Wiki；匿名 API 返回 401，Web 根路径跳转登录，注册关闭后返回
+  403。最终库仅保留一个引导账号私人 Wiki、七个 Namespace、一个内置 Component
+  和六个 ChangeTag，无 Page/Source/Import/Proposal/CLI Token 或活动 Session。
 - Agent CLI：Go CLI 已通过嵌入 OpenAPI 覆盖全部 HTTP operation，并单独覆盖 Yjs
   WebSocket；输入输出统一 JSON，path/query/header/body/response 有契约校验。浏览器
   后台可签发一次性授权码、查看和撤销 SHA-256 存储的 Bearer Token，权限实时继承账号。

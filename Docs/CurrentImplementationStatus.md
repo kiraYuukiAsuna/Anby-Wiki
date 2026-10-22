@@ -40,8 +40,11 @@ AI 配置和双会话协作 E2E。“实现完成”仍不等于“生产发布�
 - Web 在无 Session Cookie 时先跳转登录页，失效会话只显示登录提示，不渲染 Wiki
   页眉、搜索、导航或正文。登录后页眉展示当前 Wiki 名称，人工 Proposal 模板使用
   Session 返回的真实 Wiki/主 Namespace ID。
-- 本变更按预发布策略直接改写唯一初始化 Schema，不迁移旧统一 Wiki 数据。生产部署
-  必须先备份再重建空库，并重新注册账号、签发 CLI Token、配置每个 Wiki 的 AI 设置。
+- 应用 release `962b8198425a` 已在生产完成旧数据清理、空库迁移、管理员私人 Wiki
+  重建和 HTTPS 发布。双账号生产实测覆盖 Wiki/主 Namespace、页面目录、Page ID、
+  内置 Component 与 CLI Token 隔离；最终清除测试账号和内容，只保留一个引导账号
+  私人 Wiki。Migration gate 为 `current=1 expected=1 dirty=false`，Doctor 为
+  0 issue，八个常驻容器 healthy，API/Worker 最近日志无 error/panic/fatal。
 
 ## 2026-10-08 宿主机部署入口
 
