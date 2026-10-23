@@ -294,7 +294,7 @@ AI 配置和双会话协作 E2E。“实现完成”仍不等于“生产发布�
   保留。
 - Job 显式保存 current_plan_id 与 confirmed_plan_id。手工确认必须提交精确 plan_id，
   防止并发重新规划时确认错误版本；重复确认同一版本保持幂等。
-- 管理员可在 `/admin/ai` 控制是否自动确认通过质量门禁的中间计划，默认开启。该开关
+- 管理员可在 `/account` 个人中心控制是否自动确认通过质量门禁的中间计划，默认开启。该开关
   不绕过质量门禁，也不批准或应用最终 Proposal；最终内容仍进入治理审核。
 - Web 支持智能多页面、强制创建单页和更新指定页面，任务详情展示五维质量、Run 历史
   和 Plan 版本摘要，并可在同一 Job 内修改规划输入后重新排队。
@@ -438,7 +438,7 @@ outlines。References/Related 是 Current Revision
 - `/imports` 及每个 Job 的阶段、运行记录和进度详情；
 - `/governance` 下的 Proposal 创建/详情、审核队列、待原子应用队列、批量审核、审计活动、页面保护、
   AI Trust、事实一致性与 Revision 存储；
-- `/admin/ai` 的加密 Provider 密钥、模型、输出模式、超时、重试和连通性测试；
+- `/account` 个人中心的加密 Provider 密钥、模型、输出模式、超时、重试和连通性测试；
 - `/explore` 的搜索工作台、反向链接和 `/explore/graph` 图谱工作台。
 
 服务端数据统一通过 `apps/web/lib/api.ts` 创建的生成客户端访问，SWR 是唯一服务端

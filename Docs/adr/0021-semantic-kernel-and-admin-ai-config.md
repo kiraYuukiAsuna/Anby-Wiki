@@ -23,8 +23,8 @@ Microsoft Semantic Kernel 官方实现支持 Python、.NET 和 Java，不提供 
    Proposal 生成和所有权威写入；Sidecar 不能发布 Revision 或写 Knowledge。
 3. Go 与 Sidecar 使用版本化内网 JSON 协议和共享令牌。每次请求由 Go 短暂传入解密后的
    Provider 配置；Sidecar 不持久化配置，也不记录 Prompt、来源、响应或密钥。
-4. Provider、Base URL、模型、响应格式、模型最大输入 Token、来源 Chunk 字符数、超时、尝试次数和 API Key 改由管理员中心
-   `/admin/ai` 管理。配置版本化存入现有 `wiki_site.settings_json.ai_runtime`，不新增
+4. Provider、Base URL、模型、响应格式、模型最大输入 Token、来源 Chunk 字符数、超时、尝试次数和 API Key 改由个人中心
+   `/account` 管理。配置版本化存入现有 `wiki_site.settings_json.ai_runtime`，不新增
    迁移；API Key 使用 AES-256-GCM 加密，公开接口只返回是否已配置。
 5. 环境变量只保留基础设施机密：`AI_CONFIG_MASTER_KEY`、
    `AI_KERNEL_INTERNAL_TOKEN` 和内网 `AI_KERNEL_URL`。前两项仍由仓库外 `0600`

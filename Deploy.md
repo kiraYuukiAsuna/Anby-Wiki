@@ -158,7 +158,7 @@ Anby-Wiki/
 引导账号由脚本通过本机 API 创建，同时获得自己的私人 Wiki；验证管理员权限后脚本会
 关闭注册。密码只保存在 `Secret/bootstrap-admin.json`，不会出现在日志中。新增用户
 需受控重新开启注册，每个用户的 AI 供应商、模型和 Key 分别在其登录后的
-`/admin/ai` 配置。
+`/account` 个人中心配置。
 
 公网入口为 `https://anbywiki.momiya.cloud/`。宿主机默认把 Web 容器 `3000`
 映射到 `127.0.0.1:60019`，把 API 容器 `8080` 映射到

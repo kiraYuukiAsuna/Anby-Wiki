@@ -1970,7 +1970,7 @@ Web 当前提供三种常用模式：
 同一个 ImportJob 可以拥有多个不可变 ImportPlan 版本。重新规划只更新该 Job 的规划输入，
 新增 ImportRun 和 ImportPlan，不创建子 Job；历史版本通过 `revision` 与
 `parent_plan_id` 保留。Job 同时保存 `current_plan_id` 与 `confirmed_plan_id`，手工确认
-必须提交精确的 plan ID，避免并发重新规划时确认错误版本。管理员可以在 `/admin/ai`
+必须提交精确的 plan ID，避免并发重新规划时确认错误版本。管理员可以在 `/account` 个人中心
 开启“通过质量门禁后自动确认中间计划”，但它不绕过质量门禁，也不会自动批准或应用最终
 Proposal。
 

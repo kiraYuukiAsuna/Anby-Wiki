@@ -172,7 +172,9 @@ export function AccountCenter() {
           await mutate(AUTH_SESSION_KEY);
         }}
       />
-      <AIConfigWorkspace mode="account" />
+      <div id="document-understanding-model">
+        <AIConfigWorkspace mode="account" />
+      </div>
     </div>
   );
 }

@@ -44,7 +44,7 @@ Compose 以同一个 `MEILI_MASTER_KEY` 启动 Meilisearch 并派生应用的内
 `MEILI_API_KEY`；生产默认 `SEARCH_BACKEND=meilisearch`，不得保留模板占位值。
 首次部署时保持 `AUTH_REGISTRATION_ENABLED=true`，从 `/register` 创建首个管理员；
 完成所需账号初始化后建议改为 `false` 并重新部署。
-AI Provider、地址、模型和密钥在 `/admin/ai` 管理。部署文件只保存 32 字节 base64
+AI Provider、地址、模型和密钥在 `/account` 个人中心管理。部署文件只保存 32 字节 base64
 `AI_CONFIG_MASTER_KEY` 和 `AI_KERNEL_INTERNAL_TOKEN`；前者加密数据库中的 Provider
 密钥，后者只验证私网 Sidecar 请求。
 
