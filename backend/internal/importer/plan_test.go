@@ -881,6 +881,34 @@ func TestRefineImportPlanRemovesRoutesEmptiedByGroundingFilter(t *testing.T) {
 	}
 }
 
+func TestRefineImportPlanPromotesLeadAndDropsThinCreateRoutes(t *testing.T) {
+	evidenceItem := []CandidateEvidence{{
+		ChunkID: uuid.New(), Quotation: "dl-librescore can download scores and provides installation options.", CharStart: 0, CharEnd: 68,
+	}}
+	plan := &ImportPlan{Profile: SourceProfile{Useful: true}, Routes: []PageRoute{
+		{Action: RouteCreate, Title: "dl-librescore", Blocks: []PlannedBlock{
+			{Type: string(ast.BlockQuote), Mode: BlockAppend, Text: "DISCLAIMER: This is not an officially endorsed product.", Evidence: evidenceItem},
+			{Type: string(ast.BlockHeading), Mode: BlockAppend, Text: "Installation", Level: 2, Evidence: evidenceItem},
+			{Type: string(ast.BlockParagraph), Mode: BlockAppend, Text: "dl-librescore can download scores and provides installation options.", Evidence: evidenceItem},
+			{Type: string(ast.BlockOrderedList), Mode: BlockAppend, Items: []string{
+				"Install the userscript.", "Use the command-line tool.",
+			}, Evidence: evidenceItem},
+		}},
+		{Action: RouteCreate, Title: "Webmscore", Blocks: []PlannedBlock{
+			{Type: string(ast.BlockHeading), Mode: BlockAppend, Text: "Usage", Level: 2, Evidence: evidenceItem},
+			{Type: string(ast.BlockOrderedList), Mode: BlockAppend, Items: []string{"Open the website."}, Evidence: evidenceItem},
+		}},
+	}}
+
+	refineImportPlan(plan)
+	if len(plan.Routes) != 1 || plan.Routes[0].Title != "dl-librescore" {
+		t.Fatalf("unexpected routes: %#v", plan.Routes)
+	}
+	if got := plan.Routes[0].Blocks[0].Type; got != string(ast.BlockParagraph) {
+		t.Fatalf("first block type=%q, want paragraph", got)
+	}
+}
+
 func TestExplicitPlanBlockLimitsConsolidateCrossWindowJSONUpdate(t *testing.T) {
 	pageID := uuid.New()
 	evidenceItem := func(quotation string) []CandidateEvidence {

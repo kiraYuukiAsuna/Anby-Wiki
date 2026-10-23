@@ -37,12 +37,58 @@ func refineImportPlan(plan *ImportPlan) {
 			continue
 		}
 		route.Blocks = refinePlannedBlocks(route.Blocks)
+		if route.Action == RouteCreate {
+			route.Blocks = promoteLeadParagraph(route.Blocks)
+		}
 		if len(route.Blocks) > 0 {
 			routes = append(routes, route)
 		}
 	}
-	plan.Routes = routes
+	plan.Routes = removeThinCreateRoutes(routes)
 	normalizeImportPlanCollections(plan)
+}
+
+func promoteLeadParagraph(blocks []PlannedBlock) []PlannedBlock {
+	if len(blocks) == 0 || blocks[0].Type == string(ast.BlockParagraph) {
+		return blocks
+	}
+	for index := 1; index < len(blocks); index++ {
+		if blocks[index].Type != string(ast.BlockParagraph) {
+			continue
+		}
+		result := make([]PlannedBlock, 0, len(blocks))
+		result = append(result, blocks[index])
+		result = append(result, blocks[:index]...)
+		result = append(result, blocks[index+1:]...)
+		return result
+	}
+	return blocks
+}
+
+func removeThinCreateRoutes(routes []PageRoute) []PageRoute {
+	actionable := actionablePageRouteCount(routes)
+	if actionable <= 1 {
+		return routes
+	}
+	result := make([]PageRoute, 0, len(routes))
+	for _, route := range routes {
+		if route.Action != RouteCreate || !thinCreateRoute(route) {
+			result = append(result, route)
+		}
+	}
+	return result
+}
+
+func thinCreateRoute(route PageRoute) bool {
+	contentBlocks, contentRunes := 0, 0
+	for _, block := range route.Blocks {
+		if block.Type == string(ast.BlockHeading) {
+			continue
+		}
+		contentBlocks++
+		contentRunes += utf8.RuneCountInString(plannedBlockText(block))
+	}
+	return contentBlocks < 2 && contentRunes < 160
 }
 
 func removeWeaklyGroundedPlanBlocks(plan *ImportPlan) int {
