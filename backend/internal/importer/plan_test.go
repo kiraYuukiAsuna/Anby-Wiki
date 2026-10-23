@@ -855,6 +855,32 @@ func TestRefineImportPlanRemovesBatchStitchingArtifacts(t *testing.T) {
 	}
 }
 
+func TestRefineImportPlanRemovesRoutesEmptiedByGroundingFilter(t *testing.T) {
+	chunkID := uuid.New()
+	groundedEvidence := []CandidateEvidence{{
+		ChunkID: chunkID, Quotation: "RFC 7523 defines JWT assertion processing.", CharStart: 0, CharEnd: 43,
+	}}
+	weakEvidence := []CandidateEvidence{{
+		ChunkID: chunkID, Quotation: "A tool name appears in passing.", CharStart: 0, CharEnd: 30,
+	}}
+	plan := &ImportPlan{Profile: SourceProfile{Useful: true}, Routes: []PageRoute{
+		{Action: RouteCreate, Title: "RFC 7523", Blocks: []PlannedBlock{{
+			Type: string(ast.BlockParagraph), Mode: BlockAppend,
+			Text: "RFC 7523 defines JWT assertion processing.", Evidence: groundedEvidence,
+		}}},
+		{Action: RouteCreate, Title: "Passing mention", Blocks: []PlannedBlock{{
+			Type: string(ast.BlockParagraph), Mode: BlockAppend,
+			Text: "Passing mention should not become an empty page.", Evidence: weakEvidence,
+		}}},
+	}}
+
+	removeWeaklyGroundedPlanBlocks(plan)
+	refineImportPlan(plan)
+	if len(plan.Routes) != 1 || plan.Routes[0].Title != "RFC 7523" {
+		t.Fatalf("unexpected routes after final cleanup: %#v", plan.Routes)
+	}
+}
+
 func TestExplicitPlanBlockLimitsConsolidateCrossWindowJSONUpdate(t *testing.T) {
 	pageID := uuid.New()
 	evidenceItem := func(quotation string) []CandidateEvidence {

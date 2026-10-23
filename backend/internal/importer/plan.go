@@ -316,6 +316,10 @@ func (p *PagePlanner) Plan(ctx context.Context, params PlanParams) (*PlanResult,
 	ensurePlanStructuredBlocks(plan, params.Chunks)
 	applyExplicitPlanBlockLimits(plan, params.Instructions)
 	removeWeaklyGroundedPlanBlocks(plan)
+	refineImportPlan(plan)
+	if plan.Profile.Useful && actionablePageRouteCount(plan.Routes) == 0 {
+		return nil, ErrNoPagePlan
+	}
 	fidelity = min(fidelity, constrainedPlanInstructionCoverage(plan, params.Instructions))
 	fidelity = min(fidelity, preformattedPlanCoverage(plan, params.Chunks, params.Instructions))
 	threshold := params.QualityThreshold
