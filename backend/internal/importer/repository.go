@@ -97,11 +97,11 @@ func (r *Repository) QueuedAIWikiIDs(ctx context.Context, limit int) ([]uuid.UUI
 		limit = 16
 	}
 	rows, err := r.pool.Query(ctx, `SELECT wiki_id FROM (
-			SELECT wiki_id, min(created_at) AS first_created_at, min(id) AS first_id
+			SELECT DISTINCT ON (wiki_id) wiki_id, created_at AS first_created_at, id AS first_id
 			FROM import_job
 			WHERE status='queued' AND job_type='source_import'
 			  AND COALESCE(config_json->>'ingestion_mode',$1)<>$2
-			GROUP BY wiki_id
+			ORDER BY wiki_id, created_at, id
 		) queued
 		ORDER BY first_created_at,first_id LIMIT $3`,
 		IngestionModeWiki, IngestionModeSourceOnly, limit)
