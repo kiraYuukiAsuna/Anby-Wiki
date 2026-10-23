@@ -1,7 +1,8 @@
-import { NextResponse, type NextRequest } from "next/server";
+import { NextResponse } from "next/server";
 
-export function GET(request: NextRequest) {
-  return NextResponse.redirect(
-    new URL("/account#document-understanding-model", request.url),
-  );
+export function GET() {
+  return new NextResponse(null, {
+    status: 307,
+    headers: { Location: "/account#document-understanding-model" },
+  });
 }
