@@ -67,7 +67,8 @@ production_compose up -d --no-deps --wait --wait-timeout 720 api worker
 sh "$ROOT/scripts/enable-tls.sh" </dev/null
 sh "$ROOT/scripts/smoke-production.sh" </dev/null
 printf '%s\n' "$release" > "$ROOT/Secret/current-release"
-if ! sh "$ROOT/scripts/cleanup-production.sh"; then
-  echo 'Deployment succeeded, but production cleanup reported an error.' >&2
-fi
+# Cleanup runs only after the release is accepted. A cleanup failure must be
+# visible to the operator, but must not roll healthy services back.
+previous=false
+sh "$ROOT/scripts/cleanup-production.sh"
 echo "Deployed Anby Wiki $release at https://$ANBY_DOMAIN/ (loopback Web port $WEB_PORT)."
