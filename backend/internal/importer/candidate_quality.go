@@ -44,7 +44,7 @@ func normalizeCandidatesForUse(input *Candidates) *Candidates {
 		Entities: []EntityCandidate{}, Claims: []ClaimCandidate{},
 		QualityScore: input.QualityScore, PromptInjectionDetected: input.PromptInjectionDetected,
 	}
-	remappedIDs := make(map[uuid.UUID]uuid.UUID, len(input.Entities))
+	prepared := make([]EntityCandidate, 0, len(input.Entities))
 	for _, raw := range input.Entities {
 		if raw.CandidateID == uuid.Nil || strings.TrimSpace(raw.TypeKey) == "" || strings.TrimSpace(raw.Label) == "" {
 			continue
@@ -52,13 +52,17 @@ func normalizeCandidatesForUse(input *Candidates) *Candidates {
 		candidate := raw
 		candidate.Aliases = mergeAliases(nil, candidate.Aliases)
 		candidate.Evidence = mergeCandidateEvidence(nil, candidate.Evidence)
-		if index, ok := matchingEntityCandidate(result.Entities, candidate); ok {
+		prepared = append(prepared, candidate)
+	}
+	remappedIDs := make(map[uuid.UUID]uuid.UUID, len(prepared))
+	for _, candidate := range prepared {
+		if index, ok := matchingEntityCandidate(result.Entities, candidate, prepared); ok {
 			canonicalID := result.Entities[index].CandidateID
-			remappedIDs[raw.CandidateID] = canonicalID
+			remappedIDs[candidate.CandidateID] = canonicalID
 			mergeEntityCandidate(&result.Entities[index], candidate)
 			continue
 		}
-		remappedIDs[raw.CandidateID] = candidate.CandidateID
+		remappedIDs[candidate.CandidateID] = candidate.CandidateID
 		result.Entities = append(result.Entities, candidate)
 	}
 
@@ -301,10 +305,11 @@ func claimCandidateSelfReferential(candidate ClaimCandidate) bool {
 	return false
 }
 
-func matchingEntityCandidate(existing []EntityCandidate, incoming EntityCandidate) (int, bool) {
+func matchingEntityCandidate(existing []EntityCandidate, incoming EntityCandidate, all []EntityCandidate) (int, bool) {
 	matches := make([]int, 0, 2)
 	for index := range existing {
-		if entityCandidatesEquivalent(existing[index], incoming) {
+		if entityCandidatesEquivalent(existing[index], incoming) ||
+			personAbbreviationMergeAllowed(existing[index], incoming, all) {
 			matches = append(matches, index)
 		}
 	}
@@ -328,7 +333,7 @@ func entityCandidatesEquivalent(left, right EntityCandidate) bool {
 			return true
 		}
 	}
-	return normalizedPlanText(left.TypeKey) == "person" && personNamesCompatible(left.Label, right.Label)
+	return false
 }
 
 func entityCandidateNames(candidate EntityCandidate) map[string]bool {
@@ -343,9 +348,107 @@ func entityCandidateNames(candidate EntityCandidate) map[string]bool {
 
 func normalizedIdentityText(value string) string {
 	parts := strings.FieldsFunc(strings.ToLower(strings.TrimSpace(value)), func(r rune) bool {
-		return !unicode.IsLetter(r) && !unicode.IsDigit(r)
+		return !unicode.IsLetter(r) && !unicode.IsDigit(r) && r != '+' && r != '#'
 	})
 	return strings.Join(parts, " ")
+}
+
+func personAbbreviationMergeAllowed(left, right EntityCandidate, all []EntityCandidate) bool {
+	if normalizedPlanText(left.TypeKey) != "person" ||
+		normalizedPlanText(right.TypeKey) != "person" {
+		return false
+	}
+	if !personCandidatesCompatible(left, right) {
+		return false
+	}
+	if personCandidateHasAbbreviatedName(left) == personCandidateHasAbbreviatedName(right) {
+		return false
+	}
+	abbreviated := left
+	full := right
+	if personCandidateHasAbbreviatedName(right) {
+		abbreviated, full = right, left
+	}
+	if !personCandidateHasFullCompatibleName(full, abbreviated) {
+		return false
+	}
+	compatibleFullCandidates := map[uuid.UUID]bool{}
+	for _, candidate := range all {
+		if normalizedPlanText(candidate.TypeKey) != "person" ||
+			!personCandidateHasFullCompatibleName(candidate, abbreviated) {
+			continue
+		}
+		compatibleFullCandidates[candidate.CandidateID] = true
+	}
+	return len(compatibleFullCandidates) == 1
+}
+
+func personCandidatesCompatible(left, right EntityCandidate) bool {
+	for _, leftName := range entityPersonNames(left) {
+		for _, rightName := range entityPersonNames(right) {
+			if personNamesCompatible(leftName, rightName) {
+				return true
+			}
+		}
+	}
+	return false
+}
+
+func personCandidateHasFullCompatibleName(candidate, abbreviated EntityCandidate) bool {
+	for _, fullName := range entityPersonNames(candidate) {
+		if !personNameHasFullGiven(fullName) {
+			continue
+		}
+		for _, shortName := range entityPersonNames(abbreviated) {
+			if personNameHasAbbreviatedGiven(shortName) &&
+				personNamesCompatible(fullName, shortName) {
+				return true
+			}
+		}
+	}
+	return false
+}
+
+func personCandidateHasAbbreviatedName(candidate EntityCandidate) bool {
+	for _, name := range entityPersonNames(candidate) {
+		if personNameHasAbbreviatedGiven(name) {
+			return true
+		}
+	}
+	return false
+}
+
+func entityPersonNames(candidate EntityCandidate) []string {
+	values := append([]string{candidate.Label}, candidate.Aliases...)
+	result := make([]string, 0, len(values))
+	seen := map[string]bool{}
+	for _, value := range values {
+		key := normalizedIdentityText(value)
+		if key == "" || seen[key] {
+			continue
+		}
+		seen[key] = true
+		result = append(result, value)
+	}
+	return result
+}
+
+func personNameHasAbbreviatedGiven(name string) bool {
+	parts := strings.Fields(normalizedIdentityText(name))
+	return len(parts) >= 2 && utf8.RuneCountInString(parts[0]) == 1
+}
+
+func personNameHasFullGiven(name string) bool {
+	parts := strings.Fields(normalizedIdentityText(name))
+	if len(parts) < 2 {
+		return false
+	}
+	for _, part := range parts[:len(parts)-1] {
+		if utf8.RuneCountInString(part) > 1 {
+			return true
+		}
+	}
+	return false
 }
 
 func personNamesCompatible(left, right string) bool {

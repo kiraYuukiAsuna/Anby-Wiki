@@ -150,9 +150,13 @@ docs/FieldChange.md
 docs/GovernanceApi.md
 docs/HealthResponse.md
 docs/HistoryApi.md
+docs/ImportEntityAlternative.md
+docs/ImportEntityMatchReview.md
+docs/ImportEntityResolution.md
 docs/ImportJob.md
 docs/ImportJobDetail.md
 docs/ImportJobListPage.md
+docs/ImportMatchReview.md
 docs/ImportPageRoute.md
 docs/ImportPlan.md
 docs/ImportPlanEvidence.md
@@ -163,6 +167,7 @@ docs/ImportPlanVersion.md
 docs/ImportPlannedBlock.md
 docs/ImportPlanningInput.md
 docs/ImportRun.md
+docs/ImportSkippedClaimReview.md
 docs/ImportStageRun.md
 docs/ImportsApi.md
 docs/KnowledgeApi.md
@@ -441,9 +446,13 @@ models/FederatedWiki.ts
 models/FederatedWikiList.ts
 models/FieldChange.ts
 models/HealthResponse.ts
+models/ImportEntityAlternative.ts
+models/ImportEntityMatchReview.ts
+models/ImportEntityResolution.ts
 models/ImportJob.ts
 models/ImportJobDetail.ts
 models/ImportJobListPage.ts
+models/ImportMatchReview.ts
 models/ImportPageRoute.ts
 models/ImportPlan.ts
 models/ImportPlanEvidence.ts
@@ -454,6 +463,7 @@ models/ImportPlanVersion.ts
 models/ImportPlannedBlock.ts
 models/ImportPlanningInput.ts
 models/ImportRun.ts
+models/ImportSkippedClaimReview.ts
 models/ImportStageRun.ts
 models/LinkPreviewMetadata.ts
 models/LoginRequest.ts

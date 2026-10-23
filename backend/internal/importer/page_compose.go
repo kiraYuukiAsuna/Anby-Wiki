@@ -27,11 +27,27 @@ func (c *ProposalComposer) buildPageOperations(
 	}
 	entityReferences := entityReferencesForCompose(params)
 	operations := make([]governance.OperationV1, 0)
+	createPageIDs := map[string]uuid.UUID{}
+	for _, route := range params.Plan.Routes {
+		if route.Action != RouteCreate {
+			continue
+		}
+		pageID, err := c.ids.New()
+		if err != nil {
+			return nil, err
+		}
+		createPageIDs[normalizedPlanText(route.Title)] = pageID
+	}
 	for _, route := range params.Plan.Routes {
 		switch route.Action {
 		case RouteCreate:
+			pageID, ok := createPageIDs[normalizedPlanText(route.Title)]
+			if !ok || pageID == uuid.Nil {
+				return nil, ErrInvalidJob
+			}
 			pageOps, err := c.buildCreatePageOperations(
-				ctx, params, namespaceID, route, relatedPageTargets(params.Plan, route.Title), entityReferences,
+				ctx, params, namespaceID, pageID, route,
+				relatedPageTargets(params.Plan, route.Title, createPageIDs), entityReferences,
 			)
 			if err != nil {
 				return nil, err
@@ -39,7 +55,8 @@ func (c *ProposalComposer) buildPageOperations(
 			operations = append(operations, pageOps...)
 		case RouteUpdate:
 			pageOps, err := c.buildUpdatePageOperations(
-				ctx, params, route, relatedPageTargets(params.Plan, route.Title), entityReferences,
+				ctx, params, route,
+				relatedPageTargets(params.Plan, route.Title, createPageIDs), entityReferences,
 			)
 			if err != nil {
 				return nil, err
@@ -59,14 +76,11 @@ func (c *ProposalComposer) buildCreatePageOperations(
 	ctx context.Context,
 	params ComposeParams,
 	namespaceID uuid.UUID,
+	pageID uuid.UUID,
 	route PageRoute,
 	linkTargets []relatedPageTarget,
 	entityReferences []entityReferenceTarget,
 ) ([]governance.OperationV1, error) {
-	pageID, err := c.ids.New()
-	if err != nil {
-		return nil, err
-	}
 	linkTargets = filterRelatedPageTargets(pageID, linkTargets, nil)
 	document := ast.NewDocument()
 	evidenceItems := make([]governance.OperationEvidence, 0)
@@ -173,6 +187,9 @@ func (c *ProposalComposer) buildUpdatePageOperations(
 	if err != nil {
 		return nil, err
 	}
+	if route.PlannedRevisionID != nil && (revision == nil || revision.ID != *route.PlannedRevisionID) {
+		return nil, fmt.Errorf("%w: page=%s revision changed since planning", ErrPlanTargetConflict, *route.PageID)
+	}
 	document := ast.NewDocument()
 	if snapshot != nil {
 		document, err = ast.Parse(snapshot.AST)
@@ -232,6 +249,9 @@ func (c *ProposalComposer) buildUpdatePageOperations(
 			hash, err := governance.BlockHash(location.Block)
 			if err != nil {
 				return nil, err
+			}
+			if planned.TargetBlockHash != nil && hash != *planned.TargetBlockHash {
+				return nil, fmt.Errorf("%w: block=%s hash changed since planning", ErrPlanTargetConflict, *planned.TargetBlockID)
 			}
 			operation.OperationType = governance.OpReplaceBlock
 			operation.Target.BlockID = planned.TargetBlockID
@@ -383,7 +403,7 @@ type relatedPageTarget struct {
 	Evidence []CandidateEvidence
 }
 
-func relatedPageTargets(plan *ImportPlan, sourceTitle string) []relatedPageTarget {
+func relatedPageTargets(plan *ImportPlan, sourceTitle string, createPageIDs map[string]uuid.UUID) []relatedPageTarget {
 	if plan == nil {
 		return nil
 	}
@@ -391,13 +411,21 @@ func relatedPageTargets(plan *ImportPlan, sourceTitle string) []relatedPageTarge
 	result := make([]relatedPageTarget, 0)
 	seen := map[uuid.UUID]bool{}
 	for _, route := range plan.Routes {
-		if route.Action != RouteLink || route.PageID == nil || *route.PageID == uuid.Nil ||
-			seen[*route.PageID] || !relatedTitleContains(route.RelatedTo, sourceKey) {
+		if route.Action != RouteLink || !relatedTitleContains(route.RelatedTo, sourceKey) {
 			continue
 		}
-		seen[*route.PageID] = true
+		pageID := uuid.Nil
+		if route.PageID != nil {
+			pageID = *route.PageID
+		} else if createPageIDs != nil {
+			pageID = createPageIDs[normalizedPlanText(route.Title)]
+		}
+		if pageID == uuid.Nil || seen[pageID] {
+			continue
+		}
+		seen[pageID] = true
 		result = append(result, relatedPageTarget{
-			PageID: *route.PageID, Title: route.Title, Evidence: route.Evidence,
+			PageID: pageID, Title: route.Title, Evidence: route.Evidence,
 		})
 	}
 	return result

@@ -11,6 +11,7 @@ Name | Type
 `stages` | [Array&lt;ImportStageRun&gt;](ImportStageRun.md)
 `plan` | [ImportPlan](ImportPlan.md)
 `plans` | [Array&lt;ImportPlanVersion&gt;](ImportPlanVersion.md)
+`matchReview` | [ImportMatchReview](ImportMatchReview.md)
 
 ## Example
 
@@ -24,6 +25,7 @@ const example = {
   "stages": null,
   "plan": null,
   "plans": null,
+  "matchReview": null,
 } satisfies ImportJobDetail
 
 console.log(example)

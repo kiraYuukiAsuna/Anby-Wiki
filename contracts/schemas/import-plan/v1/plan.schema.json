@@ -115,6 +115,7 @@
         "action": { "enum": ["create", "update", "link", "ignore"] },
         "title": { "type": "string", "minLength": 1, "maxLength": 255 },
         "page_id": { "type": ["string", "null"], "format": "uuid" },
+        "planned_revision_id": { "type": ["string", "null"], "format": "uuid" },
         "reason": { "type": "string", "minLength": 1, "maxLength": 1000 },
         "confidence": { "type": "number", "minimum": 0, "maximum": 1 },
         "related_to": {
@@ -156,7 +157,7 @@
         {
           "properties": {
             "action": { "const": "link" },
-            "page_id": { "$ref": "#/$defs/uuid" },
+            "page_id": { "type": ["string", "null"], "format": "uuid" },
             "related_to": { "minItems": 1 },
             "evidence": { "minItems": 1 },
             "blocks": { "maxItems": 0 }
@@ -181,6 +182,7 @@
         "type": { "type": "string" },
         "mode": { "enum": ["append", "replace"] },
         "target_block_id": { "type": ["string", "null"], "format": "uuid" },
+        "target_block_hash": { "type": ["string", "null"], "minLength": 64, "maxLength": 64 },
         "evidence": {
           "type": "array",
           "minItems": 1,
@@ -213,6 +215,7 @@
         "type": { "const": "heading" },
         "mode": { "enum": ["append", "replace"] },
         "target_block_id": { "type": ["string", "null"], "format": "uuid" },
+        "target_block_hash": { "type": ["string", "null"], "minLength": 64, "maxLength": 64 },
         "text": { "type": "string", "minLength": 1, "maxLength": 500 },
         "level": { "type": "integer", "minimum": 1, "maximum": 6 },
         "is_toggleable": { "type": "boolean" },
@@ -251,6 +254,7 @@
         "type": { "const": "paragraph" },
         "mode": { "enum": ["append", "replace"] },
         "target_block_id": { "type": ["string", "null"], "format": "uuid" },
+        "target_block_hash": { "type": ["string", "null"], "minLength": 64, "maxLength": 64 },
         "text": { "type": "string", "minLength": 1, "maxLength": 12000 },
         "evidence": {
           "type": "array",
@@ -282,6 +286,7 @@
         "type": { "const": "bullet_list" },
         "mode": { "enum": ["append", "replace"] },
         "target_block_id": { "type": ["string", "null"], "format": "uuid" },
+        "target_block_hash": { "type": ["string", "null"], "minLength": 64, "maxLength": 64 },
         "items": {
           "type": "array",
           "minItems": 1,
@@ -318,6 +323,7 @@
         "type": { "const": "ordered_list" },
         "mode": { "enum": ["append", "replace"] },
         "target_block_id": { "type": ["string", "null"], "format": "uuid" },
+        "target_block_hash": { "type": ["string", "null"], "minLength": 64, "maxLength": 64 },
         "items": {
           "type": "array",
           "minItems": 1,
@@ -354,6 +360,7 @@
         "type": { "const": "quote" },
         "mode": { "enum": ["append", "replace"] },
         "target_block_id": { "type": ["string", "null"], "format": "uuid" },
+        "target_block_hash": { "type": ["string", "null"], "minLength": 64, "maxLength": 64 },
         "text": { "type": "string", "minLength": 1, "maxLength": 12000 },
         "evidence": {
           "type": "array",
@@ -385,6 +392,7 @@
         "type": { "const": "code" },
         "mode": { "enum": ["append", "replace"] },
         "target_block_id": { "type": ["string", "null"], "format": "uuid" },
+        "target_block_hash": { "type": ["string", "null"], "minLength": 64, "maxLength": 64 },
         "text": { "type": "string", "minLength": 1, "maxLength": 12000 },
         "language": { "type": "string", "maxLength": 64 },
         "caption": { "type": "string", "maxLength": 1000 },
@@ -418,6 +426,7 @@
         "type": { "const": "preformatted" },
         "mode": { "enum": ["append", "replace"] },
         "target_block_id": { "type": ["string", "null"], "format": "uuid" },
+        "target_block_hash": { "type": ["string", "null"], "minLength": 64, "maxLength": 64 },
         "text": { "type": "string", "minLength": 1, "maxLength": 12000 },
         "kind": { "enum": ["ascii_diagram", "fixed_table", "protocol_trace", "formula_text", "plain"] },
         "caption": { "type": "string", "maxLength": 1000 },
@@ -441,6 +450,7 @@
         "type": { "const": "equation" },
         "mode": { "enum": ["append", "replace"] },
         "target_block_id": { "type": ["string", "null"], "format": "uuid" },
+        "target_block_hash": { "type": ["string", "null"], "minLength": 64, "maxLength": 64 },
         "expression": { "type": "string", "minLength": 1, "maxLength": 12000 },
         "caption": { "type": "string", "maxLength": 1000 },
         "evidence": {
@@ -463,6 +473,7 @@
         "type": { "const": "todo" },
         "mode": { "enum": ["append", "replace"] },
         "target_block_id": { "type": ["string", "null"], "format": "uuid" },
+        "target_block_hash": { "type": ["string", "null"], "minLength": 64, "maxLength": 64 },
         "text": { "type": "string", "minLength": 1, "maxLength": 12000 },
         "checked": { "type": "boolean" },
         "children": {
@@ -490,6 +501,7 @@
         "type": { "const": "toggle" },
         "mode": { "enum": ["append", "replace"] },
         "target_block_id": { "type": ["string", "null"], "format": "uuid" },
+        "target_block_hash": { "type": ["string", "null"], "minLength": 64, "maxLength": 64 },
         "text": { "type": "string", "minLength": 1, "maxLength": 12000 },
         "children": {
           "type": "array",
@@ -516,6 +528,7 @@
         "type": { "const": "callout" },
         "mode": { "enum": ["append", "replace"] },
         "target_block_id": { "type": ["string", "null"], "format": "uuid" },
+        "target_block_hash": { "type": ["string", "null"], "minLength": 64, "maxLength": 64 },
         "text": { "type": "string", "minLength": 1, "maxLength": 12000 },
         "kind": { "enum": ["info", "warning", "danger"] },
         "icon": { "type": "string", "minLength": 1, "maxLength": 64 },
@@ -547,6 +560,7 @@
         "type": { "const": "table" },
         "mode": { "enum": ["append", "replace"] },
         "target_block_id": { "type": ["string", "null"], "format": "uuid" },
+        "target_block_hash": { "type": ["string", "null"], "minLength": 64, "maxLength": 64 },
         "caption": { "type": "string", "maxLength": 1000 },
         "has_column_header": { "type": "boolean" },
         "has_row_header": { "type": "boolean" },

@@ -9,6 +9,7 @@ Name | Type
 `type` | string
 `mode` | string
 `targetBlockId` | string
+`targetBlockHash` | string
 `text` | string
 `level` | number
 `isToggleable` | boolean
@@ -36,6 +37,7 @@ const example = {
   "type": null,
   "mode": null,
   "targetBlockId": null,
+  "targetBlockHash": null,
   "text": null,
   "level": null,
   "isToggleable": null,

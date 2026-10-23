@@ -256,6 +256,10 @@ func (s *Service) NextQueuedAIWikiID(ctx context.Context) (uuid.UUID, error) {
 	return s.repo.NextQueuedAIWikiID(ctx)
 }
 
+func (s *Service) QueuedAIWikiIDs(ctx context.Context, limit int) ([]uuid.UUID, error) {
+	return s.repo.QueuedAIWikiIDs(ctx, limit)
+}
+
 func (s *Service) claimNext(
 	ctx context.Context,
 	sourceOnly bool,
@@ -488,8 +492,21 @@ func (s *Service) RequireAction(
 	jobID, runID, sourceVersionID uuid.UUID,
 	action string,
 ) error {
-	if action != ActionConfirmPlan && action != ActionQualityGate {
+	return s.RequireActionWithDetails(ctx, jobID, runID, sourceVersionID, action, nil)
+}
+
+func (s *Service) RequireActionWithDetails(
+	ctx context.Context,
+	jobID, runID, sourceVersionID uuid.UUID,
+	action string,
+	errorJSON []byte,
+) error {
+	if action != ActionConfirmPlan && action != ActionQualityGate && action != ActionResolveEntities {
 		return ErrInvalidJob
+	}
+	stage := StagePlan
+	if action == ActionResolveEntities {
+		stage = StageMatch
 	}
 	return s.txm.InTx(ctx, func(tx pgx.Tx) error {
 		job, err := s.repo.GetJobForUpdate(ctx, tx, jobID)
@@ -508,7 +525,7 @@ func (s *Service) RequireAction(
 		if err := s.repo.FinishRun(ctx, tx, runID, JobSucceeded, nil); err != nil {
 			return err
 		}
-		return s.repo.RequireAction(ctx, tx, jobID, sourceVersionID, action)
+		return s.repo.RequireAction(ctx, tx, jobID, sourceVersionID, action, stage, errorJSON)
 	})
 }
 
@@ -698,7 +715,22 @@ func (s *Service) Detail(ctx context.Context, jobID uuid.UUID) (*JobDetail, erro
 	}
 	return &JobDetail{
 		Job: job, Runs: runs, Stages: stages, Plan: current, Plans: plans,
+		MatchReview: matchReviewFromJob(job),
 	}, nil
+}
+
+func matchReviewFromJob(job *Job) *MatchReview {
+	if job == nil || job.ActionRequired == nil || *job.ActionRequired != ActionResolveEntities ||
+		len(job.Error) == 0 {
+		return nil
+	}
+	var payload struct {
+		MatchReview *MatchReview `json:"match_review"`
+	}
+	if json.Unmarshal(job.Error, &payload) != nil {
+		return nil
+	}
+	return payload.MatchReview
 }
 
 func HashBytes(value []byte) string {

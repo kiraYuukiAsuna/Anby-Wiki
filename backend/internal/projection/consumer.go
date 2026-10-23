@@ -76,6 +76,10 @@ type Handler interface {
 	Handle(ctx context.Context, event Event) error
 }
 
+type BatchHandler interface {
+	HandleBatch(ctx context.Context, events []Event) error
+}
+
 // HandlerFunc 将普通函数适配为 Handler。
 type HandlerFunc func(ctx context.Context, event Event) error
 
@@ -264,11 +268,48 @@ func (c *Consumer) claimBatch(ctx context.Context) ([]Event, error) {
 // processBatch 顺序处理一批已领取事件；workCtx 取消时放弃剩余事件
 // （保持 claimed，租约过期后会被重新领取）。
 func (c *Consumer) processBatch(ctx context.Context, events []Event) {
-	for _, e := range events {
+	processed := make([]bool, len(events))
+	for index, e := range events {
 		if ctx.Err() != nil {
 			return
 		}
+		if processed[index] {
+			continue
+		}
+		h := c.handlers[e.EventType]
+		if batchHandler, ok := h.(BatchHandler); ok {
+			group := []Event{e}
+			processed[index] = true
+			for otherIndex := index + 1; otherIndex < len(events); otherIndex++ {
+				if !processed[otherIndex] && events[otherIndex].EventType == e.EventType {
+					group = append(group, events[otherIndex])
+					processed[otherIndex] = true
+				}
+			}
+			c.processMany(ctx, e.EventType, batchHandler, group)
+			continue
+		}
 		c.processOne(ctx, e)
+	}
+}
+
+func (c *Consumer) processMany(ctx context.Context, eventType string, h BatchHandler, events []Event) {
+	ctx, span := otel.Tracer("github.com/anby/wiki/backend/projection").Start(ctx, "outbox.process_batch")
+	defer span.End()
+	span.SetAttributes(
+		attribute.String("outbox.event_type", eventType),
+		attribute.Int("outbox.batch_size", len(events)),
+	)
+	if err := h.HandleBatch(ctx, events); err != nil {
+		span.RecordError(err)
+		span.SetStatus(codes.Error, "handler_failed")
+		for _, event := range events {
+			c.fail(ctx, event, err)
+		}
+		return
+	}
+	for _, event := range events {
+		c.markDone(ctx, event)
 	}
 }
 
@@ -291,13 +332,15 @@ func (c *Consumer) processOne(ctx context.Context, e Event) {
 		c.fail(ctx, e, err)
 		return
 	}
+	c.markDone(ctx, e)
+}
+
+func (c *Consumer) markDone(ctx context.Context, e Event) {
 	tag, err := c.pool.Exec(ctx, `
 		UPDATE outbox_event
 		SET status = 'done', processed_at = now(), last_error = NULL
 		WHERE id = $1 AND status = 'claimed'`, e.ID)
 	if err != nil {
-		span.RecordError(err)
-		span.SetStatus(codes.Error, "mark_done_failed")
 		c.cfg.Logger.Warn("outbox 标记 done 失败", slog.String("event_id", e.ID.String()), slog.Any("error", err))
 		return
 	}

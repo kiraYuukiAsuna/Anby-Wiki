@@ -117,7 +117,46 @@ func (r *Rebuilder) RebuildPage(ctx context.Context, pageID uuid.UUID) (rebuilt 
 				builder.Type(), pageID, syncErr)
 		}
 	}
+	if err := r.resolveAndRefreshPage(ctx, pageID, revisionID); err != nil {
+		return false, err
+	}
 	return true, nil
+}
+
+func (r *Rebuilder) resolveAndRefreshPage(
+	ctx context.Context,
+	pageID uuid.UUID,
+	revisionID uuid.UUID,
+) error {
+	if err := NewLinkResolver(r.pool, r.logger).ResolvePageLinks(ctx, pageID); err != nil {
+		return err
+	}
+	refreshTypes := []string{
+		ProjectionRelatedPages,
+		"rendered_page",
+		"rendered_sections",
+	}
+	return r.txm.InTx(ctx, func(tx pgx.Tx) error {
+		for _, projectionType := range refreshTypes {
+			builder, ok := r.reg.Builder(projectionType)
+			if !ok {
+				continue
+			}
+			if err := builder.Rebuild(ctx, tx, pageID, revisionID); err != nil {
+				return fmt.Errorf("projection: refresh %q after link resolution for page %s: %w",
+					projectionType, pageID, err)
+			}
+			if err := UpsertState(ctx, tx, OKState(
+				AggregateTypePage,
+				pageID,
+				builder.Type(),
+				revisionID,
+			)); err != nil {
+				return err
+			}
+		}
+		return nil
+	})
 }
 
 // PageFailure RebuildAll 中单页重建失败的记录。

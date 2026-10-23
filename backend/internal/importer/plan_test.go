@@ -14,6 +14,7 @@ import (
 	"github.com/anby/wiki/backend/internal/ai"
 	"github.com/anby/wiki/backend/internal/ast"
 	"github.com/anby/wiki/backend/internal/evidence"
+	"github.com/anby/wiki/backend/internal/page"
 	"github.com/anby/wiki/backend/internal/platform/id"
 )
 
@@ -46,6 +47,42 @@ type retryingPlanGenerator struct {
 type selectivelyFailingPlanGenerator struct {
 	failText string
 	calls    []string
+}
+
+type recallPageCatalog struct {
+	wikiID uuid.UUID
+	pages  map[uuid.UUID]*page.Page
+}
+
+func (c recallPageCatalog) SearchPages(_ context.Context, _ uuid.UUID, _, term string, _ int) ([]page.PageSearchHit, error) {
+	if strings.TrimSpace(term) == "" {
+		return nil, nil
+	}
+	for _, item := range c.pages {
+		if item.DisplayTitle == term {
+			return []page.PageSearchHit{{
+				ID: item.ID, DisplayTitle: item.DisplayTitle,
+				NamespaceKey: "main", MatchedOn: page.MatchedOnTitle,
+			}}, nil
+		}
+	}
+	return nil, nil
+}
+
+func (c recallPageCatalog) ResolveTitle(context.Context, uuid.UUID, string, string) (*page.ResolvedPage, error) {
+	return nil, page.ErrPageNotFound
+}
+
+func (c recallPageCatalog) GetPage(_ context.Context, id uuid.UUID) (*page.Page, error) {
+	item := c.pages[id]
+	if item == nil {
+		return nil, page.ErrPageNotFound
+	}
+	return item, nil
+}
+
+func (recallPageCatalog) CurrentContent(context.Context, uuid.UUID) (*page.Revision, *page.ContentSnapshot, error) {
+	return nil, nil, nil
 }
 
 func (g *selectivelyFailingPlanGenerator) Generate(_ context.Context, request ai.Request) (*ai.Result, error) {
@@ -1013,6 +1050,40 @@ func TestCompileRelatedPagesBlocksUseStandardSeeAlsoAndDeduplicate(t *testing.T)
 	if len(nodes) != 1 || nodes[0].Type != ast.InlinePageReference || nodes[0].TargetPageID != targetID.String() {
 		t.Fatalf("unexpected related-page nodes: %#v", nodes)
 	}
+}
+
+func TestRecallPagesKeepsExplicitTargetBeforeAlphabeticalTruncation(t *testing.T) {
+	wikiID := uuid.New()
+	zebraID := uuid.New()
+	pages := map[uuid.UUID]*page.Page{
+		zebraID: {ID: zebraID, WikiID: wikiID, DisplayTitle: "Zebra"},
+	}
+	candidates := &Candidates{Entities: []EntityCandidate{}}
+	for index := 0; index < 13; index++ {
+		title := fmt.Sprintf("A%02d", index)
+		pageID := uuid.New()
+		pages[pageID] = &page.Page{ID: pageID, WikiID: wikiID, DisplayTitle: title}
+		candidates.Entities = append(candidates.Entities, EntityCandidate{
+			CandidateID: uuid.New(), TypeKey: "topic", Label: title,
+		})
+	}
+	planner := &PagePlanner{pages: recallPageCatalog{wikiID: wikiID, pages: pages}}
+
+	recalled, err := planner.recallPages(context.Background(), PlanParams{
+		WikiID: wikiID, TargetPageID: &zebraID, Candidates: candidates,
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(recalled) != 12 {
+		t.Fatalf("recalled=%d, want capped 12", len(recalled))
+	}
+	for _, candidate := range recalled {
+		if candidate.PageID == zebraID {
+			return
+		}
+	}
+	t.Fatalf("explicit Zebra target was dropped: %#v", recalled)
 }
 
 func TestPrimaryEntityLabelScoreRejectsGenericTitleFragments(t *testing.T) {

@@ -76,6 +76,11 @@ func (r *Registry) Builders() []Builder {
 	return out
 }
 
+func (r *Registry) Builder(projectionType string) (Builder, bool) {
+	builder, ok := r.byType[projectionType]
+	return builder, ok
+}
+
 // Len 已注册 Builder 数。
 func (r *Registry) Len() int {
 	return len(r.builders)

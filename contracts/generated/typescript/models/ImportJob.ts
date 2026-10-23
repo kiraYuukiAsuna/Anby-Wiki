@@ -174,7 +174,8 @@ export type ImportJobStatusEnum = typeof ImportJobStatusEnum[keyof typeof Import
  */
 export const ImportJobActionRequiredEnum = {
     ConfirmPlan: 'confirm_plan',
-    QualityGate: 'quality_gate'
+    QualityGate: 'quality_gate',
+    ResolveEntities: 'resolve_entities'
 } as const;
 export type ImportJobActionRequiredEnum = typeof ImportJobActionRequiredEnum[keyof typeof ImportJobActionRequiredEnum];
 

@@ -57,6 +57,12 @@ export interface ImportPageRoute {
      * @type {string}
      * @memberof ImportPageRoute
      */
+    plannedRevisionId?: string;
+    /**
+     *
+     * @type {string}
+     * @memberof ImportPageRoute
+     */
     reason: string;
     /**
      *
@@ -125,6 +131,7 @@ export function ImportPageRouteFromJSONTyped(json: any, ignoreDiscriminator: boo
         'action': json['action'],
         'title': json['title'],
         'pageId': json['page_id'],
+        'plannedRevisionId': json['planned_revision_id'] == null ? undefined : json['planned_revision_id'],
         'reason': json['reason'],
         'confidence': json['confidence'],
         'relatedTo': json['related_to'],
@@ -147,6 +154,7 @@ export function ImportPageRouteToJSONTyped(value?: ImportPageRoute | null, ignor
         'action': value['action'],
         'title': value['title'],
         'page_id': value['pageId'],
+        'planned_revision_id': value['plannedRevisionId'],
         'reason': value['reason'],
         'confidence': value['confidence'],
         'related_to': value['relatedTo'],

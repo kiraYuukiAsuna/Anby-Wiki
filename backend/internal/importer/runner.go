@@ -117,7 +117,7 @@ func (r *Runner) ProcessOne(ctx context.Context) (bool, error) {
 	span.SetAttributes(attribute.Bool("import.stale_job_recovered", recovered))
 	job, run, err := r.jobs.ClaimNextSourceOnly(ctx)
 	if errors.Is(err, ErrNoQueuedJob) && r.config.Runtime != nil {
-		wikiID, wikiErr := r.jobs.NextQueuedAIWikiID(ctx)
+		wikiIDs, wikiErr := r.jobs.QueuedAIWikiIDs(ctx, 16)
 		if errors.Is(wikiErr, ErrNoQueuedJob) {
 			span.SetAttributes(attribute.Bool("import.job_claimed", false))
 			return false, nil
@@ -127,27 +127,36 @@ func (r *Runner) ProcessOne(ctx context.Context) (bool, error) {
 			span.SetStatus(codes.Error, "queue_inspection_failed")
 			return false, wikiErr
 		}
-		runtime, runtimeErr := r.config.Runtime(ctx, wikiID)
-		if runtimeErr != nil {
-			span.RecordError(runtimeErr)
-			span.SetStatus(codes.Error, "ai_configuration_unavailable")
-			return false, runtimeErr
+		for _, wikiID := range wikiIDs {
+			runtime, runtimeErr := r.config.Runtime(ctx, wikiID)
+			if runtimeErr != nil {
+				span.RecordError(runtimeErr)
+				span.SetStatus(codes.Error, "ai_configuration_unavailable")
+				return false, runtimeErr
+			}
+			if !runtime.Available {
+				continue
+			}
+			if runtime.MaxInputTokens > 0 {
+				maxInputTokens = runtime.MaxInputTokens
+			}
+			if strings.TrimSpace(runtime.Model) != "" {
+				model = strings.TrimSpace(runtime.Model)
+			}
+			if runtime.ChunkCharacters > 0 {
+				chunkCharacters = runtime.ChunkCharacters
+			}
+			autoApprovePlans = runtime.AutoApprovePlans
+			job, run, err = r.jobs.ClaimNextForWiki(ctx, wikiID)
+			if errors.Is(err, ErrNoQueuedJob) {
+				continue
+			}
+			break
 		}
-		if !runtime.Available {
+		if job == nil && err == nil {
 			span.SetAttributes(attribute.Bool("import.ai_available", false))
 			return false, nil
 		}
-		if runtime.MaxInputTokens > 0 {
-			maxInputTokens = runtime.MaxInputTokens
-		}
-		if strings.TrimSpace(runtime.Model) != "" {
-			model = strings.TrimSpace(runtime.Model)
-		}
-		if runtime.ChunkCharacters > 0 {
-			chunkCharacters = runtime.ChunkCharacters
-		}
-		autoApprovePlans = runtime.AutoApprovePlans
-		job, run, err = r.jobs.ClaimNextForWiki(ctx, wikiID)
 	} else if errors.Is(err, ErrNoQueuedJob) && r.config.Availability != nil {
 		available, availabilityErr := r.config.Availability(ctx)
 		if availabilityErr != nil {

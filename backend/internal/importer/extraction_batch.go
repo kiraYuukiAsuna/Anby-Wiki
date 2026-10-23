@@ -46,6 +46,11 @@ type extractionBatchResult struct {
 
 func (s *ExtractionService) generateCandidates(ctx context.Context, params ExtractParams) (*generatedCandidates, error) {
 	batches := batchModelSourceChunks(initialModelSourceChunks(params.Chunks), params.MaxInputTokens)
+	if overBudget := oversizedModelSourceChunks(batches, modelChunkBudget(params.MaxInputTokens)); len(overBudget) > 0 {
+		return nil, ErrModelInputTooLarge
+	}
+	batchCtx, cancel := context.WithCancel(ctx)
+	defer cancel()
 	type batchOutcome struct {
 		parts    []extractionBatchResult
 		rejected int
@@ -54,6 +59,8 @@ func (s *ExtractionService) generateCandidates(ctx context.Context, params Extra
 	outcomes := make([]batchOutcome, len(batches))
 	limit := make(chan struct{}, extractionBatchConcurrency)
 	var wait sync.WaitGroup
+	var firstPermanentError error
+	var errorMu sync.Mutex
 	for index := range batches {
 		wait.Add(1)
 		go func(index int) {
@@ -61,12 +68,21 @@ func (s *ExtractionService) generateCandidates(ctx context.Context, params Extra
 			select {
 			case limit <- struct{}{}:
 				defer func() { <-limit }()
-			case <-ctx.Done():
-				outcomes[index].err = ctx.Err()
+			case <-batchCtx.Done():
+				outcomes[index].err = batchCtx.Err()
 				return
 			}
 			outcomes[index].parts, outcomes[index].rejected, outcomes[index].err =
-				s.generateBatch(ctx, params, batches[index])
+				s.generateBatch(batchCtx, params, batches[index])
+			if outcomes[index].err != nil && !errors.Is(outcomes[index].err, context.Canceled) &&
+				!errors.Is(outcomes[index].err, context.DeadlineExceeded) {
+				errorMu.Lock()
+				if firstPermanentError == nil {
+					firstPermanentError = outcomes[index].err
+					cancel()
+				}
+				errorMu.Unlock()
+			}
 		}(index)
 	}
 	wait.Wait()
@@ -84,6 +100,9 @@ func (s *ExtractionService) generateCandidates(ctx context.Context, params Extra
 		}
 		rejectedBatches += outcome.rejected
 		parts = append(parts, outcome.parts...)
+	}
+	if firstPermanentError != nil {
+		return nil, firstPermanentError
 	}
 	if firstError != nil {
 		return nil, firstError

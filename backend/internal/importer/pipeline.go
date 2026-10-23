@@ -187,7 +187,11 @@ func (p *Pipeline) run(ctx context.Context, request PipelineRequest, acquire acq
 	var current *StageRun
 	fail := func(stage *StageRun, code string, cause error) (*PipelineResult, error) {
 		if stage != nil {
-			_ = p.jobs.Fail(ctx, request.JobID, run.ID, stage, code)
+			failCtx, cancel := context.WithTimeout(context.WithoutCancel(ctx), 10*time.Second)
+			defer cancel()
+			if err := p.jobs.Fail(failCtx, request.JobID, run.ID, stage, code); err != nil {
+				return nil, fmt.Errorf("%w: failed to record import failure: %v", cause, err)
+			}
 		}
 		return nil, cause
 	}
@@ -286,6 +290,23 @@ func (p *Pipeline) run(ctx context.Context, request PipelineRequest, acquire acq
 	resolutions, err := p.matcher.Match(ctx, request.WikiID, request.PageID, selectedCandidates.Entities)
 	if err != nil {
 		return fail(current, "entity_match_failed", err)
+	}
+	matchReview := buildMatchReview(selectedCandidates, resolutions)
+	if len(matchReview.Candidates) > 0 {
+		matchJSON, _ := json.Marshal(matchReview)
+		matchOutput := HashBytes(matchJSON)
+		if err := p.jobs.CompleteStage(ctx, request.JobID, current, &matchOutput); err != nil {
+			return nil, err
+		}
+		if err := p.jobs.RequireActionWithDetails(
+			ctx, request.JobID, run.ID, version.Version.ID, ActionResolveEntities,
+			matchReviewErrorJSON(matchReview),
+		); err != nil {
+			return nil, err
+		}
+		result.Unresolved = matchReview.Resolutions
+		result.Job, _ = p.jobs.DetailJob(ctx, request.JobID)
+		return result, nil
 	}
 	decisions, err := p.classifier.Classify(ctx, selectedCandidates.Claims, resolutions)
 	if err != nil {
@@ -405,6 +426,72 @@ func trustedPlanningCandidates(candidates *Candidates, threshold float64) (*Cand
 		Claims:          []ClaimCandidate{},
 		QualityScore:    candidates.QualityScore,
 	}, nil
+}
+
+func buildMatchReview(candidates *Candidates, resolutions []EntityResolution) *MatchReview {
+	review := &MatchReview{
+		Resolutions: append([]EntityResolution(nil), resolutions...),
+		Candidates:  []EntityMatchReview{}, SkippedClaims: []SkippedClaimReview{},
+	}
+	if candidates == nil {
+		return review
+	}
+	entities := make(map[uuid.UUID]EntityCandidate, len(candidates.Entities))
+	for _, candidate := range candidates.Entities {
+		entities[candidate.CandidateID] = candidate
+	}
+	ambiguous := map[uuid.UUID]bool{}
+	for _, resolution := range resolutions {
+		if resolution.Outcome != EntityAmbiguous {
+			continue
+		}
+		ambiguous[resolution.CandidateID] = true
+		candidate := entities[resolution.CandidateID]
+		review.Candidates = append(review.Candidates, EntityMatchReview{
+			CandidateID: resolution.CandidateID,
+			TypeKey:     candidate.TypeKey,
+			Label:       candidate.Label,
+			Aliases:     append([]string(nil), candidate.Aliases...),
+			Outcome:     resolution.Outcome,
+			EntityID:    resolution.EntityID,
+			Score:       resolution.Score,
+			Reason:      resolution.Reason,
+			Alternatives: append(
+				[]EntityAlternative(nil),
+				resolution.Alternatives...,
+			),
+		})
+	}
+	if len(ambiguous) == 0 {
+		return review
+	}
+	for _, claim := range candidates.Claims {
+		switch {
+		case claim.Subject.CandidateID != nil && ambiguous[*claim.Subject.CandidateID]:
+			review.SkippedClaims = append(review.SkippedClaims, SkippedClaimReview{
+				CandidateID: claim.CandidateID,
+				Reason:      "subject entity requires human resolution",
+			})
+		default:
+			valueID, referencesCandidate, valid := claimValueCandidateReference(claim.Value)
+			if valid && referencesCandidate && ambiguous[valueID] {
+				review.SkippedClaims = append(review.SkippedClaims, SkippedClaimReview{
+					CandidateID: claim.CandidateID,
+					Reason:      "value entity requires human resolution",
+				})
+			}
+		}
+	}
+	return review
+}
+
+func matchReviewErrorJSON(review *MatchReview) []byte {
+	value, _ := json.Marshal(map[string]any{
+		"stage":        StageMatch,
+		"code":         "entity_resolution_required",
+		"match_review": review,
+	})
+	return value
 }
 
 func (p *Pipeline) prepareParsedSource(
@@ -667,6 +754,8 @@ func extractionErrorCode(err error) string {
 		return "extraction_timeout"
 	case errors.Is(err, ErrEvidenceRequired):
 		return "extraction_evidence_invalid"
+	case errors.Is(err, ErrModelInputTooLarge):
+		return "extraction_input_too_large"
 	default:
 		return "extraction_failed"
 	}
@@ -696,6 +785,8 @@ func planErrorCode(err error) string {
 		return "page_plan_timeout"
 	case errors.Is(err, ErrEvidenceRequired):
 		return "page_plan_evidence_invalid"
+	case errors.Is(err, ErrModelInputTooLarge):
+		return "page_plan_input_too_large"
 	case errors.Is(err, ErrPlanTargetConflict):
 		return "page_plan_target_conflict"
 	case errors.Is(err, ErrNoPagePlan):

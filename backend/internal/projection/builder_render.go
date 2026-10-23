@@ -8,7 +8,9 @@ package projection
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
+	"strconv"
 
 	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5"
@@ -43,6 +45,9 @@ func (b *RenderedPageBuilder) Rebuild(ctx context.Context, tx pgx.Tx, pageID, re
 	if err != nil {
 		return err
 	}
+	if err := applyResolvedPageReferences(ctx, tx, pageID, revisionID, doc); err != nil {
+		return err
+	}
 	html, err := render.RenderHTMLWithResolvers(
 		ctx,
 		doc,
@@ -68,6 +73,105 @@ func (b *RenderedPageBuilder) Rebuild(ctx context.Context, tx pgx.Tx, pageID, re
 			created_at       = now()`,
 		pageID, revisionID, render.RendererVersion, html, hash); err != nil {
 		return fmt.Errorf("projection: 写入页面 %s 的渲染投影失败: %w", pageID, err)
+	}
+	return nil
+}
+
+type renderedPageReference struct {
+	targetPageID        uuid.UUID
+	targetAnchorBlockID *uuid.UUID
+	displayText         string
+}
+
+func applyResolvedPageReferences(
+	ctx context.Context,
+	tx pgx.Tx,
+	pageID uuid.UUID,
+	revisionID uuid.UUID,
+	doc *ast.Document,
+) error {
+	rows, err := tx.Query(ctx, `
+		SELECT source_block_id,source_node_id,target_page_id,
+		       target_anchor_block_id,display_text
+		FROM page_link_projection
+		WHERE source_page_id=$1 AND source_revision_id=$2
+		  AND resolution_status='resolved' AND target_page_id IS NOT NULL`,
+		pageID, revisionID)
+	if err != nil {
+		return fmt.Errorf("projection: query resolved page references: %w", err)
+	}
+	defer rows.Close()
+	resolved := map[string]renderedPageReference{}
+	for rows.Next() {
+		var blockID uuid.UUID
+		var nodeID string
+		var ref renderedPageReference
+		if err := rows.Scan(
+			&blockID,
+			&nodeID,
+			&ref.targetPageID,
+			&ref.targetAnchorBlockID,
+			&ref.displayText,
+		); err != nil {
+			return fmt.Errorf("projection: scan resolved page reference: %w", err)
+		}
+		resolved[blockID.String()+"\x00"+nodeID] = ref
+	}
+	if err := rows.Err(); err != nil {
+		return fmt.Errorf("projection: iterate resolved page references: %w", err)
+	}
+	if len(resolved) == 0 {
+		return nil
+	}
+	return applyResolvedPageReferencesToBlocks(doc.Children, resolved)
+}
+
+func applyResolvedPageReferencesToBlocks(
+	blocks []*ast.Block,
+	resolved map[string]renderedPageReference,
+) error {
+	for _, block := range blocks {
+		if len(block.Content) > 0 && block.Content[0] == '[' {
+			nodes, err := block.InlineContent()
+			if err != nil {
+				return err
+			}
+			changed := false
+			for index, node := range nodes {
+				if node.Type != ast.InlinePageReference ||
+					node.ResolutionStatus != ast.ResolutionUnresolved {
+					continue
+				}
+				ref, ok := resolved[block.ID+"\x00"+strconv.Itoa(index)]
+				if !ok {
+					continue
+				}
+				if ref.displayText == "" {
+					ref.displayText = node.NormalizedTitle
+				}
+				node.TargetPageID = ref.targetPageID.String()
+				node.TargetHeadingBlockID = ""
+				if ref.targetAnchorBlockID != nil {
+					node.TargetHeadingBlockID = ref.targetAnchorBlockID.String()
+				}
+				node.DisplayText = ref.displayText
+				node.ResolutionStatus = ""
+				node.TargetNamespace = ""
+				node.NormalizedTitle = ""
+				node.ExpectedEntityType = ""
+				changed = true
+			}
+			if changed {
+				raw, err := json.Marshal(nodes)
+				if err != nil {
+					return fmt.Errorf("projection: encode resolved inline references: %w", err)
+				}
+				block.Content = raw
+			}
+		}
+		if err := applyResolvedPageReferencesToBlocks(block.Children, resolved); err != nil {
+			return err
+		}
 	}
 	return nil
 }

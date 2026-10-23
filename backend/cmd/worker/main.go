@@ -25,6 +25,7 @@ import (
 	"net/http"
 	"os"
 	"os/signal"
+	"sort"
 	"strings"
 	"syscall"
 	"time"
@@ -243,9 +244,17 @@ func run(args []string) int {
 	publishedHandler := resolver.WrapPublishedHandler(
 		projection.NewRevisionPublishedHandler(pool, registry, logger),
 	)
+	renderedPageAfterResolver := projection.NewRenderedPageBuilder(pool)
+	renderedSectionsAfterResolver := projection.NewRenderedSectionsBuilder(pool)
 	consumer.Register(page.OutboxEventRevisionPublished,
 		projection.HandlerFunc(func(ctx context.Context, event projection.Event) error {
 			if err := publishedHandler.Handle(ctx, event); err != nil {
+				return err
+			}
+			if err := renderedPageAfterResolver.HandleEvent(ctx, event); err != nil {
+				return err
+			}
+			if err := renderedSectionsAfterResolver.HandleEvent(ctx, event); err != nil {
 				return err
 			}
 			return relatedInvalidator.HandlePublishedPage(ctx, event.AggregateID)
@@ -260,31 +269,13 @@ func run(args []string) int {
 	entityGraph := projection.NewEntityGraphService(pool)
 	consumer.Register(
 		knowledge.OutboxEventClaimChanged,
-		projection.HandlerFunc(func(
-			ctx context.Context,
-			event projection.Event,
-		) error {
-			if err := claimChangedHandler.Handle(ctx, event); err != nil {
-				return err
-			}
-			payload, err := projection.DecodeClaimChangedPayload(
-				ctx, pool, event,
-			)
-			if err != nil {
-				return err
-			}
-			_, _, err = factConsistency.RebuildSubject(
-				ctx, payload.SubjectEntityID,
-			)
-			if err != nil {
-				return err
-			}
-			_, err = entityGraph.RebuildSubject(ctx, payload.SubjectEntityID)
-			if err != nil {
-				return err
-			}
-			return relatedInvalidator.HandleEntityIDs(ctx, payload.SubjectEntityID)
-		}),
+		claimChangedCompositeHandler{
+			pool:               pool,
+			claimChanged:       claimChangedHandler,
+			factConsistency:    factConsistency,
+			entityGraph:        entityGraph,
+			relatedInvalidator: relatedInvalidator,
+		},
 	)
 	consumer.Register(
 		knowledge.OutboxEventEntityMetadataChanged,
@@ -634,6 +625,51 @@ func runConsistencyCheck(ctx context.Context, logger *slog.Logger, pool *pgxpool
 		return exitError
 	}
 	return exitOK
+}
+
+type claimChangedCompositeHandler struct {
+	pool               *pgxpool.Pool
+	claimChanged       *projection.ClaimChangedHandler
+	factConsistency    *knowledge.FactConsistencyService
+	entityGraph        *projection.EntityGraphService
+	relatedInvalidator *projection.RelatedPagesInvalidator
+}
+
+func (h claimChangedCompositeHandler) Handle(ctx context.Context, event projection.Event) error {
+	return h.HandleBatch(ctx, []projection.Event{event})
+}
+
+func (h claimChangedCompositeHandler) HandleBatch(ctx context.Context, events []projection.Event) error {
+	subjects := map[uuid.UUID]bool{}
+	for _, event := range events {
+		if err := h.claimChanged.Handle(ctx, event); err != nil {
+			return err
+		}
+		payload, err := projection.DecodeClaimChangedPayload(ctx, h.pool, event)
+		if err != nil {
+			return err
+		}
+		subjects[payload.SubjectEntityID] = true
+	}
+	ordered := make([]uuid.UUID, 0, len(subjects))
+	for subjectID := range subjects {
+		ordered = append(ordered, subjectID)
+	}
+	sort.Slice(ordered, func(i, j int) bool {
+		return ordered[i].String() < ordered[j].String()
+	})
+	for _, subjectID := range ordered {
+		if _, _, err := h.factConsistency.RebuildSubject(ctx, subjectID); err != nil {
+			return err
+		}
+		if _, err := h.entityGraph.RebuildSubject(ctx, subjectID); err != nil {
+			return err
+		}
+		if err := h.relatedInvalidator.HandleEntityIDs(ctx, subjectID); err != nil {
+			return err
+		}
+	}
+	return nil
 }
 
 // registerBuilders 向注册表注册全部投影 Builder。

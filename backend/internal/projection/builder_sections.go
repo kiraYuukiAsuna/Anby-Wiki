@@ -46,6 +46,9 @@ func (b *RenderedSectionsBuilder) Rebuild(
 	if err != nil {
 		return err
 	}
+	if err := applyResolvedPageReferences(ctx, tx, pageID, revisionID, doc); err != nil {
+		return err
+	}
 	sections, err := splitRenderedSections(doc)
 	if err != nil {
 		return err

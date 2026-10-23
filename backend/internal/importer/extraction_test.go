@@ -31,6 +31,12 @@ type rejectingClaimKnowledge struct {
 	err      error
 }
 
+type existingClaimKnowledge struct {
+	property *knowledge.Property
+	entities map[uuid.UUID]*knowledge.Entity
+	claims   []knowledge.Claim
+}
+
 func (f rejectingClaimKnowledge) GetEntity(context.Context, uuid.UUID) (*knowledge.Entity, error) {
 	return nil, errors.New("planned IDs must not be read before Apply")
 }
@@ -41,6 +47,22 @@ func (f rejectingClaimKnowledge) GetPropertyByKey(context.Context, string) (*kno
 
 func (rejectingClaimKnowledge) ListClaims(context.Context, knowledge.ListClaimsParams) ([]knowledge.Claim, error) {
 	return nil, errors.New("rejected claims must not query existing claims")
+}
+
+func (f existingClaimKnowledge) GetEntity(_ context.Context, id uuid.UUID) (*knowledge.Entity, error) {
+	entity := f.entities[id]
+	if entity == nil {
+		return nil, knowledge.ErrEntityNotFound
+	}
+	return entity, nil
+}
+
+func (f existingClaimKnowledge) GetPropertyByKey(context.Context, string) (*knowledge.Property, error) {
+	return f.property, nil
+}
+
+func (f existingClaimKnowledge) ListClaims(context.Context, knowledge.ListClaimsParams) ([]knowledge.Claim, error) {
+	return f.claims, nil
 }
 
 func (plannedClaimKnowledge) GetEntity(context.Context, uuid.UUID) (*knowledge.Entity, error) {
@@ -544,6 +566,44 @@ func TestClassifyCreatesClaimBetweenTwoPlannedEntities(t *testing.T) {
 	}
 }
 
+func TestClassifyFindsExistingMultivalueSupportBeforeDifferentValue(t *testing.T) {
+	subjectID, authorAID, authorBID := uuid.New(), uuid.New(), uuid.New()
+	claimAID, claimBID, candidateID := uuid.New(), uuid.New(), uuid.New()
+	valueB, _ := json.Marshal(map[string]uuid.UUID{"entity_id": authorBID})
+	classifier := NewClaimClassifier(existingClaimKnowledge{
+		property: &knowledge.Property{
+			ID: uuid.New(), PropertyKey: "author",
+			ValueType: knowledge.ValueTypeEntity, IsMultivalued: true,
+		},
+		entities: map[uuid.UUID]*knowledge.Entity{
+			subjectID: {ID: subjectID},
+			authorBID: {ID: authorBID},
+		},
+		claims: []knowledge.Claim{
+			{
+				ID: claimAID, Status: knowledge.ClaimStatusPublished,
+				ValueJSON: json.RawMessage(`{"entity_id":"` + authorAID.String() + `"}`),
+			},
+			{
+				ID: claimBID, Status: knowledge.ClaimStatusPublished,
+				ValueJSON: json.RawMessage(`{"entity_id":"` + authorBID.String() + `"}`),
+			},
+		},
+	})
+
+	decisions, err := classifier.Classify(context.Background(), []ClaimCandidate{{
+		CandidateID: candidateID, Subject: CandidateSubject{EntityID: &subjectID},
+		PropertyKey: "author", Value: valueB,
+	}}, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(decisions) != 1 || decisions[0].Outcome != ClaimSupport ||
+		decisions[0].ExistingClaimID == nil || *decisions[0].ExistingClaimID != claimBID {
+		t.Fatalf("decisions=%#v, want support for existing author B", decisions)
+	}
+}
+
 func TestClassifyKeepsBestSingleValueClaimWithinPlannedBatch(t *testing.T) {
 	subjectCandidateID := uuid.New()
 	lowValueCandidateID, highValueCandidateID := uuid.New(), uuid.New()
@@ -762,6 +822,35 @@ func TestNormalizeCandidatesDeduplicatesNamesAndRejectsWrongRelationDirection(t 
 	selected = selectCandidatesForPlan(normalized, plan)
 	if len(selected.Entities) != 2 || len(selected.Claims) != 1 {
 		t.Fatalf("profile-only subject became an authoritative graph write: %#v", selected)
+	}
+}
+
+func TestNormalizeCandidatesPreservesSymbolicNamesAndAmbiguousAbbreviations(t *testing.T) {
+	cID, cSharpID, cPlusPlusID := uuid.New(), uuid.New(), uuid.New()
+	shortPersonID, michaelID, maryID := uuid.New(), uuid.New(), uuid.New()
+	candidates := &Candidates{SchemaVersion: 1, SourceVersionID: uuid.New(), QualityScore: 0.9,
+		Entities: []EntityCandidate{
+			{CandidateID: cID, TypeKey: "software", Label: "C", Aliases: []string{}},
+			{CandidateID: cSharpID, TypeKey: "software", Label: "C#", Aliases: []string{}},
+			{CandidateID: cPlusPlusID, TypeKey: "software", Label: "C++", Aliases: []string{}},
+			{CandidateID: shortPersonID, TypeKey: "person", Label: "M. Jones", Aliases: []string{}},
+			{CandidateID: michaelID, TypeKey: "person", Label: "Michael Jones", Aliases: []string{}},
+			{CandidateID: maryID, TypeKey: "person", Label: "Mary Jones", Aliases: []string{}},
+		},
+		Claims: []ClaimCandidate{}}
+
+	normalized := normalizeCandidatesForUse(candidates)
+	if len(normalized.Entities) != 6 {
+		t.Fatalf("distinct identities were merged: %#v", normalized.Entities)
+	}
+	labels := map[string]bool{}
+	for _, candidate := range normalized.Entities {
+		labels[candidate.Label] = true
+	}
+	for _, label := range []string{"C", "C#", "C++", "M. Jones", "Michael Jones", "Mary Jones"} {
+		if !labels[label] {
+			t.Fatalf("missing label %q after normalization: %#v", label, normalized.Entities)
+		}
 	}
 }
 

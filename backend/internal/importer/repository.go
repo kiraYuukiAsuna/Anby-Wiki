@@ -92,6 +92,40 @@ func (r *Repository) NextQueuedAIWikiID(
 	return wikiID, err
 }
 
+func (r *Repository) QueuedAIWikiIDs(ctx context.Context, limit int) ([]uuid.UUID, error) {
+	if limit <= 0 {
+		limit = 16
+	}
+	rows, err := r.pool.Query(ctx, `SELECT wiki_id FROM (
+			SELECT wiki_id, min(created_at) AS first_created_at, min(id) AS first_id
+			FROM import_job
+			WHERE status='queued' AND job_type='source_import'
+			  AND COALESCE(config_json->>'ingestion_mode',$1)<>$2
+			GROUP BY wiki_id
+		) queued
+		ORDER BY first_created_at,first_id LIMIT $3`,
+		IngestionModeWiki, IngestionModeSourceOnly, limit)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	result := []uuid.UUID{}
+	for rows.Next() {
+		var wikiID uuid.UUID
+		if err := rows.Scan(&wikiID); err != nil {
+			return nil, err
+		}
+		result = append(result, wikiID)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	if len(result) == 0 {
+		return nil, ErrNoQueuedJob
+	}
+	return result, nil
+}
+
 func (r *Repository) NextStaleRunningJobForUpdate(
 	ctx context.Context, tx pgx.Tx, staleBefore time.Time,
 ) (*Job, error) {
@@ -343,13 +377,15 @@ func (r *Repository) RequireAction(
 	tx pgx.Tx,
 	jobID, sourceVersionID uuid.UUID,
 	action string,
+	stage string,
+	errorJSON []byte,
 ) error {
 	command, err := r.q(tx).Exec(ctx, `UPDATE import_job
 		SET status=$2,source_version_id=$3,action_required=$4,current_stage=$5,
-			progress=$6,error_json=NULL,finished_at=NULL,updated_at=now()
+			progress=$6,error_json=$7::jsonb,finished_at=NULL,updated_at=now()
 		WHERE id=$1 AND status='running'`,
-		jobID, JobActionRequired, sourceVersionID, action, StagePlan,
-		stageProgress[StagePlan])
+		jobID, JobActionRequired, sourceVersionID, action, stage,
+		stageProgress[stage], errorJSON)
 	if err != nil {
 		return err
 	}

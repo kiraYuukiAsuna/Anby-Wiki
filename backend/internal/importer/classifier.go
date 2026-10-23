@@ -49,8 +49,8 @@ func NewClaimClassifier(service ClaimKnowledge) *ClaimClassifier {
 	return &ClaimClassifier{knowledge: service}
 }
 
-// Classify distinguishes exact support, a genuinely new fact, an overlapping
-// multivalue contradiction, and replacement of a single-valued fact.
+// Classify distinguishes exact support, a genuinely new fact, and replacement
+// of a single-valued fact.
 func (c *ClaimClassifier) Classify(ctx context.Context, candidates []ClaimCandidate, resolutions []EntityResolution) ([]ClaimDecision, error) {
 	resolved := make(map[uuid.UUID]uuid.UUID)
 	planned := make(map[uuid.UUID]bool)
@@ -170,6 +170,7 @@ func (c *ClaimClassifier) Classify(ctx context.Context, candidates []ClaimCandid
 		if err != nil {
 			return nil, err
 		}
+		var singleValueReplacement *knowledge.Claim
 		for i := range claims {
 			existing := &claims[i]
 			if !activeClaim(existing.Status) {
@@ -182,26 +183,20 @@ func (c *ClaimClassifier) Classify(ctx context.Context, candidates []ClaimCandid
 				decision.Reason = "same normalized value and validity interval already exists"
 				break
 			}
-			if property.IsMultivalued &&
-				!timeRangesOverlap(candidate.ValidFrom, candidate.ValidTo, existing.ValidFrom, existing.ValidTo) {
-				continue
+			if !property.IsMultivalued && singleValueReplacement == nil {
+				singleValueReplacement = existing
 			}
-			claimID := existing.ID
+		}
+		if decision.Outcome != ClaimSupport && singleValueReplacement != nil {
+			claimID := singleValueReplacement.ID
 			decision.ExistingClaimID = &claimID
-			if property.IsMultivalued {
-				decision.Outcome = ClaimContradiction
-				decision.Risk = RiskMedium
-				decision.Reason = "different value overlaps an active multivalued claim"
-			} else {
-				decision.Outcome = ClaimSupersede
-				decision.Risk = RiskMedium
-				decision.Reason = "single-valued property requires replacing the active claim"
-			}
-			if existing.VerificationStatus == knowledge.VerificationHumanVerified {
+			decision.Outcome = ClaimSupersede
+			decision.Risk = RiskMedium
+			decision.Reason = "single-valued property requires replacing the active claim"
+			if singleValueReplacement.VerificationStatus == knowledge.VerificationHumanVerified {
 				decision.Risk = RiskHigh
 				decision.Reason += "; existing claim is human-verified"
 			}
-			break
 		}
 		recordDecision(candidate, property, decision)
 	}

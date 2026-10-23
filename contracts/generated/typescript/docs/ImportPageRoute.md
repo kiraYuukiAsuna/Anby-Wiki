@@ -9,6 +9,7 @@ Name | Type
 `action` | string
 `title` | string
 `pageId` | string
+`plannedRevisionId` | string
 `reason` | string
 `confidence` | number
 `relatedTo` | Array&lt;string&gt;
@@ -25,6 +26,7 @@ const example = {
   "action": null,
   "title": null,
   "pageId": null,
+  "plannedRevisionId": null,
   "reason": null,
   "confidence": null,
   "relatedTo": null,

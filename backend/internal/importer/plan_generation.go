@@ -91,10 +91,12 @@ func DecodeGeneratedImportPlan(raw []byte, sourceVersionID uuid.UUID, chunks []e
 
 	candidateByID := make(map[uuid.UUID]PageCandidate, len(candidates))
 	blockOwner := map[string]uuid.UUID{}
+	blockByID := map[string]PageCandidateBlock{}
 	for _, candidate := range candidates {
 		candidateByID[candidate.PageID] = candidate
 		for _, block := range candidate.Blocks {
 			blockOwner[block.ID] = candidate.PageID
+			blockByID[block.ID] = block
 		}
 	}
 	catalog := newEvidenceCatalog(sourceVersionID, chunks)
@@ -120,13 +122,17 @@ func DecodeGeneratedImportPlan(raw []byte, sourceVersionID uuid.UUID, chunks []e
 			route.PageID = nil
 		case RouteUpdate, RouteLink:
 			if route.PageID == nil {
-				continue
+				if route.Action == RouteUpdate {
+					continue
+				}
+			} else {
+				candidate, ok := candidateByID[*route.PageID]
+				if !ok {
+					continue
+				}
+				route.Title = candidate.Title
+				route.PlannedRevisionID = candidate.CurrentRevisionID
 			}
-			candidate, ok := candidateByID[*route.PageID]
-			if !ok {
-				continue
-			}
-			route.Title = candidate.Title
 		case RouteIgnore:
 			route.PageID = nil
 		default:
@@ -157,6 +163,10 @@ func DecodeGeneratedImportPlan(raw []byte, sourceVersionID uuid.UUID, chunks []e
 				blockOwner[*sourceBlock.ReplaceBlockID] == *route.PageID {
 				block.Mode = BlockReplace
 				block.TargetBlockID = sourceBlock.ReplaceBlockID
+				if candidateBlock, ok := blockByID[*sourceBlock.ReplaceBlockID]; ok {
+					hash := candidateBlock.Hash
+					block.TargetBlockHash = &hash
+				}
 			}
 			retainedBlocks++
 			route.Blocks = append(route.Blocks, block)

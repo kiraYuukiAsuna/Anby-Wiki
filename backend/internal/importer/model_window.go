@@ -43,12 +43,15 @@ func modelSourceChunkViews(chunks []modelSourceChunk) []evidence.SourceChunk {
 }
 
 func batchModelSourceChunks(chunks []modelSourceChunk, maxInputTokens int) [][]modelSourceChunk {
+	return batchModelSourceChunksWithinLimit(chunks, modelChunkBudget(maxInputTokens), extractionBatchMaxChunks)
+}
+
+func modelChunkBudget(maxInputTokens int) int {
 	if maxInputTokens <= 0 {
 		maxInputTokens = DefaultModelMaxInputTokens
 	}
 	reserve := max(extractionInputMinReserve, maxInputTokens/5)
-	budget := min(max(1, maxInputTokens-reserve), extractionBatchTarget)
-	return batchModelSourceChunksWithinLimit(chunks, budget, extractionBatchMaxChunks)
+	return min(max(1, maxInputTokens-reserve), extractionBatchTarget)
 }
 
 func batchModelSourceChunksWithinBudget(chunks []modelSourceChunk, budget int) [][]modelSourceChunk {
@@ -62,6 +65,18 @@ func batchPlanSourceChunks(chunks []modelSourceChunk, maxInputTokens int) [][]mo
 	reserve := max(extractionInputMinReserve, maxInputTokens/5)
 	budget := min(max(1, maxInputTokens-reserve), extractionBatchTarget)
 	return batchModelSourceChunksWithinLimit(chunks, budget, 0)
+}
+
+func oversizedModelSourceChunks(batches [][]modelSourceChunk, budget int) []modelSourceChunk {
+	result := []modelSourceChunk{}
+	for _, batch := range batches {
+		for _, chunk := range batch {
+			if estimateChunkInputTokens(chunk.View) > budget {
+				result = append(result, chunk)
+			}
+		}
+	}
+	return result
 }
 
 func batchModelSourceChunksWithinLimit(chunks []modelSourceChunk, budget, maxChunks int) [][]modelSourceChunk {

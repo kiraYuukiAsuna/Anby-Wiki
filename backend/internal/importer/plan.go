@@ -109,17 +109,19 @@ type PlannedBlock struct {
 	HasRowHeader    bool                `json:"has_row_header,omitempty"`
 	Children        []PlannedBlock      `json:"children,omitempty"`
 	Evidence        []CandidateEvidence `json:"evidence"`
+	TargetBlockHash *string             `json:"target_block_hash,omitempty"`
 }
 
 type PageRoute struct {
-	Action     string              `json:"action"`
-	Title      string              `json:"title"`
-	PageID     *uuid.UUID          `json:"page_id"`
-	Reason     string              `json:"reason"`
-	Confidence float64             `json:"confidence"`
-	RelatedTo  []string            `json:"related_to"`
-	Evidence   []CandidateEvidence `json:"evidence"`
-	Blocks     []PlannedBlock      `json:"blocks"`
+	Action            string              `json:"action"`
+	Title             string              `json:"title"`
+	PageID            *uuid.UUID          `json:"page_id"`
+	PlannedRevisionID *uuid.UUID          `json:"planned_revision_id,omitempty"`
+	Reason            string              `json:"reason"`
+	Confidence        float64             `json:"confidence"`
+	RelatedTo         []string            `json:"related_to"`
+	Evidence          []CandidateEvidence `json:"evidence"`
+	Blocks            []PlannedBlock      `json:"blocks"`
 }
 
 type ImportPlan struct {
@@ -290,9 +292,11 @@ func (p *PagePlanner) Plan(ctx context.Context, params PlanParams) (*PlanResult,
 	if plan.PromptInjectionDetected {
 		return nil, ErrQualityGate
 	}
-	if err := p.resolveCreateCollisions(ctx, params, plan); err != nil {
+	collisionPages, err := p.resolveCreateCollisions(ctx, params, plan)
+	if err != nil {
 		return nil, err
 	}
+	candidatePages = mergePageCandidates(candidatePages, collisionPages)
 	p.removeNoOpUpdates(plan, candidatePages)
 	plan.Routes = mergePageRoutes(plan.Routes)
 	plan.Routes = normalizePlanLinks(plan.Routes)
@@ -376,6 +380,9 @@ type generatedPlanBatch struct {
 
 func (p *PagePlanner) generatePlan(ctx context.Context, params PlanParams, candidates []PageCandidate) (*generatedImportPlan, error) {
 	batches := batchPlanSourceChunks(initialModelSourceChunks(params.Chunks), params.MaxInputTokens)
+	if overBudget := oversizedModelSourceChunks(batches, modelChunkBudget(params.MaxInputTokens)); len(overBudget) > 0 {
+		return nil, ErrModelInputTooLarge
+	}
 	type planBatchOutcome struct {
 		batch generatedPlanBatch
 		err   error
@@ -608,10 +615,12 @@ func ValidateImportPlan(raw []byte, sourceVersionID uuid.UUID, chunks []evidence
 	}
 	candidateByID := make(map[uuid.UUID]PageCandidate, len(candidates))
 	blockOwner := map[string]uuid.UUID{}
+	blockByID := map[string]PageCandidateBlock{}
 	for _, candidate := range candidates {
 		candidateByID[candidate.PageID] = candidate
 		for _, block := range candidate.Blocks {
 			blockOwner[block.ID] = candidate.PageID
+			blockByID[block.ID] = block
 		}
 	}
 	catalog := newEvidenceCatalog(sourceVersionID, chunks)
@@ -625,13 +634,19 @@ func ValidateImportPlan(raw []byte, sourceVersionID uuid.UUID, chunks []evidence
 		}
 		if route.Action == RouteUpdate || route.Action == RouteLink {
 			if route.PageID == nil {
-				continue
+				if route.Action == RouteUpdate {
+					continue
+				}
+			} else {
+				candidate, ok := candidateByID[*route.PageID]
+				if !ok {
+					continue
+				}
+				route.Title = candidate.Title
+				if route.PlannedRevisionID == nil {
+					route.PlannedRevisionID = candidate.CurrentRevisionID
+				}
 			}
-			candidate, ok := candidateByID[*route.PageID]
-			if !ok {
-				continue
-			}
-			route.Title = candidate.Title
 		}
 		if route.Action == RouteLink {
 			route.Evidence = catalog.normalize(route.Evidence)
@@ -662,6 +677,12 @@ func ValidateImportPlan(raw []byte, sourceVersionID uuid.UUID, chunks []evidence
 			if route.Action == RouteUpdate && block.Mode == BlockReplace {
 				if block.TargetBlockID == nil || blockOwner[*block.TargetBlockID] != *route.PageID {
 					continue
+				}
+				if block.TargetBlockHash == nil {
+					if candidateBlock, ok := blockByID[*block.TargetBlockID]; ok {
+						hash := candidateBlock.Hash
+						block.TargetBlockHash = &hash
+					}
 				}
 			}
 			if route.Action == RouteUpdate && block.Mode == BlockAppend && block.TargetBlockID != nil {
@@ -864,16 +885,34 @@ func (p *PagePlanner) recallPages(ctx context.Context, params PlanParams) ([]Pag
 		terms = append(terms, candidate.Aliases...)
 	}
 	seenTerm := map[string]bool{}
-	hits := map[uuid.UUID]page.PageSearchHit{}
+	type rankedHit struct {
+		hit   page.PageSearchHit
+		score int
+		order int
+	}
+	hits := map[uuid.UUID]rankedHit{}
+	termOrder := 0
+	remember := func(hit page.PageSearchHit, score int) {
+		if existing, ok := hits[hit.ID]; ok {
+			if score > existing.score {
+				existing.hit = hit
+				existing.score = score
+				hits[hit.ID] = existing
+			}
+			return
+		}
+		hits[hit.ID] = rankedHit{hit: hit, score: score, order: termOrder}
+		termOrder++
+	}
 	if params.TargetPageID != nil && *params.TargetPageID != uuid.Nil {
 		target, err := p.pages.GetPage(ctx, *params.TargetPageID)
 		if err != nil || target.WikiID != params.WikiID || target.DeletedAt != nil {
 			return nil, ErrPlanTargetConflict
 		}
-		hits[target.ID] = page.PageSearchHit{ID: target.ID, DisplayTitle: target.DisplayTitle,
-			NamespaceKey: "main", MatchedOn: "explicit"}
+		remember(page.PageSearchHit{ID: target.ID, DisplayTitle: target.DisplayTitle,
+			NamespaceKey: "main", MatchedOn: "explicit"}, 1000)
 		if params.RouteMode == RouteModeForceUpdate {
-			candidate, err := p.loadPageCandidate(ctx, hits[target.ID])
+			candidate, err := p.loadPageCandidate(ctx, hits[target.ID].hit)
 			if err != nil {
 				return nil, err
 			}
@@ -883,7 +922,7 @@ func (p *PagePlanner) recallPages(ctx context.Context, params PlanParams) ([]Pag
 	for _, rawTerm := range terms {
 		term := strings.TrimSpace(rawTerm)
 		key := strings.ToLower(term)
-		if term == "" || seenTerm[key] || len(seenTerm) >= 32 || len(hits) >= 20 {
+		if term == "" || seenTerm[key] || len(seenTerm) >= 32 {
 			continue
 		}
 		seenTerm[key] = true
@@ -892,33 +931,54 @@ func (p *PagePlanner) recallPages(ctx context.Context, params PlanParams) ([]Pag
 			return nil, err
 		}
 		for _, hit := range found {
-			if _, exists := hits[hit.ID]; !exists {
-				hits[hit.ID] = hit
-			}
+			remember(hit, recallHitScore(hit, term))
 		}
 	}
-	ordered := make([]page.PageSearchHit, 0, len(hits))
+	ordered := make([]rankedHit, 0, len(hits))
 	for _, hit := range hits {
 		ordered = append(ordered, hit)
 	}
 	sort.Slice(ordered, func(i, j int) bool {
-		if ordered[i].DisplayTitle == ordered[j].DisplayTitle {
-			return ordered[i].ID.String() < ordered[j].ID.String()
+		if ordered[i].score != ordered[j].score {
+			return ordered[i].score > ordered[j].score
 		}
-		return strings.ToLower(ordered[i].DisplayTitle) < strings.ToLower(ordered[j].DisplayTitle)
+		if ordered[i].order != ordered[j].order {
+			return ordered[i].order < ordered[j].order
+		}
+		if ordered[i].hit.DisplayTitle == ordered[j].hit.DisplayTitle {
+			return ordered[i].hit.ID.String() < ordered[j].hit.ID.String()
+		}
+		return strings.ToLower(ordered[i].hit.DisplayTitle) < strings.ToLower(ordered[j].hit.DisplayTitle)
 	})
 	if len(ordered) > 12 {
 		ordered = ordered[:12]
 	}
 	result := make([]PageCandidate, 0, len(ordered))
 	for _, hit := range ordered {
-		candidate, err := p.loadPageCandidate(ctx, hit)
+		candidate, err := p.loadPageCandidate(ctx, hit.hit)
 		if err != nil {
 			return nil, err
 		}
 		result = append(result, candidate)
 	}
 	return result, nil
+}
+
+func recallHitScore(hit page.PageSearchHit, term string) int {
+	if normalizedPlanText(hit.DisplayTitle) == normalizedPlanText(term) {
+		if hit.MatchedOn == page.MatchedOnAlias {
+			return 850
+		}
+		return 900
+	}
+	switch hit.MatchedOn {
+	case page.MatchedOnTitle:
+		return 500
+	case page.MatchedOnAlias:
+		return 850
+	default:
+		return 100
+	}
 }
 
 func (p *PagePlanner) loadPageCandidate(ctx context.Context, hit page.PageSearchHit) (PageCandidate, error) {
@@ -1013,7 +1073,8 @@ func plannedBlockTextFromAST(block *ast.Block) string {
 	return strings.TrimSpace(strings.Join(parts, "\n"))
 }
 
-func (p *PagePlanner) resolveCreateCollisions(ctx context.Context, params PlanParams, plan *ImportPlan) error {
+func (p *PagePlanner) resolveCreateCollisions(ctx context.Context, params PlanParams, plan *ImportPlan) ([]PageCandidate, error) {
+	collisions := []PageCandidate{}
 	for index := range plan.Routes {
 		route := &plan.Routes[index]
 		if route.Action != RouteCreate {
@@ -1024,10 +1085,17 @@ func (p *PagePlanner) resolveCreateCollisions(ctx context.Context, params PlanPa
 			continue
 		}
 		if err != nil {
-			return err
+			return nil, err
 		}
 		if params.RouteMode == RouteModeForceCreate {
-			return fmt.Errorf("%w: title=%q", ErrPlanTargetConflict, route.Title)
+			return nil, fmt.Errorf("%w: title=%q", ErrPlanTargetConflict, route.Title)
+		}
+		candidate, err := p.loadPageCandidate(ctx, page.PageSearchHit{
+			ID: resolved.Page.ID, DisplayTitle: resolved.Page.DisplayTitle,
+			NamespaceKey: "main", MatchedOn: page.MatchedOnTitle,
+		})
+		if err != nil {
+			return nil, err
 		}
 		// Exact title/alias resolution is stronger than a model create decision.
 		// Reuse the authoritative Page and retain only append intents; the model
@@ -1036,13 +1104,16 @@ func (p *PagePlanner) resolveCreateCollisions(ctx context.Context, params PlanPa
 		route.Action = RouteUpdate
 		route.PageID = &resolved.Page.ID
 		route.Title = resolved.Page.DisplayTitle
+		route.PlannedRevisionID = candidate.CurrentRevisionID
 		rewriteRelatedTitle(plan.Routes, previousTitle, route.Title)
 		for blockIndex := range route.Blocks {
 			route.Blocks[blockIndex].Mode = BlockAppend
 			route.Blocks[blockIndex].TargetBlockID = nil
+			route.Blocks[blockIndex].TargetBlockHash = nil
 		}
+		collisions = append(collisions, candidate)
 	}
-	return nil
+	return collisions, nil
 }
 
 func (p *PagePlanner) removeNoOpUpdates(plan *ImportPlan, candidates []PageCandidate) {
@@ -1082,6 +1153,22 @@ func (p *PagePlanner) removeNoOpUpdates(plan *ImportPlan, candidates []PageCandi
 			route.Action = RouteLink
 		}
 	}
+}
+
+func mergePageCandidates(existing, incoming []PageCandidate) []PageCandidate {
+	result := append([]PageCandidate(nil), existing...)
+	seen := make(map[uuid.UUID]bool, len(result)+len(incoming))
+	for _, candidate := range result {
+		seen[candidate.PageID] = true
+	}
+	for _, candidate := range incoming {
+		if candidate.PageID == uuid.Nil || seen[candidate.PageID] {
+			continue
+		}
+		seen[candidate.PageID] = true
+		result = append(result, candidate)
+	}
+	return result
 }
 
 func mergeImportPlanParts(sourceVersionID uuid.UUID, parts []*ImportPlan) *ImportPlan {

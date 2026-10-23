@@ -22,6 +22,7 @@ var (
 	ErrQualityGate         = errors.New("importer: 质量门禁未通过")
 	ErrAmbiguousEntity     = errors.New("importer: 实体匹配存在歧义")
 	ErrEvidenceRequired    = errors.New("importer: 候选缺少可核验证据")
+	ErrModelInputTooLarge  = errors.New("importer: 结构化内容超过模型窗口预算")
 	ErrNoQueuedJob         = errors.New("importer: 没有排队中的导入任务")
 	ErrSourceOnlyFormat    = errors.New("importer: source_only 仅支持确定性解析格式")
 )
@@ -34,8 +35,9 @@ const (
 	JobFailed         = "failed"
 	JobCancelled      = "cancelled"
 
-	ActionConfirmPlan = "confirm_plan"
-	ActionQualityGate = "quality_gate"
+	ActionConfirmPlan     = "confirm_plan"
+	ActionQualityGate     = "quality_gate"
+	ActionResolveEntities = "resolve_entities"
 
 	IngestionModeWiki       = "wiki"
 	IngestionModeSourceOnly = "source_only"
@@ -112,11 +114,36 @@ type StageRun struct {
 }
 
 type JobDetail struct {
-	Job    *Job          `json:"job"`
-	Runs   []Run         `json:"runs"`
-	Stages []StageRun    `json:"stages"`
-	Plan   *ImportPlan   `json:"plan"`
-	Plans  []PlanVersion `json:"plans"`
+	Job         *Job          `json:"job"`
+	Runs        []Run         `json:"runs"`
+	Stages      []StageRun    `json:"stages"`
+	Plan        *ImportPlan   `json:"plan"`
+	Plans       []PlanVersion `json:"plans"`
+	MatchReview *MatchReview  `json:"match_review,omitempty"`
+}
+
+type MatchReview struct {
+	Resolutions   []EntityResolution   `json:"resolutions"`
+	Candidates    []EntityMatchReview  `json:"candidates"`
+	SkippedClaims []SkippedClaimReview `json:"skipped_claims"`
+}
+
+type EntityMatchReview struct {
+	CandidateID     uuid.UUID           `json:"candidate_id"`
+	TypeKey         string              `json:"type_key"`
+	Label           string              `json:"label"`
+	Aliases         []string            `json:"aliases"`
+	Outcome         string              `json:"outcome"`
+	EntityID        *uuid.UUID          `json:"entity_id,omitempty"`
+	PlannedEntityID *uuid.UUID          `json:"planned_entity_id,omitempty"`
+	Score           float64             `json:"score"`
+	Reason          string              `json:"reason"`
+	Alternatives    []EntityAlternative `json:"alternatives"`
+}
+
+type SkippedClaimReview struct {
+	CandidateID uuid.UUID `json:"candidate_id"`
+	Reason      string    `json:"reason"`
 }
 
 type JobPage struct {

@@ -50,6 +50,12 @@ export interface ImportPlannedBlock {
      * @type {string}
      * @memberof ImportPlannedBlock
      */
+    targetBlockHash?: string;
+    /**
+     *
+     * @type {string}
+     * @memberof ImportPlannedBlock
+     */
     text?: string;
     /**
      *
@@ -197,6 +203,7 @@ export function ImportPlannedBlockFromJSONTyped(json: any, ignoreDiscriminator: 
         'type': json['type'],
         'mode': json['mode'],
         'targetBlockId': json['target_block_id'],
+        'targetBlockHash': json['target_block_hash'] == null ? undefined : json['target_block_hash'],
         'text': json['text'] == null ? undefined : json['text'],
         'level': json['level'] == null ? undefined : json['level'],
         'isToggleable': json['is_toggleable'] == null ? undefined : json['is_toggleable'],
@@ -230,6 +237,7 @@ export function ImportPlannedBlockToJSONTyped(value?: ImportPlannedBlock | null,
         'type': value['type'],
         'mode': value['mode'],
         'target_block_id': value['targetBlockId'],
+        'target_block_hash': value['targetBlockHash'],
         'text': value['text'],
         'level': value['level'],
         'is_toggleable': value['isToggleable'],
