@@ -28,6 +28,7 @@ import { Button } from "@/components/ui/button";
 import { collectionsApi, projectionApi } from "@/lib/api";
 import { parseDocument } from "@/lib/ast/schema";
 import { extractToc } from "@/lib/ast/toc";
+import { serverApiOptions } from "@/lib/server-api";
 import type {
   DocumentOutline,
   PageCollectionList,
@@ -70,13 +71,16 @@ export async function PageView({ data }: { data: PageWithContent }) {
     redirect?.target.kind === "page_section"
       ? redirect.target.anchorBlockId
       : undefined;
+  const apiOptions = await serverApiOptions();
+  const projections = projectionApi(apiOptions);
+  const collectionsClient = collectionsApi(apiOptions);
 
   const [outlineResult, referencesResult, relatedResult, collectionsResult] =
     await Promise.allSettled([
-      projectionApi().getPageOutline({ id: page.id }),
-      projectionApi().getPageReferences({ id: page.id }),
-      projectionApi().getRelatedPages({ id: page.id }),
-      collectionsApi().listPageCollections({ id: page.id }),
+      projections.getPageOutline({ id: page.id }),
+      projections.getPageReferences({ id: page.id }),
+      projections.getRelatedPages({ id: page.id }),
+      collectionsClient.listPageCollections({ id: page.id }),
     ]);
   const outline = fulfilled<DocumentOutline>(outlineResult);
   const projectedToc = (outline?.items ?? []).map((item) => ({
