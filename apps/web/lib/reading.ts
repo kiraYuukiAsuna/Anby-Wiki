@@ -9,6 +9,7 @@ import {
   type PageWithContent,
 } from "../../../contracts/generated/typescript";
 import { readingApi } from "./api";
+import { serverApiOptions } from "./server-api";
 
 /** 默认阅读命名空间。 */
 export const DEFAULT_NAMESPACE = "main";
@@ -34,13 +35,15 @@ async function fetchPage(
 }
 
 /** 按标题/别名读取页面当前版本（namespace=main）。 */
-export function fetchPageByTitle(title: string): Promise<FetchPageResult> {
+export async function fetchPageByTitle(title: string): Promise<FetchPageResult> {
+  const api = readingApi(await serverApiOptions());
   return fetchPage(() =>
-    readingApi().getPageByTitle({ namespace: DEFAULT_NAMESPACE, title }),
+    api.getPageByTitle({ namespace: DEFAULT_NAMESPACE, title }),
   );
 }
 
 /** 按页面 ID 读取当前版本。 */
-export function fetchPageById(id: string): Promise<FetchPageResult> {
-  return fetchPage(() => readingApi().getPageByID({ id }));
+export async function fetchPageById(id: string): Promise<FetchPageResult> {
+  const api = readingApi(await serverApiOptions());
+  return fetchPage(() => api.getPageByID({ id }));
 }

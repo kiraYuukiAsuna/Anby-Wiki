@@ -5,6 +5,7 @@
  * 客户端「加载更多」翻页与回滚写操作才在客户端走 SWR / 事件内调用。
  */
 import {
+  type ConfigurationParameters,
   ResponseError,
   type DocumentDiff,
   type RevisionDetail,
@@ -34,27 +35,33 @@ async function fetchHistory<T>(
 }
 
 /** 读取 Revision 历史第一页（created_at DESC, id DESC）。 */
-export function fetchRevisionList(
+export async function fetchRevisionList(
   id: string,
+  options: ConfigurationParameters = {},
 ): Promise<FetchHistoryResult<RevisionListPage>> {
+  const api = historyApi(options);
   return fetchHistory(() =>
-    historyApi().listRevisions({ id, pageSize: HISTORY_PAGE_SIZE }),
+    api.listRevisions({ id, pageSize: HISTORY_PAGE_SIZE }),
   );
 }
 
 /** 读取单版详情（Revision 元信息 + canonical AST）。 */
-export function fetchRevisionDetail(
+export async function fetchRevisionDetail(
   id: string,
   rid: string,
+  options: ConfigurationParameters = {},
 ): Promise<FetchHistoryResult<RevisionDetail>> {
-  return fetchHistory(() => historyApi().getRevision({ id, rid }));
+  const api = historyApi(options);
+  return fetchHistory(() => api.getRevision({ id, rid }));
 }
 
 /** 读取两版结构 Diff（from=base，to=current）。 */
-export function fetchRevisionDiff(
+export async function fetchRevisionDiff(
   id: string,
   from: string,
   to: string,
+  options: ConfigurationParameters = {},
 ): Promise<FetchHistoryResult<DocumentDiff>> {
-  return fetchHistory(() => historyApi().diffRevisions({ id, from, to }));
+  const api = historyApi(options);
+  return fetchHistory(() => api.diffRevisions({ id, from, to }));
 }

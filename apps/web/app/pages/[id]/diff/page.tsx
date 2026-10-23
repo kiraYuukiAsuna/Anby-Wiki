@@ -8,6 +8,7 @@ import { shortId } from "@/components/history/utils";
 import { Button } from "@/components/ui/button";
 import { fetchRevisionDiff } from "@/lib/history";
 import { fetchPageById } from "@/lib/reading";
+import { serverApiOptions } from "@/lib/server-api";
 
 export const dynamic = "force-dynamic";
 
@@ -52,7 +53,12 @@ export default async function PageDiffPage({
     from === to
       ? { changes: [] }
       : await (async () => {
-          const result = await fetchRevisionDiff(id, from, to);
+          const result = await fetchRevisionDiff(
+            id,
+            from,
+            to,
+            await serverApiOptions(),
+          );
           if (result.kind === "not_found") notFound();
           return result.data;
         })();

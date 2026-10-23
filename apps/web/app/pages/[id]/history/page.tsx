@@ -7,6 +7,7 @@ import { RevisionList } from "@/components/history/revision-list";
 import { Button } from "@/components/ui/button";
 import { fetchRevisionList } from "@/lib/history";
 import { fetchPageById } from "@/lib/reading";
+import { serverApiOptions } from "@/lib/server-api";
 
 export const dynamic = "force-dynamic";
 
@@ -16,9 +17,10 @@ export default async function PageHistoryPage({
   params: Promise<{ id: string }>;
 }) {
   const { id } = await params;
+  const apiOptions = await serverApiOptions();
   const [pageResult, listResult] = await Promise.all([
     fetchPageById(id),
-    fetchRevisionList(id),
+    fetchRevisionList(id, apiOptions),
   ]);
 
   if (pageResult.kind !== "ok" || listResult.kind === "not_found") {

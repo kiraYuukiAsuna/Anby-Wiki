@@ -7,6 +7,7 @@ import { RevisionDetailView } from "@/components/history/revision-detail-view";
 import { Button } from "@/components/ui/button";
 import { fetchRevisionDetail } from "@/lib/history";
 import { fetchPageById } from "@/lib/reading";
+import { serverApiOptions } from "@/lib/server-api";
 
 export const dynamic = "force-dynamic";
 
@@ -16,9 +17,10 @@ export default async function RevisionDetailPage({
   params: Promise<{ id: string; rid: string }>;
 }) {
   const { id, rid } = await params;
+  const apiOptions = await serverApiOptions();
   const [pageResult, detailResult] = await Promise.all([
     fetchPageById(id),
-    fetchRevisionDetail(id, rid),
+    fetchRevisionDetail(id, rid, apiOptions),
   ]);
 
   if (pageResult.kind !== "ok" || detailResult.kind === "not_found") {
