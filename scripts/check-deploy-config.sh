@@ -15,6 +15,7 @@ fail() {
 for script in \
   "$ROOT/scripts/deploy.sh" \
   "$ROOT/scripts/deploy-production.sh" \
+  "$ROOT/scripts/cleanup-production.sh" \
   "$ROOT/scripts/production-common.sh" \
   "$ROOT/scripts/install-nginx.sh" \
   "$ROOT/scripts/enable-tls.sh" \
@@ -24,6 +25,16 @@ for script in \
 do
   /bin/sh -n "$script"
 done
+
+grep -Fq 'sh "$ROOT/scripts/cleanup-production.sh"' "$ROOT/scripts/deploy-production.sh" ||
+  fail "successful production deployment must run cleanup"
+if grep -Eq 'deploy-backups|pg_dump' "$ROOT/scripts/deploy-production.sh" "$ROOT/scripts/prepare-production.py"; then
+  fail "production deployment must not create persistent deployment backups"
+fi
+grep -Fq 'docker builder prune --all --force' "$ROOT/scripts/cleanup-production.sh" ||
+  fail "production cleanup must remove unused build cache"
+grep -Fq 'anby-wiki-worker' "$ROOT/scripts/cleanup-production.sh" ||
+  fail "production cleanup must remove old versioned application images"
 
 if command -v ruby >/dev/null 2>&1; then
   ruby -e "require 'yaml'; YAML.safe_load(File.read(ARGV.fetch(0)), aliases: true)" "$COMPOSE_FILE"

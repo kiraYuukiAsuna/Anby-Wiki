@@ -13,20 +13,17 @@ for command in git docker python3 flock nginx certbot curl openssl systemctl; do
   command -v "$command" >/dev/null || { echo "Missing deployment tool: $command" >&2; exit 1; }
 done
 umask 077
-install -d -m 0700 "$ROOT/data" "$ROOT/Secret" "$ROOT/Secret/deploy-backups" "$ROOT/data/deploy-backups"
+install -d -m 0700 "$ROOT/data" "$ROOT/Secret"
 exec 9> "$ROOT/data/deploy.lock"
 flock -n 9 || { echo 'Another Anby Wiki deployment is running.' >&2; exit 1; }
 [ -z "$(git status --porcelain)" ] || { echo 'Commit or preserve checkout changes before deploying.' >&2; exit 1; }
 if [ "$pull" = true ]; then git pull --ff-only </dev/null; fi
 DEPLOY_ENV_FILE=${DEPLOY_ENV_FILE:-"$ROOT/.env"}
 export DEPLOY_ENV_FILE
-deployment="$(date -u '+%Y%m%dT%H%M%SZ')-$$"
-private_backup="$ROOT/Secret/deploy-backups/$deployment"
-data_backup="$ROOT/data/deploy-backups/$deployment"
-install -d -m 0700 "$private_backup" "$data_backup"
+rollback_state=$(mktemp -d "${TMPDIR:-/tmp}/anby-wiki-deploy.XXXXXX")
 previous=false
 if [ -f "$DEPLOY_ENV_FILE" ]; then
-  cp -p "$DEPLOY_ENV_FILE" "$private_backup/environment"
+  cp -p "$DEPLOY_ENV_FILE" "$rollback_state/environment"
   # A prepared environment from an interrupted first deployment is not a
   # previously accepted release. Never restore its open bootstrap registration.
   if [ -s "$ROOT/Secret/current-release" ] &&
@@ -34,31 +31,24 @@ if [ -f "$DEPLOY_ENV_FILE" ]; then
     previous=true
   fi
 fi
-git rev-parse HEAD > "$private_backup/source-commit"
-if [ -f /etc/nginx/sites-available/anby-wiki ]; then
-  cp -p /etc/nginx/sites-available/anby-wiki "$private_backup/nginx.conf"
-fi
 cleanup() {
   result=$?
   trap - EXIT
   if [ "$result" -ne 0 ] && [ "$previous" = true ]; then
-    cp -p "$private_backup/environment" "$DEPLOY_ENV_FILE"
+    cp -p "$rollback_state/environment" "$DEPLOY_ENV_FILE"
     old_release=$(python3 "$ROOT/scripts/production_environment.py" get "$DEPLOY_ENV_FILE" RELEASE_ID)
     if DEPLOY_CONFIRM="DEPLOY:$old_release" sh "$ROOT/scripts/deploy.sh" rollback \
-      > "$private_backup/rollback.log" 2>&1; then
+      > "$rollback_state/rollback.log" 2>&1; then
       echo 'Previous application release restored; database migrations retained.' >&2
     else
-      echo "Automatic application rollback failed; inspect $private_backup/rollback.log." >&2
+      echo 'Automatic application rollback failed:' >&2
+      cat "$rollback_state/rollback.log" >&2
     fi
   fi
+  rm -rf -- "$rollback_state"
   exit "$result"
 }
 trap cleanup EXIT
-if [ -f "$DEPLOY_ENV_FILE" ] && [ "$(docker inspect --format '{{.State.Running}}' anby-wiki-production-postgres-1 2>/dev/null || true)" = true ]; then
-  python3 "$ROOT/scripts/production_environment.py" exec "$DEPLOY_ENV_FILE" \
-    sh -c 'docker exec anby-wiki-production-postgres-1 pg_dump -U "$POSTGRES_USER" -d "$POSTGRES_DB"' \
-    </dev/null > "$data_backup/postgres.sql"
-fi
 python3 "$ROOT/scripts/prepare-production.py" "$ROOT"
 . "$ROOT/scripts/production-common.sh"
 load_production_domain
@@ -77,4 +67,7 @@ production_compose up -d --no-deps --wait --wait-timeout 720 api worker
 sh "$ROOT/scripts/enable-tls.sh" </dev/null
 sh "$ROOT/scripts/smoke-production.sh" </dev/null
 printf '%s\n' "$release" > "$ROOT/Secret/current-release"
+if ! sh "$ROOT/scripts/cleanup-production.sh"; then
+  echo 'Deployment succeeded, but production cleanup reported an error.' >&2
+fi
 echo "Deployed Anby Wiki $release at https://$ANBY_DOMAIN/ (loopback Web port $WEB_PORT)."

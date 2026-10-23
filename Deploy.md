@@ -137,7 +137,9 @@ Git 工作区并 `git pull --ff-only`，使用提交 SHA 标记镜像，然后�
 `--no-pull`。首次部署过程中公网站点返回 503，直到管理员初始化和 HTTPS 配置完成。
 首次启动时 Meilisearch 会下载语义搜索模型；API/Worker 健康检查提供 10 分钟启动
 宽限，部署最多等待 12 分钟。服务提前就绪就立即继续，模型缓存保留在
-`data/meilisearch/`，后续启动通常无需再次下载。
+`data/meilisearch/`，后续启动通常无需再次下载。验收成功后脚本删除旧版 Anby Wiki
+镜像、退出的一次性容器、未使用的 Docker 构建缓存及历史部署备份目录；运行中镜像、
+数据卷和 `data/postgres`、`data/rustfs`、`data/meilisearch` 不受影响。
 
 运行文件布局：
 
@@ -146,12 +148,10 @@ Anby-Wiki/
   .env                         # 配置与机密，0600，Git/Docker 排除
   Secret/bootstrap-admin.json  # 引导账号及其私人 Wiki 凭据，0600
   Secret/current-release       # 当前成功发布的提交标识
-  Secret/deploy-backups/       # 历史配置、Nginx 和回滚诊断
   data/postgres/               # 权威数据库
   data/rustfs/                 # RustFS 对象存储
   data/meilisearch/            # 搜索索引及模型缓存
   data/upload-tmp/             # API multipart 临时文件，0700，响应结束即删除
-  data/deploy-backups/         # 部署前 PostgreSQL 一致性导出
   data/deploy.lock             # flock 锁，文件存在不等于仍被占用
 ```
 
@@ -370,11 +370,13 @@ sh scripts/deploy.sh build      # 只在本机构建六个业务镜像
 sh scripts/deploy.sh migrate    # 只跑迁移与闸门
 sh scripts/deploy.sh doctor     # 只跑自检
 sh scripts/deploy.sh rollback   # 切回 RELEASE_ID 对应的已有本地镜像
+sudo sh scripts/cleanup-production.sh # 清理旧业务镜像与未使用构建缓存
 ```
 
-回滚前把环境文件中的 `RELEASE_ID` 改为旧版本，并确认部署机仍保留对应的六个
-本地镜像。回滚不会重新构建、不会 pull，也**从不**执行 down 迁移；旧镜像必须
-显式兼容线上数据库版本。需要缩表时，先发布一个兼容新旧两版的中间版本。
+一键部署只在本次进程的临时目录中保存失败自动回滚所需状态，退出即删除，不持久化
+部署备份。成功部署会删除旧版六个业务镜像；需要手工回滚时，先检出旧提交并重新构建
+对应镜像。回滚不会执行 down 迁移；旧镜像必须显式兼容线上数据库版本。需要缩表时，
+先发布一个兼容新旧两版的中间版本。
 
 ### 2.6 隔离全 API E2E
 
@@ -416,8 +418,9 @@ go test ./internal/wikicli \
 ### 2.7 备份
 
 数据在根目录 `data/postgres`、`data/rustfs` 与 `data/meilisearch` 中，随容器重建保留。
-备份必须保留原路径、目录权限和数据库恢复所需文件。备份脚本见 `scripts/backup/postgres-backup.sh`、
-`scripts/backup/object-storage-backup.sh`。
+一键部署不创建或保留数据备份。需要手工灾备时，显式运行
+`scripts/backup/postgres-backup.sh`、`scripts/backup/object-storage-backup.sh`；
+这些备份不属于部署流程，也不会由部署清理脚本扫描。
 
 ---
 

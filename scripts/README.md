@@ -13,6 +13,7 @@
 | `perf-db.sh` | 重建独立性能基准数据库 |
 | `deploy.sh` | 生产部署、迁移、诊断和回滚入口 |
 | `deploy-production.sh` | Linux/root 一键拉取、初始化、构建、部署、TLS 与验收；可传 `--no-pull` |
+| `cleanup-production.sh` | 成功部署后清理旧业务镜像、退出容器、构建缓存和遗留部署备份 |
 | `prepare-production.py` | 创建根 `.env`、随机机密与 data/Secret；已有配置保留，发布标识取 Git SHA |
 | `production_environment.py` | dotenv 数据读取、公开设置校验与进程环境注入；不执行环境文件内容 |
 | `production-common.sh` | 宿主机脚本共用的域名读取与 Compose 调用；不单独执行 |

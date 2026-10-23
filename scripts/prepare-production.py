@@ -15,7 +15,7 @@ def main() -> None:
     os.umask(0o077)
     root = Path(sys.argv[1]).resolve(strict=True)
     environment = Path(os.environ.get("DEPLOY_ENV_FILE", str(root / ".env"))).resolve()
-    for directory in [root / "data", root / "Secret", root / "Secret/deploy-backups"]:
+    for directory in [root / "data", root / "Secret"]:
         directory.mkdir(mode=0o700, parents=True, exist_ok=True)
     fresh = not environment.exists()
     if fresh:
@@ -65,7 +65,7 @@ def main() -> None:
         "RELEASE_ID": revision[:12],
         "COLLABORATION_ORIGIN_PATTERNS": "https://" + settings["ANBY_DOMAIN"],
     })
-    for name in ["postgres", "rustfs", "meilisearch", "upload-tmp", "deploy-backups"]:
+    for name in ["postgres", "rustfs", "meilisearch", "upload-tmp"]:
         (root / "data" / name).mkdir(mode=0o700, exist_ok=True)
     print("Production settings prepared; existing credentials preserved.")
 
