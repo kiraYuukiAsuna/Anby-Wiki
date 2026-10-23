@@ -248,7 +248,7 @@ func TestCompileExtendedPlannedBlocks(t *testing.T) {
 func TestCompileLargePlannedTable(t *testing.T) {
 	rows := make([][]string, 17)
 	for index := range rows {
-		rows[index] = []string{"Name", "Kind", "Path", "Description"}
+		rows[index] = []string{"Name", "Kind", "", "Description"}
 	}
 	composer := &ProposalComposer{ids: id.NewGenerator()}
 	block, err := composer.compilePlannedBlock(PlannedBlock{

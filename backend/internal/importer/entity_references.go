@@ -155,6 +155,9 @@ func primaryEntityLabelScore(wanted, rawLabel string) int {
 }
 
 func inlineNodesWithEntityReferences(text string, targets []entityReferenceTarget) ([]*ast.InlineNode, error) {
+	if text == "" {
+		return []*ast.InlineNode{}, nil
+	}
 	if len(targets) == 0 || strings.TrimSpace(text) == "" {
 		return []*ast.InlineNode{{Type: ast.InlineText, Text: text}}, nil
 	}
