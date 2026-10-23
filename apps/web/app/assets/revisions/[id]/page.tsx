@@ -7,6 +7,7 @@ import {
 
 import { AssetRevisionDetail } from "@/components/assets/asset-revision-detail";
 import { assetsApi } from "@/lib/api";
+import { serverApiOptions } from "@/lib/server-api";
 
 export const dynamic = "force-dynamic";
 
@@ -18,7 +19,9 @@ export default async function AssetRevisionPage({
   const { id } = await params;
   let revision: AssetRevision;
   try {
-    revision = await assetsApi().getAssetRevision({ revisionId: id });
+    revision = await assetsApi(await serverApiOptions()).getAssetRevision({
+      revisionId: id,
+    });
   } catch (error) {
     if (error instanceof ResponseError && error.response.status === 404) {
       notFound();

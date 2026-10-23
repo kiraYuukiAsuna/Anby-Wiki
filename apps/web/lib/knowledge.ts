@@ -7,6 +7,7 @@ import {
   type ReferenceUsageListPage,
 } from "../../../contracts/generated/typescript";
 import { knowledgeApi, projectionApi } from "./api";
+import { serverApiOptions } from "./server-api";
 
 const REFERENCE_USAGE_PAGE_SIZE = 50;
 
@@ -29,39 +30,42 @@ async function fetchDetail<T>(
   }
 }
 
-export function fetchEntityDetail(
+export async function fetchEntityDetail(
   id: string,
 ): Promise<KnowledgeDetailResult<EntityDetail>> {
+  const options = await serverApiOptions();
   return fetchDetail(
-    () => knowledgeApi().getEntity({ id }),
+    () => knowledgeApi(options).getEntity({ id }),
     () =>
-      projectionApi().listEntityMentions({
+      projectionApi(options).listEntityMentions({
         id,
         pageSize: REFERENCE_USAGE_PAGE_SIZE,
       }),
   );
 }
 
-export function fetchClaimDetail(
+export async function fetchClaimDetail(
   id: string,
 ): Promise<KnowledgeDetailResult<ClaimDetail>> {
+  const options = await serverApiOptions();
   return fetchDetail(
-    () => knowledgeApi().getClaim({ id }),
+    () => knowledgeApi(options).getClaim({ id }),
     () =>
-      projectionApi().listClaimUsages({
+      projectionApi(options).listClaimUsages({
         id,
         pageSize: REFERENCE_USAGE_PAGE_SIZE,
       }),
   );
 }
 
-export function fetchCitationDetail(
+export async function fetchCitationDetail(
   id: string,
 ): Promise<KnowledgeDetailResult<CitationDetail>> {
+  const options = await serverApiOptions();
   return fetchDetail(
-    () => knowledgeApi().getCitation({ id }),
+    () => knowledgeApi(options).getCitation({ id }),
     () =>
-      projectionApi().listCitationUsages({
+      projectionApi(options).listCitationUsages({
         id,
         pageSize: REFERENCE_USAGE_PAGE_SIZE,
       }),
