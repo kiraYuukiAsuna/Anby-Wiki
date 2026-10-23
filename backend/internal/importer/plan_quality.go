@@ -38,7 +38,7 @@ func refineImportPlan(plan *ImportPlan) {
 		}
 		route.Blocks = refinePlannedBlocks(route.Blocks)
 		if route.Action == RouteCreate {
-			route.Blocks = promoteLeadParagraph(route.Blocks)
+			route.Blocks = promoteLeadContent(route.Blocks)
 		}
 		if len(route.Blocks) > 0 {
 			routes = append(routes, route)
@@ -48,12 +48,12 @@ func refineImportPlan(plan *ImportPlan) {
 	normalizeImportPlanCollections(plan)
 }
 
-func promoteLeadParagraph(blocks []PlannedBlock) []PlannedBlock {
-	if len(blocks) == 0 || blocks[0].Type == string(ast.BlockParagraph) {
+func promoteLeadContent(blocks []PlannedBlock) []PlannedBlock {
+	if len(blocks) == 0 || blocks[0].Type != string(ast.BlockHeading) {
 		return blocks
 	}
 	for index := 1; index < len(blocks); index++ {
-		if blocks[index].Type != string(ast.BlockParagraph) {
+		if blocks[index].Type == string(ast.BlockHeading) {
 			continue
 		}
 		result := make([]PlannedBlock, 0, len(blocks))
@@ -845,7 +845,8 @@ func isDiscardedImportSection(value string) bool {
 	switch normalizedSentenceKey(value) {
 	case "references", "reference", "bibliography", "normative references", "informative references",
 		"author addresses", "authors addresses", "see also", "related topics", "related articles",
-		"further reading", "external links", "参考文献", "参考资料", "引用文献", "作者地址",
+		"further reading", "external links", "repository files navigation", "files navigation",
+		"参考文献", "参考资料", "引用文献", "作者地址",
 		"参见", "相关条目", "相关主题", "拓展阅读", "扩展阅读", "外部链接":
 		return true
 	default:

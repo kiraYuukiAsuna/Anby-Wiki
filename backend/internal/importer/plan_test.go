@@ -882,6 +882,9 @@ func TestRefineImportPlanRemovesRoutesEmptiedByGroundingFilter(t *testing.T) {
 }
 
 func TestRefineImportPlanPromotesLeadAndDropsThinCreateRoutes(t *testing.T) {
+	if !isDiscardedImportSection("Repository files navigation") {
+		t.Fatal("repository navigation heading should be discarded")
+	}
 	evidenceItem := []CandidateEvidence{{
 		ChunkID: uuid.New(), Quotation: "dl-librescore can download scores and provides installation options.", CharStart: 0, CharEnd: 68,
 	}}
@@ -904,8 +907,8 @@ func TestRefineImportPlanPromotesLeadAndDropsThinCreateRoutes(t *testing.T) {
 	if len(plan.Routes) != 1 || plan.Routes[0].Title != "dl-librescore" {
 		t.Fatalf("unexpected routes: %#v", plan.Routes)
 	}
-	if got := plan.Routes[0].Blocks[0].Type; got != string(ast.BlockParagraph) {
-		t.Fatalf("first block type=%q, want paragraph", got)
+	if got := plan.Routes[0].Blocks[0].Type; got == string(ast.BlockHeading) {
+		t.Fatalf("first block type=%q, want lead content", got)
 	}
 }
 
