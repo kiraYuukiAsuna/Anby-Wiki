@@ -1041,10 +1041,7 @@ func (c *ProposalComposer) compilePlannedChildren(
 }
 
 func validateCompiledBlock(block *ast.Block) error {
-	return ast.Validate(&ast.Document{
-		Type: "document", SchemaVersion: ast.SchemaVersion,
-		Children: []*ast.Block{block},
-	})
+	return ast.ValidateBlock(block)
 }
 
 func plannedBlockEvidence(block PlannedBlock) []CandidateEvidence {

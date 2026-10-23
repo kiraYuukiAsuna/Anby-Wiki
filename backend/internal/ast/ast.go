@@ -297,9 +297,45 @@ type InlineNode struct {
 	DatasetID  string `json:"dataset_id,omitempty"`
 }
 
-var compiledSchema = mustCompileSchema()
+const documentEnvelopeSchemaURL = "https://anby.wiki/schemas/ast/v1/document-envelope.schema.json"
 
-func mustCompileSchema() *jsonschema.Schema {
+var blockSchemaDefinitions = map[BlockType]string{
+	BlockHeading:      "headingBlock",
+	BlockParagraph:    "paragraphBlock",
+	BlockBulletList:   "bulletListBlock",
+	BlockOrderedList:  "orderedListBlock",
+	BlockListItem:     "listItemBlock",
+	BlockTable:        "tableBlock",
+	BlockTableRow:     "tableRowBlock",
+	BlockTableCell:    "tableCellBlock",
+	BlockCode:         "codeBlock",
+	BlockPreformatted: "preformattedBlock",
+	BlockEquation:     "equationBlock",
+	BlockTodo:         "todoBlock",
+	BlockToggle:       "toggleBlock",
+	BlockBreadcrumb:   "breadcrumbBlock",
+	BlockColumnList:   "columnListBlock",
+	BlockColumn:       "columnBlock",
+	BlockButton:       "buttonBlock",
+	BlockHTML:         "htmlBlock",
+	BlockQuote:        "quoteBlock",
+	BlockCallout:      "calloutBlock",
+	BlockComponent:    "componentBlock",
+	BlockImage:        "imageBlock",
+	BlockVideo:        "videoBlock",
+	BlockAudio:        "audioBlock",
+	BlockFile:         "fileBlock",
+	BlockPDF:          "pdfBlock",
+	BlockBookmark:     "bookmarkBlock",
+	BlockLinkPreview:  "linkPreviewBlock",
+	BlockDatasetView:  "datasetViewBlock",
+	BlockEmbed:        "embedBlock",
+	BlockDivider:      "dividerBlock",
+}
+
+var compiledDocumentEnvelope, compiledBlockSchemas = mustCompileSchemas()
+
+func mustCompileSchemas() (*jsonschema.Schema, map[BlockType]*jsonschema.Schema) {
 	doc, err := jsonschema.UnmarshalJSON(bytes.NewReader(schemaJSON))
 	if err != nil {
 		panic(fmt.Sprintf("ast: 解析内嵌 Schema 失败: %v", err))
@@ -310,11 +346,34 @@ func mustCompileSchema() *jsonschema.Schema {
 	if err := c.AddResource(SchemaURL, doc); err != nil {
 		panic(fmt.Sprintf("ast: 注册内嵌 Schema 失败: %v", err))
 	}
-	sch, err := c.Compile(SchemaURL)
-	if err != nil {
-		panic(fmt.Sprintf("ast: 编译内嵌 Schema 失败: %v", err))
+	blockSchemas := make(map[BlockType]*jsonschema.Schema, len(blockSchemaDefinitions))
+	for blockType, definition := range blockSchemaDefinitions {
+		schema, err := c.Compile(SchemaURL + "#/$defs/" + definition)
+		if err != nil {
+			panic(fmt.Sprintf("ast: 编译 %s Schema 失败: %v", blockType, err))
+		}
+		blockSchemas[blockType] = schema
 	}
-	return sch
+
+	envelope, err := jsonschema.UnmarshalJSON(bytes.NewReader(schemaJSON))
+	if err != nil {
+		panic(fmt.Sprintf("ast: 解析文档外壳 Schema 失败: %v", err))
+	}
+	envelopeObject := envelope.(map[string]any)
+	envelopeObject["$id"] = documentEnvelopeSchemaURL
+	properties := envelopeObject["properties"].(map[string]any)
+	children := properties["children"].(map[string]any)
+	children["items"] = true
+	envelopeCompiler := jsonschema.NewCompiler()
+	envelopeCompiler.AssertFormat()
+	if err := envelopeCompiler.AddResource(documentEnvelopeSchemaURL, envelope); err != nil {
+		panic(fmt.Sprintf("ast: 注册文档外壳 Schema 失败: %v", err))
+	}
+	documentEnvelope, err := envelopeCompiler.Compile(documentEnvelopeSchemaURL)
+	if err != nil {
+		panic(fmt.Sprintf("ast: 编译文档外壳 Schema 失败: %v", err))
+	}
+	return documentEnvelope, blockSchemas
 }
 
 // Validate 将 doc 序列化后按 AST v1 Schema 校验。
@@ -332,7 +391,48 @@ func ValidateJSON(data []byte) error {
 	if err != nil {
 		return fmt.Errorf("ast: 解析 JSON 失败: %w", err)
 	}
-	if err := compiledSchema.Validate(inst); err != nil {
+	if err := compiledDocumentEnvelope.Validate(inst); err != nil {
+		return fmt.Errorf("ast: Schema 校验失败: %w", err)
+	}
+	children := inst.(map[string]any)["children"].([]any)
+	for _, child := range children {
+		if err := validateBlockInstance(child); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+// ValidateBlock 按 Block 的判别类型校验对应的权威 Schema 子定义。
+func ValidateBlock(block *Block) error {
+	if block == nil {
+		return fmt.Errorf("ast: Block 不能为空")
+	}
+	data, err := json.Marshal(block)
+	if err != nil {
+		return fmt.Errorf("ast: 序列化 Block 失败: %w", err)
+	}
+	inst, err := jsonschema.UnmarshalJSON(bytes.NewReader(data))
+	if err != nil {
+		return fmt.Errorf("ast: 解析 Block JSON 失败: %w", err)
+	}
+	return validateBlockInstance(inst)
+}
+
+func validateBlockInstance(inst any) error {
+	object, ok := inst.(map[string]any)
+	if !ok {
+		return fmt.Errorf("ast: Schema 校验失败: Block 必须是 object")
+	}
+	rawType, ok := object["type"].(string)
+	if !ok {
+		return fmt.Errorf("ast: Schema 校验失败: Block 缺少有效 type")
+	}
+	schema, ok := compiledBlockSchemas[BlockType(rawType)]
+	if !ok {
+		return fmt.Errorf("ast: Schema 校验失败: 未知 Block type %q", rawType)
+	}
+	if err := schema.Validate(inst); err != nil {
 		return fmt.Errorf("ast: Schema 校验失败: %w", err)
 	}
 	return nil

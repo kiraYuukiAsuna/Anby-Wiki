@@ -245,6 +245,27 @@ func TestCompileExtendedPlannedBlocks(t *testing.T) {
 	}
 }
 
+func TestCompileLargePlannedTable(t *testing.T) {
+	rows := make([][]string, 17)
+	for index := range rows {
+		rows[index] = []string{"Name", "Kind", "Path", "Description"}
+	}
+	composer := &ProposalComposer{ids: id.NewGenerator()}
+	block, err := composer.compilePlannedBlock(PlannedBlock{
+		Type: string(ast.BlockTable), Mode: BlockAppend,
+		HasColumnHeader: true, Rows: rows,
+	}, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := ast.Validate(&ast.Document{
+		Type: "document", SchemaVersion: ast.SchemaVersion,
+		Children: []*ast.Block{block},
+	}); err != nil {
+		t.Fatal(err)
+	}
+}
+
 func TestDecodeGeneratedImportPlanAcceptsExactCodeEvidence(t *testing.T) {
 	sourceVersionID, chunkID := uuid.New(), uuid.New()
 	text := "  +---+\n  | A |\n  +---+"
