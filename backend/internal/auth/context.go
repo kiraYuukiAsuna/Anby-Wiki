@@ -20,6 +20,7 @@ type Principal struct {
 	MainNamespaceID uuid.UUID
 	ActorType       string
 	DisplayName     string
+	Username        string
 	Method          string
 }
 

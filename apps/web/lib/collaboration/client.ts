@@ -35,6 +35,8 @@ export interface CollaborationClientOptions {
 
 export interface CollaborationPresence {
   actorId: string;
+  actorUsername?: string;
+  actorDisplayName?: string;
   cursor: Record<string, unknown>;
 }
 
@@ -238,6 +240,8 @@ export class CollaborationClient {
       document_id?: string;
       latest_sequence?: number;
       actor_id?: string;
+      actor_username?: string;
+      actor_display_name?: string;
       cursor?: unknown;
       up_to_sequence?: number;
     };
@@ -258,6 +262,8 @@ export class CollaborationClient {
       }
       this.options.onPresence?.({
         actorId: message.actor_id,
+        actorUsername: cleanPresenceLabel(message.actor_username),
+        actorDisplayName: cleanPresenceLabel(message.actor_display_name),
         cursor: message.cursor,
       });
       return;
@@ -446,6 +452,10 @@ function collaborationURL(
   url.searchParams.set("client_id", clientId);
   url.searchParams.set("last_sequence", String(lastSequence));
   return url.toString();
+}
+
+function cleanPresenceLabel(value: unknown): string | undefined {
+  return typeof value === "string" && value.trim() ? value.trim() : undefined;
 }
 
 function defaultSocketFactory(url: string): WebSocket {

@@ -6,6 +6,8 @@ import (
 	"testing"
 
 	"github.com/google/uuid"
+
+	authdomain "github.com/anby/wiki/backend/internal/auth"
 )
 
 func TestPresenceMessageAddsAuthenticatedActor(t *testing.T) {
@@ -14,21 +16,30 @@ func TestPresenceMessageAddsAuthenticatedActor(t *testing.T) {
 	actorID := uuid.New()
 	raw, err := presenceMessage(
 		[]byte(`{"type":"presence","cursor":{"block_id":"block-1"}}`),
-		actorID,
+		authdomain.Principal{
+			ActorID:     actorID,
+			Username:    "alice",
+			DisplayName: "Alice Chen",
+		},
 	)
 	if err != nil {
 		t.Fatal(err)
 	}
 	var message struct {
-		Type    string         `json:"type"`
-		ActorID uuid.UUID      `json:"actor_id"`
-		Cursor  map[string]any `json:"cursor"`
+		Type             string         `json:"type"`
+		ActorID          uuid.UUID      `json:"actor_id"`
+		ActorUsername    string         `json:"actor_username"`
+		ActorDisplayName string         `json:"actor_display_name"`
+		Cursor           map[string]any `json:"cursor"`
 	}
 	if err := json.Unmarshal(raw, &message); err != nil {
 		t.Fatal(err)
 	}
 	if message.Type != "presence" || message.ActorID != actorID {
 		t.Fatalf("unexpected presence envelope: %#v", message)
+	}
+	if message.ActorUsername != "alice" || message.ActorDisplayName != "Alice Chen" {
+		t.Fatalf("unexpected actor label: %#v", message)
 	}
 	if message.Cursor["block_id"] != "block-1" {
 		t.Fatalf("unexpected cursor: %#v", message.Cursor)
@@ -38,7 +49,10 @@ func TestPresenceMessageAddsAuthenticatedActor(t *testing.T) {
 func TestPresenceMessageRejectsInvalidShape(t *testing.T) {
 	t.Parallel()
 
-	if _, err := presenceMessage([]byte(`{"type":"other","cursor":{}}`), uuid.New()); err == nil {
+	if _, err := presenceMessage(
+		[]byte(`{"type":"other","cursor":{}}`),
+		authdomain.Principal{ActorID: uuid.New()},
+	); err == nil {
 		t.Fatal("invalid presence type was accepted")
 	}
 }

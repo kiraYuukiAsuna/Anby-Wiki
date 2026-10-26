@@ -156,7 +156,7 @@ func (a *CollaborationAPI) connect(w http.ResponseWriter, r *http.Request) {
 			}
 			switch envelope.Type {
 			case "presence":
-				presence, err := presenceMessage(value, principal.ActorID)
+				presence, err := presenceMessage(value, principal)
 				if err != nil {
 					_ = conn.Close(websocket.StatusPolicyViolation, "invalid presence")
 					return
@@ -298,7 +298,7 @@ func writeSocket(
 	return conn.Write(writeCtx, messageType, value)
 }
 
-func presenceMessage(value []byte, actorID uuid.UUID) ([]byte, error) {
+func presenceMessage(value []byte, principal authdomain.Principal) ([]byte, error) {
 	if len(value) == 0 || len(value) > maxPresenceBytes {
 		return nil, errors.New("presence size")
 	}
@@ -311,11 +311,16 @@ func presenceMessage(value []byte, actorID uuid.UUID) ([]byte, error) {
 		return nil, errors.New("presence shape")
 	}
 	output, err := json.Marshal(struct {
-		Type    string          `json:"type"`
-		ActorID uuid.UUID       `json:"actor_id"`
-		Cursor  json.RawMessage `json:"cursor"`
+		Type             string          `json:"type"`
+		ActorID          uuid.UUID       `json:"actor_id"`
+		ActorUsername    string          `json:"actor_username,omitempty"`
+		ActorDisplayName string          `json:"actor_display_name,omitempty"`
+		Cursor           json.RawMessage `json:"cursor"`
 	}{
-		Type: "presence", ActorID: actorID, Cursor: input.Cursor,
+		Type: "presence", ActorID: principal.ActorID,
+		ActorUsername:    principal.Username,
+		ActorDisplayName: principal.DisplayName,
+		Cursor:           input.Cursor,
 	})
 	if err != nil {
 		return nil, fmt.Errorf("encode presence: %w", err)

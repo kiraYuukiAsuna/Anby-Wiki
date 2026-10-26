@@ -372,14 +372,21 @@ export function EditorSessionView({
                 typeof presence.cursor.block_id === "string"
                   ? presence.cursor.block_id
                   : null;
+              const label = presenceLabel(presence);
               return (
                 <span
                   key={presence.actorId}
-                  className="font-mono"
-                  title={presence.actorId}
+                  className="rounded border bg-muted/40 px-1.5 py-0.5 font-medium text-foreground"
+                  title={[
+                    presence.actorDisplayName,
+                    presence.actorUsername ? `@${presence.actorUsername}` : null,
+                    `Actor ${presence.actorId}`,
+                    blockID ? `Block ${blockID}` : null,
+                  ]
+                    .filter(Boolean)
+                    .join(" · ")}
                 >
-                  {presence.actorId.slice(0, 8)}
-                  {blockID ? ` @ ${blockID.slice(0, 8)}` : ""}
+                  {label}
                 </span>
               );
             })}
@@ -448,6 +455,12 @@ export function EditorSessionView({
       </Dialog>
     </div>
   );
+}
+
+function presenceLabel(presence: CollaborationPresence): string {
+  if (presence.actorUsername) return `@${presence.actorUsername}`;
+  if (presence.actorDisplayName) return presence.actorDisplayName;
+  return `成员 ${presence.actorId.slice(0, 8)}`;
 }
 
 function collaborationStatusLabel(status: CollaborationStatus): string {
