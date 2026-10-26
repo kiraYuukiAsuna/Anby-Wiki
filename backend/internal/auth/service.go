@@ -427,11 +427,19 @@ func (s *Service) resolveActorPrincipal(
 	actorID, requestedWikiID, credentialID uuid.UUID,
 	method string,
 ) (Principal, error) {
+	targetWikiID := requestedWikiID
+	if targetWikiID == uuid.Nil {
+		var err error
+		targetWikiID, err = s.actorHomeWikiID(ctx, actorID)
+		if err != nil {
+			return Principal{}, err
+		}
+	}
 	var principal Principal
 	err := s.pool.QueryRow(ctx, `SELECT
 		a.id,w.id,w.name,n.id,a.actor_type,a.display_name
 		FROM actor a
-		JOIN wiki_site w ON w.id=CASE WHEN $2=$3 THEN a.wiki_id ELSE $2 END
+		JOIN wiki_site w ON w.id=$2
 		JOIN namespace n ON n.wiki_id=w.id AND n.namespace_key='main'
 		LEFT JOIN local_account la ON la.actor_id=a.id
 		WHERE a.id=$1 AND a.status='active'
@@ -442,7 +450,7 @@ func (s *Service) resolveActorPrincipal(
 					SELECT 1 FROM actor_role ar
 					WHERE ar.actor_id=a.id AND ar.wiki_id=w.id
 				)
-			)`, actorID, requestedWikiID, uuid.Nil).Scan(
+			)`, actorID, targetWikiID).Scan(
 		&principal.ActorID, &principal.WikiID, &principal.WikiName,
 		&principal.MainNamespaceID,
 		&principal.ActorType, &principal.DisplayName,
@@ -456,6 +464,20 @@ func (s *Service) resolveActorPrincipal(
 	principal.CredentialID = credentialID
 	principal.Method = method
 	return principal, nil
+}
+
+func (s *Service) actorHomeWikiID(ctx context.Context, actorID uuid.UUID) (uuid.UUID, error) {
+	var wikiID uuid.UUID
+	err := s.pool.QueryRow(ctx, `SELECT wiki_id
+		FROM actor
+		WHERE id=$1 AND status='active' AND wiki_id IS NOT NULL`, actorID).Scan(&wikiID)
+	if errors.Is(err, pgx.ErrNoRows) {
+		return uuid.Nil, ErrUnauthenticated
+	}
+	if err != nil {
+		return uuid.Nil, fmt.Errorf("auth: resolve actor home wiki: %w", err)
+	}
+	return wikiID, nil
 }
 
 // ListWikiMemberships returns all Wiki contexts this Actor may select.

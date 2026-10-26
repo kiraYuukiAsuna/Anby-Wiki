@@ -61,6 +61,10 @@ func requestIDFrom(ctx context.Context) string {
 func Authentication(authenticator *authdomain.Authenticator, testHeaderFallback bool) func(http.Handler) http.Handler {
 	return func(next http.Handler) http.Handler {
 		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			if skipsCredentialAuthentication(r) {
+				next.ServeHTTP(w, r)
+				return
+			}
 			if authenticator != nil {
 				principal, ok, err := authenticator.Authenticate(r.Context(), r)
 				if err != nil {
@@ -82,6 +86,22 @@ func Authentication(authenticator *authdomain.Authenticator, testHeaderFallback 
 			}
 			next.ServeHTTP(w, r)
 		})
+	}
+}
+
+func skipsCredentialAuthentication(r *http.Request) bool {
+	if !strings.HasPrefix(r.URL.Path, "/api/v1/auth/") {
+		return false
+	}
+	switch {
+	case r.Method == http.MethodPost &&
+		(r.URL.Path == "/api/v1/auth/register" ||
+			r.URL.Path == "/api/v1/auth/login" ||
+			r.URL.Path == "/api/v1/auth/cli/exchange" ||
+			r.URL.Path == "/api/v1/auth/logout"):
+		return true
+	default:
+		return false
 	}
 }
 

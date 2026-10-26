@@ -31,6 +31,7 @@ AI 配置和双会话协作 E2E；当前权威契约为 172 个 operation。“�
 - `actor_role(actor_id,wiki_id,role_id)` 已从“仅 Actor 所属私人 Wiki”放宽为跨 Wiki
   成员关系；`actor_id` 与 `wiki_id` 分别引用 Actor 和 Wiki，授权仍实时读取
   `actor_role`，撤销角色会即时影响 API、CLI 与协作 WebSocket。
+  生产兼容迁移目标升至 v2，用于在线替换既有库中的旧复合外键。
 - 后端新增 `/api/v1/wiki/members` 成员接口：管理员可按用户名、邮箱或 Actor ID
   添加已有本地账号为协作者，授予/撤销 editor、reviewer、applier、admin 角色，
   或仅移出当前 Wiki 成员列表。移除协作者不会删除对方账号或其私人 Wiki，最后一个
