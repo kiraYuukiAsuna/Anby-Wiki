@@ -50,6 +50,24 @@ export interface Revision {
      */
     actorId: string;
     /**
+     * 本地账号用户名；历史 actor 没有关联本地账号时为空或缺省。
+     * @type {string}
+     * @memberof Revision
+     */
+    actorUsername?: string;
+    /**
+     * 本地账号邮箱；历史 actor 没有关联本地账号时为空或缺省。
+     * @type {string}
+     * @memberof Revision
+     */
+    actorEmail?: string;
+    /**
+     * Actor 显示名；历史 actor 不存在时为空或缺省。
+     * @type {string}
+     * @memberof Revision
+     */
+    actorDisplayName?: string;
+    /**
      * 修改摘要
      * @type {string}
      * @memberof Revision
@@ -144,6 +162,9 @@ export function RevisionFromJSONTyped(json: any, ignoreDiscriminator: boolean): 
         'parentRevisionId': json['parent_revision_id'],
         'contentSnapshotId': json['content_snapshot_id'],
         'actorId': json['actor_id'],
+        'actorUsername': json['actor_username'] == null ? undefined : json['actor_username'],
+        'actorEmail': json['actor_email'] == null ? undefined : json['actor_email'],
+        'actorDisplayName': json['actor_display_name'] == null ? undefined : json['actor_display_name'],
         'summary': json['summary'],
         'isMinor': json['is_minor'],
         'visibility': json['visibility'],
@@ -171,6 +192,9 @@ export function RevisionToJSONTyped(value?: Revision | null, ignoreDiscriminator
         'parent_revision_id': value['parentRevisionId'],
         'content_snapshot_id': value['contentSnapshotId'],
         'actor_id': value['actorId'],
+        'actor_username': value['actorUsername'],
+        'actor_email': value['actorEmail'],
+        'actor_display_name': value['actorDisplayName'],
         'summary': value['summary'],
         'is_minor': value['isMinor'],
         'visibility': value['visibility'],

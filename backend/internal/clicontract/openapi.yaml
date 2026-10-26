@@ -7070,6 +7070,16 @@ components:
         actor_id:
           type: string
           format: uuid
+        actor_username:
+          type: string
+          description: 本地账号用户名；历史 actor 没有关联本地账号时为空或缺省。
+        actor_email:
+          type: string
+          format: email
+          description: 本地账号邮箱；历史 actor 没有关联本地账号时为空或缺省。
+        actor_display_name:
+          type: string
+          description: Actor 显示名；历史 actor 不存在时为空或缺省。
         summary:
           type: string
           description: 修改摘要

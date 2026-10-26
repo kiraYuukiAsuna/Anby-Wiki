@@ -22,7 +22,11 @@ import { historyApi } from "@/lib/api";
 import { HISTORY_PAGE_SIZE } from "@/lib/history";
 
 import { RollbackButton } from "./rollback-button";
-import { formatDateTime, shortId } from "./utils";
+import {
+  revisionAuthorLabel,
+  revisionAuthorMeta,
+  revisionLabel,
+} from "./utils";
 
 export interface RevisionListProps {
   pageId: string;
@@ -120,14 +124,14 @@ export function RevisionList({
               className="flex flex-wrap items-center gap-x-3 gap-y-2 rounded-lg border border-border px-3 py-2"
             >
               <Checkbox
-                aria-label={`选择版本 ${shortId(revision.id)}`}
+                aria-label={`选择${revisionLabel(revision)}`}
                 checked={selected.includes(revision.id)}
                 onCheckedChange={() => toggleSelect(revision.id)}
               />
               <div className="min-w-0 flex-1">
                 <div className="flex flex-wrap items-center gap-x-2 gap-y-1 text-sm">
                   <span className="font-medium" title={revision.id}>
-                    版本 {shortId(revision.id)}
+                    {revisionLabel(revision)}
                   </span>
                   {revision.id === currentRevisionId ? (
                     <span className="rounded-full bg-blue-500/10 px-2 py-0.5 text-xs text-blue-600">
@@ -152,11 +156,14 @@ export function RevisionList({
                   )}
                 </div>
                 <div className="mt-1 flex flex-wrap gap-x-3 gap-y-0.5 text-xs text-muted-foreground">
-                  <time dateTime={revision.createdAt.toISOString()}>
-                    {formatDateTime(revision.createdAt)}
-                  </time>
-                  <span title={revision.actorId}>
-                    编辑者 {shortId(revision.actorId)}
+                  <span
+                    className="min-w-0 truncate"
+                    title={`Actor ${revision.actorId}`}
+                  >
+                    编辑者 {revisionAuthorLabel(revision)}
+                    {revisionAuthorMeta(revision)
+                      ? ` · ${revisionAuthorMeta(revision)}`
+                      : ""}
                   </span>
                   <span className="min-w-0 truncate">
                     {revision.summary || "（无摘要）"}

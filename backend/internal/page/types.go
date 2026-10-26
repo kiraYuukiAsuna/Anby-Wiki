@@ -227,6 +227,9 @@ type Revision struct {
 	ParentRevisionID  *uuid.UUID
 	ContentSnapshotID uuid.UUID
 	ActorID           uuid.UUID
+	ActorUsername     string
+	ActorEmail        string
+	ActorDisplayName  string
 	ChangeBatchID     *uuid.UUID
 	Summary           string
 	IsMinor           bool

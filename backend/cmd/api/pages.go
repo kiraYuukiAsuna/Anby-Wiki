@@ -214,6 +214,9 @@ type revisionResponse struct {
 	ParentRevisionID  *uuid.UUID `json:"parent_revision_id"`
 	ContentSnapshotID uuid.UUID  `json:"content_snapshot_id"`
 	ActorID           uuid.UUID  `json:"actor_id"`
+	ActorUsername     string     `json:"actor_username,omitempty"`
+	ActorEmail        string     `json:"actor_email,omitempty"`
+	ActorDisplayName  string     `json:"actor_display_name,omitempty"`
 	Summary           string     `json:"summary"`
 	IsMinor           bool       `json:"is_minor"`
 	Visibility        string     `json:"visibility"`
@@ -248,6 +251,9 @@ func toRevisionResponse(r *page.Revision) revisionResponse {
 		ParentRevisionID:  r.ParentRevisionID,
 		ContentSnapshotID: r.ContentSnapshotID,
 		ActorID:           r.ActorID,
+		ActorUsername:     r.ActorUsername,
+		ActorEmail:        r.ActorEmail,
+		ActorDisplayName:  r.ActorDisplayName,
 		Summary:           r.Summary,
 		IsMinor:           r.IsMinor,
 		Visibility:        r.Visibility,

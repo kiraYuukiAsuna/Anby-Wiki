@@ -544,6 +544,7 @@ func (r *Repository) GetRenderedHTML(ctx context.Context, tx pgx.Tx, pageID, rev
 
 // revisionSnapshotColumns 历史查询共用的 revision + snapshot 列（content_hash/schema_version 冗余自 snapshot）。
 const revisionSnapshotColumns = `r.id, r.page_id, r.parent_revision_id, r.content_snapshot_id, r.actor_id,
+	COALESCE(la.username,''), COALESCE(la.email,''), COALESCE(a.display_name,''),
 	r.change_batch_id, r.summary, r.is_minor, r.visibility, r.created_at,
 	s.id, s.schema_version, s.ast_json, s.content_hash, s.size_bytes,
 	s.storage_tier, COALESCE(s.storage_key,''), s.archived_at`
@@ -552,7 +553,8 @@ const revisionSnapshotColumns = `r.id, r.page_id, r.parent_revision_id, r.conten
 // snapAST 为 nil 时丢弃 AST 字节（列表场景只取元信息）。
 func scanRevisionSnapshot(rev *Revision, snap *ContentSnapshot, snapAST any) []any {
 	return []any{
-		&rev.ID, &rev.PageID, &rev.ParentRevisionID, &rev.ContentSnapshotID, &rev.ActorID, &rev.ChangeBatchID,
+		&rev.ID, &rev.PageID, &rev.ParentRevisionID, &rev.ContentSnapshotID, &rev.ActorID,
+		&rev.ActorUsername, &rev.ActorEmail, &rev.ActorDisplayName, &rev.ChangeBatchID,
 		&rev.Summary, &rev.IsMinor, &rev.Visibility, &rev.CreatedAt,
 		&snap.ID, &snap.SchemaVersion, snapAST, &snap.ContentHash, &snap.SizeBytes,
 		&snap.StorageTier, &snap.StorageKey, &snap.ArchivedAt,
@@ -567,6 +569,8 @@ func (r *Repository) ListRevisions(ctx context.Context, tx pgx.Tx, pageID uuid.U
 		SELECT `+revisionSnapshotColumns+`
 		FROM revision r
 		JOIN content_snapshot s ON s.id = r.content_snapshot_id
+		LEFT JOIN actor a ON a.id = r.actor_id
+		LEFT JOIN local_account la ON la.actor_id = r.actor_id
 		WHERE r.page_id = $1
 		  AND ($2::timestamptz IS NULL OR (r.created_at, r.id) < ($2::timestamptz, $3::uuid))
 		ORDER BY r.created_at DESC, r.id DESC
@@ -606,6 +610,8 @@ func (r *Repository) GetRevisionWithSnapshot(ctx context.Context, tx pgx.Tx, pag
 		SELECT `+revisionSnapshotColumns+`
 		FROM revision r
 		JOIN content_snapshot s ON s.id = r.content_snapshot_id
+		LEFT JOIN actor a ON a.id = r.actor_id
+		LEFT JOIN local_account la ON la.actor_id = r.actor_id
 		WHERE r.id = $1 AND r.page_id = $2`,
 		revisionID, pageID,
 	).Scan(scanRevisionSnapshot(&rev, &snap, &snap.AST)...)

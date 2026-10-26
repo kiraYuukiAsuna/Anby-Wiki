@@ -7,7 +7,12 @@ import { AstDocument } from "@/components/ast";
 import { parseDocument } from "@/lib/ast/schema";
 
 import { RollbackButton } from "./rollback-button";
-import { formatDateTime, shortId } from "./utils";
+import {
+  formatDateTime,
+  revisionAuthorLabel,
+  revisionAuthorMeta,
+  revisionLabel,
+} from "./utils";
 
 export function RevisionDetailView({
   pageId,
@@ -27,7 +32,7 @@ export function RevisionDetailView({
       <header className="mb-6 flex flex-wrap items-start justify-between gap-3 border-b border-border pb-4">
         <div className="min-w-0">
           <h2 className="text-xl font-semibold" title={revision.id}>
-            版本 {shortId(revision.id)}
+            {revisionLabel(revision)}
             {revision.id === currentRevisionId ? (
               <span className="ml-2 rounded-full bg-blue-500/10 px-2 py-0.5 align-middle text-xs font-normal text-blue-600">
                 当前版本
@@ -45,7 +50,12 @@ export function RevisionDetailView({
             </div>
             <div className="flex gap-1">
               <dt>编辑者</dt>
-              <dd title={revision.actorId}>{shortId(revision.actorId)}</dd>
+              <dd title={`Actor ${revision.actorId}`}>
+                {revisionAuthorLabel(revision)}
+                {revisionAuthorMeta(revision)
+                  ? ` · ${revisionAuthorMeta(revision)}`
+                  : ""}
+              </dd>
             </div>
             <div className="flex gap-1">
               <dt>摘要</dt>
@@ -61,7 +71,7 @@ export function RevisionDetailView({
               <div className="flex gap-1">
                 <dt>父版本</dt>
                 <dd title={revision.parentRevisionId}>
-                  {shortId(revision.parentRevisionId)}
+                  已关联
                 </dd>
               </div>
             ) : null}

@@ -15,6 +15,39 @@ export function formatDateTime(date: Date): string {
   }).format(date);
 }
 
+export interface RevisionActorInfo {
+  actorId: string;
+  actorUsername?: string;
+  actorEmail?: string;
+  actorDisplayName?: string;
+}
+
+export interface RevisionTimeInfo {
+  id: string;
+  createdAt: Date;
+}
+
+export function revisionLabel(revision: RevisionTimeInfo): string {
+  return `发布于 ${formatDateTime(revision.createdAt)}`;
+}
+
+export function revisionAuthorLabel(revision: RevisionActorInfo): string {
+  const username = revision.actorUsername?.trim();
+  if (username) return `@${username}`;
+  const displayName = revision.actorDisplayName?.trim();
+  if (displayName) return displayName;
+  return "未知编辑者";
+}
+
+export function revisionAuthorMeta(revision: RevisionActorInfo): string | null {
+  const email = revision.actorEmail?.trim();
+  if (email) return email;
+  const username = revision.actorUsername?.trim();
+  const displayName = revision.actorDisplayName?.trim();
+  if (displayName && displayName !== username) return displayName;
+  return null;
+}
+
 /** 索引路径展示：[0.2.1]，空路径（顶层）为 [0] 形式原样展示。 */
 export function formatPath(path?: number[]): string {
   if (!path) return "—";

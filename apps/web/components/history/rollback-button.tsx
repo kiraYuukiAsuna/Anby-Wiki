@@ -1,6 +1,6 @@
 // 回滚入口 + 确认对话框（M2-T05）：历史列表行与单版详情页共用。
 //
-// 流程：确认对话框（目标版本短 id + 时间 + 可编辑 summary，默认「回滚到 {短id}」）
+// 流程：确认对话框（目标版本发布时间 + 可编辑 summary）
 // → historyApi.rollbackPage → 成功 toast + 跳转 /pages/[id]（阅读页展示新当前版本）。
 // 错误：409 stale_revision（回滚与并发发布交错）提示刷新重试；401 引导登录。
 "use client";
@@ -27,7 +27,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { historyApi } from "@/lib/api";
 import { isUnauthorized, LOGIN_PATH } from "@/lib/auth";
 
-import { formatDateTime, shortId } from "./utils";
+import { formatDateTime, revisionLabel } from "./utils";
 
 /** 从 ResponseError 中尽力读取契约 Error.code（与 editor-session-view 同款兜底）。 */
 async function readErrorCode(error: ResponseError): Promise<string | null> {
@@ -53,7 +53,7 @@ export function RollbackButton({
   const [submitting, setSubmitting] = useState(false);
 
   const openDialog = () => {
-    setSummary(`回滚到 ${shortId(revision.id)}`);
+    setSummary(`回滚到${revisionLabel(revision)}`);
     setOpen(true);
   };
 
@@ -68,7 +68,7 @@ export function RollbackButton({
         },
       });
       setOpen(false);
-      toast.success(`已回滚到版本 ${shortId(revision.id)}`);
+      toast.success("已回滚到所选历史版本");
       // 回滚以旧快照追加新 Revision，阅读页展示的即是回滚后的新当前版本。
       router.push(`/pages/${pageId}`);
     } catch (error) {
@@ -110,9 +110,7 @@ export function RollbackButton({
           <DialogHeader>
             <DialogTitle>回滚到此版本</DialogTitle>
             <DialogDescription>
-              将以版本 {shortId(revision.id)}（
-              {formatDateTime(revision.createdAt)}
-              ）的内容追加一个新 Revision 并设为当前版本；历史版本不会被修改。
+              将以 {formatDateTime(revision.createdAt)} 发布的内容追加一个新版本并设为当前版本；历史版本不会被修改。
             </DialogDescription>
           </DialogHeader>
           <div className="flex flex-col gap-2">

@@ -11,6 +11,9 @@ Name | Type
 `parentRevisionId` | string
 `contentSnapshotId` | string
 `actorId` | string
+`actorUsername` | string
+`actorEmail` | string
+`actorDisplayName` | string
 `summary` | string
 `isMinor` | boolean
 `visibility` | string
@@ -33,6 +36,9 @@ const example = {
   "parentRevisionId": null,
   "contentSnapshotId": null,
   "actorId": null,
+  "actorUsername": null,
+  "actorEmail": null,
+  "actorDisplayName": null,
   "summary": null,
   "isMinor": null,
   "visibility": public,
