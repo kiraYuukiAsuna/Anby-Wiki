@@ -603,7 +603,7 @@ export function BlockView({
           <Database className="size-5 text-cyan-700" aria-hidden />
           <span>
             <span className="block text-sm font-semibold text-cyan-950">
-              可查询数据视图
+              数据集视图
             </span>
             <span className="mt-0.5 block text-xs text-cyan-700">
               打开筛选、排序与聚合视图

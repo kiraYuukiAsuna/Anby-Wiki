@@ -9,12 +9,10 @@ import {
   BrainCircuit,
   Boxes,
   Compass,
-  Gavel,
-  Globe2,
   House,
   Images,
   LibraryBig,
-  DatabaseZap,
+  Globe2,
   Layers3,
   LockKeyhole,
   ShieldCheck,
@@ -38,7 +36,6 @@ const GROUPS = [
       { href: "/pages", label: "全部百科页面", icon: BookOpenText, exact: true },
       { href: "/explore", label: "探索与搜索", icon: Compass },
       { href: "/collections", label: "专题合集", icon: Layers3 },
-      { href: "/datasets", label: "可查询数据", icon: DatabaseZap },
       { href: "/components", label: "组件中心", icon: Boxes },
       { href: "/assets", label: "媒体与附件", icon: Images },
       { href: "/sources", label: "来源与证据", icon: LibraryBig },
@@ -57,19 +54,13 @@ const GROUPS = [
     label: "治理",
     items: [
       {
-        href: "/governance",
-        label: "治理中心",
-        icon: Gavel,
-        exact: true,
-      },
-      {
         href: "/governance/review",
         label: "审核队列",
         icon: ShieldCheck,
       },
       {
         href: "/governance/apply",
-        label: "待原子应用",
+        label: "待应用",
         icon: BadgeCheck,
       },
       {
@@ -113,8 +104,8 @@ const GROUPS = [
         icon: TerminalSquare,
       },
       {
-        href: "/admin/users",
-        label: "用户与角色",
+        href: "/admin/members",
+        label: "成员与角色",
         icon: UsersRound,
       },
     ],

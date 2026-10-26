@@ -15,6 +15,7 @@ apis/ProjectionApi.ts
 apis/ReadingApi.ts
 apis/SearchApi.ts
 apis/SourcesApi.ts
+apis/WikiApi.ts
 apis/index.ts
 docs/AIConfig.md
 docs/AIConfigTestResult.md
@@ -24,6 +25,7 @@ docs/AccountApi.md
 docs/AccountProfile.md
 docs/AddEntityAliasRequest.md
 docs/AddEntityLabelRequest.md
+docs/AddWikiMemberRequest.md
 docs/AdminApi.md
 docs/AdminRoleMutationResult.md
 docs/AdminUser.md
@@ -42,6 +44,7 @@ docs/AuditEventListPage.md
 docs/AuthApi.md
 docs/AuthResult.md
 docs/AuthSession.md
+docs/AuthWikiMembership.md
 docs/Backlink.md
 docs/BacklinkListPage.md
 docs/BlockChange.md
@@ -313,10 +316,15 @@ docs/UpdateClaimVerificationRequest.md
 docs/UpdateEntityFederationLinkRequest.md
 docs/UpdateFederatedWikiRequest.md
 docs/UpsertBlockRedirectRequest.md
+docs/WikiApi.md
 docs/WikiComponent.md
 docs/WikiComponentListPage.md
 docs/WikiComponentVersion.md
 docs/WikiComponentVersionList.md
+docs/WikiMember.md
+docs/WikiMemberList.md
+docs/WikiMemberMutationResult.md
+docs/WikiMemberRemovalResult.md
 docs/WriteCollectionMember.md
 docs/WriteDatasetRecordRequest.md
 docs/WriteWikiComponentVersionRequest.md
@@ -328,6 +336,7 @@ models/AITrustProfileList.ts
 models/AccountProfile.ts
 models/AddEntityAliasRequest.ts
 models/AddEntityLabelRequest.ts
+models/AddWikiMemberRequest.ts
 models/AdminRoleMutationResult.ts
 models/AdminUser.ts
 models/AdminUserDeletionResult.ts
@@ -343,6 +352,7 @@ models/AuditEvent.ts
 models/AuditEventListPage.ts
 models/AuthResult.ts
 models/AuthSession.ts
+models/AuthWikiMembership.ts
 models/Backlink.ts
 models/BacklinkListPage.ts
 models/BlockChange.ts
@@ -605,6 +615,10 @@ models/WikiComponent.ts
 models/WikiComponentListPage.ts
 models/WikiComponentVersion.ts
 models/WikiComponentVersionList.ts
+models/WikiMember.ts
+models/WikiMemberList.ts
+models/WikiMemberMutationResult.ts
+models/WikiMemberRemovalResult.ts
 models/WriteCollectionMember.ts
 models/WriteDatasetRecordRequest.ts
 models/WriteWikiComponentVersionRequest.ts

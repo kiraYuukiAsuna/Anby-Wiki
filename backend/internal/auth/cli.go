@@ -303,41 +303,41 @@ func (s *Service) DeleteInactiveCLITokenRecords(
 func (s *Service) ResolveCLIToken(
 	ctx context.Context,
 	token string,
+	requestedWikiID uuid.UUID,
 ) (Principal, error) {
 	token = strings.TrimSpace(token)
 	if !strings.HasPrefix(token, cliTokenPrefix) || len(token) > 256 {
 		return Principal{}, ErrUnauthenticated
 	}
 	hash := tokenHash(token)
-	var principal Principal
+	var credentialID, actorID uuid.UUID
 	err := s.pool.QueryRow(ctx, `SELECT
-		t.id,a.id,a.wiki_id,w.name,n.id,a.actor_type,a.display_name
+		t.id,t.actor_id
 		FROM cli_access_token t
 		JOIN actor a ON a.id=t.actor_id
-		JOIN wiki_site w ON w.id=a.wiki_id
-		JOIN namespace n ON n.wiki_id=a.wiki_id AND n.namespace_key='main'
 		LEFT JOIN local_account la ON la.actor_id=a.id
 		WHERE t.token_hash=$1 AND t.revoked_at IS NULL AND t.expires_at>now()
 		  AND a.status='active' AND (la.id IS NULL OR la.status='active')`,
 		hash[:],
-	).Scan(
-		&principal.CredentialID, &principal.ActorID, &principal.WikiID,
-		&principal.WikiName, &principal.MainNamespaceID,
-		&principal.ActorType, &principal.DisplayName,
-	)
+	).Scan(&credentialID, &actorID)
 	if errors.Is(err, pgx.ErrNoRows) {
 		return Principal{}, ErrUnauthenticated
 	}
 	if err != nil {
 		return Principal{}, fmt.Errorf("auth: resolve CLI token: %w", err)
 	}
-	principal.Method = "cli_token"
+	principal, err := s.resolveActorPrincipal(
+		ctx, actorID, requestedWikiID, credentialID, "cli_token",
+	)
+	if err != nil {
+		return Principal{}, err
+	}
 	if _, err := s.pool.Exec(ctx, `UPDATE cli_access_token
 		SET last_used_at=now()
 		WHERE id=$1
 		  AND (last_used_at IS NULL OR
 		       last_used_at<now()-make_interval(secs => $2))`,
-		principal.CredentialID,
+		credentialID,
 		int(cliTokenUsageInterval/time.Second),
 	); err != nil {
 		return Principal{}, fmt.Errorf("auth: update CLI token usage: %w", err)

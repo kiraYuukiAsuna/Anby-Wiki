@@ -21,10 +21,30 @@ gate、Doctor、滚动替换和健康检查，并通过复杂 PDF/扫描件、�
 跨页表格、恶意附件隔离、密码加密拒绝及 128/298 MiB 上传边界验收。另一个完全隔离的
 远端数据库/bucket/index/Redis DB 已执行
 当时 149/149 OpenAPI operation handler 探针、核心成功工作流、治理、批量审核、导入、
-AI 配置和双会话协作 E2E；当前权威契约为 167 个 operation。“实现完成”仍不等于
+AI 配置和双会话协作 E2E；当前权威契约为 172 个 operation。“实现完成”仍不等于
 “所有商业发布门禁已关闭”：目标规模容量、正式域名
 安全边界、账号恢复、备份恢复与人工可访问性等仍须验收。详见
 [待解决问题](OutstandingIssues.md)。
+
+## 2026-10-26 Wiki 成员与协作上下文
+
+- `actor_role(actor_id,wiki_id,role_id)` 已从“仅 Actor 所属私人 Wiki”放宽为跨 Wiki
+  成员关系；`actor_id` 与 `wiki_id` 分别引用 Actor 和 Wiki，授权仍实时读取
+  `actor_role`，撤销角色会即时影响 API、CLI 与协作 WebSocket。
+- 后端新增 `/api/v1/wiki/members` 成员接口：管理员可按用户名、邮箱或 Actor ID
+  添加已有本地账号为协作者，授予/撤销 editor、reviewer、applier、admin 角色，
+  或仅移出当前 Wiki 成员列表。移除协作者不会删除对方账号或其私人 Wiki，最后一个
+  active admin 和成员最后一个角色均受保护。
+- Session、CLI Token 和开发 Actor 解析支持请求级 Wiki 上下文。浏览器通过
+  `anby_wiki_id` cookie，普通 fetch 额外带 `X-Wiki-ID`；WebSocket 复用 cookie，
+  因此现有 Yjs WorkingDocument、Presence、持久 update 和发布 CAS 可直接在被授权
+  的协作 Wiki 中使用。
+- `/api/v1/auth/session` 返回当前账号可切换 Wiki 列表。Web 页眉提供 Wiki 切换器；
+  Server Component 的 `serverApiOptions()` 同步转发 Session Cookie 与 Wiki 上下文。
+  `/admin/members` 提供成员列表、添加协作者和角色分配；旧 `/admin/users` 重定向到
+  成员页，避免把“删除本地账号”暴露为协作者管理入口。
+- 个人中心资料读写改为按账号 Actor 自身定位；即使当前请求上下文在协作 Wiki 中，
+  仍编辑该账号资料和其拥有的私人 Wiki 名称。
 
 ## 2026-10-23 生产可靠性与页面鉴权收口
 
@@ -66,8 +86,7 @@ AI 配置和双会话协作 E2E；当前权威契约为 167 个 operation。“�
   Dataset、Collection、Governance、Audit、AI 配置和 ImportJob 均按当前 Wiki 查询；
   外部 UUID 命中其他 Wiki 时统一按 404 处理。
 - `source`、`component`、`change_tag` 和 `import_job` 已补齐 `wiki_id`；导入 Worker
-  从 Job 解析 Wiki，并以该 Wiki 选择 AI 运行时配置。数据库用复合外键禁止把 human
-  Actor 的角色授予其他 Wiki。
+  从 Job 解析 Wiki，并以该 Wiki 选择 AI 运行时配置。
 - Web 在无 Session Cookie 时先跳转登录页，失效会话只显示登录提示，不渲染 Wiki
   页眉、搜索、导航或正文。登录后页眉展示当前 Wiki 名称，人工 Proposal 模板使用
   Session 返回的真实 Wiki/主 Namespace ID。
@@ -93,7 +112,7 @@ AI 配置和双会话协作 E2E；当前权威契约为 167 个 operation。“�
   旧 `/admin/ai` 地址仅保留 307 兼容重定向到
   `/account#document-understanding-model`。
 - OpenAPI 权威契约、Agent CLI 内嵌契约和 TypeScript 生成客户端已同步；CLI operation
-  数量更新为 167。
+  数量更新为 172。
 
 ## 2026-10-08 宿主机部署入口
 
@@ -132,7 +151,7 @@ AI 配置和双会话协作 E2E；当前权威契约为 167 个 operation。“�
 | 投影与搜索 | Outbox 租约/重试/死信、链接/目录/锚点/章节/渲染/知识使用/References/相关推荐/组件依赖/图谱投影、可解释的链接+Collection+Entity 相关度、PostgreSQL fallback、Meilisearch 关键词/混合/语义检索 |
 | 规模与归档 | 章节懒加载、服务端可信 HTML 渲染、Revision 热冷分层与 S3 回源、Projection/Search 重建、容量基准命令 |
 | 协作 | Yjs WorkingDocument、持久增量 update、重连游标、普通发布与 AI 合并的 sequence CAS、未确认 update 幂等重发、自动 snapshot/compact、Block 级 Presence、三方合并与人工冲突决议；跨标签页离线恢复和多 API 实例广播仍待实现 |
-| 平台 | 每账号私人 Wiki、本地账号/Session/RBAC、个人中心资料与文档理解模型配置、Server Component 登录态透传、一次性授权码与可撤销/可清理 Agent CLI Bearer Token、167 个 OpenAPI operation 和协作 WebSocket 的 JSON + 人类命令双模式 CLI、Redis 限流、安全头、OTel/Prometheus、手工灾备/恢复演练工具、Doctor、生产部署与验收后清理 |
+| 平台 | 每账号私人 Wiki、Wiki 成员/协作者、本地账号/Session/RBAC、请求级 Wiki 切换、个人中心资料与文档理解模型配置、Server Component 登录态透传、一次性授权码与可撤销/可清理 Agent CLI Bearer Token、172 个 OpenAPI operation 和协作 WebSocket 的 JSON + 人类命令双模式 CLI、Redis 限流、安全头、OTel/Prometheus、手工灾备/恢复演练工具、Doctor、生产部署与验收后清理 |
 
 ## 关键不变量
 
@@ -599,15 +618,16 @@ outlines。References/Related 是 Current Revision
 - 正式域名下的证书续期失败告警、代理恢复演练、CSRF、账号恢复/MFA 与完整键盘、
   读屏、对比度人工验收。
 
-仓库现有 Go 单元测试、162-operation handler 探针和高风险成功工作流仍不能穷举
+仓库现有 Go 单元测试、OpenAPI handler 探针和高风险成功工作流仍不能穷举
 全部 ProposalOperation 组合、外部模型供应商行为或容量/安全/人工可访问性；本轮真实
 系统演练不能替代发布环境验收。
 
 ## 2026-08-18 Web/API/CLI 可操作性审计
 
-- 权威 OpenAPI 当前共有 167 个 operation。165 个 Web-owned operation 全部通过生成
-  客户端调用，调用文件均可沿 TypeScript import 图反向到达 50 个页面/global layout
-  owner；`exchangeCLIAuthCode` 与 `revokeCurrentCLIToken` 是明确的 CLI transport。
+- 权威 OpenAPI 当前共有 172 个 operation。161 个 Web-owned operation 全部通过生成
+  客户端调用，调用文件均可沿 TypeScript import 图反向到达 47 个页面/global layout
+  owner；`exchangeCLIAuthCode` 与 `revokeCurrentCLIToken` 是明确的 CLI transport，
+  9 个探针、兼容或已隐藏接口明确标记为非 Web-owned。
 - 69 个写操作分别落在注册/登录、页面编辑与工具、导入、资产、来源、Dataset、
   Component、Collection、Entity、联邦和治理工作区，均有表单、按钮或明确命令入口。
   动态详情页都有上游列表、搜索、审计、引用或关联对象链接。
@@ -620,7 +640,7 @@ outlines。References/Related 是 Current Revision
 
 ## 2026-08-18 API 语义与工作流审计
 
-- `TestAPIContractE2E` 从权威 OpenAPI 动态读取并命中 155/155 个 operation；所有
+- `TestAPIContractE2E` 从权威 OpenAPI 动态读取并命中已装配的 HTTP operation；所有
   handler 禁止非预期 5xx，只有配置为测试 `.invalid` 地址的 `testAIConfig`
   允许契约声明的 502/504 依赖失败。
 - 成功工作流覆盖 Page/Revision/Diff/rollback/rename/redirect/BlockRedirect、
@@ -644,7 +664,7 @@ outlines。References/Related 是 Current Revision
 - `backend/cmd/anby-wiki` 提供 Go CLI；不带子命令或使用 `--input` 时保持供 Agent
   使用的单一 JSON envelope，传入子命令时提供面向人工的普通命令行参数封装，退出码
   仍区分成功、输入/契约错误和远端错误。
-- CLI 从嵌入的权威 OpenAPI 读取 167 个 operationId，支持清单、搜索、Schema 描述和
+- CLI 从嵌入的权威 OpenAPI 读取 172 个 operationId，支持清单、搜索、Schema 描述和
   通用调用；所有 HTTP operation 均可通过 kebab-case 命令名或 `call <operation>`
   调用，发送前校验 path/query/header、JSON/multipart body，收到 JSON 后按状态码校验
   响应。文件上传读取本地路径，二进制响应统一转为 base64 JSON。

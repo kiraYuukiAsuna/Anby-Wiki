@@ -14,6 +14,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { authApi } from "@/lib/api";
 import { AUTH_SESSION_KEY } from "@/lib/auth";
+import { persistSelectedWikiID } from "@/lib/wiki-context";
 
 const registerSchema = z
   .object({
@@ -75,6 +76,7 @@ export function RegisterForm() {
           displayName: parsed.data.displayName || undefined,
         },
       });
+      persistSelectedWikiID(result.wikiId);
       await mutate(AUTH_SESSION_KEY);
       toast.success(`账号创建成功，已登录为 ${result.displayName}`);
       router.replace(next);

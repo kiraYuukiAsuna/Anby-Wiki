@@ -13,6 +13,14 @@
  */
 
 import { mapValues } from '../runtime';
+import type { AuthWikiMembership } from './AuthWikiMembership';
+import {
+    AuthWikiMembershipFromJSON,
+    AuthWikiMembershipFromJSONTyped,
+    AuthWikiMembershipToJSON,
+    AuthWikiMembershipToJSONTyped,
+} from './AuthWikiMembership';
+
 /**
  *
  * @export
@@ -61,6 +69,12 @@ export interface AuthSession {
      * @memberof AuthSession
      */
     method: AuthSessionMethodEnum;
+    /**
+     *
+     * @type {Array<AuthWikiMembership>}
+     * @memberof AuthSession
+     */
+    wikis: Array<AuthWikiMembership>;
 }
 
 
@@ -87,6 +101,7 @@ export function instanceOfAuthSession(value: object): value is AuthSession {
     if ((!('actorType' in (value as Record<string, any>)) && !('actor_type' in (value as Record<string, any>))) || ((value as Record<string, any>)['actorType'] === undefined && (value as Record<string, any>)['actor_type'] === undefined)) return false;
     if ((!('displayName' in (value as Record<string, any>)) && !('display_name' in (value as Record<string, any>))) || ((value as Record<string, any>)['displayName'] === undefined && (value as Record<string, any>)['display_name'] === undefined)) return false;
     if (!('method' in value) || value['method'] === undefined) return false;
+    if (!('wikis' in value) || value['wikis'] === undefined) return false;
     return true;
 }
 
@@ -107,6 +122,7 @@ export function AuthSessionFromJSONTyped(json: any, ignoreDiscriminator: boolean
         'actorType': json['actor_type'],
         'displayName': json['display_name'],
         'method': json['method'],
+        'wikis': ((json['wikis'] as Array<any>).map(AuthWikiMembershipFromJSON)),
     };
 }
 
@@ -128,6 +144,7 @@ export function AuthSessionToJSONTyped(value?: AuthSession | null, ignoreDiscrim
         'actor_type': value['actorType'],
         'display_name': value['displayName'],
         'method': value['method'],
+        'wikis': ((value['wikis'] as Array<any>).map(AuthWikiMembershipToJSON)),
     };
 }
 

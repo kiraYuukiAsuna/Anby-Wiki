@@ -19,7 +19,7 @@
   390×844 移动端退化；完整键盘顺序、读屏器语义、对比度和正式网络失败态仍需要
   人工验收。
 - Agent CLI 已部署到正式域名和生产 tools image；历史 149-operation 全量 transport
-  验收、公开调用、请求校验和无效 Bearer 拒绝均已通过。当前契约已增长到 167 个
+  验收、公开调用、请求校验和无效 Bearer 拒绝均已通过。当前契约已增长到 172 个
   operation；正式域名的授权码创建、兑换、受保护调用、撤销和撤销后 401 仍需再完成
   一次管理员冒烟。
 - References/Related topics/Related outlines、信息框、私有页面和知识详情已在生产真实

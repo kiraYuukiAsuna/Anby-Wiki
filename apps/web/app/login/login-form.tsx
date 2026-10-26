@@ -14,6 +14,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { authApi } from "@/lib/api";
 import { AUTH_SESSION_KEY } from "@/lib/auth";
+import { persistSelectedWikiID } from "@/lib/wiki-context";
 
 const loginSchema = z.object({
   identifier: z.string().trim().min(1, "请输入用户名或邮箱").max(254),
@@ -46,6 +47,7 @@ export function LoginForm() {
       const result = await authApi().login({
         loginRequest: parsed.data,
       });
+      persistSelectedWikiID(result.wikiId);
       await mutate(AUTH_SESSION_KEY);
       toast.success(`已登录为 ${result.displayName}`);
       router.replace(next);

@@ -17,3 +17,4 @@ export * from './ProjectionApi';
 export * from './ReadingApi';
 export * from './SearchApi';
 export * from './SourcesApi';
+export * from './WikiApi';

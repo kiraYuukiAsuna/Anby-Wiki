@@ -1170,12 +1170,11 @@ CREATE TABLE role (
 );
 
 CREATE TABLE actor_role (
-    actor_id  uuid        NOT NULL,
+    actor_id  uuid        NOT NULL REFERENCES actor (id),
     role_id   uuid        NOT NULL REFERENCES role (id),
     wiki_id   uuid        NOT NULL REFERENCES wiki_site (id),
     created_at timestamptz NOT NULL DEFAULT now(),
-    PRIMARY KEY (actor_id, role_id, wiki_id),
-    FOREIGN KEY (actor_id, wiki_id) REFERENCES actor (id, wiki_id)
+    PRIMARY KEY (actor_id, role_id, wiki_id)
 );
 
 CREATE INDEX actor_role_wiki_actor_idx ON actor_role (wiki_id, actor_id);

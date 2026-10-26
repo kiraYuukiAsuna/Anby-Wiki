@@ -172,11 +172,11 @@ export function DatasetHub() {
       });
       await mutate();
       setName("");
-      toast.success("Dataset 已创建", {
+      toast.success("数据集已创建", {
         description: `${created.name} · ${normalized.length} 个字段`,
       });
     } catch {
-      toast.error("创建 Dataset 失败", {
+      toast.error("创建数据集失败", {
         description: "请检查字段定义、登录状态或名称是否重复。",
       });
     } finally {
@@ -208,7 +208,7 @@ export function DatasetHub() {
 
         {error ? (
           <div className="mt-5 rounded-2xl border border-destructive/20 bg-destructive/5 p-5 text-sm text-destructive">
-            Dataset 目录暂时无法读取。
+            数据集目录暂时无法读取。
           </div>
         ) : null}
 
@@ -226,7 +226,10 @@ export function DatasetHub() {
         {!isLoading && !error && datasets.length === 0 ? (
           <div className="mt-5 rounded-2xl border border-dashed px-6 py-14 text-center">
             <Database className="mx-auto size-8 text-muted-foreground" aria-hidden />
-            <h3 className="mt-4 font-semibold">还没有 Dataset</h3>
+            <h3 className="mt-4 font-semibold">还没有数据集</h3>
+            <p className="mx-auto mt-2 max-w-sm text-sm leading-6 text-muted-foreground">
+              用数据集管理可筛选的结构化资料，例如人物清单、作品列表、协议矩阵或术语库。
+            </p>
           </div>
         ) : null}
 
@@ -258,7 +261,7 @@ export function DatasetHub() {
           <h2 className="mt-4 font-semibold">新建结构化数据</h2>
           <div className="mt-5 space-y-4">
             <div className="space-y-2">
-              <Label htmlFor="dataset-name">Dataset 名称</Label>
+              <Label htmlFor="dataset-name">数据集名称</Label>
               <Input
                 id="dataset-name"
                 value={name}
@@ -364,7 +367,7 @@ export function DatasetHub() {
               ) : (
                 <Plus aria-hidden />
               )}
-              {isAuthenticated ? "创建 Dataset" : "登录后创建"}
+              {isAuthenticated ? "创建数据集" : "登录后创建"}
             </Button>
           </div>
         </div>

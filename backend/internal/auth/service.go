@@ -114,6 +114,14 @@ type Session struct {
 	ExpiresAt       time.Time
 }
 
+// WikiMembership is one Wiki context the actor may select for requests.
+type WikiMembership struct {
+	WikiID          uuid.UUID
+	WikiName        string
+	MainNamespaceID uuid.UUID
+	Roles           []string
+}
+
 // Service is the sole write path for accounts, external identities and
 // authentication sessions.
 type Service struct {
@@ -385,44 +393,56 @@ func (s *Service) EstablishSession(ctx context.Context, identity Identity) (Sess
 
 // ResolveSession authenticates an opaque token and re-reads Actor status on
 // every request. No role or permission is cached in the session.
-func (s *Service) ResolveSession(ctx context.Context, token string) (Principal, error) {
+func (s *Service) ResolveSession(ctx context.Context, token string, requestedWikiID uuid.UUID) (Principal, error) {
 	if token == "" {
 		return Principal{}, ErrUnauthenticated
 	}
 	hash := tokenHash(token)
-	var principal Principal
-	err := s.pool.QueryRow(ctx, `SELECT
-		a.id,a.wiki_id,w.name,n.id,a.actor_type,a.display_name
-		FROM auth_session s
-		JOIN actor a ON a.id=s.actor_id
-		JOIN wiki_site w ON w.id=a.wiki_id
-		JOIN namespace n ON n.wiki_id=a.wiki_id AND n.namespace_key='main'
-		LEFT JOIN local_account la ON la.actor_id=a.id
-		WHERE s.token_hash=$1 AND s.revoked_at IS NULL AND s.expires_at>now()
-			AND a.status='active' AND (la.id IS NULL OR la.status='active')`, hash[:]).Scan(
-		&principal.ActorID, &principal.WikiID, &principal.WikiName,
-		&principal.MainNamespaceID,
-		&principal.ActorType, &principal.DisplayName,
-	)
+	var actorID uuid.UUID
+	err := s.pool.QueryRow(ctx, `SELECT actor_id
+		FROM auth_session
+		WHERE token_hash=$1 AND revoked_at IS NULL AND expires_at>now()`,
+		hash[:],
+	).Scan(&actorID)
 	if errors.Is(err, pgx.ErrNoRows) {
 		return Principal{}, ErrUnauthenticated
 	}
 	if err != nil {
 		return Principal{}, fmt.Errorf("auth: resolve session: %w", err)
 	}
-	principal.Method = "session"
-	return principal, nil
+	return s.resolveActorPrincipal(
+		ctx, actorID, requestedWikiID, uuid.Nil, "session",
+	)
 }
 
 // ResolveDevActor validates an explicitly supplied development/test Actor.
-func (s *Service) ResolveDevActor(ctx context.Context, actorID uuid.UUID) (Principal, error) {
+func (s *Service) ResolveDevActor(ctx context.Context, actorID, requestedWikiID uuid.UUID) (Principal, error) {
+	return s.resolveActorPrincipal(
+		ctx, actorID, requestedWikiID, uuid.Nil, "development_header",
+	)
+}
+
+func (s *Service) resolveActorPrincipal(
+	ctx context.Context,
+	actorID, requestedWikiID, credentialID uuid.UUID,
+	method string,
+) (Principal, error) {
 	var principal Principal
 	err := s.pool.QueryRow(ctx, `SELECT
-		a.id,a.wiki_id,w.name,n.id,a.actor_type,a.display_name
+		a.id,w.id,w.name,n.id,a.actor_type,a.display_name
 		FROM actor a
-		JOIN wiki_site w ON w.id=a.wiki_id
-		JOIN namespace n ON n.wiki_id=a.wiki_id AND n.namespace_key='main'
-		WHERE a.id=$1 AND a.status='active'`, actorID).Scan(
+		JOIN wiki_site w ON w.id=CASE WHEN $2=$3 THEN a.wiki_id ELSE $2 END
+		JOIN namespace n ON n.wiki_id=w.id AND n.namespace_key='main'
+		LEFT JOIN local_account la ON la.actor_id=a.id
+		WHERE a.id=$1 AND a.status='active'
+			AND (la.id IS NULL OR la.status='active')
+			AND (
+				a.actor_type='system'
+				OR EXISTS (
+					SELECT 1 FROM actor_role ar
+					WHERE ar.actor_id=a.id AND ar.wiki_id=w.id
+				)
+			)`, actorID, requestedWikiID, uuid.Nil).Scan(
 		&principal.ActorID, &principal.WikiID, &principal.WikiName,
 		&principal.MainNamespaceID,
 		&principal.ActorType, &principal.DisplayName,
@@ -431,10 +451,55 @@ func (s *Service) ResolveDevActor(ctx context.Context, actorID uuid.UUID) (Princ
 		return Principal{}, ErrUnauthenticated
 	}
 	if err != nil {
-		return Principal{}, fmt.Errorf("auth: resolve development actor: %w", err)
+		return Principal{}, fmt.Errorf("auth: resolve actor principal: %w", err)
 	}
-	principal.Method = "development_header"
+	principal.CredentialID = credentialID
+	principal.Method = method
 	return principal, nil
+}
+
+// ListWikiMemberships returns all Wiki contexts this Actor may select.
+func (s *Service) ListWikiMemberships(ctx context.Context, actorID uuid.UUID) ([]WikiMembership, error) {
+	if actorID == uuid.Nil {
+		return nil, ErrUnauthenticated
+	}
+	rows, err := s.pool.Query(ctx, `SELECT
+		w.id,w.name,n.id,r.role_key
+		FROM actor_role ar
+		JOIN actor a ON a.id=ar.actor_id
+		JOIN wiki_site w ON w.id=ar.wiki_id
+		JOIN namespace n ON n.wiki_id=w.id AND n.namespace_key='main'
+		JOIN role r ON r.id=ar.role_id
+		LEFT JOIN local_account la ON la.actor_id=a.id
+		WHERE ar.actor_id=$1 AND a.status='active'
+			AND (la.id IS NULL OR la.status='active')
+		ORDER BY lower(w.name),w.id,r.role_key`, actorID)
+	if err != nil {
+		return nil, fmt.Errorf("auth: list wiki memberships: %w", err)
+	}
+	defer rows.Close()
+	items := []WikiMembership{}
+	var current *WikiMembership
+	for rows.Next() {
+		var wikiID, namespaceID uuid.UUID
+		var wikiName, role string
+		if err := rows.Scan(&wikiID, &wikiName, &namespaceID, &role); err != nil {
+			return nil, fmt.Errorf("auth: scan wiki membership: %w", err)
+		}
+		if current == nil || current.WikiID != wikiID {
+			items = append(items, WikiMembership{
+				WikiID: wikiID, WikiName: wikiName,
+				MainNamespaceID: namespaceID,
+				Roles:           []string{},
+			})
+			current = &items[len(items)-1]
+		}
+		current.Roles = append(current.Roles, role)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, fmt.Errorf("auth: iterate wiki memberships: %w", err)
+	}
+	return items, nil
 }
 
 // RevokeSession immediately invalidates the supplied opaque token.
@@ -451,8 +516,8 @@ func (s *Service) RevokeSession(ctx context.Context, token string) error {
 }
 
 // GetProfile returns the local account profile for the authenticated Actor.
-func (s *Service) GetProfile(ctx context.Context, actorID, wikiID uuid.UUID) (Profile, error) {
-	profile, err := s.scanProfile(ctx, s.pool, actorID, wikiID)
+func (s *Service) GetProfile(ctx context.Context, actorID, _ uuid.UUID) (Profile, error) {
+	profile, err := s.scanProfile(ctx, s.pool, actorID)
 	if err != nil {
 		return Profile{}, err
 	}
@@ -468,9 +533,9 @@ func (s *Service) UpdateProfile(ctx context.Context, input UpdateProfileInput) (
 	var profile Profile
 	err = s.txm.InTx(ctx, func(tx pgx.Tx) error {
 		tag, err := tx.Exec(ctx, `UPDATE actor
-			SET display_name=$3
-			WHERE id=$1 AND wiki_id=$2 AND status='active'`,
-			input.ActorID, input.WikiID, displayName)
+			SET display_name=$2
+			WHERE id=$1 AND status='active'`,
+			input.ActorID, displayName)
 		if err != nil {
 			return err
 		}
@@ -478,15 +543,14 @@ func (s *Service) UpdateProfile(ctx context.Context, input UpdateProfileInput) (
 			return ErrAccountNotFound
 		}
 		tag, err = tx.Exec(ctx, `UPDATE local_account
-			SET email=$3, normalized_email=$4, updated_at=now()
+			SET email=$2, normalized_email=$3, updated_at=now()
 			WHERE actor_id=$1 AND status='active'
 				AND EXISTS (
 					SELECT 1 FROM actor a
 					WHERE a.id=local_account.actor_id
-						AND a.wiki_id=$2
 						AND a.status='active'
 				)`,
-			input.ActorID, input.WikiID, email, normalizedEmail)
+			input.ActorID, email, normalizedEmail)
 		if err != nil {
 			return err
 		}
@@ -494,16 +558,16 @@ func (s *Service) UpdateProfile(ctx context.Context, input UpdateProfileInput) (
 			return ErrAccountNotFound
 		}
 		tag, err = tx.Exec(ctx, `UPDATE wiki_site
-			SET name=$3
-			WHERE id=$1 AND owner_actor_id=$2`,
-			input.WikiID, input.ActorID, wikiName)
+			SET name=$2
+			WHERE owner_actor_id=$1`,
+			input.ActorID, wikiName)
 		if err != nil {
 			return err
 		}
 		if tag.RowsAffected() != 1 {
 			return ErrAccountNotFound
 		}
-		profile, err = s.scanProfile(ctx, tx, input.ActorID, input.WikiID)
+		profile, err = s.scanProfile(ctx, tx, input.ActorID)
 		return err
 	})
 	if err != nil {
@@ -519,7 +583,7 @@ func (s *Service) UpdateProfile(ctx context.Context, input UpdateProfileInput) (
 func (s *Service) scanProfile(
 	ctx context.Context,
 	querier db.Querier,
-	actorID, wikiID uuid.UUID,
+	actorID uuid.UUID,
 ) (Profile, error) {
 	var profile Profile
 	err := querier.QueryRow(ctx, `SELECT
@@ -528,9 +592,9 @@ func (s *Service) scanProfile(
 		FROM actor a
 		JOIN local_account la ON la.actor_id=a.id
 		JOIN wiki_site w ON w.id=a.wiki_id
-		WHERE a.id=$1 AND a.wiki_id=$2
+		WHERE a.id=$1
 			AND a.status='active' AND la.status='active'`,
-		actorID, wikiID).Scan(
+		actorID).Scan(
 		&profile.ActorID, &profile.WikiID, &profile.Username, &profile.Email,
 		&profile.DisplayName, &profile.WikiName, &profile.CreatedAt, &profile.UpdatedAt,
 	)
@@ -734,7 +798,7 @@ func validateRegistration(input RegisterInput) (string, string, string, error) {
 }
 
 func validateProfileUpdate(input UpdateProfileInput) (string, string, string, string, error) {
-	if input.ActorID == uuid.Nil || input.WikiID == uuid.Nil {
+	if input.ActorID == uuid.Nil {
 		return "", "", "", "", ErrAccountNotFound
 	}
 	email := strings.TrimSpace(input.Email)

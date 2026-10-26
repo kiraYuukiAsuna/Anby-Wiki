@@ -6,6 +6,7 @@ import { Bot, BookOpenText, Plus } from "lucide-react";
 import { AccountMenu } from "@/components/account-menu";
 import { GlobalSearchCommand } from "@/components/global-search-command";
 import { Button } from "@/components/ui/button";
+import { WikiSwitcher } from "@/components/wiki-switcher";
 import { useSession } from "@/lib/auth";
 
 export function SiteHeader() {
@@ -31,6 +32,7 @@ export function SiteHeader() {
             {wikiName}
           </span>
         </Link>
+        <WikiSwitcher />
 
         <div className="mx-auto flex min-w-0 max-w-xl flex-1">
           <GlobalSearchCommand />

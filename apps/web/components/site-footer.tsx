@@ -21,17 +21,14 @@ export function SiteFooter() {
           <Link href="/entities" className="transition-colors hover:text-foreground">
             实体
           </Link>
-          <Link href="/datasets" className="transition-colors hover:text-foreground">
-            数据集
-          </Link>
           <Link href="/components" className="transition-colors hover:text-foreground">
             组件
           </Link>
           <Link
-            href="/governance"
+            href="/governance/review"
             className="transition-colors hover:text-foreground"
           >
-            治理中心
+            审核队列
           </Link>
         </nav>
       </div>

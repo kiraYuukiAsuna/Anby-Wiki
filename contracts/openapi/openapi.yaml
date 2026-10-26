@@ -125,6 +125,139 @@ paths:
         "204":
           description: 已退出；无活动 session 时同样成功
         "500": { $ref: "#/components/responses/Internal" }
+  /api/v1/wiki/members:
+    get:
+      operationId: listWikiMembers
+      tags: [wiki]
+      summary: 列出当前 Wiki 成员与角色
+      description: 仅 admin 可用；成员关系以 actor_role(actor_id,wiki_id,role_id) 为准。
+      security:
+        - sessionCookie: []
+        - cliBearer: []
+      parameters:
+        - name: search
+          in: query
+          schema: { type: string, maxLength: 128 }
+          description: 按用户名、邮箱、显示名或 Actor ID 过滤。
+        - name: include_disabled
+          in: query
+          schema: { type: boolean, default: false }
+      responses:
+        "200":
+          description: 当前 Wiki 成员列表
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/WikiMemberList" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "422": { $ref: "#/components/responses/UnprocessableEntity" }
+    post:
+      operationId: addWikiMember
+      tags: [wiki]
+      summary: 添加协作者并授予角色
+      description: 按用户名、邮箱或 Actor ID 查找 active 本地账号；幂等添加角色。
+      security:
+        - sessionCookie: []
+        - cliBearer: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/AddWikiMemberRequest" }
+      responses:
+        "201":
+          description: 添加后的成员角色快照
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/WikiMemberMutationResult" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "422": { $ref: "#/components/responses/UnprocessableEntity" }
+  /api/v1/wiki/members/{actor_id}:
+    delete:
+      operationId: removeWikiMember
+      tags: [wiki]
+      summary: 移除当前 Wiki 协作者
+      description: 仅撤销该 Actor 在当前 Wiki 的角色，不删除本地账号或其个人 Wiki。
+      security:
+        - sessionCookie: []
+        - cliBearer: []
+      parameters:
+        - name: actor_id
+          in: path
+          required: true
+          schema: { type: string, format: uuid }
+      responses:
+        "200":
+          description: 移除结果
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/WikiMemberRemovalResult" }
+        "400": { $ref: "#/components/responses/BadRequest" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "409": { $ref: "#/components/responses/Conflict" }
+  /api/v1/wiki/members/{actor_id}/roles/{role_key}:
+    put:
+      operationId: grantWikiMemberRole
+      tags: [wiki]
+      summary: 授予当前 Wiki 成员角色
+      description: 幂等操作；成员必须已在当前 Wiki 中。
+      security:
+        - sessionCookie: []
+        - cliBearer: []
+      parameters:
+        - name: actor_id
+          in: path
+          required: true
+          schema: { type: string, format: uuid }
+        - name: role_key
+          in: path
+          required: true
+          schema:
+            type: string
+            enum: [editor, reviewer, applier, admin]
+      responses:
+        "200":
+          description: 授权后的成员角色快照
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/WikiMemberMutationResult" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "422": { $ref: "#/components/responses/UnprocessableEntity" }
+    delete:
+      operationId: revokeWikiMemberRole
+      tags: [wiki]
+      summary: 撤销当前 Wiki 成员角色
+      description: 成员至少保留一个角色；如需完全移出成员列表，请调用移除协作者接口。
+      security:
+        - sessionCookie: []
+        - cliBearer: []
+      parameters:
+        - name: actor_id
+          in: path
+          required: true
+          schema: { type: string, format: uuid }
+        - name: role_key
+          in: path
+          required: true
+          schema:
+            type: string
+            enum: [editor, reviewer, applier, admin]
+      responses:
+        "200":
+          description: 撤销后的成员角色快照
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/WikiMemberMutationResult" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "409": { $ref: "#/components/responses/Conflict" }
   /api/v1/account/profile:
     get:
       operationId: getAccountProfile
@@ -680,6 +813,7 @@ paths:
   /api/v1/datasets:
     get:
       operationId: listDatasets
+      x-anby-web-owned: false
       tags: [datasets]
       summary: 列出站点 Dataset
       parameters:
@@ -694,6 +828,7 @@ paths:
         "400": { $ref: "#/components/responses/BadRequest" }
     post:
       operationId: createDataset
+      x-anby-web-owned: false
       tags: [datasets]
       summary: 创建带 JSON Schema 的 Dataset
       security:
@@ -1277,6 +1412,7 @@ paths:
   /api/v1/proposals:
     get:
       operationId: listProposals
+      x-anby-web-owned: false
       tags: [governance]
       summary: 列出当前 Actor 创建的 Proposal
       security:
@@ -1799,6 +1935,7 @@ paths:
   /api/v1/admin/users:
     get:
       operationId: listAdminUsers
+      x-anby-web-owned: false
       tags: [admin]
       summary: 管理员列出本地用户与角色
       description: 仅 admin 可用；角色变更不会写入 session，下一次授权检查即时生效。
@@ -1825,6 +1962,7 @@ paths:
   /api/v1/admin/users/{actor_id}:
     delete:
       operationId: deleteAdminUser
+      x-anby-web-owned: false
       tags: [admin]
       summary: 管理员删除本地注册用户
       description: 删除本地登录账号并使其 Session 与 CLI Token 失效；历史内容保留 disabled actor 作为审计主体。不能删除当前账号或最后一个 active admin。
@@ -1850,6 +1988,7 @@ paths:
   /api/v1/admin/users/{actor_id}/roles/{role_key}:
     put:
       operationId: grantAdminUserRole
+      x-anby-web-owned: false
       tags: [admin]
       summary: 管理员授予用户角色
       description: 幂等操作；角色已存在时返回 changed=false。
@@ -1879,6 +2018,7 @@ paths:
         "422": { $ref: "#/components/responses/UnprocessableEntity" }
     delete:
       operationId: revokeAdminUserRole
+      x-anby-web-owned: false
       tags: [admin]
       summary: 管理员撤销用户角色
       description: 幂等操作；角色不存在时返回 changed=false。最后一个 active human admin 不能被撤销。
@@ -4400,6 +4540,7 @@ paths:
   /healthz:
     get:
       operationId: getHealthz
+      x-anby-web-owned: false
       summary: 存活探针
       description: 恒 200，仅表示进程存活，不检查任何依赖。
       tags: [meta]
@@ -4417,6 +4558,7 @@ paths:
   /readyz:
     get:
       operationId: getReadyz
+      x-anby-web-owned: false
       summary: 就绪探针
       description: 逐项检查依赖（postgres、redis 等）；任一不可达或未配置返回 503。
       tags: [meta]
@@ -4604,7 +4746,7 @@ components:
           type: string
     AuthSession:
       type: object
-      required: [actor_id, wiki_id, wiki_name, main_namespace_id, actor_type, display_name, method]
+      required: [actor_id, wiki_id, wiki_name, main_namespace_id, actor_type, display_name, method, wikis]
       properties:
         actor_id:
           type: string
@@ -4624,6 +4766,21 @@ components:
         method:
           type: string
           enum: [session, cli_token, development_header, test_header]
+        wikis:
+          type: array
+          items: { $ref: "#/components/schemas/AuthWikiMembership" }
+    AuthWikiMembership:
+      type: object
+      required: [wiki_id, wiki_name, main_namespace_id, roles]
+      properties:
+        wiki_id: { type: string, format: uuid }
+        wiki_name: { type: string }
+        main_namespace_id: { type: string, format: uuid }
+        roles:
+          type: array
+          items:
+            type: string
+            enum: [editor, reviewer, applier, admin]
     AccountProfile:
       type: object
       additionalProperties: false
@@ -5974,6 +6131,63 @@ components:
         items:
           type: array
           items: { $ref: "#/components/schemas/RoleSummary" }
+    AddWikiMemberRequest:
+      type: object
+      additionalProperties: false
+      required: [identifier, role_keys]
+      properties:
+        identifier:
+          type: string
+          minLength: 1
+          maxLength: 254
+          description: 用户名、邮箱或 Actor ID。
+        role_keys:
+          type: array
+          minItems: 1
+          maxItems: 4
+          uniqueItems: true
+          items:
+            type: string
+            enum: [editor, reviewer, applier, admin]
+    WikiMember:
+      type: object
+      required: [actor_id, username, email, display_name, status, roles, created_at]
+      properties:
+        actor_id: { type: string, format: uuid }
+        username: { type: string }
+        email: { type: string, format: email }
+        display_name: { type: string }
+        status:
+          type: string
+          enum: [active, disabled]
+        roles:
+          type: array
+          items: { $ref: "#/components/schemas/RoleSummary" }
+        created_at: { type: string, format: date-time }
+    WikiMemberList:
+      type: object
+      required: [items]
+      properties:
+        items:
+          type: array
+          items: { $ref: "#/components/schemas/WikiMember" }
+    WikiMemberMutationResult:
+      type: object
+      required: [member, changed]
+      properties:
+        member: { $ref: "#/components/schemas/WikiMember" }
+        changed:
+          type: boolean
+          description: false 表示本次授予/撤销为幂等 no-op。
+    WikiMemberRemovalResult:
+      type: object
+      additionalProperties: false
+      required: [actor_id, removed]
+      properties:
+        actor_id: { type: string, format: uuid }
+        removed:
+          type: boolean
+          description: false 表示该 Actor 已不在当前 Wiki 成员列表中。
     AdminUser:
       type: object
       required: [actor_id, username, email, display_name, status, roles, created_at]

@@ -969,7 +969,8 @@ func toProposalResponse(p *governance.Proposal, operations []operationRecordResp
 func governanceError(w http.ResponseWriter, r *http.Request, err error) {
 	switch {
 	case errors.Is(err, governance.ErrProposalNotFound), errors.Is(err, governance.ErrBulkReviewNotFound),
-		errors.Is(err, governance.ErrProtectionNotFound), isAuditNotFound(err), isAdminUserNotFound(err):
+		errors.Is(err, governance.ErrProtectionNotFound), isAuditNotFound(err), isAdminUserNotFound(err),
+		isWikiMemberNotFound(err):
 		httpx.WriteError(w, r, http.StatusNotFound, httpx.CodeNotFound, err.Error())
 	case errors.Is(err, governance.ErrInvalidActor), errors.Is(err, governance.ErrActorNotAllowed), errors.Is(err, governance.ErrPermissionDenied):
 		httpx.WriteError(w, r, http.StatusForbidden, httpx.CodeForbidden, err.Error())
@@ -996,7 +997,7 @@ func governanceError(w http.ResponseWriter, r *http.Request, err error) {
 		httpx.WriteError(w, r, http.StatusUnprocessableEntity, httpx.CodeValidationFailed, err.Error())
 	case errors.Is(err, governance.ErrInvalidAITrustProfile):
 		httpx.WriteError(w, r, http.StatusUnprocessableEntity, httpx.CodeValidationFailed, err.Error())
-	case errors.Is(err, governance.ErrInvalidAdminUserFilter):
+	case errors.Is(err, governance.ErrInvalidAdminUserFilter), errors.Is(err, governance.ErrInvalidWikiMember):
 		httpx.WriteError(w, r, http.StatusUnprocessableEntity, httpx.CodeValidationFailed, err.Error())
 	case errors.Is(err, governance.ErrInvalidTransition), errors.Is(err, governance.ErrProposalNotDraft),
 		errors.Is(err, governance.ErrPatchTargetModified), errors.Is(err, governance.ErrMergeConflict),
@@ -1008,6 +1009,8 @@ func governanceError(w http.ResponseWriter, r *http.Request, err error) {
 		errors.Is(err, governance.ErrLastAdminRole),
 		errors.Is(err, governance.ErrLastAdminUser),
 		errors.Is(err, governance.ErrSelfAdminUserDeletion),
+		errors.Is(err, governance.ErrLastWikiMemberRole),
+		errors.Is(err, governance.ErrSelfWikiMemberRemoval),
 		errors.Is(err, collaboration.ErrSequenceMismatch),
 		errors.Is(err, collaboration.ErrIdempotencyConflict),
 		errors.Is(err, collaboration.ErrDocumentInactive),

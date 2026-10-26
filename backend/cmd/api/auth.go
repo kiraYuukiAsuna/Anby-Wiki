@@ -58,6 +58,24 @@ type accountProfileResponse struct {
 	UpdatedAt   time.Time `json:"updated_at"`
 }
 
+type authSessionResponse struct {
+	ActorID         string               `json:"actor_id"`
+	WikiID          string               `json:"wiki_id"`
+	WikiName        string               `json:"wiki_name"`
+	MainNamespaceID string               `json:"main_namespace_id"`
+	ActorType       string               `json:"actor_type"`
+	DisplayName     string               `json:"display_name"`
+	Method          string               `json:"method"`
+	Wikis           []authWikiMembership `json:"wikis"`
+}
+
+type authWikiMembership struct {
+	WikiID          string   `json:"wiki_id"`
+	WikiName        string   `json:"wiki_name"`
+	MainNamespaceID string   `json:"main_namespace_id"`
+	Roles           []string `json:"roles"`
+}
+
 func (a *AuthAPI) register(w http.ResponseWriter, r *http.Request) {
 	if !a.registrationEnabled {
 		httpx.WriteError(w, r, http.StatusForbidden, httpx.CodeForbidden, "账号注册已关闭")
@@ -149,15 +167,14 @@ func (a *AuthAPI) session(w http.ResponseWriter, r *http.Request) {
 		httpx.WriteError(w, r, http.StatusUnauthorized, httpx.CodeUnauthorized, "需要登录")
 		return
 	}
-	httpx.WriteJSON(w, http.StatusOK, map[string]string{
-		"actor_id":          principal.ActorID.String(),
-		"wiki_id":           principal.WikiID.String(),
-		"wiki_name":         principal.WikiName,
-		"main_namespace_id": principal.MainNamespaceID.String(),
-		"actor_type":        principal.ActorType,
-		"display_name":      principal.DisplayName,
-		"method":            principal.Method,
-	})
+	memberships, err := a.service.ListWikiMemberships(
+		r.Context(), principal.ActorID,
+	)
+	if err != nil {
+		httpx.WriteError(w, r, http.StatusInternalServerError, httpx.CodeInternal, "无法读取 Wiki 列表")
+		return
+	}
+	httpx.WriteJSON(w, http.StatusOK, toAuthSessionResponse(principal, memberships))
 }
 
 func (a *AuthAPI) logout(w http.ResponseWriter, r *http.Request) {
@@ -184,6 +201,27 @@ func toAccountProfileResponse(profile authdomain.Profile) accountProfileResponse
 		Username: profile.Username, Email: profile.Email,
 		DisplayName: profile.DisplayName, WikiName: profile.WikiName,
 		CreatedAt: profile.CreatedAt, UpdatedAt: profile.UpdatedAt,
+	}
+}
+
+func toAuthSessionResponse(
+	principal authdomain.Principal,
+	memberships []authdomain.WikiMembership,
+) authSessionResponse {
+	wikis := make([]authWikiMembership, len(memberships))
+	for index := range memberships {
+		wikis[index] = authWikiMembership{
+			WikiID:          memberships[index].WikiID.String(),
+			WikiName:        memberships[index].WikiName,
+			MainNamespaceID: memberships[index].MainNamespaceID.String(),
+			Roles:           memberships[index].Roles,
+		}
+	}
+	return authSessionResponse{
+		ActorID: principal.ActorID.String(), WikiID: principal.WikiID.String(),
+		WikiName: principal.WikiName, MainNamespaceID: principal.MainNamespaceID.String(),
+		ActorType: principal.ActorType, DisplayName: principal.DisplayName,
+		Method: principal.Method, Wikis: wikis,
 	}
 }
 

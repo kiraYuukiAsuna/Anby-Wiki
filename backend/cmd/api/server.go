@@ -290,6 +290,20 @@ func NewRouter(logger *slog.Logger, deps Deps, writeAPI *WriteAPI, readAPI *Read
 					)
 				}
 				if governanceAPI.userAdmin != nil {
+					r.Get("/wiki/members", governanceAPI.listWikiMembers)
+					r.Post("/wiki/members", governanceAPI.addWikiMember)
+					r.Delete(
+						"/wiki/members/{actor_id}",
+						governanceAPI.removeWikiMember,
+					)
+					r.Put(
+						"/wiki/members/{actor_id}/roles/{role_key}",
+						governanceAPI.grantWikiMemberRole,
+					)
+					r.Delete(
+						"/wiki/members/{actor_id}/roles/{role_key}",
+						governanceAPI.revokeWikiMemberRole,
+					)
 					r.Get("/admin/users", governanceAPI.listAdminUsers)
 					r.Delete(
 						"/admin/users/{actor_id}",

@@ -25,10 +25,15 @@ import {
   ReadingApi,
   SearchApi,
   SourcesApi,
+  WikiApi,
   type ConfigurationParameters,
   type Middleware,
 } from "../../../contracts/generated/typescript";
 import { clientUUID } from "@/lib/client-uuid";
+import {
+  selectedWikiIDFromDocument,
+  WIKI_CONTEXT_HEADER,
+} from "@/lib/wiki-context";
 
 /**
  * 后端 API 基础地址，本地开发默认指向 Go API 服务。
@@ -57,18 +62,23 @@ export function makeRequestId(): string {
   return clientUUID();
 }
 
-/** 为每个请求注入 X-Request-ID（服务端透传或重新生成，见契约 components/headers）。 */
+/** 为每个请求注入请求 ID 和当前 Wiki 上下文。 */
 const requestIdMiddleware: Middleware = {
-  pre: async (context) => ({
-    url: context.url,
-    init: {
-      ...context.init,
-      headers: new Headers({
-        ...context.init.headers,
-        "X-Request-ID": makeRequestId(),
-      }),
-    },
-  }),
+  pre: async (context) => {
+    const headers = new Headers(context.init.headers);
+    headers.set("X-Request-ID", makeRequestId());
+    const wikiID = selectedWikiIDFromDocument();
+    if (wikiID) {
+      headers.set(WIKI_CONTEXT_HEADER, wikiID);
+    }
+    return {
+      url: context.url,
+      init: {
+        ...context.init,
+        headers,
+      },
+    };
+  },
 };
 
 function makeConfig(overrides: ConfigurationParameters = {}): Configuration {
@@ -170,6 +180,11 @@ export function governanceApi(
   overrides: ConfigurationParameters = {},
 ): GovernanceApi {
   return new GovernanceApi(makeConfig(overrides));
+}
+
+/** 当前 Wiki 的成员、协作者与角色客户端。 */
+export function wikiApi(overrides: ConfigurationParameters = {}): WikiApi {
+  return new WikiApi(makeConfig(overrides));
 }
 
 /** AI 来源导入任务、阶段进度、取消与重试客户端。 */

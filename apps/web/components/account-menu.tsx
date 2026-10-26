@@ -8,6 +8,7 @@ import { useSWRConfig } from "swr";
 import { Button } from "@/components/ui/button";
 import { authApi } from "@/lib/api";
 import { AUTH_SESSION_KEY, LOGIN_PATH, useSession } from "@/lib/auth";
+import { clearSelectedWikiID } from "@/lib/wiki-context";
 
 export function AccountMenu() {
   const { session, isLoading, error } = useSession();
@@ -52,6 +53,7 @@ export function AccountMenu() {
   const logout = async () => {
     try {
       await authApi().logout();
+      clearSelectedWikiID();
       await mutate(AUTH_SESSION_KEY, undefined, { revalidate: false });
       toast.success("已退出登录");
     } catch {

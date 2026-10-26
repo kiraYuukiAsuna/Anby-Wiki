@@ -13,6 +13,7 @@ Name | Type
 `actorType` | string
 `displayName` | string
 `method` | string
+`wikis` | [Array&lt;AuthWikiMembership&gt;](AuthWikiMembership.md)
 
 ## Example
 
@@ -28,6 +29,7 @@ const example = {
   "actorType": null,
   "displayName": null,
   "method": null,
+  "wikis": null,
 } satisfies AuthSession
 
 console.log(example)

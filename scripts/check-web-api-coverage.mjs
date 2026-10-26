@@ -44,6 +44,7 @@ function parseOperations(source) {
         method: currentMethod,
         path: currentPath,
         cliOnly: false,
+        webOwned: true,
       };
       operations.push(currentOperation);
       continue;
@@ -53,6 +54,12 @@ function parseOperations(source) {
       /^      x-anby-cli-only:\s*true\s*$/.test(line)
     ) {
       currentOperation.cliOnly = true;
+    }
+    if (
+      currentOperation &&
+      /^      x-anby-web-owned:\s*false\s*$/.test(line)
+    ) {
+      currentOperation.webOwned = false;
     }
   }
   return operations;
@@ -139,10 +146,15 @@ function owningRoutes(start) {
 const failures = [];
 const routeOwners = new Set();
 let cliOwned = 0;
+let nonWebOwned = 0;
 
 for (const operation of operations) {
   if (operation.cliOnly) {
     cliOwned += 1;
+    continue;
+  }
+  if (!operation.webOwned) {
+    nonWebOwned += 1;
     continue;
   }
   const callPattern = new RegExp(`\\.\\s*${operation.id}\\s*\\(`);
@@ -170,5 +182,5 @@ if (failures.length > 0) {
 }
 
 console.log(
-  `web api coverage: ${operations.length - cliOwned}/${operations.length} Web-owned operations have callsites and routable UI owners (${routeOwners.size} owners); ${cliOwned} operations are Agent CLI transport`,
+  `web api coverage: ${operations.length - cliOwned - nonWebOwned}/${operations.length} Web-owned operations have callsites and routable UI owners (${routeOwners.size} owners); ${cliOwned} operations are Agent CLI transport; ${nonWebOwned} operations are intentionally not Web-owned`,
 );

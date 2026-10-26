@@ -22,7 +22,7 @@ export default async function ProposalPage({
     <div className="mx-auto w-full max-w-6xl px-4 py-8">
       <div className="mb-4 flex justify-end">
         <Button variant="outline" size="sm" asChild>
-          <Link href="/governance">返回治理中心</Link>
+          <Link href="/governance/review">返回审核队列</Link>
         </Button>
       </div>
       <ProposalActions proposal={result.proposal} />

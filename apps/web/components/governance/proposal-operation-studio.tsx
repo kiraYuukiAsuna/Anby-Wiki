@@ -767,10 +767,10 @@ export function ProposalOperationStudio() {
           </p>
         </div>
         <Link
-          href="/governance"
+          href="/governance/review"
           className="group flex items-center justify-between rounded-2xl border bg-muted/30 p-4 text-sm font-semibold transition hover:border-primary/20 hover:bg-primary/5"
         >
-          返回提案工作台
+          打开审核队列
           <ArrowRight
             className="size-4 transition-transform group-hover:translate-x-0.5"
             aria-hidden
