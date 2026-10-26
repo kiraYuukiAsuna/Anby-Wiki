@@ -1,5 +1,10 @@
 # PostgreSQL 与对象存储备份恢复 Runbook
 
+> 本 Runbook 是操作者显式执行的灾备流程，不属于
+> `scripts/deploy-production.sh`。日常部署不会创建、保留或轮换这里的备份，部署成功
+> 后的垃圾清理也不会扫描操作者指定的 `BACKUP_DIR`。备份介质、保留期和加密由部署方
+> 单独负责。
+
 ## 安全边界
 
 - 恢复只允许显式 `RESTORE_ENVIRONMENT=drill`，并拒绝 `ENV`、`APP_ENV` 或 `ANBY_ENV` 的 production/prod 值。

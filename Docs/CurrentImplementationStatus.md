@@ -1,6 +1,6 @@
 # 当前实现状态
 
-> 更新时间：2026-10-22
+> 更新时间：2026-10-26
 > 产品与能力审计依据：[整体设计方案](WikiDesignOnePage.md)
 
 ## 总体结论
@@ -13,17 +13,48 @@ Yjs update、持久恢复、普通发布与 AI 合并的 sequence CAS、同标�
 重发、每 100 个已确认 sequence 自动 snapshot/compact 及 Block 级 Presence；
 跨标签页离线恢复与多 API 实例实时广播尚未闭环，不能概括为全部协作设计能力均已完成。
 
-当前代码已通过编译、契约、依赖安全和部署静态门禁，并在本机隔离环境完成
+当前代码已通过自动化测试、编译、契约、依赖安全和部署静态门禁，并在本机隔离环境完成
 PostgreSQL、Redis、RustFS、Meilisearch、API、Linux Worker 与 Next.js Web 的真实
-联调。提交 `18944a7` 已在远端生产拓扑完成六个 OCI target 构建、迁移 gate、Doctor、
-滚动替换和健康检查，并通过复杂 PDF/扫描件、提示注入、Provider 故障恢复、上传幂等、
+联调。复杂文档验收提交 `18944a7` 曾在远端生产拓扑完成六个 OCI target 构建、迁移
+gate、Doctor、滚动替换和健康检查，并通过复杂 PDF/扫描件、提示注入、Provider 故障恢复、上传幂等、
 501 页边界、在途 Worker restart、18 页关联文档、12 页混合方向/尺寸文档、中英双语
 跨页表格、恶意附件隔离、密码加密拒绝及 128/298 MiB 上传边界验收。另一个完全隔离的
 远端数据库/bucket/index/Redis DB 已执行
-149/149 OpenAPI operation handler 探针、核心成功工作流、治理、批量审核、导入、
-AI 配置和双会话协作 E2E。“实现完成”仍不等于“生产发布就绪”：目标规模容量、正式域名
+当时 149/149 OpenAPI operation handler 探针、核心成功工作流、治理、批量审核、导入、
+AI 配置和双会话协作 E2E；当前权威契约为 167 个 operation。“实现完成”仍不等于
+“所有商业发布门禁已关闭”：目标规模容量、正式域名
 安全边界、账号恢复、备份恢复与人工可访问性等仍须验收。详见
 [待解决问题](OutstandingIssues.md)。
+
+## 2026-10-23 生产可靠性与页面鉴权收口
+
+- 当前生产 release 为 `d0285ff6b4e3`。六个业务镜像均使用该提交；API、Worker、
+  Web、AI Kernel 与数据服务健康，公网 `healthz`/`readyz` 返回 200，生产仓库和
+  `Secret/current-release` 一致。
+- 导入队列按 Wiki 选择 AI 任务时使用 `DISTINCT ON (wiki_id)` 和确定性时间/ID 排序，
+  不再对 PostgreSQL UUID 调用不支持的 `min()`；缺少 AI 配置的 Wiki 会被跳过，
+  不阻塞其他 Wiki 或无需模型的 `source_only` 任务。
+- ImportPlan 固化规划时的目标 Revision ID 和 replace Block hash。合成 Proposal 前
+  再校验 Current Revision/Block，人工在规划后修改页面时拒绝陈旧计划，不静默覆盖。
+- Entity 身份键保留 `C++`、`C#` 等有语义符号；人员缩写基于全候选集合消歧。
+  无法唯一匹配时持久化待处理决定，任务详情支持选择已有 Entity、创建新 Entity 或忽略。
+  Claim 去重按完整值和有效期查找，允许多值属性正常共存。
+- 同批 create 页面预分配 Page ID，可直接生成跨页面 `page_reference`。候选页面按
+  相关性裁剪并优先显式目标/精确命中；标题碰撞时补回已有页面内容参与去重。
+- ImportPlan 清理会移除空路由、薄 create route 和仓库导航噪声，并允许有充分证据的
+  非 Heading 首块作为 lead。真实失败任务重新规划后的质量分从门禁失败提升到 0.951，
+  成功进入 Compose。
+- Typed Block 校验先读取 `type`，再直接校验对应 `$defs` 子 Schema，避免大型嵌套
+  Table 在完整 `oneOf` 上指数级展开。生产复测中 Proposal Compose 从约 4 GiB OOM
+  降为约 15 MiB、约 190 ms；空单元格使用 `content: []`，不再序列化成缺少 `text`
+  的非法节点。
+- Page、History、Revision、Diff、Entity、Claim、Citation 与 Asset Revision 的
+  Server Component 均通过 `serverApiOptions()` 转发 Session Cookie。私有 Wiki 下
+  页面正文、目录、反链、合集和知识详情不再因内部 API 401 显示 Server Error；
+  生产登录态已验证 Entity、Citation 和 Asset Revision 详情及其投影请求均为 200。
+- 一键部署不再创建 PostgreSQL、环境或 Nginx 持久化备份。发布成功后只保留当前六个
+  业务镜像，并清理退出容器、BuildKit 缓存和遗留部署备份目录；PostgreSQL、RustFS、
+  Meilisearch 数据目录和运行中镜像不受影响。手工灾备脚本保持独立、显式执行。
 
 ## 2026-10-21 私人 Wiki 多用户隔离
 
@@ -58,6 +89,9 @@ AI 配置和双会话协作 E2E。“实现完成”仍不等于“生产发布�
   Wiki 的模型供应商、密钥、Token/Chunk 预算、超时和导入计划自动确认策略。底层复用
   既有 `aiconfig.Service` 加密存储与 Worker 运行时读取路径，模型配置随账号私人 Wiki
   隔离，不使用前端缓存或全局站点配置。
+- 对外术语统一为“文档理解模型”。导航和命令面板不再暴露“管理员模型配置”；
+  旧 `/admin/ai` 地址仅保留 307 兼容重定向到
+  `/account#document-understanding-model`。
 - OpenAPI 权威契约、Agent CLI 内嵌契约和 TypeScript 生成客户端已同步；CLI operation
   数量更新为 167。
 
@@ -74,14 +108,15 @@ AI 配置和双会话协作 E2E。“实现完成”仍不等于“生产发布�
   并关闭 API 请求缓冲；其余页面请求送 Web。Next rewrite 只作为开发和兼容路径，
   避免生产大文件受其默认 10 MiB 请求缓冲截断。
 - PostgreSQL、RustFS 与 Meilisearch 持久数据统一到根目录 `data/`；配置、首个管理员
-  凭据及配置备份位于被 Git/Docker 排除的 `.env` / `Secret/`。首次管理员通过现有
-  领域 API 初始化后关闭公开注册，未引入直接 SQL 权威写入。
+  凭据和当前成功发布标识位于被 Git/Docker 排除的 `.env` / `Secret/`。一键部署只在
+  `/tmp` 保存失败回滚所需临时状态，退出即删除，不创建持久化部署备份。首次管理员
+  通过现有领域 API 初始化后关闭公开注册，未引入直接 SQL 权威写入。
 - dotenv 按数据读取，不执行 Shell；本入口用于 `anbywiki.momiya.cloud` 独立实例，
   不自动迁移其他实例的数据。既有生产发布验收项继续见 `OutstandingIssues.md`。
 - 生产对象存储使用固定 digest 的 RustFS 1.0.1；一次性 AWS CLI 工具以 path-style
   初始化私有 bucket，不依赖已不可拉取的 MinIO/mc 镜像。已有 MinIO 目录不能直接
   当作 RustFS 数据目录使用，必须通过 S3 导出/恢复。
-- 上线检查补齐 Next.js 16.3.8、sharp 0.35.5、source-map-js 1.2.2、golang.org/x/text 0.41.0 与
+- 上线检查补齐 Next.js 16.3.8、sharp 0.35.5、source-map-js 1.2.2、golang.org/x/text 0.42.0 与
   OpenTelemetry Go 1.45.0 的安全修复；首次部署失败重试不视为可回滚的已验收版本。
 
 ## 设计能力覆盖与已知边界
@@ -93,11 +128,11 @@ AI 配置和双会话协作 E2E。“实现完成”仍不等于“生产发布�
 | 证据与媒体 | Source/Version/Chunk/Citation、Asset/AssetRevision、引用校验、相同证据 Citation 幂等复用、按页面聚合并可展开到 Block/Node 的反向使用、按全文首次出现统一编号的 References 投影、逐处正文回链、可审计来源与媒体目录 |
 | 结构化内容 | Dataset/View/Record、Component/Version、内置 Entity/Claim 信息框（按页面语言→`und`→任意主标签降级、同属性多值聚合、Entity 可跳转、验证摘要与类型感知排序）、静态与动态 Collection、成员维护、页面反向归属查询与投影；Entity/Claim/Citation 反向使用、页面反链和 Component 依赖在 Web 中按来源页面聚合，并可展开到具体 Block/Node；列表返回真实总位置/页面/区块数并支持游标续页 |
 | 治理 | ProposalOperation v1 全部 24 种 Operation（含可原子应用和补偿回滚的 Page 主 Entity 绑定）、预分配 Page/Entity ID 的同批依赖、Operation 集合事务冻结、Wiki 级多目标 Proposal、跨页面 Revision/Block、Claim 及 Page/Entity 身份冲突检测、并发唯一索引冲突到 HTTP 409 的领域映射、预览、风险、ReviewTask、面向 applier/admin 的跨 Actor 待原子应用队列、带分类失败原因和终态跳过语义的批量审核、ChangeBatch、整批补偿回滚、审计事件、ChangeTag、AI Trust 档案/策略、事实一致性；AI Trust 仅作用于预置的 `ai/import` Actor，当前用户导入仍以 human Actor 创建 Proposal |
-| 导入与 AI | URL/HTML/文本/PDF/PNG/JPEG/JSON/CSV 获取，基于 DOM 主正文且排除导航/侧栏/页眉/页脚的 HTML 解析，复杂 PDF 的原生文本+逐页视觉双轨解析，表格/图表/图片结构化 Chunk 与页内区域定位，独立图片中英 OCR、来源标题/作者/发布者/日期/DOI 等安全元数据推导、结构化数据规范化、七阶段进度、幂等 Job、同 Job 多 Run/多不可变 ImportPlan 版本、解析成功后原子写入且通过 ImportJob API 可见的不可变 SourceVersion 恢复点与无重复来源的失败重试、无需 AI 配置且只为 HTML/纯文本/JSON/CSV 固化不可变来源/分片的 `source_only` 模式、Worker 中断任务自动恢复、管理员可配置模型最大输入 Token、来源 Chunk 字符数与中间计划自动确认（默认开启，最终 Proposal 审核不变）、按输入预算与输出安全上限并行分批抽取/规划、单个持久 Chunk 内的临时语义窗口二分及证据回映射、截断或结构不合法窗口重试及跨批去重、轻量模型规划 Schema 与服务端机械字段补全、确定性 ImportPlan 合并、近义内容整合和结构清理、用户标题/内容块上限的跨窗口全局执行、现有页异常扩张硬门禁、对照原始 Chunk 与用户指定范围的生成后保真审计和证据化章节修复、保真分窗的三次语义纠正、并发真因保留及坏修复隔离与覆盖率回退、服务端五维质量评分及默认 0.70 硬门槛、Semantic Kernel 默认三次结构化调用与纠正重试、精确引文的跨 Chunk 安全纠偏、纯空白差异原文回填及坏候选/坏 Claim 隔离、Entity 缩写/别名归并、Claim 方向/类型/非自引用门禁、`instance_of` 明确分类证据门禁与批内单值属性确定性消歧、作品/RFC 的发布组织、文档编号/类别/状态、更新与废止专用属性、仅由页面路由授权图谱写入、来源概况与智能多页面 create/update/link/ignore 路由、强制创建单页、更新指定页面与用户导入要求、证据约束 Typed Block 生成/补丁及正文 Entity 引用、确定性 H2 层级与标准 See also、主 Entity 绑定及信息框、显式且有证据的页面关联与反链投影、规划结果可视化、单 ImportJob 页面+Entity+Claim 复合 Proposal 与同一 ChangeBatch 原子应用、可持久查询的导入队列 |
+| 导入与 AI | URL/HTML/文本/PDF/PNG/JPEG/JSON/CSV 获取，基于 DOM 主正文且排除导航/侧栏/页眉/页脚的 HTML 解析，复杂 PDF 的原生文本+逐页视觉双轨解析，表格/图表/图片结构化 Chunk 与页内区域定位，独立图片中英 OCR、来源标题/作者/发布者/日期/DOI 等安全元数据推导、结构化数据规范化、七阶段进度、幂等 Job、同 Job 多 Run/多不可变 ImportPlan 版本、规划 Revision/Block hash 并发保护、解析成功后原子写入且通过 ImportJob API 可见的不可变 SourceVersion 恢复点与无重复来源的失败重试、无需 AI 配置且只为 HTML/纯文本/JSON/CSV 固化不可变来源/分片的 `source_only` 模式、Worker 中断任务自动恢复、账号级文档理解模型配置与缺失配置 Wiki 跳过、模型最大输入 Token、来源 Chunk 字符数与中间计划自动确认（默认开启，最终 Proposal 审核不变）、按输入预算与输出安全上限并行分批抽取/规划、单个持久 Chunk 内的临时语义窗口二分及证据回映射、截断或结构不合法窗口重试及跨批去重、轻量模型规划 Schema 与服务端机械字段补全、确定性 ImportPlan 合并、近义内容整合和结构清理、用户标题/内容块上限的跨窗口全局执行、现有页异常扩张硬门禁、对照原始 Chunk 与用户指定范围的生成后保真审计和证据化章节修复、保真分窗的三次语义纠正、并发真因保留及坏修复隔离与覆盖率回退、服务端五维质量评分及默认 0.70 硬门槛、Semantic Kernel 默认三次结构化调用与纠正重试、精确引文的跨 Chunk 安全纠偏、纯空白差异原文回填及坏候选/坏 Claim 隔离、保留语义符号的 Entity 身份归一化、缩写/别名全候选消歧、人工匹配决定、Claim 完整值/有效期去重、Claim 方向/类型/非自引用门禁、`instance_of` 明确分类证据门禁与批内单值属性确定性消歧、作品/RFC 的发布组织、文档编号/类别/状态、更新与废止专用属性、仅由页面路由授权图谱写入、来源概况与按相关性召回的智能多页面 create/update/link/ignore 路由、同批新页面稳定互链、强制创建单页、更新指定页面与用户导入要求、证据约束 Typed Block 生成/补丁及正文 Entity 引用、确定性 H2 层级与标准 See also、主 Entity 绑定及信息框、显式且有证据的页面关联与反链投影、规划结果可视化、单 ImportJob 页面+Entity+Claim 复合 Proposal 与同一 ChangeBatch 原子应用、可持久查询的导入队列 |
 | 投影与搜索 | Outbox 租约/重试/死信、链接/目录/锚点/章节/渲染/知识使用/References/相关推荐/组件依赖/图谱投影、可解释的链接+Collection+Entity 相关度、PostgreSQL fallback、Meilisearch 关键词/混合/语义检索 |
 | 规模与归档 | 章节懒加载、服务端可信 HTML 渲染、Revision 热冷分层与 S3 回源、Projection/Search 重建、容量基准命令 |
 | 协作 | Yjs WorkingDocument、持久增量 update、重连游标、普通发布与 AI 合并的 sequence CAS、未确认 update 幂等重发、自动 snapshot/compact、Block 级 Presence、三方合并与人工冲突决议；跨标签页离线恢复和多 API 实例广播仍待实现 |
-| 平台 | 每账号私人 Wiki、本地账号/Session/RBAC、个人中心资料与模型配置、一次性授权码与可撤销/可清理 Agent CLI Bearer Token、167 个 OpenAPI operation 和协作 WebSocket 的 JSON + 人类命令双模式 CLI、Redis 限流、安全头、OTel/Prometheus、备份恢复、Doctor、生产部署清单 |
+| 平台 | 每账号私人 Wiki、本地账号/Session/RBAC、个人中心资料与文档理解模型配置、Server Component 登录态透传、一次性授权码与可撤销/可清理 Agent CLI Bearer Token、167 个 OpenAPI operation 和协作 WebSocket 的 JSON + 人类命令双模式 CLI、Redis 限流、安全头、OTel/Prometheus、手工灾备/恢复演练工具、Doctor、生产部署与验收后清理 |
 
 ## 关键不变量
 
@@ -125,7 +160,8 @@ AI 配置和双会话协作 E2E。“实现完成”仍不等于“生产发布�
   指纹和警告；相同原文件可在解析器身份变化后生成新版本。完整解析 manifest 写入对象存储并由
   `extracted_asset_id` 关联，原文件继续由 `raw_asset_id` 关联。
 - 多模态调用复用既有 Prompt Registry、Gateway 限流/重试、双重 Schema 校验和
-  `ai_request_usage` 审计。管理端连通性测试同时验证文本结构化输出和图片输入。
+  `ai_request_usage` 审计。个人中心的文档理解模型连通性测试同时验证文本结构化
+  输出和图片输入。
 - 上传上限提升为 300 MiB，PDF 上限为 500 页，页分析并发为 3，Import Worker
   单任务恢复窗口为 2 小时。任一页面分析失败时 Parse stage 整体失败，不发布部分版本。
 - 本次按预发布策略直接修改唯一初始化 Schema，不兼容旧 SourceVersion/SourceChunk
@@ -176,7 +212,7 @@ AI 配置和双会话协作 E2E。“实现完成”仍不等于“生产发布�
   每分钟三个额度耗尽时返回带 `Retry-After` 的 429，等待后恢复。每次 422 后临时目录
   都为 0，API/Worker 峰值 184.2/25.74 MiB，结束后 API 回落到 25.63 MiB，权威计数
   不变且无 OOM、重启或 Doctor issue。
-- 最终生产版本为 `18944a7d0c30`，CI `38173395650`
+- 该轮复杂文档验收版本为 `18944a7d0c30`，CI `38173395650`
   的 8 个 Job、Migration gate、全服务健康检查和只读 Doctor 均通过；active ImportJob、
   开放导入 Proposal、Outbox backlog/dead 与 Projection error 均为 0。
 
@@ -260,7 +296,7 @@ AI 配置和双会话协作 E2E。“实现完成”仍不等于“生产发布�
   `<pre>` 等正文元素开头的合法 fragment；解析仍优先读取 DOM 主正文并排除导航、
   侧栏、页眉、页脚、目录和隐藏节点，防止站点容器文本进入不可变 SourceChunk 并
   诱发无关页面规划。
-- `source-import-plan-v9` 与 `source-import-plan-fidelity-v6` 将用户范围、排除项和
+- `source-import-plan-v10` 与 `source-import-plan-fidelity-v6` 将用户范围、排除项和
   块数限制明确为跨窗口全局约束，并禁止用导航标签、孤立代码或示例值支撑宽泛正文。
 - Typed Block AST 与编辑器支持可折叠 Heading、Todo、Toggle、自定义图标/颜色 Callout、
   带 caption/行列头的 Table、带 language/caption 的 Code、块级 Equation，以及按
@@ -473,8 +509,8 @@ outlines。References/Related 是 Current Revision
 
 ## 安全与依赖
 
-- Web 使用 Next.js `16.2.12`；实际运行树固定到 PostCSS `8.5.25` 和 Sharp
-  `0.35.3`。shadcn CLI 位于 devDependencies。
+- Web 使用 Next.js `16.3.8`；Sharp 固定为 `0.35.5`，`source-map-js` 固定为
+  `1.2.2`。shadcn CLI 位于 devDependencies。
 - 新披露的 `brace-expansion` 漏洞通过 `5.0.9` 修复；安装期幂等适配器只让
   遗留 `minimatch@3` 读取新版函数导出，未知版本会直接失败，避免“审计通过但
   ESLint 损坏”。
@@ -569,8 +605,8 @@ outlines。References/Related 是 Current Revision
 
 ## 2026-08-18 Web/API/CLI 可操作性审计
 
-- 权威 OpenAPI 当前共有 162 个 operation。160 个 Web-owned operation 全部通过生成
-  客户端调用，调用文件均可沿 TypeScript import 图反向到达 48 个页面/global layout
+- 权威 OpenAPI 当前共有 167 个 operation。165 个 Web-owned operation 全部通过生成
+  客户端调用，调用文件均可沿 TypeScript import 图反向到达 50 个页面/global layout
   owner；`exchangeCLIAuthCode` 与 `revokeCurrentCLIToken` 是明确的 CLI transport。
 - 69 个写操作分别落在注册/登录、页面编辑与工具、导入、资产、来源、Dataset、
   Component、Collection、Entity、联邦和治理工作区，均有表单、按钮或明确命令入口。
@@ -608,7 +644,7 @@ outlines。References/Related 是 Current Revision
 - `backend/cmd/anby-wiki` 提供 Go CLI；不带子命令或使用 `--input` 时保持供 Agent
   使用的单一 JSON envelope，传入子命令时提供面向人工的普通命令行参数封装，退出码
   仍区分成功、输入/契约错误和远端错误。
-- CLI 从嵌入的权威 OpenAPI 读取 162 个 operationId，支持清单、搜索、Schema 描述和
+- CLI 从嵌入的权威 OpenAPI 读取 167 个 operationId，支持清单、搜索、Schema 描述和
   通用调用；所有 HTTP operation 均可通过 kebab-case 命令名或 `call <operation>`
   调用，发送前校验 path/query/header、JSON/multipart body，收到 JSON 后按状态码校验
   响应。文件上传读取本地路径，二进制响应统一转为 base64 JSON。
@@ -631,4 +667,6 @@ outlines。References/Related 是 Current Revision
   命名与静态检查通过。
 - 当前表和约束已在 PostgreSQL 17 隔离库重新执行 `up → down → up`；
   up 后 85 张表、down 后仅 `schema_migrations`，再次 up 结果一致。
-- 首次生产上线后必须冻结版本 1，并恢复只增不改的增量迁移策略。
+- 当前 release-candidate 阶段仍按仓库约定维护唯一初始化版本 1；任何不兼容 Schema
+  变更都要求显式重建对应环境，生产运行中禁止执行 `down`。进入数据保留承诺后必须
+  冻结 `000001` 并恢复只增不改的增量迁移策略。

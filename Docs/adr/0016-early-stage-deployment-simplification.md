@@ -2,7 +2,8 @@
 
 - 状态：部分被取代（第 2 节被 ADR-0006 的内部 Beta 决策重新取代；第 3 节被
   ADR-0019、第 4 节的单端口结论被 2026-10-12 修订、第 5 节部分被 ADR-0020、
-  第 6 节被 ADR-0017 取代）
+  第 6 节被 ADR-0017 取代；第 7 节的 MinIO/命名卷实现已演进为 RustFS 与宿主机
+  `data/` 绑定目录）
 - 日期：2026-07-25
 
 ## 背景
@@ -82,6 +83,10 @@ Compose 不提供 HTTPS。配置校验相应放宽：不再强制
 `docker inspect` 与日志中。
 
 ### 7. 生产 Compose 自带数据层
+
+> 历史决策：当前生产仍由 Compose 自带数据层，但对象存储已改为固定版本 RustFS，
+> PostgreSQL/RustFS/Meilisearch 使用仓库根 `data/` 宿主机绑定目录。现行操作以
+> `Deploy.md` 和 `Docs/runbooks/deployment.md` 为准。
 
 postgres / redis / minio 与应用一同部署，使用命名卷持久化。
 一次性 `storage-init` job 先修正新卷属主，数据服务随后始终以非 root 运行；

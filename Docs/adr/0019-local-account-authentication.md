@@ -1,6 +1,6 @@
 # ADR-0019：正式本地账号认证
 
-- 状态：已接受
+- 状态：已接受（2026-10-21 修订为每账号私人 Wiki）
 - 日期：2026-07-27
 
 ## 背景
@@ -12,22 +12,23 @@ ADR-0016 为封闭早期环境选择的临时共享凭据不能区分自然人�
 ## 决策
 
 - 新增 `local_account`，用户名和邮箱规范化后分别全站唯一；每个账号绑定一个独立
-  `human` Actor。
+  `human` Actor 和一个由其拥有的私人 `wiki_site`。
 - 提供注册、用户名或邮箱登录、当前会话和退出 API。共享登录凭据及其配置全部删除。
 - 密码要求 12–128 个字符，使用 Argon2id 和独立随机 salt 哈希；明文密码、密码哈希
   和 session token 均禁止写日志。
 - 成功认证后签发 32-byte 随机 session token，数据库仅保存 SHA-256。每次请求重新
   检查 Actor 状态，退出立即吊销服务端 session。
-- 首个本地账号在数据库 advisory lock 保护的注册事务中获得默认 Wiki 的 `admin`
-  角色，后续账号获得 `editor`。注册默认关闭，初始化时必须显式设置
-  `AUTH_REGISTRATION_ENABLED=true`，完成后可再次关闭。
+- 注册事务在数据库 advisory lock 保护下原子创建私人 Wiki、七个 Namespace、默认
+  ChangeTag、内置 Component、human Actor、`admin` 角色和首个 Session。每个账号都是
+  自己私人 Wiki 的管理员，不存在“后续账号进入同一默认 Wiki”的隐式共享。
+  注册默认关闭；受控开户时显式设置 `AUTH_REGISTRATION_ENABLED=true`，完成后关闭。
 - `external_identity` 与已验证外部身份到 Actor 的内部服务保留，作为未来接入企业
   IdP 的扩展点，但不暴露共享密钥或伪造身份的登录路由。
 
 ## 影响
 
 - 本决策取代 ADR-0016 第 3 节；ADR-0010 的服务端 session 原则继续有效。
-- 空库首次部署必须先创建管理员账号，再按需要关闭公开注册。首账号选择通过数据库
-  锁和单事务保证，不依赖部署机密。
+- 空库首次部署必须创建引导管理员账号及其私人 Wiki，再关闭公开注册。后续开户也走
+  同一领域注册事务，不能通过直接 SQL 把账号挂到其他 Wiki。
 - 账号已经可独立归因，但邮箱验证、密码重置、MFA、恢复码与设备会话管理仍需要邮件
   或认证基础设施，继续作为商业发布阻塞项记录在 `Docs/OutstandingIssues.md`。

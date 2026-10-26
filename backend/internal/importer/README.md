@@ -7,10 +7,12 @@ Page、Knowledge、Evidence 或 Governance 的权威表。所有正式写入均�
 ## 运行时
 
 API 的 `POST /api/v1/import-jobs` 只创建队列项。Provider、API 根地址、模型、输出模式、
-模型最大输入 Token、来源 Chunk 字符数、超时、尝试次数和密钥由管理员在 `/admin/ai` 配置；默认
+模型最大输入 Token、来源 Chunk 字符数、超时、尝试次数和密钥由当前账号在
+`/account#document-understanding-model` 配置；默认
 上下文上限为 128000 Token，默认持久 Chunk 上限为 32000 Unicode 字符。API Key 使用部署主密钥加密写入
 `wiki_site.settings_json`，不再通过 Worker 环境变量注入。配置缺失、禁用或不可解密时，
-Worker 不领取需要模型的 `source_import`，已有任务保持 queued。
+Worker 不领取该 Wiki 中需要模型的 `source_import`，已有任务保持 queued；Runner 会按
+最早任务顺序扫描最多 16 个不同 Wiki，跳过不可用配置并继续处理其他 Wiki。
 
 `ingestion_mode=source_only` 用于大规模 HTML、纯文本、JSON 或 CSV 来源归档：仍执行
 受控获取、MIME/magic 与恶意内容检查、原始资产和解析 manifest 存储，并通过 Evidence
@@ -26,15 +28,18 @@ Schema，DeepSeek 使用 JSON Object；Sidecar 对 JSON 和权威 Schema 失败�
 Go Gateway 再执行最终独立校验。Sidecar 不访问数据库、对象存储或用户会话。
 `document-page-analysis-v1` 使用同一边界发送单张渲染页；图片只在内存中停留到本次
 Provider 调用结束，并与普通结构化调用一样记录 Prompt 版本、模型、Token、耗时和状态。
-管理端模型测试会分别验证文本结构化输出和图片输入，文本模型不能通过配置验收。
+个人中心的文档理解模型测试会分别验证文本结构化输出和图片输入，文本模型不能通过配置验收。
 
-Worker 会从管理员提供的最大输入 Token 中预留 Prompt/Schema 空间，再按估算 Token 和
+Worker 会从当前 Wiki 的文档理解模型最大输入 Token 中预留 Prompt/Schema 空间，再按估算 Token 和
 单批最多 6 个 Chunk 分批调用，最多并行处理 3 批；较大上下文仍受独立的输出安全批量
 上限约束。每批候选分别完成 Schema 与逐字证据核验后，以服务端生成的候选 ID 去重合并。
 若供应商返回 `output_truncated` 或 `invalid_structured_output`，只二分重试对应模型窗口；
 即使持久 Chunk 本身只有一个，仍可在不创建新 SourceChunk 的前提下按语义边界临时二分，核验后的
 证据会映射回原始 Chunk ID 和全局字符位置。获取、安全扫描和解析恢复点不会重跑；模型结构化调用
-默认最多尝试 3 次。
+默认最多尝试 3 次。结构化 `content_json` 与正文一起计入窗口预算，单个不可再分窗口
+仍超限时返回稳定错误；任一窗口出现不可恢复错误会取消同批剩余窗口，避免继续消耗
+Provider 配额。任务超时后的失败状态收尾使用独立短时限 Context，不依赖已取消的模型
+调用 Context。
 
 部署环境只保留 `AI_CONFIG_MASTER_KEY`、`AI_KERNEL_URL`、
 `AI_KERNEL_INTERNAL_TOKEN` 以及对象存储配置：
@@ -45,6 +50,8 @@ Worker 通过 `FOR UPDATE SKIP LOCKED` 原子领取任务；每次运行有独�
 停止领取新任务，并给已领取任务一个有界完成窗口。相同 SourceVersion 的事实抽取可复用
 不可变 Extraction；页面规划按 ImportJob 与导入要求独立生成，不能因为
 来源相同而复用另一任务的 Proposal。
+待处理 Wiki 通过 `DISTINCT ON (wiki_id)` 加 `(created_at,id)` 确定性排序选取；
+PostgreSQL UUID 不参与 `min()` 等不支持的聚合。
 同一 ImportJob 可以追加多个不可变 ImportPlan 版本；每个版本保存顺序号、父版本和
 规划输入快照。调整标题、导入要求或页面路由只新增 Run 与 Plan，不创建新的 Job，
 也不覆盖旧计划。只有来源内容变化，或原 Job 已生成冻结 Proposal 后重新导入，
@@ -70,7 +77,7 @@ metadata，不记录正文、Prompt 或密钥；请求显式标题优先于自�
 
 Worker 使用 Poppler 从标准输入读取 PDF：`pdftotext` 保留每页原生 UTF-8 文本，
 `pdftoppm` 逐页生成最长边 2000 像素的临时 JPEG。PDF 最多 500 页，最多并行分析
-3 页；单页图片在模型调用后立即删除，子进程不继承 Worker 环境变量。管理员配置的
+3 页；单页图片在模型调用后立即删除，子进程不继承 Worker 环境变量。当前 Wiki 配置的
 多模态模型输出标题路径、正文、表格、图表、图片、区域和结构化数据。有文本层时以
 原生页文本生成精确 `page` Chunk，视觉模型只补充非文本元素；扫描页使用视觉转写。
 完整解析 manifest 另存对象存储，SourceVersion 固化 Adapter/MIME/Provider/Prompt/模型与警告。
@@ -95,7 +102,7 @@ Entity 值的自引用 Claim；相同约束在逐字证据核验、稳定 ID 分
 相邻技术术语误写成 `JSON instance_of JavaScript`；同一主体的单值属性若在一个模型批次中
 出现多个值，分类器按“支持现有事实优先，其次置信度、证据覆盖、稳定 ID”只保留一个，
 Composer/Apply 前置校验与 Knowledge 写入约束继续防御不可能应用的 Proposal。
-事实候选允许为空：来源随后仍会进入 `source-import-plan-v9`，由不受固定 Entity/Claim
+事实候选允许为空：来源随后仍会进入 `source-import-plan-v10`，由不受固定 Entity/Claim
 词表限制的页面规划判断百科价值。模型提供的
 引文必须逐字存在；服务端会重新推导 rune 范围以纠正模型常见的 Unicode/字节计数偏差。
 引文重复出现时选择离模型提示位置最近的精确匹配，最近距离并列才拒绝；模糊匹配、翻译
@@ -124,7 +131,14 @@ Operation 排在 Claim Operation 之前，Claim 的主体和 Entity 值在 Compo
 可核验 Entity/Claim 继续进入治理。新实体 canonical key 使用 `type_key:label`，避免
 不同类型的同名实体在整批应用时互相冲突。
 
-`source-import-plan-v9` 在事实抽取之后执行来源理解与页面路由。它先按标题、来源名、
+身份归一化只折叠大小写和空白，不删除 `C++`、`C#` 等有语义符号。人员缩写只有在
+全量候选集合中能唯一对应全名时才合并；否则保持独立候选并进入人工处理。Match stage
+持久化候选、备选项、分数、跳过 Claim 原因和已做决定，任务详情允许明确选择已有
+Entity、创建新 Entity 或忽略；无法唯一匹配时不静默新建重复身份。
+Claim 去重遍历同一主体/属性的完整现有集合，只有值和有效期都相同才视为重复；
+多值属性不会因第一条现有值不同而被误判为冲突。
+
+`source-import-plan-v10` 在事实抽取之后执行来源理解与页面路由。它先按标题、来源名、
 Entity/alias 召回已有 Page 及可替换 Block，再允许一份来源同时生成多个 `create`、
 `update`、`link` 与 `ignore` 路由。`link.related_to` 显式选择同批 create/update
 页面并携带原文证据，随后编译为稳定 `page_reference`，由投影生成反链；每个新写或改写
@@ -132,9 +146,12 @@ Block 都必须绑定可逐字核验的 SourceChunk evidence；update/replace �
 Page/Block ID。模型只输出页面语义、正文和 `chunk_id + quotation`；SourceVersion、字符范围、页码、
 空集合、Block 模式和质量分均由服务端补齐，避免让模型重复计算机械字段。输出过长、结构错误或局部
 证据失败时按临时模型窗口自适应二分；窗口仍有语义错误时，服务端携带校验反馈最多尝试三次。
+候选页面按相关性裁剪而非字母序截断，显式目标和精确标题命中优先；同名碰撞时补回
+已有正文参与去重。
 对 RFC 等硬换行文本，
 只允许将字母、标点和大小写全部一致的纯空白差异回填为不可变 Chunk 中的原始逐字引文；
-独立窗口并行规划后直接经过确定性的路由/段落合并、无内容标题与非正文区段清理，不再用一次
+独立窗口并行规划后直接经过确定性的路由/段落合并、空路由/薄 create route、无内容
+标题、仓库导航与非正文区段清理，不再用一次
 大输出 LLM 调用重写整份计划，避免可选的“收敛”步骤成为新的单点失败。
 页面计划可生成标题、段落、项目符号/编号列表、引用、Todo、Toggle、Callout、表格、
 程序代码、块级公式和预格式内容；嵌套块仍由服务端分配稳定 Block ID。固定宽度流程图、
@@ -164,18 +181,25 @@ Grounding 只评价正文块；标题不会抬高平均分，任一正文块低�
 仅 `complete/coverage` 元数据自相矛盾时也按同一原则保守归一化；
 回退后的覆盖率仍必须通过质量门槛。最终 `quality_score` 不再采用模型自评分，而由服务端按原文保真度 35%、证据支撑 25%、
 文章结构 20%、去重精炼 10% 和路由置信度 10% 计算。保真度低于 0.70、证据或结构存在硬伤，
-或综合分低于管理员阈值（默认 0.70）时，计划停在 Plan 阶段，不生成 Proposal；达到门槛才进入
-匹配和审核。站点 AI 设置默认自动确认通过门槛的中间计划；管理员可以关闭自动确认，
+或综合分低于账号级阈值（默认 0.70）时，计划停在 Plan 阶段，不生成 Proposal；达到门槛才进入
+匹配和审核。文档理解模型设置默认自动确认通过门槛的中间计划；账号管理员可以关闭自动确认，
 让任务停在 Plan 阶段等待发起者确认精确的 Plan 版本。该设置不会自动批准或应用最终
 Proposal，最终内容仍由治理审核控制。这借鉴了 VeronicaWIKI 的生成后保真审计，但修复仍遵守 Anby 的不可变证据模型，
 不会把无法定位的“遗漏原句”作为兜底正文堆入页面。
 
 Composer 把页面路由与 Entity/Claim 决策合成为一个以 Wiki 为目标的复合 Proposal；正文中
 实际采用的 Entity 会编译为稳定 `entity_reference`，标题证据继续保留在 Operation 上但不
-渲染多余的行内 Citation。创建页预分配 Page ID，更新页带 Revision 与 Block hash 基线，审核时可按页面查看全部
-Operation。Apply 先做跨页面 Revision/Block 与 Claim 冲突检测，再在单一事务中创建/更新
+渲染多余的行内 Citation。创建页预分配 Page ID，因此同批新页面能直接互相写入稳定
+`page_reference`；更新页带规划时的 Revision 与每个 replace Block hash 基线，审核时
+可按页面查看全部 Operation。Compose 前会再次对照 Current Revision/Block，规划后的
+人工修改会让陈旧计划失败，不会生成覆盖新内容的 Proposal。Apply 再做跨页面
+Revision/Block 与 Claim 冲突检测，并在单一事务中创建/更新
 多个页面和知识对象；任一步失败整批回滚。成功响应返回全部 `revision_ids`，ChangeBatch
 回滚仍按审计账本对整批追加补偿。
+
+Composer 校验 Typed Block 时先读取 `type` 并直接分派到对应 Schema 子定义，不对大型
+嵌套 Table 递归尝试完整 `oneOf`。空表格单元格表示为 `content: []`，不会生成因
+`omitempty` 丢失 `text` 的非法 Text 节点。
 
 文章结构不交给模型自由发挥：服务端把正文 heading 归一为从 H2 开始且不跳级，删除
 模型生成的 References/See also/Further reading/External links 等尾部样板；有关联时

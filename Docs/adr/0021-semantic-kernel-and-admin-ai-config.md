@@ -1,6 +1,6 @@
-# ADR-0021：Semantic Kernel Sidecar 与管理员 AI 配置
+# ADR-0021：Semantic Kernel Sidecar 与账号级文档理解模型配置
 
-- 状态：已接受
+- 状态：已接受（2026-10-22 配置入口收敛到个人中心）
 - 日期：2026-08-11
 
 ## 背景
@@ -23,9 +23,11 @@ Microsoft Semantic Kernel 官方实现支持 Python、.NET 和 Java，不提供 
    Proposal 生成和所有权威写入；Sidecar 不能发布 Revision 或写 Knowledge。
 3. Go 与 Sidecar 使用版本化内网 JSON 协议和共享令牌。每次请求由 Go 短暂传入解密后的
    Provider 配置；Sidecar 不持久化配置，也不记录 Prompt、来源、响应或密钥。
-4. Provider、Base URL、模型、响应格式、模型最大输入 Token、来源 Chunk 字符数、超时、尝试次数和 API Key 改由个人中心
-   `/account` 管理。配置版本化存入现有 `wiki_site.settings_json.ai_runtime`，不新增
-   迁移；API Key 使用 AES-256-GCM 加密，公开接口只返回是否已配置。
+4. Provider、Base URL、模型、响应格式、模型最大输入 Token、来源 Chunk 字符数、超时、
+   尝试次数和 API Key 由个人中心 `/account#document-understanding-model` 管理。
+   配置属于当前账号的私人 Wiki，版本化存入
+   `wiki_site.settings_json.ai_runtime`，不新增迁移；API Key 使用 AES-256-GCM
+   加密，公开接口只返回是否已配置。旧 `/admin/ai` 只保留兼容重定向，不再作为入口。
 5. 环境变量只保留基础设施机密：`AI_CONFIG_MASTER_KEY`、
    `AI_KERNEL_INTERNAL_TOKEN` 和内网 `AI_KERNEL_URL`。前两项仍由仓库外 `0600`
    部署环境文件提供。
@@ -38,7 +40,8 @@ Microsoft Semantic Kernel 官方实现支持 Python、.NET 和 Java，不提供 
 
 ## 影响
 
-- 管理员可以不重新部署应用就切换模型和运行策略，密钥不会通过读取接口返回。
+- 每个私人 Wiki 的管理员可以不重新部署应用就切换文档理解模型和运行策略，密钥不会
+  通过读取接口返回，也不会跨 Wiki 复用。
 - Semantic Kernel 侧的结构化重试降低常见 bad case，但不能替代 Go 侧最终契约与证据
   校验；供应商质量仍需用固定样本持续评估。
 - 生产拓扑新增一个私网、只读、非 root 的 Python 容器及一套独立依赖锁定。

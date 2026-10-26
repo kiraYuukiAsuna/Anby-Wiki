@@ -97,7 +97,7 @@ API handler、Worker、Agent 不得绕过本包直接写 `page` / `revision` / `
 - `CreateBlockRedirect` 在事务内获取命名的 `pg_advisory_xact_lock`，把整张 redirect 图的
   环校验与 upsert 线性化。相反方向的 A→B 与 B→A 并发写入恰一成功，另一请求在看到
   已提交边后返回 `ErrBlockRedirectLoop`；更长链和既有 source 改写遵循相同边界。
-- 锁仅覆盖 BlockRedirect 权威写事务并在提交或回滚时自动释放；匿名锚点解析不取锁，
+- 锁仅覆盖 BlockRedirect 权威写事务并在提交或回滚时自动释放；只读锚点解析不取锁，
   不改变现有读取语义。
 
 ## 错误码映射（cmd/api → 契约 Error 模型）

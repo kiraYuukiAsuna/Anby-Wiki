@@ -124,7 +124,8 @@ cmd/worker 用 `NewRevisionPublishedHandler(pool, registry, logger)` 把
 
 ## projection_state 状态簿记
 
-迁移 000005 建表，主键 `(aggregate_type, aggregate_id, projection_type)`，
+初始化 Schema 建立 `projection_state`，主键
+`(aggregate_type, aggregate_id, projection_type)`，
 每行记录 `source_revision_id`（FK → revision）、`status`（`ok`/`error`）、
 `projected_at`、`last_error`。写入入口 `UpsertState(ctx, q, state)`
 （`q` 可为 pool 或 tx）+ `OKState`/`ErrorState` 构造器：
@@ -154,7 +155,7 @@ go run ./cmd/worker -rebuild-all
 # projection — 页面链接与目录投影（M3-T03）
 
 依据：设计 §18.9（页面关系投影）、§9/§18.1（章节锚点）、§17.3（关系查询走投影表）。
-迁移 000006 建表；两个 Builder 在 cmd/worker `registerBuilders` 注册，
+相关表位于唯一初始化 Schema；两个 Builder 在 cmd/worker `registerBuilders` 注册，
 事件路径（page.revision_published）与 RebuildPage/RebuildAll 共用同一份 Rebuild 实现。
 
 ## PageLinksBuilder（type `page_links`）
@@ -306,7 +307,7 @@ consumer.Register(page.OutboxEventRevisionPublished,
 
 依据：设计 §15（投影记录来源 Revision）、§17.1（阅读路径：
 CDN → RenderedPage Cache → RenderedPage Storage → PostgreSQL ContentSnapshot）。
-迁移 000008 建 `rendered_page` 表；实现在 `builder_render.go`。
+`rendered_page` 位于唯一初始化 Schema；实现在 `builder_render.go`。
 
 ## RenderedPageBuilder（type `rendered_page`）
 
@@ -336,7 +337,7 @@ ast.ContentHash(doc)`，与 content_snapshot 的哈希同源）。
 # projection — 外链使用投影（M3-T06）
 
 依据：设计 §8（普通外链与引用来源复用 ExternalResource）、§15（投影可重建）、
-§18.9（页面关系投影）。迁移 000009 建 `external_link_usage`，实现在
+§18.9（页面关系投影）。`external_link_usage` 位于唯一初始化 Schema，实现在
 `builder_links_ext.go`，Builder type 为 `external_links`。
 
 ## 构建语义
@@ -397,12 +398,12 @@ go run ./cmd/worker -check-consistency -sample-size 100
 
 # projection — 知识与证据使用投影（M4-T07）
 
-迁移 000010 建 `entity_mention_projection`、`claim_usage`、`citation_usage`；
+唯一初始化 Schema 建立 `entity_mention_projection`、`claim_usage`、`citation_usage`；
 `builder_knowledge.go` 将三类 AST inline 引用分别注册成独立 Builder：
 `entity_mentions`、`claim_usage`、`citation_usage`。每个 Builder 都按 page_id
 全删重插并由 M3 版本防护保证只反映 Current Revision。
 
-匿名反向查询 API：
+当前登录 Wiki 的反向查询 API：
 
 - `GET /api/v1/entities/{id}/mentions`
 - `GET /api/v1/claims/{id}/usages`
@@ -421,18 +422,19 @@ go run ./cmd/worker -check-consistency -sample-size 100
 
 # projection — Component 信息框依赖（M9-T03）
 
-迁移 000019 建 `component_dependency`。`ComponentDependencyBuilder` 从 Current
+`component_dependency` 位于唯一初始化 Schema。`ComponentDependencyBuilder` 从 Current
 Revision 的 ComponentBlock 写入冻结组件版本与 Entity 依赖；`ClaimUsageBuilder`
 同时把信息框当前实际展示的 published Claim 写入 `claim_usage`。
 
 Knowledge Service 在 Claim 创建、替代、状态/验证状态及来源变化的同一事务写入
-`claim.changed`。Worker 只查询当前 Revision 的 `claim_usage` 与
+`claim.changed`。Consumer 按 subject Entity 合并同批事件，避免同一事实集合触发重复
+图谱和信息框重建。Worker 只查询当前 Revision 的 `claim_usage` 与
 `component_dependency`，按页锁定后重建依赖、ClaimUsage 和 RenderedPage；不扫描
 AST JSON，不创建 Revision，重复事件幂等。
 
 # projection — 搜索投影（M7-T01）
 
-迁移 000014 建 `search_document`；`SearchBuilder` 从 Current Revision AST 提取正文，
+`search_document` 位于唯一初始化 Schema；`SearchBuilder` 从 Current Revision AST 提取正文，
 并汇总 Page 标题、旧别名、语言、命名空间及主 Entity 的标签/描述/别名。投影行记录
 `source_revision_id`，发布事件走通用 `WithVersionGuard`，创建/改名事件刷新元数据。
 
@@ -446,12 +448,13 @@ title/alias/body/entity，元数据过滤支持 namespace/language/entity_type�
 Current Revision 重建，避免软删除页或历史遗留文档残留。查询端只读搜索投影，不实时
 扫描 AST；投影积压、错误和陈旧状态沿用 Outbox 与 `projection_state` 运维口径。
 
-## 早期阶段搜索收敛（ADR-0016）
+## 当前搜索后端（ADR-0006）
 
-独立搜索引擎 Adapter 已整体移除，API 与 Worker 只装配 PostgreSQL FTS。
-`search_document` 仍是可丢弃、可重建的搜索投影；SearchBuilder 只在数据库事务内
-更新它，不执行事务后的远端 HTTP 同步。显式按页/全量重建也只恢复该投影。
+`search_document` 继续作为可重建 staging 和开发 fallback。生产强制
+`SEARCH_BACKEND=meilisearch`：Builder 先提交 PostgreSQL 投影，再在 Page 行锁和
+Current Revision 复核下提交远端文档并等待 Meilisearch task 终态。旧 Revision 的
+失败重试不能覆盖新索引；失败交给 Outbox 至少一次重试。
 
-ADR-0012 的 100k 页面容量结果仍有效：PostgreSQL FTS 未达到内部 Beta 吞吐门槛。
-当前早期阶段接受该限制；数据量或并发接近门槛时，应在 `SearchAdapter` 后重新评估
-独立引擎，并补齐容量、幂等、重试与全量重建验证。
+显式按页/全量重建同时恢复 PostgreSQL staging 与当前配置的 Search Adapter。
+PostgreSQL FTS 的 100k 容量结果未达到内部 Beta 吞吐门槛，因此生产不得静默降级；
+目标硬件上的 Meilisearch 容量和中文语义召回仍按 `Docs/OutstandingIssues.md` 验收。

@@ -50,6 +50,14 @@ Wiki 页面正文的权威格式（设计依据：`Docs/WikiDesignOnePage.md` §
   `date_mention` 保存 ISO 日期或日期区间；`database_mention` 保存稳定 Dataset ID。
 - 所有对象均 `additionalProperties: false`，严格校验。
 
+## 校验实现约束
+
+- Go 校验器先校验 document 外壳，再读取每个 Block 的 `type` 判别值并直接调用对应
+  `$defs` 子 Schema；禁止对嵌套 Block 反复尝试根 `oneOf` 的全部分支。该约束避免
+  `table → row → cell` 等大型嵌套结构产生指数级错误树。
+- 空段落或表格单元格使用合法的 `content: []`。不要构造空字符串 Text 节点后依赖
+  `omitempty` 序列化，否则会得到缺少必填 `text` 的非法节点。
+
 ## ID 规则（ADR-0008）
 
 - 每个 Block 必填 `id`，`format: uuid`，使用 **UUIDv7**，标准 36 字符小写连字符形式。

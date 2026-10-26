@@ -65,8 +65,8 @@ Compose 会把这些值注入容器环境，Docker 管理员可通过 `docker in
 - API 添加 CSP、nosniff、frame 与 referrer 安全头。
 
 ADR-0020 已移除 Origin/Referer CSRF 门禁和 COOP/CORP。Session cookie 仍为
-HttpOnly、SameSite=Lax；该简化只适用于当前受控早期部署，公网发布前必须重新评估
-显式 CSRF 防护。
+HttpOnly、SameSite=Lax；该简化只适用于当前受控部署，在宣称商业发布安全门禁关闭前
+必须重新评估显式 CSRF 防护。
 
 默认不信任 `X-Forwarded-For`，因此限流按 API 看到的直连对端计数。只有上游已可靠
 清洗来源头，且 API 直连对端 IP 已明确配置到 `TRUSTED_PROXY_IPS` 时，才能按最终
@@ -81,7 +81,9 @@ HttpOnly、SameSite=Lax；该简化只适用于当前受控早期部署，公网
 
 1. `make deploy-check` 通过。
 2. 部署机具有完整受保护源码和足够的本地构建空间。
-3. PostgreSQL 与对象存储备份完成。
+3. 确认本次变更在当前 migration compatibility window 内。日常一键部署不创建
+   PostgreSQL、对象存储、环境或 Nginx 备份；需要灾备快照时，操作者必须在独立维护
+   窗口显式执行 [备份恢复 Runbook](./backup-restore.md)。
 4. `MIGRATION_EXPECTED_VERSION` 等于仓库最新迁移版本，并落在镜像兼容窗口内。
 5. 部署环境文件中的机密变量非空，且文件不允许 group/world 读取。
 6. 若外层终结 HTTPS，设置 `SESSION_COOKIE_SECURE=true`。
@@ -106,14 +108,18 @@ sh scripts/deploy.sh deploy
 6. 执行 `wiki-migrate up` 与版本兼容检查；
 7. 运行 `wiki-doctor -format json`；
 8. 依次替换 Semantic Kernel、API、Worker、Web，并等待各自 healthcheck。
+9. HTTPS smoke 通过后记录 `Secret/current-release`，删除旧业务镜像、退出的一次性
+   容器、BuildKit 缓存和遗留部署备份目录。
 
 任何步骤失败都会阻止后续替换。应用启动本身不自动迁移；禁止在生产执行
-`migrate down`。
+`migrate down`。验收前失败会尝试恢复旧环境和旧应用镜像；验收成功后的清理失败会
+返回非零供运维处理，但不会把已健康的新 release 回滚。
 
 ## 回滚
 
-把环境文件中的 `RELEASE_ID` 改为上一个版本，确认该版本的六个本地镜像仍保留，
-并保持线上数据库实际版本与兼容窗口正确，然后执行：
+成功部署会删除旧版业务镜像，因此默认不保证本机仍有可直接切换的上一版本。需要回滚
+时先检出旧提交并重新构建六个镜像，确认该版本与线上数据库兼容，再把环境文件中的
+`RELEASE_ID` 改为该版本并执行：
 
 ```sh
 sh scripts/deploy.sh rollback

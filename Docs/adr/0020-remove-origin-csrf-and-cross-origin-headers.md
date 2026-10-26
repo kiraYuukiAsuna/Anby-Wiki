@@ -25,7 +25,7 @@ origin 上会被浏览器忽略并产生告警。
 ## 安全影响
 
 `SameSite=Lax` 可降低常见跨站表单携带 cookie 的风险，但不能替代完整 CSRF 防护。
-正式公网发布前应重新评估同步 token、Fetch Metadata 或恢复精确来源校验；不得在没有
+在宣称商业发布安全门禁关闭前应重新评估同步 token、Fetch Metadata 或恢复精确来源校验；不得在没有
 等价防护时把 session cookie 改为 `SameSite=None`。
 
 ## 取代范围

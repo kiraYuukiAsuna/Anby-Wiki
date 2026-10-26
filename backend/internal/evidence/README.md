@@ -36,7 +36,7 @@ Evidence 领域服务：媒体资产（Asset）上传、外部资源（ExternalR
 ## 不可变边界
 
 - `asset_revision` / `source_version` / `source_chunk` / `citation`：
-  000007 复用 000001 的 `reject_immutable_mutation()` 触发器拒绝 UPDATE/DELETE
+  初始化 Schema 的 `reject_immutable_mutation()` 触发器拒绝 UPDATE/DELETE
   （TRUNCATE 不触发行级触发器）。
 - `asset` 允许 UPDATE（status / name / current_revision_id 流转），软删除经
   `status='deleted'`，删除后名字可被新资产复用（与 page 标题同模式）。
@@ -98,7 +98,7 @@ SourceVersion 还固化 `parse_track`、解析 Adapter 名称/版本、解析器
   quotation_hash)` 作为不可变证据身份。重试、多窗口收敛或不同页面使用
   同一证据时返回既有稳定 Citation ID；`NULLS NOT DISTINCT` 唯一索引
   保证空 Chunk/Locator/Quotation 也有相同幂等语义；
-- source_version / source_chunk / citation 均不可变（000007 触发器），
+- source_version / source_chunk / citation 均由初始化 Schema 触发器保证不可变，
   「修改」语义靠登记新版本实现。
 
 ### Actor 与存在性校验
@@ -124,7 +124,7 @@ DB 外键 `claim_source_citation_fk` 兜底）。
 
 `Service.GetCitationDetail` 按稳定 ID 沿不可变
 `Citation → SourceVersion → Source` 读取，并在存在时补全 `SourceChunk` 与
-`ExternalResource`。HTTP `GET /api/v1/citations/{id}` 将该定位链匿名只读暴露；
+`ExternalResource`。HTTP `GET /api/v1/citations/{id}` 在当前登录 Wiki 内只读暴露该定位链；
 前端 `/citations/{id}` 显示引文、Locator、Chunk 原文、版本哈希和规范化外部 URL。
 
 从页面 ClaimReference 可经使用投影、ClaimSource、Citation 追溯到 SourceChunk；

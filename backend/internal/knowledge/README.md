@@ -14,7 +14,7 @@ M4-T07 使用投影，保持权威详情与可重建关系查询分离。
 | `Entity` | `entity` | 稳定身份。`canonical_key` 每 wiki 唯一（规范化：NFC + 折叠空白 + 小写，复用 `page.NormalizeTitle`）；`status`: active/merged/deleted |
 | `EntityLabel` | `entity_label` | 多语言标签（PK = entity+language+label）。落库形态 NFC + trim + 折叠空白（保留大小写）；同 entity+language 至多一个 `is_primary`，DB 部分唯一索引 `entity_label_primary_key` 兜底 |
 | `EntityAlias` | `entity_alias` | 别名。`alias` 保留书写，`normalized_alias` 按标题同规则规范化；同实体规范化重复拒绝（服务层在实体行锁内前置检查） |
-| `EntityType` | `entity_type` | 000004 固定 UUID 种子（person/organization/…/software），按 `type_key` 解析 |
+| `EntityType` | `entity_type` | 初始化 Schema 固定 UUID 种子（person/organization/…/software），按 `type_key` 解析 |
 | `PageEntityBinding` | `page_entity_binding` | 页面-实体绑定，role ∈ primary/mentioned（PK = page+entity+role） |
 
 不变量：实体始终保有 ≥1 个主标签（CreateEntity 校验；RemoveLabel 拒绝删除仅剩的主标签）。

@@ -1,7 +1,7 @@
 # collection - Manual/Rule Collection 领域服务
 
 `collection` 是 Collection 定义与物化 Membership 的唯一权威写入入口。
-HTTP 层只暴露匿名列表、详情和成员查询；写入由领域服务校验 Actor、Wiki 边界、
+HTTP 层在当前登录 Wiki 内暴露列表、详情和成员查询；写入由领域服务校验 Actor、Wiki 边界、
 规则引用与来源 Revision 后在单事务内完成。
 
 ## 模型与不变量

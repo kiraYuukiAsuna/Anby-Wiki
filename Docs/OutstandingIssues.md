@@ -1,7 +1,9 @@
 # 待解决问题
 
-主要业务链路与静态质量门禁已经闭环；以下项目仍阻塞生产发布或“全部设计能力已
-完成真实联调”的结论。
+> 更新时间：2026-10-26
+
+主要业务链路与静态质量门禁已经闭环；以下项目仍阻塞“商业发布门禁全部关闭”或
+“全部设计能力已完成真实联调”的结论。
 
 ## 1. 备份恢复与人工可访问性尚未在发布环境验收
 
@@ -10,25 +12,30 @@
 - 此前版本已在隔离环境启动 PostgreSQL、Redis、MinIO、Meilisearch、API、Linux Worker
   与 Web，并完成最新 Schema `up → down → up`、Doctor、真实数据联调、投影重建、
   dead 回放、Revision 冷归档回源和桌面/移动端浏览器回归。
-- 远端生产机已对提交 `0196ec6` 完成 Compose config、六个 OCI target 顺序构建、
-  Migration gate、Doctor 和完整拓扑滚动替换；全部数据/应用容器及 Web/API 探针健康。
+- 当前生产 release 为 `d0285ff6b4e3`。六个业务镜像、Migration gate、Doctor、
+  HTTPS smoke、API/Worker/Web/AI Kernel 健康检查和验收后垃圾清理均已通过；
+  公网 `healthz`/`readyz` 为 200。
 - Chrome headless 已覆盖 34 个真实数据路由、导入持久队列、治理流程、斜杠标题和
   390×844 移动端退化；完整键盘顺序、读屏器语义、对比度和正式网络失败态仍需要
   人工验收。
-- Agent CLI 已部署到正式域名和生产 tools image；未登录页面、149 operation 枚举、
-  通用公开调用、请求校验和无效 Bearer 拒绝均已通过。浏览器自动化环境没有生产
-  登录态，正式域名的授权码创建、兑换、调用和撤销仍需管理员人工登录完成一次冒烟。
-- 新增的 References/Related topics/Related outlines/信息框阅读结构已通过本地构建与
-  隔离迁移验证，但尚未在生产现有数据上完成投影全量重建、真实导入和浏览器验收。
+- Agent CLI 已部署到正式域名和生产 tools image；历史 149-operation 全量 transport
+  验收、公开调用、请求校验和无效 Bearer 拒绝均已通过。当前契约已增长到 167 个
+  operation；正式域名的授权码创建、兑换、受保护调用、撤销和撤销后 401 仍需再完成
+  一次管理员冒烟。
+- References/Related topics/Related outlines、信息框、私有页面和知识详情已在生产真实
+  导入数据上完成登录态浏览器验证。尚未以当前 release 再执行一次全量 Projection
+  重建并记录全部 Builder 的前后计数。
+- 一键部署按当前运维决策不创建持久化备份，成功后还会删除旧业务镜像和 BuildKit
+  缓存。手工 PostgreSQL/对象存储灾备脚本仍在，但生产恢复演练和 RPO/RTO 尚未记录。
 
 ### 1.2 关闭条件
 
-1. 在远端生产拓扑完成 PostgreSQL 和对象存储备份恢复演练并记录 RPO/RTO；当前迁移、
-   Doctor 与服务 healthcheck 已通过。
+1. 另行安排维护窗口，在远端生产等价隔离资源上显式运行 PostgreSQL 和对象存储备份/
+   恢复演练并记录 RPO/RTO；不要把该步骤重新塞回日常一键部署。
 2. 在浏览器人工覆盖正文、编辑、历史、搜索、治理和所有 Hub 的键盘、焦点、读屏、
    对比度，以及断网、超时和 5xx 状态。
-3. 部署后全量重建 Projection，确认 References 编号/多回链、Related topics 原因、
-   Collection 归属形成的 Related outlines 和信息框在新旧页面及章节懒加载路径上一致。
+3. 以当前 release 全量重建 Projection，记录重建前后 Builder 状态与页面计数，并确认
+   References 编号/多回链、Related topics 原因、Related outlines 和信息框一致。
 4. 管理员从正式 `/settings/cli` 创建一次性授权码，完成生产 CLI 兑换、受保护读调用、
    后台撤销与撤销后 401 验证。
 
@@ -88,11 +95,11 @@
 4. 验证旧 Revision 重试不能覆盖新索引，删除 Page 会同步移除远端文档。
 5. 调整索引配置启动重试与单次请求超时，避免健康服务因慢 task 轮询产生一次性退出。
 
-## 5. 正式发布输入与 Beta 验收未确定
+## 5. 商业发布责任与 Beta 验收窗口未确定
 
 ### 5.1 缺少输入
 
-- 正式域名证书续期负责人、Nginx 配置恢复责任和最终网络拓扑变更流程。
+- 正式域名和 Nginx 拓扑已落地，但证书续期告警、代理恢复和变更审批负责人未明确。
 - Internal Beta 用户范围、账号停用和数据范围。
 - Beta 观察期、SLO 判定窗口、告警接收人和发布负责人。
 
@@ -103,7 +110,8 @@
    API/Worker/Web/Meilisearch 健康检查。
 3. 在约定 Beta 范围和观察期内满足错误率、延迟、队列积压、Projection lag、
    搜索容量、恢复和安全门禁。
-4. 问题 1–4 同时关闭后，才可给出生产发布授权。
+4. 问题 1–4 同时关闭后，才可给出“商业发布门禁全部关闭”的结论；当前受控生产实例
+   的存在不等于这些验收已完成。
 
 ## 6. 非阻断协作演进项
 
@@ -158,7 +166,8 @@
 ### 8.1 现状
 
 - 文本与视觉双轨 Parser、逐页 Poppler 渲染、页面分析 Schema、AI Kernel 图片输入、
-  SourceVersion/SourceChunk 持久化、Extraction/ImportPlan 映射及管理端配置探针均已实现。
+  SourceVersion/SourceChunk 持久化、Extraction/ImportPlan 映射及个人中心文档理解
+  模型配置探针均已实现。
 - `18944a7` 已在正式域名使用真实多模态 Provider 完成三页论文、原生文本+扫描混合、
   纯扫描表格和扫描提示注入语料。成功路径生成的 Proposal 均已通过治理 API 拒绝；
   低于 0.70 的结果进入 `action_required`，提示注入在 Extraction 失败且不生成 Proposal。
@@ -206,6 +215,19 @@
 
 ## 本轮已关闭
 
+- 导入计划与匹配可靠性：Entity 身份归一化保留语义符号，缩写按全候选集合消歧；
+  Claim 按完整值/有效期去重；人工 Entity 决定持久化；同批新页面可稳定互链；计划
+  固化目标 Revision/Block hash，陈旧计划不会覆盖人工修改。
+- 导入运行稳定性：修复 PostgreSQL `min(uuid)` 队列查询；缺少 AI 配置的 Wiki 不阻塞
+  其他任务；不可恢复窗口会取消剩余工作；结构化 JSON 计入预算；质量门禁清理空路由、
+  薄页面和导航噪声。
+- 大型 AST Compose OOM：Block 校验改为按 `type` 直接分派子 Schema，生产内存从约
+  4 GiB 降到约 15 MiB；空表格单元格改为合法空 inline 数组。
+- 私有 Wiki 服务端详情鉴权：Page/History/Revision/Diff/Entity/Claim/Citation/
+  Asset Revision Server Component 统一转发 Session Cookie，生产登录态与 API 200
+  已验证。
+- 部署垃圾与备份策略：日常部署停止创建持久化备份，成功后清理旧业务镜像、退出容器、
+  BuildKit 缓存和遗留部署备份目录；权威数据卷保持不动。手工灾备恢复仍是问题 1。
 - 私人 Wiki 多用户隔离：应用 release `962b8198425a` 已在生产从空库迁移并部署，
   旧 PostgreSQL、对象存储、搜索索引与 Redis 数据已删除。双账号实测确认 Wiki 与
   主 Namespace ID 不同、页面目录和内置 Component 隔离、外部 Page ID 返回 404、
@@ -257,9 +279,10 @@
 - 2026-08 JavaScript 新披露漏洞：生产链 `nanoid` 与开发工具链 `fast-uri`、Hono、
   `ip-address`、`js-yaml`、Undici 均锁定已修复版本；完整和 production-only
   `npm audit` 恢复为 0。
-- Web production high 漏洞：Next `16.2.12` 的实际 PostCSS/Sharp 依赖已固定到
-  安全版本，完整及 production-only `npm audit` 均为 0，类型、Lint 与构建通过。
-- Go 可达漏洞：gRPC `1.82.1`、OpenTelemetry `1.44.0` 等升级后，
+- Web production high 漏洞：Next 已升级到 `16.3.8`，PostCSS `8.5.25`、
+  Sharp `0.35.5` 与 `source-map-js` `1.2.2` 已固定；production audit、类型、Lint
+  与构建通过。
+- Go 可达漏洞：gRPC `1.83.1`、OpenTelemetry `1.45.0` 等升级后，
   `govulncheck` 为 0。
 - PostgreSQL-only 搜索架构：Meilisearch Adapter、生产服务、Worker 投影提交、
   混合/语义查询与前端工作台均已实现并完成真实实例联调；仅保留目标环境容量

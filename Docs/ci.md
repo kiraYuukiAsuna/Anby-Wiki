@@ -3,14 +3,16 @@
 工作流：`.github/workflows/ci.yml`。触发条件为 push / PR 到 `main`，以及手动
 `workflow_dispatch`。同一 ref 的新运行会取消进行中的旧运行。
 
-仓库当前不维护自动化单元、集成或浏览器测试套件。CI 聚焦静态分析、构建、契约、
-迁移、部署清单和安全扫描。
+仓库维护 Go 单元/集成测试与 AI Kernel pytest；需要独立数据库、对象存储、搜索、
+Redis 或真实浏览器登录态的全栈 E2E 仍按 Runbook 显式执行，不在每次 CI 中连接生产。
+CI 同时覆盖静态分析、构建、契约、迁移、部署清单和安全扫描。
 
 ## 各 Job
 
 | Job | 内容 | 本地复现 |
 | --- | --- | --- |
-| `backend` | `go mod verify`、gofmt、`go vet ./...`、`go build ./...` | `make lint-go build-go` |
+| `backend` | `go mod verify`、gofmt、`go vet ./...`、`go test ./...`、`go build ./...` | `make test-go lint-go build-go` |
+| `ai-kernel` | Python 3.12、固定依赖、`pytest` | `make test-ai` |
 | `web` | `npm ci`、TypeScript、ESLint、Next.js build | `make lint-web build-web` |
 | `security` | gitleaks、Go module 校验、govulncheck、npm production audit | `make security` |
 | `contracts` | OpenAPI 3.1 校验及权威 Schema 与 Go 内嵌副本字节级漂移检查 | `make contracts-check`，OpenAPI 校验需 JDK |
@@ -58,4 +60,5 @@ gitleaks 只豁免 `.next` 本地生成目录。
    healthcheck 规避。
 7. `security`：按扫描报告升级最小兼容版本，不降低审计级别。
 
-一次性执行本地现有门禁：`make ci`。
+一次性执行本地等价门禁：`make ci`。其中 `make check` 不执行测试；
+`make ci` 先运行 `make test`，再执行构建、生成物漂移和安全扫描。

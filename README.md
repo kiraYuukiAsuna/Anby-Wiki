@@ -11,6 +11,8 @@ Source/Citation + Proposal/Review + Projection/Search。
 - [待解决问题](Docs/OutstandingIssues.md)
 - [Agent JSON CLI](Docs/AgentCLI.md)
 - [开发与部署指南](Deploy.md)
+- [生产部署 Runbook](Docs/runbooks/deployment.md)
+- [手工灾备与恢复演练](Docs/runbooks/backup-restore.md)
 - [ADR 索引](Docs/adr/README.md)
 
 ## 快速开始
@@ -20,8 +22,9 @@ Source/Citation + Proposal/Review + Projection/Search。
 
 ```bash
 cp .env.example .env   # 填入外部依赖连接串
-make bootstrap                 # 安装前后端依赖
-make dev                       # 迁移并启动 API / Worker / Web
+make bootstrap         # 安装 Go、Web 与 AI Kernel 依赖
+make migrate-up        # 显式执行数据库迁移
+make dev               # 启动 API / Worker / Web
 ```
 
 详细说明（含生产 Docker 部署）见 [Deploy.md](Deploy.md)。
@@ -58,7 +61,7 @@ Docs/            设计、当前状态、ADR、运维与安全文档
 
 ```bash
 make help         # 查看按职责分组的全部公共命令
-make check        # 静态检查、单测、构建、契约与部署脚本检查
+make check        # 静态检查、构建、契约与部署脚本检查
 make gen-client   # 从 OpenAPI 重新生成 TS 客户端（生成物禁止手改）
-make ci           # check + 生成物漂移 + 安全扫描
+make ci           # 测试 + check + 生成物漂移 + 安全扫描
 ```

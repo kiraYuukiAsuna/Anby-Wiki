@@ -2,8 +2,8 @@
 
 > 字节小团队内部技术分享详细底稿
 > 副标题：一份 PDF 如何经过 AI 理解、证据校验、人工治理，最终成为可追溯的百科页面与结构化事实
-> 文档日期：2026-10-12
-> 项目状态：核心架构、主要业务链路、Web/CLI 入口和导入治理闭环已落到代码并完成真实联调；复杂 PDF 双轨解析、关联语料顺序扰动、混合方向/尺寸及跨页双语表格生产验收已完成；目标容量、安全、备份恢复与人工可访问性仍有待验收
+> 文档日期：2026-10-26
+> 项目状态：核心架构、主要业务链路、Web/CLI 入口和导入治理闭环已落到代码并完成真实联调；复杂 PDF 双轨解析、关联语料顺序扰动、混合方向/尺寸及跨页双语表格生产验收已完成；导入计划并发保护、人工 Entity 消歧、嵌套 AST 校验性能和私有页面服务端鉴权已在生产收口；目标容量、安全、备份恢复与人工可访问性仍有待验收
 > 建议完整版分享时长：90 分钟；本文先保留完整细节，后续可按 30/45/60 分钟版本裁剪
 
 ---
@@ -3172,7 +3172,7 @@ Claim 独立后：
 
 ## 18. 当前已经实现到什么程度
 
-截至 2026-10-12 的项目状态：
+截至 2026-10-26 的项目状态：
 
 ### 18.1 已落到代码和契约的能力
 
@@ -3191,7 +3191,7 @@ Claim 独立后：
 - 多页面复合 Proposal 与原子 Apply；
 - Outbox、Projection、References、Related、图谱和重建；
 - PostgreSQL fallback 与 Meilisearch 关键词/混合/语义搜索；
-- Next.js 阅读、编辑、导入、审核、治理、AI 配置诊断、后台管理和 CLI 授权入口；
+- Next.js 阅读、编辑、导入、审核、治理、个人中心文档理解模型诊断和 CLI 授权入口；
 - 本地账号、Session、RBAC、注册账号删除、一次性授权码、可撤销 Agent CLI Bearer Token、限流、Metrics、Trace、Doctor 和备份恢复工具。
 
 ### 18.2 已完成的真实联调
@@ -3225,7 +3225,7 @@ Claim 独立后：
 - 正式域名由宿主机 Nginx 终结 HTTPS；页面代理到回环 Web，`/api/*` 与健康检查
   直送回环 Go API，HTTPS 首页/API 与 WSS 协作 E2E 已通过。API location 关闭请求
   缓冲，避免大文件经 Next.js 默认 10 MiB 缓冲后被截断。
-- 162/162 个 OpenAPI operation 均有明确 Web 或 CLI owner；160 个 Web-owned
+- 167/167 个 OpenAPI operation 均有明确 Web 或 CLI owner；165 个 Web-owned
   operation 可追踪到页面/global layout，2 个授权兑换/自撤销 operation 属于 CLI transport，
   并由 `make web-api-coverage` 持续检查。
 - 独立数据库、对象存储 bucket、Meilisearch index 和 Redis DB 上动态命中 149/149
@@ -3261,9 +3261,20 @@ Claim 独立后：
 - 12×32 MiB 顺序预检共扫描约 384 MiB；每次 422 后临时目录均清零，三个限流窗口
   各返回一次可按 `Retry-After` 恢复的 429。API/Worker 峰值 184.2/25.74 MiB，
   权威计数不变且无 OOM、重启或 Doctor issue。
-- 最终 CI 的 8 个 Job、Migration gate、全服务健康检查和 Doctor 均通过；active
+- 该轮复杂文档验收的 8 个 CI Job、Migration gate、全服务健康检查和 Doctor 均通过；active
   ImportJob、开放导入 Proposal、Outbox backlog/dead 与 Projection error 均为零。
-  当前生产版本为 `18944a7d0c30`。
+  该轮验收版本为 `18944a7d0c30`。
+- 后续导入可靠性收口固化规划时的目标 Revision/Block hash，增加持久化人工 Entity
+  决定，保留 `C++`/`C#` 等身份符号，按完整值与有效期去重 Claim，并为同批新页面
+  预分配 ID 生成稳定互链。缺少 AI 配置的 Wiki 不再阻塞其他任务。
+- 大型嵌套 Table 的 AST 校验改为按 Block `type` 直接分派具体子 Schema，生产
+  Proposal Compose 从约 4 GiB OOM 降至约 15 MiB、约 190 ms；空单元格使用合法空
+  inline 数组。
+- Page、History、Revision、Entity、Claim、Citation 与 Asset Revision 的 Server
+  Component 统一转发 Session Cookie。当前生产 release `d0285ff6b4e3` 已用登录态验证
+  私有页面与知识详情 API 为 200，健康检查和六个业务镜像版本一致。
+- 日常一键部署不再生成持久化备份；验收后清理旧业务镜像、退出容器和 BuildKit 缓存。
+  PostgreSQL/对象存储灾备继续使用独立手工 Runbook，不与发布流程耦合。
 
 ### 18.3 第一版修复后的协作实现边界
 

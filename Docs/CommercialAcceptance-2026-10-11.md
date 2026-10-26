@@ -1,5 +1,10 @@
 # 商业验收证据（2026-10-11）
 
+> 本文是当次验收的历史快照，其中“当前版本”均指 2026-10-11 的验收版本。
+> 最新生产 release、后续修复和未关闭门禁见
+> [当前实现状态](CurrentImplementationStatus.md) 与
+> [待解决问题](OutstandingIssues.md)。
+
 ## 结论
 
 提交 `18944a7d0c30` 已部署到 `https://anbywiki.momiya.cloud/`。复杂 PDF、扫描件、

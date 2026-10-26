@@ -43,8 +43,9 @@ make gen-client     # 重新生成 TS 客户端（需 Java，Makefile 已处理 
 make ci             # 本地等价 CI
 ```
 
-仓库当前不维护自动化测试套件。`make check` 保留 gofmt、go vet、TypeScript、
-ESLint、Go/Web 构建、契约副本、迁移文件和部署静态检查。
+仓库维护 Go 与 AI Kernel 自动化测试。`make check` 执行 gofmt、go vet、TypeScript、
+ESLint、Go/Web 构建、契约副本、迁移文件和部署静态检查；`make ci` 额外执行测试、
+生成物漂移与安全扫描。
 
 ## 4. 不可违反的规则
 

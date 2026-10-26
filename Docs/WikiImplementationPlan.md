@@ -1,12 +1,14 @@
 # 现代 Wiki 实施方案（AI Agent Coding）
 
 > 依据：[WikiDesignOnePage.md](./WikiDesignOnePage.md)  
-> 文档状态：实施基线 v1  
+> 文档状态：历史实施基线 v1；Task/里程碑用于追溯，不作为当前状态清单
 > 目标：将整体设计拆成可由 AI Coding Agent 独立执行、验证和合并的里程碑与 Task。
 >
-> 部署与认证部分记录的是原始里程碑验收口径；当前早期阶段形态已由
-> [ADR-0016](adr/0016-early-stage-deployment-simplification.md) 取代：
-> 开发环境直接运行本地进程，生产 Compose 不含 Nginx/Meilisearch/OIDC。
+> 部署与认证部分记录原始里程碑验收口径。当前开发环境直接运行本地进程；生产使用
+> Compose 数据/应用层、RustFS、Meilisearch、Semantic Kernel 和宿主机 Nginx/TLS，
+> 认证为每账号私人 Wiki 的本地账号体系。当前事实以
+> [CurrentImplementationStatus.md](CurrentImplementationStatus.md) 和
+> [OutstandingIssues.md](OutstandingIssues.md) 为准。
 
 ## 1. 交付目标与实施策略
 
@@ -17,7 +19,8 @@
 3. **知识治理闭环**：Entity/Claim/Source/Citation → Proposal → Review → Apply → Audit/Rollback。
 4. **AI 导入闭环**：导入来源 → 解析与抽取 → 生成 Proposal → 人工/策略审核 → 正式发布。
 
-P0 完成后交付一个可内部使用的单站点 Wiki Beta；P1 增加多人协作和自动化增强；P2 再处理规模化与高级知识能力。
+原始 P0 目标是单站点 Wiki Beta；当前实现已演进为每账号一个私人 Wiki，并已包含原
+P1 的多人协作和自动化增强。里程碑编号继续用于代码与历史文档索引。
 
 ### 1.1 实施原则
 
@@ -31,7 +34,8 @@ P0 完成后交付一个可内部使用的单站点 Wiki Beta；P1 增加多人�
 
 ## 2. 固定技术基线
 
-当前仓库没有代码。以下技术栈作为项目固定基线，M0 的 ADR 只补充具体工具和工程约定，不再重新选择前后端框架或数据库。
+以下技术栈是立项时冻结的工程基线。仓库现已完成主要里程碑；实际版本、替代决策和
+部署拓扑以当前状态、ADR 与锁文件为准。
 
 | 层次 | 固定基线 | 说明 |
 |---|---|---|
@@ -53,7 +57,7 @@ P0 完成后交付一个可内部使用的单站点 Wiki Beta；P1 增加多人�
 | 多人协作 | CRDT Adapter；P1 接入 | CRDT 状态不作为正式版本历史 |
 | 接口规范 | OpenAPI 3.1 | HTTP API 的唯一权威契约；错误模型、分页和幂等头统一定义 |
 | 客户端生成 | OpenAPI Generator 或 Kiota 二选一 | M0 选定一种并固定版本，只维护一条生成链路，生成物禁止手改 |
-| 质量检查 | gofmt/go vet、TypeScript/ESLint、构建、OpenAPI/Schema 漂移、迁移与部署静态检查 | 当前轻量阶段不维护自动化测试套件 |
+| 质量检查 | Go/AI Kernel 测试、gofmt/go vet、TypeScript/ESLint、构建、OpenAPI/Schema 漂移、迁移、部署与安全检查 | `make check` 执行静态/构建门禁，`make ci` 追加测试、生成物漂移和安全扫描 |
 | 可观测性 | 结构化日志、Trace、Metrics | `request_id/job_id/page_id/revision_id/change_batch_id` 可串联 |
 
 建议目录边界：
@@ -381,8 +385,9 @@ M5 的 Contract/State Machine 可在 M4 后半段开始，但 Apply 不得在 M1
 
 ## 9. 质量检查与人工验收
 
-仓库当前不维护自动化测试套件。提交门禁保留 gofmt、go vet、TypeScript、ESLint、
-Go/Web 构建、OpenAPI/Schema 漂移、迁移规范、部署静态检查和安全扫描。
+仓库维护 Go 与 AI Kernel 自动化测试。提交门禁覆盖测试、gofmt、go vet、
+TypeScript、ESLint、Go/Web 构建、OpenAPI/Schema 漂移、迁移规范、部署静态检查和
+安全扫描；真实 Provider、独立全栈、容量与人工可访问性仍按专项 Runbook 验收。
 
 以下长期不变量必须在设计评审、代码评审和发布前人工验收中逐项确认：
 

@@ -26,7 +26,8 @@
 | `backup/` | PostgreSQL 与对象存储的备份/恢复演练 |
 
 生产入口与 `backup/` 下的脚本可能修改外部环境，因此不包装成日常 Make 目标。请按
-`Deploy.md` 和 `Docs/runbooks/` 中的步骤设置确认令牌后显式执行。
+`Deploy.md` 和 `Docs/runbooks/` 中的步骤设置确认令牌后显式执行。日常一键部署不调用
+`backup/`，也不创建 PostgreSQL、对象存储、环境或 Nginx 持久化备份。
 
 `import-acceptance.py` 从环境读取
 `ANBY_ACCEPTANCE_IDENTIFIER`、`ANBY_ACCEPTANCE_PASSWORD`，凭据不会写入报告。

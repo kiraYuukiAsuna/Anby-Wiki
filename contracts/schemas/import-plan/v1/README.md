@@ -6,7 +6,12 @@ Typed Block 草稿或补丁。
 
 - `create` 可创建多个新页面；`update` 只能选择服务端提供的候选 Page ID；
 - `append` 生成新 Block，`replace` 只能选择候选页面中提供的 Block ID；
+- update 路由固化规划时的 `planned_revision_id`，replace Block 固化
+  `target_block_hash`；Composer 必须在生成 Proposal 前重新核验两者，拒绝覆盖规划后
+  的人工修改；
 - 模型不生成权威 Page/Block/Citation ID；服务端校验后统一预分配；
+- 同批 create 路由由服务端预分配 Page ID，因此计划内页面关联可编译为稳定的已解析
+  `page_reference`，不需要等待页面先落库；
 - 所有正文 Block 必须绑定 SourceChunk 内可逐字核验的 evidence；
 - `link.related_to` 必须逐项指向同一计划内 create/update 路由的精确标题，并携带
   可核验 `evidence`；它会作为这些目标页的已解析 Typed AST 页面引用写入，反向关系由
