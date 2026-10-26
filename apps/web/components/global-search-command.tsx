@@ -50,7 +50,7 @@ const searchQuerySchema = z.string().trim().max(255, "搜索词不能超过 255 
 const QUICK_LINKS = [
   {
     href: "/pages",
-    label: "全部百科页面",
+    label: "页面目录",
     detail: "按最近更新或标题浏览条目",
     icon: BookOpenText,
   },

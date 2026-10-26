@@ -12,7 +12,7 @@ export default function PagesPage() {
           <span className="flex size-11 items-center justify-center rounded-2xl bg-primary text-primary-foreground">
             <BookOpenText className="size-5" aria-hidden />
           </span>
-          <h1 className="text-3xl font-semibold">全部页面</h1>
+          <h1 className="text-3xl font-semibold">页面目录</h1>
         </div>
         <div className="flex gap-2">
           <Button variant="outline" asChild><Link href="/explore"><Search aria-hidden />全文搜索</Link></Button>

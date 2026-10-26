@@ -75,7 +75,7 @@ export function WikiHome() {
             </form>
             <div className="mt-4 flex flex-wrap gap-2">
               <Button variant="ghost" size="sm" asChild>
-                <Link href="/pages"><BookOpenText aria-hidden />全部页面</Link>
+                <Link href="/pages"><BookOpenText aria-hidden />页面目录</Link>
               </Button>
               <Button variant="ghost" size="sm" asChild>
                 <Link href="/collections"><Layers3 aria-hidden />专题合集</Link>
@@ -118,7 +118,7 @@ export function WikiHome() {
           <div className="flex items-end justify-between gap-4">
             <h2 id="recent-pages-title" className="text-2xl font-semibold">最近更新</h2>
             <Button variant="outline" size="sm" asChild>
-              <Link href="/pages">浏览全部<ArrowRight aria-hidden /></Link>
+              <Link href="/pages">页面目录<ArrowRight aria-hidden /></Link>
             </Button>
           </div>
 
