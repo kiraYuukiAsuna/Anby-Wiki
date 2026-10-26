@@ -2,7 +2,8 @@
 
 import Link from "next/link";
 import { LockKeyhole } from "lucide-react";
-import { usePathname } from "next/navigation";
+import { useEffect } from "react";
+import { usePathname, useRouter } from "next/navigation";
 
 import { SiteFooter } from "@/components/site-footer";
 import { SiteHeader } from "@/components/site-header";
@@ -32,6 +33,14 @@ function PrivateWikiShell({
   pathname: string;
 }) {
   const { session, isLoading, error, mutate } = useSession();
+  const router = useRouter();
+  const loginHref = `/login?next=${encodeURIComponent(pathname)}`;
+
+  useEffect(() => {
+    if (!isLoading && !session && !error) {
+      router.replace(loginHref);
+    }
+  }, [error, isLoading, loginHref, router, session]);
 
   if (isLoading) {
     return (
@@ -42,6 +51,13 @@ function PrivateWikiShell({
   }
 
   if (!session) {
+    if (!error) {
+      return (
+        <main className="flex min-h-screen items-center justify-center px-5 text-sm text-muted-foreground">
+          正在前往登录…
+        </main>
+      );
+    }
     return (
       <main className="flex min-h-screen items-center justify-center px-5 py-12">
         <div className="flex w-full max-w-sm flex-col items-center text-center">
@@ -52,24 +68,21 @@ function PrivateWikiShell({
           <p className="mt-2 text-sm leading-6 text-muted-foreground">
             登录后才能查看和管理你的私人 Wiki。
           </p>
-          {error ? (
-            <Button className="mt-6" onClick={() => void mutate()}>
-              重试
+          <div className="mt-6 flex flex-wrap items-center justify-center gap-2">
+            <Button asChild>
+              <Link href={loginHref}>登录</Link>
             </Button>
-          ) : (
-            <div className="mt-6 flex items-center gap-2">
-              <Button asChild>
-                <Link href={`/login?next=${encodeURIComponent(pathname)}`}>
-                  登录
-                </Link>
+            <Button variant="outline" asChild>
+              <Link href={`/register?next=${encodeURIComponent(pathname)}`}>
+                创建账号
+              </Link>
+            </Button>
+            {error ? (
+              <Button variant="ghost" onClick={() => void mutate()}>
+                重试
               </Button>
-              <Button variant="outline" asChild>
-                <Link href={`/register?next=${encodeURIComponent(pathname)}`}>
-                  创建账号
-                </Link>
-              </Button>
-            </div>
-          )}
+            ) : null}
+          </div>
         </div>
       </main>
     );
