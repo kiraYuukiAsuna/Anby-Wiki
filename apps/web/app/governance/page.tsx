@@ -5,7 +5,6 @@ import {
   BadgeCheck,
   BrainCircuit,
   Gavel,
-  Layers3,
   LockKeyhole,
   Plus,
   ShieldAlert,
@@ -64,19 +63,6 @@ export default function GovernancePage() {
             className="group flex items-center justify-between rounded-2xl border border-border/75 bg-muted/35 p-4 text-sm font-medium transition hover:border-primary/20 hover:bg-primary/5"
           >
             查看 AI 导入队列
-            <ArrowRight
-              className="size-4 transition-transform group-hover:translate-x-0.5"
-              aria-hidden
-            />
-          </Link>
-          <Link
-            href="/governance/bulk"
-            className="group flex items-center justify-between rounded-2xl border border-border/75 bg-muted/35 p-4 text-sm font-medium transition hover:border-primary/20 hover:bg-primary/5"
-          >
-            <span className="flex items-center gap-2">
-              <Layers3 className="size-4 text-primary" aria-hidden />
-              批量评审工作台
-            </span>
             <ArrowRight
               className="size-4 transition-transform group-hover:translate-x-0.5"
               aria-hidden

@@ -16,7 +16,6 @@ import {
   LibraryBig,
   DatabaseZap,
   Layers3,
-  ListChecks,
   LockKeyhole,
   ShieldCheck,
   ScrollText,
@@ -72,11 +71,6 @@ const GROUPS = [
         href: "/governance/apply",
         label: "待原子应用",
         icon: BadgeCheck,
-      },
-      {
-        href: "/governance/bulk",
-        label: "批量评审",
-        icon: ListChecks,
       },
       {
         href: "/governance/activity",

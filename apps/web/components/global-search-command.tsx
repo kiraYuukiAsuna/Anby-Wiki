@@ -62,7 +62,7 @@ const QUICK_LINKS = [
   { href: "/collections", label: "专题合集", detail: "人工、规则与动态合集", icon: Layers3 },
   { href: "/sources", label: "来源与证据", detail: "来源版本、分片与 Citation", icon: LibraryBig },
   { href: "/imports", label: "AI 导入中心", detail: "队列、进度与导入治理", icon: Bot },
-  { href: "/governance", label: "治理中心", detail: "提案、审核与批量评审", icon: Gavel },
+  { href: "/governance", label: "治理中心", detail: "提案、审核与应用", icon: Gavel },
   {
     href: "/governance/apply",
     label: "待原子应用",
