@@ -6,6 +6,7 @@ import {
   BookOpenText,
   Clock3,
   FileText,
+  Globe2,
   Layers3,
   Search,
   SquarePen,
@@ -18,6 +19,7 @@ import { z } from "zod";
 
 import { Button } from "@/components/ui/button";
 import { collectionsApi, knowledgeApi, readingApi } from "@/lib/api";
+import { useSession } from "@/lib/auth";
 
 const DATE_FORMATTER = new Intl.DateTimeFormat("zh-CN", {
   month: "short",
@@ -27,14 +29,17 @@ const homepageSearchSchema = z.string().trim().min(1).max(255);
 
 export function WikiHome() {
   const router = useRouter();
+  const { session } = useSession();
+  const wikiID = session?.wikiId;
+  const wikiName = session?.wikiName ?? "Anby Wiki";
   const [query, setQuery] = useState("");
-  const pages = useSWR("wiki-home:recent-pages", () =>
+  const pages = useSWR(wikiID ? ["wiki-home:recent-pages", wikiID] : null, () =>
     readingApi().listPublishedPages({ sort: "recent", pageSize: 12 }),
   );
-  const collections = useSWR("wiki-home:collections", () =>
+  const collections = useSWR(wikiID ? ["wiki-home:collections", wikiID] : null, () =>
     collectionsApi().listCollections({ pageSize: 6 }),
   );
-  const entities = useSWR("wiki-home:entities", () =>
+  const entities = useSWR(wikiID ? ["wiki-home:entities", wikiID] : null, () =>
     knowledgeApi().listEntities({ status: "active", pageSize: 8 }),
   );
 
@@ -51,7 +56,15 @@ export function WikiHome() {
         <div className="wiki-grid pointer-events-none absolute inset-0 -z-10 opacity-40" aria-hidden />
         <div className="mx-auto grid w-full max-w-7xl gap-8 px-5 py-10 lg:grid-cols-[minmax(0,1fr)_20rem] lg:px-8 lg:py-12">
           <div className="max-w-3xl">
-            <h1 className="text-3xl font-semibold">Anby Wiki</h1>
+            <div className="flex flex-wrap items-center gap-2">
+              <span className="inline-flex h-7 items-center gap-1.5 rounded-lg border bg-background/80 px-2.5 text-xs font-medium text-muted-foreground">
+                <Globe2 className="size-3.5" aria-hidden />
+                当前 Wiki
+              </span>
+              <h1 className="min-w-0 max-w-full truncate text-3xl font-semibold" title={wikiName}>
+                {wikiName}
+              </h1>
+            </div>
             <form
               onSubmit={submitSearch}
               className="mt-6 flex max-w-2xl gap-2 rounded-[8px] border bg-background p-2 shadow-sm"
