@@ -66,7 +66,13 @@ func Authentication(authenticator *authdomain.Authenticator, testHeaderFallback 
 				return
 			}
 			if authenticator != nil {
-				principal, ok, err := authenticator.Authenticate(r.Context(), r)
+				authRequest := r
+				if isAccountScopedAPI(r) {
+					authRequest = requestWithoutWikiContext(r)
+				}
+				principal, ok, err := authenticator.Authenticate(
+					r.Context(), authRequest,
+				)
 				if err != nil {
 					httpx.WriteError(w, r, http.StatusInternalServerError, httpx.CodeInternal, "认证服务暂时不可用")
 					return
@@ -89,6 +95,29 @@ func Authentication(authenticator *authdomain.Authenticator, testHeaderFallback 
 	}
 }
 
+func requestWithoutWikiContext(r *http.Request) *http.Request {
+	clone := r.Clone(r.Context())
+	clone.Header = r.Header.Clone()
+	clone.Header.Del(authdomain.WikiContextHeader)
+	cookies := r.Cookies()
+	if len(cookies) == 0 {
+		return clone
+	}
+	kept := []string{}
+	for _, cookie := range cookies {
+		if cookie.Name == authdomain.WikiContextCookie {
+			continue
+		}
+		kept = append(kept, cookie.String())
+	}
+	if len(kept) == 0 {
+		clone.Header.Del("Cookie")
+	} else {
+		clone.Header.Set("Cookie", strings.Join(kept, "; "))
+	}
+	return clone
+}
+
 func skipsCredentialAuthentication(r *http.Request) bool {
 	if !strings.HasPrefix(r.URL.Path, "/api/v1/auth/") {
 		return false
@@ -99,6 +128,29 @@ func skipsCredentialAuthentication(r *http.Request) bool {
 			r.URL.Path == "/api/v1/auth/login" ||
 			r.URL.Path == "/api/v1/auth/cli/exchange" ||
 			r.URL.Path == "/api/v1/auth/logout"):
+		return true
+	default:
+		return false
+	}
+}
+
+func isAccountScopedAPI(r *http.Request) bool {
+	switch {
+	case (r.Method == http.MethodGet || r.Method == http.MethodPut) &&
+		(r.URL.Path == "/api/v1/account/profile" ||
+			r.URL.Path == "/api/v1/account/ai-config"):
+		return true
+	case r.Method == http.MethodPost &&
+		r.URL.Path == "/api/v1/auth/cli/codes":
+		return true
+	case r.Method == http.MethodGet &&
+		r.URL.Path == "/api/v1/auth/cli/tokens":
+		return true
+	case r.Method == http.MethodDelete &&
+		(r.URL.Path == "/api/v1/auth/cli/token" ||
+			r.URL.Path == "/api/v1/auth/cli/token-records" ||
+			strings.HasPrefix(r.URL.Path, "/api/v1/auth/cli/tokens/") ||
+			strings.HasPrefix(r.URL.Path, "/api/v1/auth/cli/token-records/")):
 		return true
 	default:
 		return false
@@ -127,6 +179,16 @@ func RequireAuthenticatedWiki(next http.Handler) http.Handler {
 			return
 		}
 		principal, ok := authdomain.PrincipalFrom(r.Context())
+		if isAccountScopedAPI(r) {
+			if !ok || principal.ActorID == uuid.Nil {
+				httpx.WriteError(
+					w, r, http.StatusUnauthorized, httpx.CodeUnauthorized, "需要登录",
+				)
+				return
+			}
+			next.ServeHTTP(w, r)
+			return
+		}
 		if !ok || principal.ActorID == uuid.Nil || principal.WikiID == uuid.Nil {
 			httpx.WriteError(
 				w, r, http.StatusUnauthorized, httpx.CodeUnauthorized, "需要登录",
