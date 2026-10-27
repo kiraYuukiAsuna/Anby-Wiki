@@ -5,6 +5,7 @@ import {
   Copy,
   KeyRound,
   LoaderCircle,
+  RefreshCw,
   TerminalSquare,
   Trash2,
 } from "lucide-react";
@@ -198,6 +199,7 @@ export function CLIAccessWorkspace() {
   const [tokenTtlDays, setTokenTtlDays] = useState("90");
   const [creating, setCreating] = useState(false);
   const [authorizationCode, setAuthorizationCode] = useState<CLIAuthCode>();
+  const [pendingAuthorizationName, setPendingAuthorizationName] = useState("");
   const [revokingID, setRevokingID] = useState("");
   const [deletingID, setDeletingID] = useState("");
   const [cleaningInactive, setCleaningInactive] = useState(false);
@@ -223,7 +225,9 @@ export function CLIAccessWorkspace() {
         createCLIAuthCodeRequest: parsed.data,
       });
       setAuthorizationCode(result);
+      setPendingAuthorizationName(result.name);
       setName("");
+      await tokens.mutate();
       toast.success("一次性授权码已生成");
     } catch (error) {
       if (isUnauthorized(error)) {
@@ -305,6 +309,7 @@ export function CLIAccessWorkspace() {
   const visibleTokens = showInactive
     ? allTokens
     : allTokens.filter((token) => token.status === "active");
+  const tokenListUnavailable = Boolean(tokens.error && !tokens.data);
 
   return (
     <div className="space-y-10">
@@ -390,18 +395,38 @@ export function CLIAccessWorkspace() {
           {tokens.isLoading ? (
             <div className="h-36 animate-pulse bg-muted/25" />
           ) : null}
-          {tokens.error ? (
-            <p className="p-6 text-sm text-destructive">CLI Token 暂时不可用。</p>
+          {tokenListUnavailable ? (
+            <div className="flex flex-wrap items-center justify-between gap-3 p-6">
+              <p className="text-sm text-destructive">CLI Token 暂时不可用。</p>
+              <Button
+                type="button"
+                size="sm"
+                variant="outline"
+                onClick={() => void tokens.mutate()}
+              >
+                <RefreshCw aria-hidden />
+                重新加载
+              </Button>
+            </div>
           ) : null}
-          {!tokens.isLoading && !tokens.error && visibleTokens.length === 0 ? (
+          {!tokens.isLoading && !tokenListUnavailable && visibleTokens.length === 0 ? (
             <div className="p-8 text-center">
               <TerminalSquare
                 className="mx-auto size-6 text-muted-foreground"
                 aria-hidden
               />
               <p className="mt-3 text-sm font-semibold">
-                {allTokens.length === 0 ? "还没有已授权 Agent" : "没有需要显示的 Token"}
+                {allTokens.length === 0
+                  ? pendingAuthorizationName
+                    ? "等待 Agent 兑换授权码"
+                    : "还没有已授权 Agent"
+                  : "没有需要显示的 Token"}
               </p>
+              {allTokens.length === 0 && pendingAuthorizationName ? (
+                <p className="mx-auto mt-2 max-w-md text-xs text-muted-foreground">
+                  {pendingAuthorizationName} 兑换一次性授权码后会出现在这里。
+                </p>
+              ) : null}
             </div>
           ) : null}
           {visibleTokens.map((token) => (
