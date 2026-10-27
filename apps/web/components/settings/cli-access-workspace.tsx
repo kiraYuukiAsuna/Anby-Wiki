@@ -18,6 +18,7 @@ import { z } from "zod";
 import {
   ResponseError,
   type CLIAuthCode,
+  type CLIPendingAuthorizationCode,
   type CLIToken,
 } from "../../../../contracts/generated/typescript";
 
@@ -193,13 +194,51 @@ function TokenRow({
   );
 }
 
+function PendingAuthorizationRow({
+  authorization,
+}: {
+  authorization: CLIPendingAuthorizationCode;
+}) {
+  return (
+    <div className="grid gap-3 border-b px-4 py-4 last:border-b-0 md:grid-cols-[minmax(0,1fr)_10rem_10rem_auto] md:items-center">
+      <div className="min-w-0">
+        <div className="flex flex-wrap items-center gap-2">
+          <p className="truncate text-sm font-semibold">{authorization.name}</p>
+          <span className="rounded-full bg-amber-100 px-2 py-0.5 text-[10px] font-semibold text-amber-800">
+            待兑换
+          </span>
+        </div>
+        <p className="mt-1 text-[11px] text-muted-foreground">
+          一次性授权码已生成，明文不会再次显示。
+        </p>
+      </div>
+      <div>
+        <p className="text-[10px] font-semibold text-muted-foreground uppercase">
+          授权码到期
+        </p>
+        <p className="mt-1 text-xs">
+          {DATE_FORMATTER.format(authorization.expiresAt)}
+        </p>
+      </div>
+      <div>
+        <p className="text-[10px] font-semibold text-muted-foreground uppercase">
+          Token 到期
+        </p>
+        <p className="mt-1 text-xs">
+          {DATE_FORMATTER.format(authorization.tokenExpiresAt)}
+        </p>
+      </div>
+      <span className="text-xs text-muted-foreground">等待 Agent 兑换</span>
+    </div>
+  );
+}
+
 export function CLIAccessWorkspace() {
   const session = useSession();
   const [name, setName] = useState("");
   const [tokenTtlDays, setTokenTtlDays] = useState("90");
   const [creating, setCreating] = useState(false);
   const [authorizationCode, setAuthorizationCode] = useState<CLIAuthCode>();
-  const [pendingAuthorizationName, setPendingAuthorizationName] = useState("");
   const [revokingID, setRevokingID] = useState("");
   const [deletingID, setDeletingID] = useState("");
   const [cleaningInactive, setCleaningInactive] = useState(false);
@@ -225,7 +264,6 @@ export function CLIAccessWorkspace() {
         createCLIAuthCodeRequest: parsed.data,
       });
       setAuthorizationCode(result);
-      setPendingAuthorizationName(result.name);
       setName("");
       await tokens.mutate();
       toast.success("一次性授权码已生成");
@@ -305,6 +343,7 @@ export function CLIAccessWorkspace() {
   }
 
   const allTokens = tokens.data?.items ?? [];
+  const pendingAuthorizations = tokens.data?.pendingAuthorizationCodes ?? [];
   const inactiveCount = allTokens.filter((token) => token.status !== "active").length;
   const visibleTokens = showInactive
     ? allTokens
@@ -409,26 +448,26 @@ export function CLIAccessWorkspace() {
               </Button>
             </div>
           ) : null}
-          {!tokens.isLoading && !tokenListUnavailable && visibleTokens.length === 0 ? (
+          {!tokens.isLoading &&
+          !tokenListUnavailable &&
+          pendingAuthorizations.length === 0 &&
+          visibleTokens.length === 0 ? (
             <div className="p-8 text-center">
               <TerminalSquare
                 className="mx-auto size-6 text-muted-foreground"
                 aria-hidden
               />
               <p className="mt-3 text-sm font-semibold">
-                {allTokens.length === 0
-                  ? pendingAuthorizationName
-                    ? "等待 Agent 兑换授权码"
-                    : "还没有已授权 Agent"
-                  : "没有需要显示的 Token"}
+                {allTokens.length === 0 ? "还没有已授权 Agent" : "没有需要显示的 Token"}
               </p>
-              {allTokens.length === 0 && pendingAuthorizationName ? (
-                <p className="mx-auto mt-2 max-w-md text-xs text-muted-foreground">
-                  {pendingAuthorizationName} 兑换一次性授权码后会出现在这里。
-                </p>
-              ) : null}
             </div>
           ) : null}
+          {pendingAuthorizations.map((authorization) => (
+            <PendingAuthorizationRow
+              key={authorization.id}
+              authorization={authorization}
+            />
+          ))}
           {visibleTokens.map((token) => (
             <TokenRow
               key={token.id}

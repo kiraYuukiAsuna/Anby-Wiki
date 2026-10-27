@@ -20,6 +20,13 @@ import {
     CLITokenToJSON,
     CLITokenToJSONTyped,
 } from './CLIToken';
+import type { CLIPendingAuthorizationCode } from './CLIPendingAuthorizationCode';
+import {
+    CLIPendingAuthorizationCodeFromJSON,
+    CLIPendingAuthorizationCodeFromJSONTyped,
+    CLIPendingAuthorizationCodeToJSON,
+    CLIPendingAuthorizationCodeToJSONTyped,
+} from './CLIPendingAuthorizationCode';
 
 /**
  *
@@ -33,6 +40,12 @@ export interface CLITokenList {
      * @memberof CLITokenList
      */
     items: Array<CLIToken>;
+    /**
+     * 已生成但尚未被 Agent 兑换的一次性授权码摘要；不包含明文 code。
+     * @type {Array<CLIPendingAuthorizationCode>}
+     * @memberof CLITokenList
+     */
+    pendingAuthorizationCodes: Array<CLIPendingAuthorizationCode>;
 }
 
 /**
@@ -40,6 +53,7 @@ export interface CLITokenList {
  */
 export function instanceOfCLITokenList(value: object): value is CLITokenList {
     if (!('items' in value) || value['items'] === undefined) return false;
+    if ((!('pendingAuthorizationCodes' in (value as Record<string, any>)) && !('pending_authorization_codes' in (value as Record<string, any>))) || ((value as Record<string, any>)['pendingAuthorizationCodes'] === undefined && (value as Record<string, any>)['pending_authorization_codes'] === undefined)) return false;
     return true;
 }
 
@@ -54,6 +68,7 @@ export function CLITokenListFromJSONTyped(json: any, ignoreDiscriminator: boolea
     return {
 
         'items': ((json['items'] as Array<any>).map(CLITokenFromJSON)),
+        'pendingAuthorizationCodes': ((json['pending_authorization_codes'] as Array<any>).map(CLIPendingAuthorizationCodeFromJSON)),
     };
 }
 
@@ -69,6 +84,7 @@ export function CLITokenListToJSONTyped(value?: CLITokenList | null, ignoreDiscr
     return {
 
         'items': ((value['items'] as Array<any>).map(CLITokenToJSON)),
+        'pending_authorization_codes': ((value['pendingAuthorizationCodes'] as Array<any>).map(CLIPendingAuthorizationCodeToJSON)),
     };
 }
 

@@ -7,6 +7,7 @@
 Name | Type
 ------------ | -------------
 `items` | [Array&lt;CLIToken&gt;](CLIToken.md)
+`pendingAuthorizationCodes` | [Array&lt;CLIPendingAuthorizationCode&gt;](CLIPendingAuthorizationCode.md)
 
 ## Example
 
@@ -16,6 +17,7 @@ import type { CLITokenList } from ''
 // TODO: Update the object below with actual values
 const example = {
   "items": null,
+  "pendingAuthorizationCodes": null,
 } satisfies CLITokenList
 
 console.log(example)

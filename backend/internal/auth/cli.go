@@ -37,6 +37,16 @@ type CLIAuthorizationCode struct {
 	TokenExpiresAt time.Time
 }
 
+// CLIAuthorizationCodeSummary is an unredeemed code audit entry. The
+// plaintext code is intentionally unavailable after creation.
+type CLIAuthorizationCodeSummary struct {
+	ID             uuid.UUID
+	Name           string
+	ExpiresAt      time.Time
+	TokenExpiresAt time.Time
+	CreatedAt      time.Time
+}
+
 // CLIToken is the redacted token record exposed to the account that owns it.
 type CLIToken struct {
 	ID          uuid.UUID
@@ -196,6 +206,39 @@ func (s *Service) ExchangeCLIAuthorizationCode(
 			return CLIExchangeResult{}, err
 		}
 		return CLIExchangeResult{}, fmt.Errorf("auth: exchange CLI authorization code: %w", err)
+	}
+	return result, nil
+}
+
+func (s *Service) ListCLIAuthorizationCodes(
+	ctx context.Context,
+	actorID uuid.UUID,
+) ([]CLIAuthorizationCodeSummary, error) {
+	if actorID == uuid.Nil {
+		return nil, ErrUnauthenticated
+	}
+	rows, err := s.pool.Query(ctx, `SELECT
+		id,token_name,expires_at,token_expires_at,created_at
+		FROM cli_authorization_code
+		WHERE actor_id=$1 AND used_at IS NULL AND expires_at>now()
+		ORDER BY created_at DESC,id DESC`, actorID)
+	if err != nil {
+		return nil, fmt.Errorf("auth: list CLI authorization codes: %w", err)
+	}
+	defer rows.Close()
+	result := []CLIAuthorizationCodeSummary{}
+	for rows.Next() {
+		var item CLIAuthorizationCodeSummary
+		if err := rows.Scan(
+			&item.ID, &item.Name, &item.ExpiresAt,
+			&item.TokenExpiresAt, &item.CreatedAt,
+		); err != nil {
+			return nil, fmt.Errorf("auth: scan CLI authorization code: %w", err)
+		}
+		result = append(result, item)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, fmt.Errorf("auth: iterate CLI authorization codes: %w", err)
 	}
 	return result, nil
 }

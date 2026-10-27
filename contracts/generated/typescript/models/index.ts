@@ -40,6 +40,7 @@ export * from './BulkReviewItem';
 export * from './BulkReviewWaveResult';
 export * from './CLIAuthCode';
 export * from './CLIAuthExchangeResult';
+export * from './CLIPendingAuthorizationCode';
 export * from './CLIToken';
 export * from './CLITokenList';
 export * from './ChangeTag';

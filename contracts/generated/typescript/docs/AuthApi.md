@@ -423,7 +423,7 @@ This endpoint does not need any parameter.
 ### HTTP response details
 | Status code | Description | Response headers |
 |-------------|-------------|------------------|
-| **200** | 包含有效、过期和已撤销 Token 的审计目录 |  -  |
+| **200** | 包含待兑换授权码、有效、过期和已撤销 Token 的审计目录 |  -  |
 | **401** | 未认证 |  -  |
 | **403** | 已认证但无权限 |  -  |
 | **500** | 服务端内部错误 |  -  |

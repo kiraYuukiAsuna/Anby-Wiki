@@ -39,6 +39,20 @@ type cliTokenResponse struct {
 	CreatedAt   time.Time  `json:"created_at"`
 }
 
+type cliAuthCodeSummaryResponse struct {
+	ID             uuid.UUID `json:"id"`
+	Name           string    `json:"name"`
+	Status         string    `json:"status"`
+	ExpiresAt      time.Time `json:"expires_at"`
+	TokenExpiresAt time.Time `json:"token_expires_at"`
+	CreatedAt      time.Time `json:"created_at"`
+}
+
+type cliTokenListResponse struct {
+	Items                     []cliTokenResponse           `json:"items"`
+	PendingAuthorizationCodes []cliAuthCodeSummaryResponse `json:"pending_authorization_codes"`
+}
+
 type cliAuthExchangeResponse struct {
 	Token       string           `json:"token"`
 	ActorID     uuid.UUID        `json:"actor_id"`
@@ -109,11 +123,27 @@ func (a *AuthAPI) listCLITokens(w http.ResponseWriter, r *http.Request) {
 		httpx.WriteError(w, r, http.StatusInternalServerError, httpx.CodeInternal, "无法读取 CLI Token")
 		return
 	}
+	pendingCodes, err := a.service.ListCLIAuthorizationCodes(
+		r.Context(), principal.ActorID,
+	)
+	if err != nil {
+		httpx.WriteError(w, r, http.StatusInternalServerError, httpx.CodeInternal, "无法读取 CLI 授权码")
+		return
+	}
 	response := make([]cliTokenResponse, len(items))
 	for index := range items {
 		response[index] = toCLITokenResponse(items[index])
 	}
-	httpx.WriteJSON(w, http.StatusOK, map[string]any{"items": response})
+	pendingCodeResponse := make([]cliAuthCodeSummaryResponse, len(pendingCodes))
+	for index := range pendingCodes {
+		pendingCodeResponse[index] = toCLIAuthCodeSummaryResponse(
+			pendingCodes[index],
+		)
+	}
+	httpx.WriteJSON(w, http.StatusOK, cliTokenListResponse{
+		Items:                     response,
+		PendingAuthorizationCodes: pendingCodeResponse,
+	})
 }
 
 func (a *AuthAPI) revokeCLIToken(w http.ResponseWriter, r *http.Request) {
@@ -222,5 +252,18 @@ func toCLITokenResponse(value authdomain.CLIToken) cliTokenResponse {
 		Status: value.Status, ExpiresAt: value.ExpiresAt,
 		LastUsedAt: value.LastUsedAt, RevokedAt: value.RevokedAt,
 		CreatedAt: value.CreatedAt,
+	}
+}
+
+func toCLIAuthCodeSummaryResponse(
+	value authdomain.CLIAuthorizationCodeSummary,
+) cliAuthCodeSummaryResponse {
+	return cliAuthCodeSummaryResponse{
+		ID:             value.ID,
+		Name:           value.Name,
+		Status:         "pending",
+		ExpiresAt:      value.ExpiresAt,
+		TokenExpiresAt: value.TokenExpiresAt,
+		CreatedAt:      value.CreatedAt,
 	}
 }

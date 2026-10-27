@@ -61,6 +61,7 @@ docs/BulkReviewItem.md
 docs/BulkReviewWaveResult.md
 docs/CLIAuthCode.md
 docs/CLIAuthExchangeResult.md
+docs/CLIPendingAuthorizationCode.md
 docs/CLIToken.md
 docs/CLITokenList.md
 docs/ChangeTag.md
@@ -379,6 +380,7 @@ models/BulkReviewItem.ts
 models/BulkReviewWaveResult.ts
 models/CLIAuthCode.ts
 models/CLIAuthExchangeResult.ts
+models/CLIPendingAuthorizationCode.ts
 models/CLIToken.ts
 models/CLITokenList.ts
 models/ChangeTag.ts

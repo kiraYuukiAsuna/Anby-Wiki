@@ -546,7 +546,7 @@ paths:
         - sessionCookie: []
       responses:
         "200":
-          description: 包含有效、过期和已撤销 Token 的审计目录
+          description: 包含待兑换授权码、有效、过期和已撤销 Token 的审计目录
           content:
             application/json:
               schema: { $ref: "#/components/schemas/CLITokenList" }
@@ -5039,14 +5039,43 @@ components:
         created_at:
           type: string
           format: date-time
+    CLIPendingAuthorizationCode:
+      type: object
+      additionalProperties: false
+      required:
+        [id, name, status, expires_at, token_expires_at, created_at]
+      properties:
+        id:
+          type: string
+          format: uuid
+        name:
+          type: string
+        status:
+          type: string
+          enum: [pending]
+        expires_at:
+          type: string
+          format: date-time
+          description: 一次性授权码自身的过期时间。
+        token_expires_at:
+          type: string
+          format: date-time
+          description: 兑换后生成的 CLI Token 过期时间。
+        created_at:
+          type: string
+          format: date-time
     CLITokenList:
       type: object
       additionalProperties: false
-      required: [items]
+      required: [items, pending_authorization_codes]
       properties:
         items:
           type: array
           items: { $ref: "#/components/schemas/CLIToken" }
+        pending_authorization_codes:
+          type: array
+          description: 已生成但尚未被 Agent 兑换的一次性授权码摘要；不包含明文 code。
+          items: { $ref: "#/components/schemas/CLIPendingAuthorizationCode" }
     DeleteCLITokenRecordsResult:
       type: object
       additionalProperties: false
