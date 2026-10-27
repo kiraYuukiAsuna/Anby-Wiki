@@ -14,10 +14,30 @@
 
 import * as runtime from '../runtime';
 import {
+    type AcceptPageShareLinkRequest,
+    AcceptPageShareLinkRequestFromJSON,
+    AcceptPageShareLinkRequestToJSON,
+} from '../models/AcceptPageShareLinkRequest';
+import {
     type AddWikiMemberRequest,
     AddWikiMemberRequestFromJSON,
     AddWikiMemberRequestToJSON,
 } from '../models/AddWikiMemberRequest';
+import {
+    type CreatePageShareLinkRequest,
+    CreatePageShareLinkRequestFromJSON,
+    CreatePageShareLinkRequestToJSON,
+} from '../models/CreatePageShareLinkRequest';
+import {
+    type PageShareLinkAcceptanceResult,
+    PageShareLinkAcceptanceResultFromJSON,
+    PageShareLinkAcceptanceResultToJSON,
+} from '../models/PageShareLinkAcceptanceResult';
+import {
+    type PageShareLinkCreationResult,
+    PageShareLinkCreationResultFromJSON,
+    PageShareLinkCreationResultToJSON,
+} from '../models/PageShareLinkCreationResult';
 import {
     type PageShareList,
     PageShareListFromJSON,
@@ -54,8 +74,17 @@ import {
     WikiMemberRemovalResultToJSON,
 } from '../models/WikiMemberRemovalResult';
 
+export interface AcceptPageShareLinkOperationRequest {
+    acceptPageShareLinkRequest: AcceptPageShareLinkRequest;
+}
+
 export interface AddWikiMemberOperationRequest {
     addWikiMemberRequest: AddWikiMemberRequest;
+}
+
+export interface CreatePageShareLinkOperationRequest {
+    id: string;
+    createPageShareLinkRequest: CreatePageShareLinkRequest;
 }
 
 export interface GrantWikiMemberRoleRequest {
@@ -95,6 +124,63 @@ export interface UpsertPageShareOperationRequest {
  *
  */
 export class WikiApi extends runtime.BaseAPI {
+
+    /**
+     * Creates request options for acceptPageShareLink without sending the request
+     */
+    async acceptPageShareLinkRequestOpts(requestParameters: AcceptPageShareLinkOperationRequest): Promise<runtime.RequestOpts> {
+        if (requestParameters['acceptPageShareLinkRequest'] == null) {
+            throw new runtime.RequiredError(
+                'acceptPageShareLinkRequest',
+                'Required parameter "acceptPageShareLinkRequest" was null or undefined when calling acceptPageShareLink().'
+            );
+        }
+
+        const queryParameters: any = {};
+
+        const headerParameters: runtime.HTTPHeaders = {};
+
+        headerParameters['Content-Type'] = 'application/json';
+
+        if (this.configuration && this.configuration.accessToken) {
+            const token = this.configuration.accessToken;
+            const tokenString = await token("cliBearer", []);
+
+            if (tokenString) {
+                headerParameters["Authorization"] = `Bearer ${tokenString}`;
+            }
+        }
+
+        let urlPath = `/api/v1/page-share-links/accept`;
+
+        return {
+            path: urlPath,
+            method: 'POST',
+            headers: headerParameters,
+            query: queryParameters,
+            body: AcceptPageShareLinkRequestToJSON(requestParameters['acceptPageShareLinkRequest']),
+        };
+    }
+
+    /**
+     * 登录用户访问分享链接后领取页面级 viewer/editor 权限；一次性链接只允许首个登录用户领取。token 放在请求体，避免进入 API access log path。
+     * 领取页面分享链接
+     */
+    async acceptPageShareLinkRaw(requestParameters: AcceptPageShareLinkOperationRequest, initOverrides?: RequestInit | runtime.InitOverrideFunction): Promise<runtime.ApiResponse<PageShareLinkAcceptanceResult>> {
+        const requestOptions = await this.acceptPageShareLinkRequestOpts(requestParameters);
+        const response = await this.request(requestOptions, initOverrides);
+
+        return new runtime.JSONApiResponse(response, (jsonValue) => PageShareLinkAcceptanceResultFromJSON(jsonValue));
+    }
+
+    /**
+     * 登录用户访问分享链接后领取页面级 viewer/editor 权限；一次性链接只允许首个登录用户领取。token 放在请求体，避免进入 API access log path。
+     * 领取页面分享链接
+     */
+    async acceptPageShareLink(requestParameters: AcceptPageShareLinkOperationRequest, initOverrides?: RequestInit | runtime.InitOverrideFunction): Promise<PageShareLinkAcceptanceResult> {
+        const response = await this.acceptPageShareLinkRaw(requestParameters, initOverrides);
+        return await response.value();
+    }
 
     /**
      * Creates request options for addWikiMember without sending the request
@@ -150,6 +236,71 @@ export class WikiApi extends runtime.BaseAPI {
      */
     async addWikiMember(requestParameters: AddWikiMemberOperationRequest, initOverrides?: RequestInit | runtime.InitOverrideFunction): Promise<WikiMemberMutationResult> {
         const response = await this.addWikiMemberRaw(requestParameters, initOverrides);
+        return await response.value();
+    }
+
+    /**
+     * Creates request options for createPageShareLink without sending the request
+     */
+    async createPageShareLinkRequestOpts(requestParameters: CreatePageShareLinkOperationRequest): Promise<runtime.RequestOpts> {
+        if (requestParameters['id'] == null) {
+            throw new runtime.RequiredError(
+                'id',
+                'Required parameter "id" was null or undefined when calling createPageShareLink().'
+            );
+        }
+
+        if (requestParameters['createPageShareLinkRequest'] == null) {
+            throw new runtime.RequiredError(
+                'createPageShareLinkRequest',
+                'Required parameter "createPageShareLinkRequest" was null or undefined when calling createPageShareLink().'
+            );
+        }
+
+        const queryParameters: any = {};
+
+        const headerParameters: runtime.HTTPHeaders = {};
+
+        headerParameters['Content-Type'] = 'application/json';
+
+        if (this.configuration && this.configuration.accessToken) {
+            const token = this.configuration.accessToken;
+            const tokenString = await token("cliBearer", []);
+
+            if (tokenString) {
+                headerParameters["Authorization"] = `Bearer ${tokenString}`;
+            }
+        }
+
+        let urlPath = `/api/v1/pages/{id}/share-links`;
+        urlPath = urlPath.replace('{id}', encodeURIComponent(String(requestParameters['id'])));
+
+        return {
+            path: urlPath,
+            method: 'POST',
+            headers: headerParameters,
+            query: queryParameters,
+            body: CreatePageShareLinkRequestToJSON(requestParameters['createPageShareLinkRequest']),
+        };
+    }
+
+    /**
+     * 仅当前 Wiki admin 可用；返回的 token 只在本次响应出现，服务端仅保存 hash。
+     * 为当前页面创建分享链接
+     */
+    async createPageShareLinkRaw(requestParameters: CreatePageShareLinkOperationRequest, initOverrides?: RequestInit | runtime.InitOverrideFunction): Promise<runtime.ApiResponse<PageShareLinkCreationResult>> {
+        const requestOptions = await this.createPageShareLinkRequestOpts(requestParameters);
+        const response = await this.request(requestOptions, initOverrides);
+
+        return new runtime.JSONApiResponse(response, (jsonValue) => PageShareLinkCreationResultFromJSON(jsonValue));
+    }
+
+    /**
+     * 仅当前 Wiki admin 可用；返回的 token 只在本次响应出现，服务端仅保存 hash。
+     * 为当前页面创建分享链接
+     */
+    async createPageShareLink(requestParameters: CreatePageShareLinkOperationRequest, initOverrides?: RequestInit | runtime.InitOverrideFunction): Promise<PageShareLinkCreationResult> {
+        const response = await this.createPageShareLinkRaw(requestParameters, initOverrides);
         return await response.value();
     }
 

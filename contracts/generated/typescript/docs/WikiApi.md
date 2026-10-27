@@ -4,7 +4,9 @@ All URIs are relative to *http://localhost:3000*
 
 | Method | HTTP request | Description |
 |------------- | ------------- | -------------|
+| [**acceptPageShareLink**](WikiApi.md#acceptpagesharelinkoperation) | **POST** /api/v1/page-share-links/accept | 领取页面分享链接 |
 | [**addWikiMember**](WikiApi.md#addwikimemberoperation) | **POST** /api/v1/wiki/members | 添加协作者并授予角色 |
+| [**createPageShareLink**](WikiApi.md#createpagesharelinkoperation) | **POST** /api/v1/pages/{id}/share-links | 为当前页面创建分享链接 |
 | [**grantWikiMemberRole**](WikiApi.md#grantwikimemberrole) | **PUT** /api/v1/wiki/members/{actor_id}/roles/{role_key} | 授予当前 Wiki 成员角色 |
 | [**listPageShares**](WikiApi.md#listpageshares) | **GET** /api/v1/pages/{id}/shares | 列出当前页面的单文档分享对象 |
 | [**listWikiMembers**](WikiApi.md#listwikimembers) | **GET** /api/v1/wiki/members | 列出当前 Wiki 成员与角色 |
@@ -13,6 +15,83 @@ All URIs are relative to *http://localhost:3000*
 | [**revokeWikiMemberRole**](WikiApi.md#revokewikimemberrole) | **DELETE** /api/v1/wiki/members/{actor_id}/roles/{role_key} | 撤销当前 Wiki 成员角色 |
 | [**upsertPageShare**](WikiApi.md#upsertpageshareoperation) | **PUT** /api/v1/pages/{id}/shares | 分享当前页面给本地账号 |
 
+
+
+## acceptPageShareLink
+
+> PageShareLinkAcceptanceResult acceptPageShareLink(acceptPageShareLinkRequest)
+
+领取页面分享链接
+
+登录用户访问分享链接后领取页面级 viewer/editor 权限；一次性链接只允许首个登录用户领取。token 放在请求体，避免进入 API access log path。
+
+### Example
+
+```ts
+import {
+  Configuration,
+  WikiApi,
+} from '';
+import type { AcceptPageShareLinkOperationRequest } from '';
+
+async function example() {
+  console.log("🚀 Testing  SDK...");
+  const config = new Configuration({
+    // Configure HTTP bearer authorization: cliBearer
+    accessToken: "YOUR BEARER TOKEN",
+    // To configure API key authorization: sessionCookie
+    apiKey: "YOUR API KEY",
+  });
+  const api = new WikiApi(config);
+
+  const body = {
+    // AcceptPageShareLinkRequest
+    acceptPageShareLinkRequest: ...,
+  } satisfies AcceptPageShareLinkOperationRequest;
+
+  try {
+    const data = await api.acceptPageShareLink(body);
+    console.log(data);
+  } catch (error) {
+    console.error(error);
+  }
+}
+
+// Run the test
+example().catch(console.error);
+```
+
+### Parameters
+
+
+| Name | Type | Description  | Notes |
+|------------- | ------------- | ------------- | -------------|
+| **acceptPageShareLinkRequest** | [AcceptPageShareLinkRequest](AcceptPageShareLinkRequest.md) |  | |
+
+### Return type
+
+[**PageShareLinkAcceptanceResult**](PageShareLinkAcceptanceResult.md)
+
+### Authorization
+
+[cliBearer](../README.md#cliBearer), [sessionCookie](../README.md#sessionCookie)
+
+### HTTP request headers
+
+- **Content-Type**: `application/json`
+- **Accept**: `application/json`
+
+
+### HTTP response details
+| Status code | Description | Response headers |
+|-------------|-------------|------------------|
+| **200** | 页面分享权限领取结果 |  -  |
+| **401** | 未认证 |  -  |
+| **403** | 已认证但无权限 |  -  |
+| **404** | 资源不存在 |  -  |
+| **422** | 请求语义可理解但无法处理（如重定向环/重定向链过深） |  -  |
+
+[[Back to top]](#) [[Back to API list]](../README.md#api-endpoints) [[Back to Model list]](../README.md#models) [[Back to README]](../README.md)
 
 
 ## addWikiMember
@@ -84,6 +163,86 @@ example().catch(console.error);
 | Status code | Description | Response headers |
 |-------------|-------------|------------------|
 | **201** | 添加后的成员角色快照 |  -  |
+| **401** | 未认证 |  -  |
+| **403** | 已认证但无权限 |  -  |
+| **404** | 资源不存在 |  -  |
+| **422** | 请求语义可理解但无法处理（如重定向环/重定向链过深） |  -  |
+
+[[Back to top]](#) [[Back to API list]](../README.md#api-endpoints) [[Back to Model list]](../README.md#models) [[Back to README]](../README.md)
+
+
+## createPageShareLink
+
+> PageShareLinkCreationResult createPageShareLink(id, createPageShareLinkRequest)
+
+为当前页面创建分享链接
+
+仅当前 Wiki admin 可用；返回的 token 只在本次响应出现，服务端仅保存 hash。
+
+### Example
+
+```ts
+import {
+  Configuration,
+  WikiApi,
+} from '';
+import type { CreatePageShareLinkOperationRequest } from '';
+
+async function example() {
+  console.log("🚀 Testing  SDK...");
+  const config = new Configuration({
+    // Configure HTTP bearer authorization: cliBearer
+    accessToken: "YOUR BEARER TOKEN",
+    // To configure API key authorization: sessionCookie
+    apiKey: "YOUR API KEY",
+  });
+  const api = new WikiApi(config);
+
+  const body = {
+    // string
+    id: 38400000-8cf0-11bd-b23e-10b96e4ef00d,
+    // CreatePageShareLinkRequest
+    createPageShareLinkRequest: ...,
+  } satisfies CreatePageShareLinkOperationRequest;
+
+  try {
+    const data = await api.createPageShareLink(body);
+    console.log(data);
+  } catch (error) {
+    console.error(error);
+  }
+}
+
+// Run the test
+example().catch(console.error);
+```
+
+### Parameters
+
+
+| Name | Type | Description  | Notes |
+|------------- | ------------- | ------------- | -------------|
+| **id** | `string` |  | [Defaults to `undefined`] |
+| **createPageShareLinkRequest** | [CreatePageShareLinkRequest](CreatePageShareLinkRequest.md) |  | |
+
+### Return type
+
+[**PageShareLinkCreationResult**](PageShareLinkCreationResult.md)
+
+### Authorization
+
+[cliBearer](../README.md#cliBearer), [sessionCookie](../README.md#sessionCookie)
+
+### HTTP request headers
+
+- **Content-Type**: `application/json`
+- **Accept**: `application/json`
+
+
+### HTTP response details
+| Status code | Description | Response headers |
+|-------------|-------------|------------------|
+| **201** | 页面分享链接创建结果 |  -  |
 | **401** | 未认证 |  -  |
 | **403** | 已认证但无权限 |  -  |
 | **404** | 资源不存在 |  -  |

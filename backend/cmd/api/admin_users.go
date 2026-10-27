@@ -21,6 +21,15 @@ type upsertPageShareRequest struct {
 	RoleKey    string `json:"role_key"`
 }
 
+type createPageShareLinkRequest struct {
+	RoleKey  string `json:"role_key"`
+	LinkType string `json:"link_type"`
+}
+
+type acceptPageShareLinkRequest struct {
+	Token string `json:"token"`
+}
+
 func (a *GovernanceAPI) listAdminUsers(w http.ResponseWriter, r *http.Request) {
 	actorID, ok := actorIDFrom(w, r)
 	if !ok {
@@ -269,6 +278,49 @@ func (a *GovernanceAPI) upsertPageShare(w http.ResponseWriter, r *http.Request) 
 	httpx.WriteJSON(w, http.StatusOK, result)
 }
 
+func (a *GovernanceAPI) createPageShareLink(w http.ResponseWriter, r *http.Request) {
+	actorID, ok := actorIDFrom(w, r)
+	if !ok {
+		return
+	}
+	pageID, ok := pageIDFrom(w, r)
+	if !ok {
+		return
+	}
+	var payload createPageShareLinkRequest
+	if !decodeJSON(w, r, &payload) {
+		return
+	}
+	result, err := a.userAdmin.CreatePageShareLink(
+		r.Context(), wikiIDFromRequest(r), actorID, pageID,
+		payload.RoleKey, payload.LinkType,
+	)
+	if err != nil {
+		governanceError(w, r, err)
+		return
+	}
+	httpx.WriteJSON(w, http.StatusCreated, result)
+}
+
+func (a *GovernanceAPI) acceptPageShareLink(w http.ResponseWriter, r *http.Request) {
+	actorID, ok := actorIDFrom(w, r)
+	if !ok {
+		return
+	}
+	var payload acceptPageShareLinkRequest
+	if !decodeJSON(w, r, &payload) {
+		return
+	}
+	result, err := a.userAdmin.AcceptPageShareLink(
+		r.Context(), actorID, payload.Token,
+	)
+	if err != nil {
+		governanceError(w, r, err)
+		return
+	}
+	httpx.WriteJSON(w, http.StatusOK, result)
+}
+
 func (a *GovernanceAPI) removePageShare(w http.ResponseWriter, r *http.Request) {
 	actorID, ok := actorIDFrom(w, r)
 	if !ok {
@@ -303,5 +355,6 @@ func isWikiMemberNotFound(err error) bool {
 }
 
 func isPageShareNotFound(err error) bool {
-	return errors.Is(err, governance.ErrPageShareNotFound)
+	return errors.Is(err, governance.ErrPageShareNotFound) ||
+		errors.Is(err, governance.ErrPageShareLinkNotFound)
 }

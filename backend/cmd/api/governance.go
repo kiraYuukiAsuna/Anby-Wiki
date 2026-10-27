@@ -998,7 +998,8 @@ func governanceError(w http.ResponseWriter, r *http.Request, err error) {
 	case errors.Is(err, governance.ErrInvalidAITrustProfile):
 		httpx.WriteError(w, r, http.StatusUnprocessableEntity, httpx.CodeValidationFailed, err.Error())
 	case errors.Is(err, governance.ErrInvalidAdminUserFilter), errors.Is(err, governance.ErrInvalidWikiMember),
-		errors.Is(err, governance.ErrInvalidPageShare):
+		errors.Is(err, governance.ErrInvalidPageShare),
+		errors.Is(err, governance.ErrInvalidPageShareLink):
 		httpx.WriteError(w, r, http.StatusUnprocessableEntity, httpx.CodeValidationFailed, err.Error())
 	case errors.Is(err, governance.ErrInvalidTransition), errors.Is(err, governance.ErrProposalNotDraft),
 		errors.Is(err, governance.ErrPatchTargetModified), errors.Is(err, governance.ErrMergeConflict),

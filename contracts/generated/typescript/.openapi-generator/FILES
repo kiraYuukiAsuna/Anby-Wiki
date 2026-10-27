@@ -21,6 +21,7 @@ docs/AIConfig.md
 docs/AIConfigTestResult.md
 docs/AITrustProfile.md
 docs/AITrustProfileList.md
+docs/AcceptPageShareLinkRequest.md
 docs/AccountApi.md
 docs/AccountProfile.md
 docs/AddEntityAliasRequest.md
@@ -95,6 +96,7 @@ docs/CreateImportJobRequest.md
 docs/CreatePageProtectionRequest.md
 docs/CreatePageRedirectRequest.md
 docs/CreatePageRequest.md
+docs/CreatePageShareLinkRequest.md
 docs/CreateProposalRequest.md
 docs/CreateWikiComponentRequest.md
 docs/CursorPage.md
@@ -243,6 +245,9 @@ docs/PageSectionLocator.md
 docs/PageSectionManifest.md
 docs/PageSectionSummary.md
 docs/PageShare.md
+docs/PageShareLink.md
+docs/PageShareLinkAcceptanceResult.md
+docs/PageShareLinkCreationResult.md
 docs/PageShareList.md
 docs/PageShareMutationResult.md
 docs/PageShareRemovalResult.md
@@ -338,6 +343,7 @@ models/AIConfig.ts
 models/AIConfigTestResult.ts
 models/AITrustProfile.ts
 models/AITrustProfileList.ts
+models/AcceptPageShareLinkRequest.ts
 models/AccountProfile.ts
 models/AddEntityAliasRequest.ts
 models/AddEntityLabelRequest.ts
@@ -406,6 +412,7 @@ models/CreateImportJobRequest.ts
 models/CreatePageProtectionRequest.ts
 models/CreatePageRedirectRequest.ts
 models/CreatePageRequest.ts
+models/CreatePageShareLinkRequest.ts
 models/CreateProposalRequest.ts
 models/CreateWikiComponentRequest.ts
 models/CursorPage.ts
@@ -548,6 +555,9 @@ models/PageSectionLocator.ts
 models/PageSectionManifest.ts
 models/PageSectionSummary.ts
 models/PageShare.ts
+models/PageShareLink.ts
+models/PageShareLinkAcceptanceResult.ts
+models/PageShareLinkCreationResult.ts
 models/PageShareList.ts
 models/PageShareMutationResult.ts
 models/PageShareRemovalResult.ts

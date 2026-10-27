@@ -13,6 +13,11 @@ import { useSession } from "@/lib/auth";
 
 const AUTH_PATHS = new Set(["/login", "/register"]);
 
+function currentClientPath(fallback: string) {
+  if (typeof window === "undefined") return fallback;
+  return window.location.pathname + window.location.search + window.location.hash;
+}
+
 export function SessionShell({ children }: { children: React.ReactNode }) {
   const pathname = usePathname();
 
@@ -38,9 +43,11 @@ function PrivateWikiShell({
 
   useEffect(() => {
     if (!isLoading && !session && !error) {
-      router.replace(loginHref);
+      router.replace(
+        `/login?next=${encodeURIComponent(currentClientPath(pathname))}`,
+      );
     }
-  }, [error, isLoading, loginHref, router, session]);
+  }, [error, isLoading, pathname, router, session]);
 
   if (isLoading) {
     return (

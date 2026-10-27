@@ -17,6 +17,7 @@ import { AstDocument } from "@/components/ast";
 import { ArticleEndMatter } from "@/components/article-end-matter";
 import { LazySectionDocument } from "@/components/lazy-section-document";
 import { PageButtonRuntime } from "@/components/page-button-runtime";
+import { PageShareLinkDialog } from "@/components/page-share-link-dialog";
 import { RenamePageButton } from "@/components/rename-page-button";
 import { RedirectPageButton } from "@/components/redirect-page-button";
 import { RedirectSectionFocus } from "@/components/redirect-section-focus";
@@ -189,6 +190,10 @@ export async function PageView({ data }: { data: PageWithContent }) {
                 工具
               </Link>
             </Button>
+            <PageShareLinkDialog
+              pageId={redirectSourceId}
+              pageTitle={redirectSourceTitle}
+            />
             <RedirectPageButton
               sourcePageId={redirectSourceId}
               sourceTitle={redirectSourceTitle}

@@ -161,6 +161,10 @@ func TestAPIPageSharingE2E(t *testing.T) {
 	viewer, viewerActorID := registerE2EUser(
 		t, baseURL, viewerUsername, viewerUsername+"@example.invalid", password,
 	)
+	linkViewerUsername := "page_link_" + runID
+	linkViewer, linkViewerActorID := registerE2EUser(
+		t, baseURL, linkViewerUsername, linkViewerUsername+"@example.invalid", password,
+	)
 
 	sharedPage := requestE2EMap(t, admin, http.MethodPost, baseURL+"/api/v1/pages",
 		map[string]any{
@@ -189,12 +193,42 @@ func TestAPIPageSharingE2E(t *testing.T) {
 			"is_minor": false,
 		}, http.StatusCreated)
 
-	share := requestE2EMap(t, admin, http.MethodPut,
-		fmt.Sprintf("%s/api/v1/pages/%s/shares", baseURL, sharedPageID),
-		map[string]any{"identifier": viewerUsername, "role_key": "viewer"},
-		http.StatusOK)
-	if e2eUUID(t, share["share"].(map[string]any), "actor_id") != viewerActorID {
-		t.Fatalf("share target=%#v want actor %s", share["share"], viewerActorID)
+	onceLink := requestE2EMap(t, admin, http.MethodPost,
+		fmt.Sprintf("%s/api/v1/pages/%s/share-links", baseURL, sharedPageID),
+		map[string]any{"role_key": "viewer", "link_type": "once"},
+		http.StatusCreated)
+	onceToken, ok := onceLink["token"].(string)
+	if !ok || onceToken == "" {
+		t.Fatalf("one-time share link lacks token: %#v", onceLink)
+	}
+	claim := requestE2EMap(t, viewer, http.MethodPost,
+		baseURL+"/api/v1/page-share-links/accept",
+		map[string]any{"token": onceToken}, http.StatusOK)
+	if e2eUUID(t, claim, "wiki_id") != adminWikiID ||
+		e2eUUID(t, claim, "page_id") != sharedPageID {
+		t.Fatalf("claim target=%#v want wiki=%s page=%s", claim, adminWikiID, sharedPageID)
+	}
+	if e2eUUID(t, claim["share"].(map[string]any), "actor_id") != viewerActorID {
+		t.Fatalf("claim share=%#v want actor %s", claim["share"], viewerActorID)
+	}
+	reuse := doE2ERequest(t, linkViewer, http.MethodPost,
+		baseURL+"/api/v1/page-share-links/accept",
+		map[string]any{"token": onceToken}, nil)
+	assertE2EStatus(t, reuse, http.StatusNotFound)
+
+	permanentLink := requestE2EMap(t, admin, http.MethodPost,
+		fmt.Sprintf("%s/api/v1/pages/%s/share-links", baseURL, sharedPageID),
+		map[string]any{"role_key": "viewer", "link_type": "permanent"},
+		http.StatusCreated)
+	permanentToken, ok := permanentLink["token"].(string)
+	if !ok || permanentToken == "" {
+		t.Fatalf("permanent share link lacks token: %#v", permanentLink)
+	}
+	permanentClaim := requestE2EMap(t, linkViewer, http.MethodPost,
+		baseURL+"/api/v1/page-share-links/accept",
+		map[string]any{"token": permanentToken}, http.StatusOK)
+	if e2eUUID(t, permanentClaim["share"].(map[string]any), "actor_id") != linkViewerActorID {
+		t.Fatalf("permanent claim share=%#v want actor %s", permanentClaim["share"], linkViewerActorID)
 	}
 	requestE2EMap(t, admin, http.MethodGet,
 		fmt.Sprintf("%s/api/v1/pages/%s/shares", baseURL, sharedPageID),

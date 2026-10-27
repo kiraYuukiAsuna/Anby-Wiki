@@ -161,8 +161,10 @@ export function PageShareManager({
             <UsersRound className="size-4" aria-hidden />
           </span>
           <div>
-            <h2 className="font-semibold">分享当前页面</h2>
-            <p className="mt-1 text-sm text-muted-foreground">{pageTitle}</p>
+            <h2 className="font-semibold">已授权账号</h2>
+            <p className="mt-1 text-sm text-muted-foreground">
+              {pageTitle} · 可在阅读页直接生成分享链接。
+            </p>
           </div>
         </div>
       </header>
@@ -192,7 +194,7 @@ export function PageShareManager({
               onChange={(event) =>
                 setDraft({ ...draft, identifier: event.target.value })
               }
-              placeholder="用户名、邮箱或 Actor ID"
+              placeholder="直接授权用户名、邮箱或 Actor ID"
               disabled={saving}
             />
             <select
@@ -221,7 +223,7 @@ export function PageShareManager({
               ) : (
                 <UserPlus aria-hidden />
               )}
-              分享
+              授权
             </Button>
           </div>
 
@@ -277,7 +279,7 @@ export function PageShareManager({
             </ul>
           ) : (
             <p className="rounded-xl border border-dashed p-5 text-sm text-muted-foreground">
-              还没有单独分享给其他账号。
+              还没有账号领取分享链接，也没有直接授权账号。
             </p>
           )}
         </div>

@@ -21,7 +21,7 @@ gate、Doctor、滚动替换和健康检查，并通过复杂 PDF/扫描件、�
 跨页表格、恶意附件隔离、密码加密拒绝及 128/298 MiB 上传边界验收。另一个完全隔离的
 远端数据库/bucket/index/Redis DB 已执行
 当时 149/149 OpenAPI operation handler 探针、核心成功工作流、治理、批量审核、导入、
-AI 配置和双会话协作 E2E；当前权威契约为 175 个 operation。“实现完成”仍不等于
+AI 配置和双会话协作 E2E；当前权威契约为 177 个 operation。“实现完成”仍不等于
 “所有商业发布门禁已关闭”：目标规模容量、正式域名
 安全边界、账号恢复、备份恢复与人工可访问性等仍须验收。详见
 [待解决问题](OutstandingIssues.md)。
@@ -32,6 +32,9 @@ AI 配置和双会话协作 E2E；当前权威契约为 175 个 operation。“�
   `actor_role`，因此不会把被分享账号提升为当前 Wiki 成员。
 - 管理员可在页面工具中只分享当前页面，授予 `viewer` 或 `editor`。`viewer` 可读取
   页面、历史、目录、引用和分段；`editor` 额外可进入协作编辑与发布当前页面 Revision。
+- 阅读页标题栏提供“分享”按钮，可生成只读/可编辑的一次性或永久分享链接。链接本身不匿名放行；
+  其他账号登录后访问 `/share#token=...` 才会领取页面级授权。服务端只保存 token hash，
+  一次性链接领取后不可复用，永久链接可被多个登录账号领取。
 - 认证上下文允许被分享账号切换到包含分享页的 Wiki，但 `/api/v1/auth/session`
   仅回显 `page_viewer/page_editor` 页面级角色。页面目录和搜索对这类账号只返回被分享页；
   反链、相关页面和集合归属不会向页面级分享账号暴露其他 Wiki 内容。
@@ -173,7 +176,7 @@ AI 配置和双会话协作 E2E；当前权威契约为 175 个 operation。“�
 | 投影与搜索 | Outbox 租约/重试/死信、链接/目录/锚点/章节/渲染/知识使用/References/相关推荐/组件依赖/图谱投影、可解释的链接+Collection+Entity 相关度、PostgreSQL fallback、Meilisearch 关键词/混合/语义检索 |
 | 规模与归档 | 章节懒加载、服务端可信 HTML 渲染、Revision 热冷分层与 S3 回源、Projection/Search 重建、容量基准命令 |
 | 协作 | Yjs WorkingDocument、持久增量 update、重连游标、普通发布与 AI 合并的 sequence CAS、未确认 update 幂等重发、自动 snapshot/compact、Block 级 Presence、三方合并与人工冲突决议；跨标签页离线恢复和多 API 实例广播仍待实现 |
-| 平台 | 每账号私人 Wiki、Wiki 成员/协作者、单文档分享、本地账号/Session/RBAC、请求级 Wiki 切换、个人中心资料与文档理解模型配置、Server Component 登录态透传、一次性授权码与可撤销/可清理 Agent CLI Bearer Token、175 个 OpenAPI operation 和协作 WebSocket 的 JSON + 人类命令双模式 CLI、Redis 限流、安全头、OTel/Prometheus、手工灾备/恢复演练工具、Doctor、生产部署与验收后清理 |
+| 平台 | 每账号私人 Wiki、Wiki 成员/协作者、单文档分享、本地账号/Session/RBAC、请求级 Wiki 切换、个人中心资料与文档理解模型配置、Server Component 登录态透传、一次性授权码与可撤销/可清理 Agent CLI Bearer Token、177 个 OpenAPI operation 和协作 WebSocket 的 JSON + 人类命令双模式 CLI、Redis 限流、安全头、OTel/Prometheus、手工灾备/恢复演练工具、Doctor、生产部署与验收后清理 |
 
 ## 关键不变量
 

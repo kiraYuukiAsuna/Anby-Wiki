@@ -309,6 +309,59 @@ paths:
         "403": { $ref: "#/components/responses/Forbidden" }
         "404": { $ref: "#/components/responses/NotFound" }
         "422": { $ref: "#/components/responses/UnprocessableEntity" }
+  /api/v1/pages/{id}/share-links:
+    post:
+      operationId: createPageShareLink
+      tags: [wiki]
+      summary: 为当前页面创建分享链接
+      description: 仅当前 Wiki admin 可用；返回的 token 只在本次响应出现，服务端仅保存 hash。
+      security:
+        - sessionCookie: []
+        - cliBearer: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: string, format: uuid }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/CreatePageShareLinkRequest" }
+      responses:
+        "201":
+          description: 页面分享链接创建结果
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/PageShareLinkCreationResult" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "422": { $ref: "#/components/responses/UnprocessableEntity" }
+  /api/v1/page-share-links/accept:
+    post:
+      operationId: acceptPageShareLink
+      tags: [wiki]
+      summary: 领取页面分享链接
+      description: 登录用户访问分享链接后领取页面级 viewer/editor 权限；一次性链接只允许首个登录用户领取。token 放在请求体，避免进入 API access log path。
+      security:
+        - sessionCookie: []
+        - cliBearer: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/AcceptPageShareLinkRequest" }
+      responses:
+        "200":
+          description: 页面分享权限领取结果
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/PageShareLinkAcceptanceResult" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "422": { $ref: "#/components/responses/UnprocessableEntity" }
   /api/v1/pages/{id}/shares/{actor_id}:
     delete:
       operationId: removePageShare
@@ -6344,6 +6397,77 @@ components:
         changed:
           type: boolean
           description: false 表示本次分享角色未变化。
+    CreatePageShareLinkRequest:
+      type: object
+      additionalProperties: false
+      required: [role_key, link_type]
+      properties:
+        role_key:
+          type: string
+          enum: [viewer, editor]
+          description: viewer 只读当前页面；editor 可编辑当前页面正文。
+        link_type:
+          type: string
+          enum: [once, permanent]
+          description: once 仅首个登录用户可领取；permanent 可被多个登录用户长期领取。
+    PageShareLink:
+      type: object
+      additionalProperties: false
+      required:
+        - id
+        - page_id
+        - role_key
+        - link_type
+        - created_by
+        - created_at
+      properties:
+        id: { type: string, format: uuid }
+        page_id: { type: string, format: uuid }
+        role_key:
+          type: string
+          enum: [viewer, editor]
+        link_type:
+          type: string
+          enum: [once, permanent]
+        created_by: { type: string, format: uuid }
+        created_at: { type: string, format: date-time }
+        revoked_at:
+          type: string
+          format: date-time
+          nullable: true
+    PageShareLinkCreationResult:
+      type: object
+      additionalProperties: false
+      required: [link, token]
+      properties:
+        link: { $ref: "#/components/schemas/PageShareLink" }
+        token:
+          type: string
+          description: 明文 token 仅本次返回；后端只保存 token hash。
+    AcceptPageShareLinkRequest:
+      type: object
+      additionalProperties: false
+      required: [token]
+      properties:
+        token:
+          type: string
+          minLength: 32
+          maxLength: 128
+          description: 从分享链接 fragment 读取的明文 token。
+    PageShareLinkAcceptanceResult:
+      type: object
+      additionalProperties: false
+      required: [wiki_id, page_id, role_key, share, changed]
+      properties:
+        wiki_id: { type: string, format: uuid }
+        page_id: { type: string, format: uuid }
+        role_key:
+          type: string
+          enum: [viewer, editor]
+        share: { $ref: "#/components/schemas/PageShare" }
+        changed:
+          type: boolean
+          description: false 表示领取人已有不低于链接的权限。
     PageShareRemovalResult:
       type: object
       additionalProperties: false

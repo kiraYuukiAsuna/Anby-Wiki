@@ -134,6 +134,7 @@ COMMIT;
 
 BEGIN;
 DROP TABLE page_protection;
+DROP TABLE IF EXISTS page_share_link;
 DROP TABLE IF EXISTS page_share;
 DROP TABLE actor_role;
 DROP TABLE role;
