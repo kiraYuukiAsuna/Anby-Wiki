@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
-import { useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import { toast } from "sonner";
 import { useSWRConfig } from "swr";
 import { z } from "zod";
@@ -13,7 +13,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { authApi } from "@/lib/api";
-import { AUTH_SESSION_KEY } from "@/lib/auth";
+import { AUTH_SESSION_KEY, useSession } from "@/lib/auth";
 import { persistSelectedWikiID } from "@/lib/wiki-context";
 
 const loginSchema = z.object({
@@ -25,6 +25,7 @@ export function LoginForm() {
   const router = useRouter();
   const searchParams = useSearchParams();
   const { mutate } = useSWRConfig();
+  const { session } = useSession();
   const [identifier, setIdentifier] = useState("");
   const [password, setPassword] = useState("");
   const [submitting, setSubmitting] = useState(false);
@@ -33,6 +34,17 @@ export function LoginForm() {
   const rawNext = searchParams.get("next") ?? "/";
   const next = rawNext.startsWith("/") && !rawNext.startsWith("//") ? rawNext : "/";
   const registerHref = `/register?next=${encodeURIComponent(next)}`;
+
+  const redirectToNext = useCallback(() => {
+    router.replace(next);
+    router.refresh();
+  }, [next, router]);
+
+  useEffect(() => {
+    if (session && !submitting) {
+      redirectToNext();
+    }
+  }, [redirectToNext, session, submitting]);
 
   const submit = async (event: React.FormEvent) => {
     event.preventDefault();
@@ -50,7 +62,7 @@ export function LoginForm() {
       persistSelectedWikiID(result.wikiId);
       await mutate(AUTH_SESSION_KEY);
       toast.success(`已登录为 ${result.displayName}`);
-      router.replace(next);
+      redirectToNext();
     } catch (error: unknown) {
       if (error instanceof ResponseError && error.response.status === 401) {
         toast.error("用户名、邮箱或密码错误");
