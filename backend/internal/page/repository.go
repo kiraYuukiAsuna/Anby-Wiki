@@ -177,6 +177,9 @@ func (r *Repository) SoftDeleteCreatedPageByBatch(
 			  AND (pp.expires_at IS NULL OR pp.expires_at>now())
 		  )
 		  AND NOT EXISTS (
+			SELECT 1 FROM page_share ps WHERE ps.page_id=p.id
+		  )
+		  AND NOT EXISTS (
 			SELECT 1 FROM working_document wd WHERE wd.page_id=p.id
 		  )
 		  AND NOT EXISTS (

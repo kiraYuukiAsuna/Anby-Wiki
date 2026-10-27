@@ -54,7 +54,6 @@ import { fromAst } from "@/lib/editor/fromAst";
 import { createAdapterState, type AdapterState } from "@/lib/editor/ids";
 import {
   getSelectedPageReference,
-  insertDatabaseMention,
   insertDateMention,
   insertExternalLink,
   insertPersonMention,
@@ -549,9 +548,6 @@ export function BlockEditor({
             }
             onInsertDate={(date, endDate, displayText) =>
               insertDateMention(editor, date, endDate, displayText)
-            }
-            onInsertDatabase={(datasetId, displayText) =>
-              insertDatabaseMention(editor, datasetId, displayText)
             }
           />
         </>

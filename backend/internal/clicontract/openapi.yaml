@@ -258,6 +258,85 @@ paths:
         "403": { $ref: "#/components/responses/Forbidden" }
         "404": { $ref: "#/components/responses/NotFound" }
         "409": { $ref: "#/components/responses/Conflict" }
+  /api/v1/pages/{id}/shares:
+    get:
+      operationId: listPageShares
+      tags: [wiki]
+      summary: 列出当前页面的单文档分享对象
+      description: 仅当前 Wiki admin 可用；页面分享不写入 actor_role，不授予 Wiki 级可见性。
+      security:
+        - sessionCookie: []
+        - cliBearer: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: string, format: uuid }
+      responses:
+        "200":
+          description: 页面分享对象列表
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/PageShareList" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+    put:
+      operationId: upsertPageShare
+      tags: [wiki]
+      summary: 分享当前页面给本地账号
+      description: 按用户名、邮箱或 Actor ID 查找 active 本地账号；幂等写入页面级 viewer/editor。
+      security:
+        - sessionCookie: []
+        - cliBearer: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: string, format: uuid }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/UpsertPageShareRequest" }
+      responses:
+        "200":
+          description: 写入后的页面分享快照
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/PageShareMutationResult" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "422": { $ref: "#/components/responses/UnprocessableEntity" }
+  /api/v1/pages/{id}/shares/{actor_id}:
+    delete:
+      operationId: removePageShare
+      tags: [wiki]
+      summary: 取消当前页面对指定账号的分享
+      description: 删除 page_share 记录；不会删除账号，也不会影响其个人 Wiki 或 Wiki 成员角色。
+      security:
+        - sessionCookie: []
+        - cliBearer: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: string, format: uuid }
+        - name: actor_id
+          in: path
+          required: true
+          schema: { type: string, format: uuid }
+      responses:
+        "200":
+          description: 移除结果
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/PageShareRemovalResult" }
+        "400": { $ref: "#/components/responses/BadRequest" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
   /api/v1/account/profile:
     get:
       operationId: getAccountProfile
@@ -852,6 +931,7 @@ paths:
   /api/v1/datasets/{id}:
     get:
       operationId: getDataset
+      x-anby-web-owned: false
       tags: [datasets]
       summary: 读取 Dataset 定义
       parameters:
@@ -867,6 +947,7 @@ paths:
   /api/v1/datasets/{id}/records:
     get:
       operationId: listDatasetRecords
+      x-anby-web-owned: false
       tags: [datasets]
       summary: 按稳定默认顺序列出 DatasetRecord
       parameters:
@@ -883,6 +964,7 @@ paths:
         "404": { $ref: "#/components/responses/NotFound" }
     post:
       operationId: createDatasetRecord
+      x-anby-web-owned: false
       tags: [datasets]
       summary: 创建经 Dataset Schema 校验的记录
       security:
@@ -908,6 +990,7 @@ paths:
   /api/v1/datasets/{id}/views:
     get:
       operationId: listDatasetViews
+      x-anby-web-owned: false
       tags: [datasets]
       summary: 列出 Dataset 的保存视图
       parameters:
@@ -921,6 +1004,7 @@ paths:
         "404": { $ref: "#/components/responses/NotFound" }
     post:
       operationId: createDatasetView
+      x-anby-web-owned: false
       tags: [datasets]
       summary: 创建筛选、排序与分组视图
       security:
@@ -946,6 +1030,7 @@ paths:
   /api/v1/dataset-records/{id}:
     put:
       operationId: updateDatasetRecord
+      x-anby-web-owned: false
       tags: [datasets]
       summary: 更新记录并重新执行 Dataset Schema 校验
       security:
@@ -971,6 +1056,7 @@ paths:
   /api/v1/dataset-views/{id}:
     get:
       operationId: getDatasetView
+      x-anby-web-owned: false
       tags: [datasets]
       summary: 读取保存的 DatasetView
       parameters:
@@ -985,6 +1071,7 @@ paths:
   /api/v1/dataset-views/{id}/records:
     get:
       operationId: queryDatasetView
+      x-anby-web-owned: false
       tags: [datasets]
       summary: 执行保存视图的筛选、排序与分组
       parameters:
@@ -1002,6 +1089,7 @@ paths:
   /api/v1/dataset-views/{id}/query:
     post:
       operationId: queryDatasetViewWithFilter
+      x-anby-web-owned: false
       tags: [datasets]
       summary: 使用运行时过滤器执行保存视图
       parameters:
@@ -1025,6 +1113,7 @@ paths:
   /api/v1/public/dataset-forms/{id}:
     get:
       operationId: getPublicDatasetForm
+      x-anby-web-owned: false
       tags: [datasets]
       summary: 读取当前 Wiki 已启用的 Dataset Form 定义
       parameters:
@@ -1039,6 +1128,7 @@ paths:
   /api/v1/public/dataset-forms/{id}/submissions:
     post:
       operationId: submitPublicDatasetForm
+      x-anby-web-owned: false
       tags: [datasets]
       summary: 向当前 Wiki 已启用的 Form 提交记录
       parameters:
@@ -2571,14 +2661,22 @@ paths:
   /api/v1/pages:
     get:
       operationId: listPublishedPages
-      summary: 浏览已发布百科页面目录
+      summary: 浏览百科页面目录
       description: |
-        只返回当前登录 Wiki 中未删除、属于内容命名空间且已有 Current Revision 的页面；
+        返回当前登录 Wiki 中未删除、属于内容命名空间的页面目录。status=published
+        只返回已有 Current Revision 的页面；status=draft 返回已创建但尚未发布的页面。
         recent 按最近更新倒序，title 按规范化标题升序，均使用稳定游标分页。
       tags: [reading]
       parameters:
         - $ref: "#/components/parameters/Cursor"
         - $ref: "#/components/parameters/PageSize"
+        - name: status
+          in: query
+          required: false
+          schema:
+            type: string
+            enum: [published, draft]
+            default: published
         - name: sort
           in: query
           required: false
@@ -2588,7 +2686,7 @@ paths:
             default: recent
       responses:
         "200":
-          description: 已发布页面目录
+          description: 页面目录
           content:
             application/json:
               schema: { $ref: "#/components/schemas/PageCatalogPage" }
@@ -4780,7 +4878,7 @@ components:
           type: array
           items:
             type: string
-            enum: [editor, reviewer, applier, admin]
+            enum: [editor, reviewer, applier, admin, page_viewer, page_editor]
     AccountProfile:
       type: object
       additionalProperties: false
@@ -6188,6 +6286,73 @@ components:
         removed:
           type: boolean
           description: false 表示该 Actor 已不在当前 Wiki 成员列表中。
+    UpsertPageShareRequest:
+      type: object
+      additionalProperties: false
+      required: [identifier, role_key]
+      properties:
+        identifier:
+          type: string
+          minLength: 1
+          maxLength: 254
+          description: 用户名、邮箱或 Actor ID。
+        role_key:
+          type: string
+          enum: [viewer, editor]
+          description: viewer 只读当前页面；editor 可编辑当前页面正文。
+    PageShare:
+      type: object
+      additionalProperties: false
+      required:
+        - actor_id
+        - username
+        - email
+        - display_name
+        - status
+        - role_key
+        - granted_by
+        - created_at
+        - updated_at
+      properties:
+        actor_id: { type: string, format: uuid }
+        username: { type: string }
+        email: { type: string, format: email }
+        display_name: { type: string }
+        status:
+          type: string
+          enum: [active, disabled]
+        role_key:
+          type: string
+          enum: [viewer, editor]
+        granted_by: { type: string, format: uuid }
+        created_at: { type: string, format: date-time }
+        updated_at: { type: string, format: date-time }
+    PageShareList:
+      type: object
+      additionalProperties: false
+      required: [items]
+      properties:
+        items:
+          type: array
+          items: { $ref: "#/components/schemas/PageShare" }
+    PageShareMutationResult:
+      type: object
+      additionalProperties: false
+      required: [share, changed]
+      properties:
+        share: { $ref: "#/components/schemas/PageShare" }
+        changed:
+          type: boolean
+          description: false 表示本次分享角色未变化。
+    PageShareRemovalResult:
+      type: object
+      additionalProperties: false
+      required: [actor_id, removed]
+      properties:
+        actor_id: { type: string, format: uuid }
+        removed:
+          type: boolean
+          description: false 表示该 Actor 已不在当前页面分享列表中。
     AdminUser:
       type: object
       required: [actor_id, username, email, display_name, status, roles, created_at]

@@ -11,6 +11,7 @@ import (
 	"github.com/google/uuid"
 
 	"github.com/anby/wiki/backend/internal/ast"
+	"github.com/anby/wiki/backend/internal/governance"
 	"github.com/anby/wiki/backend/internal/page"
 	"github.com/anby/wiki/backend/internal/platform/httpx"
 	"github.com/anby/wiki/backend/internal/projection"
@@ -21,6 +22,7 @@ type ReadAPI struct {
 	pages    *page.Service
 	sections *projection.Queries
 	dynamic  render.DynamicRenderer
+	auth     *governance.AuthorizationService
 }
 
 func NewReadAPI(
@@ -40,6 +42,11 @@ func (a *ReadAPI) WithDynamicRenderer(
 	dynamic render.DynamicRenderer,
 ) *ReadAPI {
 	a.dynamic = dynamic
+	return a
+}
+
+func (a *ReadAPI) WithAuthorization(auth *governance.AuthorizationService) *ReadAPI {
+	a.auth = auth
 	return a
 }
 
@@ -87,17 +94,48 @@ type pageCatalogResponse struct {
 
 // ---- handlers ----
 
-// listPages GET /api/v1/pages?sort=&cursor=&page_size= exposes the published
+// listPages GET /api/v1/pages?status=&sort=&cursor=&page_size= exposes the
 // Page directory used by the Wiki home and all-pages browser.
 func (a *ReadAPI) listPages(w http.ResponseWriter, r *http.Request) {
 	limit, ok := pageSizeFrom(w, r)
 	if !ok {
 		return
 	}
-	result, err := a.pages.ListPublishedPages(
-		r.Context(), wikiIDFromRequest(r), r.URL.Query().Get("sort"),
-		r.URL.Query().Get("cursor"), limit,
-	)
+	wikiID := wikiIDFromRequest(r)
+	var result *page.CatalogPage
+	var err error
+	if a.auth == nil {
+		result, err = a.pages.ListCatalogPages(
+			r.Context(), wikiID, r.URL.Query().Get("status"),
+			r.URL.Query().Get("sort"),
+			r.URL.Query().Get("cursor"), limit,
+		)
+	} else {
+		actorID, ok := actorIDFrom(w, r)
+		if !ok {
+			return
+		}
+		hasWikiAccess, accessErr := a.auth.HasWikiAccess(
+			r.Context(), actorID, wikiID,
+		)
+		if accessErr != nil {
+			serviceError(w, r, accessErr)
+			return
+		}
+		if hasWikiAccess {
+			result, err = a.pages.ListCatalogPages(
+				r.Context(), wikiID, r.URL.Query().Get("status"),
+				r.URL.Query().Get("sort"),
+				r.URL.Query().Get("cursor"), limit,
+			)
+		} else {
+			result, err = a.pages.ListSharedCatalogPages(
+				r.Context(), wikiID, actorID, r.URL.Query().Get("status"),
+				r.URL.Query().Get("sort"),
+				r.URL.Query().Get("cursor"), limit,
+			)
+		}
+	}
 	if err != nil {
 		serviceError(w, r, err)
 		return
@@ -151,6 +189,9 @@ func (a *ReadAPI) getPageByID(w http.ResponseWriter, r *http.Request) {
 		httpx.WriteError(w, r, http.StatusGone, httpx.CodeGone, "页面已删除: id="+p.ID.String())
 		return
 	}
+	if !a.authorizeReadPage(w, r, p.ID) {
+		return
+	}
 	a.respondPage(w, r, p, false, "")
 }
 
@@ -177,6 +218,9 @@ func (a *ReadAPI) respondPage(w http.ResponseWriter, r *http.Request, from *page
 		return
 	}
 	final := resolution.Page
+	if !a.authorizeReadPage(w, r, final.ID) {
+		return
+	}
 
 	resp := pageWithContentResponse{
 		Page:       toPageResponse(final),
@@ -279,4 +323,21 @@ func (a *ReadAPI) renderHTML(r *http.Request, pageID, revisionID uuid.UUID, snap
 		)
 	}
 	return render.RenderHTML(doc)
+}
+
+func (a *ReadAPI) authorizeReadPage(w http.ResponseWriter, r *http.Request, pageID uuid.UUID) bool {
+	if a.auth == nil {
+		return true
+	}
+	actorID, ok := actorIDFrom(w, r)
+	if !ok {
+		return false
+	}
+	if err := a.auth.CheckReadPage(
+		r.Context(), actorID, wikiIDFromRequest(r), pageID,
+	); err != nil {
+		governanceError(w, r, err)
+		return false
+	}
+	return true
 }

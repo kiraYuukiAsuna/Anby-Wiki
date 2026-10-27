@@ -290,6 +290,12 @@ func NewRouter(logger *slog.Logger, deps Deps, writeAPI *WriteAPI, readAPI *Read
 					)
 				}
 				if governanceAPI.userAdmin != nil {
+					r.Get("/pages/{id}/shares", governanceAPI.listPageShares)
+					r.Put("/pages/{id}/shares", governanceAPI.upsertPageShare)
+					r.Delete(
+						"/pages/{id}/shares/{actor_id}",
+						governanceAPI.removePageShare,
+					)
 					r.Get("/wiki/members", governanceAPI.listWikiMembers)
 					r.Post("/wiki/members", governanceAPI.addWikiMember)
 					r.Delete(

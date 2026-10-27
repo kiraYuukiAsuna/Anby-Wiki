@@ -16,6 +16,11 @@ type addWikiMemberRequest struct {
 	RoleKeys   []string `json:"role_keys"`
 }
 
+type upsertPageShareRequest struct {
+	Identifier string `json:"identifier"`
+	RoleKey    string `json:"role_key"`
+}
+
 func (a *GovernanceAPI) listAdminUsers(w http.ResponseWriter, r *http.Request) {
 	actorID, ok := actorIDFrom(w, r)
 	if !ok {
@@ -221,6 +226,72 @@ func (a *GovernanceAPI) removeWikiMember(w http.ResponseWriter, r *http.Request)
 	httpx.WriteJSON(w, http.StatusOK, result)
 }
 
+func (a *GovernanceAPI) listPageShares(w http.ResponseWriter, r *http.Request) {
+	actorID, ok := actorIDFrom(w, r)
+	if !ok {
+		return
+	}
+	pageID, ok := pageIDFrom(w, r)
+	if !ok {
+		return
+	}
+	items, err := a.userAdmin.ListPageShares(
+		r.Context(), wikiIDFromRequest(r), actorID, pageID,
+	)
+	if err != nil {
+		governanceError(w, r, err)
+		return
+	}
+	httpx.WriteJSON(w, http.StatusOK, items)
+}
+
+func (a *GovernanceAPI) upsertPageShare(w http.ResponseWriter, r *http.Request) {
+	actorID, ok := actorIDFrom(w, r)
+	if !ok {
+		return
+	}
+	pageID, ok := pageIDFrom(w, r)
+	if !ok {
+		return
+	}
+	var payload upsertPageShareRequest
+	if !decodeJSON(w, r, &payload) {
+		return
+	}
+	result, err := a.userAdmin.UpsertPageShare(
+		r.Context(), wikiIDFromRequest(r), actorID, pageID,
+		payload.Identifier, payload.RoleKey,
+	)
+	if err != nil {
+		governanceError(w, r, err)
+		return
+	}
+	httpx.WriteJSON(w, http.StatusOK, result)
+}
+
+func (a *GovernanceAPI) removePageShare(w http.ResponseWriter, r *http.Request) {
+	actorID, ok := actorIDFrom(w, r)
+	if !ok {
+		return
+	}
+	pageID, ok := pageIDFrom(w, r)
+	if !ok {
+		return
+	}
+	targetActorID, ok := governancePathID(w, r, "actor_id")
+	if !ok {
+		return
+	}
+	result, err := a.userAdmin.RemovePageShare(
+		r.Context(), wikiIDFromRequest(r), actorID, pageID, targetActorID,
+	)
+	if err != nil {
+		governanceError(w, r, err)
+		return
+	}
+	httpx.WriteJSON(w, http.StatusOK, result)
+}
+
 func isAdminUserNotFound(err error) bool {
 	return errors.Is(err, governance.ErrAdminUserNotFound) ||
 		errors.Is(err, governance.ErrAdminRoleNotFound)
@@ -229,4 +300,8 @@ func isAdminUserNotFound(err error) bool {
 func isWikiMemberNotFound(err error) bool {
 	return errors.Is(err, governance.ErrWikiMemberNotFound) ||
 		errors.Is(err, governance.ErrAdminRoleNotFound)
+}
+
+func isPageShareNotFound(err error) bool {
+	return errors.Is(err, governance.ErrPageShareNotFound)
 }

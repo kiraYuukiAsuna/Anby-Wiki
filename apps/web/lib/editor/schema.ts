@@ -551,7 +551,7 @@ const datasetViewSpec = createBlockSpec(
       const dom = window.document.createElement("div");
       dom.className = "ast-dataset-view";
       dom.dataset.datasetViewId = block.props.datasetViewId;
-      dom.textContent = "可查询数据视图";
+      dom.textContent = "旧结构化视图已停用";
       return { dom };
     },
   },

@@ -6,7 +6,6 @@ import {
   AtSign,
   Check,
   ChevronRight,
-  Database,
   ExternalLink,
   Info,
   OctagonAlert,
@@ -596,24 +595,12 @@ export function BlockView({
     }
     case "dataset_view":
       return (
-        <Link
-          href={`/datasets/views/${block.dataset_view_id}`}
-          className="group my-5 flex items-center gap-3 rounded-2xl border border-cyan-200 bg-cyan-50/60 p-4 transition hover:border-cyan-300 hover:bg-cyan-50"
+        <div
+          className="my-5 rounded-lg border border-dashed bg-muted/40 p-4 text-sm text-muted-foreground"
+          data-retired-block="dataset_view"
         >
-          <Database className="size-5 text-cyan-700" aria-hidden />
-          <span>
-            <span className="block text-sm font-semibold text-cyan-950">
-              数据集视图
-            </span>
-            <span className="mt-0.5 block text-xs text-cyan-700">
-              打开筛选、排序与聚合视图
-            </span>
-          </span>
-          <ExternalLink
-            className="ml-auto size-4 text-cyan-700 transition-transform group-hover:translate-x-0.5"
-            aria-hidden
-          />
-        </Link>
+          此旧结构化视图已停用
+        </div>
       );
     case "embed": {
       const href = safeHttpUrl(block.url);
@@ -903,14 +890,12 @@ export function InlineNodeView({
       );
     case "database_mention":
       return (
-        <Link
-          href={`/datasets/${node.dataset_id}`}
+        <span
           data-database-mention=""
-          className="mx-0.5 inline-flex items-center gap-0.5 rounded bg-cyan-100 px-1.5 py-0.5 text-sm font-medium text-cyan-900 underline-offset-4 hover:underline"
+          className="mx-0.5 rounded bg-muted px-1.5 py-0.5 text-sm font-medium text-muted-foreground"
         >
-          <Database className="size-3" aria-hidden />
           {node.display_text}
-        </Link>
+        </span>
       );
   }
 }

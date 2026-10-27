@@ -5,7 +5,6 @@ import { useEffect } from "react";
 import { toast } from "sonner";
 
 import {
-  datasetsApi,
   governanceApi,
   pagesApi,
   readingApi,
@@ -107,19 +106,6 @@ async function insertBlocks(action: Extract<ButtonAction, { type: "insert_blocks
   toast.success("插入内容已提交治理审核");
 }
 
-async function updateRecord(
-  action: Extract<ButtonAction, { type: "update_dataset_record" }>,
-) {
-  await datasetsApi().updateDatasetRecord({
-    id: action.record_id,
-    writeDatasetRecordRequest: {
-      values: action.values,
-      entityId: action.entity_id ?? undefined,
-    },
-  });
-  toast.success("数据记录已更新");
-}
-
 function showNotification(
   action: Extract<ButtonAction, { type: "notification" }>,
 ) {
@@ -152,7 +138,7 @@ async function executeActions(
         await insertBlocks(action);
         break;
       case "update_dataset_record":
-        await updateRecord(action);
+        toast.warning("这个旧按钮操作已停用");
         break;
       case "notification":
         showNotification(action);

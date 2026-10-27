@@ -361,11 +361,11 @@ export function SearchExplorer({
                 onChange={(event) => setInput(event.target.value)}
                 className="h-12 pl-10 text-base"
                 placeholder="试试：擅长机械维修的角色、可验证知识、都市奇幻作品…"
-                aria-label="探索 Wiki"
+                aria-label="搜索 Wiki"
               />
             </div>
             <Button type="submit" size="lg" className="h-12 px-5">
-              探索
+              搜索
             </Button>
           </form>
           {validationMessage ? (

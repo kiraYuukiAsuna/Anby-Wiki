@@ -855,7 +855,6 @@
   color: var(--muted-foreground);
 }
 
-.wiki-rendered .dataset-view,
 .wiki-rendered .external-embed,
 .wiki-rendered .component-unavailable {
   margin-block: 1rem;

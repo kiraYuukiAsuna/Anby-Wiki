@@ -10,6 +10,7 @@ import (
 	"github.com/go-chi/chi/v5"
 	"github.com/google/uuid"
 
+	"github.com/anby/wiki/backend/internal/governance"
 	"github.com/anby/wiki/backend/internal/page"
 	"github.com/anby/wiki/backend/internal/platform/httpx"
 )
@@ -17,11 +18,17 @@ import (
 // HistoryAPI 历史 API 依赖集合：Page 领域服务。
 type HistoryAPI struct {
 	pages *page.Service
+	auth  *governance.AuthorizationService
 }
 
 // NewHistoryAPI 装配历史 API。
 func NewHistoryAPI(pages *page.Service) *HistoryAPI {
 	return &HistoryAPI{pages: pages}
+}
+
+func (a *HistoryAPI) WithAuthorization(auth *governance.AuthorizationService) *HistoryAPI {
+	a.auth = auth
+	return a
 }
 
 // ---- 请求/响应 DTO（与 contracts/openapi/openapi.yaml 对应，契约为准）----
@@ -141,6 +148,15 @@ func (a *HistoryAPI) rollback(w http.ResponseWriter, r *http.Request) {
 		httpx.WriteError(w, r, http.StatusBadRequest, httpx.CodeBadRequest, "target_revision_id 为必填字段")
 		return
 	}
+	if a.auth != nil {
+		if err := a.auth.Check(
+			r.Context(), actorID, wikiIDFromRequest(r),
+			governance.ActionEdit, &pageID,
+		); err != nil {
+			governanceError(w, r, err)
+			return
+		}
+	}
 	rev, err := a.pages.Rollback(r.Context(), page.RollbackParams{
 		PageID:           pageID,
 		TargetRevisionID: req.TargetRevisionID,
@@ -170,6 +186,18 @@ func (a *HistoryAPI) currentPageID(
 	); err != nil {
 		serviceError(w, r, err)
 		return uuid.Nil, false
+	}
+	if a.auth != nil {
+		actorID, ok := actorIDFrom(w, r)
+		if !ok {
+			return uuid.Nil, false
+		}
+		if err := a.auth.CheckReadPage(
+			r.Context(), actorID, wikiIDFromRequest(r), pageID,
+		); err != nil {
+			governanceError(w, r, err)
+			return uuid.Nil, false
+		}
 	}
 	return pageID, true
 }

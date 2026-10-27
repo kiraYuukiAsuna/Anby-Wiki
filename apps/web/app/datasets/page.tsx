@@ -1,5 +1,5 @@
 import { redirect } from "next/navigation";
 
-export default function DatasetsPage() {
+export default function RetiredStructuredDataPage() {
   redirect("/explore");
 }

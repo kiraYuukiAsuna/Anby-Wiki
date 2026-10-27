@@ -4,11 +4,13 @@ package main
 import (
 	"errors"
 	"net/http"
+	"sort"
 	"strconv"
 	"strings"
 
 	"github.com/google/uuid"
 
+	"github.com/anby/wiki/backend/internal/governance"
 	"github.com/anby/wiki/backend/internal/platform/httpx"
 	wikisearch "github.com/anby/wiki/backend/internal/search"
 )
@@ -16,6 +18,7 @@ import (
 type SearchAPI struct {
 	search             wikisearch.SearchAdapter
 	titleAliasFallback wikisearch.SearchAdapter
+	auth               *governance.AuthorizationService
 }
 
 // NewSearchAPI 装配搜索 API。
@@ -27,6 +30,11 @@ func NewSearchAPI(adapter wikisearch.SearchAdapter) *SearchAPI {
 // unpublished pages. Full-text queries continue to read only the projection.
 func (a *SearchAPI) WithTitleAliasFallback(adapter wikisearch.SearchAdapter) *SearchAPI {
 	a.titleAliasFallback = adapter
+	return a
+}
+
+func (a *SearchAPI) WithAuthorization(auth *governance.AuthorizationService) *SearchAPI {
+	a.auth = auth
 	return a
 }
 
@@ -143,6 +151,41 @@ func (a *SearchAPI) searchPages(w http.ResponseWriter, r *http.Request) {
 		serviceError(w, r, err)
 		return
 	}
+	if a.auth != nil {
+		actorID, ok := actorIDFrom(w, r)
+		if !ok {
+			return
+		}
+		hasWikiAccess, accessErr := a.auth.HasWikiAccess(
+			r.Context(), actorID, wikiIDFromRequest(r),
+		)
+		if accessErr != nil {
+			serviceError(w, r, accessErr)
+			return
+		}
+		if !hasWikiAccess {
+			sharedIDs, shareErr := a.auth.SharedPageIDs(
+				r.Context(), actorID, wikiIDFromRequest(r),
+			)
+			if shareErr != nil {
+				serviceError(w, r, shareErr)
+				return
+			}
+			shared := make(map[uuid.UUID]bool, len(sharedIDs))
+			for _, id := range sharedIDs {
+				shared[id] = true
+			}
+			hits := make([]wikisearch.Hit, 0, len(result.Hits))
+			for _, hit := range result.Hits {
+				if shared[hit.PageID] {
+					hits = append(hits, hit)
+				}
+			}
+			result.Hits = hits
+			result.Total = len(hits)
+			result.Facets = searchFacetsForHits(hits)
+		}
+	}
 
 	resp := pageSearchResponse{
 		Items: make([]searchHitResponse, 0, len(result.Hits)),
@@ -168,6 +211,39 @@ func (a *SearchAPI) searchPages(w http.ResponseWriter, r *http.Request) {
 		})
 	}
 	httpx.WriteJSON(w, http.StatusOK, resp)
+}
+
+func searchFacetsForHits(hits []wikisearch.Hit) wikisearch.Facets {
+	namespaceCounts := map[string]int{}
+	languageCounts := map[string]int{}
+	entityTypeCounts := map[string]int{}
+	for _, hit := range hits {
+		if hit.Namespace != "" {
+			namespaceCounts[hit.Namespace]++
+		}
+		if hit.Language != "" {
+			languageCounts[hit.Language]++
+		}
+		if hit.EntityType != "" {
+			entityTypeCounts[hit.EntityType]++
+		}
+	}
+	return wikisearch.Facets{
+		Namespaces:  searchFacetValues(namespaceCounts),
+		Languages:   searchFacetValues(languageCounts),
+		EntityTypes: searchFacetValues(entityTypeCounts),
+	}
+}
+
+func searchFacetValues(counts map[string]int) []wikisearch.FacetValue {
+	values := make([]wikisearch.FacetValue, 0, len(counts))
+	for value, count := range counts {
+		values = append(values, wikisearch.FacetValue{Value: value, Count: count})
+	}
+	sort.Slice(values, func(i, j int) bool {
+		return values[i].Value < values[j].Value
+	})
+	return values
 }
 
 func (a *SearchAPI) capabilities(w http.ResponseWriter, _ *http.Request) {

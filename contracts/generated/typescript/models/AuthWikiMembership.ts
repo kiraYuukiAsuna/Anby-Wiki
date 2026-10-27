@@ -53,7 +53,9 @@ export const AuthWikiMembershipRolesEnum = {
     Editor: 'editor',
     Reviewer: 'reviewer',
     Applier: 'applier',
-    Admin: 'admin'
+    Admin: 'admin',
+    PageViewer: 'page_viewer',
+    PageEditor: 'page_editor'
 } as const;
 export type AuthWikiMembershipRolesEnum = typeof AuthWikiMembershipRolesEnum[keyof typeof AuthWikiMembershipRolesEnum];
 

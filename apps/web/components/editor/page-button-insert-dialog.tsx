@@ -22,7 +22,7 @@ import {
 } from "@/lib/ast/schema";
 import { newBlockId } from "@/lib/editor/ids";
 
-type ActionKind = ButtonAction["type"];
+type ActionKind = Exclude<ButtonAction["type"], "update_dataset_record">;
 
 export function PageButtonInsertDialog({
   open,
@@ -44,9 +44,6 @@ export function PageButtonInsertDialog({
   const [kind, setKind] = useState<ActionKind>("notification");
   const [targetPageId, setTargetPageId] = useState(currentPageId ?? "");
   const [insertText, setInsertText] = useState("");
-  const [recordId, setRecordId] = useState("");
-  const [entityId, setEntityId] = useState("");
-  const [valuesJSON, setValuesJSON] = useState("{}");
   const [message, setMessage] = useState("");
   const [tone, setTone] = useState("success");
   const [webhookURL, setWebhookURL] = useState("");
@@ -72,14 +69,6 @@ export function PageButtonInsertDialog({
                 content: [{ type: "text", text: insertText }],
               },
             ],
-          };
-          break;
-        case "update_dataset_record":
-          action = {
-            type: kind,
-            record_id: recordId.trim(),
-            ...(entityId.trim() ? { entity_id: entityId.trim() } : {}),
-            values: JSON.parse(valuesJSON),
           };
           break;
         case "notification":
@@ -146,7 +135,6 @@ export function PageButtonInsertDialog({
             >
               <option value="notification">显示通知</option>
               <option value="insert_blocks">插入内容块</option>
-              <option value="update_dataset_record">修改数据记录</option>
               <option value="webhook">发送 Webhook</option>
             </select>
           </Label>
@@ -189,32 +177,6 @@ export function PageButtonInsertDialog({
                 <Textarea
                   value={insertText}
                   onChange={(event) => setInsertText(event.target.value)}
-                />
-              </Label>
-            </>
-          ) : null}
-          {kind === "update_dataset_record" ? (
-            <>
-              <Label>
-                记录 ID
-                <Input
-                  value={recordId}
-                  onChange={(event) => setRecordId(event.target.value)}
-                />
-              </Label>
-              <Label>
-                Entity ID（可选）
-                <Input
-                  value={entityId}
-                  onChange={(event) => setEntityId(event.target.value)}
-                />
-              </Label>
-              <Label>
-                Values JSON
-                <Textarea
-                  className="font-mono"
-                  value={valuesJSON}
-                  onChange={(event) => setValuesJSON(event.target.value)}
                 />
               </Label>
             </>

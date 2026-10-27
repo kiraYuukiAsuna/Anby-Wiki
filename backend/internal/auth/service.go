@@ -40,6 +40,12 @@ const (
 	argonKeyLength   = 32
 )
 
+const (
+	wikiMembershipRolePageViewer = "page_viewer"
+	wikiMembershipRolePageEditor = "page_editor"
+	pageShareRoleEditor          = "editor"
+)
+
 var (
 	usernamePattern = regexp.MustCompile(`^[a-z0-9][a-z0-9_.-]{2,31}$`)
 	dummyHashOnce   sync.Once
@@ -451,6 +457,13 @@ func (s *Service) resolveActorPrincipal(
 					SELECT 1 FROM actor_role ar
 					WHERE ar.actor_id=a.id AND ar.wiki_id=w.id
 				)
+				OR EXISTS (
+					SELECT 1
+					FROM page_share ps
+					JOIN page p ON p.id=ps.page_id
+					WHERE ps.actor_id=a.id AND p.wiki_id=w.id
+					  AND p.deleted_at IS NULL
+				)
 			)`, actorID, targetWikiID).Scan(
 		&principal.ActorID, &principal.WikiID, &principal.WikiName,
 		&principal.MainNamespaceID,
@@ -487,16 +500,38 @@ func (s *Service) ListWikiMemberships(ctx context.Context, actorID uuid.UUID) ([
 		return nil, ErrUnauthenticated
 	}
 	rows, err := s.pool.Query(ctx, `SELECT
-		w.id,w.name,n.id,r.role_key
-		FROM actor_role ar
-		JOIN actor a ON a.id=ar.actor_id
-		JOIN wiki_site w ON w.id=ar.wiki_id
-		JOIN namespace n ON n.wiki_id=w.id AND n.namespace_key='main'
-		JOIN role r ON r.id=ar.role_id
-		LEFT JOIN local_account la ON la.actor_id=a.id
-		WHERE ar.actor_id=$1 AND a.status='active'
-			AND (la.id IS NULL OR la.status='active')
-		ORDER BY lower(w.name),w.id,r.role_key`, actorID)
+		wiki_id,wiki_name,namespace_id,role_key
+		FROM (
+			SELECT w.id AS wiki_id,w.name AS wiki_name,n.id AS namespace_id,
+			       r.role_key
+			FROM actor_role ar
+			JOIN actor a ON a.id=ar.actor_id
+			JOIN wiki_site w ON w.id=ar.wiki_id
+			JOIN namespace n ON n.wiki_id=w.id AND n.namespace_key='main'
+			JOIN role r ON r.id=ar.role_id
+			LEFT JOIN local_account la ON la.actor_id=a.id
+			WHERE ar.actor_id=$1 AND a.status='active'
+				AND (la.id IS NULL OR la.status='active')
+			UNION
+			SELECT w.id AS wiki_id,w.name AS wiki_name,n.id AS namespace_id,
+			       CASE
+			         WHEN bool_or(ps.role_key=$4) THEN $2
+			         ELSE $3
+			       END AS role_key
+			FROM page_share ps
+			JOIN page p ON p.id=ps.page_id
+			JOIN wiki_site w ON w.id=p.wiki_id
+			JOIN namespace n ON n.wiki_id=w.id AND n.namespace_key='main'
+			JOIN actor a ON a.id=ps.actor_id
+			LEFT JOIN local_account la ON la.actor_id=a.id
+			WHERE ps.actor_id=$1 AND p.deleted_at IS NULL
+				AND a.status='active'
+				AND (la.id IS NULL OR la.status='active')
+			GROUP BY w.id,w.name,n.id
+		) memberships
+		ORDER BY lower(wiki_name),wiki_id,role_key`,
+		actorID, wikiMembershipRolePageEditor, wikiMembershipRolePageViewer,
+		pageShareRoleEditor)
 	if err != nil {
 		return nil, fmt.Errorf("auth: list wiki memberships: %w", err)
 	}

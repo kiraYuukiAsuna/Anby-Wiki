@@ -14,6 +14,7 @@ import (
 	"github.com/go-chi/chi/v5"
 	"github.com/google/uuid"
 
+	"github.com/anby/wiki/backend/internal/governance"
 	"github.com/anby/wiki/backend/internal/page"
 	"github.com/anby/wiki/backend/internal/platform/httpx"
 	"github.com/anby/wiki/backend/internal/projection"
@@ -25,6 +26,7 @@ import (
 type ProjectionAPI struct {
 	pages   *page.Service
 	queries *projection.Queries
+	auth    *governance.AuthorizationService
 }
 
 // NewProjectionAPI 装配投影查询 API。
@@ -33,6 +35,11 @@ func NewProjectionAPI(
 	queries *projection.Queries,
 ) *ProjectionAPI {
 	return &ProjectionAPI{pages: pages, queries: queries}
+}
+
+func (a *ProjectionAPI) WithAuthorization(auth *governance.AuthorizationService) *ProjectionAPI {
+	a.auth = auth
+	return a
 }
 
 // ---- 响应 DTO（与 contracts/openapi/openapi.yaml 对应，契约为准）----
@@ -228,6 +235,16 @@ func (a *ProjectionAPI) listBacklinks(w http.ResponseWriter, r *http.Request) {
 	if !ok {
 		return
 	}
+	fullWikiAccess, ok := a.fullWikiAccess(w, r)
+	if !ok {
+		return
+	}
+	if !fullWikiAccess {
+		httpx.WriteJSON(w, http.StatusOK, backlinkListResponse{
+			Items: []backlinkResponse{},
+		})
+		return
+	}
 	limit, ok := pageSizeFrom(w, r)
 	if !ok {
 		return
@@ -323,6 +340,16 @@ func (a *ProjectionAPI) getReferences(w http.ResponseWriter, r *http.Request) {
 func (a *ProjectionAPI) getRelatedPages(w http.ResponseWriter, r *http.Request) {
 	pageID, ok := a.livePageIDFrom(w, r)
 	if !ok {
+		return
+	}
+	fullWikiAccess, ok := a.fullWikiAccess(w, r)
+	if !ok {
+		return
+	}
+	if !fullWikiAccess {
+		httpx.WriteJSON(w, http.StatusOK, relatedPageListResponse{
+			Ready: true, Items: []relatedPageResponse{},
+		})
 		return
 	}
 	result, err := a.queries.RelatedPages(r.Context(), pageID)
@@ -705,5 +732,33 @@ func (a *ProjectionAPI) livePageIDFrom(w http.ResponseWriter, r *http.Request) (
 		httpx.WriteError(w, r, http.StatusGone, httpx.CodeGone, "页面已删除: id="+p.ID.String())
 		return uuid.Nil, false
 	}
+	if a.auth != nil {
+		actorID, ok := actorIDFrom(w, r)
+		if !ok {
+			return uuid.Nil, false
+		}
+		if err := a.auth.CheckReadPage(
+			r.Context(), actorID, wikiIDFromRequest(r), pageID,
+		); err != nil {
+			governanceError(w, r, err)
+			return uuid.Nil, false
+		}
+	}
 	return pageID, true
+}
+
+func (a *ProjectionAPI) fullWikiAccess(w http.ResponseWriter, r *http.Request) (bool, bool) {
+	if a.auth == nil {
+		return true, true
+	}
+	actorID, ok := actorIDFrom(w, r)
+	if !ok {
+		return false, false
+	}
+	allowed, err := a.auth.HasWikiAccess(r.Context(), actorID, wikiIDFromRequest(r))
+	if err != nil {
+		serviceError(w, r, err)
+		return false, false
+	}
+	return allowed, true
 }

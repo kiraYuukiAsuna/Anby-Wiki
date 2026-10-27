@@ -19,6 +19,26 @@ import {
     AddWikiMemberRequestToJSON,
 } from '../models/AddWikiMemberRequest';
 import {
+    type PageShareList,
+    PageShareListFromJSON,
+    PageShareListToJSON,
+} from '../models/PageShareList';
+import {
+    type PageShareMutationResult,
+    PageShareMutationResultFromJSON,
+    PageShareMutationResultToJSON,
+} from '../models/PageShareMutationResult';
+import {
+    type PageShareRemovalResult,
+    PageShareRemovalResultFromJSON,
+    PageShareRemovalResultToJSON,
+} from '../models/PageShareRemovalResult';
+import {
+    type UpsertPageShareRequest,
+    UpsertPageShareRequestFromJSON,
+    UpsertPageShareRequestToJSON,
+} from '../models/UpsertPageShareRequest';
+import {
     type WikiMemberList,
     WikiMemberListFromJSON,
     WikiMemberListToJSON,
@@ -43,9 +63,18 @@ export interface GrantWikiMemberRoleRequest {
     roleKey: GrantWikiMemberRoleRoleKeyEnum;
 }
 
+export interface ListPageSharesRequest {
+    id: string;
+}
+
 export interface ListWikiMembersRequest {
     search?: string;
     includeDisabled?: boolean;
+}
+
+export interface RemovePageShareRequest {
+    id: string;
+    actorId: string;
 }
 
 export interface RemoveWikiMemberRequest {
@@ -55,6 +84,11 @@ export interface RemoveWikiMemberRequest {
 export interface RevokeWikiMemberRoleRequest {
     actorId: string;
     roleKey: RevokeWikiMemberRoleRoleKeyEnum;
+}
+
+export interface UpsertPageShareOperationRequest {
+    id: string;
+    upsertPageShareRequest: UpsertPageShareRequest;
 }
 
 /**
@@ -183,6 +217,61 @@ export class WikiApi extends runtime.BaseAPI {
     }
 
     /**
+     * Creates request options for listPageShares without sending the request
+     */
+    async listPageSharesRequestOpts(requestParameters: ListPageSharesRequest): Promise<runtime.RequestOpts> {
+        if (requestParameters['id'] == null) {
+            throw new runtime.RequiredError(
+                'id',
+                'Required parameter "id" was null or undefined when calling listPageShares().'
+            );
+        }
+
+        const queryParameters: any = {};
+
+        const headerParameters: runtime.HTTPHeaders = {};
+
+        if (this.configuration && this.configuration.accessToken) {
+            const token = this.configuration.accessToken;
+            const tokenString = await token("cliBearer", []);
+
+            if (tokenString) {
+                headerParameters["Authorization"] = `Bearer ${tokenString}`;
+            }
+        }
+
+        let urlPath = `/api/v1/pages/{id}/shares`;
+        urlPath = urlPath.replace('{id}', encodeURIComponent(String(requestParameters['id'])));
+
+        return {
+            path: urlPath,
+            method: 'GET',
+            headers: headerParameters,
+            query: queryParameters,
+        };
+    }
+
+    /**
+     * 仅当前 Wiki admin 可用；页面分享不写入 actor_role，不授予 Wiki 级可见性。
+     * 列出当前页面的单文档分享对象
+     */
+    async listPageSharesRaw(requestParameters: ListPageSharesRequest, initOverrides?: RequestInit | runtime.InitOverrideFunction): Promise<runtime.ApiResponse<PageShareList>> {
+        const requestOptions = await this.listPageSharesRequestOpts(requestParameters);
+        const response = await this.request(requestOptions, initOverrides);
+
+        return new runtime.JSONApiResponse(response, (jsonValue) => PageShareListFromJSON(jsonValue));
+    }
+
+    /**
+     * 仅当前 Wiki admin 可用；页面分享不写入 actor_role，不授予 Wiki 级可见性。
+     * 列出当前页面的单文档分享对象
+     */
+    async listPageShares(requestParameters: ListPageSharesRequest, initOverrides?: RequestInit | runtime.InitOverrideFunction): Promise<PageShareList> {
+        const response = await this.listPageSharesRaw(requestParameters, initOverrides);
+        return await response.value();
+    }
+
+    /**
      * Creates request options for listWikiMembers without sending the request
      */
     async listWikiMembersRequestOpts(requestParameters: ListWikiMembersRequest): Promise<runtime.RequestOpts> {
@@ -234,6 +323,69 @@ export class WikiApi extends runtime.BaseAPI {
      */
     async listWikiMembers(requestParameters: ListWikiMembersRequest = {}, initOverrides?: RequestInit | runtime.InitOverrideFunction): Promise<WikiMemberList> {
         const response = await this.listWikiMembersRaw(requestParameters, initOverrides);
+        return await response.value();
+    }
+
+    /**
+     * Creates request options for removePageShare without sending the request
+     */
+    async removePageShareRequestOpts(requestParameters: RemovePageShareRequest): Promise<runtime.RequestOpts> {
+        if (requestParameters['id'] == null) {
+            throw new runtime.RequiredError(
+                'id',
+                'Required parameter "id" was null or undefined when calling removePageShare().'
+            );
+        }
+
+        if (requestParameters['actorId'] == null) {
+            throw new runtime.RequiredError(
+                'actorId',
+                'Required parameter "actorId" was null or undefined when calling removePageShare().'
+            );
+        }
+
+        const queryParameters: any = {};
+
+        const headerParameters: runtime.HTTPHeaders = {};
+
+        if (this.configuration && this.configuration.accessToken) {
+            const token = this.configuration.accessToken;
+            const tokenString = await token("cliBearer", []);
+
+            if (tokenString) {
+                headerParameters["Authorization"] = `Bearer ${tokenString}`;
+            }
+        }
+
+        let urlPath = `/api/v1/pages/{id}/shares/{actor_id}`;
+        urlPath = urlPath.replace('{id}', encodeURIComponent(String(requestParameters['id'])));
+        urlPath = urlPath.replace('{actor_id}', encodeURIComponent(String(requestParameters['actorId'])));
+
+        return {
+            path: urlPath,
+            method: 'DELETE',
+            headers: headerParameters,
+            query: queryParameters,
+        };
+    }
+
+    /**
+     * 删除 page_share 记录；不会删除账号，也不会影响其个人 Wiki 或 Wiki 成员角色。
+     * 取消当前页面对指定账号的分享
+     */
+    async removePageShareRaw(requestParameters: RemovePageShareRequest, initOverrides?: RequestInit | runtime.InitOverrideFunction): Promise<runtime.ApiResponse<PageShareRemovalResult>> {
+        const requestOptions = await this.removePageShareRequestOpts(requestParameters);
+        const response = await this.request(requestOptions, initOverrides);
+
+        return new runtime.JSONApiResponse(response, (jsonValue) => PageShareRemovalResultFromJSON(jsonValue));
+    }
+
+    /**
+     * 删除 page_share 记录；不会删除账号，也不会影响其个人 Wiki 或 Wiki 成员角色。
+     * 取消当前页面对指定账号的分享
+     */
+    async removePageShare(requestParameters: RemovePageShareRequest, initOverrides?: RequestInit | runtime.InitOverrideFunction): Promise<PageShareRemovalResult> {
+        const response = await this.removePageShareRaw(requestParameters, initOverrides);
         return await response.value();
     }
 
@@ -352,6 +504,71 @@ export class WikiApi extends runtime.BaseAPI {
      */
     async revokeWikiMemberRole(requestParameters: RevokeWikiMemberRoleRequest, initOverrides?: RequestInit | runtime.InitOverrideFunction): Promise<WikiMemberMutationResult> {
         const response = await this.revokeWikiMemberRoleRaw(requestParameters, initOverrides);
+        return await response.value();
+    }
+
+    /**
+     * Creates request options for upsertPageShare without sending the request
+     */
+    async upsertPageShareRequestOpts(requestParameters: UpsertPageShareOperationRequest): Promise<runtime.RequestOpts> {
+        if (requestParameters['id'] == null) {
+            throw new runtime.RequiredError(
+                'id',
+                'Required parameter "id" was null or undefined when calling upsertPageShare().'
+            );
+        }
+
+        if (requestParameters['upsertPageShareRequest'] == null) {
+            throw new runtime.RequiredError(
+                'upsertPageShareRequest',
+                'Required parameter "upsertPageShareRequest" was null or undefined when calling upsertPageShare().'
+            );
+        }
+
+        const queryParameters: any = {};
+
+        const headerParameters: runtime.HTTPHeaders = {};
+
+        headerParameters['Content-Type'] = 'application/json';
+
+        if (this.configuration && this.configuration.accessToken) {
+            const token = this.configuration.accessToken;
+            const tokenString = await token("cliBearer", []);
+
+            if (tokenString) {
+                headerParameters["Authorization"] = `Bearer ${tokenString}`;
+            }
+        }
+
+        let urlPath = `/api/v1/pages/{id}/shares`;
+        urlPath = urlPath.replace('{id}', encodeURIComponent(String(requestParameters['id'])));
+
+        return {
+            path: urlPath,
+            method: 'PUT',
+            headers: headerParameters,
+            query: queryParameters,
+            body: UpsertPageShareRequestToJSON(requestParameters['upsertPageShareRequest']),
+        };
+    }
+
+    /**
+     * 按用户名、邮箱或 Actor ID 查找 active 本地账号；幂等写入页面级 viewer/editor。
+     * 分享当前页面给本地账号
+     */
+    async upsertPageShareRaw(requestParameters: UpsertPageShareOperationRequest, initOverrides?: RequestInit | runtime.InitOverrideFunction): Promise<runtime.ApiResponse<PageShareMutationResult>> {
+        const requestOptions = await this.upsertPageShareRequestOpts(requestParameters);
+        const response = await this.request(requestOptions, initOverrides);
+
+        return new runtime.JSONApiResponse(response, (jsonValue) => PageShareMutationResultFromJSON(jsonValue));
+    }
+
+    /**
+     * 按用户名、邮箱或 Actor ID 查找 active 本地账号；幂等写入页面级 viewer/editor。
+     * 分享当前页面给本地账号
+     */
+    async upsertPageShare(requestParameters: UpsertPageShareOperationRequest, initOverrides?: RequestInit | runtime.InitOverrideFunction): Promise<PageShareMutationResult> {
+        const response = await this.upsertPageShareRaw(requestParameters, initOverrides);
         return await response.value();
     }
 

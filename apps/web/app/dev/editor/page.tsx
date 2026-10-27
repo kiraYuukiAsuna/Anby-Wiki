@@ -88,12 +88,6 @@ const SAMPLE_AST: Document = parseDocument({
           end_date: "2026-10-22",
           display_text: "2026-10-20 至 2026-10-22",
         },
-        { type: "text", text: "；" },
-        {
-          type: "database_mention",
-          dataset_id: "0198a1b2-c3d4-7e5f-8a9b-0c1d2e3f4b03",
-          display_text: "示例 Dataset",
-        },
         { type: "text", text: "。" },
       ],
     },

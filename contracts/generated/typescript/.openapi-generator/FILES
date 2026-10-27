@@ -242,6 +242,10 @@ docs/PageSearchResults.md
 docs/PageSectionLocator.md
 docs/PageSectionManifest.md
 docs/PageSectionSummary.md
+docs/PageShare.md
+docs/PageShareList.md
+docs/PageShareMutationResult.md
+docs/PageShareRemovalResult.md
 docs/PageWithContent.md
 docs/PageWithContentRedirect.md
 docs/PagesApi.md
@@ -316,6 +320,7 @@ docs/UpdateClaimVerificationRequest.md
 docs/UpdateEntityFederationLinkRequest.md
 docs/UpdateFederatedWikiRequest.md
 docs/UpsertBlockRedirectRequest.md
+docs/UpsertPageShareRequest.md
 docs/WikiApi.md
 docs/WikiComponent.md
 docs/WikiComponentListPage.md
@@ -542,6 +547,10 @@ models/PageSearchResults.ts
 models/PageSectionLocator.ts
 models/PageSectionManifest.ts
 models/PageSectionSummary.ts
+models/PageShare.ts
+models/PageShareList.ts
+models/PageShareMutationResult.ts
+models/PageShareRemovalResult.ts
 models/PageWithContent.ts
 models/PageWithContentRedirect.ts
 models/PreviewDocument.ts
@@ -611,6 +620,7 @@ models/UpdateClaimVerificationRequest.ts
 models/UpdateEntityFederationLinkRequest.ts
 models/UpdateFederatedWikiRequest.ts
 models/UpsertBlockRedirectRequest.ts
+models/UpsertPageShareRequest.ts
 models/WikiComponent.ts
 models/WikiComponentListPage.ts
 models/WikiComponentVersion.ts

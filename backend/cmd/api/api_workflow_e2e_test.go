@@ -146,6 +146,134 @@ func TestAPICLIAuthE2E(t *testing.T) {
 	}
 }
 
+func TestAPIPageSharingE2E(t *testing.T) {
+	baseURL := strings.TrimRight(os.Getenv("API_E2E_BASE_URL"), "/")
+	password := os.Getenv("API_E2E_PASSWORD")
+	if baseURL == "" || password == "" {
+		t.Skip("set API_E2E_BASE_URL and API_E2E_PASSWORD")
+	}
+	runID := strconv.FormatInt(time.Now().UnixNano(), 36)
+	admin, _ := apiE2EAdmin(t, baseURL, password)
+	adminSession := requestE2EMap(t, admin, http.MethodGet,
+		baseURL+"/api/v1/auth/session", nil, http.StatusOK)
+	adminWikiID := e2eUUID(t, adminSession, "wiki_id")
+	viewerUsername := "page_share_" + runID
+	viewer, viewerActorID := registerE2EUser(
+		t, baseURL, viewerUsername, viewerUsername+"@example.invalid", password,
+	)
+
+	sharedPage := requestE2EMap(t, admin, http.MethodPost, baseURL+"/api/v1/pages",
+		map[string]any{
+			"namespace": "main", "title": "Shared " + runID,
+			"language": "zh-Hans", "content_model": "block-v1",
+		}, http.StatusCreated)
+	sharedPageID := e2eUUID(t, sharedPage, "id")
+	otherPage := requestE2EMap(t, admin, http.MethodPost, baseURL+"/api/v1/pages",
+		map[string]any{
+			"namespace": "main", "title": "Private " + runID,
+			"language": "zh-Hans", "content_model": "block-v1",
+		}, http.StatusCreated)
+	otherPageID := e2eUUID(t, otherPage, "id")
+	requestE2EMap(t, admin, http.MethodPost,
+		fmt.Sprintf("%s/api/v1/pages/%s/revisions", baseURL, sharedPageID),
+		map[string]any{
+			"ast":      documentE2E(uuid.New(), "Shared "+runID, "visible"),
+			"summary":  "publish shared page",
+			"is_minor": false,
+		}, http.StatusCreated)
+	requestE2EMap(t, admin, http.MethodPost,
+		fmt.Sprintf("%s/api/v1/pages/%s/revisions", baseURL, otherPageID),
+		map[string]any{
+			"ast":      documentE2E(uuid.New(), "Private "+runID, "hidden"),
+			"summary":  "publish private page",
+			"is_minor": false,
+		}, http.StatusCreated)
+
+	share := requestE2EMap(t, admin, http.MethodPut,
+		fmt.Sprintf("%s/api/v1/pages/%s/shares", baseURL, sharedPageID),
+		map[string]any{"identifier": viewerUsername, "role_key": "viewer"},
+		http.StatusOK)
+	if e2eUUID(t, share["share"].(map[string]any), "actor_id") != viewerActorID {
+		t.Fatalf("share target=%#v want actor %s", share["share"], viewerActorID)
+	}
+	requestE2EMap(t, admin, http.MethodGet,
+		fmt.Sprintf("%s/api/v1/pages/%s/shares", baseURL, sharedPageID),
+		nil, http.StatusOK)
+
+	sharedWikiHeader := http.Header{"X-Wiki-ID": []string{adminWikiID.String()}}
+	session := requestE2EMapHeaders(t, viewer, http.MethodGet,
+		baseURL+"/api/v1/auth/session", nil, sharedWikiHeader, http.StatusOK)
+	if e2eUUID(t, session, "wiki_id") != adminWikiID {
+		t.Fatalf("shared session wiki=%v want %s", session["wiki_id"], adminWikiID)
+	}
+	wikis, ok := session["wikis"].([]any)
+	if !ok {
+		t.Fatalf("session wikis invalid: %#v", session["wikis"])
+	}
+	var sawPageViewer bool
+	for _, raw := range wikis {
+		item, ok := raw.(map[string]any)
+		if !ok || item["wiki_id"] != adminWikiID.String() {
+			continue
+		}
+		roles, ok := item["roles"].([]any)
+		if !ok {
+			continue
+		}
+		for _, role := range roles {
+			sawPageViewer = sawPageViewer || role == "page_viewer"
+		}
+	}
+	if !sawPageViewer {
+		t.Fatalf("shared wiki roles do not include page_viewer: %#v", wikis)
+	}
+
+	requestE2EMapHeaders(t, viewer, http.MethodGet,
+		fmt.Sprintf("%s/api/v1/pages/%s", baseURL, sharedPageID),
+		nil, sharedWikiHeader, http.StatusOK)
+	response := doE2ERequest(t, viewer, http.MethodGet,
+		fmt.Sprintf("%s/api/v1/pages/%s", baseURL, otherPageID),
+		nil, sharedWikiHeader)
+	assertE2EStatus(t, response, http.StatusForbidden)
+	catalog := requestE2EMapHeaders(t, viewer, http.MethodGet,
+		baseURL+"/api/v1/pages?status=published&page_size=20",
+		nil, sharedWikiHeader, http.StatusOK)
+	if !e2eCatalogContainsPage(catalog, sharedPageID) ||
+		e2eCatalogContainsPage(catalog, otherPageID) {
+		t.Fatalf("shared catalog leaked pages: %#v", catalog)
+	}
+	viewerPublish := doE2ERequest(t, viewer, http.MethodPost,
+		fmt.Sprintf("%s/api/v1/pages/%s/revisions", baseURL, sharedPageID),
+		map[string]any{
+			"ast":      documentE2E(uuid.New(), "Shared "+runID, "viewer edit"),
+			"summary":  "viewer should not publish",
+			"is_minor": false,
+		},
+		sharedWikiHeader)
+	assertE2EStatus(t, viewerPublish, http.StatusForbidden)
+
+	requestE2EMap(t, admin, http.MethodPut,
+		fmt.Sprintf("%s/api/v1/pages/%s/shares", baseURL, sharedPageID),
+		map[string]any{"identifier": viewerUsername, "role_key": "editor"},
+		http.StatusOK)
+	requestE2EMapHeaders(t, viewer, http.MethodPost,
+		fmt.Sprintf("%s/api/v1/pages/%s/revisions", baseURL, sharedPageID),
+		map[string]any{
+			"ast":      documentE2E(uuid.New(), "Shared "+runID, "editor edit"),
+			"summary":  "editor publish",
+			"is_minor": false,
+		},
+		sharedWikiHeader, http.StatusCreated)
+
+	requestE2EMap(t, admin, http.MethodDelete,
+		fmt.Sprintf("%s/api/v1/pages/%s/shares/%s", baseURL, sharedPageID, viewerActorID),
+		nil, http.StatusOK)
+	revoked := doE2ERequest(t, viewer, http.MethodGet,
+		fmt.Sprintf("%s/api/v1/pages/%s", baseURL, sharedPageID),
+		nil, sharedWikiHeader)
+	assertE2EStatus(t, revoked, http.StatusUnauthorized)
+}
+
 func TestAPIGovernanceKnowledgeE2E(t *testing.T) {
 	baseURL := strings.TrimRight(os.Getenv("API_E2E_BASE_URL"), "/")
 	password := os.Getenv("API_E2E_PASSWORD")
@@ -618,8 +746,12 @@ func testPageWorkflow(
 	second := requestE2EMap(t, client, http.MethodPost, baseURL+"/api/v1/pages",
 		map[string]any{"namespace": "main", "title": "API E2E B " + runID,
 			"language": "en", "content_model": "block-v1"}, http.StatusCreated)
+	draft := requestE2EMap(t, client, http.MethodPost, baseURL+"/api/v1/pages",
+		map[string]any{"namespace": "main", "title": "API E2E Draft " + runID,
+			"language": "en", "content_model": "block-v1"}, http.StatusCreated)
 	firstID := e2eUUID(t, first, "id")
 	secondID := e2eUUID(t, second, "id")
+	draftID := e2eUUID(t, draft, "id")
 	firstHeading := uuid.New()
 	secondHeading := uuid.New()
 
@@ -647,8 +779,16 @@ func testPageWorkflow(
 		}, http.StatusCreated)
 	updatedRevisionID := e2eUUID(t, updatedRevision, "id")
 
-	requestE2EMap(t, client, http.MethodGet,
+	publishedCatalog := requestE2EMap(t, client, http.MethodGet,
 		baseURL+"/api/v1/pages?page_size=10", nil, http.StatusOK)
+	if e2eCatalogContainsPage(publishedCatalog, draftID) {
+		t.Fatalf("default page catalog includes unpublished draft %s", draftID)
+	}
+	draftCatalog := requestE2EMap(t, client, http.MethodGet,
+		baseURL+"/api/v1/pages?status=draft&page_size=20", nil, http.StatusOK)
+	if !e2eCatalogContainsPage(draftCatalog, draftID) {
+		t.Fatalf("draft page catalog does not include %s: %#v", draftID, draftCatalog)
+	}
 	requestE2EMap(t, client, http.MethodGet,
 		fmt.Sprintf("%s/api/v1/pages/%s", baseURL, firstID), nil, http.StatusOK)
 	requestE2EMap(t, client, http.MethodGet,
@@ -1376,6 +1516,23 @@ func e2eUUID(t *testing.T, value map[string]any, key string) uuid.UUID {
 		t.Fatalf("parse %s: %v", key, err)
 	}
 	return parsed
+}
+
+func e2eCatalogContainsPage(value map[string]any, pageID uuid.UUID) bool {
+	items, ok := value["items"].([]any)
+	if !ok {
+		return false
+	}
+	for _, raw := range items {
+		item, ok := raw.(map[string]any)
+		if !ok {
+			continue
+		}
+		if item["id"] == pageID.String() {
+			return true
+		}
+	}
+	return false
 }
 
 func e2eUUIDSlice(t *testing.T, value map[string]any, key string) []uuid.UUID {

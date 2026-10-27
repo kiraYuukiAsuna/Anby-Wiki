@@ -970,7 +970,7 @@ func governanceError(w http.ResponseWriter, r *http.Request, err error) {
 	switch {
 	case errors.Is(err, governance.ErrProposalNotFound), errors.Is(err, governance.ErrBulkReviewNotFound),
 		errors.Is(err, governance.ErrProtectionNotFound), isAuditNotFound(err), isAdminUserNotFound(err),
-		isWikiMemberNotFound(err):
+		isWikiMemberNotFound(err), isPageShareNotFound(err):
 		httpx.WriteError(w, r, http.StatusNotFound, httpx.CodeNotFound, err.Error())
 	case errors.Is(err, governance.ErrInvalidActor), errors.Is(err, governance.ErrActorNotAllowed), errors.Is(err, governance.ErrPermissionDenied):
 		httpx.WriteError(w, r, http.StatusForbidden, httpx.CodeForbidden, err.Error())
@@ -997,7 +997,8 @@ func governanceError(w http.ResponseWriter, r *http.Request, err error) {
 		httpx.WriteError(w, r, http.StatusUnprocessableEntity, httpx.CodeValidationFailed, err.Error())
 	case errors.Is(err, governance.ErrInvalidAITrustProfile):
 		httpx.WriteError(w, r, http.StatusUnprocessableEntity, httpx.CodeValidationFailed, err.Error())
-	case errors.Is(err, governance.ErrInvalidAdminUserFilter), errors.Is(err, governance.ErrInvalidWikiMember):
+	case errors.Is(err, governance.ErrInvalidAdminUserFilter), errors.Is(err, governance.ErrInvalidWikiMember),
+		errors.Is(err, governance.ErrInvalidPageShare):
 		httpx.WriteError(w, r, http.StatusUnprocessableEntity, httpx.CodeValidationFailed, err.Error())
 	case errors.Is(err, governance.ErrInvalidTransition), errors.Is(err, governance.ErrProposalNotDraft),
 		errors.Is(err, governance.ErrPatchTargetModified), errors.Is(err, governance.ErrMergeConflict),

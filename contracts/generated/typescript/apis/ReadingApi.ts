@@ -38,6 +38,7 @@ export interface GetPageByTitleRequest {
 export interface ListPublishedPagesRequest {
     cursor?: string;
     pageSize?: number;
+    status?: ListPublishedPagesStatusEnum;
     sort?: ListPublishedPagesSortEnum;
 }
 
@@ -192,6 +193,10 @@ export class ReadingApi extends runtime.BaseAPI {
             queryParameters['page_size'] = requestParameters['pageSize'];
         }
 
+        if (requestParameters['status'] != null) {
+            queryParameters['status'] = requestParameters['status'];
+        }
+
         if (requestParameters['sort'] != null) {
             queryParameters['sort'] = requestParameters['sort'];
         }
@@ -218,8 +223,8 @@ export class ReadingApi extends runtime.BaseAPI {
     }
 
     /**
-     * 只返回当前登录 Wiki 中未删除、属于内容命名空间且已有 Current Revision 的页面； recent 按最近更新倒序，title 按规范化标题升序，均使用稳定游标分页。
-     * 浏览已发布百科页面目录
+     * 返回当前登录 Wiki 中未删除、属于内容命名空间的页面目录。status=published 只返回已有 Current Revision 的页面；status=draft 返回已创建但尚未发布的页面。 recent 按最近更新倒序，title 按规范化标题升序，均使用稳定游标分页。
+     * 浏览百科页面目录
      */
     async listPublishedPagesRaw(requestParameters: ListPublishedPagesRequest, initOverrides?: RequestInit | runtime.InitOverrideFunction): Promise<runtime.ApiResponse<PageCatalogPage>> {
         const requestOptions = await this.listPublishedPagesRequestOpts(requestParameters);
@@ -229,8 +234,8 @@ export class ReadingApi extends runtime.BaseAPI {
     }
 
     /**
-     * 只返回当前登录 Wiki 中未删除、属于内容命名空间且已有 Current Revision 的页面； recent 按最近更新倒序，title 按规范化标题升序，均使用稳定游标分页。
-     * 浏览已发布百科页面目录
+     * 返回当前登录 Wiki 中未删除、属于内容命名空间的页面目录。status=published 只返回已有 Current Revision 的页面；status=draft 返回已创建但尚未发布的页面。 recent 按最近更新倒序，title 按规范化标题升序，均使用稳定游标分页。
+     * 浏览百科页面目录
      */
     async listPublishedPages(requestParameters: ListPublishedPagesRequest = {}, initOverrides?: RequestInit | runtime.InitOverrideFunction): Promise<PageCatalogPage> {
         const response = await this.listPublishedPagesRaw(requestParameters, initOverrides);
@@ -257,6 +262,14 @@ export const GetPageByTitleContentModeEnum = {
     Sections: 'sections'
 } as const;
 export type GetPageByTitleContentModeEnum = typeof GetPageByTitleContentModeEnum[keyof typeof GetPageByTitleContentModeEnum];
+/**
+ * @export
+ */
+export const ListPublishedPagesStatusEnum = {
+    Published: 'published',
+    Draft: 'draft'
+} as const;
+export type ListPublishedPagesStatusEnum = typeof ListPublishedPagesStatusEnum[keyof typeof ListPublishedPagesStatusEnum];
 /**
  * @export
  */

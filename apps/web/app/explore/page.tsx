@@ -1,4 +1,4 @@
-import { Compass, Network } from "lucide-react";
+import { Network, Search } from "lucide-react";
 import Link from "next/link";
 
 import { SearchExplorer } from "@/components/search/search-explorer";
@@ -24,7 +24,7 @@ export default async function ExplorePage({
       <header className="mb-8 flex flex-wrap items-center justify-between gap-4 border-b border-border/75 pb-6">
         <div className="flex items-center gap-3">
         <span className="flex size-11 items-center justify-center rounded-2xl bg-primary text-primary-foreground shadow-lg shadow-primary/20">
-          <Compass className="size-5" aria-hidden />
+          <Search className="size-5" aria-hidden />
         </span>
           <h1 className="text-3xl font-semibold">搜索</h1>
         </div>

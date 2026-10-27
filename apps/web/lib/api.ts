@@ -14,7 +14,6 @@ import {
   CollectionsApi,
   ComponentsApi,
   Configuration,
-  DatasetsApi,
   GovernanceApi,
   HistoryApi,
   ImportsApi,
@@ -166,13 +165,6 @@ export function componentsApi(
   overrides: ConfigurationParameters = {},
 ): ComponentsApi {
   return new ComponentsApi(makeConfig(overrides));
-}
-
-/** Dataset 定义、Schema 校验记录与保存视图客户端。 */
-export function datasetsApi(
-  overrides: ConfigurationParameters = {},
-): DatasetsApi {
-  return new DatasetsApi(makeConfig(overrides));
 }
 
 /** Proposal、Preview、Review、Apply 与 ChangeBatch 回滚客户端。 */

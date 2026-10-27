@@ -195,7 +195,7 @@ func main() {
 				collection.NewRepository(pool), page.NewRepository(pool),
 				db.NewTxManager(pool), id.NewGenerator(),
 			),
-		)
+		).WithAuthorization(governance.NewAuthorizationService(pool))
 		datasetAPI = NewDatasetAPI(
 			dataset.NewService(
 				dataset.NewRepository(pool), page.NewRepository(pool),
@@ -364,6 +364,7 @@ func assembleAPIs(pool *pgxpool.Pool, searchBackends ...wikisearch.SearchAdapter
 		searchBackend = searchBackends[0]
 	}
 	searchAPI := NewSearchAPI(searchBackend)
+	searchAPI.WithAuthorization(authorization)
 	if _, postgres := searchBackend.(*wikisearch.PostgresAdapter); postgres {
 		searchAPI.WithTitleAliasFallback(wikisearch.NewPageAdapter(svc))
 	}
@@ -372,9 +373,11 @@ func assembleAPIs(pool *pgxpool.Pool, searchBackends ...wikisearch.SearchAdapter
 			WithButtonActions(pageaction.NewService(svc)).
 			WithCollaborationPublisher(collaboration.NewPublisher(txm, ids, svc)),
 		NewReadAPI(svc, projection.NewQueries(pool)).
+			WithAuthorization(authorization).
 			WithDynamicRenderer(projection.NewDynamicHTMLRenderer(pool)),
-		NewHistoryAPI(svc),
-		NewProjectionAPI(svc, projection.NewQueries(pool)),
+		NewHistoryAPI(svc).WithAuthorization(authorization),
+		NewProjectionAPI(svc, projection.NewQueries(pool)).
+			WithAuthorization(authorization),
 		searchAPI,
 		NewKnowledgeReadAPI(knowledgeService, evidenceService).
 			WithMergeAuthorization(authorization).

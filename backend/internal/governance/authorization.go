@@ -52,6 +52,88 @@ func (s *AuthorizationService) Check(ctx context.Context, actorID, wikiID uuid.U
 	return s.CheckTx(ctx, nil, actorID, wikiID, action, pageID)
 }
 
+func (s *AuthorizationService) CheckReadPage(ctx context.Context, actorID, wikiID, pageID uuid.UUID) error {
+	var actorType, status string
+	if err := s.pool.QueryRow(ctx, `SELECT actor_type,status FROM actor WHERE id=$1`, actorID).Scan(&actorType, &status); err != nil {
+		return ErrInvalidActor
+	}
+	if status != "active" {
+		return ErrInvalidActor
+	}
+	if actorType == "system" {
+		return nil
+	}
+	if actorType != "human" {
+		return ErrPermissionDenied
+	}
+	hasWikiAccess, err := s.HasWikiAccess(ctx, actorID, wikiID)
+	if err != nil {
+		return err
+	}
+	if hasWikiAccess {
+		return nil
+	}
+	shared, err := s.hasPageShareRole(
+		ctx, nil, actorID, wikiID, pageID,
+		PageShareRoleViewer, PageShareRoleEditor,
+	)
+	if err != nil {
+		return err
+	}
+	if shared {
+		return nil
+	}
+	return ErrPermissionDenied
+}
+
+func (s *AuthorizationService) HasWikiAccess(ctx context.Context, actorID, wikiID uuid.UUID) (bool, error) {
+	var allowed bool
+	err := s.pool.QueryRow(ctx, `SELECT EXISTS(
+		SELECT 1
+		FROM actor a
+		LEFT JOIN local_account la ON la.actor_id=a.id
+		WHERE a.id=$1 AND a.status='active'
+		  AND (la.id IS NULL OR la.status='active')
+		  AND (
+		    a.actor_type='system'
+		    OR EXISTS (
+		      SELECT 1 FROM actor_role ar
+		      WHERE ar.actor_id=a.id AND ar.wiki_id=$2
+		    )
+		  )
+	)`, actorID, wikiID).Scan(&allowed)
+	return allowed, err
+}
+
+func (s *AuthorizationService) SharedPageIDs(ctx context.Context, actorID, wikiID uuid.UUID) ([]uuid.UUID, error) {
+	hasWikiAccess, err := s.HasWikiAccess(ctx, actorID, wikiID)
+	if err != nil {
+		return nil, err
+	}
+	if hasWikiAccess {
+		return nil, nil
+	}
+	rows, err := s.pool.Query(ctx, `
+		SELECT ps.page_id
+		FROM page_share ps
+		JOIN page p ON p.id=ps.page_id
+		WHERE ps.actor_id=$1 AND p.wiki_id=$2 AND p.deleted_at IS NULL
+		ORDER BY p.updated_at DESC,p.id DESC`, actorID, wikiID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	ids := []uuid.UUID{}
+	for rows.Next() {
+		var id uuid.UUID
+		if err := rows.Scan(&id); err != nil {
+			return nil, err
+		}
+		ids = append(ids, id)
+	}
+	return ids, rows.Err()
+}
+
 // CheckCreate 对尚不存在的页面按 Namespace + normalized title 叠加保护规则。
 func (s *AuthorizationService) CheckCreate(ctx context.Context, actorID, wikiID, namespaceID uuid.UUID, normalizedTitle string) error {
 	return s.checkTx(ctx, nil, actorID, wikiID, ActionCreate, nil, &namespaceID, normalizedTitle)
@@ -113,6 +195,24 @@ func (s *AuthorizationService) checkTx(ctx context.Context, tx pgx.Tx, actorID, 
 		baseAllowed = baseAllowed || allowedRoles[role]
 	}
 	if !baseAllowed {
+		if action == ActionEdit && pageID != nil {
+			shared, err := s.hasPageShareRole(
+				ctx, tx, actorID, wikiID, *pageID, PageShareRoleEditor,
+			)
+			if err != nil {
+				return err
+			}
+			if shared {
+				protected, err := s.hasActivePageProtection(ctx, tx, *pageID, action)
+				if err != nil {
+					return err
+				}
+				if protected {
+					return fmt.Errorf("%w: page protection requires wiki role", ErrPermissionDenied)
+				}
+				return nil
+			}
+		}
 		return fmt.Errorf("%w: action=%s", ErrPermissionDenied, action)
 	}
 	if pageID == nil && (action != ActionCreate || namespaceID == nil || normalizedTitle == "") {
@@ -156,6 +256,53 @@ func (s *AuthorizationService) checkTx(ctx context.Context, tx pgx.Tx, actorID, 
 		}
 	}
 	return protectionRows.Err()
+}
+
+func (s *AuthorizationService) hasPageShareRole(
+	ctx context.Context,
+	tx pgx.Tx,
+	actorID, wikiID, pageID uuid.UUID,
+	roleKeys ...string,
+) (bool, error) {
+	if len(roleKeys) == 0 {
+		return false, nil
+	}
+	args := []any{actorID, wikiID, pageID}
+	placeholders := ""
+	for index, roleKey := range roleKeys {
+		if index > 0 {
+			placeholders += ","
+		}
+		args = append(args, roleKey)
+		placeholders += fmt.Sprintf("$%d", len(args))
+	}
+	var allowed bool
+	err := s.q(tx).QueryRow(ctx, `SELECT EXISTS(
+		SELECT 1
+		FROM page_share ps
+		JOIN page p ON p.id=ps.page_id
+		WHERE ps.actor_id=$1 AND p.wiki_id=$2 AND ps.page_id=$3
+		  AND p.deleted_at IS NULL
+		  AND ps.role_key IN (`+placeholders+`)
+	)`, args...).Scan(&allowed)
+	return allowed, err
+}
+
+func (s *AuthorizationService) hasActivePageProtection(
+	ctx context.Context,
+	tx pgx.Tx,
+	pageID uuid.UUID,
+	action string,
+) (bool, error) {
+	var protected bool
+	err := s.q(tx).QueryRow(ctx, `SELECT EXISTS(
+		SELECT 1
+		FROM page_protection pp
+		WHERE pp.page_id=$1 AND pp.action_type=$2
+		  AND pp.revoked_at IS NULL
+		  AND (pp.expires_at IS NULL OR pp.expires_at>now())
+	)`, pageID, action).Scan(&protected)
+	return protected, err
 }
 
 func wikiIDForProposal(ctx context.Context, tx pgx.Tx, repo *Repository, p *Proposal) uuid.UUID {

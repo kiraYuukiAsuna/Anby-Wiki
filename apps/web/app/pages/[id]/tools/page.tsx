@@ -6,6 +6,7 @@ import { BlockRedirectManager } from "@/components/page-tools/block-redirect-man
 import { BacklinksPanel } from "@/components/page-tools/backlinks-panel";
 import { PageEntityBindingManager } from "@/components/page-tools/page-entity-binding-manager";
 import { PageRedirectManager } from "@/components/page-tools/page-redirect-manager";
+import { PageShareManager } from "@/components/page-tools/page-share-manager";
 import { Button } from "@/components/ui/button";
 import { fetchPageById } from "@/lib/reading";
 
@@ -44,6 +45,10 @@ export default async function PageToolsPage({
         </Button>
       </header>
       <div className="space-y-6">
+        <PageShareManager
+          pageId={managedPage.id}
+          pageTitle={managedPage.displayTitle}
+        />
         <BacklinksPanel pageId={managedPage.id} />
         <PageEntityBindingManager
           pageId={managedPage.id}

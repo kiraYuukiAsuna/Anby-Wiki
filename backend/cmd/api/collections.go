@@ -9,15 +9,22 @@ import (
 	"github.com/google/uuid"
 
 	"github.com/anby/wiki/backend/internal/collection"
+	"github.com/anby/wiki/backend/internal/governance"
 	"github.com/anby/wiki/backend/internal/platform/httpx"
 )
 
 type CollectionAPI struct {
 	service *collection.Service
+	auth    *governance.AuthorizationService
 }
 
 func NewCollectionAPI(service *collection.Service) *CollectionAPI {
 	return &CollectionAPI{service: service}
+}
+
+func (a *CollectionAPI) WithAuthorization(auth *governance.AuthorizationService) *CollectionAPI {
+	a.auth = auth
+	return a
 }
 
 type collectionResponse struct {
@@ -74,6 +81,9 @@ func toCollectionResponse(value collection.Collection) collectionResponse {
 }
 
 func (a *CollectionAPI) list(w http.ResponseWriter, r *http.Request) {
+	if !a.requireWikiAccess(w, r) {
+		return
+	}
 	limit, ok := pageSizeFrom(w, r)
 	if !ok {
 		return
@@ -96,6 +106,31 @@ func (a *CollectionAPI) listForPage(w http.ResponseWriter, r *http.Request) {
 	pageID, ok := pageIDFrom(w, r)
 	if !ok {
 		return
+	}
+	if a.auth != nil {
+		actorID, ok := actorIDFrom(w, r)
+		if !ok {
+			return
+		}
+		if err := a.auth.CheckReadPage(
+			r.Context(), actorID, wikiIDFromRequest(r), pageID,
+		); err != nil {
+			governanceError(w, r, err)
+			return
+		}
+		fullWikiAccess, err := a.auth.HasWikiAccess(
+			r.Context(), actorID, wikiIDFromRequest(r),
+		)
+		if err != nil {
+			a.writeError(w, r, err)
+			return
+		}
+		if !fullWikiAccess {
+			httpx.WriteJSON(w, http.StatusOK, pageCollectionListResponse{
+				Items: []pageCollectionResponse{},
+			})
+			return
+		}
 	}
 	items, err := a.service.ListForPage(r.Context(), wikiIDFromRequest(r), pageID)
 	if err != nil {
@@ -122,6 +157,9 @@ type createCollectionRequest struct {
 }
 
 func (a *CollectionAPI) create(w http.ResponseWriter, r *http.Request) {
+	if !a.requireWikiAccess(w, r) {
+		return
+	}
 	actorID, ok := actorIDFrom(w, r)
 	if !ok {
 		return
@@ -143,6 +181,9 @@ func (a *CollectionAPI) create(w http.ResponseWriter, r *http.Request) {
 }
 
 func (a *CollectionAPI) get(w http.ResponseWriter, r *http.Request) {
+	if !a.requireWikiAccess(w, r) {
+		return
+	}
 	id, ok := pageIDFrom(w, r)
 	if !ok {
 		return
@@ -156,6 +197,9 @@ func (a *CollectionAPI) get(w http.ResponseWriter, r *http.Request) {
 }
 
 func (a *CollectionAPI) members(w http.ResponseWriter, r *http.Request) {
+	if !a.requireWikiAccess(w, r) {
+		return
+	}
 	id, ok := pageIDFrom(w, r)
 	if !ok {
 		return
@@ -198,6 +242,9 @@ type replaceManualMembersRequest struct {
 }
 
 func (a *CollectionAPI) replaceMembers(w http.ResponseWriter, r *http.Request) {
+	if !a.requireWikiAccess(w, r) {
+		return
+	}
 	actorID, ok := actorIDFrom(w, r)
 	if !ok {
 		return
@@ -231,6 +278,9 @@ type rebuildCollectionRequest struct {
 }
 
 func (a *CollectionAPI) rebuild(w http.ResponseWriter, r *http.Request) {
+	if !a.requireWikiAccess(w, r) {
+		return
+	}
 	actorID, ok := actorIDFrom(w, r)
 	if !ok {
 		return
@@ -251,6 +301,26 @@ func (a *CollectionAPI) rebuild(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	httpx.WriteJSON(w, http.StatusOK, map[string]int{"member_count": count})
+}
+
+func (a *CollectionAPI) requireWikiAccess(w http.ResponseWriter, r *http.Request) bool {
+	if a.auth == nil {
+		return true
+	}
+	actorID, ok := actorIDFrom(w, r)
+	if !ok {
+		return false
+	}
+	allowed, err := a.auth.HasWikiAccess(r.Context(), actorID, wikiIDFromRequest(r))
+	if err != nil {
+		a.writeError(w, r, err)
+		return false
+	}
+	if !allowed {
+		governanceError(w, r, governance.ErrPermissionDenied)
+		return false
+	}
+	return true
 }
 
 func (a *CollectionAPI) writeError(w http.ResponseWriter, r *http.Request, err error) {

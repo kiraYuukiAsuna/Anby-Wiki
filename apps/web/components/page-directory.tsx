@@ -5,6 +5,7 @@ import {
   ArrowRight,
   BookOpenText,
   Clock3,
+  FilePenLine,
   FileText,
   LoaderCircle,
   RefreshCw,
@@ -21,6 +22,7 @@ import { cn } from "@/lib/utils";
 
 const PAGE_SIZE = 30;
 type SortMode = "recent" | "title";
+type PageStatus = "published" | "draft";
 
 const DATE_FORMATTER = new Intl.DateTimeFormat("zh-CN", {
   year: "numeric",
@@ -30,22 +32,26 @@ const DATE_FORMATTER = new Intl.DateTimeFormat("zh-CN", {
 
 export function PageDirectory() {
   const [sort, setSort] = useState<SortMode>("recent");
+  const [status, setStatus] = useState<PageStatus>("published");
   const state = useSWRInfinite<PageCatalogPage>(
     (pageIndex, previousPage) => {
       if (pageIndex > 0 && !previousPage?.nextCursor) return null;
       return [
-        "published-page-directory",
+        "page-directory",
+        status,
         sort,
         pageIndex === 0 ? "" : (previousPage?.nextCursor ?? ""),
       ] as const;
     },
     (cacheKey) => {
-      const [, selectedSort, cursor] = cacheKey as readonly [
+      const [, selectedStatus, selectedSort, cursor] = cacheKey as readonly [
         string,
+        PageStatus,
         SortMode,
         string,
       ];
       return readingApi().listPublishedPages({
+        status: selectedStatus,
         sort: selectedSort,
         cursor: cursor || undefined,
         pageSize: PAGE_SIZE,
@@ -59,14 +65,43 @@ export function PageDirectory() {
   const lastPage = state.data?.[state.data.length - 1];
   const canLoadMore = Boolean(lastPage?.nextCursor);
   const loadingMore = state.isValidating && Boolean(state.data);
+  const published = status === "published";
 
   return (
     <section aria-labelledby="page-directory-title">
       <div className="flex flex-wrap items-center justify-between gap-3">
         <h2 id="page-directory-title" className="text-xl font-semibold">
-          {typeof total === "number" ? `${total} 个已发布条目` : "已发布条目"}
+          {typeof total === "number"
+            ? `${total} 个${published ? "已发布条目" : "未发布草稿"}`
+            : published
+              ? "已发布条目"
+              : "未发布草稿"}
         </h2>
         <div className="flex items-center gap-2">
+          <div className="flex rounded-xl bg-muted p-1" aria-label="页面状态">
+            <button
+              type="button"
+              aria-pressed={published}
+              onClick={() => setStatus("published")}
+              className={cn(
+                "flex items-center gap-1.5 rounded-lg px-3 py-1.5 text-xs font-medium text-muted-foreground",
+                published && "bg-background text-foreground shadow-sm",
+              )}
+            >
+              <FileText className="size-3.5" aria-hidden />已发布
+            </button>
+            <button
+              type="button"
+              aria-pressed={!published}
+              onClick={() => setStatus("draft")}
+              className={cn(
+                "flex items-center gap-1.5 rounded-lg px-3 py-1.5 text-xs font-medium text-muted-foreground",
+                !published && "bg-background text-foreground shadow-sm",
+              )}
+            >
+              <FilePenLine className="size-3.5" aria-hidden />未发布
+            </button>
+          </div>
           <div className="flex rounded-xl bg-muted p-1" aria-label="页面排序">
             <button
               type="button"
@@ -117,7 +152,9 @@ export function PageDirectory() {
       {!state.isLoading && !state.error && items.length === 0 ? (
         <div className="mt-5 rounded-2xl border border-dashed px-6 py-14 text-center">
           <BookOpenText className="mx-auto size-8 text-muted-foreground" aria-hidden />
-          <h3 className="mt-4 font-semibold">还没有已发布页面</h3>
+          <h3 className="mt-4 font-semibold">
+            {published ? "还没有已发布页面" : "没有未发布草稿"}
+          </h3>
           <Button asChild className="mt-5"><Link href="/new">创建页面</Link></Button>
         </div>
       ) : null}
@@ -126,14 +163,21 @@ export function PageDirectory() {
           {items.map((page) => (
             <li key={page.id}>
               <Link
-                href={`/pages/${page.id}`}
+                href={published ? `/pages/${page.id}` : `/pages/${page.id}/edit`}
                 className="group flex h-full min-w-0 items-start gap-3 rounded-2xl border bg-card p-4 transition hover:-translate-y-0.5 hover:border-primary/25 hover:shadow-[0_12px_32px_rgb(15_23_42/0.07)]"
               >
-                <span className="flex size-9 shrink-0 items-center justify-center rounded-xl bg-primary/8 text-primary"><FileText className="size-4" aria-hidden /></span>
+                <span className="flex size-9 shrink-0 items-center justify-center rounded-xl bg-primary/8 text-primary">
+                  {published ? (
+                    <FileText className="size-4" aria-hidden />
+                  ) : (
+                    <FilePenLine className="size-4" aria-hidden />
+                  )}
+                </span>
                 <span className="min-w-0 flex-1">
                   <span className="line-clamp-2 font-semibold leading-6 [overflow-wrap:anywhere]">{page.displayTitle}</span>
                   <span className="mt-2 block text-[11px] text-muted-foreground">
                     {DATE_FORMATTER.format(page.updatedAt)} · {page.language}
+                    {!published ? " · 继续编辑" : ""}
                   </span>
                 </span>
                 <ArrowRight className="mt-1 size-4 shrink-0 text-muted-foreground transition-transform group-hover:translate-x-0.5 group-hover:text-primary" aria-hidden />
@@ -151,7 +195,7 @@ export function PageDirectory() {
           onClick={() => void state.setSize(state.size + 1)}
         >
           {loadingMore ? <LoaderCircle className="animate-spin" aria-hidden /> : null}
-          加载更多页面
+          {published ? "加载更多页面" : "加载更多草稿"}
         </Button>
       ) : null}
     </section>

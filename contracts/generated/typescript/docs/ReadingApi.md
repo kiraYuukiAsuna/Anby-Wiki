@@ -6,7 +6,7 @@ All URIs are relative to *http://localhost:3000*
 |------------- | ------------- | -------------|
 | [**getPageByID**](ReadingApi.md#getpagebyid) | **GET** /api/v1/pages/{id} | 按 ID 读取页面当前版本 |
 | [**getPageByTitle**](ReadingApi.md#getpagebytitle) | **GET** /api/v1/pages/by-title | 按标题/别名读取页面当前版本 |
-| [**listPublishedPages**](ReadingApi.md#listpublishedpages) | **GET** /api/v1/pages | 浏览已发布百科页面目录 |
+| [**listPublishedPages**](ReadingApi.md#listpublishedpages) | **GET** /api/v1/pages | 浏览百科页面目录 |
 
 
 
@@ -177,11 +177,11 @@ example().catch(console.error);
 
 ## listPublishedPages
 
-> PageCatalogPage listPublishedPages(cursor, pageSize, sort)
+> PageCatalogPage listPublishedPages(cursor, pageSize, status, sort)
 
-浏览已发布百科页面目录
+浏览百科页面目录
 
-只返回当前登录 Wiki 中未删除、属于内容命名空间且已有 Current Revision 的页面； recent 按最近更新倒序，title 按规范化标题升序，均使用稳定游标分页。
+返回当前登录 Wiki 中未删除、属于内容命名空间的页面目录。status&#x3D;published 只返回已有 Current Revision 的页面；status&#x3D;draft 返回已创建但尚未发布的页面。 recent 按最近更新倒序，title 按规范化标题升序，均使用稳定游标分页。
 
 ### Example
 
@@ -207,6 +207,8 @@ async function example() {
     cursor: cursor_example,
     // number | 每页条数，默认 20，最大 100 (optional)
     pageSize: 56,
+    // 'published' | 'draft' (optional)
+    status: status_example,
     // 'recent' | 'title' (optional)
     sort: sort_example,
   } satisfies ListPublishedPagesRequest;
@@ -230,6 +232,7 @@ example().catch(console.error);
 |------------- | ------------- | ------------- | -------------|
 | **cursor** | `string` | 上一页响应返回的 next_cursor；首页不传 | [Optional] [Defaults to `undefined`] |
 | **pageSize** | `number` | 每页条数，默认 20，最大 100 | [Optional] [Defaults to `20`] |
+| **status** | `published`, `draft` |  | [Optional] [Defaults to `&#39;published&#39;`] [Enum: published, draft] |
 | **sort** | `recent`, `title` |  | [Optional] [Defaults to `&#39;recent&#39;`] [Enum: recent, title] |
 
 ### Return type
@@ -249,7 +252,7 @@ example().catch(console.error);
 ### HTTP response details
 | Status code | Description | Response headers |
 |-------------|-------------|------------------|
-| **200** | 已发布页面目录 |  -  |
+| **200** | 页面目录 |  -  |
 | **400** | 请求格式错误 |  -  |
 | **500** | 服务端内部错误 |  -  |
 

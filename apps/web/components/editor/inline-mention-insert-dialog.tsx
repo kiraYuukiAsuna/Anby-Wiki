@@ -2,9 +2,8 @@
 
 import { useState } from "react";
 
-import { CalendarDays, Database, UserRound } from "lucide-react";
+import { CalendarDays, UserRound } from "lucide-react";
 import { toast } from "sonner";
-import useSWR from "swr";
 
 import { Button } from "@/components/ui/button";
 import {
@@ -18,26 +17,22 @@ import {
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import {
-  databaseMentionNodeSchema,
   dateMentionNodeSchema,
   mentionNodeSchema,
 } from "@/lib/ast/schema";
-import { datasetsApi } from "@/lib/api";
 
-type MentionMode = "person" | "date" | "database";
+type MentionMode = "person" | "date";
 
 export function InlineMentionInsertDialog({
   open,
   onOpenChange,
   onInsertPerson,
   onInsertDate,
-  onInsertDatabase,
 }: {
   open: boolean;
   onOpenChange: (open: boolean) => void;
   onInsertPerson: (actorId: string, displayText: string) => void;
   onInsertDate: (date: string, endDate: string, displayText: string) => void;
-  onInsertDatabase: (datasetId: string, displayText: string) => void;
 }) {
   const [mode, setMode] = useState<MentionMode>("person");
   const [actorId, setActorId] = useState("");
@@ -45,14 +40,6 @@ export function InlineMentionInsertDialog({
   const [date, setDate] = useState("");
   const [endDate, setEndDate] = useState("");
   const [dateText, setDateText] = useState("");
-  const [datasetId, setDatasetId] = useState("");
-  const [databaseText, setDatabaseText] = useState("");
-
-  const { data: datasetPage, isLoading: datasetsLoading } = useSWR(
-    open && mode === "database" ? ["editor-dataset-mentions"] : null,
-    () => datasetsApi().listDatasets({ pageSize: 100 }),
-  );
-  const datasets = datasetPage?.items ?? [];
 
   const close = () => onOpenChange(false);
 
@@ -95,21 +82,7 @@ export function InlineMentionInsertDialog({
         parsed.data.display_text,
       );
       close();
-      return;
     }
-
-    const selected = datasets.find((dataset) => dataset.id === datasetId);
-    const parsed = databaseMentionNodeSchema.safeParse({
-      type: "database_mention",
-      dataset_id: datasetId,
-      display_text: databaseText.trim() || selected?.name || "",
-    });
-    if (!parsed.success || !parsed.data.display_text) {
-      toast.error("请选择 Dataset 并填写显示名称");
-      return;
-    }
-    onInsertDatabase(parsed.data.dataset_id, parsed.data.display_text);
-    close();
   };
 
   return (
@@ -117,10 +90,10 @@ export function InlineMentionInsertDialog({
       <DialogContent>
         <DialogHeader>
           <DialogTitle>插入行内提及</DialogTitle>
-          <DialogDescription>引用人员、日期或 Dataset。</DialogDescription>
+          <DialogDescription>引用人员或日期。</DialogDescription>
         </DialogHeader>
 
-        <div className="grid grid-cols-3 gap-1 rounded-md bg-muted p-1">
+        <div className="grid grid-cols-2 gap-1 rounded-md bg-muted p-1">
           <Button
             type="button"
             size="sm"
@@ -138,15 +111,6 @@ export function InlineMentionInsertDialog({
           >
             <CalendarDays className="size-4" />
             Date
-          </Button>
-          <Button
-            type="button"
-            size="sm"
-            variant={mode === "database" ? "default" : "ghost"}
-            onClick={() => setMode("database")}
-          >
-            <Database className="size-4" />
-            Database
           </Button>
         </div>
 
@@ -202,43 +166,6 @@ export function InlineMentionInsertDialog({
                 value={dateText}
                 onChange={(event) => setDateText(event.target.value)}
                 placeholder={endDate ? `${date} 至 ${endDate}` : date}
-              />
-            </div>
-          </div>
-        ) : null}
-
-        {mode === "database" ? (
-          <div className="grid gap-4">
-            <div className="grid gap-2">
-              <Label htmlFor="mention-dataset">Dataset</Label>
-              <select
-                id="mention-dataset"
-                value={datasetId}
-                onChange={(event) => {
-                  setDatasetId(event.target.value);
-                  const selected = datasets.find(
-                    (dataset) => dataset.id === event.target.value,
-                  );
-                  setDatabaseText(selected?.name ?? "");
-                }}
-                className="border-input bg-background h-9 rounded-md border px-3 text-sm"
-              >
-                <option value="">
-                  {datasetsLoading ? "加载中..." : "选择 Dataset"}
-                </option>
-                {datasets.map((dataset) => (
-                  <option key={dataset.id} value={dataset.id}>
-                    {dataset.name}
-                  </option>
-                ))}
-              </select>
-            </div>
-            <div className="grid gap-2">
-              <Label htmlFor="mention-database-text">显示名称</Label>
-              <Input
-                id="mention-database-text"
-                value={databaseText}
-                onChange={(event) => setDatabaseText(event.target.value)}
               />
             </div>
           </div>

@@ -5,7 +5,6 @@ import {
   ArrowRight,
   BookOpenText,
   Clock3,
-  Compass,
   FileText,
   Layers3,
   Search,
@@ -81,7 +80,7 @@ export function WikiHome() {
                 <Link href="/collections"><Layers3 aria-hidden />专题合集</Link>
               </Button>
               <Button variant="ghost" size="sm" asChild>
-                <Link href="/explore"><Compass aria-hidden />高级探索</Link>
+                <Link href="/explore"><Search aria-hidden />搜索</Link>
               </Button>
             </div>
           </div>
