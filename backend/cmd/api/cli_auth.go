@@ -146,6 +146,30 @@ func (a *AuthAPI) listCLITokens(w http.ResponseWriter, r *http.Request) {
 	})
 }
 
+func (a *AuthAPI) deleteCLIAuthCode(w http.ResponseWriter, r *http.Request) {
+	principal, ok := browserSessionPrincipal(w, r)
+	if !ok {
+		return
+	}
+	codeID, err := uuid.Parse(chi.URLParam(r, "id"))
+	if err != nil {
+		httpx.WriteError(w, r, http.StatusBadRequest, httpx.CodeBadRequest, "路径 id 不是合法 UUID")
+		return
+	}
+	err = a.service.DeleteCLIAuthorizationCode(
+		r.Context(), principal.ActorID, codeID,
+	)
+	if errors.Is(err, authdomain.ErrCLIAuthorizationCodeNotFound) {
+		httpx.WriteError(w, r, http.StatusNotFound, httpx.CodeNotFound, "CLI 授权码不存在")
+		return
+	}
+	if err != nil {
+		httpx.WriteError(w, r, http.StatusInternalServerError, httpx.CodeInternal, "无法删除 CLI 授权码")
+		return
+	}
+	w.WriteHeader(http.StatusNoContent)
+}
+
 func (a *AuthAPI) revokeCLIToken(w http.ResponseWriter, r *http.Request) {
 	principal, ok := browserSessionPrincipal(w, r)
 	if !ok {

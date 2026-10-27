@@ -68,6 +68,10 @@ export interface CreateCLIAuthCodeOperationRequest {
     createCLIAuthCodeRequest: CreateCLIAuthCodeRequest;
 }
 
+export interface DeleteCLIAuthCodeRequest {
+    id: string;
+}
+
 export interface DeleteCLITokenRecordRequest {
     id: string;
 }
@@ -140,6 +144,52 @@ export class AuthApi extends runtime.BaseAPI {
     async createCLIAuthCode(requestParameters: CreateCLIAuthCodeOperationRequest, initOverrides?: RequestInit | runtime.InitOverrideFunction): Promise<CLIAuthCode> {
         const response = await this.createCLIAuthCodeRaw(requestParameters, initOverrides);
         return await response.value();
+    }
+
+    /**
+     * Creates request options for deleteCLIAuthCode without sending the request
+     */
+    async deleteCLIAuthCodeRequestOpts(requestParameters: DeleteCLIAuthCodeRequest): Promise<runtime.RequestOpts> {
+        if (requestParameters['id'] == null) {
+            throw new runtime.RequiredError(
+                'id',
+                'Required parameter "id" was null or undefined when calling deleteCLIAuthCode().'
+            );
+        }
+
+        const queryParameters: any = {};
+
+        const headerParameters: runtime.HTTPHeaders = {};
+
+
+        let urlPath = `/api/v1/auth/cli/codes/{id}`;
+        urlPath = urlPath.replace('{id}', encodeURIComponent(String(requestParameters['id'])));
+
+        return {
+            path: urlPath,
+            method: 'DELETE',
+            headers: headerParameters,
+            query: queryParameters,
+        };
+    }
+
+    /**
+     * 仅删除待兑换且未过期的授权码；不会影响已经兑换出的 CLI Token。
+     * 删除当前账号尚未兑换的一次性 CLI 授权码
+     */
+    async deleteCLIAuthCodeRaw(requestParameters: DeleteCLIAuthCodeRequest, initOverrides?: RequestInit | runtime.InitOverrideFunction): Promise<runtime.ApiResponse<void>> {
+        const requestOptions = await this.deleteCLIAuthCodeRequestOpts(requestParameters);
+        const response = await this.request(requestOptions, initOverrides);
+
+        return new runtime.VoidApiResponse(response);
+    }
+
+    /**
+     * 仅删除待兑换且未过期的授权码；不会影响已经兑换出的 CLI Token。
+     * 删除当前账号尚未兑换的一次性 CLI 授权码
+     */
+    async deleteCLIAuthCode(requestParameters: DeleteCLIAuthCodeRequest, initOverrides?: RequestInit | runtime.InitOverrideFunction): Promise<void> {
+        await this.deleteCLIAuthCodeRaw(requestParameters, initOverrides);
     }
 
     /**

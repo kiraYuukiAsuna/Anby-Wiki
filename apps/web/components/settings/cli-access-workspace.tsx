@@ -196,8 +196,12 @@ function TokenRow({
 
 function PendingAuthorizationRow({
   authorization,
+  deleting,
+  onDelete,
 }: {
   authorization: CLIPendingAuthorizationCode;
+  deleting: boolean;
+  onDelete: () => void;
 }) {
   return (
     <div className="grid gap-3 border-b px-4 py-4 last:border-b-0 md:grid-cols-[minmax(0,1fr)_10rem_10rem_auto] md:items-center">
@@ -228,7 +232,20 @@ function PendingAuthorizationRow({
           {DATE_FORMATTER.format(authorization.tokenExpiresAt)}
         </p>
       </div>
-      <span className="text-xs text-muted-foreground">等待 Agent 兑换</span>
+      <Button
+        type="button"
+        size="sm"
+        variant="outline"
+        disabled={deleting}
+        onClick={onDelete}
+      >
+        {deleting ? (
+          <LoaderCircle className="animate-spin" aria-hidden />
+        ) : (
+          <Trash2 aria-hidden />
+        )}
+        删除
+      </Button>
     </div>
   );
 }
@@ -241,6 +258,7 @@ export function CLIAccessWorkspace() {
   const [authorizationCode, setAuthorizationCode] = useState<CLIAuthCode>();
   const [revokingID, setRevokingID] = useState("");
   const [deletingID, setDeletingID] = useState("");
+  const [deletingAuthorizationID, setDeletingAuthorizationID] = useState("");
   const [cleaningInactive, setCleaningInactive] = useState(false);
   const [showInactive, setShowInactive] = useState(false);
   const tokens = useSWR(
@@ -307,6 +325,25 @@ export function CLIAccessWorkspace() {
       }
     } finally {
       setDeletingID("");
+    }
+  };
+
+  const deletePendingAuthorization = async (
+    authorization: CLIPendingAuthorizationCode,
+  ) => {
+    setDeletingAuthorizationID(authorization.id);
+    try {
+      await authApi().deleteCLIAuthCode({ id: authorization.id });
+      await tokens.mutate();
+      toast.success("CLI 授权码已删除");
+    } catch (error) {
+      if (error instanceof ResponseError && error.response.status === 404) {
+        toast.error("授权码已失效或已被兑换");
+      } else {
+        toast.error("CLI 授权码删除失败");
+      }
+    } finally {
+      setDeletingAuthorizationID("");
     }
   };
 
@@ -466,6 +503,8 @@ export function CLIAccessWorkspace() {
             <PendingAuthorizationRow
               key={authorization.id}
               authorization={authorization}
+              deleting={deletingAuthorizationID === authorization.id}
+              onDelete={() => void deletePendingAuthorization(authorization)}
             />
           ))}
           {visibleTokens.map((token) => (

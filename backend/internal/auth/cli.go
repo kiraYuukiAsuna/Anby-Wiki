@@ -13,10 +13,11 @@ import (
 )
 
 var (
-	ErrInvalidCLIInput             = errors.New("auth: invalid CLI authorization input")
-	ErrInvalidCLIAuthorizationCode = errors.New("auth: invalid CLI authorization code")
-	ErrCLITokenNotFound            = errors.New("auth: CLI token not found")
-	ErrActiveCLITokenDeletion      = errors.New("auth: active CLI token cannot be deleted")
+	ErrInvalidCLIInput              = errors.New("auth: invalid CLI authorization input")
+	ErrInvalidCLIAuthorizationCode  = errors.New("auth: invalid CLI authorization code")
+	ErrCLIAuthorizationCodeNotFound = errors.New("auth: CLI authorization code not found")
+	ErrCLITokenNotFound             = errors.New("auth: CLI token not found")
+	ErrActiveCLITokenDeletion       = errors.New("auth: active CLI token cannot be deleted")
 )
 
 const (
@@ -241,6 +242,25 @@ func (s *Service) ListCLIAuthorizationCodes(
 		return nil, fmt.Errorf("auth: iterate CLI authorization codes: %w", err)
 	}
 	return result, nil
+}
+
+func (s *Service) DeleteCLIAuthorizationCode(
+	ctx context.Context,
+	actorID, codeID uuid.UUID,
+) error {
+	if actorID == uuid.Nil || codeID == uuid.Nil {
+		return ErrCLIAuthorizationCodeNotFound
+	}
+	tag, err := s.pool.Exec(ctx, `DELETE FROM cli_authorization_code
+		WHERE id=$1 AND actor_id=$2 AND used_at IS NULL AND expires_at>now()`,
+		codeID, actorID)
+	if err != nil {
+		return fmt.Errorf("auth: delete CLI authorization code: %w", err)
+	}
+	if tag.RowsAffected() != 1 {
+		return ErrCLIAuthorizationCodeNotFound
+	}
+	return nil
 }
 
 func (s *Service) ListCLITokens(

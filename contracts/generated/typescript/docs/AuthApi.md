@@ -5,6 +5,7 @@ All URIs are relative to *http://localhost:3000*
 | Method | HTTP request | Description |
 |------------- | ------------- | -------------|
 | [**createCLIAuthCode**](AuthApi.md#createcliauthcodeoperation) | **POST** /api/v1/auth/cli/codes | 创建一次性 CLI 授权码 |
+| [**deleteCLIAuthCode**](AuthApi.md#deletecliauthcode) | **DELETE** /api/v1/auth/cli/codes/{id} | 删除当前账号尚未兑换的一次性 CLI 授权码 |
 | [**deleteCLITokenRecord**](AuthApi.md#deleteclitokenrecord) | **DELETE** /api/v1/auth/cli/token-records/{id} | 删除当前账号的单个已失效 CLI Token 记录 |
 | [**deleteInactiveCLITokenRecords**](AuthApi.md#deleteinactiveclitokenrecords) | **DELETE** /api/v1/auth/cli/token-records | 删除当前账号的已失效 CLI Token 记录 |
 | [**exchangeCLIAuthCode**](AuthApi.md#exchangecliauthcodeoperation) | **POST** /api/v1/auth/cli/exchange | 兑换一次性授权码 |
@@ -88,6 +89,82 @@ example().catch(console.error);
 | **400** | 请求格式错误 |  -  |
 | **401** | 未认证 |  -  |
 | **403** | 已认证但无权限 |  -  |
+| **500** | 服务端内部错误 |  -  |
+
+[[Back to top]](#) [[Back to API list]](../README.md#api-endpoints) [[Back to Model list]](../README.md#models) [[Back to README]](../README.md)
+
+
+## deleteCLIAuthCode
+
+> deleteCLIAuthCode(id)
+
+删除当前账号尚未兑换的一次性 CLI 授权码
+
+仅删除待兑换且未过期的授权码；不会影响已经兑换出的 CLI Token。
+
+### Example
+
+```ts
+import {
+  Configuration,
+  AuthApi,
+} from '';
+import type { DeleteCLIAuthCodeRequest } from '';
+
+async function example() {
+  console.log("🚀 Testing  SDK...");
+  const config = new Configuration({
+    // To configure API key authorization: sessionCookie
+    apiKey: "YOUR API KEY",
+  });
+  const api = new AuthApi(config);
+
+  const body = {
+    // string
+    id: 38400000-8cf0-11bd-b23e-10b96e4ef00d,
+  } satisfies DeleteCLIAuthCodeRequest;
+
+  try {
+    const data = await api.deleteCLIAuthCode(body);
+    console.log(data);
+  } catch (error) {
+    console.error(error);
+  }
+}
+
+// Run the test
+example().catch(console.error);
+```
+
+### Parameters
+
+
+| Name | Type | Description  | Notes |
+|------------- | ------------- | ------------- | -------------|
+| **id** | `string` |  | [Defaults to `undefined`] |
+
+### Return type
+
+`void` (Empty response body)
+
+### Authorization
+
+[sessionCookie](../README.md#sessionCookie)
+
+### HTTP request headers
+
+- **Content-Type**: Not defined
+- **Accept**: `application/json`
+
+
+### HTTP response details
+| Status code | Description | Response headers |
+|-------------|-------------|------------------|
+| **204** | 授权码已删除 |  -  |
+| **400** | 请求格式错误 |  -  |
+| **401** | 未认证 |  -  |
+| **403** | 已认证但无权限 |  -  |
+| **404** | 资源不存在 |  -  |
 | **500** | 服务端内部错误 |  -  |
 
 [[Back to top]](#) [[Back to API list]](../README.md#api-endpoints) [[Back to Model list]](../README.md#models) [[Back to README]](../README.md)

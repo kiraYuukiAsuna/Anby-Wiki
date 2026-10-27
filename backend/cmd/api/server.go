@@ -106,6 +106,7 @@ func NewRouter(logger *slog.Logger, deps Deps, writeAPI *WriteAPI, readAPI *Read
 				r.Get("/account/profile", authAPI.getAccountProfile)
 				r.Put("/account/profile", authAPI.updateAccountProfile)
 				r.Post("/auth/cli/codes", authAPI.createCLIAuthCode)
+				r.Delete("/auth/cli/codes/{id}", authAPI.deleteCLIAuthCode)
 				r.Post("/auth/cli/exchange", authAPI.exchangeCLIAuthCode)
 				r.Get("/auth/cli/tokens", authAPI.listCLITokens)
 				r.Delete("/auth/cli/tokens/{id}", authAPI.revokeCLIToken)

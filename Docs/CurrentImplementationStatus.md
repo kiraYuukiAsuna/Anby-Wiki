@@ -697,7 +697,7 @@ outlines。References/Related 是 Current Revision
   durable update、Presence 和 snapshot/compact，opaque bytes 均通过 base64。
 - `/settings/cli` 使用浏览器 Session 生成十分钟一次性授权码，CLI 兑换只显示一次的
   Bearer Token。数据库只保存 SHA-256；后台显示待兑换授权码摘要，以及 Token 前缀、
-  状态、到期和最近使用时间并可撤销。
+  状态、到期和最近使用时间；待兑换授权码可删除，Token 可撤销。
 - CLI Token 映射到签发 Actor，不复制角色；每次请求实时读取 Actor/账号状态并继续经过
   现有 RBAC、PageProtection、Proposal Review/Apply 与领域服务边界。
 - 详细协议与示例见 [Agent CLI](AgentCLI.md)。

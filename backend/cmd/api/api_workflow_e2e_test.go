@@ -54,6 +54,39 @@ func TestAPICLIAuthE2E(t *testing.T) {
 		t.Skip("set API_E2E_BASE_URL and API_E2E_PASSWORD")
 	}
 	admin, adminActor := apiE2EAdmin(t, baseURL, password)
+	deletedCodeResponse := requestE2EMap(t, admin, http.MethodPost,
+		baseURL+"/api/v1/auth/cli/codes", map[string]any{
+			"name": "API E2E Deleted Agent", "token_ttl_days": 30,
+		}, http.StatusCreated)
+	deletedCode, ok := deletedCodeResponse["code"].(string)
+	if !ok || !strings.HasPrefix(deletedCode, "anby_code_") {
+		t.Fatalf("invalid deleted CLI authorization code response: %#v", deletedCodeResponse)
+	}
+	pendingDeleteList := requestE2EMap(t, admin, http.MethodGet,
+		baseURL+"/api/v1/auth/cli/tokens", nil, http.StatusOK)
+	pendingCodes, ok := pendingDeleteList["pending_authorization_codes"].([]any)
+	if !ok || len(pendingCodes) == 0 {
+		t.Fatalf("CLI token list lacks pending authorization codes: %#v", pendingDeleteList)
+	}
+	var deletedCodeID uuid.UUID
+	for _, raw := range pendingCodes {
+		item, ok := raw.(map[string]any)
+		if ok && item["name"] == "API E2E Deleted Agent" {
+			deletedCodeID = e2eUUID(t, item, "id")
+			break
+		}
+	}
+	if deletedCodeID == uuid.Nil {
+		t.Fatalf("pending CLI authorization code not found: %#v", pendingCodes)
+	}
+	requestE2ENoBody(t, admin, http.MethodDelete,
+		fmt.Sprintf("%s/api/v1/auth/cli/codes/%s", baseURL, deletedCodeID),
+		http.StatusNoContent)
+	anonymous := &http.Client{Timeout: collaborationE2ETimeout}
+	requestE2EMap(t, anonymous, http.MethodPost,
+		baseURL+"/api/v1/auth/cli/exchange",
+		map[string]any{"code": deletedCode}, http.StatusUnauthorized)
+
 	codeResponse := requestE2EMap(t, admin, http.MethodPost,
 		baseURL+"/api/v1/auth/cli/codes", map[string]any{
 			"name": "API E2E Agent", "token_ttl_days": 30,
@@ -65,7 +98,7 @@ func TestAPICLIAuthE2E(t *testing.T) {
 
 	pendingList := requestE2EMap(t, admin, http.MethodGet,
 		baseURL+"/api/v1/auth/cli/tokens", nil, http.StatusOK)
-	pendingCodes, ok := pendingList["pending_authorization_codes"].([]any)
+	pendingCodes, ok = pendingList["pending_authorization_codes"].([]any)
 	if !ok || len(pendingCodes) == 0 {
 		t.Fatalf("CLI token list lacks pending authorization codes: %#v", pendingList)
 	}
@@ -75,7 +108,6 @@ func TestAPICLIAuthE2E(t *testing.T) {
 		t.Fatalf("invalid pending CLI authorization code: %#v", pendingCodes[0])
 	}
 
-	anonymous := &http.Client{Timeout: collaborationE2ETimeout}
 	exchange := requestE2EMap(t, anonymous, http.MethodPost,
 		baseURL+"/api/v1/auth/cli/exchange",
 		map[string]any{"code": code}, http.StatusOK)

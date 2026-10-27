@@ -513,6 +513,27 @@ paths:
         "401": { $ref: "#/components/responses/Unauthorized" }
         "403": { $ref: "#/components/responses/Forbidden" }
         "500": { $ref: "#/components/responses/Internal" }
+  /api/v1/auth/cli/codes/{id}:
+    delete:
+      operationId: deleteCLIAuthCode
+      tags: [auth]
+      summary: 删除当前账号尚未兑换的一次性 CLI 授权码
+      description: 仅删除待兑换且未过期的授权码；不会影响已经兑换出的 CLI Token。
+      security:
+        - sessionCookie: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: string, format: uuid }
+      responses:
+        "204":
+          description: 授权码已删除
+        "400": { $ref: "#/components/responses/BadRequest" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "500": { $ref: "#/components/responses/Internal" }
   /api/v1/auth/cli/exchange:
     post:
       operationId: exchangeCLIAuthCode

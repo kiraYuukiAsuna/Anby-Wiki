@@ -42,22 +42,37 @@ func TestRequireAuthenticatedWiki(t *testing.T) {
 		}
 	})
 
-	t.Run("account route accepts principal without wiki", func(t *testing.T) {
-		request := httptest.NewRequest(
-			http.MethodGet, "/api/v1/auth/cli/tokens", nil,
-		)
-		request = request.WithContext(authdomain.WithPrincipal(
-			request.Context(),
-			authdomain.Principal{ActorID: uuid.New(), Method: "session"},
-		))
-		response := httptest.NewRecorder()
+	for _, route := range []struct {
+		name   string
+		method string
+		path   string
+	}{
+		{
+			name:   "list CLI tokens",
+			method: http.MethodGet,
+			path:   "/api/v1/auth/cli/tokens",
+		},
+		{
+			name:   "delete CLI authorization code",
+			method: http.MethodDelete,
+			path:   "/api/v1/auth/cli/codes/" + uuid.NewString(),
+		},
+	} {
+		t.Run("account route accepts principal without wiki: "+route.name, func(t *testing.T) {
+			request := httptest.NewRequest(route.method, route.path, nil)
+			request = request.WithContext(authdomain.WithPrincipal(
+				request.Context(),
+				authdomain.Principal{ActorID: uuid.New(), Method: "session"},
+			))
+			response := httptest.NewRecorder()
 
-		handler.ServeHTTP(response, request)
+			handler.ServeHTTP(response, request)
 
-		if response.Code != http.StatusNoContent {
-			t.Fatalf("status=%d want=%d", response.Code, http.StatusNoContent)
-		}
-	})
+			if response.Code != http.StatusNoContent {
+				t.Fatalf("status=%d want=%d", response.Code, http.StatusNoContent)
+			}
+		})
+	}
 
 	for _, path := range []string{
 		"/api/v1/auth/register",
