@@ -912,6 +912,52 @@ func TestRefineImportPlanPromotesLeadAndDropsThinCreateRoutes(t *testing.T) {
 	}
 }
 
+func TestRefineImportPlanKeepsProceduralHeadingBeforeList(t *testing.T) {
+	evidenceItem := []CandidateEvidence{{
+		ChunkID: uuid.New(), Quotation: "Step evidence.", CharStart: 0, CharEnd: 14,
+	}}
+	plan := &ImportPlan{Profile: SourceProfile{Useful: true}, Routes: []PageRoute{{
+		Action: RouteCreate, Title: "Basic flow", Blocks: []PlannedBlock{
+			{Type: string(ast.BlockHeading), Mode: BlockAppend, Text: "Steps", Level: 2, Evidence: evidenceItem},
+			{Type: string(ast.BlockOrderedList), Mode: BlockAppend, Items: []string{
+				"Start the request.", "Return the protected resource.",
+			}, Evidence: evidenceItem},
+		},
+	}}}
+
+	refineImportPlan(plan)
+	blocks := plan.Routes[0].Blocks
+	if len(blocks) != 2 ||
+		blocks[0].Type != string(ast.BlockHeading) ||
+		blocks[0].Text != "Steps" ||
+		blocks[1].Type != string(ast.BlockOrderedList) {
+		t.Fatalf("procedural heading/list order changed: %#v", blocks)
+	}
+}
+
+func TestRefineImportPlanRepairsLateProceduralHeading(t *testing.T) {
+	evidenceItem := []CandidateEvidence{{
+		ChunkID: uuid.New(), Quotation: "Step evidence.", CharStart: 0, CharEnd: 14,
+	}}
+	plan := &ImportPlan{Profile: SourceProfile{Useful: true}, Routes: []PageRoute{{
+		Action: RouteCreate, Title: "Basic flow", Blocks: []PlannedBlock{
+			{Type: string(ast.BlockOrderedList), Mode: BlockAppend, Items: []string{
+				"Start the request.", "Return the protected resource.",
+			}, Evidence: evidenceItem},
+			{Type: string(ast.BlockHeading), Mode: BlockAppend, Text: "Steps", Level: 2, Evidence: evidenceItem},
+		},
+	}}}
+
+	refineImportPlan(plan)
+	blocks := plan.Routes[0].Blocks
+	if len(blocks) != 2 ||
+		blocks[0].Type != string(ast.BlockHeading) ||
+		blocks[0].Text != "Steps" ||
+		blocks[1].Type != string(ast.BlockOrderedList) {
+		t.Fatalf("late procedural heading was not repaired: %#v", blocks)
+	}
+}
+
 func TestExplicitPlanBlockLimitsConsolidateCrossWindowJSONUpdate(t *testing.T) {
 	pageID := uuid.New()
 	evidenceItem := func(quotation string) []CandidateEvidence {

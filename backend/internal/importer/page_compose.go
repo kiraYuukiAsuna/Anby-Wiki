@@ -21,6 +21,12 @@ func (c *ProposalComposer) buildPageOperations(
 	if params.Plan == nil {
 		return nil, ErrInvalidJob
 	}
+	plan := *params.Plan
+	plan.Routes = append([]PageRoute(nil), params.Plan.Routes...)
+	for index := range plan.Routes {
+		plan.Routes[index].Blocks = append([]PlannedBlock(nil), params.Plan.Routes[index].Blocks...)
+	}
+	refineImportPlan(&plan)
 	namespaceID, err := c.pages.NamespaceID(ctx, params.WikiID, "main")
 	if err != nil {
 		return nil, err
@@ -28,7 +34,7 @@ func (c *ProposalComposer) buildPageOperations(
 	entityReferences := entityReferencesForCompose(params)
 	operations := make([]governance.OperationV1, 0)
 	createPageIDs := map[string]uuid.UUID{}
-	for _, route := range params.Plan.Routes {
+	for _, route := range plan.Routes {
 		if route.Action != RouteCreate {
 			continue
 		}
@@ -38,7 +44,7 @@ func (c *ProposalComposer) buildPageOperations(
 		}
 		createPageIDs[normalizedPlanText(route.Title)] = pageID
 	}
-	for _, route := range params.Plan.Routes {
+	for _, route := range plan.Routes {
 		switch route.Action {
 		case RouteCreate:
 			pageID, ok := createPageIDs[normalizedPlanText(route.Title)]
@@ -47,7 +53,7 @@ func (c *ProposalComposer) buildPageOperations(
 			}
 			pageOps, err := c.buildCreatePageOperations(
 				ctx, params, namespaceID, pageID, route,
-				relatedPageTargets(params.Plan, route.Title, createPageIDs), entityReferences,
+				relatedPageTargets(&plan, route.Title, createPageIDs), entityReferences,
 			)
 			if err != nil {
 				return nil, err
@@ -56,7 +62,7 @@ func (c *ProposalComposer) buildPageOperations(
 		case RouteUpdate:
 			pageOps, err := c.buildUpdatePageOperations(
 				ctx, params, route,
-				relatedPageTargets(params.Plan, route.Title, createPageIDs), entityReferences,
+				relatedPageTargets(&plan, route.Title, createPageIDs), entityReferences,
 			)
 			if err != nil {
 				return nil, err

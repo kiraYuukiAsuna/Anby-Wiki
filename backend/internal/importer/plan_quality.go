@@ -56,6 +56,9 @@ func promoteLeadContent(blocks []PlannedBlock) []PlannedBlock {
 		if blocks[index].Type == string(ast.BlockHeading) {
 			continue
 		}
+		if !isLeadContentBlock(blocks[index]) {
+			return blocks
+		}
 		result := make([]PlannedBlock, 0, len(blocks))
 		result = append(result, blocks[index])
 		result = append(result, blocks[:index]...)
@@ -63,6 +66,15 @@ func promoteLeadContent(blocks []PlannedBlock) []PlannedBlock {
 		return result
 	}
 	return blocks
+}
+
+func isLeadContentBlock(block PlannedBlock) bool {
+	switch block.Type {
+	case string(ast.BlockParagraph), string(ast.BlockQuote), string(ast.BlockCallout):
+		return strings.TrimSpace(block.Text) != ""
+	default:
+		return false
+	}
 }
 
 func removeThinCreateRoutes(routes []PageRoute) []PageRoute {
@@ -234,7 +246,44 @@ func refinePlannedBlocks(blocks []PlannedBlock) []PlannedBlock {
 		}
 		result = append(result, block)
 	}
-	return normalizeArticleHeadingLevels(removeOrphanHeadings(result))
+	return normalizeArticleHeadingLevels(removeOrphanHeadings(repairLateSectionHeadings(result)))
+}
+
+func repairLateSectionHeadings(blocks []PlannedBlock) []PlannedBlock {
+	if len(blocks) < 2 {
+		return blocks
+	}
+	result := append([]PlannedBlock(nil), blocks...)
+	for index := 1; index < len(result); index++ {
+		heading := result[index]
+		if heading.Type != string(ast.BlockHeading) ||
+			len(heading.Children) > 0 ||
+			index+1 < len(result) && result[index+1].Type != string(ast.BlockHeading) {
+			continue
+		}
+		previous := result[index-1]
+		if !canMoveLateHeadingBefore(previous, heading) {
+			continue
+		}
+		result[index-1], result[index] = result[index], result[index-1]
+	}
+	return result
+}
+
+func canMoveLateHeadingBefore(previous PlannedBlock, heading PlannedBlock) bool {
+	if heading.Mode != "" && heading.Mode != BlockAppend ||
+		heading.TargetBlockID != nil ||
+		previous.Mode != "" && previous.Mode != BlockAppend ||
+		previous.TargetBlockID != nil {
+		return false
+	}
+	switch previous.Type {
+	case string(ast.BlockBulletList), string(ast.BlockOrderedList), string(ast.BlockTable),
+		string(ast.BlockCode), string(ast.BlockPreformatted), string(ast.BlockEquation):
+		return true
+	default:
+		return false
+	}
 }
 
 func equivalentPlannedBlockIndex(blocks []PlannedBlock, incoming PlannedBlock) int {
