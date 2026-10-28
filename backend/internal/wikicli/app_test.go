@@ -87,8 +87,8 @@ func TestLocalActionSurface(t *testing.T) {
 		}
 		if input.Action == "operations.list" && input.Tag == "" {
 			data := result.Data.(map[string]any)
-			if data["count"] != 167 {
-				t.Fatalf("operation count=%v want=167", data["count"])
+			if data["count"] != 179 {
+				t.Fatalf("operation count=%v want=179", data["count"])
 			}
 		}
 	}
@@ -277,7 +277,8 @@ func TestAuthExchangePersistsTokenWithoutReturningSecret(t *testing.T) {
 					"main_namespace_id":"0198a1b2-c3d4-7e5f-8a9b-0c1d2e3f4a03",
 				"actor_type":"human",
 				"display_name":"CLI Test",
-				"method":"cli_token"
+				"method":"cli_token",
+				"wikis":[]
 			}`))
 		case "/api/v1/auth/cli/token":
 			if request.Header.Get("Authorization") !=

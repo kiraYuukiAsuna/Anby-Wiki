@@ -112,6 +112,28 @@ func TestInlineRichTextAndMentions(t *testing.T) {
 	}
 }
 
+func TestConceptReferencePreservesIdentityAndEscapesLabel(t *testing.T) {
+	entityID := uuid.NewString()
+	content, err := json.Marshal([]*ast.InlineNode{{
+		Type: ast.InlineEntityReference, EntityID: entityID, DisplayText: "<Concept>",
+	}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	document := &ast.Document{
+		Type: "document", SchemaVersion: ast.SchemaVersion,
+		Children: []*ast.Block{{ID: uuid.NewString(), Type: ast.BlockParagraph, Content: content}},
+	}
+	rendered, err := RenderHTML(document)
+	if err != nil {
+		t.Fatal(err)
+	}
+	expected := `<a href="/concepts/` + entityID + `" data-entity-ref="` + entityID + `">&lt;Concept&gt;</a>`
+	if !strings.Contains(rendered, expected) {
+		t.Fatalf("concept reference missing %q: %s", expected, rendered)
+	}
+}
+
 func TestExtendedContentBlocksRenderSafely(t *testing.T) {
 	content := func(text string) json.RawMessage {
 		raw, err := json.Marshal([]*ast.InlineNode{{

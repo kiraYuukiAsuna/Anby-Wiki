@@ -822,13 +822,13 @@ export function InlineNodeView({
     }
     case "entity_reference":
       return (
-        <Link
-          href={`/entities/${node.entity_id}`}
-          data-entity-ref=""
+        <a
+          href={`/concepts/${node.entity_id}`}
+          data-entity-ref={node.entity_id}
           className="text-violet-600 underline-offset-4 hover:underline"
         >
           {node.display_text}
-        </Link>
+        </a>
       );
     case "claim_reference":
       return (

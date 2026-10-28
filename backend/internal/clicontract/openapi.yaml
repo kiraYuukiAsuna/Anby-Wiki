@@ -3598,6 +3598,35 @@ paths:
           $ref: "#/components/responses/NotFound"
         "500":
           $ref: "#/components/responses/Internal"
+  /api/v1/entities/{id}/articles:
+    get:
+      operationId: resolveEntityArticles
+      summary: 将正文概念引用解析为可阅读条目
+      description: |
+        在当前登录 Wiki 内跟随 Entity 合并映射，仅返回当前读者有权限阅读的、
+        已发布且未删除的 primary 绑定条目（排除重定向页）。
+        language 指定的同语言条目优先，其余语言保留为可选条目。
+        items 为空表示没有可阅读条目；一条可直接跳转，多条由读者选择。
+        返回完整候选集合，不使用提及页面或搜索结果推断条目。
+      tags: [knowledge]
+      parameters:
+        - $ref: "#/components/parameters/ReferenceTargetId"
+        - name: language
+          in: query
+          required: false
+          schema: { type: string, maxLength: 64 }
+          description: 优先显示的条目语言
+      responses:
+        "200":
+          description: 合并后的实体身份及可阅读条目
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/EntityArticleResolution" }
+        "400": { $ref: "#/components/responses/BadRequest" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "500": { $ref: "#/components/responses/Internal" }
   /api/v1/entities/{id}/labels:
     post:
       operationId: addEntityLabel
@@ -8236,6 +8265,27 @@ components:
           type: array
           items:
             $ref: "#/components/schemas/PageEntityBinding"
+    EntityArticle:
+      type: object
+      additionalProperties: false
+      required: [page_id, display_title, namespace, language]
+      properties:
+        page_id: { type: string, format: uuid }
+        display_title: { type: string }
+        namespace: { type: string }
+        language: { type: string }
+    EntityArticleResolution:
+      type: object
+      additionalProperties: false
+      required: [entity_id, items]
+      properties:
+        entity_id:
+          type: string
+          format: uuid
+          description: 跟随合并后的当前实体 ID
+        items:
+          type: array
+          items: { $ref: "#/components/schemas/EntityArticle" }
     SetPageEntityBindingRequest:
       type: object
       additionalProperties: false

@@ -49,6 +49,11 @@ import {
     EntityAliasToJSON,
 } from '../models/EntityAlias';
 import {
+    type EntityArticleResolution,
+    EntityArticleResolutionFromJSON,
+    EntityArticleResolutionToJSON,
+} from '../models/EntityArticleResolution';
+import {
     type EntityDetail,
     EntityDetailFromJSON,
     EntityDetailToJSON,
@@ -253,6 +258,11 @@ export interface RemovePageEntityBindingRequest {
     id: string;
     entityId: string;
     role: RemovePageEntityBindingRoleEnum;
+}
+
+export interface ResolveEntityArticlesRequest {
+    id: string;
+    language?: string;
 }
 
 export interface RollbackEntityMergeRequest {
@@ -1509,6 +1519,65 @@ export class KnowledgeApi extends runtime.BaseAPI {
      */
     async removePageEntityBinding(requestParameters: RemovePageEntityBindingRequest, initOverrides?: RequestInit | runtime.InitOverrideFunction): Promise<void> {
         await this.removePageEntityBindingRaw(requestParameters, initOverrides);
+    }
+
+    /**
+     * Creates request options for resolveEntityArticles without sending the request
+     */
+    async resolveEntityArticlesRequestOpts(requestParameters: ResolveEntityArticlesRequest): Promise<runtime.RequestOpts> {
+        if (requestParameters['id'] == null) {
+            throw new runtime.RequiredError(
+                'id',
+                'Required parameter "id" was null or undefined when calling resolveEntityArticles().'
+            );
+        }
+
+        const queryParameters: any = {};
+
+        if (requestParameters['language'] != null) {
+            queryParameters['language'] = requestParameters['language'];
+        }
+
+        const headerParameters: runtime.HTTPHeaders = {};
+
+        if (this.configuration && this.configuration.accessToken) {
+            const token = this.configuration.accessToken;
+            const tokenString = await token("cliBearer", []);
+
+            if (tokenString) {
+                headerParameters["Authorization"] = `Bearer ${tokenString}`;
+            }
+        }
+
+        let urlPath = `/api/v1/entities/{id}/articles`;
+        urlPath = urlPath.replace('{id}', encodeURIComponent(String(requestParameters['id'])));
+
+        return {
+            path: urlPath,
+            method: 'GET',
+            headers: headerParameters,
+            query: queryParameters,
+        };
+    }
+
+    /**
+     * 在当前登录 Wiki 内跟随 Entity 合并映射，仅返回当前读者有权限阅读的、 已发布且未删除的 primary 绑定条目（排除重定向页）。 language 指定的同语言条目优先，其余语言保留为可选条目。 items 为空表示没有可阅读条目；一条可直接跳转，多条由读者选择。 返回完整候选集合，不使用提及页面或搜索结果推断条目。
+     * 将正文概念引用解析为可阅读条目
+     */
+    async resolveEntityArticlesRaw(requestParameters: ResolveEntityArticlesRequest, initOverrides?: RequestInit | runtime.InitOverrideFunction): Promise<runtime.ApiResponse<EntityArticleResolution>> {
+        const requestOptions = await this.resolveEntityArticlesRequestOpts(requestParameters);
+        const response = await this.request(requestOptions, initOverrides);
+
+        return new runtime.JSONApiResponse(response, (jsonValue) => EntityArticleResolutionFromJSON(jsonValue));
+    }
+
+    /**
+     * 在当前登录 Wiki 内跟随 Entity 合并映射，仅返回当前读者有权限阅读的、 已发布且未删除的 primary 绑定条目（排除重定向页）。 language 指定的同语言条目优先，其余语言保留为可选条目。 items 为空表示没有可阅读条目；一条可直接跳转，多条由读者选择。 返回完整候选集合，不使用提及页面或搜索结果推断条目。
+     * 将正文概念引用解析为可阅读条目
+     */
+    async resolveEntityArticles(requestParameters: ResolveEntityArticlesRequest, initOverrides?: RequestInit | runtime.InitOverrideFunction): Promise<EntityArticleResolution> {
+        const response = await this.resolveEntityArticlesRaw(requestParameters, initOverrides);
+        return await response.value();
     }
 
     /**

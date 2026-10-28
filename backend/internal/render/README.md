@@ -39,7 +39,7 @@ M3 引入 RenderedPage 投影与缓存时复用本包，并按 `RendererVersion`
 | `page_reference`（已解析） | `<a href="/pages/{target_page_id}" data-page-ref>{display_text}</a>`；带 `target_heading_block_id` 时 href 追加 `#{block_id}` |
 | `page_reference`（未解析） | `<a class="unresolved" data-unresolved-ref data-target-namespace data-target-title>{normalized_title}</a>`，**无 href，不可跳转** |
 | `external_link` | `<a href="{url}" rel="noopener noreferrer nofollow" target="_blank">{display_text}</a>` |
-| `entity_reference` | `<a href="/entities/{entity_id}" data-entity-ref>{display_text}</a>` |
+| `entity_reference` | `<a href="/concepts/{entity_id}" data-entity-ref="{entity_id}">{display_text}</a>`；阅读时按主实体绑定解析到条目 |
 | `claim_reference` | `<a href="/claims/{claim_id}" data-claim-ref="{claim_id}">{display_text}</a>` |
 | `citation_reference` | `<sup id="cite-ref-{block_id}-{node_index}" data-citation-ref="{citation_id}" …><a href="#cite-note-{n}">[n]</a></sup>`；按全文 Citation 首次出现顺序编号，同一 ID 复用序号，并与文末 References 双向导航 |
 | `mention` | `<span class="mention" data-actor-id="{actor_id}">@{display_text}</span>` |
@@ -69,7 +69,7 @@ M3 引入 RenderedPage 投影与缓存时复用本包，并按 `RendererVersion`
 
 ## 版本策略
 
-`RendererVersion` 当前为 `"v12"`。旧投影会
+`RendererVersion` 当前为 `"v13"`。旧投影会
 因版本不匹配自动失效。规则：
 
 - 任何影响输出字节流的变更（标签结构、属性、转义行为、URL 策略）都必须升版
@@ -81,6 +81,7 @@ M3 引入 RenderedPage 投影与缓存时复用本包，并按 `RendererVersion`
 
 版本记录：
 
+- `v13`：正文 EntityReference 保留实体 ID，链接进入条目解析路径；唯一条目跳转，多条目供读者选择。
 - `v12`：增加 Underline、受限文本/背景颜色、DateMention 与 DatabaseMention。
 - `v11`：增加 Audio、File、PDF、Bookmark、LinkPreview，并将 Embed 升级为
   YouTube/Vimeo/Figma 白名单交互式 iframe。

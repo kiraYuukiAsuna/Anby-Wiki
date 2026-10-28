@@ -25,7 +25,7 @@ import (
 
 // RendererVersion 渲染器版本。渲染规则发生任何影响输出的变更时必须升版
 // （M3 的 RenderedPage 投影按此版本判断缓存是否需要重建）。变更规则见 README。
-const RendererVersion = "v12"
+const RendererVersion = "v13"
 
 type renderContext struct {
 	citationNumbers map[string]int
@@ -761,8 +761,8 @@ func renderInline(
 		return nil
 
 	case ast.InlineEntityReference:
-		fmt.Fprintf(b, `<a href="/entities/%s" data-entity-ref>%s</a>`,
-			html.EscapeString(n.EntityID), html.EscapeString(n.DisplayText))
+		fmt.Fprintf(b, `<a href="/concepts/%s" data-entity-ref="%s">%s</a>`,
+			html.EscapeString(n.EntityID), html.EscapeString(n.EntityID), html.EscapeString(n.DisplayText))
 		return nil
 
 	case ast.InlineClaimReference:

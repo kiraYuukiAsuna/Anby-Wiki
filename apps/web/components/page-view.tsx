@@ -15,6 +15,7 @@ import {
 
 import { AstDocument } from "@/components/ast";
 import { ArticleEndMatter } from "@/components/article-end-matter";
+import { ConceptArticleLinks } from "@/components/concept-article-links";
 import { LazySectionDocument } from "@/components/lazy-section-document";
 import { PageButtonRuntime } from "@/components/page-button-runtime";
 import { PageShareLinkDialog } from "@/components/page-share-link-dialog";
@@ -268,25 +269,27 @@ export async function PageView({ data }: { data: PageWithContent }) {
 
         {!terminalRedirect ? <TableOfContents entries={toc} /> : null}
 
-        {sectioned && content && !terminalRedirect ? (
-          <LazySectionDocument
-            pageId={page.id}
-            revisionId={content.revision.id}
-            expectedSectionCount={content.sectionCount}
-            initialBlockId={sectionTarget}
-          />
-        ) : document && content?.html && !terminalRedirect ? (
-          <ServerRenderedDocument
-            html={content.html}
-            rendererVersion={content.rendererVersion}
-          />
-        ) : document && !terminalRedirect ? (
-          <AstDocument document={document} />
-        ) : !terminalRedirect ? (
-          <p className="rounded-lg border border-dashed border-border p-6 text-center text-sm text-muted-foreground">
-            本页面已创建，但尚未发布任何内容。
-          </p>
-        ) : null}
+        <ConceptArticleLinks key={page.id} wikiId={page.wikiId} language={page.language}>
+          {sectioned && content && !terminalRedirect ? (
+            <LazySectionDocument
+              pageId={page.id}
+              revisionId={content.revision.id}
+              expectedSectionCount={content.sectionCount}
+              initialBlockId={sectionTarget}
+            />
+          ) : document && content?.html && !terminalRedirect ? (
+            <ServerRenderedDocument
+              html={content.html}
+              rendererVersion={content.rendererVersion}
+            />
+          ) : document && !terminalRedirect ? (
+            <AstDocument document={document} />
+          ) : !terminalRedirect ? (
+            <p className="rounded-lg border border-dashed border-border p-6 text-center text-sm text-muted-foreground">
+              本页面已创建，但尚未发布任何内容。
+            </p>
+          ) : null}
+        </ConceptArticleLinks>
 
         {!terminalRedirect ? (
           <ArticleEndMatter

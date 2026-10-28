@@ -163,6 +163,7 @@ func NewRouter(logger *slog.Logger, deps Deps, writeAPI *WriteAPI, readAPI *Read
 			if knowledgeReadAPI != nil {
 				r.Get("/entities", knowledgeReadAPI.listEntities)
 				r.Get("/entities/{id}", knowledgeReadAPI.getEntity)
+				r.Get("/entities/{id}/articles", knowledgeReadAPI.resolveEntityArticles)
 				r.Post("/entities/{id}/labels", knowledgeReadAPI.addEntityLabel)
 				r.Delete("/entities/{id}/labels", knowledgeReadAPI.removeEntityLabel)
 				r.Put("/entities/{id}/labels/primary", knowledgeReadAPI.setPrimaryEntityLabel)

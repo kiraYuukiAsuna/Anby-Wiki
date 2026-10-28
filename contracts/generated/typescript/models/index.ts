@@ -94,6 +94,8 @@ export * from './DeleteCLITokenRecordsResult';
 export * from './DocumentDiff';
 export * from './DocumentOutline';
 export * from './EntityAlias';
+export * from './EntityArticle';
+export * from './EntityArticleResolution';
 export * from './EntityCatalogItem';
 export * from './EntityDetail';
 export * from './EntityFederationLink';

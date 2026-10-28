@@ -24,6 +24,7 @@ All URIs are relative to *http://localhost:3000*
 | [**removeEntityAlias**](KnowledgeApi.md#removeentityalias) | **DELETE** /api/v1/entities/{id}/aliases/{alias_id} | 删除 Entity 别名 |
 | [**removeEntityLabel**](KnowledgeApi.md#removeentitylabel) | **DELETE** /api/v1/entities/{id}/labels | 删除 Entity 标签 |
 | [**removePageEntityBinding**](KnowledgeApi.md#removepageentitybinding) | **DELETE** /api/v1/pages/{id}/entity-bindings/{entity_id} | 删除 Page 的 Entity 绑定 |
+| [**resolveEntityArticles**](KnowledgeApi.md#resolveentityarticles) | **GET** /api/v1/entities/{id}/articles | 将正文概念引用解析为可阅读条目 |
 | [**rollbackEntityMerge**](KnowledgeApi.md#rollbackentitymerge) | **POST** /api/v1/entity-merges/{id}/rollback | 补偿回滚 Entity 合并 |
 | [**scanFactConsistency**](KnowledgeApi.md#scanfactconsistency) | **POST** /api/v1/fact-consistency-scans | 全量重建事实一致性问题 |
 | [**setPageEntityBinding**](KnowledgeApi.md#setpageentitybindingoperation) | **PUT** /api/v1/pages/{id}/entity-bindings | 设置 Page 的 Entity 绑定 |
@@ -1626,6 +1627,87 @@ example().catch(console.error);
 | Status code | Description | Response headers |
 |-------------|-------------|------------------|
 | **204** | 绑定已删除 |  * X-Request-ID -  <br>  |
+| **400** | 请求格式错误 |  -  |
+| **401** | 未认证 |  -  |
+| **403** | 已认证但无权限 |  -  |
+| **404** | 资源不存在 |  -  |
+| **500** | 服务端内部错误 |  -  |
+
+[[Back to top]](#) [[Back to API list]](../README.md#api-endpoints) [[Back to Model list]](../README.md#models) [[Back to README]](../README.md)
+
+
+## resolveEntityArticles
+
+> EntityArticleResolution resolveEntityArticles(id, language)
+
+将正文概念引用解析为可阅读条目
+
+在当前登录 Wiki 内跟随 Entity 合并映射，仅返回当前读者有权限阅读的、 已发布且未删除的 primary 绑定条目（排除重定向页）。 language 指定的同语言条目优先，其余语言保留为可选条目。 items 为空表示没有可阅读条目；一条可直接跳转，多条由读者选择。 返回完整候选集合，不使用提及页面或搜索结果推断条目。
+
+### Example
+
+```ts
+import {
+  Configuration,
+  KnowledgeApi,
+} from '';
+import type { ResolveEntityArticlesRequest } from '';
+
+async function example() {
+  console.log("🚀 Testing  SDK...");
+  const config = new Configuration({
+    // Configure HTTP bearer authorization: cliBearer
+    accessToken: "YOUR BEARER TOKEN",
+    // To configure API key authorization: sessionCookie
+    apiKey: "YOUR API KEY",
+  });
+  const api = new KnowledgeApi(config);
+
+  const body = {
+    // string | Entity、Claim 或 Citation 稳定 ID
+    id: 38400000-8cf0-11bd-b23e-10b96e4ef00d,
+    // string | 优先显示的条目语言 (optional)
+    language: language_example,
+  } satisfies ResolveEntityArticlesRequest;
+
+  try {
+    const data = await api.resolveEntityArticles(body);
+    console.log(data);
+  } catch (error) {
+    console.error(error);
+  }
+}
+
+// Run the test
+example().catch(console.error);
+```
+
+### Parameters
+
+
+| Name | Type | Description  | Notes |
+|------------- | ------------- | ------------- | -------------|
+| **id** | `string` | Entity、Claim 或 Citation 稳定 ID | [Defaults to `undefined`] |
+| **language** | `string` | 优先显示的条目语言 | [Optional] [Defaults to `undefined`] |
+
+### Return type
+
+[**EntityArticleResolution**](EntityArticleResolution.md)
+
+### Authorization
+
+[cliBearer](../README.md#cliBearer), [sessionCookie](../README.md#sessionCookie)
+
+### HTTP request headers
+
+- **Content-Type**: Not defined
+- **Accept**: `application/json`
+
+
+### HTTP response details
+| Status code | Description | Response headers |
+|-------------|-------------|------------------|
+| **200** | 合并后的实体身份及可阅读条目 |  -  |
 | **400** | 请求格式错误 |  -  |
 | **401** | 未认证 |  -  |
 | **403** | 已认证但无权限 |  -  |

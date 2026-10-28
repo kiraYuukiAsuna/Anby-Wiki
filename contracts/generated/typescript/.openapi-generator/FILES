@@ -118,6 +118,8 @@ docs/DeleteCLITokenRecordsResult.md
 docs/DocumentDiff.md
 docs/DocumentOutline.md
 docs/EntityAlias.md
+docs/EntityArticle.md
+docs/EntityArticleResolution.md
 docs/EntityCatalogItem.md
 docs/EntityDetail.md
 docs/EntityFederationLink.md
@@ -434,6 +436,8 @@ models/DeleteCLITokenRecordsResult.ts
 models/DocumentDiff.ts
 models/DocumentOutline.ts
 models/EntityAlias.ts
+models/EntityArticle.ts
+models/EntityArticleResolution.ts
 models/EntityCatalogItem.ts
 models/EntityDetail.ts
 models/EntityFederationLink.ts

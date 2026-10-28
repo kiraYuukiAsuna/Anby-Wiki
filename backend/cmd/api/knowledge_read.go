@@ -111,6 +111,18 @@ type entityCatalogPageResponse struct {
 	NextCursor *string                     `json:"next_cursor"`
 }
 
+type entityArticleResponse struct {
+	PageID       uuid.UUID `json:"page_id"`
+	DisplayTitle string    `json:"display_title"`
+	Namespace    string    `json:"namespace"`
+	Language     string    `json:"language"`
+}
+
+type entityArticleResolutionResponse struct {
+	EntityID uuid.UUID               `json:"entity_id"`
+	Items    []entityArticleResponse `json:"items"`
+}
+
 type propertyResponse struct {
 	ID            uuid.UUID       `json:"id"`
 	PropertyKey   string          `json:"property_key"`
@@ -277,6 +289,47 @@ func (a *KnowledgeReadAPI) getEntity(w http.ResponseWriter, r *http.Request) {
 			Alias: alias.Alias, AliasType: alias.AliasType}
 	}
 	httpx.WriteJSON(w, http.StatusOK, resp)
+}
+
+func (a *KnowledgeReadAPI) resolveEntityArticles(w http.ResponseWriter, r *http.Request) {
+	id, ok := pageIDFrom(w, r)
+	if !ok {
+		return
+	}
+	actorID, ok := actorIDFrom(w, r)
+	if !ok {
+		return
+	}
+	if a.authorization == nil {
+		a.writeError(w, r, governance.ErrPermissionDenied)
+		return
+	}
+	wikiID := wikiIDFromRequest(r)
+	// SharedPageIDs returns nil for Wiki members and a non-nil, possibly
+	// empty slice for page guests. Filter in SQL before exposing any titles.
+	pageIDs, err := a.authorization.SharedPageIDs(r.Context(), actorID, wikiID)
+	if err != nil {
+		a.writeError(w, r, err)
+		return
+	}
+	result, err := a.knowledge.ResolveEntityArticles(r.Context(), knowledge.EntityArticlesParams{
+		WikiID: wikiID, EntityID: id, Language: r.URL.Query().Get("language"), PageIDs: pageIDs,
+	})
+	if err != nil {
+		a.writeError(w, r, err)
+		return
+	}
+	response := entityArticleResolutionResponse{
+		EntityID: result.EntityID, Items: make([]entityArticleResponse, len(result.Items)),
+	}
+	for i, item := range result.Items {
+		response.Items[i] = entityArticleResponse{
+			PageID: item.PageID, DisplayTitle: item.DisplayTitle,
+			Namespace: item.Namespace, Language: item.Language,
+		}
+	}
+	w.Header().Set("Cache-Control", "private, no-store")
+	httpx.WriteJSON(w, http.StatusOK, response)
 }
 
 func (a *KnowledgeReadAPI) getClaim(w http.ResponseWriter, r *http.Request) {
