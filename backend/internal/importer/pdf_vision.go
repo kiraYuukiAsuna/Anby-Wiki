@@ -16,18 +16,17 @@ import (
 	"sync"
 	"unicode/utf8"
 
-	"github.com/anby/wiki/backend/internal/ai"
 	"github.com/anby/wiki/backend/internal/evidence"
 )
 
 const (
 	DocumentPageAnalysisPromptKey     = "document-page-analysis-v1"
 	DocumentPageAnalysisPromptVersion = 2
-	visionPDFParserVersion            = "1"
+	visionPDFParserVersion            = "2"
 	maxAdvancedPDFPages               = 500
 	maxVisionPageImageBytes           = 16 << 20
 	maxVisionNativeTextRunes          = 24000
-	visionRenderEdge                  = 2000
+	visionRenderEdge                  = 4000
 	visionPageWorkers                 = 3
 )
 
@@ -49,17 +48,18 @@ func (*visionPDFAdapter) Supports(mimeType string) bool {
 }
 
 type pageAnalysis struct {
-	SchemaVersion int           `json:"schema_version"`
-	Page          int           `json:"page"`
-	SectionPath   []string      `json:"section_path"`
-	Elements      []pageElement `json:"elements"`
-	Warnings      []string      `json:"warnings"`
-	QualityScore  float64       `json:"quality_score"`
-	RenderWidth   int32         `json:"-"`
-	RenderHeight  int32         `json:"-"`
-	PromptVersion int           `json:"-"`
-	Provider      string        `json:"-"`
-	Model         string        `json:"-"`
+	SchemaVersion       int           `json:"schema_version"`
+	Page                int           `json:"page"`
+	SectionPath         []string      `json:"section_path"`
+	Elements            []pageElement `json:"elements"`
+	Warnings            []string      `json:"warnings"`
+	QualityScore        float64       `json:"quality_score"`
+	RenderWidth         int32         `json:"-"`
+	RenderHeight        int32         `json:"-"`
+	PromptVersion       int           `json:"-"`
+	LayoutPromptVersion int           `json:"-"`
+	Provider            string        `json:"-"`
+	Model               string        `json:"-"`
 }
 
 type pageElement struct {
@@ -130,6 +130,7 @@ func (a *visionPDFAdapter) Parse(
 	warnings := make([]string, 0)
 	nativeTextPresent := false
 	promptVersion := 0
+	layoutPromptVersion := 0
 	effectiveProvider := ""
 	effectiveModel := ""
 	for pageIndex := range analyses {
@@ -138,40 +139,29 @@ func (a *visionPDFAdapter) Parse(
 		nativeTextPresent = nativeTextPresent || nativeText != ""
 		analysis := analyses[pageIndex]
 		if pageIndex == 0 {
-			promptVersion = analysis.PromptVersion
+			layoutPromptVersion = analysis.LayoutPromptVersion
 			effectiveProvider = analysis.Provider
 			effectiveModel = analysis.Model
-		} else if promptVersion != analysis.PromptVersion ||
+		} else if layoutPromptVersion != analysis.LayoutPromptVersion ||
 			effectiveProvider != analysis.Provider ||
 			effectiveModel != analysis.Model {
 			return nil, ErrVisionPageAnalysisFailed
 		}
+		if analysis.PromptVersion > 0 {
+			if promptVersion > 0 && promptVersion != analysis.PromptVersion {
+				return nil, ErrVisionPageAnalysisFailed
+			}
+			promptVersion = analysis.PromptVersion
+		}
+		pageBlocks := groundedPageBlocks(&analysis, nativeText)
 		for _, warning := range analysis.Warnings {
 			warnings = append(warnings, fmt.Sprintf("page %d: %s", pageNumber, warning))
 		}
-		if analysis.QualityScore < 0.6 {
+		if len(analysis.Elements) > 0 && analysis.QualityScore < 0.6 {
 			warnings = append(
 				warnings,
 				fmt.Sprintf("page %d: visual analysis quality %.2f", pageNumber, analysis.QualityScore),
 			)
-		}
-		pageBlocks := pageAnalysisBlocks(analysis)
-		if nativeText != "" {
-			page := int32(pageNumber)
-			exactTextBlock := TextBlock{
-				Kind: evidence.SourceChunkTypePage,
-				Text: nativeText,
-				Page: &page, PageEnd: &page,
-				SectionPath: append([]string(nil), analysis.SectionPath...),
-				Content:     json.RawMessage(`{"source":"native_text"}`),
-			}
-			visualBlocks := make([]TextBlock, 0, len(pageBlocks))
-			for index := range pageBlocks {
-				if pageBlocks[index].Kind != evidence.SourceChunkTypeText {
-					visualBlocks = append(visualBlocks, pageBlocks[index])
-				}
-			}
-			pageBlocks = append([]TextBlock{exactTextBlock}, visualBlocks...)
 		}
 		blocks = append(blocks, pageBlocks...)
 	}
@@ -182,14 +172,19 @@ func (a *visionPDFAdapter) Parse(
 	if nativeTextPresent {
 		track = evidence.ParseTrackHybrid
 	}
+	prompts := []ParsePrompt{{Key: DocumentPageLayoutPromptKey, Version: layoutPromptVersion}}
+	if promptVersion > 0 {
+		prompts = append(prompts, ParsePrompt{Key: DocumentRegionAnalysisPromptKey, Version: promptVersion})
+	}
 	return &adapterResult{
 		Track: track,
 		Metadata: ParseMetadata{
 			PageCount:     pageCount,
 			Provider:      effectiveProvider,
 			Model:         effectiveModel,
-			PromptKey:     DocumentPageAnalysisPromptKey,
-			PromptVersion: promptVersion,
+			PromptKey:     DocumentPageLayoutPromptKey,
+			PromptVersion: layoutPromptVersion,
+			Prompts:       prompts,
 			Warnings:      warnings,
 		},
 		Blocks: blocks,
@@ -265,76 +260,14 @@ func (a *visionPDFAdapter) analyzePage(
 	nativeText string,
 	page, pageCount int,
 ) (pageAnalysis, error) {
-	nativeText = trimRunes(nativeText, maxVisionNativeTextRunes)
-	generated, err := a.generator.Generate(ctx, ai.Request{
-		Provider:  request.Provider,
-		Model:     request.Model,
-		PromptKey: DocumentPageAnalysisPromptKey,
-		Variables: map[string]any{
-			"filename":    request.Filename,
-			"page":        page,
-			"page_count":  pageCount,
-			"native_text": nativeText,
-		},
-		Images: []ai.ImageInput{{
-			MediaType: "image/jpeg",
-			Data:      rendered.Data,
-		}},
-		ImportJobID: request.ImportJobID,
-		ImportRunID: request.ImportRunID,
-	})
+	analysis, err := analyzeVisionPage(ctx, a.generator, request, rendered, nativeText, page, pageCount)
 	if err != nil {
 		if ctx.Err() != nil {
 			return pageAnalysis{}, ctx.Err()
 		}
-		return pageAnalysis{}, fmt.Errorf("%w: page %d: %v", ErrVisionPageAnalysisFailed, page, err)
+		// Never include supplier bodies or model output in the returned error.
+		return pageAnalysis{}, fmt.Errorf("%w: page %d: %w", ErrVisionPageAnalysisFailed, page, err)
 	}
-	var analysis pageAnalysis
-	if err := json.Unmarshal(generated.JSON, &analysis); err != nil ||
-		analysis.SchemaVersion != 1 || analysis.Page != page ||
-		generated.PromptVersion <= 0 ||
-		strings.TrimSpace(generated.Provider) == "" ||
-		strings.TrimSpace(generated.Model) == "" {
-		return pageAnalysis{}, fmt.Errorf("%w: page %d output", ErrVisionPageAnalysisFailed, page)
-	}
-	for index := range analysis.Elements {
-		element := &analysis.Elements[index]
-		element.Text = strings.TrimSpace(element.Text)
-		element.Title = strings.TrimSpace(element.Title)
-		element.Summary = strings.TrimSpace(element.Summary)
-		if element.Text == "" || !evidence.IsValidSourceChunkType(element.Kind) ||
-			element.Kind == evidence.SourceChunkTypePage {
-			return pageAnalysis{}, fmt.Errorf(
-				"%w: page %d element %d",
-				ErrVisionPageAnalysisFailed, page, index,
-			)
-		}
-		if len(element.StructuredData) == 0 {
-			element.StructuredData = json.RawMessage(`{}`)
-		}
-		if element.Region != nil {
-			region := element.Region
-			if region.X >= 1000 || region.Y >= 1000 {
-				analysis.Warnings = append(
-					analysis.Warnings,
-					fmt.Sprintf("element %d region origin outside page; locator omitted", index),
-				)
-				element.Region = nil
-			} else if region.X+region.Width > 1000 || region.Y+region.Height > 1000 {
-				region.Width = min(region.Width, 1000-region.X)
-				region.Height = min(region.Height, 1000-region.Y)
-				analysis.Warnings = append(
-					analysis.Warnings,
-					fmt.Sprintf("element %d region clipped to page bounds", index),
-				)
-			}
-		}
-	}
-	analysis.RenderWidth = rendered.Width
-	analysis.RenderHeight = rendered.Height
-	analysis.PromptVersion = generated.PromptVersion
-	analysis.Provider = generated.Provider
-	analysis.Model = generated.Model
 	return analysis, nil
 }
 
@@ -353,6 +286,7 @@ func pageAnalysisBlocks(analysis pageAnalysis) []TextBlock {
 			"structured_data": json.RawMessage(element.StructuredData),
 			"confidence":      element.Confidence,
 			"source":          "vision_page",
+			"reading_order":   index,
 		})
 		blocks = append(blocks, TextBlock{
 			Kind: element.Kind, Title: element.Title, Text: element.Text,

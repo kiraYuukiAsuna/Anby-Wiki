@@ -24,6 +24,7 @@
 | [ADR-0020](./0020-remove-origin-csrf-and-cross-origin-headers.md) | 移除 Origin CSRF 门禁与 COOP/CORP | 已接受 |
 | [ADR-0021](./0021-semantic-kernel-and-admin-ai-config.md) | Semantic Kernel Sidecar 与账号级文档理解模型配置 | 已接受 |
 | [ADR-0022](./0022-dual-track-document-parsing.md) | 复杂文档采用文本与视觉双轨解析 | 已接受 |
+| [ADR-0023](./0023-llm-layout-and-region-parsing.md) | LLM 布局与区域识别分离，统一 PDF 与图片解析 | 已接受 |
 
 新增 ADR 规则：编号只增不复用；状态为「提议 / 已接受 / 已废弃 / 被 ADR-XXXX 取代」；
 涉及实施方案 §8.2 高冲突资源的决策变更必须先更新 ADR 再改代码。

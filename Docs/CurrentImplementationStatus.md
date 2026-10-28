@@ -26,6 +26,24 @@ AI 配置和双会话协作 E2E；当前权威契约为 177 个 operation。“�
 安全边界、账号恢复、备份恢复与人工可访问性等仍须验收。详见
 [待解决问题](OutstandingIssues.md)。
 
+## 2026-10-27 MinerU 设计融入与纯 LLM 解析
+
+- 评估固定版本 MinerU 的解析、分窗、后处理与定位源码，决定改造解析层，继续采用
+  SourceVersion → Extraction → ImportPlan → Proposal 的领域服务与人工审核边界。
+  完整比较、来源、实施范围和成本限制见 [借鉴方案](MinerUReferencePlan.md) 与
+  [ADR-0023](adr/0023-llm-layout-and-region-parsing.md)。
+- PDF、PNG、JPEG 统一使用账号配置的多模态 LLM。先识别全页有序布局，再裁出局部
+  区域识别；PDF 渲染最长边 4000，布局请求 1600，局部请求 2000，不放大低分辨率图。
+  移除 Worker 的 Tesseract 实现和镜像依赖，不引入 embedding、向量库或小模型栈。
+- 原生 PDF 区域文字必须能唯一、逐字或仅空白差异回填原文；原始子串成为分片文字。
+  重复位置不猜测，未覆盖原文仍固化为补充分片。页内阅读顺序与区域原图坐标由 Worker
+  绑定，第二阶段模型不能改写；图片和扫描页明确使用视觉转写。
+- 两个新 Prompt 使用独立版本化 Schema，并加入契约副本漂移检查；实际版本一起参与
+  parser fingerprint。最多三页并行、页内串行，任何必需区域失败时不发布部分解析制品。
+  保留历史 SourceVersion 和已有解析恢复点，不改数据库、OpenAPI、AST 或发布事务。
+- 本地协议与编排测试不能证明真实 LLM 的识别改善；两阶段调用数和耗时需用实际语料
+  比较。旧版本复杂文档的生产验收记录不能作为本次新解析器的生产验收。
+
 ## 2026-10-27 单文档分享
 
 - 新增 `page_share(page_id,actor_id,role_key)` 页面级授权；它不写入

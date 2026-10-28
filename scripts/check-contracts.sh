@@ -47,6 +47,16 @@ check_copy \
   "$ROOT/backend/internal/importer/schema/document-page-analysis.schema.json"
 
 check_copy \
+  "Document page layout v1" \
+  "$ROOT/contracts/schemas/document-parsing/v1/page-layout.schema.json" \
+  "$ROOT/backend/internal/importer/schema/document-page-layout.schema.json"
+
+check_copy \
+  "Document region analysis v1" \
+  "$ROOT/contracts/schemas/document-parsing/v1/region-analysis.schema.json" \
+  "$ROOT/backend/internal/importer/schema/document-region-analysis.schema.json"
+
+check_copy \
   "Agent CLI OpenAPI" \
   "$ROOT/contracts/openapi/openapi.yaml" \
   "$ROOT/backend/internal/clicontract/openapi.yaml"

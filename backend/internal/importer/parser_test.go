@@ -224,34 +224,6 @@ func TestParseHTMLFallsBackToBodyContent(t *testing.T) {
 	}
 }
 
-func TestParseTesseractTSVPreservesImageLocator(t *testing.T) {
-	content := strings.Join([]string{
-		"level\tpage_num\tblock_num\tpar_num\tline_num\tword_num\tleft\ttop\twidth\theight\tconf\ttext",
-		"5\t1\t1\t1\t1\t1\t10\t20\t30\t12\t95.0\t安比",
-		"5\t1\t1\t1\t1\t2\t42\t20\t45\t12\t91.0\t狡兔屋",
-	}, "\n")
-	page := int32(3)
-	blocks, err := parseTesseractTSV([]byte(content), &page, 200, 100)
-	if err != nil {
-		t.Fatalf("parse TSV: %v", err)
-	}
-	if len(blocks) != 1 || blocks[0].Text != "安比狡兔屋" {
-		t.Fatalf("unexpected OCR blocks: %#v", blocks)
-	}
-	if blocks[0].ImageRegion == nil ||
-		blocks[0].ImageRegion.X != 10 ||
-		blocks[0].ImageRegion.Y != 20 ||
-		blocks[0].ImageRegion.Width != 77 ||
-		blocks[0].ImageRegion.Height != 12 {
-		t.Fatalf("unexpected image region: %#v", blocks[0].ImageRegion)
-	}
-	if blocks[0].OCR == nil || blocks[0].OCR.Confidence == nil ||
-		*blocks[0].OCR.Confidence < 0.92 ||
-		*blocks[0].OCR.Confidence > 0.94 {
-		t.Fatalf("unexpected OCR metadata: %#v", blocks[0].OCR)
-	}
-}
-
 func TestVisionPageAnalysisPreservesChartStructureAndRegion(t *testing.T) {
 	structured := json.RawMessage(`{
 		"series":[{"name":"Latency","points":[{"label":"P95","value":120,"unit":"ms"}]}]
@@ -293,71 +265,6 @@ func TestVisionPageAnalysisPreservesChartStructureAndRegion(t *testing.T) {
 	}
 	if content["source"] != "vision_page" {
 		t.Fatalf("content=%#v", content)
-	}
-}
-
-func TestVisionPageAnalysisSanitizesOutOfBoundsRegions(t *testing.T) {
-	generator := parserGeneratorFunc(func(
-		context.Context,
-		ai.Request,
-	) (*ai.Result, error) {
-		return &ai.Result{
-			PromptKey: DocumentPageAnalysisPromptKey, PromptVersion: 1,
-			Provider: "test", Model: "vision-model",
-			JSON: json.RawMessage(`{
-				"schema_version":1,
-				"page":1,
-				"section_path":[],
-				"elements":[
-					{
-						"kind":"text",
-						"title":"",
-						"text":"Outside page.",
-						"summary":"",
-						"section_path":[],
-						"region":{"x":100,"y":1050,"width":200,"height":100},
-						"structured_data":{},
-						"confidence":0.8
-					},
-					{
-						"kind":"figure",
-						"title":"Clipped",
-						"text":"Clipped figure.",
-						"summary":"Clipped.",
-						"section_path":[],
-						"region":{"x":900,"y":100,"width":200,"height":200},
-						"structured_data":{},
-						"confidence":0.8
-					}
-				],
-				"warnings":[],
-				"quality_score":0.8
-			}`),
-		}, nil
-	})
-	adapter := visionPDFAdapter{generator: generator}
-	analysis, err := adapter.analyzePage(
-		context.Background(),
-		ParseRequest{Filename: "regions.pdf", Provider: "test", Model: "vision-model"},
-		renderedVisionPage{Data: []byte("jpeg"), Width: 1000, Height: 1000},
-		"",
-		1,
-		1,
-	)
-	if err != nil {
-		t.Fatal(err)
-	}
-	if analysis.Elements[0].Region != nil ||
-		analysis.Elements[1].Region == nil ||
-		analysis.Elements[1].Region.Width != 100 ||
-		len(analysis.Warnings) != 2 {
-		t.Fatalf("unexpected sanitized analysis: %#v", analysis)
-	}
-	blocks := pageAnalysisBlocks(analysis)
-	if blocks[0].ImageRegion != nil ||
-		blocks[1].ImageRegion == nil ||
-		blocks[1].ImageRegion.Width != 100 {
-		t.Fatalf("unexpected sanitized blocks: %#v", blocks)
 	}
 }
 
@@ -404,36 +311,36 @@ func TestVisionPDFAdapterUsesRenderedPageAndNativeText(t *testing.T) {
 		_ context.Context,
 		request ai.Request,
 	) (*ai.Result, error) {
-		if request.PromptKey != DocumentPageAnalysisPromptKey ||
-			len(request.Images) != 1 ||
+		if len(request.Images) != 1 ||
 			request.Images[0].MediaType != "image/jpeg" ||
 			len(request.Images[0].Data) == 0 {
 			t.Fatalf("unexpected page request: %#v", request)
 		}
-		if !strings.Contains(request.Variables["native_text"].(string), "Hello PDF") {
-			t.Fatalf("native text=%q", request.Variables["native_text"])
+		if request.PromptKey == DocumentPageLayoutPromptKey {
+			if !strings.Contains(request.Variables["native_text"].(string), "Hello PDF") {
+				t.Fatalf("native text=%q", request.Variables["native_text"])
+			}
+			return visionTestResult(request, `{
+				"schema_version":1, "section_path":["Overview"],
+				"elements":[{"kind":"chart","title":"Diagnostic chart","section_path":["Overview"],
+					"region":{"x":100,"y":100,"width":300,"height":100}}], "warnings":[]
+			}`), nil
+		}
+		if request.Variables["native_text"] != "" {
+			t.Fatal("region recognition received unrelated page text")
 		}
 		return &ai.Result{
-			PromptKey:     DocumentPageAnalysisPromptKey,
+			PromptKey:     DocumentRegionAnalysisPromptKey,
 			PromptVersion: 1,
 			Provider:      "openai-compatible",
 			Model:         "vision-model",
 			JSON: json.RawMessage(`{
 				"schema_version":1,
-				"page":1,
-				"section_path":["Overview"],
-				"elements":[{
-					"kind":"chart",
-					"title":"Diagnostic chart",
 					"text":"The diagnostic chart contains the label Hello PDF.",
 					"summary":"One labeled chart.",
-					"section_path":["Overview"],
-					"region":{"x":100,"y":100,"width":300,"height":100},
 					"structured_data":{"labels":["Hello PDF"]},
-					"confidence":0.99
-				}],
-				"warnings":[],
-				"quality_score":0.99
+					"confidence":0.99,
+				"warnings":[]
 			}`),
 		}, nil
 	})
@@ -457,10 +364,10 @@ func TestVisionPDFAdapterUsesRenderedPageAndNativeText(t *testing.T) {
 		len(result.Chunks) != 2 {
 		t.Fatalf("unexpected parse result: %#v", result)
 	}
-	if result.Chunks[0].ChunkType != "page" ||
-		!strings.Contains(result.Chunks[0].TextContent, "Hello PDF") ||
-		result.Chunks[1].ChunkType != "chart" ||
-		result.Chunks[1].Locator.ImageRegion == nil {
+	if result.Chunks[1].ChunkType != "page" ||
+		!strings.Contains(result.Chunks[1].TextContent, "Hello PDF") ||
+		result.Chunks[0].ChunkType != "chart" ||
+		result.Chunks[0].Locator.ImageRegion == nil {
 		t.Fatalf("unexpected parsed chunks: %#v", result.Chunks)
 	}
 }
@@ -474,25 +381,26 @@ func TestVisionPDFAdapterTranscribesScanOnlyPage(t *testing.T) {
 		if request.Variables["native_text"] != "" {
 			t.Fatalf("native text=%q, want empty scan text", request.Variables["native_text"])
 		}
+		if request.PromptKey == DocumentPageLayoutPromptKey {
+			return &ai.Result{
+				PromptKey: request.PromptKey, PromptVersion: 1, Provider: "test", Model: "vision-model",
+				JSON: json.RawMessage(`{
+					"schema_version":1,"section_path":["Scanned page"],
+					"elements":[{"kind":"text","title":"","section_path":["Scanned page"],
+						"region":{"x":100,"y":100,"width":500,"height":100}}],"warnings":[]
+				}`),
+			}, nil
+		}
 		return &ai.Result{
-			PromptKey: DocumentPageAnalysisPromptKey, PromptVersion: 1,
+			PromptKey: DocumentRegionAnalysisPromptKey, PromptVersion: 1,
 			Provider: "test", Model: "vision-model",
 			JSON: json.RawMessage(`{
 				"schema_version":1,
-				"page":1,
-				"section_path":["Scanned page"],
-				"elements":[{
-					"kind":"text",
-					"title":"",
 					"text":"Vision-only transcription.",
 					"summary":"",
-					"section_path":["Scanned page"],
-					"region":{"x":100,"y":100,"width":500,"height":100},
 					"structured_data":{},
-					"confidence":0.95
-				}],
-				"warnings":[],
-				"quality_score":0.95
+					"confidence":0.95,
+				"warnings":[]
 			}`),
 		}, nil
 	})
@@ -687,36 +595,5 @@ func TestValidateUploadReaderRuntime(t *testing.T) {
 	}
 	if validated.SizeBytes != info.Size() {
 		t.Fatalf("validated size=%d, want %d", validated.SizeBytes, info.Size())
-	}
-}
-
-func TestParseImageOCRRuntime(t *testing.T) {
-	imagePath := strings.TrimSpace(os.Getenv("ANBY_OCR_TEST_IMAGE"))
-	if imagePath == "" {
-		t.Skip("set ANBY_OCR_TEST_IMAGE to exercise the installed OCR runtime")
-	}
-	content, err := os.ReadFile(imagePath)
-	if err != nil {
-		t.Fatalf("read OCR fixture: %v", err)
-	}
-	result, err := NewParser(1200, nil).Parse(context.Background(), ParseRequest{
-		MIMEType: "image/png",
-		Content:  content,
-	})
-	if err != nil {
-		t.Fatalf("parse OCR image: %v", err)
-	}
-	chunks := result.Chunks
-	if len(chunks) == 0 {
-		t.Fatal("OCR returned no chunks")
-	}
-	for _, chunk := range chunks {
-		if chunk.Locator.ImageRegion == nil || chunk.Locator.OCR == nil ||
-			chunk.Locator.OCR.Confidence == nil {
-			t.Fatalf("OCR chunk lost locator metadata: %#v", chunk)
-		}
-		if err := chunk.Locator.Validate(); err != nil {
-			t.Fatalf("invalid OCR locator: %v", err)
-		}
 	}
 }

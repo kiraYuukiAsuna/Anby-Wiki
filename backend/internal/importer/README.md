@@ -26,8 +26,9 @@ Worker 不领取该 Wiki 中需要模型的 `source_import`，已有任务保持
 模型调用经私网 Semantic Kernel Sidecar：OpenAI-compatible 可使用原生 strict JSON
 Schema，DeepSeek 使用 JSON Object；Sidecar 对 JSON 和权威 Schema 失败执行有限纠正重试，
 Go Gateway 再执行最终独立校验。Sidecar 不访问数据库、对象存储或用户会话。
-`document-page-analysis-v1` 使用同一边界发送单张渲染页；图片只在内存中停留到本次
-Provider 调用结束，并与普通结构化调用一样记录 Prompt 版本、模型、Token、耗时和状态。
+`document-page-layout-v1` 与 `document-region-analysis-v1` 使用同一边界识别全页布局与
+局部裁图；图片只在当前页调用期间保留，并与普通结构化调用一样记录 Prompt 版本、
+模型、Token、耗时和状态。布局和识别的实际 Prompt 版本同时参与解析指纹。
 个人中心的文档理解模型测试会分别验证文本结构化输出和图片输入，文本模型不能通过配置验收。
 
 Worker 会从当前 Wiki 的文档理解模型最大输入 Token 中预留 Prompt/Schema 空间，再按估算 Token 和
@@ -66,7 +67,7 @@ Worker 被强制终止或部署替换后，超过完整任务超时仍处于 run
 
 HTTP 产品入口同时接收受控公网 URL 与 multipart 文件上传。支持 HTML、纯文本、
 JSON、CSV、PDF、PNG 与 JPEG：公网 JSON 作为 API 快照，上传的 JSON/CSV 作为
-数据库记录导出，图片进入 OCR，PDF 进入文本与视觉双轨解析。上传先由 API 经 Evidence
+数据库记录导出，图片进入 LLM 布局与区域识别，PDF 进入原生文本与同一视觉流程。上传先由 API 经 Evidence
 服务写入私有对象存储，Job config 只保存对象键与内容哈希、不保存正文；Worker 读取后
 再次校验。两条路径共享 MIME/magic、300 MiB、恶意签名、哈希和证据固化门禁。
 
@@ -76,13 +77,17 @@ DOI/标识符和语言；URL host、文件名与 MIME 作为补充。只把这�
 metadata，不记录正文、Prompt 或密钥；请求显式标题优先于自动推导结果。
 
 Worker 使用 Poppler 从标准输入读取 PDF：`pdftotext` 保留每页原生 UTF-8 文本，
-`pdftoppm` 逐页生成最长边 2000 像素的临时 JPEG。PDF 最多 500 页，最多并行分析
-3 页；单页图片在模型调用后立即删除，子进程不继承 Worker 环境变量。当前 Wiki 配置的
-多模态模型输出标题路径、正文、表格、图表、图片、区域和结构化数据。有文本层时以
-原生页文本生成精确 `page` Chunk，视觉模型只补充非文本元素；扫描页使用视觉转写。
+`pdftoppm` 逐页生成最长边 4000 像素的临时 JPEG。PDF 最多 500 页，最多并行分析
+3 页；页内区域串行识别，子进程不继承 Worker 环境变量。布局请求缩到最长边 1600，
+识别请求从原始渲染裁图并限制最长边 2000。当前账号配置的多模态模型先输出有序区域，
+再逐区域识别正文、表格、图表、图片和结构化数据。原生 PDF 的区域文字仅在唯一匹配
+原文或纯空白差异可回填时固化为精确正文；重复/改写/未匹配的视觉正文不替代原文，
+未被区域覆盖的原文保留为补充分片。扫描页使用明确标记的视觉转写。
 完整解析 manifest 另存对象存储，SourceVersion 固化 Adapter/MIME/Provider/Prompt/模型与警告。
-PNG/JPEG 仍走本地 Tesseract OCR，限制 4000 万像素；行级区域、原图尺寸、引擎、
-语言与置信度一并固化进 SourceChunk locator，Citation 可以还原到原始图像区域。
+PNG/JPEG 共用上述 LLM 流程，限制 4000 万像素；区域始终绑定原始图像尺寸，
+不会因布局图或裁图缩小而改变 Citation 定位。Worker 不再依赖 Tesseract。
+本实现不使用 embedding 或独立 OCR/布局/表格模型。依据与调用成本限制见
+[`Docs/MinerUReferencePlan.md`](../../../Docs/MinerUReferencePlan.md)。
 
 DeepSeek 的 JSON Object 模式只保证返回合法 JSON，因此 Semantic Kernel 会使用与
 Gateway 相同的权威 JSON Schema 预校验并纠正失败输出；OpenAI compatible 可使用供应商
@@ -215,7 +220,7 @@ Composer 校验 Typed Block 时先读取 `type` 并直接分派到对应 Schema 
   link-local、CGNAT、benchmark 等地址，防 DNS rebinding。
 - 原始资产和 Source 在解析前持久化；解析失败不丢失原始证据。
 - HTML/PDF/图片/JSON/CSV 只产出稳定 Chunk、页码/章节/字符范围或图片区域，不执行
-  来源内脚本或指令；Poppler 与 Tesseract 在只读、非 root、capabilities 全移除的
+  来源内脚本或指令；Poppler 在只读、非 root、capabilities 全移除的
   Worker 容器内运行。
 - 抽取结果先经权威 JSON Schema，再逐条核对 `source_version_id`、Chunk ID、原文引用和
   字符范围；检测到 Prompt Injection 或质量低于阈值即停止，不创建 Citation/Proposal。

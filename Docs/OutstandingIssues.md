@@ -165,6 +165,9 @@
 
 ### 8.1 现状
 
+- 2026-10-27 按 [MinerU 借鉴方案](MinerUReferencePlan.md) 将 PDF/图片升级为纯 LLM
+  布局与区域识别两阶段流程。已有整页视觉版的生产验收仍为历史证据；新流程的真实
+  供应商识别质量、细小区域、调用量、峰值内存和成本需要重新比较，尚未部署验收。
 - 文本与视觉双轨 Parser、逐页 Poppler 渲染、页面分析 Schema、AI Kernel 图片输入、
   SourceVersion/SourceChunk 持久化、Extraction/ImportPlan 映射及个人中心文档理解
   模型配置探针均已实现。

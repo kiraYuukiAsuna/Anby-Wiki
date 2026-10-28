@@ -31,16 +31,22 @@ type ParseRequest struct {
 }
 
 type ParseMetadata struct {
-	Adapter        string   `json:"adapter"`
-	AdapterVersion string   `json:"adapter_version"`
-	Track          string   `json:"track"`
-	MIMEType       string   `json:"mime_type"`
-	PageCount      int      `json:"page_count,omitempty"`
-	Provider       string   `json:"provider,omitempty"`
-	Model          string   `json:"model,omitempty"`
-	PromptKey      string   `json:"prompt_key,omitempty"`
-	PromptVersion  int      `json:"prompt_version,omitempty"`
-	Warnings       []string `json:"warnings"`
+	Adapter        string        `json:"adapter"`
+	AdapterVersion string        `json:"adapter_version"`
+	Track          string        `json:"track"`
+	MIMEType       string        `json:"mime_type"`
+	PageCount      int           `json:"page_count,omitempty"`
+	Provider       string        `json:"provider,omitempty"`
+	Model          string        `json:"model,omitempty"`
+	PromptKey      string        `json:"prompt_key,omitempty"`
+	PromptVersion  int           `json:"prompt_version,omitempty"`
+	Prompts        []ParsePrompt `json:"prompts,omitempty"`
+	Warnings       []string      `json:"warnings"`
+}
+
+type ParsePrompt struct {
+	Key     string `json:"key"`
+	Version int    `json:"version"`
 }
 
 type ParseResult struct {
@@ -111,6 +117,7 @@ func NewParser(maxChunkRunes int, generator StructuredGenerator) *Parser {
 		generator:     generator,
 		adapters: []DocumentParseAdapter{
 			&visionPDFAdapter{generator: generator},
+			&visionImageAdapter{generator: generator},
 			deterministicDocumentAdapter{},
 		},
 	}
@@ -132,10 +139,15 @@ func (p *Parser) Parse(ctx context.Context, request ParseRequest) (*ParseResult,
 		if len(chunks) == 0 {
 			return nil, ErrParseFailed
 		}
+		promptIdentity := parsed.Metadata.PromptKey
+		if len(parsed.Metadata.Prompts) > 0 {
+			encoded, _ := json.Marshal(parsed.Metadata.Prompts)
+			promptIdentity += "\x00" + string(encoded)
+		}
 		fingerprint := parserFingerprint(
 			adapter.Name(), adapter.Version(), parsed.Track,
 			request.MIMEType, parsed.Metadata.Provider, parsed.Metadata.Model,
-			parsed.Metadata.PromptKey,
+			promptIdentity,
 			parsed.Metadata.PromptVersion, p.MaxChunkRunes,
 		)
 		parsed.Metadata.Adapter = adapter.Name()
@@ -254,7 +266,7 @@ func (deterministicDocumentAdapter) Supports(mimeType string) bool {
 }
 
 func (deterministicDocumentAdapter) Parse(
-	ctx context.Context,
+	_ context.Context,
 	request ParseRequest,
 ) (*adapterResult, error) {
 	var blocks []TextBlock
@@ -277,8 +289,6 @@ func (deterministicDocumentAdapter) Parse(
 		blocks, err = parseJSON(request.Content)
 	case "text/csv":
 		blocks, err = parseCSV(request.Content)
-	case "image/png", "image/jpeg":
-		blocks, err = parseImageOCR(ctx, request.Content, nil)
 	default:
 		return nil, ErrUnsupportedMIME
 	}
