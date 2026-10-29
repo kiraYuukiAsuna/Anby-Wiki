@@ -1,7 +1,7 @@
 "use client";
 
 import { Command } from "cmdk";
-import { Plus, RefreshCw, Trash2 } from "lucide-react";
+import { Code2, ListChecks, Plus, RefreshCw, Trash2 } from "lucide-react";
 import { useEffect, useId, useState } from "react";
 import { toast } from "sonner";
 import useSWR from "swr";
@@ -28,6 +28,53 @@ const INFOBOX_FIELD_LABELS: Record<string, string> = {
   language: "标签语言",
   property_keys: "展示属性",
 };
+
+function ComponentFormMode({
+  title,
+  advanced,
+  canUseForm,
+  onChange,
+}: {
+  title: string;
+  advanced: boolean;
+  canUseForm: boolean;
+  onChange: (advanced: boolean) => void;
+}) {
+  return (
+    <div className="sticky top-0 z-10 flex flex-wrap items-center justify-between gap-2 border-b bg-background/95 pb-3 pt-1 backdrop-blur-sm">
+      <p className="text-sm font-semibold">{title}</p>
+      <div
+        role="group"
+        aria-label={`${title}编辑方式`}
+        className="flex items-center gap-1 rounded-lg border bg-muted/40 p-1"
+      >
+        <Button
+          type="button"
+          variant="ghost"
+          size="sm"
+          aria-pressed={!advanced}
+          disabled={!canUseForm}
+          className="text-xs text-muted-foreground aria-pressed:bg-background aria-pressed:text-foreground aria-pressed:shadow-xs"
+          onClick={() => onChange(false)}
+        >
+          <ListChecks aria-hidden />
+          表单
+        </Button>
+        <Button
+          type="button"
+          variant="ghost"
+          size="sm"
+          aria-pressed={advanced}
+          className="text-xs text-muted-foreground aria-pressed:bg-background aria-pressed:text-foreground aria-pressed:shadow-xs"
+          onClick={() => onChange(true)}
+        >
+          <Code2 aria-hidden />
+          高级 JSON
+        </Button>
+      </div>
+    </div>
+  );
+}
 
 function FieldName({
   value,
@@ -160,6 +207,12 @@ export function ComponentDefinitionForm({
 
   return (
     <div className="space-y-4">
+      <ComponentFormMode
+        title="字段配置"
+        advanced={advanced || !fields}
+        canUseForm={fields !== null}
+        onChange={setAdvanced}
+      />
       <div className="space-y-2">
         <Label htmlFor={`${id}-renderer`}>组件类型</Label>
         <select
@@ -375,16 +428,6 @@ export function ComponentDefinitionForm({
           </Button>
         </>
       )}
-      {fields ? (
-        <Button
-          type="button"
-          variant="ghost"
-          size="sm"
-          onClick={() => setAdvanced(!advanced)}
-        >
-          {advanced ? "返回表单" : "高级：编辑 JSON Schema"}
-        </Button>
-      ) : null}
     </div>
   );
 }
@@ -415,6 +458,12 @@ export function ComponentPropsForm({
   const useJSON = advanced || !fields?.length || !values || extraValues;
   return (
     <div className="space-y-4">
+      <ComponentFormMode
+        title="显示配置"
+        advanced={Boolean(useJSON)}
+        canUseForm={Boolean(fields?.length && values && !extraValues)}
+        onChange={setAdvanced}
+      />
       {useJSON ? (
         <div className="space-y-2">
           <Label htmlFor={`${id}-props`}>显示配置 JSON</Label>
@@ -471,16 +520,6 @@ export function ComponentPropsForm({
           </div>
         ))
       )}
-      {fields?.length && values && !extraValues ? (
-        <Button
-          type="button"
-          variant="ghost"
-          size="sm"
-          onClick={() => setAdvanced(!advanced)}
-        >
-          {advanced ? "返回表单" : "高级：编辑显示配置 JSON"}
-        </Button>
-      ) : null}
     </div>
   );
 }
