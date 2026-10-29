@@ -72,13 +72,15 @@ function backlinkLabel(index: number): string {
   return label;
 }
 
-function ReferenceItem({ item }: { item: PageReference }) {
-  const publishedAt = formatDate(item.publishedAt);
-  const href = safeHttpUrl(item.externalUrl);
+function ReferenceItem({
+  item,
+  showVersion,
+}: {
+  item: PageReference;
+  showVersion: boolean;
+}) {
   const location = locatorText(item.locator);
-  const details = [item.author, item.publisher, publishedAt, location].filter(
-    (value): value is string => Boolean(value),
-  );
+  const fetchedAt = showVersion ? formatDate(item.fetchedAt) : null;
   const occurrences = item.occurrences.length > 0
     ? item.occurrences
     : [{ blockId: item.firstBlockId, nodeId: item.firstNodeId }];
@@ -87,9 +89,10 @@ function ReferenceItem({ item }: { item: PageReference }) {
     <li
       id={`cite-note-${item.number}`}
       value={item.number}
-      className="scroll-mt-20 pl-1 text-sm leading-6 text-foreground/90"
+      className="scroll-mt-20 break-words pl-1 text-sm leading-6 text-foreground/90"
     >
-      <span className="mr-1.5 inline-flex items-center gap-1 text-xs">
+      <span className="font-medium">{location ?? "引用位置"}</span>
+      <span className="ml-2 inline-flex flex-wrap items-center gap-1 text-xs">
         <RotateCcw className="inline size-3.5 text-muted-foreground" aria-hidden />
         {occurrences.map((occurrence, index) => (
           <a
@@ -102,42 +105,10 @@ function ReferenceItem({ item }: { item: PageReference }) {
           </a>
         ))}
       </span>
-      {href ? (
-        <a
-          href={href}
-          target="_blank"
-          rel="noopener noreferrer"
-          className="font-medium text-blue-700 underline-offset-4 hover:underline"
-        >
-          {item.sourceTitle}
-          <ArrowUpRight className="ml-1 inline size-3" aria-hidden />
-        </a>
-      ) : (
-        <Link
-          href={`/sources/${item.sourceId}`}
-          className="font-medium underline-offset-4 hover:underline"
-        >
-          {item.sourceTitle}
-        </Link>
-      )}
-      {details.length > 0 ? (
-        <span className="text-muted-foreground"> · {details.join(" · ")}</span>
-      ) : null}
       {item.occurrenceCount > 1 ? (
         <span className="text-muted-foreground">
           {` · 正文引用 ${item.occurrenceCount} 次`}
         </span>
-      ) : null}
-      {item.quotation ? (
-        <details className="mt-2 rounded-lg border border-border/70 bg-muted/30 px-3 py-2">
-          <summary className="flex cursor-pointer list-none items-center gap-1.5 text-xs font-medium text-muted-foreground">
-            <Quote className="size-3.5" aria-hidden />
-            查看核对片段
-          </summary>
-          <blockquote className="mt-2 border-l-2 border-border pl-3 text-xs leading-5 text-muted-foreground">
-            {item.quotation}
-          </blockquote>
-        </details>
       ) : null}
       <Link
         href={`/citations/${item.citationId}`}
@@ -145,6 +116,82 @@ function ReferenceItem({ item }: { item: PageReference }) {
       >
         证据详情
       </Link>
+      {showVersion ? (
+        <p className="mt-1 text-xs text-muted-foreground">
+          版本 {item.versionHash.slice(0, 12)}
+          {fetchedAt ? ` · 获取于 ${fetchedAt}` : ""}
+        </p>
+      ) : null}
+      {item.quotation ? (
+        <div className="mt-2 flex items-start gap-2 text-muted-foreground">
+          <Quote className="mt-0.5 size-3.5 shrink-0" aria-hidden />
+          <blockquote className="min-w-0 border-l-2 border-border pl-3 text-xs leading-5">
+            {item.quotation}
+          </blockquote>
+        </div>
+      ) : null}
+    </li>
+  );
+}
+
+function ReferenceSource({ items }: { items: PageReference[] }) {
+  const source = items[0];
+  const href = safeHttpUrl(source.externalUrl);
+  const metadata = [
+    source.author,
+    source.publisher,
+    formatDate(source.publishedAt),
+  ].filter((value): value is string => Boolean(value));
+  const showVersion = new Set(items.map((item) => item.sourceVersionId)).size > 1;
+  const occurrenceCount = items.reduce(
+    (total, item) => total + item.occurrenceCount,
+    0,
+  );
+
+  return (
+    <li className="min-w-0 break-words text-sm leading-6 text-foreground/90">
+      {href ? (
+        <a
+          href={href}
+          target="_blank"
+          rel="noopener noreferrer"
+          className="font-medium text-blue-700 underline-offset-4 hover:underline"
+        >
+          {source.sourceTitle}
+          <ArrowUpRight className="ml-1 inline size-3" aria-hidden />
+        </a>
+      ) : (
+        <Link
+          href={`/sources/${source.sourceId}`}
+          className="font-medium underline-offset-4 hover:underline"
+        >
+          {source.sourceTitle}
+        </Link>
+      )}
+      {metadata.length > 0 ? (
+        <span className="text-muted-foreground"> · {metadata.join(" · ")}</span>
+      ) : null}
+      <details className="group/source mt-2 rounded-lg border border-border/70 bg-muted/30 px-3 py-2">
+        <summary className="flex cursor-pointer list-none flex-wrap items-center gap-1.5 text-xs font-medium text-muted-foreground hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring">
+          <ChevronDown
+            className="size-3.5 shrink-0 transition-transform group-open/source:rotate-180"
+            aria-hidden
+          />
+          <span>{items.length} 处引用位置</span>
+          {occurrenceCount > items.length ? (
+            <span className="font-normal">· 正文引用 {occurrenceCount} 次</span>
+          ) : null}
+        </summary>
+        <ol className="mt-3 list-decimal space-y-4 pl-6 marker:font-medium marker:text-muted-foreground">
+          {items.map((item) => (
+            <ReferenceItem
+              key={item.citationId}
+              item={item}
+              showVersion={showVersion}
+            />
+          ))}
+        </ol>
+      </details>
     </li>
   );
 }
@@ -168,11 +215,18 @@ export function ArticleEndMatter({
 }) {
   const showReferenceStatus = references?.ready === false;
   const referenceItems = references?.ready ? references.items : [];
-  const visibleReferenceItems = referenceItems.slice(
+  const referencesBySource = new Map<string, PageReference[]>();
+  for (const item of referenceItems) {
+    const group = referencesBySource.get(item.sourceId);
+    if (group) group.push(item);
+    else referencesBySource.set(item.sourceId, [item]);
+  }
+  const referenceSources = Array.from(referencesBySource.values());
+  const visibleReferenceSources = referenceSources.slice(
     0,
     DEFAULT_VISIBLE_REFERENCES,
   );
-  const collapsedReferenceItems = referenceItems.slice(
+  const collapsedReferenceSources = referenceSources.slice(
     DEFAULT_VISIBLE_REFERENCES,
   );
   const relatedItems = related?.ready ? related.items : [];
@@ -254,33 +308,30 @@ export function ArticleEndMatter({
             </p>
           ) : (
             <>
-              <ol className="mt-4 list-decimal space-y-4 pl-7 marker:font-medium marker:text-muted-foreground">
-                {visibleReferenceItems.map((item) => (
-                  <ReferenceItem key={item.citationId} item={item} />
+              <ul className="mt-4 space-y-4">
+                {visibleReferenceSources.map((items) => (
+                  <ReferenceSource key={items[0].sourceId} items={items} />
                 ))}
-              </ol>
-              {collapsedReferenceItems.length > 0 ? (
-                <details className="group mt-5 rounded-xl border border-border bg-muted/20 px-4 py-3">
+              </ul>
+              {collapsedReferenceSources.length > 0 ? (
+                <details className="group/references mt-5 rounded-xl border border-border bg-muted/20 px-4 py-3">
                   <summary className="flex cursor-pointer list-none items-center gap-2 text-sm font-medium text-muted-foreground transition hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring">
                     <ChevronDown
-                      className="size-4 transition-transform group-open:rotate-180"
+                      className="size-4 shrink-0 transition-transform group-open/references:rotate-180"
                       aria-hidden
                     />
-                    <span className="group-open:hidden">
-                      展开后续 {collapsedReferenceItems.length} 条参考文献
+                    <span className="group-open/references:hidden">
+                      展开后续 {collapsedReferenceSources.length} 条参考文献
                     </span>
-                    <span className="hidden group-open:inline">
-                      收起后续 {collapsedReferenceItems.length} 条参考文献
+                    <span className="hidden group-open/references:inline">
+                      收起后续 {collapsedReferenceSources.length} 条参考文献
                     </span>
                   </summary>
-                  <ol
-                    start={DEFAULT_VISIBLE_REFERENCES + 1}
-                    className="mt-4 list-decimal space-y-4 pl-7 marker:font-medium marker:text-muted-foreground"
-                  >
-                    {collapsedReferenceItems.map((item) => (
-                      <ReferenceItem key={item.citationId} item={item} />
+                  <ul className="mt-4 space-y-4">
+                    {collapsedReferenceSources.map((items) => (
+                      <ReferenceSource key={items[0].sourceId} items={items} />
                     ))}
-                  </ol>
+                  </ul>
                 </details>
               ) : null}
             </>
