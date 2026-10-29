@@ -12,7 +12,7 @@ Name | Type
 `status` | string
 `inputHash` | string
 `outputHash` | string
-`error` | { [key: string]: any; }
+`error` | [ImportFailure](ImportFailure.md)
 `startedAt` | Date
 `finishedAt` | Date
 

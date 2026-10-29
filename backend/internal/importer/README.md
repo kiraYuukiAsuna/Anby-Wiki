@@ -65,6 +65,21 @@ Worker 被强制终止或部署替换后，超过完整任务超时仍处于 run
 `ImportJob.source_version_id` 在同一事务提交，因此后续模型失败时 API 仍能展示并导航
 已固化的 SourceVersion/Chunk；上传恢复点还必须与 Job 中固定的内容哈希一致。
 
+失败使用 OpenAPI `ImportFailure` v1：`stage/code/message/suggestion/retryable` 和
+可选 `details` 在 Job、Run、Stage 同一事务保存。诊断只包含安全错误码、HTTP 状态、
+失败页码、限制值，以及抽取的模型、质量分数、候选数量、提示注入标记和复用状态，
+不序列化 `err.Error()`、模型输出、来源引文、Prompt 或供应商响应。
+阶段启动、检查点或状态保存等异常也执行有界的失败收尾；已有终态或另一 Run 优先，
+避免覆盖取消状态或正在执行的重试。
+
+`quality_gate` / `extract` 表示事实抽取的安全门禁，应优先检查
+`prompt_injection_detected`；不能仅依据质量分数推断原因。疑似提示注入可能误判，
+Web 提醒核查角色设定等来源并修改内容后重新导入。同一 SourceVersion 会复用原
+Extraction，直接重试或调整规划意图不能清除已保存的注入标记。
+旧 `stage/code` 详情在读取时使用失败 Stage 的输入 SourceVersion 查询对应 Extraction，
+补充当时保留的诊断，并按创建时间识别复用；未记录的历史质量阈值保持缺省。
+历史数据库行及不可变制品均不改写。人工实体匹配的 `match_review` 仍完整保留。
+
 HTTP 产品入口同时接收受控公网 URL 与 multipart 文件上传。支持 Markdown、HTML、纯文本、
 JSON、CSV、PDF、PNG 与 JPEG：公网 JSON 作为 API 快照，上传的 JSON/CSV 作为
 数据库记录导出，图片进入 LLM 布局与区域识别，PDF 进入原生文本与同一视觉流程。上传先由 API 经 Evidence

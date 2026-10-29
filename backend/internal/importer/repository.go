@@ -363,6 +363,12 @@ func (r *Repository) CancelRunningStages(ctx context.Context, tx pgx.Tx, runID u
 	return err
 }
 
+func (r *Repository) FailRunningStages(ctx context.Context, tx pgx.Tx, runID uuid.UUID, errorJSON []byte) error {
+	_, err := r.q(tx).Exec(ctx, `UPDATE import_stage_run SET status=$2,error_json=$3::jsonb,finished_at=now()
+		WHERE import_run_id=$1 AND status='running'`, runID, StageFailed, errorJSON)
+	return err
+}
+
 func (r *Repository) FinishJob(ctx context.Context, tx pgx.Tx, jobID uuid.UUID, status, stage string,
 	progress int, sourceVersionID, proposalID *uuid.UUID, errorJSON []byte) error {
 	_, err := r.q(tx).Exec(ctx, `UPDATE import_job SET status=$2,current_stage=$3,progress=$4,

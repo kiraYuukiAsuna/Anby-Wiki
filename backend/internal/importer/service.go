@@ -177,7 +177,13 @@ func (s *Service) ListOwned(
 	if limit > MaxPageSize {
 		limit = MaxPageSize
 	}
-	return s.repo.ListOwnedJobs(ctx, actorID, status, cursor, limit)
+	page, err := s.repo.ListOwnedJobs(ctx, actorID, status, cursor, limit)
+	if err == nil {
+		for index := range page.Items {
+			page.Items[index].Error = enrichFailure(page.Items[index].Error)
+		}
+	}
+	return page, err
 }
 
 func jsonEqual(left, right []byte) bool {
@@ -316,7 +322,7 @@ func (s *Service) RecoverStale(ctx context.Context, staleBefore time.Time) (bool
 		if err != nil {
 			return err
 		}
-		errorJSON := safeError(job.CurrentStage, "worker_interrupted")
+		errorJSON := safeError(job.CurrentStage, ErrorWorkerInterrupted)
 		if err := s.repo.CancelRunningStages(ctx, tx, run.ID, errorJSON); err != nil {
 			return err
 		}
@@ -434,21 +440,39 @@ func (s *Service) CompleteParseStage(
 }
 
 func safeError(stage, code string) []byte {
-	value, _ := json.Marshal(map[string]string{"stage": stage, "code": code})
-	return value
+	return newFailure(stage, code, nil).JSON()
 }
 
-func (s *Service) Fail(ctx context.Context, jobID, runID uuid.UUID, stageRun *StageRun, code string) error {
-	errorJSON := safeError(stageRun.Stage, code)
+func (s *Service) Fail(ctx context.Context, jobID, runID uuid.UUID, failure Failure) error {
 	return s.txm.InTx(ctx, func(tx pgx.Tx) error {
-		if err := s.repo.CompleteStage(ctx, tx, stageRun.ID, StageFailed, nil, errorJSON); err != nil {
+		job, err := s.repo.GetJobForUpdate(ctx, tx, jobID)
+		if err != nil {
+			return err
+		}
+		if job.Status != JobRunning {
+			// Cancellation, a recorded failure or a completed run wins over
+			// late pipeline errors.
+			return nil
+		}
+		run, err := s.repo.RunningRun(ctx, tx, jobID)
+		if err != nil {
+			return err
+		}
+		if run.ID != runID {
+			return nil
+		}
+		if failure.Stage == "" {
+			failure.Stage = job.CurrentStage
+		}
+		errorJSON := failure.JSON()
+		if err := s.repo.FailRunningStages(ctx, tx, runID, errorJSON); err != nil {
 			return err
 		}
 		if err := s.repo.FinishRun(ctx, tx, runID, JobFailed, errorJSON); err != nil {
 			return err
 		}
-		return s.repo.FinishJob(ctx, tx, jobID, JobFailed, stageRun.Stage,
-			stageProgress[stageRun.Stage], nil, nil, errorJSON)
+		return s.repo.FinishJob(ctx, tx, jobID, JobFailed, failure.Stage,
+			job.Progress, nil, nil, errorJSON)
 	})
 }
 
@@ -647,7 +671,7 @@ func (s *Service) Cancel(ctx context.Context, jobID uuid.UUID) error {
 		}
 		if job.Status == JobRunning {
 			if run, err := s.repo.RunningRun(ctx, tx, jobID); err == nil {
-				errorJSON := safeError(job.CurrentStage, "cancelled")
+				errorJSON := safeError(job.CurrentStage, ErrorCancelled)
 				if err := s.repo.CancelRunningStages(ctx, tx, run.ID, errorJSON); err != nil {
 					return err
 				}
@@ -657,7 +681,7 @@ func (s *Service) Cancel(ctx context.Context, jobID uuid.UUID) error {
 			}
 		}
 		return s.repo.FinishJob(ctx, tx, jobID, JobCancelled, job.CurrentStage,
-			job.Progress, nil, nil, safeError(job.CurrentStage, "cancelled"))
+			job.Progress, nil, nil, safeError(job.CurrentStage, ErrorCancelled))
 	})
 }
 
@@ -713,10 +737,14 @@ func (s *Service) Detail(ctx context.Context, jobID uuid.UUID) (*JobDetail, erro
 		}
 		normalizeImportPlanCollections(current)
 	}
-	return &JobDetail{
+	detail := &JobDetail{
 		Job: job, Runs: runs, Stages: stages, Plan: current, Plans: plans,
 		MatchReview: matchReviewFromJob(job),
-	}, nil
+	}
+	if err := s.enrichDetailFailures(ctx, detail); err != nil {
+		return nil, err
+	}
+	return detail, nil
 }
 
 func matchReviewFromJob(job *Job) *MatchReview {

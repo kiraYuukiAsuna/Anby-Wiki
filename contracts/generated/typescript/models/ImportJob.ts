@@ -20,6 +20,13 @@ import {
     ImportPlanningInputToJSON,
     ImportPlanningInputToJSONTyped,
 } from './ImportPlanningInput';
+import type { ImportFailure } from './ImportFailure';
+import {
+    ImportFailureFromJSON,
+    ImportFailureFromJSONTyped,
+    ImportFailureToJSON,
+    ImportFailureToJSONTyped,
+} from './ImportFailure';
 
 /**
  *
@@ -125,10 +132,10 @@ export interface ImportJob {
     progress: number;
     /**
      *
-     * @type {{ [key: string]: any; }}
+     * @type {ImportFailure}
      * @memberof ImportJob
      */
-    error?: { [key: string]: any; };
+    error?: ImportFailure;
     /**
      *
      * @type {Date}
@@ -241,7 +248,7 @@ export function ImportJobFromJSONTyped(json: any, ignoreDiscriminator: boolean):
         'planConfirmedAt': json['plan_confirmed_at'] == null ? undefined : (new Date(json['plan_confirmed_at'])),
         'currentStage': json['current_stage'],
         'progress': json['progress'],
-        'error': json['error'] == null ? undefined : json['error'],
+        'error': json['error'] == null ? undefined : ImportFailureFromJSON(json['error']),
         'createdAt': (new Date(json['created_at'])),
         'startedAt': json['started_at'] == null ? undefined : (new Date(json['started_at'])),
         'finishedAt': json['finished_at'] == null ? undefined : (new Date(json['finished_at'])),
@@ -276,7 +283,7 @@ export function ImportJobToJSONTyped(value?: ImportJob | null, ignoreDiscriminat
         'plan_confirmed_at': value['planConfirmedAt'] == null ? value['planConfirmedAt'] : value['planConfirmedAt'].toISOString(),
         'current_stage': value['currentStage'],
         'progress': value['progress'],
-        'error': value['error'],
+        'error': ImportFailureToJSON(value['error']),
         'created_at': value['createdAt'].toISOString(),
         'started_at': value['startedAt'] == null ? value['startedAt'] : value['startedAt'].toISOString(),
         'finished_at': value['finishedAt'] == null ? value['finishedAt'] : value['finishedAt'].toISOString(),

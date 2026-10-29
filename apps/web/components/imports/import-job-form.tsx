@@ -18,6 +18,7 @@ import { importsApi, searchApi } from "@/lib/api";
 import { isUnauthorized, LOGIN_PATH } from "@/lib/auth";
 import { clientUUID } from "@/lib/client-uuid";
 import { httpUrlSchema, safeHttpUrl } from "@/lib/http-url";
+import { importRequestError } from "@/lib/import-error";
 import { cn } from "@/lib/utils";
 
 export type ImportPageTarget = Pick<PageSearchHit, "id" | "displayTitle">;
@@ -255,7 +256,7 @@ export function ImportJobForm() {
         toast.error("请先登录后再创建导入任务");
         router.push(LOGIN_PATH);
       } else {
-        toast.error("创建导入任务失败", { description: "请检查来源或稍后重试。" });
+        toast.error("创建导入任务失败", { description: await importRequestError(error, "请检查来源或稍后重试。") });
       }
     } finally {
       setSubmitting(false);

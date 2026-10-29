@@ -23,6 +23,7 @@ import type {
 } from "../../../../contracts/generated/typescript";
 
 import { Button } from "@/components/ui/button";
+import { importFailureMessage } from "@/components/imports/import-failure-notice";
 import { importsApi } from "@/lib/api";
 import { LOGIN_PATH, useSession } from "@/lib/auth";
 import { cn } from "@/lib/utils";
@@ -199,6 +200,11 @@ function ImportJobRow({ job }: { job: ImportJob }) {
                   className="block h-full rounded-full bg-primary transition-[width]"
                   style={{ width: `${job.progress}%` }}
                 />
+              </span>
+            ) : null}
+            {job.status === "failed" && job.error ? (
+              <span className="mt-3 block break-words text-xs leading-5 text-destructive [overflow-wrap:anywhere]">
+                {importFailureMessage(job.error)}
               </span>
             ) : null}
           </span>

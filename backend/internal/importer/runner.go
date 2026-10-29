@@ -219,9 +219,20 @@ func (r *Runner) ProcessOne(ctx context.Context) (bool, error) {
 		err = ErrInvalidJob
 	}
 	if err != nil {
-		span.RecordError(err)
+		code := ErrorImportFailed
+		if errors.Is(err, context.DeadlineExceeded) || errors.Is(err, ai.ErrTimeout) {
+			code = ErrorImportTimeout
+		}
+		failure := newFailure("", code, err)
+		failCtx, cancel := context.WithTimeout(context.WithoutCancel(ctx), 10*time.Second)
+		defer cancel()
+		if recordErr := r.jobs.Fail(failCtx, job.ID, run.ID, failure); recordErr != nil {
+			return true, fmt.Errorf("job %s: failed to record import failure", job.ID)
+		}
+		safeErr := fmt.Errorf("job %s: %s", job.ID, failure.Message)
+		span.RecordError(safeErr)
 		span.SetStatus(codes.Error, "pipeline_failed")
-		return true, fmt.Errorf("job %s: %w", job.ID, err)
+		return true, safeErr
 	}
 	return true, nil
 }
@@ -271,9 +282,11 @@ func validSHA256(value string) bool {
 }
 
 func (r *Runner) failInvalidConfig(ctx context.Context, job *Job, run *Run) error {
-	stage, err := r.jobs.StartStage(ctx, run.ID, StageFetch, nil)
+	failCtx, cancel := context.WithTimeout(context.WithoutCancel(ctx), 10*time.Second)
+	defer cancel()
+	stage, err := r.jobs.StartStage(failCtx, run.ID, StageFetch, nil)
 	if err != nil {
 		return err
 	}
-	return r.jobs.Fail(ctx, job.ID, run.ID, stage, "invalid_config")
+	return r.jobs.Fail(failCtx, job.ID, run.ID, newFailure(stage.Stage, ErrorInvalidConfig, nil))
 }

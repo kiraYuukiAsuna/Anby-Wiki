@@ -135,6 +135,8 @@ export * from './HealthResponse';
 export * from './ImportEntityAlternative';
 export * from './ImportEntityMatchReview';
 export * from './ImportEntityResolution';
+export * from './ImportFailure';
+export * from './ImportFailureDetails';
 export * from './ImportJob';
 export * from './ImportJobDetail';
 export * from './ImportJobListPage';

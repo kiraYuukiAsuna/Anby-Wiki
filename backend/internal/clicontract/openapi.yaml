@@ -5763,6 +5763,41 @@ components:
         route_mode: { type: string, enum: [auto, force_create, force_update] }
         page_id: { type: string, format: uuid, nullable: true }
         quality_threshold: { type: number, minimum: 0, maximum: 1 }
+    ImportFailure:
+      type: object
+      nullable: true
+      description: 导入失败诊断 v1。旧记录允许仅含 stage/code；人工实体确认仍携带 match_review。仅返回安全诊断，不返回原文、Prompt、密钥或供应商原始响应。
+      required: [stage, code]
+      properties:
+        schema_version: { type: integer, enum: [1] }
+        stage: { type: string }
+        code: { type: string }
+        message: { type: string }
+        suggestion: { type: string }
+        retryable:
+          type: boolean
+          description: 直接重试是否可能恢复；false 时先按建议修复。缓存的安全门禁结果需要修改来源后重新导入。
+        details: { $ref: "#/components/schemas/ImportFailureDetails" }
+        match_review: { $ref: "#/components/schemas/ImportMatchReview" }
+    ImportFailureDetails:
+      type: object
+      additionalProperties: false
+      properties:
+        source_version_id: { type: string, format: uuid }
+        extraction_id: { type: string, format: uuid }
+        model: { type: string }
+        prompt_injection_detected: { type: boolean }
+        quality_score: { type: number, minimum: 0, maximum: 1 }
+        quality_threshold: { type: number, minimum: 0, maximum: 1 }
+        entity_count: { type: integer, minimum: 0 }
+        claim_count: { type: integer, minimum: 0 }
+        extraction_reused: { type: boolean }
+        provider_code: { type: string }
+        http_status: { type: integer, minimum: 100, maximum: 599 }
+        max_input_tokens: { type: integer, minimum: 1 }
+        max_source_bytes: { type: integer, minimum: 1 }
+        max_pages: { type: integer, minimum: 1 }
+        page: { type: integer, minimum: 1 }
     ImportJob:
       type: object
       required: [id, wiki_id, job_type, status, initiated_by, idempotency_key, config, planning_input, current_stage, progress, created_at, updated_at]
@@ -5786,7 +5821,7 @@ components:
         plan_confirmed_at: { type: string, format: date-time, nullable: true }
         current_stage: { type: string, enum: [queued, fetch, parse, extract, plan, match, compose, review, complete] }
         progress: { type: integer, minimum: 0, maximum: 100 }
-        error: { type: object, additionalProperties: true, nullable: true }
+        error: { $ref: "#/components/schemas/ImportFailure" }
         created_at: { type: string, format: date-time }
         started_at: { type: string, format: date-time, nullable: true }
         finished_at: { type: string, format: date-time, nullable: true }
@@ -5814,7 +5849,7 @@ components:
         attempt: { type: integer, minimum: 1 }
         idempotency_key: { type: string }
         status: { type: string, enum: [running, succeeded, failed, cancelled] }
-        error: { type: object, additionalProperties: true, nullable: true }
+        error: { $ref: "#/components/schemas/ImportFailure" }
         started_at: { type: string, format: date-time }
         finished_at: { type: string, format: date-time, nullable: true }
     ImportStageRun:
@@ -5827,7 +5862,7 @@ components:
         status: { type: string, enum: [running, succeeded, failed, skipped, cancelled] }
         input_hash: { type: string, nullable: true }
         output_hash: { type: string, nullable: true }
-        error: { type: object, additionalProperties: true, nullable: true }
+        error: { $ref: "#/components/schemas/ImportFailure" }
         started_at: { type: string, format: date-time }
         finished_at: { type: string, format: date-time, nullable: true }
     ImportPlanEvidence:

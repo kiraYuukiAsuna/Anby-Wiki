@@ -171,7 +171,7 @@ func (p *Pipeline) RunURL(ctx context.Context, request PipelineRequest, rawURL s
 
 type acquireSource func(context.Context) (*AcquiredSource, error)
 
-func (p *Pipeline) run(ctx context.Context, request PipelineRequest, acquire acquireSource) (*PipelineResult, error) {
+func (p *Pipeline) run(ctx context.Context, request PipelineRequest, acquire acquireSource) (pipelineResult *PipelineResult, pipelineErr error) {
 	if err := p.validate(request.SourceOnly); err != nil {
 		return nil, err
 	}
@@ -183,13 +183,41 @@ func (p *Pipeline) run(ctx context.Context, request PipelineRequest, acquire acq
 	if err != nil {
 		return nil, err
 	}
+	defer func() {
+		if pipelineErr == nil {
+			return
+		}
+		code := ErrorImportFailed
+		if errors.Is(pipelineErr, context.DeadlineExceeded) || errors.Is(pipelineErr, ai.ErrTimeout) {
+			code = ErrorImportTimeout
+		}
+		failCtx, cancel := context.WithTimeout(context.WithoutCancel(ctx), 10*time.Second)
+		defer cancel()
+		if err := p.jobs.Fail(failCtx, request.JobID, run.ID, newFailure("", code, pipelineErr)); err != nil {
+			pipelineErr = fmt.Errorf("%w: failed to record import failure", pipelineErr)
+		}
+	}()
 	result := &PipelineResult{ProposalIDs: []uuid.UUID{}, Unresolved: []EntityResolution{}}
 	var current *StageRun
+	var extracted *ExtractResult
 	fail := func(stage *StageRun, code string, cause error) (*PipelineResult, error) {
 		if stage != nil {
+			failure := newFailure(stage.Stage, code, cause)
+			if code == ErrorQualityGate {
+				failure = extractionFailure(extracted, max(DefaultQualityThreshold, request.QualityThreshold))
+			}
+			if errors.Is(cause, ErrModelInputTooLarge) {
+				if failure.Details == nil {
+					failure.Details = &FailureDetails{}
+				}
+				failure.Details.MaxInputTokens = request.MaxInputTokens
+				if failure.Details.MaxInputTokens <= 0 {
+					failure.Details.MaxInputTokens = DefaultModelMaxInputTokens
+				}
+			}
 			failCtx, cancel := context.WithTimeout(context.WithoutCancel(ctx), 10*time.Second)
 			defer cancel()
-			if err := p.jobs.Fail(failCtx, request.JobID, run.ID, stage, code); err != nil {
+			if err := p.jobs.Fail(failCtx, request.JobID, run.ID, failure); err != nil {
 				return nil, fmt.Errorf("%w: failed to record import failure: %v", cause, err)
 			}
 		}
@@ -214,7 +242,7 @@ func (p *Pipeline) run(ctx context.Context, request PipelineRequest, acquire acq
 	if err != nil {
 		return nil, err
 	}
-	extracted, err := p.extraction.Extract(ctx, ExtractParams{SourceVersionID: version.Version.ID,
+	extracted, err = p.extraction.Extract(ctx, ExtractParams{SourceVersionID: version.Version.ID,
 		SourceLabel: sourceLabel, Chunks: version.Chunks, Provider: request.Provider, Model: request.Model,
 		MaxInputTokens: request.MaxInputTokens,
 		ImportJobID:    &request.JobID, ImportRunID: &run.ID})
@@ -227,7 +255,7 @@ func (p *Pipeline) run(ctx context.Context, request PipelineRequest, acquire acq
 	}
 	planningCandidates, err := trustedPlanningCandidates(extracted.Candidates, threshold)
 	if err != nil {
-		return fail(current, "quality_gate", ErrQualityGate)
+		return fail(current, ErrorQualityGate, ErrQualityGate)
 	}
 	extracted.Candidates = planningCandidates
 	extractOutput := extracted.Extraction.ID.String()
@@ -289,7 +317,7 @@ func (p *Pipeline) run(ctx context.Context, request PipelineRequest, acquire acq
 	}
 	resolutions, err := p.matcher.Match(ctx, request.WikiID, request.PageID, selectedCandidates.Entities)
 	if err != nil {
-		return fail(current, "entity_match_failed", err)
+		return fail(current, ErrorEntityMatchFailed, err)
 	}
 	matchReview := buildMatchReview(selectedCandidates, resolutions)
 	if len(matchReview.Candidates) > 0 {
@@ -310,7 +338,7 @@ func (p *Pipeline) run(ctx context.Context, request PipelineRequest, acquire acq
 	}
 	decisions, err := p.classifier.Classify(ctx, selectedCandidates.Claims, resolutions)
 	if err != nil {
-		return fail(current, "claim_classification_failed", err)
+		return fail(current, ErrorClaimClassifyFailed, err)
 	}
 	matchJSON, _ := json.Marshal(struct {
 		Resolutions []EntityResolution `json:"resolutions"`
@@ -329,7 +357,7 @@ func (p *Pipeline) run(ctx context.Context, request PipelineRequest, acquire acq
 		SourceVersionID: version.Version.ID, ActorID: request.ActorID, Candidates: selectedCandidates,
 		Plan: planned.Plan, Resolutions: resolutions, Decisions: decisions})
 	if err != nil {
-		return fail(current, "proposal_compose_failed", err)
+		return fail(current, ErrorProposalComposeFailed, err)
 	}
 	result.Unresolved = composed.Unresolved
 	for _, proposal := range composed.Proposals {
@@ -360,7 +388,7 @@ func (p *Pipeline) run(ctx context.Context, request PipelineRequest, acquire acq
 	for _, proposal := range composed.Proposals {
 		if proposal.Status == governance.ProposalDraft {
 			if _, err := p.reviews.Submit(ctx, proposal.ID); err != nil {
-				return fail(current, "review_submit_failed", err)
+				return fail(current, ErrorReviewSubmitFailed, err)
 			}
 		}
 	}
@@ -551,7 +579,7 @@ func (p *Pipeline) prepareParsedSource(
 	asset, err := p.evidence.StoreAsset(ctx, evidence.StoreAssetParams{WikiID: request.WikiID,
 		Name: acquired.Filename, Content: bytes.NewReader(acquired.Content), MimeType: acquired.MIMEType, ActorID: request.ActorID})
 	if err != nil {
-		_, failed := fail(fetchStage, "asset_store_failed", err)
+		_, failed := fail(fetchStage, ErrorAssetStoreFailed, err)
 		return nil, "", failed
 	}
 	sourceID := request.SourceID
@@ -576,7 +604,7 @@ func (p *Pipeline) prepareParsedSource(
 		}
 		source, err := p.evidence.CreateSource(ctx, params)
 		if err != nil {
-			_, failed := fail(fetchStage, "source_create_failed", err)
+			_, failed := fail(fetchStage, ErrorSourceCreateFailed, err)
 			return nil, "", failed
 		}
 		sourceID = &source.ID
@@ -611,7 +639,7 @@ func (p *Pipeline) prepareParsedSource(
 	}
 	artifactJSON, err := parsed.ArtifactJSON()
 	if err != nil {
-		_, failed := fail(parseStage, "parse_artifact_failed", err)
+		_, failed := fail(parseStage, ErrorParseArtifactFailed, err)
 		return nil, "", failed
 	}
 	extractedAsset, err := p.evidence.StoreAsset(
@@ -625,7 +653,7 @@ func (p *Pipeline) prepareParsedSource(
 		},
 	)
 	if err != nil {
-		_, failed := fail(parseStage, "parse_artifact_store_failed", err)
+		_, failed := fail(parseStage, ErrorParseArtifactStoreFailed, err)
 		return nil, "", failed
 	}
 	version, err := p.evidence.AddSourceVersion(ctx, evidence.AddSourceVersionParams{
@@ -638,7 +666,7 @@ func (p *Pipeline) prepareParsedSource(
 		FetchedAt:     time.Now().UTC(), Chunks: parsed.Chunks,
 	})
 	if err != nil {
-		_, failed := fail(parseStage, "source_version_failed", err)
+		_, failed := fail(parseStage, ErrorSourceVersionFailed, err)
 		return nil, "", failed
 	}
 	if err := p.jobs.CompleteParseStage(
@@ -679,44 +707,44 @@ func (p *Pipeline) loadParseCheckpoint(ctx context.Context, request PipelineRequ
 func acquisitionErrorCode(err error) string {
 	switch {
 	case errors.Is(err, ErrUnsafeURL):
-		return "unsafe_url"
+		return ErrorUnsafeURL
 	case errors.Is(err, ErrSourceTooLarge):
-		return "source_too_large"
+		return ErrorSourceTooLarge
 	case errors.Is(err, ErrUnsupportedMIME):
-		return "unsupported_mime"
+		return ErrorUnsupportedMIME
 	case errors.Is(err, ErrMalware):
-		return "malware_detected"
+		return ErrorMalwareDetected
 	default:
-		return "fetch_failed"
+		return ErrorFetchFailed
 	}
 }
 
 func parseErrorCode(err error) string {
 	switch {
 	case errors.Is(err, ErrPDFExtractorUnavailable):
-		return "pdf_extractor_unavailable"
+		return ErrorPDFExtractorUnavailable
 	case errors.Is(err, ErrPDFTextTooLarge):
-		return "pdf_text_too_large"
+		return ErrorPDFTextTooLarge
 	case errors.Is(err, ErrPDFRasterizerUnavailable):
-		return "pdf_rasterizer_unavailable"
+		return ErrorPDFRasterizerUnavailable
 	case errors.Is(err, ErrPDFPageLimitExceeded):
-		return "pdf_page_limit_exceeded"
+		return ErrorPDFPageLimitExceeded
 	case errors.Is(err, ErrAdvancedParserUnavailable):
-		return "advanced_parser_unavailable"
+		return ErrorAdvancedParserUnavailable
 	case errors.Is(err, ErrVisionPageAnalysisFailed):
-		return "vision_page_analysis_failed"
+		return ErrorVisionPageAnalysisFailed
 	case errors.Is(err, ErrOCRUnavailable):
-		return "ocr_unavailable"
+		return ErrorOCRUnavailable
 	case errors.Is(err, ErrOCRImageTooLarge):
-		return "ocr_image_too_large"
+		return ErrorOCRImageTooLarge
 	case errors.Is(err, ErrOCRTextTooLarge):
-		return "ocr_text_too_large"
+		return ErrorOCRTextTooLarge
 	case errors.Is(err, ErrOCRNoText):
-		return "ocr_no_text"
+		return ErrorOCRNoText
 	case errors.Is(err, ErrOCRFailed):
-		return "ocr_failed"
+		return ErrorOCRFailed
 	default:
-		return "parse_failed"
+		return ErrorParseFailed
 	}
 }
 
@@ -745,19 +773,19 @@ func extractionErrorCode(err error) string {
 	var providerErr *ai.ProviderError
 	switch {
 	case errors.As(err, &providerErr) && providerErr.Code == "output_truncated":
-		return "extraction_output_truncated"
+		return ErrorExtractionOutputTruncated
 	case errors.Is(err, ai.ErrInvalidOutput):
-		return "extraction_invalid_output"
+		return ErrorExtractionInvalidOutput
 	case errors.Is(err, ai.ErrProvider):
-		return "extraction_provider_failed"
+		return ErrorExtractionProviderFailed
 	case errors.Is(err, ai.ErrTimeout), errors.Is(err, context.DeadlineExceeded):
-		return "extraction_timeout"
+		return ErrorExtractionTimeout
 	case errors.Is(err, ErrEvidenceRequired):
-		return "extraction_evidence_invalid"
+		return ErrorExtractionEvidenceInvalid
 	case errors.Is(err, ErrModelInputTooLarge):
-		return "extraction_input_too_large"
+		return ErrorExtractionInputTooLarge
 	default:
-		return "extraction_failed"
+		return ErrorExtractionFailed
 	}
 }
 
@@ -776,25 +804,25 @@ func planErrorCode(err error) string {
 	var providerErr *ai.ProviderError
 	switch {
 	case errors.As(err, &providerErr) && providerErr.Code == "output_truncated":
-		return "page_plan_output_truncated"
+		return ErrorPagePlanOutputTruncated
 	case errors.Is(err, ai.ErrInvalidOutput):
-		return "page_plan_invalid_output"
+		return ErrorPagePlanInvalidOutput
 	case errors.Is(err, ai.ErrProvider):
-		return "page_plan_provider_failed"
+		return ErrorPagePlanProviderFailed
 	case errors.Is(err, ai.ErrTimeout), errors.Is(err, context.DeadlineExceeded):
-		return "page_plan_timeout"
+		return ErrorPagePlanTimeout
 	case errors.Is(err, ErrEvidenceRequired):
-		return "page_plan_evidence_invalid"
+		return ErrorPagePlanEvidenceInvalid
 	case errors.Is(err, ErrModelInputTooLarge):
-		return "page_plan_input_too_large"
+		return ErrorPagePlanInputTooLarge
 	case errors.Is(err, ErrPlanTargetConflict):
-		return "page_plan_target_conflict"
+		return ErrorPagePlanTargetConflict
 	case errors.Is(err, ErrNoPagePlan):
-		return "no_page_plan"
+		return ErrorNoPagePlan
 	case errors.Is(err, ErrQualityGate):
-		return "page_plan_quality_gate"
+		return ErrorPagePlanQualityGate
 	default:
-		return "page_plan_failed"
+		return ErrorPagePlanFailed
 	}
 }
 

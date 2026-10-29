@@ -161,6 +161,8 @@ docs/HistoryApi.md
 docs/ImportEntityAlternative.md
 docs/ImportEntityMatchReview.md
 docs/ImportEntityResolution.md
+docs/ImportFailure.md
+docs/ImportFailureDetails.md
 docs/ImportJob.md
 docs/ImportJobDetail.md
 docs/ImportJobListPage.md
@@ -478,6 +480,8 @@ models/HealthResponse.ts
 models/ImportEntityAlternative.ts
 models/ImportEntityMatchReview.ts
 models/ImportEntityResolution.ts
+models/ImportFailure.ts
+models/ImportFailureDetails.ts
 models/ImportJob.ts
 models/ImportJobDetail.ts
 models/ImportJobListPage.ts

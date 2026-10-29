@@ -266,7 +266,7 @@ func (a *visionPDFAdapter) analyzePage(
 			return pageAnalysis{}, ctx.Err()
 		}
 		// Never include supplier bodies or model output in the returned error.
-		return pageAnalysis{}, fmt.Errorf("%w: page %d: %w", ErrVisionPageAnalysisFailed, page, err)
+		return pageAnalysis{}, &visionPageError{page: page, cause: err}
 	}
 	return analysis, nil
 }

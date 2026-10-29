@@ -13,6 +13,14 @@
  */
 
 import { mapValues } from '../runtime';
+import type { ImportFailure } from './ImportFailure';
+import {
+    ImportFailureFromJSON,
+    ImportFailureFromJSONTyped,
+    ImportFailureToJSON,
+    ImportFailureToJSONTyped,
+} from './ImportFailure';
+
 /**
  *
  * @export
@@ -51,10 +59,10 @@ export interface ImportRun {
     status: ImportRunStatusEnum;
     /**
      *
-     * @type {{ [key: string]: any; }}
+     * @type {ImportFailure}
      * @memberof ImportRun
      */
-    error?: { [key: string]: any; };
+    error?: ImportFailure;
     /**
      *
      * @type {Date}
@@ -110,7 +118,7 @@ export function ImportRunFromJSONTyped(json: any, ignoreDiscriminator: boolean):
         'attempt': json['attempt'],
         'idempotencyKey': json['idempotency_key'],
         'status': json['status'],
-        'error': json['error'] == null ? undefined : json['error'],
+        'error': json['error'] == null ? undefined : ImportFailureFromJSON(json['error']),
         'startedAt': (new Date(json['started_at'])),
         'finishedAt': json['finished_at'] == null ? undefined : (new Date(json['finished_at'])),
     };
@@ -132,7 +140,7 @@ export function ImportRunToJSONTyped(value?: ImportRun | null, ignoreDiscriminat
         'attempt': value['attempt'],
         'idempotency_key': value['idempotencyKey'],
         'status': value['status'],
-        'error': value['error'],
+        'error': ImportFailureToJSON(value['error']),
         'started_at': value['startedAt'].toISOString(),
         'finished_at': value['finishedAt'] == null ? value['finishedAt'] : value['finishedAt'].toISOString(),
     };

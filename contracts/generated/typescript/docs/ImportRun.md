@@ -11,7 +11,7 @@ Name | Type
 `attempt` | number
 `idempotencyKey` | string
 `status` | string
-`error` | { [key: string]: any; }
+`error` | [ImportFailure](ImportFailure.md)
 `startedAt` | Date
 `finishedAt` | Date
 

@@ -183,7 +183,7 @@ func (f *Fetcher) Fetch(ctx context.Context, rawURL string) (*AcquiredSource, er
 	}
 	defer response.Body.Close()
 	if response.StatusCode < 200 || response.StatusCode >= 300 {
-		return nil, fmt.Errorf("%w: HTTP %d", ErrFetchFailed, response.StatusCode)
+		return nil, &sourceHTTPError{status: response.StatusCode}
 	}
 	if response.ContentLength > f.policy.MaxBytes {
 		return nil, ErrSourceTooLarge

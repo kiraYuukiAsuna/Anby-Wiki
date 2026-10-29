@@ -13,6 +13,14 @@
  */
 
 import { mapValues } from '../runtime';
+import type { ImportFailure } from './ImportFailure';
+import {
+    ImportFailureFromJSON,
+    ImportFailureFromJSONTyped,
+    ImportFailureToJSON,
+    ImportFailureToJSONTyped,
+} from './ImportFailure';
+
 /**
  *
  * @export
@@ -57,10 +65,10 @@ export interface ImportStageRun {
     outputHash?: string;
     /**
      *
-     * @type {{ [key: string]: any; }}
+     * @type {ImportFailure}
      * @memberof ImportStageRun
      */
-    error?: { [key: string]: any; };
+    error?: ImportFailure;
     /**
      *
      * @type {Date}
@@ -131,7 +139,7 @@ export function ImportStageRunFromJSONTyped(json: any, ignoreDiscriminator: bool
         'status': json['status'],
         'inputHash': json['input_hash'] == null ? undefined : json['input_hash'],
         'outputHash': json['output_hash'] == null ? undefined : json['output_hash'],
-        'error': json['error'] == null ? undefined : json['error'],
+        'error': json['error'] == null ? undefined : ImportFailureFromJSON(json['error']),
         'startedAt': (new Date(json['started_at'])),
         'finishedAt': json['finished_at'] == null ? undefined : (new Date(json['finished_at'])),
     };
@@ -154,7 +162,7 @@ export function ImportStageRunToJSONTyped(value?: ImportStageRun | null, ignoreD
         'status': value['status'],
         'input_hash': value['inputHash'],
         'output_hash': value['outputHash'],
-        'error': value['error'],
+        'error': ImportFailureToJSON(value['error']),
         'started_at': value['startedAt'].toISOString(),
         'finished_at': value['finishedAt'] == null ? value['finishedAt'] : value['finishedAt'].toISOString(),
     };

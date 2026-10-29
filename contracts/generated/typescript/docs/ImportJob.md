@@ -22,7 +22,7 @@ Name | Type
 `planConfirmedAt` | Date
 `currentStage` | string
 `progress` | number
-`error` | { [key: string]: any; }
+`error` | [ImportFailure](ImportFailure.md)
 `createdAt` | Date
 `startedAt` | Date
 `finishedAt` | Date

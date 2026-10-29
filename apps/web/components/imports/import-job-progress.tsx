@@ -33,6 +33,7 @@ import {
   ImportPageTargetPicker,
   type ImportPageTarget,
 } from "@/components/imports/import-job-form";
+import { ImportFailureNotice } from "@/components/imports/import-failure-notice";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -40,6 +41,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { importsApi } from "@/lib/api";
 import { isUnauthorized, LOGIN_PATH } from "@/lib/auth";
 import { clientUUID } from "@/lib/client-uuid";
+import { importRequestError } from "@/lib/import-error";
 import { cn } from "@/lib/utils";
 
 const STAGES = ["fetch", "parse", "extract", "plan", "match", "compose", "review"] as const;
@@ -122,39 +124,6 @@ function StageStatusIcon({ status }: { status: keyof typeof STAGE_STATUS_META })
     </span>
   );
 }
-const ERROR_MESSAGES: Record<string, string> = {
-  parse_failed: "来源内容无法解析。",
-  pdf_extractor_unavailable: "服务器缺少 PDF 文本提取组件，请联系管理员。",
-  pdf_text_too_large: "PDF 解压后的文本超过处理上限。",
-  pdf_rasterizer_unavailable: "服务器缺少 PDF 页面渲染组件，请联系管理员。",
-  pdf_page_limit_exceeded: "PDF 超过高级解析的 500 页上限。",
-  advanced_parser_unavailable: "高级文档解析器未配置。",
-  vision_page_analysis_failed: "PDF 视觉页面分析失败，请检查多模态模型配置后重试。",
-  parse_artifact_failed: "结构化解析制品生成失败。",
-  parse_artifact_store_failed: "结构化解析制品保存失败。",
-  ocr_unavailable: "服务器缺少 OCR 组件或语言数据，请联系管理员。",
-  ocr_image_too_large: "图片像素或 PDF 栅格页超过 OCR 安全上限。",
-  ocr_text_too_large: "OCR 输出超过处理上限。",
-  ocr_no_text: "图片中没有识别到可抽取文本。",
-  ocr_failed: "OCR 执行失败，请确认图片清晰度或联系管理员。",
-  extraction_failed: "结构化抽取失败，请稍后重试。",
-  extraction_invalid_output: "模型返回的结构不符合抽取 Schema，请重试或更换模型。",
-  extraction_output_truncated: "模型输出达到长度上限，请减少单次来源内容或使用支持更长输出的模型。",
-  extraction_provider_failed: "模型供应商调用失败，请检查模型、额度和 API Key。",
-  extraction_timeout: "模型调用超时，请稍后重试。",
-  extraction_evidence_invalid: "模型返回的引用无法与来源文本核对。",
-  page_plan_failed: "页面规划失败，请稍后重试。",
-  page_plan_invalid_output: "模型返回的页面规划结构不合法，已完成自适应拆分仍无法修复。",
-  page_plan_output_truncated: "页面规划输出达到模型长度上限，请提高输出上限或缩小来源。",
-  page_plan_provider_failed: "页面规划模型调用失败，请检查模型、额度和 API Key。",
-  page_plan_timeout: "页面规划模型调用超时，请稍后重试。",
-  page_plan_evidence_invalid: "页面规划引用的原文无法通过逐字核验。",
-  page_plan_target_conflict: "规划的新页面标题已存在，或目标页面在规划期间发生冲突。",
-  page_plan_quality_gate: "来源理解质量未达到当前 AI 配置阈值。",
-  no_page_plan: "来源有价值，但没有形成可审核的页面写入计划。",
-  no_reviewable_proposal: "候选已完成匹配，但没有形成可写入的审核操作。",
-};
-
 const JOB_STATUS_LABEL = {
   queued: "排队中",
   running: "处理中",
@@ -230,7 +199,7 @@ function ReplanPanel({
       if (isUnauthorized(replanError)) {
         router.push(LOGIN_PATH);
       } else {
-        toast.error("重新规划失败");
+        toast.error("重新规划失败", { description: await importRequestError(replanError, "请稍后重试。") });
       }
     } finally {
       setSubmitting(false);
@@ -288,12 +257,6 @@ function ReplanPanel({
   );
 }
 
-function importErrorMessage(error: unknown) {
-  if (!error || typeof error !== "object" || !("code" in error)) return null;
-  const code = (error as { code?: unknown }).code;
-  return typeof code === "string" ? ERROR_MESSAGES[code] ?? null : null;
-}
-
 function isSourceOnly(config: object) {
   return "ingestion_mode" in config && config.ingestion_mode === "source_only";
 }
@@ -337,7 +300,7 @@ export function ImportJobProgress({ id }: { id: string }) {
         toast.error("请先登录后再操作导入任务");
         router.push(LOGIN_PATH);
       } else {
-        toast.error("任务操作失败");
+        toast.error("任务操作失败", { description: await importRequestError(actionError, "请稍后重试。") });
       }
     }
   };
@@ -354,36 +317,40 @@ export function ImportJobProgress({ id }: { id: string }) {
   }
   if (error) return <p className="rounded-lg border border-destructive/30 p-5 text-sm text-destructive">导入任务响应解析失败，请刷新页面；如果问题持续出现，请联系管理员。</p>;
   if (!data) return <p className="text-sm text-muted-foreground">正在加载导入进度…</p>;
-  const latestByStage = new Map(data.stages.map((stage) => [stage.stage, stage]));
-  const errorMessage = importErrorMessage(data.job.error);
+  const latestRun = data.job.status === "queued" ? undefined : data.runs.at(-1);
+  const latestByStage = new Map(data.stages
+    .filter((stage) => stage.importRunId === latestRun?.id)
+    .map((stage) => [stage.stage, stage]));
+  const blockedExtraction = data.job.error?.code === "quality_gate" && data.job.error.stage === "extract";
   const planningInput = data.job.planningInput;
   const sourceOnlyComplete =
     data.job.status === "succeeded" && isSourceOnly(data.job.config);
-  const canReplan = !sourceOnlyComplete && Boolean(data.job.sourceVersionId) &&
+  const canReplan = !sourceOnlyComplete && !blockedExtraction && Boolean(data.job.sourceVersionId) &&
     !data.job.proposalId && !["queued", "running"].includes(data.job.status);
   const currentPlanVersion = data.plans.find((item) => item.id === data.job.currentPlanId)
     ?? data.plans.at(-1);
 
   return (
-    <div className="space-y-6">
+    <div className="min-w-0 space-y-6">
       <section className="rounded-xl border border-border p-5">
         <div className="flex flex-wrap items-start justify-between gap-3">
-          <div>
+          <div className="min-w-0">
             <p className="text-sm font-semibold">{JOB_STATUS_LABEL[data.job.status]} · {data.job.progress}%</p>
-            <p className="mt-1 font-mono text-xs text-muted-foreground">{data.job.id}</p>
+            <p className="mt-1 break-all font-mono text-xs text-muted-foreground">{data.job.id}</p>
           </div>
-          <div className="flex gap-2">
+          <div className="flex flex-wrap gap-2">
             {(data.job.status === "queued" || data.job.status === "running" || data.job.status === "action_required") &&
               <Button variant="destructive" disabled={isMutating} onClick={() => void act("cancel")}>取消</Button>}
-            {(data.job.status === "failed" || data.job.status === "cancelled") &&
-              <Button disabled={isMutating} onClick={() => void act("retry")}>重试</Button>}
+            {(data.job.status === "failed" || data.job.status === "cancelled") && !blockedExtraction &&
+              <Button disabled={isMutating} onClick={() => void act("retry")}>{data.job.error?.retryable === false ? "修复后重试" : "重试"}</Button>}
+            {data.job.status === "failed" && blockedExtraction &&
+              <Button asChild><Link href="/imports">修改来源后重新导入</Link></Button>}
           </div>
         </div>
         <div className="mt-4 h-2 overflow-hidden rounded-full bg-muted" aria-label={`进度 ${data.job.progress}%`}>
           <div className="h-full bg-primary transition-[width]" style={{ width: `${data.job.progress}%` }} />
         </div>
-        {errorMessage ? <p className="mt-4 rounded-lg bg-destructive/10 p-3 text-sm text-destructive">{errorMessage}</p> : null}
-        {data.job.error ? <pre className="mt-2 rounded-lg bg-muted p-3 text-xs text-destructive">{JSON.stringify(data.job.error, null, 2)}</pre> : null}
+        <ImportFailureNotice error={data.job.error} className="mt-4 border-t border-border pt-4" />
       </section>
 
       {data.job.status === "action_required" ? (
@@ -419,28 +386,32 @@ export function ImportJobProgress({ id }: { id: string }) {
             (sourceOnlyComplete && name !== "fetch" && name !== "parse"
               ? "skipped"
               : "pending");
-          return <li key={name} className="rounded-lg border border-border p-4">
+          return <li key={name} className="min-w-0 rounded-lg border border-border p-4">
             <div className="flex items-center justify-between gap-2">
               <span className="text-sm font-medium">{LABELS[name]}</span>
               <StageStatusIcon status={status} />
             </div>
             {stage?.finishedAt ? <p className="mt-2 text-xs text-muted-foreground">完成于 {stage.finishedAt.toLocaleString()}</p> : null}
+            <ImportFailureNotice error={stage?.error} compact className="mt-3" />
           </li>;
         })}
       </ol>
 
-      {data.runs.length > 1 ? (
+      {data.runs.length > 0 ? (
         <details className="rounded-lg border border-border p-4">
           <summary className="cursor-pointer text-sm font-medium">
             运行记录（{data.runs.length} 次）
           </summary>
           <ol className="mt-3 divide-y divide-border">
-            {data.runs.map((run) => (
-              <li key={run.id} className="flex items-center justify-between gap-3 py-2 text-xs">
-                <span>第 {run.attempt} 次 · {JOB_STATUS_LABEL[run.status]}</span>
-                <time className="text-muted-foreground" dateTime={run.startedAt.toISOString()}>
-                  {run.startedAt.toLocaleString()}
-                </time>
+            {[...data.runs].reverse().map((run) => (
+              <li key={run.id} className="min-w-0 space-y-3 py-3 text-xs">
+                <div className="flex flex-wrap items-center justify-between gap-2">
+                  <span>第 {run.attempt} 次 · {JOB_STATUS_LABEL[run.status]}</span>
+                  <time className="text-muted-foreground" dateTime={run.startedAt.toISOString()}>
+                    {run.startedAt.toLocaleString()}
+                  </time>
+                </div>
+                <ImportFailureNotice error={run.error} compact />
               </li>
             ))}
           </ol>
