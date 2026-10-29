@@ -7,6 +7,7 @@ package main
 import (
 	"encoding/json"
 	"net/http"
+	"strconv"
 
 	"github.com/google/uuid"
 
@@ -94,21 +95,32 @@ type pageCatalogResponse struct {
 
 // ---- handlers ----
 
-// listPages GET /api/v1/pages?status=&sort=&cursor=&page_size= exposes the
+// listPages GET /api/v1/pages?status=&sort=&page=&cursor=&page_size= exposes the
 // Page directory used by the Wiki home and all-pages browser.
 func (a *ReadAPI) listPages(w http.ResponseWriter, r *http.Request) {
 	limit, ok := pageSizeFrom(w, r)
 	if !ok {
 		return
 	}
+	query := r.URL.Query()
+	pageNumber := 0
+	if query.Has("page") {
+		var err error
+		pageNumber, err = strconv.Atoi(query.Get("page"))
+		if err != nil || pageNumber < 1 || pageNumber > page.MaxCatalogPageNumber || query.Get("cursor") != "" {
+			httpx.WriteError(w, r, http.StatusBadRequest, httpx.CodeBadRequest,
+				"page 必须是 1.."+strconv.Itoa(page.MaxCatalogPageNumber)+" 的整数，且不能与 cursor 同时使用")
+			return
+		}
+	}
 	wikiID := wikiIDFromRequest(r)
 	var result *page.CatalogPage
 	var err error
 	if a.auth == nil {
 		result, err = a.pages.ListCatalogPages(
-			r.Context(), wikiID, r.URL.Query().Get("status"),
-			r.URL.Query().Get("sort"),
-			r.URL.Query().Get("cursor"), limit,
+			r.Context(), wikiID, query.Get("status"),
+			query.Get("sort"),
+			query.Get("cursor"), limit, pageNumber,
 		)
 	} else {
 		actorID, ok := actorIDFrom(w, r)
@@ -124,15 +136,15 @@ func (a *ReadAPI) listPages(w http.ResponseWriter, r *http.Request) {
 		}
 		if hasWikiAccess {
 			result, err = a.pages.ListCatalogPages(
-				r.Context(), wikiID, r.URL.Query().Get("status"),
-				r.URL.Query().Get("sort"),
-				r.URL.Query().Get("cursor"), limit,
+				r.Context(), wikiID, query.Get("status"),
+				query.Get("sort"),
+				query.Get("cursor"), limit, pageNumber,
 			)
 		} else {
 			result, err = a.pages.ListSharedCatalogPages(
-				r.Context(), wikiID, actorID, r.URL.Query().Get("status"),
-				r.URL.Query().Get("sort"),
-				r.URL.Query().Get("cursor"), limit,
+				r.Context(), wikiID, actorID, query.Get("status"),
+				query.Get("sort"),
+				query.Get("cursor"), limit, pageNumber,
 			)
 		}
 	}

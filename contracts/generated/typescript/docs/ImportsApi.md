@@ -255,7 +255,7 @@ example().catch(console.error);
 
 校验并暂存用户文件，幂等创建来源导入任务
 
-接受最大 300 MiB 的 HTML、纯文本、JSON、CSV、PDF、PNG 或 JPEG。API 在排队前 执行 MIME/magic、大小与恶意签名检查，并经 Evidence 领域服务写入私有对象存储； Worker 获取后会再次校验内容哈希与全部安全门禁。PDF 采用原生文本层与逐页视觉 理解双轨，统一输出 text/table/chart/figure/page SourceChunk；图片使用中英 OCR， JSON API 快照与 CSV/JSON 数据库导出保留为可定位 SourceChunk。原始内容不写入 ImportJob config 或诊断日志。
+接受最大 300 MiB 的 Markdown（.md/.markdown）、HTML、纯文本、JSON、CSV、PDF、PNG 或 JPEG。API 在排队前 执行 MIME/magic、大小与恶意签名检查，并经 Evidence 领域服务写入私有对象存储； Worker 获取后会再次校验内容哈希与全部安全门禁。PDF 采用原生文本层与逐页视觉 理解双轨，统一输出 text/table/chart/figure/page SourceChunk；图片使用中英 OCR， JSON API 快照与 CSV/JSON 数据库导出保留为可定位 SourceChunk。原始内容不写入 ImportJob config 或诊断日志。
 
 ### Example
 
@@ -285,7 +285,7 @@ async function example() {
     title: title_example,
     // string (optional)
     instructions: instructions_example,
-    // string | source_only 仅用于 HTML/纯文本/JSON/CSV，固化不可变来源与分片且不调用模型或生成 Proposal。 (optional)
+    // string | source_only 仅用于 Markdown/HTML/纯文本/JSON/CSV，固化不可变来源与分片且不调用模型或生成 Proposal。 (optional)
     ingestionMode: ingestionMode_example,
     // string (optional)
     routeMode: routeMode_example,
@@ -314,7 +314,7 @@ example().catch(console.error);
 | **file** | `Blob` |  | [Defaults to `undefined`] |
 | **title** | `string` |  | [Optional] [Defaults to `undefined`] |
 | **instructions** | `string` |  | [Optional] [Defaults to `undefined`] |
-| **ingestionMode** | `wiki`, `source_only` | source_only 仅用于 HTML/纯文本/JSON/CSV，固化不可变来源与分片且不调用模型或生成 Proposal。 | [Optional] [Defaults to `&#39;wiki&#39;`] [Enum: wiki, source_only] |
+| **ingestionMode** | `wiki`, `source_only` | source_only 仅用于 Markdown/HTML/纯文本/JSON/CSV，固化不可变来源与分片且不调用模型或生成 Proposal。 | [Optional] [Defaults to `&#39;wiki&#39;`] [Enum: wiki, source_only] |
 | **routeMode** | `auto`, `force_create`, `force_update` |  | [Optional] [Defaults to `&#39;auto&#39;`] [Enum: auto, force_create, force_update] |
 | **pageId** | `string` |  | [Optional] [Defaults to `undefined`] |
 

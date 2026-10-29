@@ -181,8 +181,9 @@ func TestParseHTMLPreservesTypedSourceBlocks(t *testing.T) {
 	}
 }
 
-func TestParsePlainTextPreservesMarkdownBlocks(t *testing.T) {
-	blocks, err := parsePlainText([]byte(strings.Join([]string{
+func TestParseTextSourcesPreservesMarkdownBlocks(t *testing.T) {
+	content := []byte(strings.Join([]string{
+		"# Import",
 		"## Release",
 		"- safe",
 		"- reviewable",
@@ -196,21 +197,45 @@ func TestParsePlainTextPreservesMarkdownBlocks(t *testing.T) {
 		`fmt.Println("ok")`,
 		"```",
 		"",
+		"> Keep the evidence",
+		"",
+		"| Name | Status |",
+		"| --- | --- |",
+		"| Import | Ready |",
+		"",
 		"$$E = mc^2$$",
-	}, "\n")))
-	if err != nil {
-		t.Fatal(err)
-	}
-	got := make([]string, 0, len(blocks))
-	for _, block := range blocks {
-		var hint sourceBlockHint
-		if json.Unmarshal(block.Content, &hint) == nil && hint.BlockType != "" {
-			got = append(got, hint.BlockType)
-		}
-	}
-	want := []string{"heading", "bullet_list", "ordered_list", "todo", "code", "equation"}
-	if fmt.Sprint(got) != fmt.Sprint(want) {
-		t.Fatalf("typed blocks=%v, want %v", got, want)
+	}, "\n"))
+	for _, mimeType := range []string{"text/plain", MIMEMarkdown} {
+		t.Run(mimeType, func(t *testing.T) {
+			source, err := ValidateUpload(
+				context.Background(), DefaultURLPolicy(), nil,
+				"document", mimeType, content,
+			)
+			if err != nil {
+				t.Fatal(err)
+			}
+			result, err := NewParser(0, nil).Parse(context.Background(), ParseRequest{
+				Filename: source.Filename, MIMEType: source.MIMEType, Content: source.Content,
+			})
+			if err != nil {
+				t.Fatal(err)
+			}
+			if result.Metadata.MIMEType != mimeType {
+				t.Fatalf("parser mime=%q, want %q", result.Metadata.MIMEType, mimeType)
+			}
+			got := make([]string, 0, len(result.Chunks))
+			for _, chunk := range result.Chunks {
+				var hint sourceBlockHint
+				if err := json.Unmarshal(chunk.Content, &hint); err != nil {
+					t.Fatal(err)
+				}
+				got = append(got, hint.BlockType)
+			}
+			want := []string{"heading", "bullet_list", "ordered_list", "todo", "code", "quote", "table", "equation"}
+			if fmt.Sprint(got) != fmt.Sprint(want) {
+				t.Fatalf("typed blocks=%v, want %v", got, want)
+			}
+		})
 	}
 }
 
@@ -498,6 +523,96 @@ func TestValidateUploadDetectsStructuredMIME(t *testing.T) {
 	}
 	if source.MIMEType != "application/json" {
 		t.Fatalf("mime=%q, want application/json", source.MIMEType)
+	}
+}
+
+func TestMarkdownAcquisitionPreservesFormat(t *testing.T) {
+	const markdown = "# 文档\n\n## 导入\n\n保留来源证据。\n"
+	const jsonText = `{"title":"Document"}`
+	tests := []struct {
+		name     string
+		filename string
+		mimeType string
+		content  string
+		wantMIME string
+	}{
+		{"missing MIME", "document.md", "", markdown, MIMEMarkdown},
+		{"plain uppercase extension", "DOCUMENT.MD", "text/plain; charset=utf-8", markdown, MIMEMarkdown},
+		{"octet stream", "document.markdown", "application/octet-stream", markdown, MIMEMarkdown},
+		{"declared Markdown", "source", "text/markdown; charset=UTF-8", markdown, MIMEMarkdown},
+		{"legacy MIME", "source.txt", "text/x-markdown", markdown, MIMEMarkdown},
+		{"JSON in Markdown", "snippet.md", "text/plain", jsonText, MIMEMarkdown},
+		{"HTML in Markdown", "snippet.md", "", "<p>Embedded HTML</p>", MIMEMarkdown},
+		{"JSON still detected", "data.json", "text/plain", jsonText, "application/json"},
+		{"declared JSON takes precedence", "data.md", "application/json", jsonText, "application/json"},
+	}
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			content := []byte(test.content)
+			// URL acquisition uses byte-based refinement; uploads use the streaming path.
+			mimeType := refineMIME(test.filename, normalizedMIME(test.mimeType), content)
+			if mimeType != test.wantMIME || !magicMatches(mimeType, content) {
+				t.Fatalf("URL format=%q, want %q", mimeType, test.wantMIME)
+			}
+			reader := bytes.NewReader(content)
+			validated, err := ValidateUploadReader(
+				context.Background(), DefaultURLPolicy(), nil,
+				test.filename, test.mimeType, reader,
+			)
+			if err != nil {
+				t.Fatal(err)
+			}
+			sum := sha256.Sum256(content)
+			if validated.MIMEType != test.wantMIME ||
+				validated.ContentHash != hex.EncodeToString(sum[:]) ||
+				validated.SizeBytes != int64(len(content)) {
+				t.Fatalf("unexpected validated upload: %#v", validated)
+			}
+			position, err := reader.Seek(0, io.SeekCurrent)
+			if err != nil || position != 0 {
+				t.Fatalf("reader position=%d, error=%v, want 0", position, err)
+			}
+		})
+	}
+}
+
+func TestMarkdownUploadKeepsSafetyChecks(t *testing.T) {
+	tests := []struct {
+		name     string
+		content  []byte
+		maxBytes int64
+		wantErr  error
+	}{
+		{
+			name: "invalid UTF-8 beyond sniff prefix",
+			content: append(
+				bytes.Repeat([]byte("a"), signatureScanChunkSize+1), 0xff,
+			),
+			wantErr: ErrUnsupportedMIME,
+		},
+		{
+			name: "malware", content: []byte("# EICAR-STANDARD-ANTIVIRUS-TEST-FILE"),
+			wantErr: ErrMalware,
+		},
+		{
+			name: "size limit", content: []byte("# Large document"),
+			maxBytes: 8, wantErr: ErrSourceTooLarge,
+		},
+	}
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			policy := DefaultURLPolicy()
+			if test.maxBytes > 0 {
+				policy.MaxBytes = test.maxBytes
+			}
+			_, err := ValidateUploadReader(
+				context.Background(), policy, nil,
+				"document.md", MIMEMarkdown, bytes.NewReader(test.content),
+			)
+			if !errors.Is(err, test.wantErr) {
+				t.Fatalf("error=%v, want %v", err, test.wantErr)
+			}
+		})
 	}
 }
 

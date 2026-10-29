@@ -32,6 +32,7 @@ func (r *Repository) ListCatalogPages(
 	sortKey string,
 	after *catalogCursor,
 	limit int,
+	offset int64,
 ) ([]CatalogItem, int, error) {
 	revisionCondition := "p.current_revision_id IS NOT NULL"
 	if status == CatalogStatusDraft {
@@ -44,6 +45,9 @@ func (r *Repository) ListCatalogPages(
 		WHERE p.wiki_id=$1 AND p.deleted_at IS NULL
 		  AND `+revisionCondition+` AND n.is_content`, wikiID).Scan(&total); err != nil {
 		return nil, 0, fmt.Errorf("page: 统计页面目录失败: %w", err)
+	}
+	if offset >= int64(total) {
+		return []CatalogItem{}, total, nil
 	}
 
 	var rows pgx.Rows
@@ -60,8 +64,8 @@ func (r *Repository) ListCatalogPages(
 			WHERE p.wiki_id=$1 AND p.deleted_at IS NULL
 			  AND `+revisionCondition+` AND n.is_content
 			  AND ($2::text IS NULL OR (p.normalized_title,p.id)>($2,$3))
-			ORDER BY p.normalized_title ASC,p.id ASC LIMIT $4`,
-			wikiID, afterTitle, afterID, limit)
+			ORDER BY p.normalized_title ASC,p.id ASC LIMIT $4 OFFSET $5`,
+			wikiID, afterTitle, afterID, limit, offset)
 	} else {
 		var afterTime *time.Time
 		afterID := uuid.Nil
@@ -74,8 +78,8 @@ func (r *Repository) ListCatalogPages(
 			WHERE p.wiki_id=$1 AND p.deleted_at IS NULL
 			  AND `+revisionCondition+` AND n.is_content
 			  AND ($2::timestamptz IS NULL OR (p.updated_at,p.id)<($2,$3))
-			ORDER BY p.updated_at DESC,p.id DESC LIMIT $4`,
-			wikiID, afterTime, afterID, limit)
+			ORDER BY p.updated_at DESC,p.id DESC LIMIT $4 OFFSET $5`,
+			wikiID, afterTime, afterID, limit, offset)
 	}
 	if err != nil {
 		return nil, 0, fmt.Errorf("page: 列出页面目录失败: %w", err)
@@ -103,6 +107,7 @@ func (r *Repository) ListSharedCatalogPages(
 	sortKey string,
 	after *catalogCursor,
 	limit int,
+	offset int64,
 ) ([]CatalogItem, int, error) {
 	revisionCondition := "p.current_revision_id IS NOT NULL"
 	if status == CatalogStatusDraft {
@@ -117,6 +122,9 @@ func (r *Repository) ListSharedCatalogPages(
 		WHERE p.wiki_id=$1 AND p.deleted_at IS NULL
 		  AND `+revisionCondition+` AND n.is_content`, wikiID, actorID).Scan(&total); err != nil {
 		return nil, 0, fmt.Errorf("page: 统计分享页面目录失败: %w", err)
+	}
+	if offset >= int64(total) {
+		return []CatalogItem{}, total, nil
 	}
 
 	var rows pgx.Rows
@@ -135,8 +143,8 @@ func (r *Repository) ListSharedCatalogPages(
 			WHERE p.wiki_id=$1 AND p.deleted_at IS NULL
 			  AND `+revisionCondition+` AND n.is_content
 			  AND ($3::text IS NULL OR (p.normalized_title,p.id)>($3,$4))
-			ORDER BY p.normalized_title ASC,p.id ASC LIMIT $5`,
-			wikiID, actorID, afterTitle, afterID, limit)
+			ORDER BY p.normalized_title ASC,p.id ASC LIMIT $5 OFFSET $6`,
+			wikiID, actorID, afterTitle, afterID, limit, offset)
 	} else {
 		var afterTime *time.Time
 		afterID := uuid.Nil
@@ -151,8 +159,8 @@ func (r *Repository) ListSharedCatalogPages(
 			WHERE p.wiki_id=$1 AND p.deleted_at IS NULL
 			  AND `+revisionCondition+` AND n.is_content
 			  AND ($3::timestamptz IS NULL OR (p.updated_at,p.id)<($3,$4))
-			ORDER BY p.updated_at DESC,p.id DESC LIMIT $5`,
-			wikiID, actorID, afterTime, afterID, limit)
+			ORDER BY p.updated_at DESC,p.id DESC LIMIT $5 OFFSET $6`,
+			wikiID, actorID, afterTime, afterID, limit, offset)
 	}
 	if err != nil {
 		return nil, 0, fmt.Errorf("page: 列出分享页面目录失败: %w", err)

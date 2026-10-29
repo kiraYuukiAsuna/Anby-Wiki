@@ -14,7 +14,7 @@ API 的 `POST /api/v1/import-jobs` 只创建队列项。Provider、API 根地址
 Worker 不领取该 Wiki 中需要模型的 `source_import`，已有任务保持 queued；Runner 会按
 最早任务顺序扫描最多 16 个不同 Wiki，跳过不可用配置并继续处理其他 Wiki。
 
-`ingestion_mode=source_only` 用于大规模 HTML、纯文本、JSON 或 CSV 来源归档：仍执行
+`ingestion_mode=source_only` 用于大规模 Markdown、HTML、纯文本、JSON 或 CSV 来源归档：仍执行
 受控获取、MIME/magic 与恶意内容检查、原始资产和解析 manifest 存储，并通过 Evidence
 服务固化不可变 Source/SourceVersion/SourceChunk；Parse 成功后 Job 直接完成，不调用
 模型、不生成 ImportPlan/Proposal，也不发布页面。Worker 会在读取 AI 配置前优先领取
@@ -65,11 +65,16 @@ Worker 被强制终止或部署替换后，超过完整任务超时仍处于 run
 `ImportJob.source_version_id` 在同一事务提交，因此后续模型失败时 API 仍能展示并导航
 已固化的 SourceVersion/Chunk；上传恢复点还必须与 Job 中固定的内容哈希一致。
 
-HTTP 产品入口同时接收受控公网 URL 与 multipart 文件上传。支持 HTML、纯文本、
+HTTP 产品入口同时接收受控公网 URL 与 multipart 文件上传。支持 Markdown、HTML、纯文本、
 JSON、CSV、PDF、PNG 与 JPEG：公网 JSON 作为 API 快照，上传的 JSON/CSV 作为
 数据库记录导出，图片进入 LLM 布局与区域识别，PDF 进入原生文本与同一视觉流程。上传先由 API 经 Evidence
 服务写入私有对象存储，Job config 只保存对象键与内容哈希、不保存正文；Worker 读取后
 再次校验。两条路径共享 MIME/magic、300 MiB、恶意签名、哈希和证据固化门禁。
+
+Markdown 接受 `text/markdown`、`text/x-markdown`，以及 MIME 缺失或为
+`text/plain`/`application/octet-stream` 的 `.md`/`.markdown` 文件；扩展名识别优先于
+JSON 内容探测。确定性解析保留标题、列表、任务、引用、代码块、表格和公式结构，
+不执行来源中的 HTML 或脚本，后续仍按既有流程生成计划并交由人工审核。
 
 来源固化前会在最多 256 KiB 的有界窗口中推导结构化元数据：HTML `title`/meta、
 JSON 常用字段、Markdown front matter 与 RFC 头可提供标题、作者、发布者、日期、
@@ -229,7 +234,7 @@ Apply 在全部页面发布后绑定当前 Revision，通过 Collection 服务�
 - URL 仅允许 HTTP(S) 80/443，逐次校验 DNS 与重定向；Dial 时再次拒绝内网、回环、
   link-local、CGNAT、benchmark 等地址，防 DNS rebinding。
 - 原始资产和 Source 在解析前持久化；解析失败不丢失原始证据。
-- HTML/PDF/图片/JSON/CSV 只产出稳定 Chunk、页码/章节/字符范围或图片区域，不执行
+- Markdown/文本/HTML/PDF/图片/JSON/CSV 只产出稳定 Chunk、页码/章节/字符范围或图片区域，不执行
   来源内脚本或指令；Poppler 在只读、非 root、capabilities 全移除的
   Worker 容器内运行。
 - 抽取结果先经权威 JSON Schema，再逐条核对 `source_version_id`、Chunk ID、原文引用和

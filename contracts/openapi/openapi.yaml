@@ -1409,7 +1409,7 @@ paths:
         - sessionCookie: []
         - cliBearer: []
       description: |
-        接受最大 300 MiB 的 HTML、纯文本、JSON、CSV、PDF、PNG 或 JPEG。API 在排队前
+        接受最大 300 MiB 的 Markdown（.md/.markdown）、HTML、纯文本、JSON、CSV、PDF、PNG 或 JPEG。API 在排队前
         执行 MIME/magic、大小与恶意签名检查，并经 Evidence 领域服务写入私有对象存储；
         Worker 获取后会再次校验内容哈希与全部安全门禁。PDF 采用原生文本层与逐页视觉
         理解双轨，统一输出 text/table/chart/figure/page SourceChunk；图片使用中英 OCR，
@@ -1438,7 +1438,7 @@ paths:
                   type: string
                   enum: [wiki, source_only]
                   default: wiki
-                  description: source_only 仅用于 HTML/纯文本/JSON/CSV，固化不可变来源与分片且不调用模型或生成 Proposal。
+                  description: source_only 仅用于 Markdown/HTML/纯文本/JSON/CSV，固化不可变来源与分片且不调用模型或生成 Proposal。
                 route_mode:
                   type: string
                   enum: [auto, force_create, force_update]
@@ -2739,11 +2739,21 @@ paths:
       description: |
         返回当前登录 Wiki 中未删除、属于内容命名空间的页面目录。status=published
         只返回已有 Current Revision 的页面；status=draft 返回已创建但尚未发布的页面。
-        recent 按最近更新倒序，title 按规范化标题升序，均使用稳定游标分页。
+        recent 按最近更新倒序，title 按规范化标题升序，以页面 ID 打破排序平局。
+        page 从 1 开始，可直接跳转指定页；超出总页数返回空 items 和当前 total。
+        不传 page 时保留游标分页；page 不能与非空 cursor 同时使用。
       tags: [reading]
       parameters:
         - $ref: "#/components/parameters/Cursor"
         - $ref: "#/components/parameters/PageSize"
+        - name: page
+          in: query
+          required: false
+          description: 从 1 开始的页码，与非空 cursor 互斥；省略时使用游标分页。
+          schema:
+            type: integer
+            minimum: 1
+            maximum: 2147483647
         - name: status
           in: query
           required: false
@@ -5706,7 +5716,7 @@ components:
           type: string
           enum: [wiki, source_only]
           default: wiki
-          description: source_only 仅用于 HTML/纯文本/JSON/CSV，在固化 SourceVersion/Chunk 后成功结束且不调用模型或生成 Proposal。
+          description: source_only 仅用于 Markdown/HTML/纯文本/JSON/CSV，在固化 SourceVersion/Chunk 后成功结束且不调用模型或生成 Proposal。
         title: { type: string, maxLength: 255 }
         instructions: { type: string, maxLength: 4000 }
         route_mode: { type: string, enum: [auto, force_create, force_update], default: auto }

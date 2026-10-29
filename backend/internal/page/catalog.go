@@ -20,6 +20,7 @@ const (
 
 	DefaultCatalogPageSize = 20
 	MaxCatalogPageSize     = 100
+	MaxCatalogPageNumber   = 1<<31 - 1
 )
 
 // CatalogItem is the public discovery projection of one live Page.
@@ -51,28 +52,28 @@ func (s *Service) ListCatalogPages(
 	ctx context.Context,
 	wikiID uuid.UUID,
 	status, sortKey, cursor string,
-	limit int,
+	limit, pageNumber int,
 ) (*CatalogPage, error) {
-	return s.listCatalogPages(ctx, wikiID, uuid.Nil, status, sortKey, cursor, limit)
+	return s.listCatalogPages(ctx, wikiID, uuid.Nil, status, sortKey, cursor, limit, pageNumber)
 }
 
 func (s *Service) ListSharedCatalogPages(
 	ctx context.Context,
 	wikiID, actorID uuid.UUID,
 	status, sortKey, cursor string,
-	limit int,
+	limit, pageNumber int,
 ) (*CatalogPage, error) {
 	if actorID == uuid.Nil {
 		return nil, ErrWikiNotFound
 	}
-	return s.listCatalogPages(ctx, wikiID, actorID, status, sortKey, cursor, limit)
+	return s.listCatalogPages(ctx, wikiID, actorID, status, sortKey, cursor, limit, pageNumber)
 }
 
 func (s *Service) listCatalogPages(
 	ctx context.Context,
 	wikiID, actorID uuid.UUID,
 	status, sortKey, cursor string,
-	limit int,
+	limit, pageNumber int,
 ) (*CatalogPage, error) {
 	if wikiID == uuid.Nil {
 		return nil, ErrWikiNotFound
@@ -97,6 +98,13 @@ func (s *Service) listCatalogPages(
 	if limit > MaxCatalogPageSize {
 		limit = MaxCatalogPageSize
 	}
+	if pageNumber < 0 || pageNumber > MaxCatalogPageNumber || (pageNumber > 0 && cursor != "") {
+		return nil, fmt.Errorf("%w: page 非法或与 cursor 同时使用", ErrInvalidCursor)
+	}
+	var offset int64
+	if pageNumber > 0 {
+		offset = int64(pageNumber-1) * int64(limit)
+	}
 
 	var after *catalogCursor
 	if cursor != "" {
@@ -114,10 +122,10 @@ func (s *Service) listCatalogPages(
 	var total int
 	var err error
 	if actorID == uuid.Nil {
-		items, total, err = s.repo.ListCatalogPages(ctx, wikiID, status, sortKey, after, limit+1)
+		items, total, err = s.repo.ListCatalogPages(ctx, wikiID, status, sortKey, after, limit+1, offset)
 	} else {
 		items, total, err = s.repo.ListSharedCatalogPages(
-			ctx, wikiID, actorID, status, sortKey, after, limit+1,
+			ctx, wikiID, actorID, status, sortKey, after, limit+1, offset,
 		)
 	}
 	if err != nil {

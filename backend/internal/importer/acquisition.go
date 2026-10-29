@@ -38,7 +38,10 @@ type URLPolicy struct {
 	AllowedPorts map[string]bool
 }
 
-const DefaultMaxSourceBytes = int64(300 << 20)
+const (
+	DefaultMaxSourceBytes = int64(300 << 20)
+	MIMEMarkdown          = "text/markdown"
+)
 
 func DefaultURLPolicy() URLPolicy {
 	return URLPolicy{
@@ -46,6 +49,7 @@ func DefaultURLPolicy() URLPolicy {
 		AllowedMIMEs: map[string]bool{
 			"text/html":        true,
 			"text/plain":       true,
+			MIMEMarkdown:       true,
 			"text/csv":         true,
 			"application/pdf":  true,
 			"application/json": true,
@@ -171,7 +175,7 @@ func (f *Fetcher) Fetch(ctx context.Context, rawURL string) (*AcquiredSource, er
 	request.Header.Set("User-Agent", "AnbyWiki-Importer/1.0")
 	request.Header.Set(
 		"Accept",
-		"text/html,application/pdf,text/plain,text/csv,application/json,image/png,image/jpeg",
+		"text/html,"+MIMEMarkdown+",application/pdf,text/plain,text/csv,application/json,image/png,image/jpeg",
 	)
 	response, err := f.client.Do(request)
 	if err != nil {
@@ -193,9 +197,6 @@ func (f *Fetcher) Fetch(ctx context.Context, rawURL string) (*AcquiredSource, er
 	}
 	filename := filepath.Base(response.Request.URL.Path)
 	mimeType := normalizedMIME(response.Header.Get("Content-Type"))
-	if mimeType == "" {
-		mimeType = normalizedMIME(http.DetectContentType(content))
-	}
 	mimeType = refineMIME(filename, mimeType, content)
 	if !f.policy.AllowedMIMEs[mimeType] || !magicMatches(mimeType, content) {
 		return nil, ErrUnsupportedMIME
@@ -220,6 +221,8 @@ func normalizedMIME(value string) string {
 		return "text/csv"
 	case "text/json":
 		return "application/json"
+	case "text/x-markdown":
+		return MIMEMarkdown
 	default:
 		return strings.ToLower(parsed)
 	}
@@ -227,6 +230,10 @@ func normalizedMIME(value string) string {
 
 func refineMIME(filename, mimeType string, content []byte) string {
 	extension := strings.ToLower(filepath.Ext(strings.TrimSpace(filename)))
+	if (mimeType == "" || mimeType == "application/octet-stream" || mimeType == "text/plain") &&
+		(extension == ".md" || extension == ".markdown") {
+		return MIMEMarkdown
+	}
 	if (mimeType == "" || mimeType == "application/octet-stream" || mimeType == "text/plain") &&
 		json.Valid(bytes.TrimSpace(content)) {
 		return "application/json"
@@ -247,6 +254,8 @@ func extensionForMIME(mimeType string) string {
 		return ".html"
 	case "text/plain":
 		return ".txt"
+	case MIMEMarkdown:
+		return ".md"
 	case "text/csv":
 		return ".csv"
 	case "application/pdf":
@@ -287,7 +296,7 @@ func magicMatches(mimeType string, content []byte) bool {
 			}
 		}
 		return false
-	case "text/plain":
+	case "text/plain", MIMEMarkdown:
 		return utf8.Valid(content)
 	case "text/csv":
 		return utf8.Valid(content) && !bytes.Contains(content, []byte{0})
@@ -444,6 +453,10 @@ func ValidateUpload(
 
 func refineMIMEReader(filename, mimeType string, content io.ReadSeeker) (string, error) {
 	extension := strings.ToLower(filepath.Ext(strings.TrimSpace(filename)))
+	if (mimeType == "" || mimeType == "application/octet-stream" || mimeType == "text/plain") &&
+		(extension == ".md" || extension == ".markdown") {
+		return MIMEMarkdown, nil
+	}
 	if mimeType == "" || mimeType == "application/octet-stream" || mimeType == "text/plain" {
 		valid, err := validJSONReader(content)
 		if err != nil {
@@ -496,7 +509,7 @@ func magicMatchesReader(mimeType string, content io.ReadSeeker) (bool, error) {
 			}
 		}
 		return false, nil
-	case "text/plain":
+	case "text/plain", MIMEMarkdown:
 		return validUTF8Reader(content)
 	case "text/csv":
 		contains, err := readerContainsByte(content, 0)

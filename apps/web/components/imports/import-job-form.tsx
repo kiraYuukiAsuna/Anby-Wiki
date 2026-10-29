@@ -1,8 +1,8 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { Command } from "cmdk";
-import { FilePenLine, FilePlus2, FileText, Network, Search, X } from "lucide-react";
+import { CheckCircle2, FilePenLine, FilePlus2, FileText, Network, Search, Upload, X } from "lucide-react";
 import { useRouter } from "next/navigation";
 import { toast } from "sonner";
 import useSWR from "swr";
@@ -50,28 +50,34 @@ const sourceSchema = z.object({
   ...planningFields,
 }).superRefine(validatePlanning);
 
+const UPLOAD_MIME_TYPES = [
+  "text/markdown",
+  "text/x-markdown",
+  "text/html",
+  "text/plain",
+  "text/csv",
+  "application/json",
+  "application/pdf",
+  "image/png",
+  "image/jpeg",
+];
+const UPLOAD_ACCEPT = [".md", ".markdown", ".html", ".htm", ".txt", ".csv", ".json", ".pdf", ".png", ".jpg", ".jpeg", ...UPLOAD_MIME_TYPES].join(",");
+
+const uploadFileSchema = z
+  .custom<File>((value) => {
+    if (typeof value !== "object" || value === null) return false;
+    const candidate = value as { name?: unknown; size?: unknown; type?: unknown };
+    return typeof candidate.name === "string" && typeof candidate.size === "number" && typeof candidate.type === "string";
+  }, "请选择来源文件")
+  .refine((file) => file.size > 0, "文件不能为空")
+  .refine((file) => file.size <= 300 * 1024 * 1024, "文件不能超过 300 MiB")
+  .refine(
+    (file) => UPLOAD_MIME_TYPES.includes(file.type) || /\.(md|markdown|html?|txt|csv|json|pdf|png|jpe?g)$/i.test(file.name),
+    "仅支持 Markdown、HTML、文本、JSON、CSV、PDF、PNG 或 JPEG",
+  );
+
 const uploadSchema = z.object({
-  file: z
-    .custom<File>((value) => {
-      if (typeof value !== "object" || value === null) return false;
-      const candidate = value as { name?: unknown; size?: unknown; type?: unknown };
-      return typeof candidate.name === "string" && typeof candidate.size === "number" && typeof candidate.type === "string";
-    }, "请选择来源文件")
-    .refine((file) => file.size <= 300 * 1024 * 1024, "文件不能超过 300 MiB")
-    .refine(
-      (file) =>
-        [
-          "text/html",
-          "text/plain",
-          "text/csv",
-          "application/json",
-          "application/pdf",
-          "image/png",
-          "image/jpeg",
-        ].includes(file.type) ||
-        /\.(html?|txt|csv|json|pdf|png|jpe?g)$/i.test(file.name),
-      "仅支持 HTML、文本、JSON、CSV、PDF、PNG 或 JPEG",
-    ),
+  file: uploadFileSchema,
   ...planningFields,
 }).superRefine(validatePlanning);
 
@@ -183,11 +189,20 @@ export function ImportJobForm() {
   const [sourceKind, setSourceKind] = useState<"url" | "upload">("url");
   const [url, setURL] = useState("");
   const [file, setFile] = useState<File | null>(null);
+  const fileInput = useRef<HTMLInputElement>(null);
+  const [fileError, setFileError] = useState("");
+  const [dragging, setDragging] = useState(false);
   const [title, setTitle] = useState("");
   const [instructions, setInstructions] = useState("");
   const [routeMode, setRouteMode] = useState<"auto" | "force_create" | "force_update">("auto");
   const [targetPage, setTargetPage] = useState<ImportPageTarget | null>(null);
   const [submitting, setSubmitting] = useState(false);
+
+  const selectFile = (selected: File) => {
+    const parsed = uploadFileSchema.safeParse(selected);
+    setFile(parsed.success ? parsed.data : null);
+    setFileError(parsed.success ? "" : parsed.error.issues[0]?.message ?? "文件不合法");
+  };
 
   const submit = async (event: React.FormEvent) => {
     event.preventDefault();
@@ -202,6 +217,9 @@ export function ImportJobForm() {
         routeMode, pageId,
       });
     if (!parsed.success) {
+      if (sourceKind === "upload") {
+        setFileError(parsed.error.issues.find((issue) => issue.path[0] === "file")?.message ?? "");
+      }
       toast.error(parsed.error.issues[0]?.message ?? "来源参数不合法");
       return;
     }
@@ -228,7 +246,7 @@ export function ImportJobForm() {
             title: title || undefined,
             instructions: instructions || undefined,
             routeMode,
-          pageId,
+            pageId,
           });
       toast.success("导入任务已排队");
       router.push(`/imports/${job.id}`);
@@ -237,7 +255,7 @@ export function ImportJobForm() {
         toast.error("请先登录后再创建导入任务");
         router.push(LOGIN_PATH);
       } else {
-        toast.error("创建导入任务失败", { description: "请检查来源地址或稍后重试。" });
+        toast.error("创建导入任务失败", { description: "请检查来源或稍后重试。" });
       }
     } finally {
       setSubmitting(false);
@@ -248,9 +266,9 @@ export function ImportJobForm() {
     <form onSubmit={submit} className="space-y-5 rounded-xl border border-border p-5">
       <div className="flex gap-2" aria-label="来源类型">
         <Button type="button" variant={sourceKind === "url" ? "default" : "outline"}
-          aria-pressed={sourceKind === "url"} onClick={() => setSourceKind("url")}>公网 URL</Button>
+          aria-pressed={sourceKind === "url"} disabled={submitting} onClick={() => setSourceKind("url")}>公网 URL</Button>
         <Button type="button" variant={sourceKind === "upload" ? "default" : "outline"}
-          aria-pressed={sourceKind === "upload"} onClick={() => setSourceKind("upload")}>上传文件</Button>
+          aria-pressed={sourceKind === "upload"} disabled={submitting} onClick={() => setSourceKind("upload")}>上传文件</Button>
       </div>
       {sourceKind === "url" ? (
         <div className="space-y-2">
@@ -260,13 +278,115 @@ export function ImportJobForm() {
           <p className="text-xs text-muted-foreground">仅允许 http/https 公网地址；重定向和目标 IP 会经过 SSRF 校验。</p>
         </div>
       ) : (
-        <div className="space-y-2">
-          <Label htmlFor="source-file">来源文件</Label>
-          <Input id="source-file" type="file" accept=".html,.htm,.txt,.csv,.json,.pdf,.png,.jpg,.jpeg,text/html,text/plain,text/csv,application/json,application/pdf,image/png,image/jpeg"
-            onChange={(event) => setFile(event.target.files?.[0] ?? null)} required />
-          <p className="text-xs text-muted-foreground">
-            支持网页、文本、JSON/CSV 数据、PDF 与图片，最大 300 MiB；PDF 会保留原生
-            文本并逐页识别表格、图表和图片。
+        <div className="space-y-3">
+          <div className="flex items-center justify-between gap-3">
+            <Label htmlFor="source-file" id="source-file-label">来源文件</Label>
+            <span className="text-xs text-muted-foreground">最大 300 MiB</span>
+          </div>
+          <input
+            ref={fileInput}
+            id="source-file"
+            type="file"
+            accept={UPLOAD_ACCEPT}
+            className="sr-only"
+            tabIndex={-1}
+            aria-invalid={Boolean(fileError)}
+            aria-describedby={fileError ? "source-file-error source-file-help" : "source-file-help"}
+            disabled={submitting}
+            onChange={(event) => {
+              const selected = event.target.files?.[0];
+              if (selected) selectFile(selected);
+              event.target.value = "";
+            }}
+          />
+          <div
+            aria-labelledby="source-file-label"
+            aria-describedby={fileError ? "source-file-error source-file-help" : "source-file-help"}
+            className={cn(
+              "rounded-xl border border-dashed transition-colors",
+              dragging ? "border-primary bg-primary/5" : "border-border bg-muted/20",
+              fileError && "border-destructive/50",
+            )}
+            onDragOver={(event) => {
+              event.preventDefault();
+              if (!submitting && event.dataTransfer.types.includes("Files")) setDragging(true);
+            }}
+            onDragLeave={(event) => {
+              if (!event.currentTarget.contains(event.relatedTarget as Node | null)) setDragging(false);
+            }}
+            onDrop={(event) => {
+              event.preventDefault();
+              setDragging(false);
+              if (submitting) return;
+              const dropped = event.dataTransfer.files;
+              if (dropped.length !== 1) {
+                setFile(null);
+                setFileError("每次请选择一个来源文件");
+                return;
+              }
+              selectFile(dropped[0]);
+            }}
+          >
+            {file ? (
+              <>
+                <div className="flex items-center gap-3 p-4">
+                  <span className="flex size-11 shrink-0 items-center justify-center rounded-xl bg-primary/10 text-primary">
+                    <FileText className="size-5" aria-hidden />
+                  </span>
+                  <div className="min-w-0 flex-1">
+                    <p className="truncate text-sm font-medium" title={file.name}>{file.name}</p>
+                    <p className="mt-1 text-xs text-muted-foreground">
+                      {/\.(md|markdown)$/i.test(file.name) ? "Markdown" : file.name.split(".").pop()?.toUpperCase() || "文件"}
+                      {" · "}
+                      {file.size < 1024
+                        ? `${file.size} B`
+                        : file.size < 1024 * 1024
+                          ? `${(file.size / 1024).toFixed(1)} KiB`
+                          : `${(file.size / (1024 * 1024)).toFixed(1)} MiB`}
+                    </p>
+                  </div>
+                </div>
+                <div className="flex items-center justify-between gap-2 border-t border-border/60 px-4 py-2">
+                  <span className="flex items-center gap-1.5 text-xs text-muted-foreground" role="status">
+                    <CheckCircle2 className="size-3.5 text-primary" aria-hidden />
+                    {dragging ? "松开以更换文件" : "已选择"}
+                  </span>
+                  <div className="flex items-center gap-1">
+                    <Button type="button" variant="ghost" size="sm" disabled={submitting}
+                      onClick={() => fileInput.current?.click()}>更换文件</Button>
+                    <Button type="button" variant="ghost" size="icon-sm" aria-label="移除来源文件" disabled={submitting}
+                      onClick={() => {
+                        setFile(null);
+                        setFileError("");
+                      }}>
+                      <X aria-hidden />
+                    </Button>
+                  </div>
+                </div>
+              </>
+            ) : (
+              <div className="flex flex-col items-center gap-3 px-4 py-6 text-center">
+                <span className="flex size-11 items-center justify-center rounded-xl border border-border bg-background text-muted-foreground">
+                  <Upload className="size-5" aria-hidden />
+                </span>
+                <div className="space-y-1">
+                  <p className="text-sm font-medium">{dragging ? "松开即可选择文件" : "拖放文件到这里"}</p>
+                  <p className="text-xs text-muted-foreground">将文档或数据导入 Wiki，生成可审核的页面计划</p>
+                </div>
+                <Button type="button" variant="outline" disabled={submitting}
+                  aria-describedby={fileError ? "source-file-error" : "source-file-help"}
+                  onClick={() => fileInput.current?.click()}>选择文件</Button>
+              </div>
+            )}
+          </div>
+          {fileError ? <p id="source-file-error" role="alert" className="text-xs text-destructive">{fileError}</p> : null}
+          <div id="source-file-help" className="flex flex-wrap gap-1.5 text-xs text-muted-foreground">
+            {["Markdown / 文本", "HTML", "JSON / CSV", "PDF / 图片"].map((format) => (
+              <span key={format} className="rounded-md bg-muted px-2 py-1">{format}</span>
+            ))}
+          </div>
+          <p className="text-xs leading-5 text-muted-foreground">
+            PDF 保留原生文本，并逐页识别表格、图表与图片；图片支持 PNG、JPEG。
           </p>
         </div>
       )}

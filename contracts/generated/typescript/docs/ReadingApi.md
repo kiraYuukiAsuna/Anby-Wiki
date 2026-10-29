@@ -177,11 +177,11 @@ example().catch(console.error);
 
 ## listPublishedPages
 
-> PageCatalogPage listPublishedPages(cursor, pageSize, status, sort)
+> PageCatalogPage listPublishedPages(cursor, pageSize, page, status, sort)
 
 浏览百科页面目录
 
-返回当前登录 Wiki 中未删除、属于内容命名空间的页面目录。status&#x3D;published 只返回已有 Current Revision 的页面；status&#x3D;draft 返回已创建但尚未发布的页面。 recent 按最近更新倒序，title 按规范化标题升序，均使用稳定游标分页。
+返回当前登录 Wiki 中未删除、属于内容命名空间的页面目录。status&#x3D;published 只返回已有 Current Revision 的页面；status&#x3D;draft 返回已创建但尚未发布的页面。 recent 按最近更新倒序，title 按规范化标题升序，以页面 ID 打破排序平局。 page 从 1 开始，可直接跳转指定页；超出总页数返回空 items 和当前 total。 不传 page 时保留游标分页；page 不能与非空 cursor 同时使用。
 
 ### Example
 
@@ -207,6 +207,8 @@ async function example() {
     cursor: cursor_example,
     // number | 每页条数，默认 20，最大 100 (optional)
     pageSize: 56,
+    // number | 从 1 开始的页码，与非空 cursor 互斥；省略时使用游标分页。 (optional)
+    page: 56,
     // 'published' | 'draft' (optional)
     status: status_example,
     // 'recent' | 'title' (optional)
@@ -232,6 +234,7 @@ example().catch(console.error);
 |------------- | ------------- | ------------- | -------------|
 | **cursor** | `string` | 上一页响应返回的 next_cursor；首页不传 | [Optional] [Defaults to `undefined`] |
 | **pageSize** | `number` | 每页条数，默认 20，最大 100 | [Optional] [Defaults to `20`] |
+| **page** | `number` | 从 1 开始的页码，与非空 cursor 互斥；省略时使用游标分页。 | [Optional] [Defaults to `undefined`] |
 | **status** | `published`, `draft` |  | [Optional] [Defaults to `&#39;published&#39;`] [Enum: published, draft] |
 | **sort** | `recent`, `title` |  | [Optional] [Defaults to `&#39;recent&#39;`] [Enum: recent, title] |
 

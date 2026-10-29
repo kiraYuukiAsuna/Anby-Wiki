@@ -59,7 +59,7 @@ func inferSourceMetadata(source *AcquiredSource) inferredSourceMetadata {
 		inferHTMLMetadata(string(probe), &result, details)
 	case "application/json":
 		inferJSONMetadata(probe, &result, details)
-	case "text/plain":
+	case "text/plain", MIMEMarkdown:
 		inferTextMetadata(string(probe), &result, details)
 	}
 	encoded, err := json.Marshal(details)

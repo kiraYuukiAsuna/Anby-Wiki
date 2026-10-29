@@ -26,6 +26,32 @@ AI 配置和双会话协作 E2E；当前权威契约为 179 个 operation。“�
 安全边界、账号恢复、备份恢复与人工可访问性等仍须验收。详见
 [待解决问题](OutstandingIssues.md)。
 
+## 2026-10-29 页面目录数字分页
+
+- `/pages` 目录每页显示 30 条，提供数字页码、上一页、下一页和首尾页入口；
+  页数较多时折叠中间页码。切换发布状态或排序回到第一页，页数缩减后自动回到有效页。
+- 目录 API 新增可选 `page` 参数，可直接读取指定页，原有 `cursor` 调用保持兼容；
+  两者互斥。已发布/草稿、内容命名空间和页面分享权限筛选同时作用于列表与总数。
+- 分页按钮支持键盘操作和当前页语义，移动端工具栏与页码允许换行；读取失败可就地重试。
+- 验证：`make check`、全量 Go 测试及隔离 PGlite 分页/分享权限集成测试通过；
+  Chromium 使用真实组件和生成客户端覆盖直接跳页、筛选重置、页数缩减、过期响应、
+  键盘操作、错误重试和空列表；320/390/493/960px 宽度均无水平溢出。
+
+## 2026-10-29 Markdown 导入与文件上传体验
+
+- URL 与文件上传支持 Markdown：接受 `.md`/`.markdown`、`text/markdown` 和
+  `text/x-markdown`，兼容缺失 MIME、纯文本和二进制流标记；Markdown 扩展名优先于
+  JSON 内容探测，并继续执行大小、UTF-8、恶意签名、原始哈希和上传流复位检查。
+- 复用确定性文本解析器，保留标题、列表、任务、引用、代码块、表格和公式结构，
+  推导 front matter/一级标题元数据；完整导入继续生成计划并经最终人工审核，
+  `source_only` 同样支持 Markdown 来源固化。
+- 文件上传区域使用可拖放面板、格式标签与独立大小提示；选择后展示文件名、格式和
+  大小，可更换或移除文件，格式、空文件、大小或多文件错误就地显示。
+- 验证：`make check` 与全量 Go 测试通过；隔离 Chromium 使用真实组件与生成客户端，
+  覆盖文件选择、更换、移除、格式/空文件/300 MiB 校验、文件拖放事件、多文件拒绝和
+  multipart 提交参数。390/493/960px 宽度均无水平溢出；回执由验收服务返回，
+  此验证不替代真实模型或生产导入验收。
+
 ## 2026-10-29 导入专题归属推荐与审核
 
 - 页面规划阶段向 LLM 提供当前 Wiki 的现有手动专题名称与已发布说明页摘要；
@@ -49,7 +75,8 @@ AI 配置和双会话协作 E2E；当前权威契约为 179 个 operation。“�
   不自动创建条目。实体合并映射会解析到当前身份，并保留合并前身份的主绑定候选。
 - 候选限定为当前 Wiki 中已发布、未删除且非重定向的条目；同语言优先，其余
   语言仍可选择。页面分享读者只看到获得阅读授权的候选，不返回其他条目的标题或数量。
-- 唯一候选直接跳转，多候选展示链接旁的选择浮窗；暂无候选时显示提示与概念信息入口。
+- 唯一候选直接跳转，多候选展示链接旁的选择浮窗；暂无候选时保留浮窗，显示
+  “当前暂无条目。”，打开和切换为空结果时将焦点留在浮窗内。
   全文、AST 回退和懒加载章节共用按点击解析与 SWR 缓存，不在首屏逐引用发请求。
 - 普通链接指向 `/concepts/{id}`，复制或新标签页打开后仍会解析条目；多候选显示
   独立选择页。治理入口 `/entities/{id}` 继续用于实体信息维护。
@@ -226,7 +253,7 @@ AI 配置和双会话协作 E2E；当前权威契约为 179 个 operation。“�
 | 证据与媒体 | Source/Version/Chunk/Citation、Asset/AssetRevision、引用校验、相同证据 Citation 幂等复用、按页面聚合并可展开到 Block/Node 的反向使用、按全文首次出现统一编号的 References 投影、逐处正文回链、可审计来源与媒体目录 |
 | 结构化内容 | Component/Version、内置 Entity/Claim 信息框（按页面语言→`und`→任意主标签降级、同属性多值聚合、Entity 可跳转、验证摘要与类型感知排序）、静态与动态 Collection、成员维护、页面反向归属查询与投影；Entity/Claim/Citation 反向使用、页面反链和 Component 依赖在 Web 中按来源页面聚合，并可展开到具体 Block/Node；列表返回真实总位置/页面/区块数并支持游标续页。Dataset/View/Record 仅作为后端兼容层保留，Web 工作台、公开表单、编辑器插入与阅读链接已退场 |
 | 治理 | ProposalOperation v1 全部 24 种 Operation（含可原子应用和补偿回滚的 Page 主 Entity 绑定）、预分配 Page/Entity ID 的同批依赖、Operation 集合事务冻结、Wiki 级多目标 Proposal、跨页面 Revision/Block、Claim 及 Page/Entity 身份冲突检测、并发唯一索引冲突到 HTTP 409 的领域映射、预览、风险、ReviewTask、面向 applier/admin 的跨 Actor 待原子应用队列、带分类失败原因和终态跳过语义的批量审核、ChangeBatch、整批补偿回滚、审计事件、ChangeTag、AI Trust 档案/策略、事实一致性；AI Trust 仅作用于预置的 `ai/import` Actor，当前用户导入仍以 human Actor 创建 Proposal |
-| 导入与 AI | URL/HTML/文本/PDF/PNG/JPEG/JSON/CSV 获取，基于 DOM 主正文且排除导航/侧栏/页眉/页脚的 HTML 解析，复杂 PDF 的原生文本+逐页视觉双轨解析，表格/图表/图片结构化 Chunk 与页内区域定位，独立图片中英 OCR、来源标题/作者/发布者/日期/DOI 等安全元数据推导、结构化数据规范化、七阶段进度、幂等 Job、同 Job 多 Run/多不可变 ImportPlan 版本、规划 Revision/Block hash 并发保护、解析成功后原子写入且通过 ImportJob API 可见的不可变 SourceVersion 恢复点与无重复来源的失败重试、无需 AI 配置且只为 HTML/纯文本/JSON/CSV 固化不可变来源/分片的 `source_only` 模式、Worker 中断任务自动恢复、账号级文档理解模型配置与缺失配置 Wiki 跳过、模型最大输入 Token、来源 Chunk 字符数与中间计划自动确认（默认开启，最终 Proposal 审核不变）、按输入预算与输出安全上限并行分批抽取/规划、单个持久 Chunk 内的临时语义窗口二分及证据回映射、截断或结构不合法窗口重试及跨批去重、轻量模型规划 Schema 与服务端机械字段补全、确定性 ImportPlan 合并、近义内容整合和结构清理、用户标题/内容块上限的跨窗口全局执行、现有页异常扩张硬门禁、对照原始 Chunk 与用户指定范围的生成后保真审计和证据化章节修复、保真分窗的三次语义纠正、并发真因保留及坏修复隔离与覆盖率回退、服务端五维质量评分及默认 0.70 硬门槛、Semantic Kernel 默认三次结构化调用与纠正重试、精确引文的跨 Chunk 安全纠偏、纯空白差异原文回填及坏候选/坏 Claim 隔离、保留语义符号的 Entity 身份归一化、缩写/别名全候选消歧、人工匹配决定、Claim 完整值/有效期去重、Claim 方向/类型/非自引用门禁、`instance_of` 明确分类证据门禁与批内单值属性确定性消歧、作品/RFC 的发布组织、文档编号/类别/状态、更新与废止专用属性、仅由页面路由授权图谱写入、来源概况与按相关性召回的智能多页面 create/update/link/ignore 路由、同批新页面稳定互链、强制创建单页、更新指定页面与用户导入要求、证据约束 Typed Block 生成/补丁及正文 Entity 引用、确定性 H2 层级与标准 See also、主 Entity 绑定及信息框、显式且有证据的页面关联与反链投影、规划结果可视化、单 ImportJob 页面+Entity+Claim 复合 Proposal 与同一 ChangeBatch 原子应用、可持久查询的导入队列 |
+| 导入与 AI | URL/Markdown/HTML/文本/PDF/PNG/JPEG/JSON/CSV 获取，基于 DOM 主正文且排除导航/侧栏/页眉/页脚的 HTML 解析，复杂 PDF 的原生文本+逐页视觉双轨解析，表格/图表/图片结构化 Chunk 与页内区域定位，独立图片中英 OCR、来源标题/作者/发布者/日期/DOI 等安全元数据推导、结构化数据规范化、七阶段进度、幂等 Job、同 Job 多 Run/多不可变 ImportPlan 版本、规划 Revision/Block hash 并发保护、解析成功后原子写入且通过 ImportJob API 可见的不可变 SourceVersion 恢复点与无重复来源的失败重试、无需 AI 配置且只为 Markdown/HTML/纯文本/JSON/CSV 固化不可变来源/分片的 `source_only` 模式、Worker 中断任务自动恢复、账号级文档理解模型配置与缺失配置 Wiki 跳过、模型最大输入 Token、来源 Chunk 字符数与中间计划自动确认（默认开启，最终 Proposal 审核不变）、按输入预算与输出安全上限并行分批抽取/规划、单个持久 Chunk 内的临时语义窗口二分及证据回映射、截断或结构不合法窗口重试及跨批去重、轻量模型规划 Schema 与服务端机械字段补全、确定性 ImportPlan 合并、近义内容整合和结构清理、用户标题/内容块上限的跨窗口全局执行、现有页异常扩张硬门禁、对照原始 Chunk 与用户指定范围的生成后保真审计和证据化章节修复、保真分窗的三次语义纠正、并发真因保留及坏修复隔离与覆盖率回退、服务端五维质量评分及默认 0.70 硬门槛、Semantic Kernel 默认三次结构化调用与纠正重试、精确引文的跨 Chunk 安全纠偏、纯空白差异原文回填及坏候选/坏 Claim 隔离、保留语义符号的 Entity 身份归一化、缩写/别名全候选消歧、人工匹配决定、Claim 完整值/有效期去重、Claim 方向/类型/非自引用门禁、`instance_of` 明确分类证据门禁与批内单值属性确定性消歧、作品/RFC 的发布组织、文档编号/类别/状态、更新与废止专用属性、仅由页面路由授权图谱写入、来源概况与按相关性召回的智能多页面 create/update/link/ignore 路由、同批新页面稳定互链、强制创建单页、更新指定页面与用户导入要求、证据约束 Typed Block 生成/补丁及正文 Entity 引用、确定性 H2 层级与标准 See also、主 Entity 绑定及信息框、显式且有证据的页面关联与反链投影、规划结果可视化、单 ImportJob 页面+Entity+Claim 复合 Proposal 与同一 ChangeBatch 原子应用、可持久查询的导入队列 |
 | 投影与搜索 | Outbox 租约/重试/死信、链接/目录/锚点/章节/渲染/知识使用/References/相关推荐/组件依赖/图谱投影、可解释的链接+Collection+Entity 相关度、PostgreSQL fallback、Meilisearch 关键词/混合/语义检索 |
 | 规模与归档 | 章节懒加载、服务端可信 HTML 渲染、Revision 热冷分层与 S3 回源、Projection/Search 重建、容量基准命令 |
 | 协作 | Yjs WorkingDocument、持久增量 update、重连游标、普通发布与 AI 合并的 sequence CAS、未确认 update 幂等重发、自动 snapshot/compact、Block 级 Presence、三方合并与人工冲突决议；跨标签页离线恢复和多 API 实例广播仍待实现 |

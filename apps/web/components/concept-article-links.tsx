@@ -1,6 +1,6 @@
 "use client";
 
-import { ArrowUpRight, BookOpen, LoaderCircle, RefreshCw, X } from "lucide-react";
+import { BookOpen, LoaderCircle, RefreshCw, X } from "lucide-react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { Popover } from "radix-ui";
@@ -53,9 +53,9 @@ export function ConceptArticleLinks({
       });
       return () => cancelAnimationFrame(frame);
     } else {
-      contentRef.current
-        ?.querySelector<HTMLAnchorElement>("[data-article-choice]")
-        ?.focus();
+      const focusTarget = contentRef.current
+        ?.querySelector<HTMLAnchorElement>("[data-article-choice]") ?? contentRef.current;
+      focusTarget?.focus();
     }
   }, [items, resolution.error, resolution.isValidating, router]);
 
@@ -98,6 +98,10 @@ export function ConceptArticleLinks({
             collisionPadding={16}
             aria-label={`「${active?.label ?? ""}」的条目`}
             className="z-50 flex max-h-[min(28rem,var(--radix-popover-content-available-height))] w-80 max-w-[calc(100vw-2rem)] flex-col overflow-hidden rounded-xl border bg-popover text-popover-foreground shadow-lg outline-none"
+            onOpenAutoFocus={(event) => {
+              event.preventDefault();
+              contentRef.current?.focus();
+            }}
             onCloseAutoFocus={(event) => {
               event.preventDefault();
               anchorRef.current?.focus();
@@ -162,16 +166,7 @@ export function ConceptArticleLinks({
                 ))}
               </nav>
             ) : (
-              <div className="space-y-3 p-4">
-                <p className="text-sm text-muted-foreground">暂无可阅读条目。</p>
-                <Link
-                  href={`/entities/${resolution.data?.entityId ?? active?.id}`}
-                  className="inline-flex items-center gap-1 text-sm text-primary hover:underline"
-                >
-                  查看概念信息
-                  <ArrowUpRight aria-hidden className="size-3.5" />
-                </Link>
-              </div>
+              <p role="status" className="p-4 text-sm text-muted-foreground">当前暂无条目。</p>
             )}
           </Popover.Content>
         </Popover.Portal>

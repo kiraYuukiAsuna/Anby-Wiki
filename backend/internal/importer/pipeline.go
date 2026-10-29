@@ -541,7 +541,7 @@ func (p *Pipeline) prepareParsedSource(
 	}
 	if request.SourceOnly {
 		switch acquired.MIMEType {
-		case "text/html", "text/plain", "application/json", "text/csv":
+		case "text/html", "text/plain", MIMEMarkdown, "application/json", "text/csv":
 		default:
 			_, failed := fail(fetchStage, ErrorSourceOnlyFormat, ErrSourceOnlyFormat)
 			return nil, "", failed
@@ -733,7 +733,7 @@ func inferredSourceType(source *AcquiredSource) string {
 		return evidence.SourceTypeDatabase
 	case "text/csv":
 		return evidence.SourceTypeDatabase
-	case "text/plain":
+	case "text/plain", MIMEMarkdown:
 		if source.URL == "" {
 			return evidence.SourceTypeBook
 		}

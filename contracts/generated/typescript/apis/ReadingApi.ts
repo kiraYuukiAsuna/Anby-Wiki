@@ -38,6 +38,7 @@ export interface GetPageByTitleRequest {
 export interface ListPublishedPagesRequest {
     cursor?: string;
     pageSize?: number;
+    page?: number;
     status?: ListPublishedPagesStatusEnum;
     sort?: ListPublishedPagesSortEnum;
 }
@@ -193,6 +194,10 @@ export class ReadingApi extends runtime.BaseAPI {
             queryParameters['page_size'] = requestParameters['pageSize'];
         }
 
+        if (requestParameters['page'] != null) {
+            queryParameters['page'] = requestParameters['page'];
+        }
+
         if (requestParameters['status'] != null) {
             queryParameters['status'] = requestParameters['status'];
         }
@@ -223,7 +228,7 @@ export class ReadingApi extends runtime.BaseAPI {
     }
 
     /**
-     * 返回当前登录 Wiki 中未删除、属于内容命名空间的页面目录。status=published 只返回已有 Current Revision 的页面；status=draft 返回已创建但尚未发布的页面。 recent 按最近更新倒序，title 按规范化标题升序，均使用稳定游标分页。
+     * 返回当前登录 Wiki 中未删除、属于内容命名空间的页面目录。status=published 只返回已有 Current Revision 的页面；status=draft 返回已创建但尚未发布的页面。 recent 按最近更新倒序，title 按规范化标题升序，以页面 ID 打破排序平局。 page 从 1 开始，可直接跳转指定页；超出总页数返回空 items 和当前 total。 不传 page 时保留游标分页；page 不能与非空 cursor 同时使用。
      * 浏览百科页面目录
      */
     async listPublishedPagesRaw(requestParameters: ListPublishedPagesRequest, initOverrides?: RequestInit | runtime.InitOverrideFunction): Promise<runtime.ApiResponse<PageCatalogPage>> {
@@ -234,7 +239,7 @@ export class ReadingApi extends runtime.BaseAPI {
     }
 
     /**
-     * 返回当前登录 Wiki 中未删除、属于内容命名空间的页面目录。status=published 只返回已有 Current Revision 的页面；status=draft 返回已创建但尚未发布的页面。 recent 按最近更新倒序，title 按规范化标题升序，均使用稳定游标分页。
+     * 返回当前登录 Wiki 中未删除、属于内容命名空间的页面目录。status=published 只返回已有 Current Revision 的页面；status=draft 返回已创建但尚未发布的页面。 recent 按最近更新倒序，title 按规范化标题升序，以页面 ID 打破排序平局。 page 从 1 开始，可直接跳转指定页；超出总页数返回空 items 和当前 total。 不传 page 时保留游标分页；page 不能与非空 cursor 同时使用。
      * 浏览百科页面目录
      */
     async listPublishedPages(requestParameters: ListPublishedPagesRequest = {}, initOverrides?: RequestInit | runtime.InitOverrideFunction): Promise<PageCatalogPage> {

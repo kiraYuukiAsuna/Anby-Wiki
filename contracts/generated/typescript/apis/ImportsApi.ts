@@ -362,7 +362,7 @@ export class ImportsApi extends runtime.BaseAPI {
     }
 
     /**
-     * 接受最大 300 MiB 的 HTML、纯文本、JSON、CSV、PDF、PNG 或 JPEG。API 在排队前 执行 MIME/magic、大小与恶意签名检查，并经 Evidence 领域服务写入私有对象存储； Worker 获取后会再次校验内容哈希与全部安全门禁。PDF 采用原生文本层与逐页视觉 理解双轨，统一输出 text/table/chart/figure/page SourceChunk；图片使用中英 OCR， JSON API 快照与 CSV/JSON 数据库导出保留为可定位 SourceChunk。原始内容不写入 ImportJob config 或诊断日志。
+     * 接受最大 300 MiB 的 Markdown（.md/.markdown）、HTML、纯文本、JSON、CSV、PDF、PNG 或 JPEG。API 在排队前 执行 MIME/magic、大小与恶意签名检查，并经 Evidence 领域服务写入私有对象存储； Worker 获取后会再次校验内容哈希与全部安全门禁。PDF 采用原生文本层与逐页视觉 理解双轨，统一输出 text/table/chart/figure/page SourceChunk；图片使用中英 OCR， JSON API 快照与 CSV/JSON 数据库导出保留为可定位 SourceChunk。原始内容不写入 ImportJob config 或诊断日志。
      * 校验并暂存用户文件，幂等创建来源导入任务
      */
     async createImportUploadJobRaw(requestParameters: CreateImportUploadJobRequest, initOverrides?: RequestInit | runtime.InitOverrideFunction): Promise<runtime.ApiResponse<ImportJob>> {
@@ -373,7 +373,7 @@ export class ImportsApi extends runtime.BaseAPI {
     }
 
     /**
-     * 接受最大 300 MiB 的 HTML、纯文本、JSON、CSV、PDF、PNG 或 JPEG。API 在排队前 执行 MIME/magic、大小与恶意签名检查，并经 Evidence 领域服务写入私有对象存储； Worker 获取后会再次校验内容哈希与全部安全门禁。PDF 采用原生文本层与逐页视觉 理解双轨，统一输出 text/table/chart/figure/page SourceChunk；图片使用中英 OCR， JSON API 快照与 CSV/JSON 数据库导出保留为可定位 SourceChunk。原始内容不写入 ImportJob config 或诊断日志。
+     * 接受最大 300 MiB 的 Markdown（.md/.markdown）、HTML、纯文本、JSON、CSV、PDF、PNG 或 JPEG。API 在排队前 执行 MIME/magic、大小与恶意签名检查，并经 Evidence 领域服务写入私有对象存储； Worker 获取后会再次校验内容哈希与全部安全门禁。PDF 采用原生文本层与逐页视觉 理解双轨，统一输出 text/table/chart/figure/page SourceChunk；图片使用中英 OCR， JSON API 快照与 CSV/JSON 数据库导出保留为可定位 SourceChunk。原始内容不写入 ImportJob config 或诊断日志。
      * 校验并暂存用户文件，幂等创建来源导入任务
      */
     async createImportUploadJob(requestParameters: CreateImportUploadJobRequest, initOverrides?: RequestInit | runtime.InitOverrideFunction): Promise<ImportJob> {

@@ -34,7 +34,7 @@ export interface SourceImportConfig {
      */
     source: SourceImportSource;
     /**
-     * source_only 仅用于 HTML/纯文本/JSON/CSV，在固化 SourceVersion/Chunk 后成功结束且不调用模型或生成 Proposal。
+     * source_only 仅用于 Markdown/HTML/纯文本/JSON/CSV，在固化 SourceVersion/Chunk 后成功结束且不调用模型或生成 Proposal。
      * @type {SourceImportConfigIngestionModeEnum}
      * @memberof SourceImportConfig
      */

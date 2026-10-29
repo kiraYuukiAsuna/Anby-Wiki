@@ -31,14 +31,19 @@ func TestInferSourceMetadataFromHTML(t *testing.T) {
 	}
 }
 
-func TestInferSourceMetadataFromPlainTextFrontMatter(t *testing.T) {
-	metadata := inferSourceMetadata(&AcquiredSource{
-		Filename: "document.md",
-		MIMEType: "text/plain",
-		Content:  []byte("---\ntitle: A grounded article\nauthor: Ada Example\ndate: 2026-08-12\n---\n# Ignored fallback\n"),
-	})
-	if metadata.Title != "A grounded article" || metadata.Author != "Ada Example" {
-		t.Fatalf("unexpected metadata: %#v", metadata)
+func TestInferSourceMetadataFromTextFrontMatter(t *testing.T) {
+	for _, mimeType := range []string{"text/plain", MIMEMarkdown} {
+		t.Run(mimeType, func(t *testing.T) {
+			metadata := inferSourceMetadata(&AcquiredSource{
+				Filename: "document.md",
+				MIMEType: mimeType,
+				Content:  []byte("---\ntitle: A grounded article\nauthor: Ada Example\ndate: 2026-08-12\n---\n# Ignored fallback\n"),
+			})
+			if metadata.Title != "A grounded article" || metadata.Author != "Ada Example" ||
+				metadata.PublishedAt == nil || metadata.PublishedAt.Format("2006-01-02") != "2026-08-12" {
+				t.Fatalf("unexpected metadata: %#v", metadata)
+			}
+		})
 	}
 }
 

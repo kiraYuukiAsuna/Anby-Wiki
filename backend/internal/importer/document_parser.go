@@ -275,7 +275,7 @@ func (deterministicDocumentAdapter) Parse(
 	switch request.MIMEType {
 	case "text/html":
 		blocks, err = parseHTML(request.Content)
-	case "text/plain":
+	case "text/plain", MIMEMarkdown:
 		content := request.Content
 		if bytes.IndexByte(content, 0) >= 0 {
 			content = bytes.ReplaceAll(content, []byte{0}, nil)
