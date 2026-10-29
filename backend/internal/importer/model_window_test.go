@@ -41,6 +41,18 @@ func TestSplitModelWindowRemapsEvidenceToImmutableChunk(t *testing.T) {
 		t.Fatalf("mapped range=%d:%d, want %d:%d", mapped[0].CharStart, mapped[0].CharEnd,
 			wantStart, wantStart+len([]rune(quotation)))
 	}
+	plan := &ImportPlan{Routes: []PageRoute{{Collections: []PlannedCollectionMembership{{
+		Evidence: []CandidateEvidence{{
+			ChunkID: right[0].View.ID, Quotation: quotation,
+			CharStart: len([]rune(right[0].View.TextContent[:localStart])),
+			CharEnd:   len([]rune(right[0].View.TextContent[:localStart+len(quotation)])),
+		}},
+	}}}}}
+	remapImportPlanEvidence(plan, right)
+	recommendationEvidence := plan.Routes[0].Collections[0].Evidence[0]
+	if recommendationEvidence.ChunkID != chunkID || recommendationEvidence.CharStart != wantStart {
+		t.Fatalf("collection evidence still refers to transient window: %#v", recommendationEvidence)
+	}
 }
 
 func TestDecodeGeneratedImportPlanDerivesMechanicalFields(t *testing.T) {
@@ -55,7 +67,7 @@ func TestDecodeGeneratedImportPlanDerivesMechanicalFields(t *testing.T) {
     }`)
 	plan, canonical, err := DecodeGeneratedImportPlan(raw, sourceVersionID, []evidence.SourceChunk{{
 		ID: chunkID, SourceVersionID: sourceVersionID, TextContent: text, LocatorJSON: json.RawMessage(`{"page":2}`),
-	}}, nil, RouteModeAuto)
+	}}, nil, nil, RouteModeAuto)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -67,6 +79,66 @@ func TestDecodeGeneratedImportPlanDerivesMechanicalFields(t *testing.T) {
 	}
 	if !json.Valid(canonical) {
 		t.Fatal("canonical plan is not JSON")
+	}
+}
+
+func TestGeneratedImportPlanCollectionWhitelistAndGrounding(t *testing.T) {
+	sourceID, chunkID, collectionID, otherID := uuid.New(), uuid.New(), uuid.New(), uuid.New()
+	text := "JWT is a token format used for authentication."
+	grounding := []generatedPlanEvidence{{ChunkID: chunkID, Quotation: text}}
+	recommendations := []generatedCollectionMembership{
+		{CollectionID: collectionID, Reason: "authentication tokens", Confidence: 0.8, Evidence: grounding},
+		{CollectionID: collectionID, Reason: "token format", Confidence: 0.95, Evidence: grounding},
+		{CollectionID: otherID, Reason: "invented target", Confidence: 1, Evidence: grounding},
+		{CollectionID: uuid.New(), Reason: "unsupported", Confidence: 1,
+			Evidence: []generatedPlanEvidence{{ChunkID: chunkID, Quotation: "This quote is invented."}}},
+	}
+	raw, err := json.Marshal(generatedImportPlanDocument{
+		Profile: SourceProfile{Title: "JWT", Language: "en", Useful: true, Subjects: []SourceSubject{}},
+		Routes: []generatedPageRoute{
+			{Action: RouteCreate, Title: "JWT", Reason: "documented", Confidence: 0.9,
+				Collections: recommendations, Blocks: []generatedPlannedBlock{{
+					Type: "paragraph", Text: text, Evidence: grounding,
+				}}},
+			{Action: RouteIgnore, Title: "Incidental", Reason: "incidental", Confidence: 0.9, Collections: recommendations},
+		},
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	plan, canonical, err := DecodeGeneratedImportPlan(raw, sourceID, []evidence.SourceChunk{{
+		ID: chunkID, SourceVersionID: sourceID, TextContent: text,
+	}}, nil, []CollectionCandidate{
+		{CollectionID: collectionID, Title: "Authentication"},
+		{CollectionID: recommendations[3].CollectionID, Title: "Unsupported"},
+	}, RouteModeAuto)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(plan.Routes) != 2 || len(plan.Routes[0].Collections) != 1 || len(plan.Routes[1].Collections) != 0 {
+		t.Fatalf("unapproved collection recommendation survived: %#v", plan.Routes)
+	}
+	item := plan.Routes[0].Collections[0]
+	if item.CollectionID != collectionID || item.Title != "Authentication" || item.Confidence != 0.95 ||
+		item.Reason != "token format" || len(item.Evidence) != 1 || item.Evidence[0].CharEnd != len([]rune(text)) {
+		t.Fatalf("recommendation was not grounded and deduplicated: %#v", item)
+	}
+	var instance any
+	if err := json.Unmarshal(canonical, &instance); err != nil {
+		t.Fatal(err)
+	}
+	if err := compiledImportPlanSchema.Validate(instance); err != nil {
+		t.Fatalf("persisted collection recommendation violates canonical schema: %v", err)
+	}
+	routes := []PageRoute{}
+	for index := 0; index < 10; index++ {
+		recommendation := item
+		recommendation.Evidence = []CandidateEvidence{{ChunkID: uuid.New(), Quotation: text, CharEnd: len([]rune(text))}}
+		routes = append(routes, PageRoute{Action: RouteCreate, Title: "JWT", Collections: []PlannedCollectionMembership{recommendation}})
+	}
+	merged := mergePageRoutes(routes)
+	if len(merged) != 1 || len(merged[0].Collections) != 1 || len(merged[0].Collections[0].Evidence) != 8 {
+		t.Fatalf("window merge duplicated collection or exceeded evidence contract: %#v", merged)
 	}
 }
 

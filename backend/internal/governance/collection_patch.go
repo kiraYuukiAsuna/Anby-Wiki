@@ -31,8 +31,9 @@ func (s *ApplyService) applyCollectionOperationInTx(
 	if s.collections == nil {
 		return uuid.Nil, fmt.Errorf("%w: Collection 领域服务未装配", ErrUnsupportedOperation)
 	}
-	if proposal.TargetType != TargetCollection || proposal.TargetID == nil ||
-		op.Target.CollectionID == nil || *proposal.TargetID != *op.Target.CollectionID {
+	if proposal.TargetID == nil || op.Target.CollectionID == nil ||
+		(proposal.TargetType != TargetCollection && proposal.TargetType != TargetWiki) ||
+		(proposal.TargetType == TargetCollection && *proposal.TargetID != *op.Target.CollectionID) {
 		return uuid.Nil, ErrInvalidOperation
 	}
 	if (op.Target.PageID == nil) == (op.Target.EntityID == nil) {
@@ -61,9 +62,22 @@ func (s *ApplyService) applyCollectionOperationInTx(
 		if err := decodeOperationPayload(op.Payload, &payload); err != nil {
 			return uuid.Nil, err
 		}
-		if strings.TrimSpace(payload.SortKey) == "" ||
-			payload.SourceRevisionID == uuid.Nil {
+		if strings.TrimSpace(payload.SortKey) == "" {
 			return uuid.Nil, ErrInvalidOperation
+		}
+		if payload.SourceRevisionID == uuid.Nil {
+			if proposal.TargetType != TargetWiki || op.Target.PageID == nil {
+				return uuid.Nil, ErrInvalidOperation
+			}
+			target, err := s.pages.GetPageInTx(ctx, tx, *op.Target.PageID)
+			if err != nil {
+				return uuid.Nil, err
+			}
+			if target.WikiID != wikiID || target.DeletedAt != nil ||
+				target.CurrentRevisionID == nil {
+				return uuid.Nil, ErrInvalidOperation
+			}
+			payload.SourceRevisionID = *target.CurrentRevisionID
 		}
 		input.SortKey = payload.SortKey
 		input.SourceRevisionID = payload.SourceRevisionID
@@ -74,9 +88,9 @@ func (s *ApplyService) applyCollectionOperationInTx(
 		}
 	}
 	if _, err := s.collections.ApplyManualMemberInTx(
-		ctx, tx, wikiID, *proposal.TargetID, actorID, input, add, &changeBatchID,
+		ctx, tx, wikiID, *op.Target.CollectionID, actorID, input, add, &changeBatchID,
 	); err != nil {
 		return uuid.Nil, err
 	}
-	return *proposal.TargetID, nil
+	return *op.Target.CollectionID, nil
 }

@@ -41,14 +41,22 @@ type generatedPlannedBlock struct {
 }
 
 type generatedPageRoute struct {
-	Action     string                  `json:"action"`
-	Title      string                  `json:"title"`
-	PageID     *uuid.UUID              `json:"page_id,omitempty"`
-	Reason     string                  `json:"reason"`
-	Confidence float64                 `json:"confidence"`
-	RelatedTo  []string                `json:"related_to,omitempty"`
-	Evidence   []generatedPlanEvidence `json:"evidence,omitempty"`
-	Blocks     []generatedPlannedBlock `json:"blocks,omitempty"`
+	Action      string                          `json:"action"`
+	Title       string                          `json:"title"`
+	PageID      *uuid.UUID                      `json:"page_id,omitempty"`
+	Reason      string                          `json:"reason"`
+	Confidence  float64                         `json:"confidence"`
+	RelatedTo   []string                        `json:"related_to,omitempty"`
+	Evidence    []generatedPlanEvidence         `json:"evidence,omitempty"`
+	Blocks      []generatedPlannedBlock         `json:"blocks,omitempty"`
+	Collections []generatedCollectionMembership `json:"collections,omitempty"`
+}
+
+type generatedCollectionMembership struct {
+	CollectionID uuid.UUID               `json:"collection_id"`
+	Reason       string                  `json:"reason"`
+	Confidence   float64                 `json:"confidence"`
+	Evidence     []generatedPlanEvidence `json:"evidence"`
 }
 
 type generatedImportPlanDocument struct {
@@ -63,7 +71,7 @@ type generatedImportPlanDocument struct {
 // Invalid individual routes/blocks are isolated; unsupported evidence is never
 // broadened or invented.
 func DecodeGeneratedImportPlan(raw []byte, sourceVersionID uuid.UUID, chunks []evidence.SourceChunk,
-	candidates []PageCandidate, routeMode string) (*ImportPlan, json.RawMessage, error) {
+	candidates []PageCandidate, collections []CollectionCandidate, routeMode string) (*ImportPlan, json.RawMessage, error) {
 	instance, err := jsonschema.UnmarshalJSON(bytes.NewReader(raw))
 	if err != nil {
 		return nil, nil, fmt.Errorf("%w: import plan JSON: %v", ai.ErrInvalidOutput, err)
@@ -100,6 +108,10 @@ func DecodeGeneratedImportPlan(raw []byte, sourceVersionID uuid.UUID, chunks []e
 		}
 	}
 	catalog := newEvidenceCatalog(sourceVersionID, chunks)
+	collectionByID := make(map[uuid.UUID]CollectionCandidate, len(collections))
+	for _, candidate := range collections {
+		collectionByID[candidate.CollectionID] = candidate
+	}
 	originalBlocks, retainedBlocks := 0, 0
 	for _, sourceRoute := range generated.Routes {
 		route := PageRoute{
@@ -174,6 +186,19 @@ func DecodeGeneratedImportPlan(raw []byte, sourceVersionID uuid.UUID, chunks []e
 		if len(route.Blocks) == 0 {
 			continue
 		}
+		for _, recommendation := range sourceRoute.Collections {
+			candidate, ok := collectionByID[recommendation.CollectionID]
+			grounding := catalog.normalize(generatedEvidenceCandidates(recommendation.Evidence))
+			reason := strings.TrimSpace(recommendation.Reason)
+			if !ok || candidate.CollectionID == uuid.Nil || reason == "" || len(grounding) == 0 {
+				continue
+			}
+			route.Collections = append(route.Collections, PlannedCollectionMembership{
+				CollectionID: candidate.CollectionID, Title: candidate.Title,
+				Reason: reason, Confidence: recommendation.Confidence, Evidence: grounding,
+			})
+		}
+		route.Collections = mergePlannedCollections(nil, route.Collections)
 		plan.Routes = append(plan.Routes, route)
 	}
 

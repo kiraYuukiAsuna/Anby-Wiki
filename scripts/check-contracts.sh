@@ -42,6 +42,11 @@ check_copy \
   "$ROOT/backend/internal/importer/schema/candidates.schema.json"
 
 check_copy \
+  "ImportPlan v1" \
+  "$ROOT/contracts/schemas/import-plan/v1/plan.schema.json" \
+  "$ROOT/backend/internal/importer/schema/import-plan.schema.json"
+
+check_copy \
   "Document page analysis v1" \
   "$ROOT/contracts/schemas/document-parsing/v1/page-analysis.schema.json" \
   "$ROOT/backend/internal/importer/schema/document-page-analysis.schema.json"

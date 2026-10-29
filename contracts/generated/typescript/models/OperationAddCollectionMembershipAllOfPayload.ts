@@ -26,11 +26,11 @@ export interface OperationAddCollectionMembershipAllOfPayload {
      */
     sortKey: string;
     /**
-     *
+     * Collection-target proposals require this field; Wiki-target page additions may omit it to use the page revision after this batch publishes.
      * @type {string}
      * @memberof OperationAddCollectionMembershipAllOfPayload
      */
-    sourceRevisionId: string;
+    sourceRevisionId?: string;
 }
 
 /**
@@ -38,7 +38,6 @@ export interface OperationAddCollectionMembershipAllOfPayload {
  */
 export function instanceOfOperationAddCollectionMembershipAllOfPayload(value: object): value is OperationAddCollectionMembershipAllOfPayload {
     if ((!('sortKey' in (value as Record<string, any>)) && !('sort_key' in (value as Record<string, any>))) || ((value as Record<string, any>)['sortKey'] === undefined && (value as Record<string, any>)['sort_key'] === undefined)) return false;
-    if ((!('sourceRevisionId' in (value as Record<string, any>)) && !('source_revision_id' in (value as Record<string, any>))) || ((value as Record<string, any>)['sourceRevisionId'] === undefined && (value as Record<string, any>)['source_revision_id'] === undefined)) return false;
     return true;
 }
 
@@ -53,7 +52,7 @@ export function OperationAddCollectionMembershipAllOfPayloadFromJSONTyped(json: 
     return {
 
         'sortKey': json['sort_key'],
-        'sourceRevisionId': json['source_revision_id'],
+        'sourceRevisionId': json['source_revision_id'] == null ? undefined : json['source_revision_id'],
     };
 }
 

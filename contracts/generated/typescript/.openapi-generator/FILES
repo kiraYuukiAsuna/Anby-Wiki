@@ -173,6 +173,7 @@ docs/ImportPlanQuality.md
 docs/ImportPlanSubject.md
 docs/ImportPlanVersion.md
 docs/ImportPlannedBlock.md
+docs/ImportPlannedCollectionMembership.md
 docs/ImportPlanningInput.md
 docs/ImportRun.md
 docs/ImportSkippedClaimReview.md
@@ -489,6 +490,7 @@ models/ImportPlanQuality.ts
 models/ImportPlanSubject.ts
 models/ImportPlanVersion.ts
 models/ImportPlannedBlock.ts
+models/ImportPlannedCollectionMembership.ts
 models/ImportPlanningInput.ts
 models/ImportRun.ts
 models/ImportSkippedClaimReview.ts

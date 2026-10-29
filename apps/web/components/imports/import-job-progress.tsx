@@ -505,6 +505,27 @@ export function ImportJobProgress({ id }: { id: string }) {
                     {route.relatedTo.length > 0 ? <span>关联到 {route.relatedTo.join("、")}</span> : null}
                     {route.pageId ? <Link className="underline" href={`/pages/${route.pageId}`}>查看目标页</Link> : null}
                   </div>
+                  {(route.collections ?? []).length > 0 ? (
+                    <div className="mt-3 space-y-3 border-t border-border pt-3">
+                      <p className="text-xs font-medium">建议加入专题 · 随提案审核</p>
+                      {route.collections?.map((recommendation) => (
+                        <div key={recommendation.collectionId} className="min-w-0 text-xs leading-5">
+                          <div className="flex flex-wrap items-center gap-x-2">
+                            <Link className="break-words font-medium underline" href={`/collections/${recommendation.collectionId}`}>
+                              {recommendation.title}
+                            </Link>
+                            <span className="text-muted-foreground">置信度 {Math.round(recommendation.confidence * 100)}%</span>
+                          </div>
+                          <p className="mt-1 text-muted-foreground">{recommendation.reason}</p>
+                          {recommendation.evidence.map((item, evidenceIndex) => (
+                            <blockquote key={`${item.chunkId}:${evidenceIndex}`} className="mt-1 break-words border-l-2 border-border pl-2 text-muted-foreground">
+                              {item.quotation}
+                            </blockquote>
+                          ))}
+                        </div>
+                      ))}
+                    </div>
+                  ) : null}
                   {route.blocks.length > 0 ? (
                     <div className="mt-3 space-y-2 border-t border-border pt-3">
                       {route.blocks.slice(0, 3).map((block, blockIndex) => (

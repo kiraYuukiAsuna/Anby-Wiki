@@ -270,7 +270,7 @@
         "sort_key": { "type": "string", "minLength": 1, "maxLength": 500 },
         "source_revision_id": { "$ref": "#/$defs/uuid" }
       },
-      "required": ["sort_key", "source_revision_id"],
+      "required": ["sort_key"],
       "additionalProperties": false
     },
     "add_collection_membership": {

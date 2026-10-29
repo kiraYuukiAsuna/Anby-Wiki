@@ -492,6 +492,8 @@ func (s *ApplyService) applyWikiOperationsInTx(
 		case isPageContentOperation(ops[i].OperationType):
 			// One immutable Revision per target page is published after all
 			// lifecycle and knowledge dependencies have been applied.
+		case isCollectionOperation(ops[i].OperationType):
+			// Memberships use the published page revision after all page writes.
 		case isKnowledgeOperation(ops[i].OperationType):
 			if ops[i].OperationType == OpMergeEntity && s.auth != nil {
 				if err := s.auth.CheckTx(
@@ -549,6 +551,16 @@ func (s *ApplyService) applyWikiOperationsInTx(
 		result.RevisionID = &revision.ID
 		result.RevisionIDs = appendUniqueUUID(result.RevisionIDs, revision.ID)
 		result.PageIDs = appendUniqueUUID(result.PageIDs, pageID)
+	}
+	for _, op := range ops {
+		if !isCollectionOperation(op.OperationType) {
+			continue
+		}
+		collectionID, err := s.applyCollectionOperationInTx(ctx, tx, proposal, op, actorID, batchID)
+		if err != nil {
+			return err
+		}
+		result.CollectionIDs = appendUniqueUUID(result.CollectionIDs, collectionID)
 	}
 	return nil
 }
@@ -637,6 +649,28 @@ func (s *ApplyService) validateWikiOperationTargets(
 				ctx, tx, wikiID, op, plannedEntityIDs,
 			); err != nil {
 				return err
+			}
+		case isCollectionOperation(op.OperationType):
+			if s.collections == nil || op.Target.CollectionID == nil ||
+				op.Target.WikiID == nil || *op.Target.WikiID != wikiID ||
+				op.Target.PageID == nil || *op.Target.PageID == uuid.Nil || op.Target.EntityID != nil {
+				return ErrInvalidOperation
+			}
+			value, err := s.collections.GetInTx(ctx, tx, wikiID, *op.Target.CollectionID)
+			if err != nil {
+				return err
+			}
+			if value.CollectionType != collection.TypeManual {
+				return ErrInvalidOperation
+			}
+			if _, planned := plannedPageIDs[*op.Target.PageID]; !planned {
+				target, err := s.pages.GetPageInTx(ctx, tx, *op.Target.PageID)
+				if err != nil {
+					return err
+				}
+				if target.WikiID != wikiID || target.DeletedAt != nil {
+					return ErrInvalidOperation
+				}
 			}
 		default:
 			return fmt.Errorf("%w: wiki target operation=%s", ErrUnsupportedOperation, op.OperationType)

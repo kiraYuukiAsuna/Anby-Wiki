@@ -147,6 +147,7 @@ export * from './ImportPlanQuality';
 export * from './ImportPlanSubject';
 export * from './ImportPlanVersion';
 export * from './ImportPlannedBlock';
+export * from './ImportPlannedCollectionMembership';
 export * from './ImportPlanningInput';
 export * from './ImportRun';
 export * from './ImportSkippedClaimReview';

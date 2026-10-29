@@ -210,6 +210,9 @@ func remapImportPlanEvidence(plan *ImportPlan, chunks []modelSourceChunk) {
 	for routeIndex := range plan.Routes {
 		route := &plan.Routes[routeIndex]
 		route.Evidence = remapCandidateEvidence(route.Evidence, chunks)
+		for index := range route.Collections {
+			route.Collections[index].Evidence = remapCandidateEvidence(route.Collections[index].Evidence, chunks)
+		}
 		for blockIndex := range route.Blocks {
 			block := &route.Blocks[blockIndex]
 			block.Evidence = remapCandidateEvidence(block.Evidence, chunks)

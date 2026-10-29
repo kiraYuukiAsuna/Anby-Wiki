@@ -15,6 +15,7 @@ Name | Type
 `relatedTo` | Array&lt;string&gt;
 `evidence` | [Array&lt;ImportPlanEvidence&gt;](ImportPlanEvidence.md)
 `blocks` | [Array&lt;ImportPlannedBlock&gt;](ImportPlannedBlock.md)
+`collections` | [Array&lt;ImportPlannedCollectionMembership&gt;](ImportPlannedCollectionMembership.md)
 
 ## Example
 
@@ -32,6 +33,7 @@ const example = {
   "relatedTo": null,
   "evidence": null,
   "blocks": null,
+  "collections": null,
 } satisfies ImportPageRoute
 
 console.log(example)

@@ -11,6 +11,7 @@ import (
 
 	"github.com/anby/wiki/backend/internal/ai"
 	"github.com/anby/wiki/backend/internal/aiconfig"
+	"github.com/anby/wiki/backend/internal/collection"
 	"github.com/anby/wiki/backend/internal/component"
 	"github.com/anby/wiki/backend/internal/evidence"
 	"github.com/anby/wiki/backend/internal/governance"
@@ -195,11 +196,12 @@ func assembleImportRunner(ctx context.Context, pool *pgxpool.Pool, cfg config.Co
 	}, ai.GatewayConfig{Timeout: 10 * time.Minute, MaxAttempts: 1})
 	importRepo := importer.NewRepository(pool)
 	jobs := importer.NewService(importRepo, txm, ids)
+	collections := collection.NewService(collection.NewRepository(pool), pageRepo, txm, ids)
 	pipeline := importer.NewPipeline(importer.PipelineServices{
 		Jobs: jobs, Repository: importRepo, Evidence: evidenceService,
 		Parser:     importer.NewParser(0, gateway),
 		Extraction: importer.NewExtractionService(importRepo, evidenceRepo, gateway, ids),
-		Planner:    importer.NewPagePlanner(importRepo, pageService, gateway, ids),
+		Planner:    importer.NewPagePlanner(importRepo, pageService, gateway, ids).WithCollections(collections),
 		Matcher:    importer.NewEntityMatcher(knowledgeService), Classifier: importer.NewClaimClassifier(knowledgeService),
 		Composer: importer.NewProposalComposer(
 			evidenceService, governanceService, knowledgeService,

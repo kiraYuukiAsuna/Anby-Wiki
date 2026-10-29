@@ -17,6 +17,7 @@ import (
 
 	"github.com/anby/wiki/backend/internal/ai"
 	"github.com/anby/wiki/backend/internal/ast"
+	"github.com/anby/wiki/backend/internal/collection"
 	"github.com/anby/wiki/backend/internal/evidence"
 	"github.com/anby/wiki/backend/internal/page"
 	"github.com/anby/wiki/backend/internal/platform/id"
@@ -25,7 +26,7 @@ import (
 const (
 	ImportPlanSchemaURL           = "https://anby.wiki/schemas/import-plan/v1/plan.schema.json"
 	ImportPlanGenerationSchemaURL = "https://anby.wiki/schemas/import-plan-generation/v1/plan.schema.json"
-	ImportPlanPromptKey           = "source-import-plan-v10"
+	ImportPlanPromptKey           = "source-import-plan-v11"
 	planBatchConcurrency          = 3
 	planLeafValidationAttempts    = 3
 
@@ -113,15 +114,34 @@ type PlannedBlock struct {
 }
 
 type PageRoute struct {
-	Action            string              `json:"action"`
-	Title             string              `json:"title"`
-	PageID            *uuid.UUID          `json:"page_id"`
-	PlannedRevisionID *uuid.UUID          `json:"planned_revision_id,omitempty"`
-	Reason            string              `json:"reason"`
-	Confidence        float64             `json:"confidence"`
-	RelatedTo         []string            `json:"related_to"`
-	Evidence          []CandidateEvidence `json:"evidence"`
-	Blocks            []PlannedBlock      `json:"blocks"`
+	Action            string                        `json:"action"`
+	Title             string                        `json:"title"`
+	PageID            *uuid.UUID                    `json:"page_id"`
+	PlannedRevisionID *uuid.UUID                    `json:"planned_revision_id,omitempty"`
+	Reason            string                        `json:"reason"`
+	Confidence        float64                       `json:"confidence"`
+	RelatedTo         []string                      `json:"related_to"`
+	Evidence          []CandidateEvidence           `json:"evidence"`
+	Blocks            []PlannedBlock                `json:"blocks"`
+	Collections       []PlannedCollectionMembership `json:"collections,omitempty"`
+}
+
+type PlannedCollectionMembership struct {
+	CollectionID uuid.UUID           `json:"collection_id"`
+	Title        string              `json:"title"`
+	Reason       string              `json:"reason"`
+	Confidence   float64             `json:"confidence"`
+	Evidence     []CandidateEvidence `json:"evidence"`
+}
+
+type CollectionCandidate struct {
+	CollectionID uuid.UUID `json:"collection_id"`
+	Title        string    `json:"title"`
+	Description  string    `json:"description"`
+}
+
+type CollectionPlanningCatalog interface {
+	List(context.Context, uuid.UUID, string, int) (*collection.CollectionPage, error)
 }
 
 type ImportPlan struct {
@@ -196,35 +216,42 @@ type PagePlanningCatalog interface {
 }
 
 type PagePlanner struct {
-	repo  *Repository
-	pages PagePlanningCatalog
-	ai    StructuredGenerator
-	ids   *id.Generator
+	repo        *Repository
+	pages       PagePlanningCatalog
+	ai          StructuredGenerator
+	ids         *id.Generator
+	collections CollectionPlanningCatalog
 }
 
 func NewPagePlanner(repo *Repository, pages PagePlanningCatalog, gateway StructuredGenerator, ids *id.Generator) *PagePlanner {
 	return &PagePlanner{repo: repo, pages: pages, ai: gateway, ids: ids}
 }
 
+func (p *PagePlanner) WithCollections(catalog CollectionPlanningCatalog) *PagePlanner {
+	p.collections = catalog
+	return p
+}
+
 type PlanParams struct {
-	SourceVersionID  uuid.UUID
-	SourceLabel      string
-	PreferredTitle   string
-	Instructions     string
-	RouteMode        string
-	TargetPageID     *uuid.UUID
-	WikiID           uuid.UUID
-	Chunks           []evidence.SourceChunk
-	Candidates       *Candidates
-	Provider         string
-	Model            string
-	MaxInputTokens   int
-	QualityThreshold float64
-	PlanningInput    json.RawMessage
-	ActorID          uuid.UUID
-	InputHash        string
-	ImportJobID      *uuid.UUID
-	ImportRunID      *uuid.UUID
+	SourceVersionID      uuid.UUID
+	SourceLabel          string
+	PreferredTitle       string
+	Instructions         string
+	RouteMode            string
+	TargetPageID         *uuid.UUID
+	WikiID               uuid.UUID
+	Chunks               []evidence.SourceChunk
+	Candidates           *Candidates
+	Provider             string
+	Model                string
+	MaxInputTokens       int
+	QualityThreshold     float64
+	PlanningInput        json.RawMessage
+	ActorID              uuid.UUID
+	InputHash            string
+	ImportJobID          *uuid.UUID
+	ImportRunID          *uuid.UUID
+	collectionCandidates []CollectionCandidate
 }
 
 type PlanResult struct {
@@ -277,6 +304,10 @@ func (p *PagePlanner) Plan(ctx context.Context, params PlanParams) (*PlanResult,
 	}
 
 	candidatePages, err := p.recallPages(ctx, params)
+	if err != nil {
+		return nil, err
+	}
+	params.collectionCandidates, err = p.recallCollections(ctx, params.WikiID)
 	if err != nil {
 		return nil, err
 	}
@@ -537,7 +568,7 @@ func (p *PagePlanner) generateValidatedPlanBatch(ctx context.Context, params Pla
 			return nil, nil, err
 		}
 		plan, _, err := DecodeGeneratedImportPlan(result.JSON, params.SourceVersionID, modelSourceChunkViews(chunks),
-			candidates, params.RouteMode)
+			candidates, params.collectionCandidates, params.RouteMode)
 		if err == nil {
 			remapImportPlanEvidence(plan, chunks)
 			return plan, result, nil
@@ -576,6 +607,14 @@ func (p *PagePlanner) generatePlanOnce(ctx context.Context, params PlanParams, c
 	if err != nil {
 		return nil, err
 	}
+	collections := params.collectionCandidates
+	if collections == nil {
+		collections = []CollectionCandidate{}
+	}
+	collectionsJSON, err := json.Marshal(collections)
+	if err != nil {
+		return nil, err
+	}
 	entities := []map[string]any{}
 	for _, candidate := range rankedEntityCandidates(params.Candidates, 24) {
 		entities = append(entities, map[string]any{
@@ -589,15 +628,16 @@ func (p *PagePlanner) generatePlanOnce(ctx context.Context, params PlanParams, c
 	return p.ai.Generate(ctx, ai.Request{
 		Provider: params.Provider, Model: params.Model, PromptKey: ImportPlanPromptKey,
 		Variables: map[string]any{
-			"source_version_id":   params.SourceVersionID.String(),
-			"source_label":        strings.TrimSpace(params.SourceLabel),
-			"preferred_title":     strings.TrimSpace(params.PreferredTitle),
-			"instructions":        strings.TrimSpace(params.Instructions),
-			"route_mode":          params.RouteMode,
-			"entities_json":       string(entitiesJSON),
-			"candidate_pages":     string(candidatesJSON),
-			"chunks_json":         string(chunksJSON),
-			"validation_feedback": validationFeedback,
+			"source_version_id":     params.SourceVersionID.String(),
+			"source_label":          strings.TrimSpace(params.SourceLabel),
+			"preferred_title":       strings.TrimSpace(params.PreferredTitle),
+			"instructions":          strings.TrimSpace(params.Instructions),
+			"route_mode":            params.RouteMode,
+			"entities_json":         string(entitiesJSON),
+			"candidate_pages":       string(candidatesJSON),
+			"candidate_collections": string(collectionsJSON),
+			"chunks_json":           string(chunksJSON),
+			"validation_feedback":   validationFeedback,
 		},
 		ImportJobID: params.ImportJobID, ImportRunID: params.ImportRunID,
 	})
@@ -864,6 +904,9 @@ func normalizeImportPlanCollections(plan *ImportPlan) {
 		if route.Blocks == nil {
 			route.Blocks = []PlannedBlock{}
 		}
+		if route.Collections == nil || (route.Action != RouteCreate && route.Action != RouteUpdate) {
+			route.Collections = []PlannedCollectionMembership{}
+		}
 		for blockIndex := range route.Blocks {
 			normalizePlannedBlockCollections(&route.Blocks[blockIndex])
 		}
@@ -879,6 +922,55 @@ func normalizePlannedBlockCollections(block *PlannedBlock) {
 	}
 	for index := range block.Children {
 		normalizePlannedBlockCollections(&block.Children[index])
+	}
+}
+
+func (p *PagePlanner) recallCollections(ctx context.Context, wikiID uuid.UUID) ([]CollectionCandidate, error) {
+	candidates := []CollectionCandidate{}
+	if p.collections == nil {
+		return candidates, nil
+	}
+	cursor := ""
+	for {
+		items, err := p.collections.List(ctx, wikiID, cursor, collection.MaxPageSize)
+		if err != nil {
+			return nil, err
+		}
+		for _, item := range items.Items {
+			if item.WikiID != wikiID || item.CollectionType != collection.TypeManual {
+				continue
+			}
+			candidate := CollectionCandidate{CollectionID: item.ID, Title: item.Title}
+			if item.DescriptionPageID != nil {
+				target, err := p.pages.GetPage(ctx, *item.DescriptionPageID)
+				if err != nil {
+					return nil, err
+				}
+				if target.WikiID == wikiID && target.DeletedAt == nil && target.CurrentRevisionID != nil {
+					_, snapshot, err := p.pages.CurrentContent(ctx, target.ID)
+					if err != nil {
+						return nil, err
+					}
+					document, err := ast.Parse(snapshot.AST)
+					if err != nil {
+						return nil, err
+					}
+					parts := []string{}
+					for _, block := range ast.Blocks(document) {
+						parts = append(parts, plannedBlockTextFromAST(block))
+					}
+					candidate.Description = boundedRunes(strings.Join(parts, "\n"), 1500)
+				}
+			}
+			candidates = append(candidates, candidate)
+			if len(candidates) == collection.MaxPageSize {
+				return candidates, nil
+			}
+		}
+		if items.NextCursor == nil {
+			return candidates, nil
+		}
+		cursor = *items.NextCursor
 	}
 }
 
@@ -1234,10 +1326,12 @@ func mergePageRoutes(routes []PageRoute) []PageRoute {
 			existing.Blocks = mergePlannedBlocks(existing.Blocks, route.Blocks)
 			existing.RelatedTo = mergeRelatedTitles(existing.RelatedTo, route.RelatedTo)
 			existing.Evidence = mergeCandidateEvidence(existing.Evidence, route.Evidence)
+			existing.Collections = mergePlannedCollections(existing.Collections, route.Collections)
 			continue
 		}
 		indexByKey[key] = len(result)
 		route.Blocks = mergePlannedBlocks(nil, route.Blocks)
+		route.Collections = mergePlannedCollections(nil, route.Collections)
 		result = append(result, route)
 	}
 	sort.SliceStable(result, func(i, j int) bool {
@@ -1249,6 +1343,34 @@ func mergePageRoutes(routes []PageRoute) []PageRoute {
 	})
 	if len(result) > 20 {
 		result = result[:20]
+	}
+	return result
+}
+
+func mergePlannedCollections(left, right []PlannedCollectionMembership) []PlannedCollectionMembership {
+	result := make([]PlannedCollectionMembership, 0, len(left)+len(right))
+	indexByID := map[uuid.UUID]int{}
+	for _, item := range append(append([]PlannedCollectionMembership{}, left...), right...) {
+		if index, ok := indexByID[item.CollectionID]; ok {
+			existing := &result[index]
+			if item.Confidence > existing.Confidence {
+				existing.Reason = item.Reason
+				existing.Confidence = item.Confidence
+			}
+			existing.Evidence = mergeCandidateEvidence(existing.Evidence, item.Evidence)
+			if len(existing.Evidence) > 8 {
+				existing.Evidence = existing.Evidence[:8]
+			}
+			continue
+		}
+		indexByID[item.CollectionID] = len(result)
+		result = append(result, item)
+	}
+	sort.SliceStable(result, func(i, j int) bool {
+		return result[i].Confidence > result[j].Confidence
+	})
+	if len(result) > 8 {
+		result = result[:8]
 	}
 	return result
 }

@@ -27,6 +27,13 @@ import {
     ImportPlanEvidenceToJSON,
     ImportPlanEvidenceToJSONTyped,
 } from './ImportPlanEvidence';
+import type { ImportPlannedCollectionMembership } from './ImportPlannedCollectionMembership';
+import {
+    ImportPlannedCollectionMembershipFromJSON,
+    ImportPlannedCollectionMembershipFromJSONTyped,
+    ImportPlannedCollectionMembershipToJSON,
+    ImportPlannedCollectionMembershipToJSONTyped,
+} from './ImportPlannedCollectionMembership';
 
 /**
  *
@@ -88,6 +95,12 @@ export interface ImportPageRoute {
      * @memberof ImportPageRoute
      */
     blocks: Array<ImportPlannedBlock>;
+    /**
+     *
+     * @type {Array<ImportPlannedCollectionMembership>}
+     * @memberof ImportPageRoute
+     */
+    collections?: Array<ImportPlannedCollectionMembership>;
 }
 
 
@@ -137,6 +150,7 @@ export function ImportPageRouteFromJSONTyped(json: any, ignoreDiscriminator: boo
         'relatedTo': json['related_to'],
         'evidence': ((json['evidence'] as Array<any>).map(ImportPlanEvidenceFromJSON)),
         'blocks': ((json['blocks'] as Array<any>).map(ImportPlannedBlockFromJSON)),
+        'collections': json['collections'] == null ? undefined : ((json['collections'] as Array<any>).map(ImportPlannedCollectionMembershipFromJSON)),
     };
 }
 
@@ -160,6 +174,7 @@ export function ImportPageRouteToJSONTyped(value?: ImportPageRoute | null, ignor
         'related_to': value['relatedTo'],
         'evidence': ((value['evidence'] as Array<any>).map(ImportPlanEvidenceToJSON)),
         'blocks': ((value['blocks'] as Array<any>).map(ImportPlannedBlockToJSON)),
+        'collections': value['collections'] == null ? undefined : ((value['collections'] as Array<any>).map(ImportPlannedCollectionMembershipToJSON)),
     };
 }
 

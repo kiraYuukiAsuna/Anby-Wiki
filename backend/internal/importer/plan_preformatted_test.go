@@ -288,7 +288,7 @@ func TestDecodeGeneratedImportPlanAcceptsExactCodeEvidence(t *testing.T) {
 	}
 	plan, _, err := DecodeGeneratedImportPlan(raw, sourceVersionID, []evidence.SourceChunk{{
 		ID: chunkID, SourceVersionID: sourceVersionID, TextContent: text,
-	}}, nil, RouteModeAuto)
+	}}, nil, nil, RouteModeAuto)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -352,7 +352,7 @@ func TestDecodeGeneratedImportPlanAcceptsExtendedBlocks(t *testing.T) {
 		ID: chunkID, SourceVersionID: sourceVersionID, TextContent: source,
 	}}
 	plan, canonical, err := DecodeGeneratedImportPlan(
-		raw, sourceVersionID, chunks, nil, RouteModeAuto,
+		raw, sourceVersionID, chunks, nil, nil, RouteModeAuto,
 	)
 	if err != nil {
 		t.Fatal(err)

@@ -5880,6 +5880,18 @@ components:
         evidence:
           type: array
           items: { $ref: "#/components/schemas/ImportPlanEvidence" }
+    ImportPlannedCollectionMembership:
+      type: object
+      additionalProperties: false
+      required: [collection_id, title, reason, confidence, evidence]
+      properties:
+        collection_id: { type: string, format: uuid }
+        title: { type: string }
+        reason: { type: string }
+        confidence: { type: number, minimum: 0, maximum: 1 }
+        evidence:
+          type: array
+          items: { $ref: "#/components/schemas/ImportPlanEvidence" }
     ImportPageRoute:
       type: object
       additionalProperties: false
@@ -5900,6 +5912,10 @@ components:
         blocks:
           type: array
           items: { $ref: "#/components/schemas/ImportPlannedBlock" }
+        collections:
+          type: array
+          maxItems: 8
+          items: { $ref: "#/components/schemas/ImportPlannedCollectionMembership" }
     ImportPlan:
       type: object
       additionalProperties: false
@@ -6252,11 +6268,14 @@ components:
             operation_type: { type: string, enum: [add_collection_membership] }
             payload:
               type: object
-              required: [sort_key, source_revision_id]
+              required: [sort_key]
               additionalProperties: false
               properties:
                 sort_key: { type: string, minLength: 1, maxLength: 500 }
-                source_revision_id: { type: string, format: uuid }
+                source_revision_id:
+                  type: string
+                  format: uuid
+                  description: Collection-target proposals require this field; Wiki-target page additions may omit it to use the page revision after this batch publishes.
     OperationRemoveCollectionMembership:
       allOf:
         - $ref: "#/components/schemas/ProposalOperationEnvelope"

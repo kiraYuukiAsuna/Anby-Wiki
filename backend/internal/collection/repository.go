@@ -353,7 +353,7 @@ func (r *Repository) AddMember(
 	tx pgx.Tx,
 	collectionID uuid.UUID,
 	member Membership,
-) error {
+) (bool, error) {
 	tag, err := tx.Exec(ctx, `INSERT INTO collection_membership
 		(collection_id,page_id,entity_id,member_type,source_type,sort_key,source_revision_id)
 		VALUES ($1,$2,$3,$4,$5,$6,$7)
@@ -361,12 +361,9 @@ func (r *Repository) AddMember(
 		collectionID, member.PageID, member.EntityID, member.MemberType,
 		member.SourceType, member.SortKey, member.SourceRevisionID)
 	if err != nil {
-		return err
+		return false, err
 	}
-	if tag.RowsAffected() != 1 {
-		return ErrInvalidMember
-	}
-	return nil
+	return tag.RowsAffected() == 1, nil
 }
 
 // GetMemberForUpdate 读取并锁定一个精确成员，供 Proposal 删除与补偿保存完整旧值。

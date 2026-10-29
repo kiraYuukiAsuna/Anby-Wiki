@@ -257,8 +257,14 @@ func (s *Service) ApplyManualMemberInTx(
 			return Membership{}, err
 		}
 		member.CollectionID = collectionID
-		if err := s.repo.AddMember(ctx, tx, collectionID, member); err != nil {
+		inserted, err := s.repo.AddMember(ctx, tx, collectionID, member)
+		if err != nil {
 			return Membership{}, err
+		}
+		if !inserted {
+			// Preserve pre-existing membership metadata and omit a change event
+			// so ChangeBatch rollback cannot remove another batch's membership.
+			return s.repo.GetMemberForUpdate(ctx, tx, collectionID, member.MemberType, member.PageID, member.EntityID)
 		}
 	} else {
 		member = Membership{
@@ -432,7 +438,13 @@ func memberTarget(member Membership) uuid.UUID {
 func (s *Service) Get(
 	ctx context.Context, wikiID, id uuid.UUID,
 ) (*Collection, error) {
-	value, err := s.repo.Get(ctx, nil, id)
+	return s.GetInTx(ctx, nil, wikiID, id)
+}
+
+func (s *Service) GetInTx(
+	ctx context.Context, tx pgx.Tx, wikiID, id uuid.UUID,
+) (*Collection, error) {
+	value, err := s.repo.Get(ctx, tx, id)
 	if err != nil {
 		return nil, err
 	}

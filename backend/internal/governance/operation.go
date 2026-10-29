@@ -199,7 +199,8 @@ func operationParams(proposalID uuid.UUID, op *OperationV1) AddOperationParams {
 		indexedEntityID = nil
 	}
 	indexedPageID := op.Target.PageID
-	if op.OperationType == OpCreatePage || op.OperationType == OpSetPageEntityBinding {
+	if op.OperationType == OpCreatePage || op.OperationType == OpSetPageEntityBinding ||
+		isCollectionOperation(op.OperationType) {
 		// The preallocated Page does not exist until Apply commits.
 		indexedPageID = nil
 	}

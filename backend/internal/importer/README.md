@@ -107,7 +107,7 @@ Entity 值的自引用 Claim；相同约束在逐字证据核验、稳定 ID 分
 相邻技术术语误写成 `JSON instance_of JavaScript`；同一主体的单值属性若在一个模型批次中
 出现多个值，分类器按“支持现有事实优先，其次置信度、证据覆盖、稳定 ID”只保留一个，
 Composer/Apply 前置校验与 Knowledge 写入约束继续防御不可能应用的 Proposal。
-事实候选允许为空：来源随后仍会进入 `source-import-plan-v10`，由不受固定 Entity/Claim
+事实候选允许为空：来源随后仍会进入 `source-import-plan-v11`，由不受固定 Entity/Claim
 词表限制的页面规划判断百科价值。模型提供的
 引文必须逐字存在；服务端会重新推导 rune 范围以纠正模型常见的 Unicode/字节计数偏差。
 引文重复出现时选择离模型提示位置最近的精确匹配，最近距离并列才拒绝；模糊匹配、翻译
@@ -143,7 +143,7 @@ Entity、创建新 Entity 或忽略；无法唯一匹配时不静默新建重复
 Claim 去重遍历同一主体/属性的完整现有集合，只有值和有效期都相同才视为重复；
 多值属性不会因第一条现有值不同而被误判为冲突。
 
-`source-import-plan-v10` 在事实抽取之后执行来源理解与页面路由。它先按标题、来源名、
+`source-import-plan-v11` 在事实抽取之后执行来源理解与页面路由。它先按标题、来源名、
 Entity/alias 召回已有 Page 及可替换 Block，再允许一份来源同时生成多个 `create`、
 `update`、`link` 与 `ignore` 路由。`link.related_to` 显式选择同批 create/update
 页面并携带原文证据，随后编译为稳定 `page_reference`，由投影生成反链；每个新写或改写
@@ -213,6 +213,16 @@ Composer 校验 Typed Block 时先读取 `type` 并直接分派到对应 Schema 
 `article-infobox` Component；更新页会复用现有标准章节与 Block ID，避免重复尾部和
 信息框。References 本身由已核验 Citation 的 Current Revision 投影生成，不复制模型
 书目文本，也不把页面关联伪装成 Citation。
+
+规划阶段还向模型提供当前 Wiki 中最多 100 个现有手动专题，附名称与已发布说明页的
+有界摘要。create/update 路由可给出 `collections` 推荐：只能选择候选中的稳定 ID，
+每项必须有理由、置信度与精确来源引文；服务端补齐名称、过滤未知目标和坏证据，
+跨窗口按专题 ID 合并。规则/动态集合不接受推荐写入，link/ignore 不产生专题归属。
+推荐与正文一同保存为不可变计划，在导入详情展示并随计划确认；最终 Proposal 仍须
+人工审核。Composer 使用同批预分配 Page ID 编译 `add_collection_membership`，
+Apply 在全部页面发布后绑定当前 Revision，通过 Collection 服务与页面/知识共享
+原子 ChangeBatch。重复加入保留原成员，不记为本批次新增，因此补偿回滚不会移除
+之前存在的归属。
 
 ## 安全边界
 

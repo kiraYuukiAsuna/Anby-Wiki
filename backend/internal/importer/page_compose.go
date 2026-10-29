@@ -59,6 +59,7 @@ func (c *ProposalComposer) buildPageOperations(
 				return nil, err
 			}
 			operations = append(operations, pageOps...)
+			operations = append(operations, collectionMembershipOperations(params.WikiID, pageID, route)...)
 		case RouteUpdate:
 			pageOps, err := c.buildUpdatePageOperations(
 				ctx, params, route,
@@ -68,6 +69,7 @@ func (c *ProposalComposer) buildPageOperations(
 				return nil, err
 			}
 			operations = append(operations, pageOps...)
+			operations = append(operations, collectionMembershipOperations(params.WikiID, *route.PageID, route)...)
 		case RouteLink, RouteIgnore:
 			// Link intents are compiled into their related create/update route;
 			// ignore remains immutable planning metadata only.
@@ -76,6 +78,34 @@ func (c *ProposalComposer) buildPageOperations(
 		}
 	}
 	return operations, nil
+}
+
+func collectionMembershipOperations(wikiID, pageID uuid.UUID, route PageRoute) []governance.OperationV1 {
+	operations := make([]governance.OperationV1, 0, len(route.Collections))
+	for _, recommendation := range route.Collections {
+		payload, _ := json.Marshal(map[string]string{"sort_key": route.Title})
+		baseVersion := 0
+		collectionID := recommendation.CollectionID
+		evidenceItems := make([]governance.OperationEvidence, 0, len(recommendation.Evidence))
+		for _, item := range recommendation.Evidence {
+			chunkID := item.ChunkID
+			evidenceItems = append(evidenceItems, governance.OperationEvidence{
+				SourceChunkID: &chunkID, Note: boundedRunes(item.Quotation, 1000),
+			})
+		}
+		operations = append(operations, governance.OperationV1{
+			SchemaVersion: governance.OperationVersion,
+			OperationType: governance.OpAddCollectionMembership,
+			Base:          governance.OperationBase{StateVersion: &baseVersion},
+			Target:        governance.OperationTarget{WikiID: &wikiID, PageID: &pageID, CollectionID: &collectionID},
+			Payload:       payload,
+			Evidence:      evidenceItems,
+			Risk: governance.OperationRisk{Level: RiskMedium, Reasons: []string{
+				boundedRunes("加入专题「"+recommendation.Title+"」："+recommendation.Reason, 1000),
+			}},
+		})
+	}
+	return operations
 }
 
 func (c *ProposalComposer) buildCreatePageOperations(
