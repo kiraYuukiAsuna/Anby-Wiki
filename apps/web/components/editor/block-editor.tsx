@@ -41,14 +41,12 @@ import { ExternalContentInsertDialog } from "@/components/editor/external-conten
 import { HTMLBlockInsertDialog } from "@/components/editor/html-block-insert-dialog";
 import { InlineMentionInsertDialog } from "@/components/editor/inline-mention-insert-dialog";
 import { MediaBlockInsertDialog } from "@/components/editor/media-block-insert-dialog";
-import {
-  InfoboxInsertButton,
-  type InfoboxSelection,
-} from "@/components/editor/infobox-insert-button";
+import { ComponentInsertButton } from "@/components/editor/component-insert-button";
 import { PageReferencePicker } from "@/components/editor/page-reference-picker";
 import { PageButtonInsertDialog } from "@/components/editor/page-button-insert-dialog";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { clientUUID } from "@/lib/client-uuid";
 import type { Block, Document } from "@/lib/ast/schema";
 import { fromAst } from "@/lib/editor/fromAst";
 import { createAdapterState, type AdapterState } from "@/lib/editor/ids";
@@ -176,43 +174,6 @@ export function BlockEditor({
       lastBlock,
       "after",
     );
-  };
-
-  const insertInfobox = (selection: InfoboxSelection) => {
-    const blocks = editor.document as unknown as BNBlock[];
-    const includesComponent = (items: BNBlock[]): boolean =>
-      items.some(
-        (block) =>
-          (block.type === "component" &&
-            block.props.componentId === selection.componentId) ||
-          includesComponent(block.children),
-      );
-    if (includesComponent(blocks)) {
-      toast.info("页面中已经包含文章信息框");
-      return;
-    }
-    const firstBlock = editor.document[0];
-    if (!firstBlock) return;
-    editor.insertBlocks(
-      [
-        {
-          type: "component",
-          props: {
-            componentId: selection.componentId,
-            componentVersion: selection.componentVersion,
-            entityId: selection.entityId,
-            displayConfig: JSON.stringify({
-              title: "",
-              language: selection.language,
-              property_keys: [],
-            }),
-          },
-        },
-      ] as never,
-      firstBlock,
-      "before",
-    );
-    toast.success("已在文首插入主实体信息框");
   };
 
   // 快捷键：⌘/Ctrl+K 页面引用，⌘/Ctrl+Shift+K 外链。
@@ -399,9 +360,17 @@ export function BlockEditor({
             <PanelsTopLeft className="size-4" />
             外部内容
           </Button>
-          {pageId ? (
-            <InfoboxInsertButton pageId={pageId} onInsert={insertInfobox} />
-          ) : null}
+          <ComponentInsertButton pageId={pageId} onInsert={(selection) => {
+            insertAstBlock({
+              type: "component",
+              id: clientUUID(),
+              component_id: selection.componentId,
+              component_version: selection.componentVersion,
+              entity_id: selection.entityId,
+              display_config: selection.displayConfig,
+            });
+            toast.success("已插入组件");
+          }} />
           <Button
             type="button"
             variant="outline"

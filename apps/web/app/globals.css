@@ -990,6 +990,28 @@
   font-weight: 600;
 }
 
+.wiki-rendered.wiki-component-preview {
+  min-width: 0;
+  display: flow-root;
+}
+
+.wiki-rendered.wiki-component-preview .entity-infobox {
+  float: none;
+  width: 100%;
+  margin: 0;
+}
+
+.wiki-rendered.wiki-component-preview [data-component-renderer="key-value"] {
+  margin: 0;
+  grid-template-columns: minmax(0, 0.8fr) minmax(0, 1.2fr);
+}
+
+.wiki-rendered.wiki-component-preview dt,
+.wiki-rendered.wiki-component-preview dd {
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+
 :where([data-ast-document], .wiki-rendered) [data-text-color="gray"] {
   color: #9b9a97;
 }

@@ -7,7 +7,6 @@ import {
   Check,
   CircleDot,
   Component,
-  Copy,
   Eye,
   FileJson2,
   LoaderCircle,
@@ -19,16 +18,16 @@ import {
 import { useState } from "react";
 import { toast } from "sonner";
 import useSWR from "swr";
-import { z } from "zod";
 
 import type {
   WikiComponent,
   WikiComponentVersion,
   WikiComponentVersionList,
-  WriteWikiComponentVersionRequest,
 } from "../../../../contracts/generated/typescript";
 
 import { Button } from "@/components/ui/button";
+import { ComponentDefinitionForm } from "@/components/components/component-forms";
+import { ComponentConfigure } from "@/components/components/component-configure";
 import { ComponentUsagePanel } from "@/components/projection/usage-panels";
 import {
   Dialog,
@@ -38,91 +37,38 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
-import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
-import { Textarea } from "@/components/ui/textarea";
 import { componentsApi } from "@/lib/api";
 import { useSession } from "@/lib/auth";
+import { COMPONENT_PRESETS, parseComponentObject, type ComponentRenderer } from "@/lib/components";
 import { cn } from "@/lib/utils";
-
-type RendererRef = WriteWikiComponentVersionRequest["rendererRef"];
-
-const jsonObjectSchema = z.record(z.string(), z.unknown());
-
-const DEFAULT_SCHEMA: Record<RendererRef, Record<string, unknown>> = {
-  "builtin.key_value": {
-    type: "object",
-    additionalProperties: true,
-  },
-  "builtin.entity_claim_infobox": {
-    type: "object",
-    properties: {
-      title: { type: "string" },
-      language: { type: "string" },
-      property_keys: {
-        type: "array",
-        items: { type: "string" },
-        uniqueItems: true,
-      },
-    },
-    additionalProperties: false,
-  },
-};
-
-const DEFAULT_PROPS: Record<RendererRef, Record<string, unknown>> = {
-  "builtin.key_value": {
-    名称: "示例条目",
-    类型: "可信组件",
-  },
-  "builtin.entity_claim_infobox": {
-    title: "",
-    language: "zh",
-    property_keys: [],
-  },
-};
-
-function parseJSONObject(source: string): Record<string, unknown> | null {
-  try {
-    const value: unknown = JSON.parse(source);
-    const result = jsonObjectSchema.safeParse(value);
-    return result.success ? result.data : null;
-  } catch {
-    return null;
-  }
-}
 
 function VersionEditor({
   component,
   version,
+  copyFrom,
   onClose,
   onSaved,
 }: {
   component: WikiComponent;
   version: WikiComponentVersion | null;
+  copyFrom: WikiComponentVersion | null;
   onClose: () => void;
   onSaved: () => Promise<void>;
 }) {
-  const [renderer, setRenderer] = useState<RendererRef>(
-    version?.rendererRef ?? "builtin.entity_claim_infobox",
+  const [renderer, setRenderer] = useState<ComponentRenderer>(
+    version?.rendererRef ?? copyFrom?.rendererRef ?? COMPONENT_PRESETS[0].renderer,
   );
   const [schema, setSchema] = useState(() =>
     JSON.stringify(
-      version?.propsSchema ?? DEFAULT_SCHEMA["builtin.entity_claim_infobox"],
+      version?.propsSchema ?? copyFrom?.propsSchema ?? COMPONENT_PRESETS[0].schema,
       null,
       2,
     ),
   );
   const [saving, setSaving] = useState(false);
 
-  const switchRenderer = (next: RendererRef) => {
-    setRenderer(next);
-    if (!version) {
-      setSchema(JSON.stringify(DEFAULT_SCHEMA[next], null, 2));
-    }
-  };
-
   const save = async () => {
-    const propsSchema = parseJSONObject(schema);
+    const propsSchema = parseComponentObject(schema);
     if (!propsSchema || propsSchema.type !== "object") {
       toast.error("Props Schema 必须是根 type=object 的合法 JSON");
       return;
@@ -163,43 +109,15 @@ function VersionEditor({
     <>
       <DialogHeader>
         <DialogTitle>
-          {version ? `编辑 v${version.version} 草稿` : "创建组件版本"}
+          {version ? `编辑 v${version.version} 草稿` : copyFrom ? `基于 v${copyFrom.version} 定制新版本` : "创建组件版本"}
         </DialogTitle>
         <DialogDescription>
-          只有 draft 可修改；发布后 Schema 与渲染器永久冻结。
+          保存为草稿，预览确认后再发布。已有页面继续使用其原版本。
         </DialogDescription>
       </DialogHeader>
-      <div className="space-y-4">
-        <div className="space-y-2">
-          <Label htmlFor="renderer-ref">可信渲染器</Label>
-          <select
-            id="renderer-ref"
-            value={renderer}
-            onChange={(event) => switchRenderer(event.target.value as RendererRef)}
-            className="h-8 w-full rounded-lg border border-input bg-background px-2.5 text-sm"
-          >
-            <option value="builtin.entity_claim_infobox">
-              Entity / Claim 信息框
-            </option>
-            <option value="builtin.key_value">通用键值卡片</option>
-          </select>
-        </div>
-        <div className="space-y-2">
-          <div className="flex items-center justify-between">
-            <Label htmlFor="props-schema">Props JSON Schema</Label>
-            <span className="font-mono text-[10px] text-muted-foreground">
-              draft-2020-12
-            </span>
-          </div>
-          <Textarea
-            id="props-schema"
-            value={schema}
-            onChange={(event) => setSchema(event.target.value)}
-            className="min-h-72 resize-y font-mono text-xs leading-5"
-            spellCheck={false}
-          />
-        </div>
-      </div>
+      <fieldset disabled={saving} className="max-h-[65vh] min-w-0 overflow-y-auto">
+        <ComponentDefinitionForm renderer={renderer} source={schema} onChange={(next, value) => { setRenderer(next); setSchema(value); }} />
+      </fieldset>
       <DialogFooter>
         <Button type="button" variant="outline" onClick={onClose}>
           取消
@@ -207,124 +125,6 @@ function VersionEditor({
         <Button type="button" disabled={saving} onClick={() => void save()}>
           {saving ? <LoaderCircle className="animate-spin" aria-hidden /> : null}
           保存草稿
-        </Button>
-      </DialogFooter>
-    </>
-  );
-}
-
-function ComponentPreview({
-  component,
-  version,
-  onClose,
-}: {
-  component: WikiComponent;
-  version: WikiComponentVersion;
-  onClose: () => void;
-}) {
-  const [props, setProps] = useState(() =>
-    JSON.stringify(DEFAULT_PROPS[version.rendererRef], null, 2),
-  );
-  const [entityID, setEntityID] = useState("");
-  const [html, setHTML] = useState("");
-  const [loading, setLoading] = useState(false);
-
-  const preview = async () => {
-    const parsed = parseJSONObject(props);
-    if (!parsed) {
-      toast.error("预览 Props 必须是合法 JSON object");
-      return;
-    }
-    if (
-      version.rendererRef === "builtin.entity_claim_infobox" &&
-      !entityID.trim()
-    ) {
-      toast.error("Entity 信息框预览需要 Entity ID");
-      return;
-    }
-    setLoading(true);
-    try {
-      const result = await componentsApi().previewWikiComponentVersion({
-        id: component.id,
-        version: version.version,
-        previewWikiComponentRequest: {
-          props: parsed,
-          entityId: entityID.trim() || undefined,
-        },
-      });
-      setHTML(result.html);
-    } catch {
-      toast.error("组件预览失败", {
-        description: "请检查 Props 是否符合 Schema，以及 Entity 是否存在。",
-      });
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  return (
-    <>
-      <DialogHeader>
-        <DialogTitle>
-          预览 {component.name} · v{version.version}
-        </DialogTitle>
-        <DialogDescription>
-          请求由服务端 Schema 校验，并只执行白名单内置渲染器。
-        </DialogDescription>
-      </DialogHeader>
-      <div className="grid max-h-[68vh] gap-4 overflow-y-auto lg:grid-cols-2">
-        <div className="space-y-4">
-          {version.rendererRef === "builtin.entity_claim_infobox" ? (
-            <div className="space-y-2">
-              <Label htmlFor="preview-entity">Entity ID</Label>
-              <Input
-                id="preview-entity"
-                value={entityID}
-                onChange={(event) => setEntityID(event.target.value)}
-                placeholder="UUID"
-                className="font-mono text-xs"
-              />
-            </div>
-          ) : null}
-          <div className="space-y-2">
-            <Label htmlFor="preview-props">display_config / Props</Label>
-            <Textarea
-              id="preview-props"
-              value={props}
-              onChange={(event) => setProps(event.target.value)}
-              className="min-h-60 resize-y font-mono text-xs leading-5"
-              spellCheck={false}
-            />
-          </div>
-        </div>
-        <div className="min-h-64 rounded-2xl border bg-muted/20 p-4">
-          <p className="mb-3 text-[11px] font-semibold tracking-[0.12em] text-muted-foreground uppercase">
-            Server preview
-          </p>
-          {html ? (
-            <div
-              className="wiki-component-preview rounded-xl bg-background p-4"
-              // HTML originates from a fixed server-side renderer registry; user values are escaped there.
-              dangerouslySetInnerHTML={{ __html: html }}
-            />
-          ) : (
-            <div className="flex min-h-48 items-center justify-center text-center text-xs leading-5 text-muted-foreground">
-              填写示例 Props 后运行预览。
-            </div>
-          )}
-        </div>
-      </div>
-      <DialogFooter>
-        <Button type="button" variant="outline" onClick={onClose}>
-          关闭
-        </Button>
-        <Button type="button" disabled={loading} onClick={() => void preview()}>
-          {loading ? (
-            <LoaderCircle className="animate-spin" aria-hidden />
-          ) : (
-            <Eye aria-hidden />
-          )}
-          运行预览
         </Button>
       </DialogFooter>
     </>
@@ -353,20 +153,21 @@ export function ComponentWorkspace({ id }: { id: string }) {
   const [editorOpen, setEditorOpen] = useState(false);
   const [editingVersion, setEditingVersion] =
     useState<WikiComponentVersion | null>(null);
+  const [copyFrom, setCopyFrom] = useState<WikiComponentVersion | null>(null);
   const [previewVersion, setPreviewVersion] =
     useState<WikiComponentVersion | null>(null);
   const [transitioning, setTransitioning] = useState("");
-  const [copied, setCopied] = useState("");
-  const { isAuthenticated, isLoading: sessionLoading } = useSession();
-  const componentState = useSWR<WikiComponent>(["component", id], () =>
+  const { session, isLoading: sessionLoading } = useSession();
+  const canWrite = Boolean(session && (session.actorType === "system" || session.homeWikiId === session.wikiId));
+  const componentState = useSWR<WikiComponent>(sessionLoading ? null : ["component", session?.actorId, session?.wikiId, id], () =>
     componentsApi().getWikiComponent({ id }),
   );
   const versionState = useSWR<WikiComponentVersionList>(
-    componentState.data ? ["component-versions", id] : null,
+    componentState.data ? ["component-versions", session?.actorId, session?.wikiId, id] : null,
     () => componentsApi().listWikiComponentVersions({ id }),
   );
 
-  if (componentState.isLoading || versionState.isLoading) {
+  if (sessionLoading || componentState.isLoading || versionState.isLoading) {
     return <div className="h-72 animate-pulse rounded-3xl border bg-muted/35" />;
   }
   if (
@@ -418,24 +219,6 @@ export function ComponentWorkspace({ id }: { id: string }) {
     }
   };
 
-  const copyBlock = async (version: WikiComponentVersion) => {
-    const value = JSON.stringify(
-      {
-        type: "component",
-        component_id: component.id,
-        component_version: version.version,
-        entity_id: "ENTITY_UUID",
-        display_config: DEFAULT_PROPS[version.rendererRef],
-      },
-      null,
-      2,
-    );
-    await navigator.clipboard.writeText(value);
-    setCopied(String(version.version));
-    toast.success("ComponentBlock 模板已复制");
-    window.setTimeout(() => setCopied(""), 1600);
-  };
-
   return (
     <>
       <header className="border-b border-border/75 pb-7">
@@ -446,28 +229,28 @@ export function ComponentWorkspace({ id }: { id: string }) {
           </Link>
         </Button>
         <div className="flex flex-wrap items-end justify-between gap-5">
-          <div>
+          <div className="min-w-0">
             <span className="flex size-11 items-center justify-center rounded-2xl bg-violet-100 text-violet-700">
               <Component className="size-5" aria-hidden />
             </span>
-            <h1 className="mt-4 text-4xl font-semibold tracking-[-0.045em]">
+            <h1 className="mt-4 break-words text-4xl font-semibold tracking-[-0.045em]">
               {component.name}
             </h1>
-            <p className="mt-2 font-mono text-xs text-muted-foreground">
+            <p className="mt-2 break-all font-mono text-xs text-muted-foreground">
               {component.componentKey}
             </p>
           </div>
-          <Button
+          {canWrite ? <Button
             type="button"
-            disabled={!isAuthenticated || sessionLoading}
             onClick={() => {
               setEditingVersion(null);
+              setCopyFrom(versions.find((version) => version.status === "published") ?? versions[0] ?? null);
               setEditorOpen(true);
             }}
           >
             <Plus aria-hidden />
             创建新版本
-          </Button>
+          </Button> : null}
         </div>
       </header>
 
@@ -536,28 +319,20 @@ export function ComponentWorkspace({ id }: { id: string }) {
                         <Eye aria-hidden />
                         预览
                       </Button>
-                      <Button
-                        type="button"
-                        size="sm"
-                        variant="ghost"
-                        onClick={() => void copyBlock(version)}
-                      >
-                        {copied === String(version.version) ? (
-                          <Check aria-hidden />
-                        ) : (
-                          <Copy aria-hidden />
-                        )}
-                        Block
-                      </Button>
-                      {version.status === "draft" ? (
+                      {canWrite && version.status !== "draft" ? <Button type="button" size="sm" variant="outline" onClick={() => {
+                        setEditingVersion(null);
+                        setCopyFrom(version);
+                        setEditorOpen(true);
+                      }}><Plus aria-hidden />定制新版本</Button> : null}
+                      {canWrite && version.status === "draft" ? (
                         <>
                           <Button
                             type="button"
                             size="sm"
                             variant="ghost"
-                            disabled={!isAuthenticated}
                             onClick={() => {
                               setEditingVersion(version);
+                              setCopyFrom(null);
                               setEditorOpen(true);
                             }}
                           >
@@ -568,7 +343,6 @@ export function ComponentWorkspace({ id }: { id: string }) {
                             type="button"
                             size="sm"
                             disabled={
-                              !isAuthenticated ||
                               transitioning.startsWith(busyPrefix)
                             }
                             onClick={() => void transition(version, "publish")}
@@ -582,13 +356,12 @@ export function ComponentWorkspace({ id }: { id: string }) {
                           </Button>
                         </>
                       ) : null}
-                      {version.status === "published" ? (
+                      {canWrite && version.status === "published" ? (
                         <Button
                           type="button"
                           size="sm"
                           variant="destructive"
                           disabled={
-                            !isAuthenticated ||
                             transitioning.startsWith(busyPrefix)
                           }
                           onClick={() => void transition(version, "deprecate")}
@@ -631,11 +404,12 @@ export function ComponentWorkspace({ id }: { id: string }) {
         }}
       >
         <DialogContent className="sm:max-w-2xl">
-          {editorOpen ? (
+          {editorOpen && canWrite ? (
             <VersionEditor
               key={editingVersion?.version ?? "new"}
               component={component}
               version={editingVersion}
+              copyFrom={copyFrom}
               onClose={() => setEditorOpen(false)}
               onSaved={async () => {
                 await versionState.mutate();
@@ -653,7 +427,7 @@ export function ComponentWorkspace({ id }: { id: string }) {
       >
         <DialogContent className="sm:max-w-4xl">
           {previewVersion ? (
-            <ComponentPreview
+            <ComponentConfigure
               key={previewVersion.version}
               component={component}
               version={previewVersion}
