@@ -16,6 +16,7 @@ type Principal struct {
 	CredentialID    uuid.UUID
 	ActorID         uuid.UUID
 	WikiID          uuid.UUID
+	HomeWikiID      uuid.UUID
 	WikiName        string
 	MainNamespaceID uuid.UUID
 	ActorType       string

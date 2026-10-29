@@ -14,6 +14,7 @@ import {
   TriangleAlert,
 } from "lucide-react";
 import Link from "next/link";
+import { WorkspaceLink } from "@/components/workspace-link";
 import { useRouter } from "next/navigation";
 import { FormEvent, useEffect, useState } from "react";
 import { toast } from "sonner";
@@ -212,7 +213,7 @@ export function BlockRedirectManager({
             </div>
           </div>
         </div>
-        <Link
+        <WorkspaceLink
           href={`/governance/protections?page_id=${pageId}`}
           className="group rounded-3xl border bg-card p-5 transition hover:border-primary/25 hover:bg-primary/[0.035]"
         >
@@ -228,7 +229,7 @@ export function BlockRedirectManager({
               aria-hidden
             />
           </span>
-        </Link>
+        </WorkspaceLink>
       </section>
 
       <div className="grid gap-8 xl:grid-cols-[26rem_minmax(0,1fr)]">

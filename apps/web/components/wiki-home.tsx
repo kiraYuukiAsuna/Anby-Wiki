@@ -16,8 +16,10 @@ import useSWR from "swr";
 
 import { Button } from "@/components/ui/button";
 import { WikiSearchForm } from "@/components/wiki-search-form";
+import { WorkspaceLink } from "@/components/workspace-link";
 import { collectionsApi, knowledgeApi, readingApi } from "@/lib/api";
 import { useSession } from "@/lib/auth";
+import { workspaceAccessNotice } from "@/lib/workspace-access";
 
 const DATE_FORMATTER = new Intl.DateTimeFormat("zh-CN", {
   month: "short",
@@ -28,13 +30,14 @@ export function WikiHome() {
   const { session } = useSession();
   const wikiID = session?.wikiId;
   const wikiName = session?.wikiName ?? "Anby Wiki";
-  const pages = useSWR(wikiID ? ["wiki-home:recent-pages", wikiID] : null, () =>
+  const canReadCollections = !workspaceAccessNotice("/collections", session);
+  const pages = useSWR(wikiID ? ["wiki-home:recent-pages", session?.actorId, wikiID] : null, () =>
     readingApi().listPublishedPages({ sort: "recent", pageSize: 12 }),
   );
-  const collections = useSWR(wikiID ? ["wiki-home:collections", wikiID] : null, () =>
+  const collections = useSWR(wikiID && canReadCollections ? ["wiki-home:collections", session?.actorId, wikiID] : null, () =>
     collectionsApi().listCollections({ pageSize: 6 }),
   );
-  const entities = useSWR(wikiID ? ["wiki-home:entities", wikiID] : null, () =>
+  const entities = useSWR(wikiID ? ["wiki-home:entities", session?.actorId, wikiID] : null, () =>
     knowledgeApi().listEntities({ status: "active", pageSize: 8 }),
   );
 
@@ -59,7 +62,7 @@ export function WikiHome() {
                 <Link href="/pages"><BookOpenText aria-hidden />页面目录</Link>
               </Button>
               <Button variant="ghost" size="sm" asChild>
-                <Link href="/collections"><Layers3 aria-hidden />专题合集</Link>
+                <WorkspaceLink href="/collections"><Layers3 aria-hidden />专题合集</WorkspaceLink>
               </Button>
               <Button variant="ghost" size="sm" asChild>
                 <Link href="/explore"><Search aria-hidden />搜索</Link>
@@ -78,17 +81,17 @@ export function WikiHome() {
               </div>
             </div>
             <div className="mt-5 grid grid-cols-2 gap-2 border-t pt-4 text-center">
-              <div className="rounded-xl bg-muted/55 p-3">
+              {canReadCollections ? <div className="rounded-xl bg-muted/55 p-3">
                 <p className="font-semibold tabular-nums">{collections.data?.items.length ?? "—"}</p>
                 <p className="mt-1 text-[10px] text-muted-foreground">专题</p>
-              </div>
+              </div> : null}
               <div className="rounded-xl bg-muted/55 p-3">
                 <p className="font-semibold tabular-nums">{entities.data?.items.length ?? "—"}</p>
                 <p className="mt-1 text-[10px] text-muted-foreground">实体</p>
               </div>
             </div>
             <Button asChild variant="outline" className="mt-4 w-full">
-              <Link href="/new"><SquarePen aria-hidden />创建页面</Link>
+              <WorkspaceLink href="/new"><SquarePen aria-hidden />创建页面</WorkspaceLink>
             </Button>
           </aside>
         </div>
@@ -135,13 +138,13 @@ export function WikiHome() {
             <div className="mt-5 rounded-2xl border border-dashed px-6 py-12 text-center">
               <BookOpenText className="mx-auto size-8 text-muted-foreground" aria-hidden />
               <h3 className="mt-4 font-semibold">还没有已发布页面</h3>
-              <Button asChild className="mt-5"><Link href="/new">创建第一页</Link></Button>
+              <Button asChild className="mt-5"><WorkspaceLink href="/new">创建第一页</WorkspaceLink></Button>
             </div>
           )}
         </section>
 
         <div className="mt-12 grid gap-8 border-t pt-10 lg:grid-cols-[minmax(0,1fr)_22rem]">
-          <section aria-labelledby="collections-title">
+          {canReadCollections ? <section aria-labelledby="collections-title">
             <div className="flex items-end justify-between gap-4">
               <h2 id="collections-title" className="text-xl font-semibold">专题合集</h2>
               <Link href="/collections" className="text-sm font-medium text-primary hover:underline">全部专题</Link>
@@ -161,7 +164,7 @@ export function WikiHome() {
             ) : (
               <p className="mt-4 rounded-2xl border border-dashed p-6 text-sm text-muted-foreground">暂无专题</p>
             )}
-          </section>
+          </section> : null}
 
           <section aria-labelledby="entities-title" className="rounded-2xl border bg-card p-5">
             <div className="flex items-center justify-between gap-3">

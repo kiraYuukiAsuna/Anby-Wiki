@@ -548,8 +548,8 @@ export class GovernanceApi extends runtime.BaseAPI {
     }
 
     /**
-     * 仅管理员可执行。对象上传与校验完成后，Page 领域服务才把非当前 hot 快照原子切换到 cold；当前 Revision 永远保留在 hot tier。
-     * 手动执行一批到期 Revision 快照归档
+     * 需要当前账户拥有的 Wiki 的管理员权限，选择协作 Wiki 不改变归档范围。 仅处理该 Wiki 独占引用的到期历史快照。对象上传与校验完成后， Page 领域服务在行锁内复核当前版本和跨 Wiki 引用，再把 hot 快照原子切换到 cold。 当前 Revision 永远保留在 hot tier。
+     * 手动归档当前账户 Wiki 的一批到期 Revision 快照
      */
     async archiveRevisionSnapshotsRaw(requestParameters: ArchiveRevisionSnapshotsOperationRequest, initOverrides?: RequestInit | runtime.InitOverrideFunction): Promise<runtime.ApiResponse<SnapshotArchiveResult>> {
         const requestOptions = await this.archiveRevisionSnapshotsRequestOpts(requestParameters);
@@ -559,8 +559,8 @@ export class GovernanceApi extends runtime.BaseAPI {
     }
 
     /**
-     * 仅管理员可执行。对象上传与校验完成后，Page 领域服务才把非当前 hot 快照原子切换到 cold；当前 Revision 永远保留在 hot tier。
-     * 手动执行一批到期 Revision 快照归档
+     * 需要当前账户拥有的 Wiki 的管理员权限，选择协作 Wiki 不改变归档范围。 仅处理该 Wiki 独占引用的到期历史快照。对象上传与校验完成后， Page 领域服务在行锁内复核当前版本和跨 Wiki 引用，再把 hot 快照原子切换到 cold。 当前 Revision 永远保留在 hot tier。
+     * 手动归档当前账户 Wiki 的一批到期 Revision 快照
      */
     async archiveRevisionSnapshots(requestParameters: ArchiveRevisionSnapshotsOperationRequest, initOverrides?: RequestInit | runtime.InitOverrideFunction): Promise<SnapshotArchiveResult> {
         const response = await this.archiveRevisionSnapshotsRaw(requestParameters, initOverrides);
@@ -1234,8 +1234,8 @@ export class GovernanceApi extends runtime.BaseAPI {
     }
 
     /**
-     * 仅管理员可见。统计不可变 ContentSnapshot 的物理存储层、 到期候选数与归档能力，不返回 AST 正文或对象存储键。
-     * 查看 Revision 快照冷热分层状态
+     * 需要当前账户拥有的 Wiki 的管理员权限。仅统计该 Wiki 的 Revision 引用的 不可变 ContentSnapshot，每个快照只计一次；选择协作 Wiki 不改变统计范围。 到期候选排除当前版本和其他 Wiki 共用的快照，不返回 AST 正文或对象存储键。
+     * 查看当前账户 Wiki 的 Revision 快照冷热分层状态
      */
     async getRevisionStorageStatsRaw(initOverrides?: RequestInit | runtime.InitOverrideFunction): Promise<runtime.ApiResponse<RevisionStorageStats>> {
         const requestOptions = await this.getRevisionStorageStatsRequestOpts();
@@ -1245,8 +1245,8 @@ export class GovernanceApi extends runtime.BaseAPI {
     }
 
     /**
-     * 仅管理员可见。统计不可变 ContentSnapshot 的物理存储层、 到期候选数与归档能力，不返回 AST 正文或对象存储键。
-     * 查看 Revision 快照冷热分层状态
+     * 需要当前账户拥有的 Wiki 的管理员权限。仅统计该 Wiki 的 Revision 引用的 不可变 ContentSnapshot，每个快照只计一次；选择协作 Wiki 不改变统计范围。 到期候选排除当前版本和其他 Wiki 共用的快照，不返回 AST 正文或对象存储键。
+     * 查看当前账户 Wiki 的 Revision 快照冷热分层状态
      */
     async getRevisionStorageStats(initOverrides?: RequestInit | runtime.InitOverrideFunction): Promise<RevisionStorageStats> {
         const response = await this.getRevisionStorageStatsRaw(initOverrides);

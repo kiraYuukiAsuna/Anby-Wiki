@@ -18,7 +18,7 @@ All URIs are relative to *http://localhost:3000*
 
 读取当前账号的模型配置
 
-API Key 永不返回，只暴露是否已配置。
+仅读取当前账号拥有的私人 Wiki 配置，选择协作 Wiki 不改变范围。API Key 永不返回，只暴露是否已配置。
 
 ### Example
 
@@ -148,7 +148,7 @@ This endpoint does not need any parameter.
 
 测试当前账号已保存的模型配置
 
-不接受临时密钥或 Prompt；仅返回供应商、模型与端到端耗时。
+使用当前账号拥有的私人 Wiki 配置，选择协作 Wiki 不改变范围。不接受临时密钥或 Prompt；仅返回供应商、模型与端到端耗时。
 
 ### Example
 
@@ -216,7 +216,7 @@ This endpoint does not need any parameter.
 
 保存当前账号的模型配置
 
-模型配置写入当前账号对应的私有 Wiki。首次保存必须提供 api_key； 后续省略或传空字符串表示保留现有密钥。密钥使用部署主密钥加密后持久化。
+模型配置写入当前账号拥有的私人 Wiki，选择协作 Wiki 不改变范围。首次保存必须提供 api_key； 后续省略或传空字符串表示保留现有密钥。密钥使用部署主密钥加密后持久化。
 
 ### Example
 

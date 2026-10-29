@@ -346,12 +346,12 @@ func NewRouter(logger *slog.Logger, deps Deps, writeAPI *WriteAPI, readAPI *Read
 				r.Post("/import-jobs/{id}/replan", importAPI.replanJob)
 			}
 			if aiConfigAPI != nil {
-				r.Get("/admin/ai-config", aiConfigAPI.get)
-				r.Put("/admin/ai-config", aiConfigAPI.update)
-				r.Post("/admin/ai-config/test", aiConfigAPI.test)
-				r.Get("/account/ai-config", aiConfigAPI.get)
-				r.Put("/account/ai-config", aiConfigAPI.update)
-				r.Post("/account/ai-config/test", aiConfigAPI.test)
+				r.Get("/admin/ai-config", aiConfigAPI.withWikiScope(false, aiConfigAPI.get))
+				r.Put("/admin/ai-config", aiConfigAPI.withWikiScope(false, aiConfigAPI.update))
+				r.Post("/admin/ai-config/test", aiConfigAPI.withWikiScope(false, aiConfigAPI.test))
+				r.Get("/account/ai-config", aiConfigAPI.withWikiScope(true, aiConfigAPI.get))
+				r.Put("/account/ai-config", aiConfigAPI.withWikiScope(true, aiConfigAPI.update))
+				r.Post("/account/ai-config/test", aiConfigAPI.withWikiScope(true, aiConfigAPI.test))
 			}
 		})
 	}

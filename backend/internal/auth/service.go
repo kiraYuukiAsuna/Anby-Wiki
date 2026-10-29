@@ -443,7 +443,7 @@ func (s *Service) resolveActorPrincipal(
 	}
 	var principal Principal
 	err := s.pool.QueryRow(ctx, `SELECT
-		a.id,w.id,w.name,n.id,a.actor_type,a.display_name,
+		a.id,w.id,COALESCE(a.wiki_id,$3),w.name,n.id,a.actor_type,a.display_name,
 		COALESCE(la.username,'')
 		FROM actor a
 		JOIN wiki_site w ON w.id=$2
@@ -464,8 +464,8 @@ func (s *Service) resolveActorPrincipal(
 					WHERE ps.actor_id=a.id AND p.wiki_id=w.id
 					  AND p.deleted_at IS NULL
 				)
-			)`, actorID, targetWikiID).Scan(
-		&principal.ActorID, &principal.WikiID, &principal.WikiName,
+			)`, actorID, targetWikiID, uuid.Nil).Scan(
+		&principal.ActorID, &principal.WikiID, &principal.HomeWikiID, &principal.WikiName,
 		&principal.MainNamespaceID,
 		&principal.ActorType, &principal.DisplayName, &principal.Username,
 	)

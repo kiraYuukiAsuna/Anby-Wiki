@@ -7,7 +7,7 @@ All URIs are relative to *http://localhost:3000*
 | [**addProposalOperation**](GovernanceApi.md#addproposaloperation) | **POST** /api/v1/proposals/{id}/operations | 向 draft Proposal 追加 v1 Operation |
 | [**applyNextBulkReviewWave**](GovernanceApi.md#applynextbulkreviewwave) | **POST** /api/v1/bulk-review-batches/{id}/apply-next-wave | 逐 Proposal 调用既有 Apply 边界应用下一固定 wave |
 | [**applyProposal**](GovernanceApi.md#applyproposal) | **POST** /api/v1/proposals/{id}/apply | 原子应用已批准 Proposal |
-| [**archiveRevisionSnapshots**](GovernanceApi.md#archiverevisionsnapshotsoperation) | **POST** /api/v1/revision-storage/archive | 手动执行一批到期 Revision 快照归档 |
+| [**archiveRevisionSnapshots**](GovernanceApi.md#archiverevisionsnapshotsoperation) | **POST** /api/v1/revision-storage/archive | 手动归档当前账户 Wiki 的一批到期 Revision 快照 |
 | [**assignChangeTag**](GovernanceApi.md#assignchangetagoperation) | **POST** /api/v1/change-tags/{id}/assignments | 给 Revision、Proposal 或 AuditEvent 追加不可变标签 |
 | [**createBulkReviewBatch**](GovernanceApi.md#createbulkreviewbatchoperation) | **POST** /api/v1/bulk-review-batches | 创建并冻结批量风险审核的抽样集合与 Apply wave |
 | [**createChangeTag**](GovernanceApi.md#createchangetagoperation) | **POST** /api/v1/change-tags | 创建不可变 ChangeTag |
@@ -19,7 +19,7 @@ All URIs are relative to *http://localhost:3000*
 | [**finalizeBulkReviewBatch**](GovernanceApi.md#finalizebulkreviewbatch) | **POST** /api/v1/bulk-review-batches/{id}/finalize | 抽样通过后批准未抽样 Proposal 并冻结审核结果 |
 | [**getBulkReviewBatch**](GovernanceApi.md#getbulkreviewbatch) | **GET** /api/v1/bulk-review-batches/{id} | 读取批量审核、Proposal 决策与固定 wave |
 | [**getProposal**](GovernanceApi.md#getproposal) | **GET** /api/v1/proposals/{id} | 读取 Proposal、Operation 与冲突 |
-| [**getRevisionStorageStats**](GovernanceApi.md#getrevisionstoragestats) | **GET** /api/v1/revision-storage | 查看 Revision 快照冷热分层状态 |
+| [**getRevisionStorageStats**](GovernanceApi.md#getrevisionstoragestats) | **GET** /api/v1/revision-storage | 查看当前账户 Wiki 的 Revision 快照冷热分层状态 |
 | [**listAITrustProfiles**](GovernanceApi.md#listaitrustprofiles) | **GET** /api/v1/ai-trust-profiles | 列出 AI/Import Actor 的信任与抽样策略 |
 | [**listAuditEvents**](GovernanceApi.md#listauditevents) | **GET** /api/v1/audit-events | 分页查询当前 Wiki 的不可变审计流 |
 | [**listBulkReviewAuditEvents**](GovernanceApi.md#listbulkreviewauditevents) | **GET** /api/v1/bulk-review-batches/{id}/audit-events | 查询批量审核、决策、暂停和 wave Apply 审计 |
@@ -271,9 +271,9 @@ example().catch(console.error);
 
 > SnapshotArchiveResult archiveRevisionSnapshots(archiveRevisionSnapshotsRequest)
 
-手动执行一批到期 Revision 快照归档
+手动归档当前账户 Wiki 的一批到期 Revision 快照
 
-仅管理员可执行。对象上传与校验完成后，Page 领域服务才把非当前 hot 快照原子切换到 cold；当前 Revision 永远保留在 hot tier。
+需要当前账户拥有的 Wiki 的管理员权限，选择协作 Wiki 不改变归档范围。 仅处理该 Wiki 独占引用的到期历史快照。对象上传与校验完成后， Page 领域服务在行锁内复核当前版本和跨 Wiki 引用，再把 hot 快照原子切换到 cold。 当前 Revision 永远保留在 hot tier。
 
 ### Example
 
@@ -1185,9 +1185,9 @@ example().catch(console.error);
 
 > RevisionStorageStats getRevisionStorageStats()
 
-查看 Revision 快照冷热分层状态
+查看当前账户 Wiki 的 Revision 快照冷热分层状态
 
-仅管理员可见。统计不可变 ContentSnapshot 的物理存储层、 到期候选数与归档能力，不返回 AST 正文或对象存储键。
+需要当前账户拥有的 Wiki 的管理员权限。仅统计该 Wiki 的 Revision 引用的 不可变 ContentSnapshot，每个快照只计一次；选择协作 Wiki 不改变统计范围。 到期候选排除当前版本和其他 Wiki 共用的快照，不返回 AST 正文或对象存储键。
 
 ### Example
 
@@ -1241,7 +1241,7 @@ This endpoint does not need any parameter.
 ### HTTP response details
 | Status code | Description | Response headers |
 |-------------|-------------|------------------|
-| **200** | 当前冷热分层统计 |  -  |
+| **200** | 当前账户 Wiki 的冷热分层统计 |  -  |
 | **401** | 未认证 |  -  |
 | **403** | 已认证但无权限 |  -  |
 | **500** | 服务端内部错误 |  -  |

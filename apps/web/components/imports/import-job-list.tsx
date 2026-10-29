@@ -210,7 +210,7 @@ function ImportJobRow({ job }: { job: ImportJob }) {
 
 export function ImportJobList() {
   const [filter, setFilter] = useState<Filter>("all");
-  const { isAuthenticated, isLoading: sessionLoading } = useSession();
+  const { session, isAuthenticated, isLoading: sessionLoading } = useSession();
   const { data, error, isLoading, isValidating, mutate, size, setSize } =
     useSWRInfinite<ImportJobListPage>(
       (pageIndex, previousPage) => {
@@ -218,11 +218,12 @@ export function ImportJobList() {
         if (pageIndex > 0 && !previousPage?.nextCursor) return null;
         return [
           "import-jobs",
+          session?.actorId,
           filter,
           pageIndex === 0 ? "" : (previousPage?.nextCursor ?? ""),
         ] as const;
       },
-      ([, selectedFilter, cursor]) =>
+      ([, , selectedFilter, cursor]) =>
         importsApi().listImportJobs({
           cursor: typeof cursor === "string" && cursor ? cursor : undefined,
           pageSize: PAGE_SIZE,

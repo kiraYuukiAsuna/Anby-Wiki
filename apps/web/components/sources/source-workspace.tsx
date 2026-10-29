@@ -1,6 +1,7 @@
 "use client";
 
 import Link from "next/link";
+import { WorkspaceLink } from "@/components/workspace-link";
 import {
   ArrowLeft,
   ArrowRight,
@@ -617,10 +618,10 @@ export function SourceWorkspace({ id }: { id: string }) {
             <FileClock className="mx-auto size-8 text-muted-foreground" aria-hidden />
             <h3 className="mt-4 font-semibold">尚无来源版本</h3>
             <Button asChild variant="outline" className="mt-5">
-              <Link href="/imports">
+              <WorkspaceLink href="/imports">
                 前往导入中心
                 <ArrowRight aria-hidden />
-              </Link>
+              </WorkspaceLink>
             </Button>
           </div>
         ) : null}

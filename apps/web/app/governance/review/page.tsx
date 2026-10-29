@@ -1,4 +1,4 @@
-import Link from "next/link";
+import { WorkspaceLink } from "@/components/workspace-link";
 import { BadgeCheck, Plus } from "lucide-react";
 
 import { BulkReviewHub } from "@/components/governance/bulk-review-hub";
@@ -12,16 +12,16 @@ export default function ReviewQueuePage() {
         <h1 className="text-3xl font-semibold">人工审核队列</h1>
         <div className="flex flex-wrap gap-2">
           <Button variant="outline" size="sm" asChild>
-            <Link href="/governance/apply">
+            <WorkspaceLink href="/governance/apply">
               <BadgeCheck aria-hidden />
               待应用
-            </Link>
+            </WorkspaceLink>
           </Button>
           <Button size="sm" asChild>
-            <Link href="/governance/proposals/new">
+            <WorkspaceLink href="/governance/proposals/new">
               <Plus aria-hidden />
               新建提案
-            </Link>
+            </WorkspaceLink>
           </Button>
         </div>
       </header>

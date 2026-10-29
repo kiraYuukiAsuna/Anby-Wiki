@@ -8,6 +8,7 @@ Name | Type
 ------------ | -------------
 `actorId` | string
 `wikiId` | string
+`homeWikiId` | string
 `wikiName` | string
 `mainNamespaceId` | string
 `actorType` | string
@@ -24,6 +25,7 @@ import type { AuthSession } from ''
 const example = {
   "actorId": null,
   "wikiId": null,
+  "homeWikiId": null,
   "wikiName": null,
   "mainNamespaceId": null,
   "actorType": null,

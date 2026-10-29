@@ -1,6 +1,6 @@
 "use client";
 
-import Link from "next/link";
+import { WorkspaceLink } from "@/components/workspace-link";
 import { useRouter } from "next/navigation";
 import { useState } from "react";
 import {
@@ -30,6 +30,8 @@ import {
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { governanceApi } from "@/lib/api";
+import { useSession } from "@/lib/auth";
+import { workspaceAccessNotice } from "@/lib/workspace-access";
 import { compactId } from "@/lib/display-id";
 import {
   isIdentityConflictMessage,
@@ -42,13 +44,16 @@ type PendingAction = "submit" | "apply" | "rollback" | null;
 
 export function ProposalActions({ proposal }: { proposal: Proposal }) {
   const router = useRouter();
+  const { session } = useSession();
+  const canApply = !workspaceAccessNotice("/governance/apply", session);
   const [pending, setPending] = useState<PendingAction>(null);
   const [rollbackOpen, setRollbackOpen] = useState(false);
   const [confirmation, setConfirmation] = useState("");
-  const canRollback =
+  const hasAppliedBatch =
     proposal.status === "applied" &&
     proposal.changeBatchStatus === "applied" &&
     Boolean(proposal.changeBatchId);
+  const canRollback = canApply && hasAppliedBatch;
 
   const submit = async () => {
     setPending("submit");
@@ -125,7 +130,7 @@ export function ProposalActions({ proposal }: { proposal: Proposal }) {
         </div>
 
         <div className="flex shrink-0 flex-wrap items-center gap-2">
-          {proposal.status === "draft" ? (
+          {proposal.status === "draft" && proposal.createdBy === session?.actorId ? (
             <Button disabled={pending !== null} onClick={() => void submit()}>
               {pending === "submit" ? (
                 <LoaderCircle aria-hidden className="animate-spin" />
@@ -139,26 +144,28 @@ export function ProposalActions({ proposal }: { proposal: Proposal }) {
           {proposal.status === "submitted" ||
           proposal.status === "in_review" ? (
             <Button variant="outline" asChild>
-              <Link href="/governance/review">
+              <WorkspaceLink href="/governance/review">
                 查看审核队列
                 <ArrowRight aria-hidden />
-              </Link>
+              </WorkspaceLink>
             </Button>
           ) : null}
 
           {proposal.status === "approved" ? (
             <>
               <Button variant="outline" asChild>
-                <Link href="/governance/apply">打开待应用队列<ArrowRight aria-hidden /></Link>
+                <WorkspaceLink href="/governance/apply">打开待应用队列<ArrowRight aria-hidden /></WorkspaceLink>
               </Button>
-              <Button disabled={pending !== null} onClick={() => void apply()}>
-                {pending === "apply" ? (
-                  <LoaderCircle aria-hidden className="animate-spin" />
-                ) : (
-                  <CheckCircle2 aria-hidden />
-                )}
-                原子应用
-              </Button>
+              {canApply ? (
+                <Button disabled={pending !== null} onClick={() => void apply()}>
+                  {pending === "apply" ? (
+                    <LoaderCircle aria-hidden className="animate-spin" />
+                  ) : (
+                    <CheckCircle2 aria-hidden />
+                  )}
+                  原子应用
+                </Button>
+              ) : null}
             </>
           ) : null}
 
@@ -182,7 +189,7 @@ export function ProposalActions({ proposal }: { proposal: Proposal }) {
         </div>
       </div>
 
-      {proposal.status === "applied" && !canRollback ? (
+      {proposal.status === "applied" && !hasAppliedBatch ? (
         <div className="border-t border-amber-500/25 bg-amber-500/5 px-4 py-2.5 text-xs text-amber-800 dark:text-amber-300">
           当前响应没有可用的 applied ChangeBatch，已禁用回滚入口以避免错误操作。
         </div>

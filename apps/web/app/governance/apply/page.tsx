@@ -1,4 +1,4 @@
-import Link from "next/link";
+import { WorkspaceLink } from "@/components/workspace-link";
 import { ArrowLeft, BadgeCheck } from "lucide-react";
 
 import { ApplyQueue } from "@/components/governance/apply-queue";
@@ -13,7 +13,7 @@ export default function ApplyQueuePage() {
           <h1 className="text-3xl font-semibold">待应用</h1>
         </div>
         <Button asChild variant="outline" size="sm">
-          <Link href="/governance/review"><ArrowLeft aria-hidden />审核队列</Link>
+          <WorkspaceLink href="/governance/review"><ArrowLeft aria-hidden />审核队列</WorkspaceLink>
         </Button>
       </header>
       <ApplyQueue />

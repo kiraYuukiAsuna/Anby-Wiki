@@ -11,6 +11,7 @@ import {
   TriangleAlert,
 } from "lucide-react";
 import Link from "next/link";
+import { WorkspaceLink } from "@/components/workspace-link";
 import { useRouter } from "next/navigation";
 import { useRef, useState } from "react";
 import { toast } from "sonner";
@@ -766,7 +767,7 @@ export function ProposalOperationStudio() {
             当前 Wiki 与主命名空间会自动填入；其余以 0000 开头的 UUID 必须替换。
           </p>
         </div>
-        <Link
+        <WorkspaceLink
           href="/governance/review"
           className="group flex items-center justify-between rounded-2xl border bg-muted/30 p-4 text-sm font-semibold transition hover:border-primary/20 hover:bg-primary/5"
         >
@@ -775,7 +776,7 @@ export function ProposalOperationStudio() {
             className="size-4 transition-transform group-hover:translate-x-0.5"
             aria-hidden
           />
-        </Link>
+        </WorkspaceLink>
       </aside>
     </div>
   );

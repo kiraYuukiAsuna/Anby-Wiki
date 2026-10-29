@@ -109,9 +109,11 @@ function Metric({
 }
 
 function ArchiveDialog({
+  actorId,
   stats,
   onComplete,
 }: {
+  actorId: string;
   stats: RevisionStorageStats;
   onComplete: (result: SnapshotArchiveResult) => Promise<void>;
 }) {
@@ -120,7 +122,7 @@ function ArchiveDialog({
   const [limit, setLimit] = useState(String(stats.defaultBatchSize));
   const [validationError, setValidationError] = useState("");
   const archive = useSWRMutation(
-    "governance:revision-storage:archive",
+    ["governance:revision-storage:archive", actorId],
     async () => {
       const parsed = archiveLimitSchema.safeParse(limit);
       if (!parsed.success) {
@@ -179,8 +181,8 @@ function ArchiveDialog({
         <DialogHeader>
           <DialogTitle>迁移到冷存储</DialogTitle>
           <DialogDescription>
-            系统会先上传并校验内容寻址对象，再原子切换数据库中的物理层标记。
-            当前版本不会成为候选，历史读取仍会透明回源。
+            仅归档当前账户 Wiki 的到期历史快照，当前版本及其他 Wiki 共用的快照会保留。
+            归档后仍可阅读历史版本。
           </DialogDescription>
         </DialogHeader>
 
@@ -246,8 +248,11 @@ function ArchiveDialog({
 
 export function RevisionStorageWorkspace() {
   const session = useSession();
+  const actorId = session.session?.actorId;
   const storage = useSWR(
-    session.isAuthenticated ? "governance:revision-storage" : null,
+    session.isAuthenticated && actorId
+      ? ["governance:revision-storage", actorId]
+      : null,
     () => governanceApi().getRevisionStorageStats(),
     { shouldRetryOnError: false, revalidateOnFocus: true },
   );
@@ -273,7 +278,7 @@ export function RevisionStorageWorkspace() {
         <LockKeyhole className="mx-auto size-8 text-muted-foreground" aria-hidden />
         <h2 className="mt-4 text-lg font-semibold">登录后查看存储治理</h2>
         <p className="mt-2 text-sm text-muted-foreground">
-          该页面展示站点级存储容量和运维动作，只向管理员开放。
+          该页面仅展示当前账户 Wiki 的存储容量和归档状态。
         </p>
         <Button asChild className="mt-5">
           <Link href={LOGIN_PATH}>前往登录</Link>
@@ -292,8 +297,7 @@ export function RevisionStorageWorkspace() {
           需要管理员权限
         </h2>
         <p className="mt-2 max-w-2xl text-sm leading-6 text-amber-900/70">
-          Revision 历史仍可正常阅读；容量统计、保留期和手动归档仅供 admin
-          角色操作。
+          需要当前账户 Wiki 的管理员权限才能查看容量统计和执行手动归档。
         </p>
       </div>
     );
@@ -317,7 +321,7 @@ export function RevisionStorageWorkspace() {
       </div>
     );
   }
-  if (!storage.data) {
+  if (!storage.data || !actorId) {
     return (
       <div className="grid gap-3 sm:grid-cols-3">
         {[0, 1, 2].map((item) => (
@@ -333,6 +337,9 @@ export function RevisionStorageWorkspace() {
   const stats = storage.data;
   return (
     <div className="space-y-8">
+      <p className="text-sm text-muted-foreground">
+        仅统计当前账户拥有的 Wiki，切换协作 Wiki 不会改变此处的归档范围。
+      </p>
       <section className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
         <Metric
           icon={Flame}
@@ -443,6 +450,8 @@ export function RevisionStorageWorkspace() {
           ) : null}
           <div className="mt-5 flex flex-col gap-2">
             <ArchiveDialog
+              key={actorId}
+              actorId={actorId}
               stats={stats}
               onComplete={async () => {
                 await storage.mutate();

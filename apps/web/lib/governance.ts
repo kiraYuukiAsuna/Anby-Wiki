@@ -10,6 +10,7 @@ import { serverApiOptions } from "./server-api";
 
 export type ProposalWorkspaceResult =
   | { kind: "ok"; proposal: Proposal; preview: ProposalPreview | null }
+  | { kind: "forbidden" }
   | { kind: "not_found" };
 
 export async function fetchProposalWorkspace(
@@ -40,6 +41,9 @@ export async function fetchProposalWorkspace(
       : null;
     return { kind: "ok", proposal, preview };
   } catch (error) {
+    if (error instanceof ResponseError && error.response.status === 403) {
+      return { kind: "forbidden" };
+    }
     if (error instanceof ResponseError && error.response.status === 404) {
       return { kind: "not_found" };
     }

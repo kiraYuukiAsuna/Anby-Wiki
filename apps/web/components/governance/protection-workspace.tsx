@@ -131,14 +131,14 @@ export function ProtectionWorkspace({
 
   const initialPage = useSWR(
     initialPageId && uuidSchema.safeParse(initialPageId).success
-      ? ["protection:initial-page", initialPageId]
+      ? ["protection:initial-page", session.session?.actorId, session.session?.wikiId, initialPageId]
       : null,
     () => readingApi().getPageByID({ id: initialPageId! }),
     { revalidateOnFocus: false },
   );
   const catalog = useSWR(
     session.isAuthenticated
-      ? ["governance:protections", initialPageId ?? ""]
+      ? ["governance:protections", session.session?.actorId, session.session?.wikiId, initialPageId ?? ""]
       : null,
     async () => {
       const [rules, roles] = await Promise.all([
@@ -155,7 +155,7 @@ export function ProtectionWorkspace({
 
   const pageSearch = useSWR(
     scope === "page" && debouncedQuery
-      ? ["protection:page-search", debouncedQuery]
+      ? ["protection:page-search", session.session?.actorId, session.session?.wikiId, debouncedQuery]
       : null,
     () =>
       searchApi().searchPages({

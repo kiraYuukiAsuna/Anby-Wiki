@@ -40,6 +40,12 @@ export interface AuthSession {
      */
     wikiId: string;
     /**
+     * 账户所属 Wiki；切换协作 Wiki 时保持不变。无所属 Wiki 的系统 Actor 返回零 UUID。
+     * @type {string}
+     * @memberof AuthSession
+     */
+    homeWikiId: string;
+    /**
      *
      * @type {string}
      * @memberof AuthSession
@@ -96,6 +102,7 @@ export type AuthSessionMethodEnum = typeof AuthSessionMethodEnum[keyof typeof Au
 export function instanceOfAuthSession(value: object): value is AuthSession {
     if ((!('actorId' in (value as Record<string, any>)) && !('actor_id' in (value as Record<string, any>))) || ((value as Record<string, any>)['actorId'] === undefined && (value as Record<string, any>)['actor_id'] === undefined)) return false;
     if ((!('wikiId' in (value as Record<string, any>)) && !('wiki_id' in (value as Record<string, any>))) || ((value as Record<string, any>)['wikiId'] === undefined && (value as Record<string, any>)['wiki_id'] === undefined)) return false;
+    if ((!('homeWikiId' in (value as Record<string, any>)) && !('home_wiki_id' in (value as Record<string, any>))) || ((value as Record<string, any>)['homeWikiId'] === undefined && (value as Record<string, any>)['home_wiki_id'] === undefined)) return false;
     if ((!('wikiName' in (value as Record<string, any>)) && !('wiki_name' in (value as Record<string, any>))) || ((value as Record<string, any>)['wikiName'] === undefined && (value as Record<string, any>)['wiki_name'] === undefined)) return false;
     if ((!('mainNamespaceId' in (value as Record<string, any>)) && !('main_namespace_id' in (value as Record<string, any>))) || ((value as Record<string, any>)['mainNamespaceId'] === undefined && (value as Record<string, any>)['main_namespace_id'] === undefined)) return false;
     if ((!('actorType' in (value as Record<string, any>)) && !('actor_type' in (value as Record<string, any>))) || ((value as Record<string, any>)['actorType'] === undefined && (value as Record<string, any>)['actor_type'] === undefined)) return false;
@@ -117,6 +124,7 @@ export function AuthSessionFromJSONTyped(json: any, ignoreDiscriminator: boolean
 
         'actorId': json['actor_id'],
         'wikiId': json['wiki_id'],
+        'homeWikiId': json['home_wiki_id'],
         'wikiName': json['wiki_name'],
         'mainNamespaceId': json['main_namespace_id'],
         'actorType': json['actor_type'],
@@ -139,6 +147,7 @@ export function AuthSessionToJSONTyped(value?: AuthSession | null, ignoreDiscrim
 
         'actor_id': value['actorId'],
         'wiki_id': value['wikiId'],
+        'home_wiki_id': value['homeWikiId'],
         'wiki_name': value['wikiName'],
         'main_namespace_id': value['mainNamespaceId'],
         'actor_type': value['actorType'],

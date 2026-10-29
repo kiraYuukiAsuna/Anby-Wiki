@@ -433,7 +433,7 @@ paths:
       operationId: getAccountAIConfig
       tags: [account]
       summary: 读取当前账号的模型配置
-      description: API Key 永不返回，只暴露是否已配置。
+      description: 仅读取当前账号拥有的私人 Wiki 配置，选择协作 Wiki 不改变范围。API Key 永不返回，只暴露是否已配置。
       security:
         - sessionCookie: []
       responses:
@@ -450,7 +450,7 @@ paths:
       tags: [account]
       summary: 保存当前账号的模型配置
       description: >-
-        模型配置写入当前账号对应的私有 Wiki。首次保存必须提供 api_key；
+        模型配置写入当前账号拥有的私人 Wiki，选择协作 Wiki 不改变范围。首次保存必须提供 api_key；
         后续省略或传空字符串表示保留现有密钥。密钥使用部署主密钥加密后持久化。
       security:
         - sessionCookie: []
@@ -474,7 +474,7 @@ paths:
       operationId: testAccountAIConfig
       tags: [account]
       summary: 测试当前账号已保存的模型配置
-      description: 不接受临时密钥或 Prompt；仅返回供应商、模型与端到端耗时。
+      description: 使用当前账号拥有的私人 Wiki 配置，选择协作 Wiki 不改变范围。不接受临时密钥或 Prompt；仅返回供应商、模型与端到端耗时。
       security:
         - sessionCookie: []
       responses:
@@ -2382,16 +2382,17 @@ paths:
     get:
       operationId: getRevisionStorageStats
       tags: [governance]
-      summary: 查看 Revision 快照冷热分层状态
+      summary: 查看当前账户 Wiki 的 Revision 快照冷热分层状态
       description: >-
-        仅管理员可见。统计不可变 ContentSnapshot 的物理存储层、
-        到期候选数与归档能力，不返回 AST 正文或对象存储键。
+        需要当前账户拥有的 Wiki 的管理员权限。仅统计该 Wiki 的 Revision 引用的
+        不可变 ContentSnapshot，每个快照只计一次；选择协作 Wiki 不改变统计范围。
+        到期候选排除当前版本和其他 Wiki 共用的快照，不返回 AST 正文或对象存储键。
       security:
         - sessionCookie: []
         - cliBearer: []
       responses:
         "200":
-          description: 当前冷热分层统计
+          description: 当前账户 Wiki 的冷热分层统计
           content:
             application/json:
               schema:
@@ -2403,10 +2404,12 @@ paths:
     post:
       operationId: archiveRevisionSnapshots
       tags: [governance]
-      summary: 手动执行一批到期 Revision 快照归档
+      summary: 手动归档当前账户 Wiki 的一批到期 Revision 快照
       description: >-
-        仅管理员可执行。对象上传与校验完成后，Page 领域服务才把非当前
-        hot 快照原子切换到 cold；当前 Revision 永远保留在 hot tier。
+        需要当前账户拥有的 Wiki 的管理员权限，选择协作 Wiki 不改变归档范围。
+        仅处理该 Wiki 独占引用的到期历史快照。对象上传与校验完成后，
+        Page 领域服务在行锁内复核当前版本和跨 Wiki 引用，再把 hot 快照原子切换到 cold。
+        当前 Revision 永远保留在 hot tier。
       security:
         - sessionCookie: []
         - cliBearer: []
@@ -4957,7 +4960,7 @@ components:
           type: string
     AuthSession:
       type: object
-      required: [actor_id, wiki_id, wiki_name, main_namespace_id, actor_type, display_name, method, wikis]
+      required: [actor_id, wiki_id, home_wiki_id, wiki_name, main_namespace_id, actor_type, display_name, method, wikis]
       properties:
         actor_id:
           type: string
@@ -4965,6 +4968,10 @@ components:
         wiki_id:
           type: string
           format: uuid
+        home_wiki_id:
+          type: string
+          format: uuid
+          description: 账户所属 Wiki；切换协作 Wiki 时保持不变。无所属 Wiki 的系统 Actor 返回零 UUID。
         wiki_name:
           type: string
         main_namespace_id:
@@ -6759,14 +6766,14 @@ components:
           enum: [json_object, json_schema]
         max_input_tokens:
           type: integer
-          minimum: 4096
-          maximum: 2000000
+          minimum: 12800
+          maximum: 20000000
           default: 128000
           description: 模型上下文允许的最大输入 Token；Worker 据此预留 Prompt/输出空间并分批抽取。
         chunk_characters:
           type: integer
-          minimum: 1000
-          maximum: 128000
+          minimum: 12800
+          maximum: 20000000
           default: 32000
           description: 来源持久化分片的最大 Unicode 字符数；新解析的来源版本使用此值。
         auto_approve_import_plans:
@@ -6810,13 +6817,13 @@ components:
           enum: [json_object, json_schema]
         max_input_tokens:
           type: integer
-          minimum: 4096
-          maximum: 2000000
+          minimum: 12800
+          maximum: 20000000
           default: 128000
         chunk_characters:
           type: integer
-          minimum: 1000
-          maximum: 128000
+          minimum: 12800
+          maximum: 20000000
           default: 32000
         auto_approve_import_plans:
           type: boolean

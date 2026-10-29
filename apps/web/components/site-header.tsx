@@ -7,6 +7,7 @@ import { AccountMenu } from "@/components/account-menu";
 import { GlobalSearchCommand } from "@/components/global-search-command";
 import { Button } from "@/components/ui/button";
 import { WikiSwitcher } from "@/components/wiki-switcher";
+import { WorkspaceLink } from "@/components/workspace-link";
 import { useSession } from "@/lib/auth";
 
 export function SiteHeader() {
@@ -44,16 +45,16 @@ export function SiteHeader() {
           asChild
           className="hidden gap-1.5 xl:inline-flex"
         >
-          <Link href="/imports">
+          <WorkspaceLink href="/imports">
             <Bot aria-hidden />
             AI 导入
-          </Link>
+          </WorkspaceLink>
         </Button>
         <Button size="sm" asChild className="hidden gap-1.5 sm:inline-flex">
-          <Link href="/new">
+          <WorkspaceLink href="/new">
             <Plus aria-hidden />
             创建
-          </Link>
+          </WorkspaceLink>
         </Button>
         <AccountMenu />
       </div>

@@ -1,4 +1,5 @@
 import Link from "next/link";
+import { WorkspaceLink } from "@/components/workspace-link";
 import { BookOpenText, Search, SquarePen } from "lucide-react";
 
 import { PageDirectory } from "@/components/page-directory";
@@ -17,7 +18,7 @@ export default function PagesPage() {
         </div>
         <div className="flex gap-2">
           <Button variant="outline" asChild><Link href="/explore"><Search aria-hidden />全文搜索</Link></Button>
-          <Button asChild><Link href="/new"><SquarePen aria-hidden />创建页面</Link></Button>
+          <Button asChild><WorkspaceLink href="/new"><SquarePen aria-hidden />创建页面</WorkspaceLink></Button>
         </div>
       </header>
       <WikiSearchForm id="page-directory-search" className="mb-8" />

@@ -52,6 +52,23 @@ func (s *AuthorizationService) Check(ctx context.Context, actorID, wikiID uuid.U
 	return s.CheckTx(ctx, nil, actorID, wikiID, action, pageID)
 }
 
+// CheckAccountManage authorizes management of the actor's own Wiki, independent
+// of the Wiki selected for collaboration.
+func (s *AuthorizationService) CheckAccountManage(ctx context.Context, actorID uuid.UUID) (uuid.UUID, error) {
+	var wikiID uuid.UUID
+	err := s.pool.QueryRow(ctx, `SELECT id FROM wiki_site WHERE owner_actor_id=$1`, actorID).Scan(&wikiID)
+	if errors.Is(err, pgx.ErrNoRows) {
+		return uuid.Nil, ErrPermissionDenied
+	}
+	if err != nil {
+		return uuid.Nil, err
+	}
+	if err := s.Check(ctx, actorID, wikiID, ActionManage, nil); err != nil {
+		return uuid.Nil, err
+	}
+	return wikiID, nil
+}
+
 func (s *AuthorizationService) CheckReadPage(ctx context.Context, actorID, wikiID, pageID uuid.UUID) error {
 	var actorType, status string
 	if err := s.pool.QueryRow(ctx, `SELECT actor_type,status FROM actor WHERE id=$1`, actorID).Scan(&actorType, &status); err != nil {

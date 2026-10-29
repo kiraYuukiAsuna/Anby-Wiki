@@ -1,6 +1,7 @@
 "use client";
 
 import Link from "next/link";
+import { WorkspaceLink } from "@/components/workspace-link";
 import {
   ArrowRight,
   BookText,
@@ -299,7 +300,7 @@ export function SourceLibrary() {
             <Inbox className="mx-auto size-8 text-muted-foreground" aria-hidden />
             <h3 className="mt-4 font-semibold">没有匹配来源</h3>
             <Button asChild variant="outline" className="mt-5">
-              <Link href="/imports">打开导入中心</Link>
+              <WorkspaceLink href="/imports">打开导入中心</WorkspaceLink>
             </Button>
           </div>
         ) : null}

@@ -1,6 +1,7 @@
 "use client";
 
 import Link from "next/link";
+import { WorkspaceLink } from "@/components/workspace-link";
 import {
   ArrowRight,
   Bot,
@@ -113,10 +114,10 @@ export function ApplyQueue() {
     (pageIndex, previousPage) => {
       if (!session.isAuthenticated) return null;
       if (pageIndex > 0 && !previousPage?.nextCursor) return null;
-      return ["governance:apply-queue", pageIndex === 0 ? "" : (previousPage?.nextCursor ?? "")] as const;
+      return ["governance:apply-queue", session.session?.actorId, session.session?.wikiId, pageIndex === 0 ? "" : (previousPage?.nextCursor ?? "")] as const;
     },
     (cacheKey) => {
-      const [, cursor] = cacheKey as readonly [string, string];
+      const [, , , cursor] = cacheKey as readonly [string, string, string, string];
       return governanceApi().listPendingApplyProposals({
         cursor: cursor || undefined,
         pageSize: PAGE_SIZE,
@@ -200,7 +201,7 @@ export function ApplyQueue() {
         <div className="mt-5 rounded-2xl border border-dashed px-6 py-14 text-center">
           <CircleDashed className="mx-auto size-8 text-muted-foreground" aria-hidden />
           <h3 className="mt-4 font-semibold">当前没有待应用提案</h3>
-          <Button asChild variant="outline" className="mt-5"><Link href="/governance/review">打开审核队列</Link></Button>
+          <Button asChild variant="outline" className="mt-5"><WorkspaceLink href="/governance/review">打开审核队列</WorkspaceLink></Button>
         </div>
       ) : null}
       {proposals.length ? (

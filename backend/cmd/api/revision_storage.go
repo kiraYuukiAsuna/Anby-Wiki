@@ -44,13 +44,12 @@ func (a *GovernanceAPI) revisionStorageStats(
 		governanceError(w, r, governance.ErrPermissionDenied)
 		return
 	}
-	if err := a.auth.Check(
-		r.Context(), actorID, wikiIDFromRequest(r), governance.ActionManage, nil,
-	); err != nil {
+	wikiID, err := a.auth.CheckAccountManage(r.Context(), actorID)
+	if err != nil {
 		governanceError(w, r, err)
 		return
 	}
-	stats, err := a.revisions.SnapshotStorageStats(r.Context())
+	stats, err := a.revisions.SnapshotStorageStats(r.Context(), wikiID)
 	if err != nil {
 		serviceError(w, r, err)
 		return
@@ -70,9 +69,8 @@ func (a *GovernanceAPI) archiveRevisionSnapshots(
 		governanceError(w, r, governance.ErrPermissionDenied)
 		return
 	}
-	if err := a.auth.Check(
-		r.Context(), actorID, wikiIDFromRequest(r), governance.ActionManage, nil,
-	); err != nil {
+	wikiID, err := a.auth.CheckAccountManage(r.Context(), actorID)
+	if err != nil {
 		governanceError(w, r, err)
 		return
 	}
@@ -87,8 +85,8 @@ func (a *GovernanceAPI) archiveRevisionSnapshots(
 		)
 		return
 	}
-	result, err := a.revisions.ArchiveRevisionSnapshots(
-		r.Context(), req.Limit,
+	result, err := a.revisions.ArchiveWikiRevisionSnapshots(
+		r.Context(), wikiID, req.Limit,
 	)
 	if err != nil {
 		serviceError(w, r, err)

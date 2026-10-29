@@ -1,6 +1,7 @@
 "use client";
 
 import Link from "next/link";
+import { WorkspaceLink } from "@/components/workspace-link";
 import {
   AlertTriangle,
   ArrowRight,
@@ -277,10 +278,10 @@ export function ProposalList() {
         </h2>
         <div className="flex gap-2">
           <Button asChild size="sm">
-            <Link href="/governance/proposals/new">
+            <WorkspaceLink href="/governance/proposals/new">
               <Plus aria-hidden />
               新建提案
-            </Link>
+            </WorkspaceLink>
           </Button>
           <Button
             type="button"
@@ -350,10 +351,10 @@ export function ProposalList() {
           </h3>
           <div className="mt-5 flex justify-center gap-2">
             <Button asChild>
-              <Link href="/governance/proposals/new">创建人工提案</Link>
+              <WorkspaceLink href="/governance/proposals/new">创建人工提案</WorkspaceLink>
             </Button>
             <Button asChild variant="outline">
-              <Link href="/imports">从资料导入</Link>
+              <WorkspaceLink href="/imports">从资料导入</WorkspaceLink>
             </Button>
           </div>
         </div>

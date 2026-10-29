@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { LockKeyhole } from "lucide-react";
+import { LockKeyhole, ShieldCheck } from "lucide-react";
 import { useEffect } from "react";
 import { usePathname, useRouter } from "next/navigation";
 
@@ -10,6 +10,7 @@ import { SiteHeader } from "@/components/site-header";
 import { SiteNavigation } from "@/components/site-navigation";
 import { Button } from "@/components/ui/button";
 import { useSession } from "@/lib/auth";
+import { workspaceAccessNotice } from "@/lib/workspace-access";
 
 const AUTH_PATHS = new Set(["/login", "/register"]);
 
@@ -95,6 +96,8 @@ function PrivateWikiShell({
     );
   }
 
+  const notice = workspaceAccessNotice(pathname, session);
+
   return (
     <>
       <a
@@ -107,8 +110,27 @@ function PrivateWikiShell({
       <div className="flex min-h-0 w-full min-w-0 flex-1">
         <SiteNavigation />
         <div className="flex min-w-0 flex-1 flex-col">
-          <main id="main-content" className="flex min-w-0 flex-1 flex-col">
-            {children}
+          <main
+            id="main-content"
+            className="flex min-w-0 flex-1 flex-col"
+            key={`${session.actorId}:${session.wikiId}`}
+          >
+            {notice ? (
+              <div className="mx-auto w-full max-w-7xl px-5 py-10 lg:px-8 lg:py-12">
+                <header className="mb-8 border-b border-border/75 pb-6">
+                  <h1 className="text-3xl font-semibold">{notice.title}</h1>
+                </header>
+                <div className="rounded-3xl border border-amber-200 bg-amber-50/65 p-8">
+                  <ShieldCheck className="size-7 text-amber-700" aria-hidden />
+                  <h2 className="mt-4 text-lg font-semibold text-amber-950">
+                    {notice.heading}
+                  </h2>
+                  <p className="mt-2 max-w-2xl text-sm leading-6 text-amber-900/70">
+                    {notice.message}
+                  </p>
+                </div>
+              </div>
+            ) : children}
           </main>
           <SiteFooter />
         </div>

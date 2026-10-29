@@ -299,7 +299,7 @@ function AuditCard({
 }
 
 export function AuditActivity() {
-  const { isAuthenticated, isLoading: sessionLoading } = useSession();
+  const { session, isAuthenticated, isLoading: sessionLoading } = useSession();
   const [aggregateType, setAggregateType] = useState("");
   const [eventType, setEventType] = useState("");
   const [tagKey, setTagKey] = useState("");
@@ -309,7 +309,7 @@ export function AuditActivity() {
   const [creating, setCreating] = useState(false);
 
   const tagState = useSWR(
-    "governance:change-tags",
+    ["governance:change-tags", session?.actorId, session?.wikiId],
     () => governanceApi().listChangeTags(),
     { revalidateOnFocus: false },
   );
@@ -319,6 +319,8 @@ export function AuditActivity() {
       if (pageIndex > 0 && !previousPage?.nextCursor) return null;
       return [
         "governance:audit",
+        session?.actorId,
+        session?.wikiId,
         aggregateType,
         eventType,
         tagKey,
@@ -326,7 +328,9 @@ export function AuditActivity() {
       ] as const;
     },
     (cacheKey) => {
-      const [, aggregate, event, tag, cursor] = cacheKey as readonly [
+      const [, , , aggregate, event, tag, cursor] = cacheKey as readonly [
+        string,
+        string,
         string,
         string,
         string,

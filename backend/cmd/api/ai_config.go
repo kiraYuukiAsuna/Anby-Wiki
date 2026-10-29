@@ -21,10 +21,37 @@ import (
 type AIConfigAPI struct {
 	service  *aiconfig.Service
 	provider ai.Provider
+	auth     *governance.AuthorizationService
 }
 
-func NewAIConfigAPI(service *aiconfig.Service, provider ai.Provider) *AIConfigAPI {
-	return &AIConfigAPI{service: service, provider: provider}
+func NewAIConfigAPI(service *aiconfig.Service, provider ai.Provider, auth *governance.AuthorizationService) *AIConfigAPI {
+	return &AIConfigAPI{service: service, provider: provider, auth: auth}
+}
+
+func (a *AIConfigAPI) withWikiScope(
+	account bool,
+	next func(http.ResponseWriter, *http.Request, uuid.UUID),
+) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		wikiID := wikiIDFromRequest(r)
+		if account {
+			actorID, ok := actorIDFrom(w, r)
+			if !ok {
+				return
+			}
+			if a.auth == nil {
+				aiConfigError(w, r, governance.ErrPermissionDenied)
+				return
+			}
+			var err error
+			wikiID, err = a.auth.CheckAccountManage(r.Context(), actorID)
+			if err != nil {
+				aiConfigError(w, r, err)
+				return
+			}
+		}
+		next(w, r, wikiID)
+	}
 }
 
 type updateAIConfigRequest struct {
@@ -65,12 +92,12 @@ type aiConfigTestResponse struct {
 	LatencyMS int64  `json:"latency_ms"`
 }
 
-func (a *AIConfigAPI) get(w http.ResponseWriter, r *http.Request) {
+func (a *AIConfigAPI) get(w http.ResponseWriter, r *http.Request, wikiID uuid.UUID) {
 	actorID, ok := actorIDFrom(w, r)
 	if !ok {
 		return
 	}
-	value, err := a.service.Get(r.Context(), wikiIDFromRequest(r), actorID)
+	value, err := a.service.Get(r.Context(), wikiID, actorID)
 	if err != nil {
 		aiConfigError(w, r, err)
 		return
@@ -78,7 +105,7 @@ func (a *AIConfigAPI) get(w http.ResponseWriter, r *http.Request) {
 	httpx.WriteJSON(w, http.StatusOK, toAIConfigResponse(value))
 }
 
-func (a *AIConfigAPI) update(w http.ResponseWriter, r *http.Request) {
+func (a *AIConfigAPI) update(w http.ResponseWriter, r *http.Request, wikiID uuid.UUID) {
 	actorID, ok := actorIDFrom(w, r)
 	if !ok {
 		return
@@ -88,7 +115,7 @@ func (a *AIConfigAPI) update(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	value, err := a.service.Update(r.Context(), aiconfig.UpdateParams{
-		WikiID: wikiIDFromRequest(r), ActorID: actorID, Enabled: request.Enabled,
+		WikiID: wikiID, ActorID: actorID, Enabled: request.Enabled,
 		Provider: request.Provider, BaseURL: request.BaseURL, Model: request.Model,
 		ResponseFormat:         request.ResponseFormat,
 		MaxInputTokens:         request.MaxInputTokens,
@@ -104,16 +131,16 @@ func (a *AIConfigAPI) update(w http.ResponseWriter, r *http.Request) {
 	httpx.WriteJSON(w, http.StatusOK, toAIConfigResponse(value))
 }
 
-func (a *AIConfigAPI) test(w http.ResponseWriter, r *http.Request) {
+func (a *AIConfigAPI) test(w http.ResponseWriter, r *http.Request, wikiID uuid.UUID) {
 	actorID, ok := actorIDFrom(w, r)
 	if !ok {
 		return
 	}
-	if _, err := a.service.Get(r.Context(), wikiIDFromRequest(r), actorID); err != nil {
+	if _, err := a.service.Get(r.Context(), wikiID, actorID); err != nil {
 		aiConfigError(w, r, err)
 		return
 	}
-	runtime, err := a.service.Runtime(r.Context(), wikiIDFromRequest(r))
+	runtime, err := a.service.Runtime(r.Context(), wikiID)
 	if err != nil {
 		aiConfigError(w, r, err)
 		return
@@ -124,7 +151,7 @@ func (a *AIConfigAPI) test(w http.ResponseWriter, r *http.Request) {
 	}
 	ctx, cancel := context.WithTimeout(r.Context(), timeout)
 	defer cancel()
-	ctx = ai.WithWikiID(ctx, wikiIDFromRequest(r))
+	ctx = ai.WithWikiID(ctx, wikiID)
 	started := time.Now()
 	sourceVersionID := uuid.MustParse("00000000-0000-4000-8000-000000000001")
 	result, err := a.provider.Generate(ctx, ai.ProviderRequest{

@@ -747,8 +747,8 @@ func TestAPIImportAndAIConfigE2E(t *testing.T) {
 	configBody := map[string]any{
 		"enabled": true, "provider": "openai-compatible",
 		"base_url": "https://api-e2e.invalid/v1", "model": "api-e2e-model",
-		"response_format": "json_schema", "max_input_tokens": 4096,
-		"chunk_characters": 1000, "auto_approve_import_plans": true,
+		"response_format": "json_schema", "max_input_tokens": 12800,
+		"chunk_characters": 12800, "auto_approve_import_plans": true,
 		"request_timeout_seconds": 5,
 		"max_attempts":            1, "api_key": "api-e2e-not-a-real-key",
 	}

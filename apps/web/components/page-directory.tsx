@@ -1,6 +1,7 @@
 "use client";
 
 import Link from "next/link";
+import { WorkspaceLink } from "@/components/workspace-link";
 import {
   ArrowRight,
   BookOpenText,
@@ -167,7 +168,7 @@ export function PageDirectory() {
           <h3 className="mt-4 font-semibold">
             {published ? "还没有已发布页面" : "没有未发布草稿"}
           </h3>
-          <Button asChild className="mt-5"><Link href="/new">创建页面</Link></Button>
+          <Button asChild className="mt-5"><WorkspaceLink href="/new">创建页面</WorkspaceLink></Button>
         </div>
       ) : null}
       {items.length ? (

@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 import Link from "next/link";
+import { WorkspaceLink } from "@/components/workspace-link";
 import { useRouter } from "next/navigation";
 import {
   ArrowRight,
@@ -53,7 +54,7 @@ export function ReviewQueue() {
   const [forceFull, setForceFull] = useState(false);
   const [creating, setCreating] = useState(false);
   const { data, error, mutate, isLoading } = useSWR(
-    session.isAuthenticated ? "governance:pending-reviews" : null,
+    session.isAuthenticated ? ["governance:pending-reviews", session.session?.actorId, session.session?.wikiId] : null,
     () => governanceApi().listReviewTasks({ pageSize: 100 }),
   );
   const [reasons, setReasons] = useState<Record<string, string>>({});
@@ -213,10 +214,10 @@ export function ReviewQueue() {
         />
         <p className="mt-3 text-sm text-muted-foreground">当前没有待审核提案。</p>
         <Button asChild variant="outline" size="sm" className="mt-4">
-          <Link href="/governance/apply">
+          <WorkspaceLink href="/governance/apply">
             查看已批准待应用
             <ArrowRight aria-hidden />
-          </Link>
+          </WorkspaceLink>
         </Button>
       </div>
     );

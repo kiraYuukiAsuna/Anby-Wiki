@@ -65,6 +65,7 @@ type SnapshotArchiveResult struct {
 
 func (s *Service) SnapshotStorageStats(
 	ctx context.Context,
+	wikiID uuid.UUID,
 ) (*RevisionStorageStats, error) {
 	cutoff := time.Now().UTC().Add(-s.archiveRetention)
 	result := &RevisionStorageStats{
@@ -84,9 +85,17 @@ func (s *Service) SnapshotStorageStats(
 					JOIN revision r ON r.id=p.current_revision_id
 					WHERE r.content_snapshot_id=content_snapshot.id
 				  )
+				  AND NOT EXISTS (
+					SELECT 1 FROM revision r JOIN page p ON p.id=r.page_id
+					WHERE r.content_snapshot_id=content_snapshot.id AND p.wiki_id<>$2
+				  )
 			),
 			min(created_at) FILTER (WHERE storage_tier='hot')
-		FROM content_snapshot`, cutoff,
+		FROM content_snapshot
+		WHERE EXISTS (
+			SELECT 1 FROM revision r JOIN page p ON p.id=r.page_id
+			WHERE r.content_snapshot_id=content_snapshot.id AND p.wiki_id=$2
+		)`, cutoff, wikiID,
 	).Scan(
 		&result.HotSnapshots, &result.ColdSnapshots,
 		&result.HotBytes, &result.ColdBytes,
@@ -103,6 +112,24 @@ func (s *Service) SnapshotStorageStats(
 // physical tier transition, so a DB row never points at an absent object.
 func (s *Service) ArchiveRevisionSnapshots(
 	ctx context.Context,
+	limit int,
+) (*SnapshotArchiveResult, error) {
+	return s.archiveRevisionSnapshots(ctx, nil, limit)
+}
+
+// ArchiveWikiRevisionSnapshots only archives snapshots exclusively referenced
+// by this Wiki. Shared snapshots must be left to the global Worker.
+func (s *Service) ArchiveWikiRevisionSnapshots(
+	ctx context.Context,
+	wikiID uuid.UUID,
+	limit int,
+) (*SnapshotArchiveResult, error) {
+	return s.archiveRevisionSnapshots(ctx, &wikiID, limit)
+}
+
+func (s *Service) archiveRevisionSnapshots(
+	ctx context.Context,
+	wikiID *uuid.UUID,
 	limit int,
 ) (*SnapshotArchiveResult, error) {
 	if s.snapshotStore == nil || s.snapshotEnv == "" {
@@ -127,8 +154,12 @@ func (s *Service) ArchiveRevisionSnapshots(
 			JOIN revision r ON r.id=p.current_revision_id
 			WHERE r.content_snapshot_id=cs.id
 		  )
+		  AND ($3::uuid IS NULL OR NOT EXISTS (
+			SELECT 1 FROM revision r JOIN page p ON p.id=r.page_id
+			WHERE r.content_snapshot_id=cs.id AND p.wiki_id<>$3
+		  ))
 		ORDER BY cs.created_at,cs.id
-		LIMIT $2`, cutoff, limit,
+		LIMIT $2`, cutoff, limit, wikiID,
 	)
 	if err != nil {
 		return nil, fmt.Errorf("page: list archive candidates: %w", err)
@@ -148,7 +179,7 @@ func (s *Service) ArchiveRevisionSnapshots(
 	}
 	result := &SnapshotArchiveResult{Examined: len(ids)}
 	for _, snapshotID := range ids {
-		archived, size, err := s.archiveSnapshot(ctx, snapshotID)
+		archived, size, err := s.archiveSnapshot(ctx, snapshotID, wikiID)
 		if err != nil {
 			return result, err
 		}
@@ -165,6 +196,7 @@ func (s *Service) ArchiveRevisionSnapshots(
 func (s *Service) archiveSnapshot(
 	ctx context.Context,
 	snapshotID uuid.UUID,
+	wikiID *uuid.UUID,
 ) (bool, int64, error) {
 	var raw []byte
 	var contentHash string
@@ -172,7 +204,17 @@ func (s *Service) archiveSnapshot(
 	err := s.repo.q(nil).QueryRow(ctx, `
 		SELECT ast_json,content_hash,size_bytes
 		FROM content_snapshot
-		WHERE id=$1 AND storage_tier='hot'`, snapshotID,
+		WHERE id=$1 AND storage_tier='hot'
+		  AND ($2::uuid IS NULL OR (
+			EXISTS (
+				SELECT 1 FROM revision r JOIN page p ON p.id=r.page_id
+				WHERE r.content_snapshot_id=content_snapshot.id AND p.wiki_id=$2
+			)
+			AND NOT EXISTS (
+				SELECT 1 FROM revision r JOIN page p ON p.id=r.page_id
+				WHERE r.content_snapshot_id=content_snapshot.id AND p.wiki_id<>$2
+			)
+		  ))`, snapshotID, wikiID,
 	).Scan(&raw, &contentHash, &sizeBytes)
 	if errors.Is(err, pgx.ErrNoRows) {
 		return false, 0, nil
@@ -243,17 +285,24 @@ func (s *Service) archiveSnapshot(
 		if lockedHash != contentHash || lockedSize != sizeBytes {
 			return ErrSnapshotIntegrity
 		}
-		var isCurrent bool
+		var eligible bool
 		if err := tx.QueryRow(ctx, `
-			SELECT EXISTS(
+			SELECT NOT EXISTS(
 				SELECT 1 FROM page p
 				JOIN revision r ON r.id=p.current_revision_id
 				WHERE r.content_snapshot_id=$1
-			)`, snapshotID,
-		).Scan(&isCurrent); err != nil {
+			)
+			AND EXISTS (
+				SELECT 1 FROM revision r WHERE r.content_snapshot_id=$1
+			)
+			AND ($2::uuid IS NULL OR NOT EXISTS (
+				SELECT 1 FROM revision r JOIN page p ON p.id=r.page_id
+				WHERE r.content_snapshot_id=$1 AND p.wiki_id<>$2
+			))`, snapshotID, wikiID,
+		).Scan(&eligible); err != nil {
 			return err
 		}
-		if isCurrent {
+		if !eligible {
 			return nil
 		}
 		tag, err := tx.Exec(ctx, `

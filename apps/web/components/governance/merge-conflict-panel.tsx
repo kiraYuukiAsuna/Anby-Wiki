@@ -1,6 +1,6 @@
 "use client";
 
-import Link from "next/link";
+import { WorkspaceLink } from "@/components/workspace-link";
 import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { toast } from "sonner";
@@ -52,7 +52,7 @@ export function MergeConflictPanel({ proposal }: { proposal: Proposal }) {
       </p>
       {hasIdentityConflict && proposal.importJobId ? (
         <Button className="mt-3" size="sm" variant="outline" asChild>
-          <Link href={`/imports/${proposal.importJobId}`}>查看原导入任务</Link>
+          <WorkspaceLink href={`/imports/${proposal.importJobId}`}>查看原导入任务</WorkspaceLink>
         </Button>
       ) : null}
       <div className="mt-4 space-y-4">

@@ -245,7 +245,7 @@ func main() {
 				logger.Error("装配 Semantic Kernel 客户端失败", slog.Any("error", kernelErr))
 				os.Exit(1)
 			}
-			aiConfigAPI = NewAIConfigAPI(aiConfigService, kernelProvider)
+			aiConfigAPI = NewAIConfigAPI(aiConfigService, kernelProvider, governanceAPI.auth)
 		}
 		governanceAPI.WithWorkingDocumentMerge(
 			governance.NewMergeWorkingDocumentService(

@@ -41,6 +41,8 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog";
 import { knowledgeApi, searchApi } from "@/lib/api";
+import { useSession } from "@/lib/auth";
+import { workspaceAccessNotice } from "@/lib/workspace-access";
 
 const SEARCH_DEBOUNCE_MS = 200;
 const SEARCH_LIMIT = 20;
@@ -118,6 +120,7 @@ const MATCH_LABEL: Record<PageSearchHit["matchedOn"], string> = {
 
 export function GlobalSearchCommand() {
   const router = useRouter();
+  const { session } = useSession();
   const [open, setOpen] = useState(false);
   const [query, setQuery] = useState("");
   const debouncedQuery = useDebouncedValue(query, SEARCH_DEBOUNCE_MS);
@@ -136,10 +139,10 @@ export function GlobalSearchCommand() {
 
   const { data, isLoading } = useSWR(
     open && parsedQuery.success && parsedQuery.data
-      ? ["global-search", parsedQuery.data]
+      ? ["global-search", session?.actorId, session?.wikiId, parsedQuery.data]
       : null,
     async (cacheKey) => {
-      const [, q] = cacheKey as readonly [string, string];
+      const [, , , q] = cacheKey as readonly [string, string, string, string];
       const [pages, entities] = await Promise.all([
         searchApi().searchPages({
           q,
@@ -225,7 +228,7 @@ export function GlobalSearchCommand() {
                   className="[&_[cmdk-group-heading]]:px-3 [&_[cmdk-group-heading]]:py-2 [&_[cmdk-group-heading]]:text-[10px] [&_[cmdk-group-heading]]:font-semibold [&_[cmdk-group-heading]]:tracking-wider [&_[cmdk-group-heading]]:text-muted-foreground [&_[cmdk-group-heading]]:uppercase"
                 >
                   <div className="grid gap-1 sm:grid-cols-2">
-                    {QUICK_LINKS.map((link) => {
+                    {QUICK_LINKS.filter((link) => !workspaceAccessNotice(link.href, session)).map((link) => {
                       const Icon = link.icon;
                       return (
                         <Command.Item

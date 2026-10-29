@@ -61,6 +61,7 @@ type accountProfileResponse struct {
 type authSessionResponse struct {
 	ActorID         string               `json:"actor_id"`
 	WikiID          string               `json:"wiki_id"`
+	HomeWikiID      string               `json:"home_wiki_id"`
 	WikiName        string               `json:"wiki_name"`
 	MainNamespaceID string               `json:"main_namespace_id"`
 	ActorType       string               `json:"actor_type"`
@@ -219,7 +220,8 @@ func toAuthSessionResponse(
 	}
 	return authSessionResponse{
 		ActorID: principal.ActorID.String(), WikiID: principal.WikiID.String(),
-		WikiName: principal.WikiName, MainNamespaceID: principal.MainNamespaceID.String(),
+		HomeWikiID: principal.HomeWikiID.String(),
+		WikiName:   principal.WikiName, MainNamespaceID: principal.MainNamespaceID.String(),
 		ActorType: principal.ActorType, DisplayName: principal.DisplayName,
 		Method: principal.Method, Wikis: wikis,
 	}

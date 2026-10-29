@@ -1,4 +1,4 @@
-import Link from "next/link";
+import { WorkspaceLink } from "@/components/workspace-link";
 import { ArrowLeft } from "lucide-react";
 
 import { BulkReviewWorkspace } from "@/components/governance/bulk-review-workspace";
@@ -15,10 +15,10 @@ export default async function BulkReviewDetailPage({
     <div className="mx-auto w-full max-w-7xl px-5 py-10 lg:px-8 lg:py-12">
       <div className="mb-6">
         <Button variant="ghost" size="sm" asChild>
-          <Link href="/governance/review">
+          <WorkspaceLink href="/governance/review">
             <ArrowLeft aria-hidden />
             返回审核队列
-          </Link>
+          </WorkspaceLink>
         </Button>
       </div>
       <BulkReviewWorkspace id={id} />

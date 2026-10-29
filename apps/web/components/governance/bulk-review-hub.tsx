@@ -16,6 +16,7 @@ import {
 
 import { Button } from "@/components/ui/button";
 import { governanceApi } from "@/lib/api";
+import { useSession } from "@/lib/auth";
 import { compactId } from "@/lib/display-id";
 import { cn } from "@/lib/utils";
 
@@ -99,6 +100,7 @@ function BatchCard({ batch }: { batch: BulkReviewBatchSummary }) {
 }
 
 export function BulkReviewHub() {
+  const { session } = useSession();
   const [status, setStatus] = useState<StatusFilter>("all");
 
   const listRequest =
@@ -122,7 +124,7 @@ export function BulkReviewHub() {
     data: batches,
     error: batchError,
     isLoading: batchesLoading,
-  } = useSWR(["governance:bulk-review-batches", status], () =>
+  } = useSWR(["governance:bulk-review-batches", session?.actorId, session?.wikiId, status], () =>
     governanceApi().listBulkReviewBatches(listRequest),
   );
 

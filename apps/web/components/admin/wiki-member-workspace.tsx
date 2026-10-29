@@ -292,7 +292,7 @@ export function WikiMemberWorkspace() {
 
   const members = useSWR(
     session.isAuthenticated
-      ? ["wiki:members", session.session?.wikiId, normalizedSearch, includeDisabled]
+      ? ["wiki:members", session.session?.actorId, session.session?.wikiId, normalizedSearch, includeDisabled]
       : null,
     () =>
       wikiApi().listWikiMembers({

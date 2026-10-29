@@ -28,9 +28,10 @@ import type {
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
 import { governanceApi } from "@/lib/api";
-import { isUnauthorized, LOGIN_PATH } from "@/lib/auth";
+import { isUnauthorized, LOGIN_PATH, useSession } from "@/lib/auth";
 import { compactId } from "@/lib/display-id";
 import { cn } from "@/lib/utils";
+import { workspaceAccessNotice } from "@/lib/workspace-access";
 
 const decisionSchema = z.string().trim().min(1, "请记录审核依据").max(1000);
 
@@ -206,6 +207,8 @@ function ProposalRow({
 
 export function BulkReviewWorkspace({ id }: { id: string }) {
   const router = useRouter();
+  const { session } = useSession();
+  const canApply = !workspaceAccessNotice("/governance/apply", session);
   const [reasons, setReasons] = useState<Record<string, string>>({});
   const [busyAction, setBusyAction] = useState<string>();
   const {
@@ -213,11 +216,11 @@ export function BulkReviewWorkspace({ id }: { id: string }) {
     error,
     isLoading,
     mutate: mutateBatch,
-  } = useSWR(["governance:bulk-review", id], () =>
+  } = useSWR(["governance:bulk-review", session?.actorId, session?.wikiId, id], () =>
     governanceApi().getBulkReviewBatch({ id }),
   );
   const { data: audit, mutate: mutateAudit } = useSWR(
-    ["governance:bulk-review-audit", id],
+    ["governance:bulk-review-audit", session?.actorId, session?.wikiId, id],
     () => governanceApi().listBulkReviewAuditEvents({ id }),
   );
 
@@ -334,7 +337,7 @@ export function BulkReviewWorkspace({ id }: { id: string }) {
               完成审核
             </Button>
           ) : null}
-          {batch.status === "ready" ? (
+          {batch.status === "ready" && canApply ? (
             <>
               <Button
                 variant="outline"
@@ -365,7 +368,7 @@ export function BulkReviewWorkspace({ id }: { id: string }) {
               </Button>
             </>
           ) : null}
-          {batch.status === "paused" ? (
+          {batch.status === "paused" && canApply ? (
             <Button
               disabled={Boolean(busyAction)}
               onClick={() =>

@@ -12,6 +12,7 @@ import {
   Sparkles,
 } from "lucide-react";
 import Link from "next/link";
+import { WorkspaceLink } from "@/components/workspace-link";
 import { useMemo, useState } from "react";
 import { toast } from "sonner";
 import useSWR from "swr";
@@ -262,7 +263,7 @@ function TrustProfileCard({
 export function AITrustWorkspace() {
   const session = useSession();
   const profiles = useSWR(
-    session.isAuthenticated ? "governance:ai-trust-profiles" : null,
+    session.isAuthenticated ? ["governance:ai-trust-profiles", session.session?.actorId, session.session?.wikiId] : null,
     () => governanceApi().listAITrustProfiles(),
     {
       revalidateOnFocus: false,
@@ -390,7 +391,7 @@ export function AITrustWorkspace() {
               启用 AI 导入并创建 Actor 后，策略会自动出现在这里。
             </p>
             <Button asChild variant="outline" className="mt-5">
-              <Link href="/imports">打开导入中心</Link>
+              <WorkspaceLink href="/imports">打开导入中心</WorkspaceLink>
             </Button>
           </div>
         ) : null}

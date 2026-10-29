@@ -62,6 +62,11 @@ func TestValidateValuesChecksMaxInputTokens(t *testing.T) {
 	if err := valid(DefaultMaxInputTokens); err != nil {
 		t.Fatalf("default max input tokens rejected: %v", err)
 	}
+	for _, tokens := range []int{12800, 20000000} {
+		if err := valid(tokens); err != nil {
+			t.Fatalf("max input tokens boundary %d rejected: %v", tokens, err)
+		}
+	}
 	if err := valid(MinMaxInputTokens - 1); err == nil {
 		t.Fatal("max input tokens below minimum must be rejected")
 	}
@@ -79,6 +84,11 @@ func TestValidateValuesChecksChunkCharacters(t *testing.T) {
 	}
 	if err := valid(DefaultChunkCharacters); err != nil {
 		t.Fatalf("default chunk characters rejected: %v", err)
+	}
+	for _, characters := range []int{12800, 20000000} {
+		if err := valid(characters); err != nil {
+			t.Fatalf("chunk characters boundary %d rejected: %v", characters, err)
+		}
 	}
 	if err := valid(MinChunkCharacters - 1); err == nil {
 		t.Fatal("chunk characters below minimum must be rejected")

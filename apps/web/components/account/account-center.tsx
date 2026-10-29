@@ -131,9 +131,10 @@ function ProfileForm({
 
 export function AccountCenter() {
   const session = useSession();
+  const actorId = session.session?.actorId;
   const { mutate } = useSWRConfig();
   const profile = useSWR(
-    session.isAuthenticated ? ACCOUNT_PROFILE_KEY : null,
+    session.isAuthenticated && actorId ? [ACCOUNT_PROFILE_KEY, actorId] : null,
     () => accountApi().getAccountProfile(),
     {
       revalidateOnFocus: false,
@@ -165,7 +166,7 @@ export function AccountCenter() {
   return (
     <div className="space-y-6">
       <ProfileForm
-        key={profile.data.updatedAt.toISOString()}
+        key={`${actorId}:${profile.data.updatedAt.toISOString()}`}
         profile={profile.data}
         onSaved={async (value) => {
           await profile.mutate(value, { revalidate: false });

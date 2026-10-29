@@ -27,6 +27,8 @@ import {
 import { usePathname } from "next/navigation";
 
 import { cn } from "@/lib/utils";
+import { useSession } from "@/lib/auth";
+import { workspaceAccessNotice } from "@/lib/workspace-access";
 
 const GROUPS = [
   {
@@ -119,12 +121,17 @@ function isActive(pathname: string, href: string, exact?: boolean) {
 
 export function SiteNavigation() {
   const pathname = usePathname();
+  const { session } = useSession();
+  const groups = GROUPS.map((group) => ({
+    ...group,
+    items: group.items.filter((item) => !workspaceAccessNotice(item.href, session)),
+  })).filter((group) => group.items.length > 0);
 
   return (
     <aside className="hidden w-56 shrink-0 border-r border-sidebar-border bg-sidebar/70 lg:block">
       <div className="sticky top-16 flex h-[calc(100vh-4rem)] flex-col overflow-y-auto px-3 py-6">
         <nav aria-label="主要导航" className="space-y-6">
-          {GROUPS.map((group) => (
+          {groups.map((group) => (
             <div key={group.label}>
               <p className="mb-2 px-2 text-[11px] font-semibold tracking-[0.14em] text-muted-foreground uppercase">
                 {group.label}

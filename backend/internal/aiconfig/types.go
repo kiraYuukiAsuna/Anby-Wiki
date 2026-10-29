@@ -26,11 +26,11 @@ const (
 	ResponseFormatJSONSchema = "json_schema"
 
 	DefaultMaxInputTokens  = 128000
-	MinMaxInputTokens      = 4096
-	MaxMaxInputTokens      = 2000000
+	MinMaxInputTokens      = 12800
+	MaxMaxInputTokens      = 20000000
 	DefaultChunkCharacters = 32000
-	MinChunkCharacters     = 1000
-	MaxChunkCharacters     = 128000
+	MinChunkCharacters     = 12800
+	MaxChunkCharacters     = 20000000
 )
 
 // StoredConfig is the versioned JSON persisted inside wiki_site.settings_json.
