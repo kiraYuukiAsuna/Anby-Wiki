@@ -73,17 +73,18 @@ Session cookie 仍设置 HttpOnly 与 `SameSite=Lax`，Web 仍通过当前 origi
 
 Web 安全依赖同步完成：
 
-- Next 升级到 `16.3.8`，受控 npm override 使用 PostCSS `8.5.25`、
+- Next 与 `eslint-config-next` 升级到 `16.4.3`，受控 npm override 使用 PostCSS `8.5.25`、
   Sharp `0.35.5` 与 `source-map-js` `1.2.2`；
+- Zod 升级到 `4.6.7`，修复超大受约束集合验证的内存耗尽漏洞；
 - shadcn 移到 devDependencies；MCP/Hono、`shell-quote` 与
   `brace-expansion` 均固定到已修复版本；
 - `brace-expansion` 5 改变了 CommonJS 导出形态，安装期幂等脚本只适配仍由
   ESLint 9 使用的 `minimatch@3` 导入语句；未知源码会失败并要求人工复核；
-- `npm audit --audit-level=high` 与 `npm audit --omit=dev --audit-level=high`
-  均为 0，`npm ci`、typecheck、Lint、OpenAPI 生成和 production build 通过。
+- npm 生产依赖使用 `npm audit --omit=dev --audit-level=high` 审计；
+  `npm ci`、typecheck、Lint、OpenAPI 生成和 production build 按 CI 分别验证。
 
 Go 构建基线为 `1.26.10`；OpenTelemetry Go 为 `1.45.0`，gRPC 为 `1.83.1`，
-`golang.org/x/net` 为 `0.60.0`，`golang.org/x/text` 为 `0.42.0`。版本更新后仍需以
+`golang.org/x/net` 为 `0.62.0`，`golang.org/x/text` 为 `0.43.0`。版本更新后仍需以
 `govulncheck` 的实际可达调用链作为门禁，不能只根据依赖版本文字判断安全状态。
 
 `.gitleaks.toml` 只精确豁免 Next `.next` 生成目录与部署模板中的两个完整字面

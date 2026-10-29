@@ -10,6 +10,7 @@ Name | Type
 `page` | [Page](Page.md)
 `content` | [PageContent](PageContent.md)
 `viaAlias` | boolean
+`canEdit` | boolean
 `aliasTitle` | string
 `redirect` | [PageWithContentRedirect](PageWithContentRedirect.md)
 
@@ -23,6 +24,7 @@ const example = {
   "page": null,
   "content": null,
   "viaAlias": null,
+  "canEdit": null,
   "aliasTitle": null,
   "redirect": null,
 } satisfies PageWithContent

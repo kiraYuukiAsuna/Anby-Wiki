@@ -5,8 +5,6 @@ import {
   ChevronDown,
   FolderTree,
   Network,
-  Quote,
-  RotateCcw,
 } from "lucide-react";
 
 import { safeHttpUrl } from "@/lib/http-url";
@@ -61,17 +59,6 @@ function locatorText(locator: PageReference["locator"]): string | null {
   return parts.length > 0 ? parts.join(" · ") : null;
 }
 
-function backlinkLabel(index: number): string {
-  let value = index + 1;
-  let label = "";
-  while (value > 0) {
-    value--;
-    label = String.fromCharCode(97 + (value % 26)) + label;
-    value = Math.floor(value / 26);
-  }
-  return label;
-}
-
 function ReferenceItem({
   item,
   showVersion,
@@ -91,31 +78,33 @@ function ReferenceItem({
       value={item.number}
       className="scroll-mt-20 break-words pl-1 text-sm leading-6 text-foreground/90"
     >
-      <span className="font-medium">{location ?? "引用位置"}</span>
-      <span className="ml-2 inline-flex flex-wrap items-center gap-1 text-xs">
-        <RotateCcw className="inline size-3.5 text-muted-foreground" aria-hidden />
-        {occurrences.map((occurrence, index) => (
-          <a
-            key={`${occurrence.blockId}-${occurrence.nodeId}`}
-            href={`#cite-ref-${occurrence.blockId}-${occurrence.nodeId}`}
-            aria-label={`返回正文引用 ${item.number}${occurrences.length > 1 ? ` 第 ${index + 1} 处` : ""}`}
-            className="rounded px-0.5 text-muted-foreground hover:text-primary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
-          >
-            {occurrences.length > 1 ? backlinkLabel(index) : "↩"}
-          </a>
-        ))}
-      </span>
-      {item.occurrenceCount > 1 ? (
-        <span className="text-muted-foreground">
-          {` · 正文引用 ${item.occurrenceCount} 次`}
+      <div className="flex flex-wrap items-baseline gap-x-3 gap-y-1">
+        <span className="min-w-0 font-medium">{location ?? "引用位置"}</span>
+        <span className="inline-flex min-w-0 flex-wrap items-baseline gap-x-2 gap-y-1 text-xs text-muted-foreground">
+          {occurrences.length > 1 ? <span>返回正文</span> : null}
+          {occurrences.map((occurrence, index) => (
+            <a
+              key={`${occurrence.blockId}-${occurrence.nodeId}`}
+              href={`#cite-ref-${occurrence.blockId}-${occurrence.nodeId}`}
+              aria-label={`返回正文引用 ${item.number}${occurrences.length > 1 ? ` 第 ${index + 1} 处` : ""}`}
+              className="whitespace-nowrap rounded underline-offset-4 hover:text-foreground hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+            >
+              {occurrences.length > 1 ? `第 ${index + 1} 处` : "返回正文"}
+            </a>
+          ))}
         </span>
-      ) : null}
-      <Link
-        href={`/citations/${item.citationId}`}
-        className="ml-2 whitespace-nowrap text-xs text-muted-foreground underline-offset-4 hover:text-foreground hover:underline"
-      >
-        证据详情
-      </Link>
+        <Link
+          href={`/citations/${item.citationId}`}
+          className="whitespace-nowrap rounded text-xs text-muted-foreground underline-offset-4 hover:text-foreground hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+        >
+          证据详情
+        </Link>
+        {item.occurrenceCount > 1 ? (
+          <span className="text-xs text-muted-foreground">
+            {`正文引用 ${item.occurrenceCount} 次`}
+          </span>
+        ) : null}
+      </div>
       {showVersion ? (
         <p className="mt-1 text-xs text-muted-foreground">
           版本 {item.versionHash.slice(0, 12)}
@@ -123,12 +112,9 @@ function ReferenceItem({
         </p>
       ) : null}
       {item.quotation ? (
-        <div className="mt-2 flex items-start gap-2 text-muted-foreground">
-          <Quote className="mt-0.5 size-3.5 shrink-0" aria-hidden />
-          <blockquote className="min-w-0 border-l-2 border-border pl-3 text-xs leading-5">
-            {item.quotation}
-          </blockquote>
-        </div>
+        <blockquote className="mt-2 border-l-2 border-border pl-3 text-xs leading-5 text-muted-foreground">
+          {item.quotation}
+        </blockquote>
       ) : null}
     </li>
   );

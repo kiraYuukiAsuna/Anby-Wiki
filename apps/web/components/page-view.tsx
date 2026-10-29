@@ -1,6 +1,6 @@
 // 阅读页内容视图：/wiki/[...title] 与 /pages/[id] 共用。
 // 渲染重定向/别名提示条、正文 AST、目录与 Revision 信息条；
-// 标题行右侧是「编辑」入口（M2-T03，P0 无认证，不做登录态区分）。
+// 标题行右侧的「编辑」入口由当前请求的页面编辑权限控制。
 import Link from "next/link";
 import {
   ArrowRight,
@@ -203,12 +203,14 @@ export async function PageView({ data }: { data: PageWithContent }) {
               pageId={page.id}
               currentTitle={page.displayTitle}
             />
-            <Button variant="outline" size="sm" asChild className="gap-1">
-              <Link href={`/pages/${page.id}/edit`}>
-                <Pencil aria-hidden className="size-3.5" />
-                编辑
-              </Link>
-            </Button>
+            {data.canEdit ? (
+              <Button variant="outline" size="sm" asChild className="gap-1">
+                <Link href={`/pages/${page.id}/edit`}>
+                  <Pencil aria-hidden className="size-3.5" />
+                  编辑
+                </Link>
+              </Button>
+            ) : null}
           </div>
         </div>
 

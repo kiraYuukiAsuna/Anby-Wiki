@@ -194,7 +194,7 @@ jobs:
       - name: 检查生成物漂移
         run: git diff --exit-code contracts/generated/typescript
 
-  # 迁移文件规范校验 + 对空库执行迁移（等价 sh scripts/check-migrations.sh + make migrate-up）
+  # 迁移文件规范校验 + 空库 up / 完整 down / 再次 up
   migrations:
     runs-on: ubuntu-latest
     services:
@@ -221,7 +221,7 @@ jobs:
         run: make migration-check
       # 保留空迁移目录兼容：golang-migrate 对空目录返回 fs.ErrNotExist，
       # 因此仅在存在 .up.sql 时执行。当前仓库已有初始化迁移，会走真实迁移分支。
-      - name: 对空库执行迁移
+      - name: 验证空库迁移和完整回滚
         working-directory: backend
         env:
           DATABASE_URL: 'postgres://wiki:wiki@localhost:5432/wiki?sslmode=disable'
@@ -232,7 +232,12 @@ jobs:
           S3_ACCESS_KEY: ci-placeholder
           S3_SECRET_KEY: ci-placeholder
         run: |
-          if ls migrations/*.up.sql >/dev/null 2>&1; then
+          set -- migrations/*.up.sql
+          if [ -f "$1" ]; then
+            go run ./cmd/migrate up
+            go run ./cmd/migrate version
+            go run ./cmd/migrate down "$#"
+            go run ./cmd/migrate version
             go run ./cmd/migrate up
             go run ./cmd/migrate version
           else

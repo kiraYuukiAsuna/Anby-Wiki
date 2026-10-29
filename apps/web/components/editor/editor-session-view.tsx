@@ -175,6 +175,7 @@ export function EditorSessionView({
   }, [pageId, baseRevisionId, receivePresence]);
 
   const openPublishDialog = () => {
+    if (collaborationStatus === "forbidden" || collaborationStatus === "closed") return;
     if (session.conflict) {
       toast.warning("请先处理版本冲突", {
         description: "可查看差异、切换到最新版为基，或放弃本地修改。",
@@ -199,7 +200,7 @@ export function EditorSessionView({
     window.addEventListener("keydown", onKeyDown);
     return () => window.removeEventListener("keydown", onKeyDown);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [session.dirty]);
+  }, [session.dirty, collaborationStatus]);
 
   const publish = async () => {
     session.setPublishing(true);
@@ -325,6 +326,20 @@ export function EditorSessionView({
     void publish();
   };
 
+  if (collaborationStatus === "forbidden") {
+    return (
+      <div className="mx-auto w-full max-w-3xl px-4 py-16 text-center">
+        <h1 className="text-2xl font-semibold">当前页面仅可阅读</h1>
+        <p role="status" className="mt-2 text-sm text-muted-foreground">
+          编辑权限已失效或协作访问被拒绝，编辑和同步已停止。
+        </p>
+        <Button asChild className="mt-5">
+          <Link href={`/pages/${pageId}`}>返回阅读</Link>
+        </Button>
+      </div>
+    );
+  }
+
   return (
     <div className="mx-auto flex w-full max-w-5xl flex-1 flex-col gap-4 px-4 py-6">
       <div className="flex items-center gap-3">
@@ -347,7 +362,7 @@ export function EditorSessionView({
         <Button
           size="sm"
           onClick={openPublishDialog}
-          disabled={session.publishing}
+          disabled={session.publishing || collaborationStatus === "closed"}
         >
           发布…
         </Button>
@@ -398,9 +413,11 @@ export function EditorSessionView({
           <BlockEditor
             key={editorEpoch}
             pageId={pageId}
+            editable={collaborationStatus !== "closed"}
             resolveLinkPreview={resolveLinkPreview}
             initialAst={session.ast}
             onChange={(ast) => {
+              if (collaborationStatus === "closed") return;
               session.setAst(ast);
               collaborationRef.current?.syncAst(ast);
             }}
@@ -473,6 +490,8 @@ function collaborationStatusLabel(status: CollaborationStatus): string {
       return "协作在线";
     case "offline":
       return "协作离线，修改将在重连后同步";
+    case "forbidden":
+      return "无编辑权限，协作已停止";
     case "closed":
       return "协作已停止";
   }

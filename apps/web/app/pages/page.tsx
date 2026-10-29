@@ -3,6 +3,7 @@ import { BookOpenText, Search, SquarePen } from "lucide-react";
 
 import { PageDirectory } from "@/components/page-directory";
 import { Button } from "@/components/ui/button";
+import { WikiSearchForm } from "@/components/wiki-search-form";
 
 export default function PagesPage() {
   return (
@@ -19,6 +20,7 @@ export default function PagesPage() {
           <Button asChild><Link href="/new"><SquarePen aria-hidden />创建页面</Link></Button>
         </div>
       </header>
+      <WikiSearchForm id="page-directory-search" className="mb-8" />
       <PageDirectory />
     </div>
   );

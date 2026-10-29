@@ -17,7 +17,7 @@ CI 同时覆盖静态分析、构建、契约、迁移、部署清单和安全�
 | `security` | gitleaks、Go module 校验、govulncheck、npm production audit | `make security` |
 | `contracts` | OpenAPI 3.1 校验及权威 Schema 与 Go 内嵌副本字节级漂移检查 | `make contracts-check`，OpenAPI 校验需 JDK |
 | `client-drift` | 重新生成 TypeScript 客户端并检查 Git diff | `make gen-check` |
-| `migrations` | 迁移文件规范检查，并在空 PostgreSQL 17 上执行 up/version | `make migration-check`、`make migrate-up` |
+| `migrations` | 迁移文件规范检查，并在空 PostgreSQL 17 上执行 up、完整 down、再次 up，逐步检查版本 | `make migration-check`、`make migrate-up`、`go run ./cmd/migrate down N` |
 | `deploy` | Shell 语法、Dockerfile/Compose 静态检查、OCI target 构建和运行元数据检查 | `make deploy-check` |
 
 ## 迁移文件规范
@@ -30,8 +30,9 @@ CI 同时覆盖静态分析、构建、契约、迁移、部署清单和安全�
 - 名称为非空小写蛇形；
 - 除 `README.md` 外不存在游离文件。
 
-CI 的 `migrations` Job 另起 PostgreSQL 17，对空库真实执行 `go run ./cmd/migrate up`
-与 `version`。本地可通过 `.env` 指向自备 PostgreSQL 后运行 `make migrate-up`。
+CI 的 `migrations` Job 另起 PostgreSQL 17，对空库真实执行 `up → down → up`，
+每一步读取迁移版本；`down` 步数由迁移文件数量确定。本地可通过 `.env` 指向自备
+PostgreSQL 后运行 `make migrate-up`；完整回滚只在隔离测试库执行。
 
 ## 部署配置门禁
 

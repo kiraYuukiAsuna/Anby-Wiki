@@ -1,6 +1,6 @@
 BEGIN;
 
-CREATE TABLE page_share_link (
+CREATE TABLE IF NOT EXISTS page_share_link (
     id          uuid        PRIMARY KEY,
     page_id     uuid        NOT NULL REFERENCES page (id),
     token_hash  bytea       NOT NULL UNIQUE,
@@ -22,6 +22,6 @@ CREATE TABLE page_share_link (
     )
 );
 
-CREATE INDEX page_share_link_page_created_idx ON page_share_link (page_id, created_at DESC);
+CREATE INDEX IF NOT EXISTS page_share_link_page_created_idx ON page_share_link (page_id, created_at DESC);
 
 COMMIT;

@@ -3,7 +3,7 @@
 // 数据边界：服务端组件经 readingApi 注入页面当前内容作为编辑会话初始值；
 // 会话状态（Zustand）与草稿恢复都在客户端（SWR 不介入编辑路径——阅读
 // 路径才有「服务端数据客户端缓存」需求，编辑会话是一次性初始注入 + 本地状态）。
-import { notFound } from "next/navigation";
+import { notFound, redirect } from "next/navigation";
 
 import { EditorSessionView } from "@/components/editor/editor-session-view";
 import { parseDocument, type Document } from "@/lib/ast/schema";
@@ -40,7 +40,10 @@ export default async function PageEditPage({
     );
   }
 
-  const { page, content } = result.data;
+  const { page, content, canEdit } = result.data;
+  if (!canEdit) {
+    redirect(`/pages/${page.id}`);
+  }
   const ast = content ? parseDocument(content.astJson) : EMPTY_DOCUMENT;
 
   return (

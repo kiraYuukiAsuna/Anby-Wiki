@@ -6,6 +6,7 @@ package main
 
 import (
 	"encoding/json"
+	"errors"
 	"net/http"
 	"strconv"
 
@@ -78,6 +79,7 @@ type pageWithContentResponse struct {
 	Page       pageResponse         `json:"page"`
 	Content    *pageContentResponse `json:"content"`
 	ViaAlias   bool                 `json:"via_alias"`
+	CanEdit    bool                 `json:"can_edit"`
 	AliasTitle string               `json:"alias_title,omitempty"`
 	Redirect   *redirectResponse    `json:"redirect,omitempty"`
 }
@@ -238,6 +240,18 @@ func (a *ReadAPI) respondPage(w http.ResponseWriter, r *http.Request, from *page
 		Page:       toPageResponse(final),
 		ViaAlias:   viaAlias,
 		AliasTitle: aliasTitle,
+	}
+	if a.auth != nil {
+		actorID, ok := actorIDFrom(w, r)
+		if !ok {
+			return
+		}
+		err := a.auth.Check(r.Context(), actorID, wikiIDFromRequest(r), governance.ActionEdit, &final.ID)
+		if err != nil && !errors.Is(err, governance.ErrPermissionDenied) {
+			governanceError(w, r, err)
+			return
+		}
+		resp.CanEdit = err == nil
 	}
 	if resolution.Hops > 0 {
 		target := page.RedirectTarget{

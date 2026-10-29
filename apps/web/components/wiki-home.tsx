@@ -12,12 +12,10 @@ import {
   SquarePen,
   Waypoints,
 } from "lucide-react";
-import { useRouter } from "next/navigation";
-import { useState, type FormEvent } from "react";
 import useSWR from "swr";
-import { z } from "zod";
 
 import { Button } from "@/components/ui/button";
+import { WikiSearchForm } from "@/components/wiki-search-form";
 import { collectionsApi, knowledgeApi, readingApi } from "@/lib/api";
 import { useSession } from "@/lib/auth";
 
@@ -25,14 +23,11 @@ const DATE_FORMATTER = new Intl.DateTimeFormat("zh-CN", {
   month: "short",
   day: "numeric",
 });
-const homepageSearchSchema = z.string().trim().min(1).max(255);
 
 export function WikiHome() {
-  const router = useRouter();
   const { session } = useSession();
   const wikiID = session?.wikiId;
   const wikiName = session?.wikiName ?? "Anby Wiki";
-  const [query, setQuery] = useState("");
   const pages = useSWR(wikiID ? ["wiki-home:recent-pages", wikiID] : null, () =>
     readingApi().listPublishedPages({ sort: "recent", pageSize: 12 }),
   );
@@ -43,18 +38,11 @@ export function WikiHome() {
     knowledgeApi().listEntities({ status: "active", pageSize: 8 }),
   );
 
-  const submitSearch = (event: FormEvent<HTMLFormElement>) => {
-    event.preventDefault();
-    const parsed = homepageSearchSchema.safeParse(query);
-    if (!parsed.success) return;
-    router.push(`/explore?q=${encodeURIComponent(parsed.data)}`);
-  };
-
   return (
     <div className="w-full">
       <section className="relative isolate border-b border-border/70">
         <div className="wiki-grid pointer-events-none absolute inset-0 -z-10 opacity-40" aria-hidden />
-        <div className="mx-auto grid w-full max-w-7xl gap-8 px-5 py-10 lg:grid-cols-[minmax(0,1fr)_20rem] lg:px-8 lg:py-12">
+        <div className="mx-auto grid w-full max-w-7xl grid-cols-1 gap-8 px-5 py-10 lg:grid-cols-[minmax(0,1fr)_20rem] lg:px-8 lg:py-12">
           <div className="max-w-3xl">
             <div className="flex flex-wrap items-center gap-2">
               <span className="inline-flex h-7 items-center gap-1.5 rounded-lg border bg-background/80 px-2.5 text-xs font-medium text-muted-foreground">
@@ -65,26 +53,7 @@ export function WikiHome() {
                 {wikiName}
               </h1>
             </div>
-            <form
-              onSubmit={submitSearch}
-              className="mt-6 flex max-w-2xl gap-2 rounded-[8px] border bg-background p-2 shadow-sm"
-              role="search"
-            >
-              <label htmlFor="wiki-home-search" className="sr-only">搜索百科</label>
-              <Search className="ml-2 size-5 shrink-0 self-center text-muted-foreground" aria-hidden />
-              <input
-                id="wiki-home-search"
-                value={query}
-                onChange={(event) => setQuery(event.target.value)}
-                maxLength={255}
-                placeholder="搜索人物、作品、概念或事实…"
-                className="min-w-0 flex-1 bg-transparent px-1 text-sm outline-none placeholder:text-muted-foreground"
-              />
-              <Button type="submit" disabled={!homepageSearchSchema.safeParse(query).success}>
-                搜索
-                <ArrowRight aria-hidden />
-              </Button>
-            </form>
+            <WikiSearchForm id="wiki-home-search" className="mt-6" />
             <div className="mt-4 flex flex-wrap gap-2">
               <Button variant="ghost" size="sm" asChild>
                 <Link href="/pages"><BookOpenText aria-hidden />页面目录</Link>

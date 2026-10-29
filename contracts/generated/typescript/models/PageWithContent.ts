@@ -60,6 +60,12 @@ export interface PageWithContent {
      */
     viaAlias: boolean;
     /**
+     * 当前请求用户能否编辑落地页，实时叠加 Wiki 角色、页面分享和页面保护；只读分享为 false
+     * @type {boolean}
+     * @memberof PageWithContent
+     */
+    canEdit: boolean;
+    /**
      * via_alias=true 时回显客户端请求的标题原文
      * @type {string}
      * @memberof PageWithContent
@@ -80,6 +86,7 @@ export function instanceOfPageWithContent(value: object): value is PageWithConte
     if (!('page' in value) || value['page'] === undefined) return false;
     if (!('content' in value) || value['content'] === undefined) return false;
     if ((!('viaAlias' in (value as Record<string, any>)) && !('via_alias' in (value as Record<string, any>))) || ((value as Record<string, any>)['viaAlias'] === undefined && (value as Record<string, any>)['via_alias'] === undefined)) return false;
+    if ((!('canEdit' in (value as Record<string, any>)) && !('can_edit' in (value as Record<string, any>))) || ((value as Record<string, any>)['canEdit'] === undefined && (value as Record<string, any>)['can_edit'] === undefined)) return false;
     return true;
 }
 
@@ -96,6 +103,7 @@ export function PageWithContentFromJSONTyped(json: any, ignoreDiscriminator: boo
         'page': PageFromJSON(json['page']),
         'content': PageContentFromJSON(json['content']),
         'viaAlias': json['via_alias'],
+        'canEdit': json['can_edit'],
         'aliasTitle': json['alias_title'] == null ? undefined : json['alias_title'],
         'redirect': json['redirect'] == null ? undefined : PageWithContentRedirectFromJSON(json['redirect']),
     };
@@ -115,6 +123,7 @@ export function PageWithContentToJSONTyped(value?: PageWithContent | null, ignor
         'page': PageToJSON(value['page']),
         'content': PageContentToJSON(value['content']),
         'via_alias': value['viaAlias'],
+        'can_edit': value['canEdit'],
         'alias_title': value['aliasTitle'],
         'redirect': PageWithContentRedirectToJSON(value['redirect']),
     };

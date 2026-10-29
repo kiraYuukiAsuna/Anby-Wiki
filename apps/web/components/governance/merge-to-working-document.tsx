@@ -125,6 +125,8 @@ function statusLabel(status: CollaborationStatus): string {
       return "工作副本已同步";
     case "offline":
       return "连接已断开";
+    case "forbidden":
+      return "无编辑权限";
     case "closed":
       return "连接已关闭";
   }

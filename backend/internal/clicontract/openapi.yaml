@@ -7685,7 +7685,7 @@ components:
           default: false
     PageWithContent:
       type: object
-      required: [page, content, via_alias]
+      required: [page, content, via_alias, can_edit]
       description: 阅读端点响应：落地页元信息 + 当前 Revision 内容（渲染直连 ContentSnapshot）
       properties:
         page:
@@ -7697,6 +7697,9 @@ components:
         via_alias:
           type: boolean
           description: 是否经由 page_alias（旧标题别名）解析命中
+        can_edit:
+          type: boolean
+          description: 当前请求用户能否编辑落地页，实时叠加 Wiki 角色、页面分享和页面保护；只读分享为 false
         alias_title:
           type: string
           description: via_alias=true 时回显客户端请求的标题原文

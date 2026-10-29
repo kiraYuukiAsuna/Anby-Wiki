@@ -2,6 +2,7 @@ package main
 
 import (
 	"bytes"
+	"context"
 	"crypto/sha256"
 	"encoding/base64"
 	"encoding/json"
@@ -15,7 +16,10 @@ import (
 	"testing"
 	"time"
 
+	"github.com/coder/websocket"
 	"github.com/google/uuid"
+
+	authdomain "github.com/anby/wiki/backend/internal/auth"
 )
 
 func TestAPICoreWorkflowsE2E(t *testing.T) {
@@ -310,9 +314,32 @@ func TestAPIPageSharingE2E(t *testing.T) {
 		t.Fatalf("shared wiki roles do not include page_viewer: %#v", wikis)
 	}
 
-	requestE2EMapHeaders(t, viewer, http.MethodGet,
-		fmt.Sprintf("%s/api/v1/pages/%s", baseURL, sharedPageID),
+	for _, reader := range []*http.Client{viewer, linkViewer} {
+		for _, mode := range []string{"auto", "full", "sections"} {
+			read := requestE2EMapHeaders(t, reader, http.MethodGet,
+				fmt.Sprintf("%s/api/v1/pages/%s?content_mode=%s", baseURL, sharedPageID, mode),
+				nil, sharedWikiHeader, http.StatusOK)
+			if read["can_edit"] != false {
+				t.Fatalf("read-only share has can_edit=%v", read["can_edit"])
+			}
+		}
+		rejected := doE2ERequest(t, reader, http.MethodGet,
+			fmt.Sprintf("%s/api/v1/pages/%s/collaboration?client_id=%s", baseURL, sharedPageID, uuid.New()),
+			nil, sharedWikiHeader)
+		assertE2EStatus(t, rejected, http.StatusForbidden)
+	}
+	readByTitle := requestE2EMapHeaders(t, viewer, http.MethodGet,
+		baseURL+"/api/v1/pages/by-title?namespace=main&title="+url.QueryEscape("Shared "+runID),
 		nil, sharedWikiHeader, http.StatusOK)
+	if readByTitle["can_edit"] != false {
+		t.Fatalf("read-only title lookup has can_edit=%v", readByTitle["can_edit"])
+	}
+	ownerRead := requestE2EMap(t, admin, http.MethodGet,
+		fmt.Sprintf("%s/api/v1/pages/%s", baseURL, sharedPageID),
+		nil, http.StatusOK)
+	if ownerRead["can_edit"] != true {
+		t.Fatalf("owner has can_edit=%v", ownerRead["can_edit"])
+	}
 	response := doE2ERequest(t, viewer, http.MethodGet,
 		fmt.Sprintf("%s/api/v1/pages/%s", baseURL, otherPageID),
 		nil, sharedWikiHeader)
@@ -338,14 +365,67 @@ func TestAPIPageSharingE2E(t *testing.T) {
 		fmt.Sprintf("%s/api/v1/pages/%s/shares", baseURL, sharedPageID),
 		map[string]any{"identifier": viewerUsername, "role_key": "editor"},
 		http.StatusOK)
+	editorRead := requestE2EMapHeaders(t, viewer, http.MethodGet,
+		fmt.Sprintf("%s/api/v1/pages/%s", baseURL, sharedPageID),
+		nil, sharedWikiHeader, http.StatusOK)
+	if editorRead["can_edit"] != true {
+		t.Fatalf("editor share has can_edit=%v", editorRead["can_edit"])
+	}
+	// Editing one shared page must not grant editing of a second read-only page.
+	requestE2EMap(t, admin, http.MethodPut,
+		fmt.Sprintf("%s/api/v1/pages/%s/shares", baseURL, otherPageID),
+		map[string]any{"identifier": viewerUsername, "role_key": "viewer"},
+		http.StatusOK)
+	otherRead := requestE2EMapHeaders(t, viewer, http.MethodGet,
+		fmt.Sprintf("%s/api/v1/pages/%s", baseURL, otherPageID),
+		nil, sharedWikiHeader, http.StatusOK)
+	if otherRead["can_edit"] != false {
+		t.Fatalf("other read-only page has can_edit=%v", otherRead["can_edit"])
+	}
 	requestE2EMapHeaders(t, viewer, http.MethodPost,
 		fmt.Sprintf("%s/api/v1/pages/%s/revisions", baseURL, sharedPageID),
 		map[string]any{
-			"ast":      documentE2E(uuid.New(), "Shared "+runID, "editor edit"),
-			"summary":  "editor publish",
-			"is_minor": false,
+			"expected_revision_id": e2eUUID(t, editorRead["page"].(map[string]any), "current_revision_id"),
+			"ast":                  documentE2E(uuid.New(), "Shared "+runID, "editor edit"),
+			"summary":              "editor publish",
+			"is_minor":             false,
 		},
 		sharedWikiHeader, http.StatusCreated)
+
+	httpURL, err := url.Parse(baseURL)
+	if err != nil {
+		t.Fatal(err)
+	}
+	viewer.Jar.SetCookies(httpURL, []*http.Cookie{
+		{Name: authdomain.WikiContextCookie, Value: adminWikiID.String(), Path: "/"},
+	})
+	editorConn, _ := dialE2ECollaboration(t, viewer, baseURL, sharedPageID, uuid.New(), 0)
+	defer editorConn.CloseNow()
+	requestE2EMap(t, admin, http.MethodPut,
+		fmt.Sprintf("%s/api/v1/pages/%s/shares", baseURL, sharedPageID),
+		map[string]any{"identifier": viewerUsername, "role_key": "viewer"},
+		http.StatusOK)
+	downgradedRead := requestE2EMapHeaders(t, viewer, http.MethodGet,
+		fmt.Sprintf("%s/api/v1/pages/%s", baseURL, sharedPageID),
+		nil, sharedWikiHeader, http.StatusOK)
+	if downgradedRead["can_edit"] != false {
+		t.Fatalf("downgraded share has can_edit=%v", downgradedRead["can_edit"])
+	}
+	writeE2EBinary(t, editorConn, encodeE2EClientUpdate(uuid.New(), []byte("rejected update")))
+	ctx, cancel := context.WithTimeout(context.Background(), collaborationE2ETimeout)
+	_, _, readErr := editorConn.Read(ctx)
+	cancel()
+	if websocket.CloseStatus(readErr) != websocket.StatusPolicyViolation {
+		t.Fatalf("downgraded editor websocket closed with %v, want policy violation", readErr)
+	}
+	ownerConn, recovery := dialE2ECollaboration(t, admin, baseURL, sharedPageID, uuid.New(), 0)
+	defer ownerConn.CloseNow()
+	if recovery.Ready != 0 || len(recovery.Updates) != 0 {
+		t.Fatalf("downgraded editor persisted an update: %#v", recovery)
+	}
+	requestE2EMap(t, admin, http.MethodDelete,
+		fmt.Sprintf("%s/api/v1/pages/%s/shares/%s", baseURL, otherPageID, viewerActorID),
+		nil, http.StatusOK)
 
 	requestE2EMap(t, admin, http.MethodDelete,
 		fmt.Sprintf("%s/api/v1/pages/%s/shares/%s", baseURL, sharedPageID, viewerActorID),

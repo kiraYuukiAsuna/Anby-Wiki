@@ -34,8 +34,8 @@ const GROUPS = [
     items: [
       { href: "/", label: "首页", icon: House, exact: true },
       { href: "/pages", label: "页面目录", icon: BookOpenText, exact: true },
-      { href: "/explore", label: "搜索", icon: Search },
       { href: "/collections", label: "专题合集", icon: Layers3 },
+      { href: "/explore", label: "搜索", icon: Search },
       { href: "/components", label: "组件中心", icon: Boxes },
       { href: "/assets", label: "媒体与附件", icon: Images },
       { href: "/sources", label: "来源与证据", icon: LibraryBig },

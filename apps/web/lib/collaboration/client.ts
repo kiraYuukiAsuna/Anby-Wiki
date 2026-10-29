@@ -1,5 +1,7 @@
 import * as Y from "yjs";
 
+import { ResponseError } from "../../../../contracts/generated/typescript";
+import { readingApi } from "@/lib/api";
 import type { Document } from "@/lib/ast/schema";
 import { clientUUID } from "@/lib/client-uuid";
 import {
@@ -22,6 +24,7 @@ export type CollaborationStatus =
   | "syncing"
   | "online"
   | "offline"
+  | "forbidden"
   | "closed";
 
 export interface CollaborationClientOptions {
@@ -64,6 +67,7 @@ export class CollaborationClient {
   private socket: WebSocket | null = null;
   private ready = false;
   private closed = false;
+  private connecting = false;
   private latestSequence = 0;
   private reconnectAttempts = 0;
   private reconnectTimer: ReturnType<typeof setTimeout> | null = null;
@@ -89,24 +93,57 @@ export class CollaborationClient {
     );
   }
 
-  connect(): void {
-    if (this.closed || this.socket) return;
+  async connect(): Promise<void> {
+    if (this.closed || this.socket || this.connecting) return;
+    this.connecting = true;
     this.options.onStatus?.("connecting");
+    try {
+      const page = await readingApi().getPageByID({
+        id: this.options.pageId,
+        contentMode: "sections",
+      });
+      if (this.closed) return;
+      if (!page.canEdit) {
+        this.denyAccess();
+        return;
+      }
+    } catch (error) {
+      if (this.closed) return;
+      if (
+        error instanceof ResponseError &&
+        [401, 403, 404, 410].includes(error.response.status)
+      ) {
+        this.denyAccess();
+      } else {
+        this.options.onStatus?.("offline");
+        this.scheduleReconnect();
+      }
+      return;
+    } finally {
+      this.connecting = false;
+    }
+    if (this.closed) return;
     const socket = (this.options.socketFactory ?? defaultSocketFactory)(
       collaborationURL(this.options.pageId, this.clientId, this.latestSequence),
     );
     socket.binaryType = "arraybuffer";
-    socket.onopen = () => this.options.onStatus?.("syncing");
+    socket.onopen = () => {
+      if (!this.closed && this.socket === socket) this.options.onStatus?.("syncing");
+    };
     socket.onmessage = (event) => {
       this.receiveQueue = this.receiveQueue
-        .then(() => this.receive(event.data))
+        .then(() => {
+          if (!this.closed && this.socket === socket) return this.receive(event.data);
+        })
         .catch(() => {
           if (this.socket === socket) {
             socket.close(1002, "invalid collaboration message");
           }
         });
     };
-    socket.onerror = () => this.options.onStatus?.("offline");
+    socket.onerror = () => {
+      if (!this.closed && this.socket === socket) this.options.onStatus?.("offline");
+    };
     socket.onclose = (event) => {
       if (this.socket !== socket) return;
       this.socket = null;
@@ -114,8 +151,7 @@ export class CollaborationClient {
       this.snapshotInFlight = false;
       if (this.closed) return;
       if (event.code === 1008) {
-        this.closed = true;
-        this.options.onStatus?.("closed");
+        this.denyAccess();
         return;
       }
       this.options.onStatus?.("offline");
@@ -125,6 +161,7 @@ export class CollaborationClient {
   }
 
   syncAst(ast: Document): void {
+    if (this.closed) return;
     // The editor already renders this AST. Remember it before the server echoes
     // the Yjs update so that an acknowledgement cannot remount the editor.
     this.renderedAstJSON = JSON.stringify(ast);
@@ -197,6 +234,7 @@ export class CollaborationClient {
   }
 
   close(): void {
+    if (this.closed) return;
     this.closed = true;
     this.ready = false;
     if (this.reconnectTimer) clearTimeout(this.reconnectTimer);
@@ -207,6 +245,13 @@ export class CollaborationClient {
     this.socket = null;
     this.options.onStatus?.("closed");
     this.ydoc.destroy();
+  }
+
+  private denyAccess(): void {
+    this.close();
+    this.pendingAst = null;
+    this.pendingUpdates.length = 0;
+    this.options.onStatus?.("forbidden");
   }
 
   private readonly onDocumentUpdate = (
@@ -316,6 +361,7 @@ export class CollaborationClient {
   }
 
   private receiveBinary(buffer: ArrayBuffer): void {
+    if (this.closed) return;
     const frame = new Uint8Array(buffer);
     if (frame.length <= 9 || (frame[0] !== 1 && frame[0] !== 2)) {
       throw new Error("invalid collaboration server frame");

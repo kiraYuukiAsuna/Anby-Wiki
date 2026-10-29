@@ -70,7 +70,7 @@ func (a *CollaborationAPI) connect(w http.ResponseWriter, r *http.Request) {
 	if authErr := a.authorization.Check(
 		r.Context(), principal.ActorID, wikiIDFromRequest(r), governance.ActionEdit, &pageID,
 	); authErr != nil {
-		serviceError(w, r, authErr)
+		governanceError(w, r, authErr)
 		return
 	}
 	document, err := a.service.Open(r.Context(), pageID, principal.ActorID)
