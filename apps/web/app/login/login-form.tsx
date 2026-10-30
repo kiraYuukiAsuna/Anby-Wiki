@@ -2,6 +2,7 @@
 
 import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
+import { LogIn } from "lucide-react";
 import { useCallback, useEffect, useState } from "react";
 import { toast } from "sonner";
 import { useSWRConfig } from "swr";
@@ -123,7 +124,8 @@ export function LoginForm() {
           className="mt-1 h-12 w-full rounded-[8px] text-sm font-semibold"
           disabled={submitting}
         >
-          {submitting ? "登录中…" : "登录"}
+          <LogIn data-icon="inline-start" aria-hidden />
+          <span>{submitting ? "登录中…" : "登录"}</span>
         </Button>
       </form>
     </AuthShell>
