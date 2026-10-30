@@ -13,8 +13,9 @@ import (
 )
 
 type createCLIAuthCodeRequest struct {
-	Name         string `json:"name"`
-	TokenTTLDays int    `json:"token_ttl_days"`
+	ActorID      uuid.UUID `json:"actor_id"`
+	Name         string    `json:"name"`
+	TokenTTLDays int       `json:"token_ttl_days"`
 }
 
 type exchangeCLIAuthCodeRequest struct {
@@ -22,6 +23,7 @@ type exchangeCLIAuthCodeRequest struct {
 }
 
 type cliAuthCodeResponse struct {
+	authdomain.CLIActorIdentity
 	Code           string    `json:"code"`
 	Name           string    `json:"name"`
 	ExpiresAt      time.Time `json:"expires_at"`
@@ -29,6 +31,7 @@ type cliAuthCodeResponse struct {
 }
 
 type cliTokenResponse struct {
+	authdomain.CLIActorIdentity
 	ID          uuid.UUID  `json:"id"`
 	Name        string     `json:"name"`
 	TokenPrefix string     `json:"token_prefix"`
@@ -40,6 +43,7 @@ type cliTokenResponse struct {
 }
 
 type cliAuthCodeSummaryResponse struct {
+	authdomain.CLIActorIdentity
 	ID             uuid.UUID `json:"id"`
 	Name           string    `json:"name"`
 	Status         string    `json:"status"`
@@ -54,10 +58,9 @@ type cliTokenListResponse struct {
 }
 
 type cliAuthExchangeResponse struct {
-	Token       string           `json:"token"`
-	ActorID     uuid.UUID        `json:"actor_id"`
-	DisplayName string           `json:"display_name"`
-	TokenInfo   cliTokenResponse `json:"token_info"`
+	authdomain.CLIActorIdentity
+	Token     string           `json:"token"`
+	TokenInfo cliTokenResponse `json:"token_info"`
 }
 
 func (a *AuthAPI) createCLIAuthCode(w http.ResponseWriter, r *http.Request) {
@@ -70,7 +73,10 @@ func (a *AuthAPI) createCLIAuthCode(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	result, err := a.service.CreateCLIAuthorizationCode(
-		r.Context(), principal.ActorID, request.Name, request.TokenTTLDays,
+		r.Context(), authdomain.CreateCLIAuthCodeParams{
+			IssuedBy: principal.ActorID, ActorID: request.ActorID,
+			Name: request.Name, TokenTTLDays: request.TokenTTLDays,
+		},
 	)
 	switch {
 	case errors.Is(err, authdomain.ErrInvalidCLIInput):
@@ -79,12 +85,15 @@ func (a *AuthAPI) createCLIAuthCode(w http.ResponseWriter, r *http.Request) {
 			"名称须为 1–120 个字符，Token 有效期须为 1–365 天",
 		)
 	case errors.Is(err, authdomain.ErrUnauthenticated):
-		httpx.WriteError(w, r, http.StatusUnauthorized, httpx.CodeUnauthorized, "需要登录")
+		httpx.WriteError(w, r, http.StatusForbidden, httpx.CodeForbidden, "Actor 已停用或所属账户已失去管理员权限")
+	case errors.Is(err, authdomain.ErrMachineActorForbidden):
+		httpx.WriteError(w, r, http.StatusForbidden, httpx.CodeForbidden, "只能绑定本人创建的机器 Actor")
 	case err != nil:
 		httpx.WriteError(w, r, http.StatusInternalServerError, httpx.CodeInternal, "无法创建 CLI 授权码")
 	default:
 		httpx.WriteJSON(w, http.StatusCreated, cliAuthCodeResponse{
-			Code: result.Code, Name: result.Name,
+			CLIActorIdentity: result.CLIActorIdentity,
+			Code:             result.Code, Name: result.Name,
 			ExpiresAt: result.ExpiresAt, TokenExpiresAt: result.TokenExpiresAt,
 		})
 	}
@@ -108,8 +117,8 @@ func (a *AuthAPI) exchangeCLIAuthCode(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	httpx.WriteJSON(w, http.StatusOK, cliAuthExchangeResponse{
-		Token: result.Token, ActorID: result.ActorID,
-		DisplayName: result.DisplayName, TokenInfo: toCLITokenResponse(result.TokenInfo),
+		CLIActorIdentity: result.CLIActorIdentity,
+		Token:            result.Token, TokenInfo: toCLITokenResponse(result.TokenInfo),
 	})
 }
 
@@ -272,7 +281,8 @@ func browserSessionPrincipal(
 
 func toCLITokenResponse(value authdomain.CLIToken) cliTokenResponse {
 	return cliTokenResponse{
-		ID: value.ID, Name: value.Name, TokenPrefix: value.TokenPrefix,
+		CLIActorIdentity: value.CLIActorIdentity,
+		ID:               value.ID, Name: value.Name, TokenPrefix: value.TokenPrefix,
 		Status: value.Status, ExpiresAt: value.ExpiresAt,
 		LastUsedAt: value.LastUsedAt, RevokedAt: value.RevokedAt,
 		CreatedAt: value.CreatedAt,
@@ -283,11 +293,12 @@ func toCLIAuthCodeSummaryResponse(
 	value authdomain.CLIAuthorizationCodeSummary,
 ) cliAuthCodeSummaryResponse {
 	return cliAuthCodeSummaryResponse{
-		ID:             value.ID,
-		Name:           value.Name,
-		Status:         "pending",
-		ExpiresAt:      value.ExpiresAt,
-		TokenExpiresAt: value.TokenExpiresAt,
-		CreatedAt:      value.CreatedAt,
+		CLIActorIdentity: value.CLIActorIdentity,
+		ID:               value.ID,
+		Name:             value.Name,
+		Status:           "pending",
+		ExpiresAt:        value.ExpiresAt,
+		TokenExpiresAt:   value.TokenExpiresAt,
+		CreatedAt:        value.CreatedAt,
 	}
 }

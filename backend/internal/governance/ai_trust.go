@@ -2,6 +2,7 @@ package governance
 
 import (
 	"context"
+	"crypto/sha256"
 	"encoding/binary"
 	"encoding/json"
 	"errors"
@@ -32,6 +33,7 @@ type AITrustProfile struct {
 	ActorID               uuid.UUID  `json:"actor_id"`
 	ActorType             string     `json:"actor_type"`
 	ActorDisplayName      string     `json:"actor_display_name"`
+	ActorStatus           string     `json:"actor_status"`
 	TrustLevel            string     `json:"trust_level"`
 	RequiredSamplePercent int        `json:"required_sample_percent"`
 	Configured            bool       `json:"configured"`
@@ -64,7 +66,7 @@ func NewAITrustService(
 	return &AITrustService{repo: repo, auth: auth, txm: txm, ids: ids}
 }
 
-// List returns every active AI/import actor, including a conservative virtual
+// List returns this Wiki's AI/import actors, including a conservative virtual
 // default when an administrator has not configured a profile yet.
 func (s *AITrustService) List(
 	ctx context.Context,
@@ -76,7 +78,7 @@ func (s *AITrustService) List(
 		return nil, err
 	}
 	rows, err := s.repo.pool.Query(ctx, `SELECT
-		a.id,a.actor_type,a.display_name,
+		a.id,a.actor_type,a.display_name,a.status,
 		COALESCE(p.trust_level,'untrusted'),
 		COALESCE(p.required_sample_percent,100),
 		(p.actor_id IS NOT NULL),
@@ -84,8 +86,7 @@ func (s *AITrustService) List(
 		FROM actor a
 		LEFT JOIN ai_trust_profile p
 		  ON p.actor_id=a.id AND p.wiki_id=$1
-		WHERE a.actor_type IN ('ai','import')
-		  AND (a.status='active' OR p.actor_id IS NOT NULL)
+		WHERE a.actor_type IN ('ai','import') AND a.wiki_id=$1
 		ORDER BY (p.actor_id IS NULL),a.display_name,a.id`, wikiID)
 	if err != nil {
 		return nil, err
@@ -96,6 +97,7 @@ func (s *AITrustService) List(
 		item := AITrustProfile{WikiID: wikiID}
 		if err := rows.Scan(
 			&item.ActorID, &item.ActorType, &item.ActorDisplayName,
+			&item.ActorStatus,
 			&item.TrustLevel, &item.RequiredSamplePercent,
 			&item.Configured, &item.UpdatedBy, &item.CreatedAt,
 			&item.UpdatedAt,
@@ -129,8 +131,8 @@ func (s *AITrustService) Update(
 		}
 		var actorType, displayName, status string
 		if err := tx.QueryRow(ctx, `SELECT actor_type,display_name,status
-			FROM actor WHERE id=$1 FOR UPDATE`,
-			params.ActorID,
+			FROM actor WHERE id=$1 AND wiki_id=$2 FOR UPDATE`,
+			params.ActorID, params.WikiID,
 		).Scan(&actorType, &displayName, &status); err != nil {
 			if errors.Is(err, pgx.ErrNoRows) {
 				return ErrInvalidActor
@@ -156,6 +158,7 @@ func (s *AITrustService) Update(
 		item := &AITrustProfile{
 			WikiID: params.WikiID, ActorID: params.ActorID,
 			ActorType: actorType, ActorDisplayName: displayName,
+			ActorStatus:           status,
 			TrustLevel:            params.TrustLevel,
 			RequiredSamplePercent: params.RequiredSamplePercent,
 			Configured:            true, UpdatedBy: &params.UpdatedBy,
@@ -244,12 +247,13 @@ func (s *AITrustService) ApplyPolicy(
 		return nil
 	}
 	if decision.AutoApprove && sampledProposal(proposal.ID, sample) {
-		decision.AutoApprove = false
 		decision.SampledForReview = true
 		decision.Reasons = appendUnique(
 			decision.Reasons, "AI 信任策略命中人工抽样",
 		)
 	}
+	decision.AutoApprove = false
+	decision.Reasons = appendUnique(decision.Reasons, "机器 Actor 提案最终必须由真人审核")
 	return nil
 }
 
@@ -266,6 +270,9 @@ func sampledProposal(id uuid.UUID, percent int) bool {
 	if percent >= 100 {
 		return true
 	}
-	bucket := int(binary.BigEndian.Uint16(id[:2]) % 100)
+	// UUIDv7 prefixes encode time. Hash the full ID so a time window is not
+	// assigned entirely to one sample bucket.
+	hash := sha256.Sum256(id[:])
+	bucket := int(binary.BigEndian.Uint64(hash[:8]) % 100)
 	return bucket < percent
 }

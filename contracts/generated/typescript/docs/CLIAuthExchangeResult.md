@@ -6,6 +6,8 @@
 
 Name | Type
 ------------ | -------------
+`wikiId` | string
+`actorType` | string
 `token` | string
 `actorId` | string
 `displayName` | string
@@ -18,6 +20,8 @@ import type { CLIAuthExchangeResult } from ''
 
 // TODO: Update the object below with actual values
 const example = {
+  "wikiId": null,
+  "actorType": null,
   "token": null,
   "actorId": null,
   "displayName": null,

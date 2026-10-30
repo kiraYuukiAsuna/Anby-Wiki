@@ -45,6 +45,12 @@ export interface AITrustProfile {
     actorDisplayName: string;
     /**
      *
+     * @type {string}
+     * @memberof AITrustProfile
+     */
+    actorStatus: string;
+    /**
+     *
      * @type {AITrustProfileTrustLevelEnum}
      * @memberof AITrustProfile
      */
@@ -110,6 +116,7 @@ export function instanceOfAITrustProfile(value: object): value is AITrustProfile
     if ((!('actorId' in (value as Record<string, any>)) && !('actor_id' in (value as Record<string, any>))) || ((value as Record<string, any>)['actorId'] === undefined && (value as Record<string, any>)['actor_id'] === undefined)) return false;
     if ((!('actorType' in (value as Record<string, any>)) && !('actor_type' in (value as Record<string, any>))) || ((value as Record<string, any>)['actorType'] === undefined && (value as Record<string, any>)['actor_type'] === undefined)) return false;
     if ((!('actorDisplayName' in (value as Record<string, any>)) && !('actor_display_name' in (value as Record<string, any>))) || ((value as Record<string, any>)['actorDisplayName'] === undefined && (value as Record<string, any>)['actor_display_name'] === undefined)) return false;
+    if ((!('actorStatus' in (value as Record<string, any>)) && !('actor_status' in (value as Record<string, any>))) || ((value as Record<string, any>)['actorStatus'] === undefined && (value as Record<string, any>)['actor_status'] === undefined)) return false;
     if ((!('trustLevel' in (value as Record<string, any>)) && !('trust_level' in (value as Record<string, any>))) || ((value as Record<string, any>)['trustLevel'] === undefined && (value as Record<string, any>)['trust_level'] === undefined)) return false;
     if ((!('requiredSamplePercent' in (value as Record<string, any>)) && !('required_sample_percent' in (value as Record<string, any>))) || ((value as Record<string, any>)['requiredSamplePercent'] === undefined && (value as Record<string, any>)['required_sample_percent'] === undefined)) return false;
     if (!('configured' in value) || value['configured'] === undefined) return false;
@@ -130,6 +137,7 @@ export function AITrustProfileFromJSONTyped(json: any, ignoreDiscriminator: bool
         'actorId': json['actor_id'],
         'actorType': json['actor_type'],
         'actorDisplayName': json['actor_display_name'],
+        'actorStatus': json['actor_status'],
         'trustLevel': json['trust_level'],
         'requiredSamplePercent': json['required_sample_percent'],
         'configured': json['configured'],
@@ -154,6 +162,7 @@ export function AITrustProfileToJSONTyped(value?: AITrustProfile | null, ignoreD
         'actor_id': value['actorId'],
         'actor_type': value['actorType'],
         'actor_display_name': value['actorDisplayName'],
+        'actor_status': value['actorStatus'],
         'trust_level': value['trustLevel'],
         'required_sample_percent': value['requiredSamplePercent'],
         'configured': value['configured'],

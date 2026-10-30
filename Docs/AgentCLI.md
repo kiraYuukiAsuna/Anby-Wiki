@@ -106,7 +106,7 @@ bin/anby-wiki --input request.json
 
 ## 测试
 
-CLI action、167 个 HTTP operation、multipart、二进制响应和协作 WebSocket 的本地
+CLI action、183 个 HTTP operation、multipart、二进制响应和协作 WebSocket 的本地
 回归：
 
 ```sh
@@ -133,7 +133,7 @@ go test ./internal/wikicli \
 
 1. 浏览器登录站点。
 2. 打开 `/settings/cli`。
-3. 输入 Agent 名称和 Token 有效期，生成一次性授权码。
+3. 选择绑定身份、输入 Agent 名称和 Token 有效期，生成一次性授权码。
 4. 在十分钟内兑换：
 
 ```json
@@ -155,8 +155,25 @@ go test ./internal/wikicli \
 - `ANBY_WIKI_BASE_URL`
 - `ANBY_WIKI_TOKEN`
 
-授权码只能兑换一次；服务端只保存授权码和 Token 的 SHA-256。Token 权限实时继承
-签发账号的 RBAC 和 PageProtection。后台撤销、账号停用或角色撤销会立即生效。
+授权码只能兑换一次；服务端只保存授权码和 Token 的 SHA-256。本人身份继续按该
+真人 Actor 的 RBAC 和 PageProtection 授权。后台撤销、账号停用或角色撤销会立即生效。
+
+机器身份先在 `/governance/ai-trust` 的「创建机器 Actor」填写名称，选择 `ai` 或
+`import`。创建者必须是当前 Wiki 的活跃真人管理员；新 Actor 默认
+`untrusted/100%`。随后在 `/settings/cli` 的「绑定身份」选择它并兑换授权码，CLI
+无需另外传入 Actor ID。`auth.status`、`config.show` 和授权记录均显示实际绑定的
+`actor_id`、`actor_type` 与 `wiki_id`，机器 Proposal 的 `created_by` 使用该 Actor。
+
+机器身份只可读取所属 Wiki、创建和提交自己的 Proposal，不继承创建者的管理、
+直接编辑、审核或 Apply 权限。所有机器提案最终必须真人审核；信任与抽样策略记录
+复核标记，低风险未抽中的提案仍进入人工队列。抽样使用完整 Proposal ID 的哈希，
+重试不会改变结果。
+
+只有创建者账号可以签发和管理机器凭证；所属 Wiki 的真人管理员可以启用或停用
+Actor。停用撤销全部 Token 并清除待兑换授权码，重新启用须重新授权，旧凭证不会
+恢复。每次兑换和 API 调用都检查机器、所属账号及创建者管理员权限。
+删除管理账号会永久停用其机器 Actor、撤销凭证并保留历史署名；删除审计记录相关机器 ID。
+普通 Web ImportJob 当前仍以真人为 Proposal 作者，不会自动绑定这里创建的 Actor。
 
 ## HTTP Operation
 

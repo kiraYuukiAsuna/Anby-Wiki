@@ -24,6 +24,30 @@ export interface CLIToken {
      * @type {string}
      * @memberof CLIToken
      */
+    actorId: string;
+    /**
+     *
+     * @type {string}
+     * @memberof CLIToken
+     */
+    wikiId: string;
+    /**
+     *
+     * @type {string}
+     * @memberof CLIToken
+     */
+    actorType: string;
+    /**
+     *
+     * @type {string}
+     * @memberof CLIToken
+     */
+    displayName: string;
+    /**
+     *
+     * @type {string}
+     * @memberof CLIToken
+     */
     id: string;
     /**
      *
@@ -85,6 +109,10 @@ export type CLITokenStatusEnum = typeof CLITokenStatusEnum[keyof typeof CLIToken
  * Check if a given object implements the CLIToken interface.
  */
 export function instanceOfCLIToken(value: object): value is CLIToken {
+    if ((!('actorId' in (value as Record<string, any>)) && !('actor_id' in (value as Record<string, any>))) || ((value as Record<string, any>)['actorId'] === undefined && (value as Record<string, any>)['actor_id'] === undefined)) return false;
+    if ((!('wikiId' in (value as Record<string, any>)) && !('wiki_id' in (value as Record<string, any>))) || ((value as Record<string, any>)['wikiId'] === undefined && (value as Record<string, any>)['wiki_id'] === undefined)) return false;
+    if ((!('actorType' in (value as Record<string, any>)) && !('actor_type' in (value as Record<string, any>))) || ((value as Record<string, any>)['actorType'] === undefined && (value as Record<string, any>)['actor_type'] === undefined)) return false;
+    if ((!('displayName' in (value as Record<string, any>)) && !('display_name' in (value as Record<string, any>))) || ((value as Record<string, any>)['displayName'] === undefined && (value as Record<string, any>)['display_name'] === undefined)) return false;
     if (!('id' in value) || value['id'] === undefined) return false;
     if (!('name' in value) || value['name'] === undefined) return false;
     if ((!('tokenPrefix' in (value as Record<string, any>)) && !('token_prefix' in (value as Record<string, any>))) || ((value as Record<string, any>)['tokenPrefix'] === undefined && (value as Record<string, any>)['token_prefix'] === undefined)) return false;
@@ -104,6 +132,10 @@ export function CLITokenFromJSONTyped(json: any, ignoreDiscriminator: boolean): 
     }
     return {
 
+        'actorId': json['actor_id'],
+        'wikiId': json['wiki_id'],
+        'actorType': json['actor_type'],
+        'displayName': json['display_name'],
         'id': json['id'],
         'name': json['name'],
         'tokenPrefix': json['token_prefix'],
@@ -126,6 +158,10 @@ export function CLITokenToJSONTyped(value?: CLIToken | null, ignoreDiscriminator
 
     return {
 
+        'actor_id': value['actorId'],
+        'wiki_id': value['wikiId'],
+        'actor_type': value['actorType'],
+        'display_name': value['displayName'],
         'id': value['id'],
         'name': value['name'],
         'token_prefix': value['tokenPrefix'],

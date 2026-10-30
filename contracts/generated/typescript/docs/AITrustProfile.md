@@ -10,6 +10,7 @@ Name | Type
 `actorId` | string
 `actorType` | string
 `actorDisplayName` | string
+`actorStatus` | string
 `trustLevel` | string
 `requiredSamplePercent` | number
 `configured` | boolean
@@ -28,6 +29,7 @@ const example = {
   "actorId": null,
   "actorType": null,
   "actorDisplayName": null,
+  "actorStatus": null,
   "trustLevel": null,
   "requiredSamplePercent": null,
   "configured": null,

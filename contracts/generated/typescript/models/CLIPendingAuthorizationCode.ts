@@ -24,6 +24,30 @@ export interface CLIPendingAuthorizationCode {
      * @type {string}
      * @memberof CLIPendingAuthorizationCode
      */
+    actorId: string;
+    /**
+     *
+     * @type {string}
+     * @memberof CLIPendingAuthorizationCode
+     */
+    wikiId: string;
+    /**
+     *
+     * @type {string}
+     * @memberof CLIPendingAuthorizationCode
+     */
+    actorType: string;
+    /**
+     *
+     * @type {string}
+     * @memberof CLIPendingAuthorizationCode
+     */
+    displayName: string;
+    /**
+     *
+     * @type {string}
+     * @memberof CLIPendingAuthorizationCode
+     */
     id: string;
     /**
      *
@@ -71,6 +95,10 @@ export type CLIPendingAuthorizationCodeStatusEnum = typeof CLIPendingAuthorizati
  * Check if a given object implements the CLIPendingAuthorizationCode interface.
  */
 export function instanceOfCLIPendingAuthorizationCode(value: object): value is CLIPendingAuthorizationCode {
+    if ((!('actorId' in (value as Record<string, any>)) && !('actor_id' in (value as Record<string, any>))) || ((value as Record<string, any>)['actorId'] === undefined && (value as Record<string, any>)['actor_id'] === undefined)) return false;
+    if ((!('wikiId' in (value as Record<string, any>)) && !('wiki_id' in (value as Record<string, any>))) || ((value as Record<string, any>)['wikiId'] === undefined && (value as Record<string, any>)['wiki_id'] === undefined)) return false;
+    if ((!('actorType' in (value as Record<string, any>)) && !('actor_type' in (value as Record<string, any>))) || ((value as Record<string, any>)['actorType'] === undefined && (value as Record<string, any>)['actor_type'] === undefined)) return false;
+    if ((!('displayName' in (value as Record<string, any>)) && !('display_name' in (value as Record<string, any>))) || ((value as Record<string, any>)['displayName'] === undefined && (value as Record<string, any>)['display_name'] === undefined)) return false;
     if (!('id' in value) || value['id'] === undefined) return false;
     if (!('name' in value) || value['name'] === undefined) return false;
     if (!('status' in value) || value['status'] === undefined) return false;
@@ -92,6 +120,10 @@ export function CLIPendingAuthorizationCodeFromJSONTyped(json: any, ignoreDiscri
     }
     return {
 
+        'actorId': json['actor_id'],
+        'wikiId': json['wiki_id'],
+        'actorType': json['actor_type'],
+        'displayName': json['display_name'],
         'id': json['id'],
         'name': json['name'],
         'status': json['status'],
@@ -112,6 +144,10 @@ export function CLIPendingAuthorizationCodeToJSONTyped(value?: CLIPendingAuthori
 
     return {
 
+        'actor_id': value['actorId'],
+        'wiki_id': value['wikiId'],
+        'actor_type': value['actorType'],
+        'display_name': value['displayName'],
         'id': value['id'],
         'name': value['name'],
         'status': value['status'],

@@ -78,6 +78,8 @@ type Config struct {
 	Token       string     `json:"token,omitempty"`
 	TokenPrefix string     `json:"token_prefix,omitempty"`
 	ActorID     string     `json:"actor_id,omitempty"`
+	ActorType   string     `json:"actor_type,omitempty"`
+	WikiID      string     `json:"wiki_id,omitempty"`
 	DisplayName string     `json:"display_name,omitempty"`
 	ExpiresAt   *time.Time `json:"expires_at,omitempty"`
 }
@@ -202,7 +204,7 @@ func HelpResult(version string) Result {
 			{
 				"step":    1,
 				"title":   "Create an authorization code",
-				"command": "Open https://anbywiki.example.com/settings/cli in a browser, then create a one-time code.",
+				"command": "Open https://anbywiki.example.com/settings/cli in a browser, select your identity, then create a one-time code. To use a machine Actor, create it at /governance/ai-trust first.",
 			},
 			{
 				"step":    2,
@@ -533,6 +535,8 @@ func (a *App) exchange(ctx context.Context, input Input) (Result, int) {
 	token, _ := payload["token"].(string)
 	actorID, _ := payload["actor_id"].(string)
 	displayName, _ := payload["display_name"].(string)
+	actorType, _ := payload["actor_type"].(string)
+	wikiID, _ := payload["wiki_id"].(string)
 	tokenInfo, _ := payload["token_info"].(map[string]any)
 	tokenPrefix, _ := tokenInfo["token_prefix"].(string)
 	expiresAt, err := parseJSONTime(tokenInfo["expires_at"])
@@ -541,13 +545,15 @@ func (a *App) exchange(ctx context.Context, input Input) (Result, int) {
 	}
 	data := map[string]any{
 		"actor_id": actorID, "display_name": displayName,
+		"actor_type": actorType, "wiki_id": wikiID,
 		"token_prefix": tokenPrefix, "expires_at": expiresAt,
 		"persisted": persist,
 	}
 	if persist {
 		config = Config{
 			BaseURL: config.BaseURL, Token: token, TokenPrefix: tokenPrefix,
-			ActorID: actorID, DisplayName: displayName, ExpiresAt: &expiresAt,
+			ActorID: actorID, ActorType: actorType, WikiID: wikiID,
+			DisplayName: displayName, ExpiresAt: &expiresAt,
 		}
 		if err := saveConfig(configPath, config); err != nil {
 			return failure(input.Action, "config_write_failed", err.Error(), nil), 1
@@ -596,6 +602,8 @@ func (a *App) logout(ctx context.Context, input Input) (Result, int) {
 	config.Token = ""
 	config.TokenPrefix = ""
 	config.ActorID = ""
+	config.ActorType = ""
+	config.WikiID = ""
 	config.DisplayName = ""
 	config.ExpiresAt = nil
 	if err := saveConfig(configPath, config); err != nil {
@@ -628,6 +636,7 @@ func (a *App) showConfig(input Input) (Result, int) {
 		"config_path": path, "base_url": config.BaseURL,
 		"authenticated": config.Token != "", "token_prefix": config.TokenPrefix,
 		"actor_id": config.ActorID, "display_name": config.DisplayName,
+		"actor_type": config.ActorType, "wiki_id": config.WikiID,
 		"expires_at": config.ExpiresAt,
 	}), 0
 }

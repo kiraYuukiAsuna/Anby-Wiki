@@ -495,7 +495,9 @@ paths:
       summary: 创建一次性 CLI 授权码
       description: >-
         仅浏览器 Session 可调用。授权码十分钟内有效且只能兑换一次；响应中的明文码
-        不会再次返回，服务端只持久化 SHA-256。
+        不会再次返回，服务端只持久化 SHA-256。可选择本人创建且所属 Wiki 仍有管理员
+        权限的机器 Actor；省略 actor_id 时使用当前真人身份。机器身份只读所属 Wiki、
+        创建与提交提案，最终必须人工审核。
       security:
         - sessionCookie: []
       requestBody:
@@ -562,7 +564,7 @@ paths:
     get:
       operationId: listCLITokens
       tags: [auth]
-      summary: 列出当前账号的 CLI Token
+      summary: 列出当前账号及其机器 Actor 的 CLI Token
       security:
         - sessionCookie: []
       responses:
@@ -573,6 +575,96 @@ paths:
               schema: { $ref: "#/components/schemas/CLITokenList" }
         "401": { $ref: "#/components/responses/Unauthorized" }
         "403": { $ref: "#/components/responses/Forbidden" }
+        "500": { $ref: "#/components/responses/Internal" }
+  /api/v1/auth/cli/actors:
+    get:
+      operationId: listCLIMachineActors
+      tags: [auth]
+      summary: 列出当前账户可绑定的机器 Actor
+      description: 只返回本人创建且本人仍为所属 Wiki 管理员的 Actor；停用的 Actor 不可授权。
+      security:
+        - sessionCookie: []
+      responses:
+        "200":
+          description: 本人机器 Actor
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/MachineActorList" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "500": { $ref: "#/components/responses/Internal" }
+  /api/v1/machine-actors:
+    get:
+      operationId: listMachineActors
+      tags: [auth]
+      summary: 管理员查看当前 Wiki 的机器 Actor
+      security:
+        - sessionCookie: []
+      responses:
+        "200":
+          description: 当前 Wiki 的受管机器 Actor
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/MachineActorList" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "500": { $ref: "#/components/responses/Internal" }
+    post:
+      operationId: createMachineActor
+      tags: [auth]
+      summary: 真人管理员创建所属账户管理的 AI 或 Import Actor
+      description: 同一 Wiki 的 Idempotency-Key 重试返回原 Actor；创建配置不一致返回 409。
+      security:
+        - sessionCookie: []
+      parameters:
+        - name: Idempotency-Key
+          in: header
+          required: true
+          schema: { type: string, minLength: 1, maxLength: 200 }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/CreateMachineActorRequest" }
+      responses:
+        "201":
+          description: 新建或幂等返回的机器 Actor
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/MachineActor" }
+        "400": { $ref: "#/components/responses/BadRequest" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "409": { $ref: "#/components/responses/Conflict" }
+        "500": { $ref: "#/components/responses/Internal" }
+  /api/v1/machine-actors/{id}/status:
+    put:
+      operationId: setMachineActorStatus
+      tags: [auth]
+      summary: 真人管理员启用或停用当前 Wiki 的机器 Actor
+      description: 状态变化撤销全部 CLI Token 并清除授权码；重新启用须重新授权，旧凭证不会复活。
+      security:
+        - sessionCookie: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: string, format: uuid }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/SetMachineActorStatusRequest" }
+      responses:
+        "200":
+          description: 更新后的机器 Actor
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/MachineActor" }
+        "400": { $ref: "#/components/responses/BadRequest" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
         "500": { $ref: "#/components/responses/Internal" }
   /api/v1/auth/cli/tokens/{id}:
     delete:
@@ -5042,6 +5134,10 @@ components:
       additionalProperties: false
       required: [name, token_ttl_days]
       properties:
+        actor_id:
+          type: string
+          format: uuid
+          description: 本人创建的机器 Actor；省略时绑定当前真人账号。
         name:
           type: string
           minLength: 1
@@ -5053,8 +5149,12 @@ components:
     CLIAuthCode:
       type: object
       additionalProperties: false
-      required: [code, name, expires_at, token_expires_at]
+      required: [code, name, expires_at, token_expires_at, actor_id, wiki_id, actor_type, display_name]
       properties:
+        actor_id: { type: string, format: uuid }
+        wiki_id: { type: string, format: uuid }
+        actor_type: { type: string, enum: [human, ai, import] }
+        display_name: { type: string }
         code:
           type: string
           writeOnly: true
@@ -5080,8 +5180,12 @@ components:
       type: object
       additionalProperties: false
       required:
-        [id, name, token_prefix, status, expires_at, created_at]
+        [id, name, token_prefix, status, expires_at, created_at, actor_id, wiki_id, actor_type, display_name]
       properties:
+        actor_id: { type: string, format: uuid }
+        wiki_id: { type: string, format: uuid }
+        actor_type: { type: string }
+        display_name: { type: string }
         id:
           type: string
           format: uuid
@@ -5110,8 +5214,12 @@ components:
       type: object
       additionalProperties: false
       required:
-        [id, name, status, expires_at, token_expires_at, created_at]
+        [id, name, status, expires_at, token_expires_at, created_at, actor_id, wiki_id, actor_type, display_name]
       properties:
+        actor_id: { type: string, format: uuid }
+        wiki_id: { type: string, format: uuid }
+        actor_type: { type: string }
+        display_name: { type: string }
         id:
           type: string
           format: uuid
@@ -5155,8 +5263,10 @@ components:
     CLIAuthExchangeResult:
       type: object
       additionalProperties: false
-      required: [token, actor_id, display_name, token_info]
+      required: [token, actor_id, wiki_id, actor_type, display_name, token_info]
       properties:
+        wiki_id: { type: string, format: uuid }
+        actor_type: { type: string, enum: [human, ai, import] }
         token:
           type: string
           writeOnly: true
@@ -5168,6 +5278,41 @@ components:
           type: string
         token_info:
           $ref: "#/components/schemas/CLIToken"
+    MachineActor:
+      type: object
+      additionalProperties: false
+      required: [actor_id, wiki_id, actor_type, display_name, owner_actor_id, status, created_at]
+      properties:
+        actor_id: { type: string, format: uuid }
+        wiki_id: { type: string, format: uuid }
+        actor_type: { type: string, enum: [ai, import] }
+        display_name: { type: string }
+        owner_actor_id:
+          type: string
+          format: uuid
+          description: 管理账号的真人 Actor ID；账号删除后返回零 UUID，机器 Actor 永久停用。
+        status: { type: string, enum: [active, disabled] }
+        created_at: { type: string, format: date-time }
+    MachineActorList:
+      type: object
+      required: [items]
+      properties:
+        items:
+          type: array
+          items: { $ref: "#/components/schemas/MachineActor" }
+    CreateMachineActorRequest:
+      type: object
+      additionalProperties: false
+      required: [actor_type, display_name]
+      properties:
+        actor_type: { type: string, enum: [ai, import] }
+        display_name: { type: string, minLength: 1, maxLength: 120 }
+    SetMachineActorStatusRequest:
+      type: object
+      additionalProperties: false
+      required: [status]
+      properties:
+        status: { type: string, enum: [active, disabled] }
     AssetRevision:
       type: object
       required: [id, asset_id, content_hash, mime_type, size_bytes, width, height, created_at]
@@ -6732,6 +6877,7 @@ components:
         - actor_id
         - actor_type
         - actor_display_name
+        - actor_status
         - trust_level
         - required_sample_percent
         - configured
@@ -6740,6 +6886,7 @@ components:
         actor_id: { type: string, format: uuid }
         actor_type: { type: string, enum: [ai, import] }
         actor_display_name: { type: string }
+        actor_status: { type: string }
         trust_level:
           type: string
           enum: [untrusted, assisted, trusted]

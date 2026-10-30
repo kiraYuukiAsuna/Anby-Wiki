@@ -8,6 +8,7 @@ import (
 	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5"
 
+	authdomain "github.com/anby/wiki/backend/internal/auth"
 	"github.com/anby/wiki/backend/internal/platform/db"
 )
 
@@ -80,7 +81,7 @@ func (s *AuthorizationService) CheckReadPage(ctx context.Context, actorID, wikiI
 	if actorType == "system" {
 		return nil
 	}
-	if actorType != "human" {
+	if actorType != "human" && actorType != "ai" && actorType != "import" {
 		return ErrPermissionDenied
 	}
 	hasWikiAccess, err := s.HasWikiAccess(ctx, actorID, wikiID)
@@ -89,6 +90,9 @@ func (s *AuthorizationService) CheckReadPage(ctx context.Context, actorID, wikiI
 	}
 	if hasWikiAccess {
 		return nil
+	}
+	if actorType == authdomain.ActorTypeAI || actorType == authdomain.ActorTypeImport {
+		return ErrPermissionDenied
 	}
 	shared, err := s.hasPageShareRole(
 		ctx, nil, actorID, wikiID, pageID,
@@ -113,12 +117,20 @@ func (s *AuthorizationService) HasWikiAccess(ctx context.Context, actorID, wikiI
 		  AND (la.id IS NULL OR la.status='active')
 		  AND (
 		    a.actor_type='system'
-		    OR EXISTS (
+		    OR (a.actor_type IN ('ai','import') AND a.wiki_id=$2
+		      AND starts_with(a.external_key,$3)
+		      AND EXISTS (SELECT 1 FROM local_account owner_account
+		        JOIN actor owner ON owner.id=owner_account.actor_id
+		        JOIN actor_role ar ON ar.actor_id=owner.id AND ar.wiki_id=$2
+		        JOIN role role ON role.id=ar.role_id AND role.role_key='admin'
+		        WHERE owner_account.id=a.user_id AND owner_account.status='active'
+		          AND owner.status='active' AND owner.actor_type='human'))
+		    OR (a.actor_type='human' AND EXISTS (
 		      SELECT 1 FROM actor_role ar
 		      WHERE ar.actor_id=a.id AND ar.wiki_id=$2
-		    )
+		    ))
 		  )
-	)`, actorID, wikiID).Scan(&allowed)
+	)`, actorID, wikiID, authdomain.MachineActorKeyPrefix).Scan(&allowed)
 	return allowed, err
 }
 

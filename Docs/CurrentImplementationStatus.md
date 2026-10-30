@@ -21,7 +21,7 @@ gate、Doctor、滚动替换和健康检查，并通过复杂 PDF/扫描件、�
 跨页表格、恶意附件隔离、密码加密拒绝及 128/298 MiB 上传边界验收。另一个完全隔离的
 远端数据库/bucket/index/Redis DB 已执行
 当时 149/149 OpenAPI operation handler 探针、核心成功工作流、治理、批量审核、导入、
-AI 配置和双会话协作 E2E；当前权威契约为 179 个 operation。“实现完成”仍不等于
+AI 配置和双会话协作 E2E；当前权威契约为 183 个 operation。“实现完成”仍不等于
 “所有商业发布门禁已关闭”：目标规模容量、正式域名
 安全边界、账号恢复、备份恢复与人工可访问性等仍须验收。详见
 [待解决问题](OutstandingIssues.md)。
@@ -383,12 +383,12 @@ AI 配置和双会话协作 E2E；当前权威契约为 179 个 operation。“�
 | 知识图谱 | Entity/Property/Claim、标签/别名/主标签、Page 主 Entity 绑定、Claim 验证、Entity 合并与回滚、联邦 Wiki/Entity 映射、图谱查询 |
 | 证据与媒体 | Source/Version/Chunk/Citation、Asset/AssetRevision、引用校验、相同证据 Citation 幂等复用、按页面聚合并可展开到 Block/Node 的反向使用、按全文首次出现统一编号的 References 投影、逐处正文回链、可审计来源与媒体目录 |
 | 结构化内容 | Component/Version、内置 Entity/Claim 信息框（按页面语言→`und`→任意主标签降级、同属性多值聚合、Entity 可跳转、验证摘要与类型感知排序）、静态与动态 Collection、成员维护、页面反向归属查询与投影；Entity/Claim/Citation 反向使用、页面反链和 Component 依赖在 Web 中按来源页面聚合，并可展开到具体 Block/Node；列表返回真实总位置/页面/区块数并支持游标续页。Dataset/View/Record 仅作为后端兼容层保留，Web 工作台、公开表单、编辑器插入与阅读链接已退场 |
-| 治理 | ProposalOperation v1 全部 24 种 Operation（含可原子应用和补偿回滚的 Page 主 Entity 绑定）、预分配 Page/Entity ID 的同批依赖、Operation 集合事务冻结、Wiki 级多目标 Proposal、跨页面 Revision/Block、Claim 及 Page/Entity 身份冲突检测、并发唯一索引冲突到 HTTP 409 的领域映射、预览、风险、ReviewTask、面向 applier/admin 的跨 Actor 待原子应用队列、带分类失败原因和终态跳过语义的批量审核、ChangeBatch、整批补偿回滚、审计事件、ChangeTag、AI Trust 档案/策略、事实一致性；AI Trust 仅作用于预置的 `ai/import` Actor，当前用户导入仍以 human Actor 创建 Proposal |
+| 治理 | ProposalOperation v1 全部 24 种 Operation（含可原子应用和补偿回滚的 Page 主 Entity 绑定）、预分配 Page/Entity ID 的同批依赖、Operation 集合事务冻结、Wiki 级多目标 Proposal、跨页面 Revision/Block、Claim 及 Page/Entity 身份冲突检测、并发唯一索引冲突到 HTTP 409 的领域映射、预览、风险、ReviewTask、面向 applier/admin 的跨 Actor 待原子应用队列、带分类失败原因和终态跳过语义的批量审核、ChangeBatch、整批补偿回滚、审计事件、ChangeTag、AI Trust 档案/策略、事实一致性；支持创建、启停和绑定 Agent CLI 的 `ai/import` Actor，机器提案最终必须人工审核，普通 Web 导入仍以 human Actor 创建 Proposal |
 | 导入与 AI | URL/Markdown/HTML/文本/PDF/PNG/JPEG/JSON/CSV 获取，基于 DOM 主正文且排除导航/侧栏/页眉/页脚的 HTML 解析，复杂 PDF 的原生文本+逐页视觉双轨解析，表格/图表/图片结构化 Chunk 与页内区域定位，独立图片中英 OCR、来源标题/作者/发布者/日期/DOI 等安全元数据推导、结构化数据规范化、七阶段进度、幂等 Job、同 Job 多 Run/多不可变 ImportPlan 版本、规划 Revision/Block hash 并发保护、解析成功后原子写入且通过 ImportJob API 可见的不可变 SourceVersion 恢复点与无重复来源的失败重试、无需 AI 配置且只为 Markdown/HTML/纯文本/JSON/CSV 固化不可变来源/分片的 `source_only` 模式、Worker 中断任务自动恢复、账号级文档理解模型配置与缺失配置 Wiki 跳过、模型最大输入 Token、来源 Chunk 字符数与中间计划自动确认（默认开启，最终 Proposal 审核不变）、按输入预算与输出安全上限并行分批抽取/规划、单个持久 Chunk 内的临时语义窗口二分及证据回映射、截断或结构不合法窗口重试及跨批去重、轻量模型规划 Schema 与服务端机械字段补全、确定性 ImportPlan 合并、近义内容整合和结构清理、用户标题/内容块上限的跨窗口全局执行、现有页异常扩张硬门禁、对照原始 Chunk 与用户指定范围的生成后保真审计和证据化章节修复、保真分窗的三次语义纠正、并发真因保留及坏修复隔离与覆盖率回退、服务端五维质量评分及默认 0.70 硬门槛、Semantic Kernel 默认三次结构化调用与纠正重试、精确引文的跨 Chunk 安全纠偏、纯空白差异原文回填及坏候选/坏 Claim 隔离、保留语义符号的 Entity 身份归一化、缩写/别名全候选消歧、人工匹配决定、Claim 完整值/有效期去重、Claim 方向/类型/非自引用门禁、`instance_of` 明确分类证据门禁与批内单值属性确定性消歧、作品/RFC 的发布组织、文档编号/类别/状态、更新与废止专用属性、仅由页面路由授权图谱写入、来源概况与按相关性召回的智能多页面 create/update/link/ignore 路由、同批新页面稳定互链、强制创建单页、更新指定页面与用户导入要求、证据约束 Typed Block 生成/补丁及正文 Entity 引用、确定性 H2 层级与标准 See also、主 Entity 绑定及信息框、显式且有证据的页面关联与反链投影、规划结果可视化、单 ImportJob 页面+Entity+Claim 复合 Proposal 与同一 ChangeBatch 原子应用、可持久查询的导入队列 |
 | 投影与搜索 | Outbox 租约/重试/死信、链接/目录/锚点/章节/渲染/知识使用/References/相关推荐/组件依赖/图谱投影、可解释的链接+Collection+Entity 相关度、PostgreSQL fallback、Meilisearch 关键词/混合/语义检索 |
 | 规模与归档 | 章节懒加载、服务端可信 HTML 渲染、Revision 热冷分层与 S3 回源、Projection/Search 重建、容量基准命令 |
 | 协作 | Yjs WorkingDocument、持久增量 update、重连游标、普通发布与 AI 合并的 sequence CAS、未确认 update 幂等重发、自动 snapshot/compact、Block 级 Presence、三方合并与人工冲突决议；跨标签页离线恢复和多 API 实例广播仍待实现 |
-| 平台 | 每账号私人 Wiki、Wiki 成员/协作者、单文档分享、本地账号/Session/RBAC、请求级 Wiki 切换、个人中心资料与文档理解模型配置、Server Component 登录态透传、一次性授权码与可撤销/可清理 Agent CLI Bearer Token、177 个 OpenAPI operation 和协作 WebSocket 的 JSON + 人类命令双模式 CLI、Redis 限流、安全头、OTel/Prometheus、手工灾备/恢复演练工具、Doctor、生产部署与验收后清理 |
+| 平台 | 每账号私人 Wiki、Wiki 成员/协作者、单文档分享、本地账号/Session/RBAC、请求级 Wiki 切换、个人中心资料与文档理解模型配置、Server Component 登录态透传、一次性授权码与可绑定机器 Actor、撤销及清理的 Agent CLI Bearer Token、183 个 OpenAPI operation 和协作 WebSocket 的 JSON + 人类命令双模式 CLI、Redis 限流、安全头、OTel/Prometheus、手工灾备/恢复演练工具、Doctor、生产部署与验收后清理 |
 
 ## 关键不变量
 
@@ -893,8 +893,8 @@ outlines。References/Related 是 Current Revision
 - Parse stage 完成或恢复跳过时，Worker 现在在同一事务完成 stage 并写入
   `ImportJob.source_version_id`。即使后续模型调用失败，失败任务 API 仍可导航到
   已持久化 SourceVersion/Chunk，并从同一 checkpoint 重试。
-- AI Trust 的更新成功路径依赖预先存在的 `ai/import` Actor；公开注册只创建 human，
-  当前用户发起的导入 Proposal 也以 human 为作者，因此该策略尚未进入普通导入闭环，
+- AI Trust 已支持创建、启停并绑定 Agent CLI 的 `ai/import` Actor；公开注册仍只创建
+  human，当前用户发起的导入 Proposal 也以 human 为作者，因此该策略尚未进入普通导入闭环，
   详见 [待解决问题](OutstandingIssues.md)。
 
 ## Agent CLI
@@ -902,7 +902,7 @@ outlines。References/Related 是 Current Revision
 - `backend/cmd/anby-wiki` 提供 Go CLI；不带子命令或使用 `--input` 时保持供 Agent
   使用的单一 JSON envelope，传入子命令时提供面向人工的普通命令行参数封装，退出码
   仍区分成功、输入/契约错误和远端错误。
-- CLI 从嵌入的权威 OpenAPI 读取 172 个 operationId，支持清单、搜索、Schema 描述和
+- CLI 从嵌入的权威 OpenAPI 读取 183 个 operationId，支持清单、搜索、Schema 描述和
   通用调用；所有 HTTP operation 均可通过 kebab-case 命令名或 `call <operation>`
   调用，发送前校验 path/query/header、JSON/multipart body，收到 JSON 后按状态码校验
   响应。文件上传读取本地路径，二进制响应统一转为 base64 JSON。
@@ -913,6 +913,19 @@ outlines。References/Related 是 Current Revision
   状态、到期和最近使用时间；待兑换授权码可删除，Token 可撤销。
 - CLI Token 映射到签发 Actor，不复制角色；每次请求实时读取 Actor/账号状态并继续经过
   现有 RBAC、PageProtection、Proposal Review/Apply 与领域服务边界。
+- AI 信任页提供 `ai/import` Actor 创建和启停，默认 `untrusted/100%`；Agent CLI 授权
+  可选择本人创建的机器身份，Token、授权码记录与 CLI 配置显示实际 Actor 和所属 Wiki。
+  机器只读所属 Wiki 并提交自己的提案，不能直接编辑、管理、审核或 Apply；所有机器
+  提案最终由真人审核，三档信任与完整 Proposal ID 哈希抽样记录重点复核标记。
+  创建和启停记录审计；停用撤销全部 Token 并清除授权码，重新启用不会恢复旧凭证。
+  创建者账号不再活跃或失去管理员权限时，机器凭证每次兑换与使用均拒绝。
+  管理账号删除会在同一事务永久停用机器 Actor、撤销凭证并记录相关机器 ID，历史署名保留。
+- 本轮变更集中于 auth 机器 Actor 与凭证服务、治理权限/信任/提交响应及账号删除、
+  Agent CLI 身份配置、AI 信任与 CLI 授权页面，OpenAPI/内嵌契约和 TS 客户端同步。
+  验证包含全量 Go 测试、真实 PostgreSQL 机器生命周期、两类 Actor 的真实 CLI
+  读取/提案/真人审核/Apply E2E、并发授权码兑换、三档信任与稳定抽样、320/390/960px
+  浏览器创建/保存/绑定/停用及无横向溢出；`make check`、契约副本和生成物重跑一致性通过。
+  未改数据库主 Schema、AST/Operation/事件版本、根配置或依赖锁；高冲突资源无持续占用。
 - 详细协议与示例见 [Agent CLI](AgentCLI.md)。
 - 隔离 PostgreSQL/Redis/Meilisearch 上的真实 E2E 已覆盖授权码兑换、Bearer Session、
   禁止 Bearer 递归签发、后台撤销、CLI 创建 Page、WorkingDocument 恢复和 CLI 自撤销。

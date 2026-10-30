@@ -44,6 +44,11 @@ import {
     CreateCLIAuthCodeRequestToJSON,
 } from '../models/CreateCLIAuthCodeRequest';
 import {
+    type CreateMachineActorRequest,
+    CreateMachineActorRequestFromJSON,
+    CreateMachineActorRequestToJSON,
+} from '../models/CreateMachineActorRequest';
+import {
     type DeleteCLITokenRecordsResult,
     DeleteCLITokenRecordsResultFromJSON,
     DeleteCLITokenRecordsResultToJSON,
@@ -59,13 +64,33 @@ import {
     LoginRequestToJSON,
 } from '../models/LoginRequest';
 import {
+    type MachineActor,
+    MachineActorFromJSON,
+    MachineActorToJSON,
+} from '../models/MachineActor';
+import {
+    type MachineActorList,
+    MachineActorListFromJSON,
+    MachineActorListToJSON,
+} from '../models/MachineActorList';
+import {
     type RegisterRequest,
     RegisterRequestFromJSON,
     RegisterRequestToJSON,
 } from '../models/RegisterRequest';
+import {
+    type SetMachineActorStatusRequest,
+    SetMachineActorStatusRequestFromJSON,
+    SetMachineActorStatusRequestToJSON,
+} from '../models/SetMachineActorStatusRequest';
 
 export interface CreateCLIAuthCodeOperationRequest {
     createCLIAuthCodeRequest: CreateCLIAuthCodeRequest;
+}
+
+export interface CreateMachineActorOperationRequest {
+    idempotencyKey: string;
+    createMachineActorRequest: CreateMachineActorRequest;
 }
 
 export interface DeleteCLIAuthCodeRequest {
@@ -90,6 +115,11 @@ export interface RegisterOperationRequest {
 
 export interface RevokeCLITokenRequest {
     id: string;
+}
+
+export interface SetMachineActorStatusOperationRequest {
+    id: string;
+    setMachineActorStatusRequest: SetMachineActorStatusRequest;
 }
 
 /**
@@ -127,7 +157,7 @@ export class AuthApi extends runtime.BaseAPI {
     }
 
     /**
-     * 仅浏览器 Session 可调用。授权码十分钟内有效且只能兑换一次；响应中的明文码 不会再次返回，服务端只持久化 SHA-256。
+     * 仅浏览器 Session 可调用。授权码十分钟内有效且只能兑换一次；响应中的明文码 不会再次返回，服务端只持久化 SHA-256。可选择本人创建且所属 Wiki 仍有管理员 权限的机器 Actor；省略 actor_id 时使用当前真人身份。机器身份只读所属 Wiki、 创建与提交提案，最终必须人工审核。
      * 创建一次性 CLI 授权码
      */
     async createCLIAuthCodeRaw(requestParameters: CreateCLIAuthCodeOperationRequest, initOverrides?: RequestInit | runtime.InitOverrideFunction): Promise<runtime.ApiResponse<CLIAuthCode>> {
@@ -138,11 +168,71 @@ export class AuthApi extends runtime.BaseAPI {
     }
 
     /**
-     * 仅浏览器 Session 可调用。授权码十分钟内有效且只能兑换一次；响应中的明文码 不会再次返回，服务端只持久化 SHA-256。
+     * 仅浏览器 Session 可调用。授权码十分钟内有效且只能兑换一次；响应中的明文码 不会再次返回，服务端只持久化 SHA-256。可选择本人创建且所属 Wiki 仍有管理员 权限的机器 Actor；省略 actor_id 时使用当前真人身份。机器身份只读所属 Wiki、 创建与提交提案，最终必须人工审核。
      * 创建一次性 CLI 授权码
      */
     async createCLIAuthCode(requestParameters: CreateCLIAuthCodeOperationRequest, initOverrides?: RequestInit | runtime.InitOverrideFunction): Promise<CLIAuthCode> {
         const response = await this.createCLIAuthCodeRaw(requestParameters, initOverrides);
+        return await response.value();
+    }
+
+    /**
+     * Creates request options for createMachineActor without sending the request
+     */
+    async createMachineActorRequestOpts(requestParameters: CreateMachineActorOperationRequest): Promise<runtime.RequestOpts> {
+        if (requestParameters['idempotencyKey'] == null) {
+            throw new runtime.RequiredError(
+                'idempotencyKey',
+                'Required parameter "idempotencyKey" was null or undefined when calling createMachineActor().'
+            );
+        }
+
+        if (requestParameters['createMachineActorRequest'] == null) {
+            throw new runtime.RequiredError(
+                'createMachineActorRequest',
+                'Required parameter "createMachineActorRequest" was null or undefined when calling createMachineActor().'
+            );
+        }
+
+        const queryParameters: any = {};
+
+        const headerParameters: runtime.HTTPHeaders = {};
+
+        headerParameters['Content-Type'] = 'application/json';
+
+        if (requestParameters['idempotencyKey'] != null) {
+            headerParameters['Idempotency-Key'] = String(requestParameters['idempotencyKey']);
+        }
+
+
+        let urlPath = `/api/v1/machine-actors`;
+
+        return {
+            path: urlPath,
+            method: 'POST',
+            headers: headerParameters,
+            query: queryParameters,
+            body: CreateMachineActorRequestToJSON(requestParameters['createMachineActorRequest']),
+        };
+    }
+
+    /**
+     * 同一 Wiki 的 Idempotency-Key 重试返回原 Actor；创建配置不一致返回 409。
+     * 真人管理员创建所属账户管理的 AI 或 Import Actor
+     */
+    async createMachineActorRaw(requestParameters: CreateMachineActorOperationRequest, initOverrides?: RequestInit | runtime.InitOverrideFunction): Promise<runtime.ApiResponse<MachineActor>> {
+        const requestOptions = await this.createMachineActorRequestOpts(requestParameters);
+        const response = await this.request(requestOptions, initOverrides);
+
+        return new runtime.JSONApiResponse(response, (jsonValue) => MachineActorFromJSON(jsonValue));
+    }
+
+    /**
+     * 同一 Wiki 的 Idempotency-Key 重试返回原 Actor；创建配置不一致返回 409。
+     * 真人管理员创建所属账户管理的 AI 或 Import Actor
+     */
+    async createMachineActor(requestParameters: CreateMachineActorOperationRequest, initOverrides?: RequestInit | runtime.InitOverrideFunction): Promise<MachineActor> {
+        const response = await this.createMachineActorRaw(requestParameters, initOverrides);
         return await response.value();
     }
 
@@ -364,6 +454,45 @@ export class AuthApi extends runtime.BaseAPI {
     }
 
     /**
+     * Creates request options for listCLIMachineActors without sending the request
+     */
+    async listCLIMachineActorsRequestOpts(): Promise<runtime.RequestOpts> {
+        const queryParameters: any = {};
+
+        const headerParameters: runtime.HTTPHeaders = {};
+
+
+        let urlPath = `/api/v1/auth/cli/actors`;
+
+        return {
+            path: urlPath,
+            method: 'GET',
+            headers: headerParameters,
+            query: queryParameters,
+        };
+    }
+
+    /**
+     * 只返回本人创建且本人仍为所属 Wiki 管理员的 Actor；停用的 Actor 不可授权。
+     * 列出当前账户可绑定的机器 Actor
+     */
+    async listCLIMachineActorsRaw(initOverrides?: RequestInit | runtime.InitOverrideFunction): Promise<runtime.ApiResponse<MachineActorList>> {
+        const requestOptions = await this.listCLIMachineActorsRequestOpts();
+        const response = await this.request(requestOptions, initOverrides);
+
+        return new runtime.JSONApiResponse(response, (jsonValue) => MachineActorListFromJSON(jsonValue));
+    }
+
+    /**
+     * 只返回本人创建且本人仍为所属 Wiki 管理员的 Actor；停用的 Actor 不可授权。
+     * 列出当前账户可绑定的机器 Actor
+     */
+    async listCLIMachineActors(initOverrides?: RequestInit | runtime.InitOverrideFunction): Promise<MachineActorList> {
+        const response = await this.listCLIMachineActorsRaw(initOverrides);
+        return await response.value();
+    }
+
+    /**
      * Creates request options for listCLITokens without sending the request
      */
     async listCLITokensRequestOpts(): Promise<runtime.RequestOpts> {
@@ -383,7 +512,7 @@ export class AuthApi extends runtime.BaseAPI {
     }
 
     /**
-     * 列出当前账号的 CLI Token
+     * 列出当前账号及其机器 Actor 的 CLI Token
      */
     async listCLITokensRaw(initOverrides?: RequestInit | runtime.InitOverrideFunction): Promise<runtime.ApiResponse<CLITokenList>> {
         const requestOptions = await this.listCLITokensRequestOpts();
@@ -393,10 +522,47 @@ export class AuthApi extends runtime.BaseAPI {
     }
 
     /**
-     * 列出当前账号的 CLI Token
+     * 列出当前账号及其机器 Actor 的 CLI Token
      */
     async listCLITokens(initOverrides?: RequestInit | runtime.InitOverrideFunction): Promise<CLITokenList> {
         const response = await this.listCLITokensRaw(initOverrides);
+        return await response.value();
+    }
+
+    /**
+     * Creates request options for listMachineActors without sending the request
+     */
+    async listMachineActorsRequestOpts(): Promise<runtime.RequestOpts> {
+        const queryParameters: any = {};
+
+        const headerParameters: runtime.HTTPHeaders = {};
+
+
+        let urlPath = `/api/v1/machine-actors`;
+
+        return {
+            path: urlPath,
+            method: 'GET',
+            headers: headerParameters,
+            query: queryParameters,
+        };
+    }
+
+    /**
+     * 管理员查看当前 Wiki 的机器 Actor
+     */
+    async listMachineActorsRaw(initOverrides?: RequestInit | runtime.InitOverrideFunction): Promise<runtime.ApiResponse<MachineActorList>> {
+        const requestOptions = await this.listMachineActorsRequestOpts();
+        const response = await this.request(requestOptions, initOverrides);
+
+        return new runtime.JSONApiResponse(response, (jsonValue) => MachineActorListFromJSON(jsonValue));
+    }
+
+    /**
+     * 管理员查看当前 Wiki 的机器 Actor
+     */
+    async listMachineActors(initOverrides?: RequestInit | runtime.InitOverrideFunction): Promise<MachineActorList> {
+        const response = await this.listMachineActorsRaw(initOverrides);
         return await response.value();
     }
 
@@ -618,6 +784,63 @@ export class AuthApi extends runtime.BaseAPI {
      */
     async revokeCurrentCLIToken(initOverrides?: RequestInit | runtime.InitOverrideFunction): Promise<void> {
         await this.revokeCurrentCLITokenRaw(initOverrides);
+    }
+
+    /**
+     * Creates request options for setMachineActorStatus without sending the request
+     */
+    async setMachineActorStatusRequestOpts(requestParameters: SetMachineActorStatusOperationRequest): Promise<runtime.RequestOpts> {
+        if (requestParameters['id'] == null) {
+            throw new runtime.RequiredError(
+                'id',
+                'Required parameter "id" was null or undefined when calling setMachineActorStatus().'
+            );
+        }
+
+        if (requestParameters['setMachineActorStatusRequest'] == null) {
+            throw new runtime.RequiredError(
+                'setMachineActorStatusRequest',
+                'Required parameter "setMachineActorStatusRequest" was null or undefined when calling setMachineActorStatus().'
+            );
+        }
+
+        const queryParameters: any = {};
+
+        const headerParameters: runtime.HTTPHeaders = {};
+
+        headerParameters['Content-Type'] = 'application/json';
+
+
+        let urlPath = `/api/v1/machine-actors/{id}/status`;
+        urlPath = urlPath.replace('{id}', encodeURIComponent(String(requestParameters['id'])));
+
+        return {
+            path: urlPath,
+            method: 'PUT',
+            headers: headerParameters,
+            query: queryParameters,
+            body: SetMachineActorStatusRequestToJSON(requestParameters['setMachineActorStatusRequest']),
+        };
+    }
+
+    /**
+     * 状态变化撤销全部 CLI Token 并清除授权码；重新启用须重新授权，旧凭证不会复活。
+     * 真人管理员启用或停用当前 Wiki 的机器 Actor
+     */
+    async setMachineActorStatusRaw(requestParameters: SetMachineActorStatusOperationRequest, initOverrides?: RequestInit | runtime.InitOverrideFunction): Promise<runtime.ApiResponse<MachineActor>> {
+        const requestOptions = await this.setMachineActorStatusRequestOpts(requestParameters);
+        const response = await this.request(requestOptions, initOverrides);
+
+        return new runtime.JSONApiResponse(response, (jsonValue) => MachineActorFromJSON(jsonValue));
+    }
+
+    /**
+     * 状态变化撤销全部 CLI Token 并清除授权码；重新启用须重新授权，旧凭证不会复活。
+     * 真人管理员启用或停用当前 Wiki 的机器 Actor
+     */
+    async setMachineActorStatus(requestParameters: SetMachineActorStatusOperationRequest, initOverrides?: RequestInit | runtime.InitOverrideFunction): Promise<MachineActor> {
+        const response = await this.setMachineActorStatusRaw(requestParameters, initOverrides);
+        return await response.value();
     }
 
 }

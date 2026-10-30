@@ -6,6 +6,10 @@
 
 Name | Type
 ------------ | -------------
+`actorId` | string
+`wikiId` | string
+`actorType` | string
+`displayName` | string
 `id` | string
 `name` | string
 `tokenPrefix` | string
@@ -22,6 +26,10 @@ import type { CLIToken } from ''
 
 // TODO: Update the object below with actual values
 const example = {
+  "actorId": null,
+  "wikiId": null,
+  "actorType": null,
+  "displayName": null,
   "id": null,
   "name": null,
   "tokenPrefix": null,

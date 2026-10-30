@@ -6,6 +6,7 @@
 
 Name | Type
 ------------ | -------------
+`actorId` | string
 `name` | string
 `tokenTtlDays` | number
 
@@ -16,6 +17,7 @@ import type { CreateCLIAuthCodeRequest } from ''
 
 // TODO: Update the object below with actual values
 const example = {
+  "actorId": null,
   "name": null,
   "tokenTtlDays": null,
 } satisfies CreateCLIAuthCodeRequest

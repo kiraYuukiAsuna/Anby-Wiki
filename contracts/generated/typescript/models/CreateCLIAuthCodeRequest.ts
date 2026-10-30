@@ -20,6 +20,12 @@ import { mapValues } from '../runtime';
  */
 export interface CreateCLIAuthCodeRequest {
     /**
+     * 本人创建的机器 Actor；省略时绑定当前真人账号。
+     * @type {string}
+     * @memberof CreateCLIAuthCodeRequest
+     */
+    actorId?: string;
+    /**
      *
      * @type {string}
      * @memberof CreateCLIAuthCodeRequest
@@ -52,6 +58,7 @@ export function CreateCLIAuthCodeRequestFromJSONTyped(json: any, ignoreDiscrimin
     }
     return {
 
+        'actorId': json['actor_id'] == null ? undefined : json['actor_id'],
         'name': json['name'],
         'tokenTtlDays': json['token_ttl_days'],
     };
@@ -68,6 +75,7 @@ export function CreateCLIAuthCodeRequestToJSONTyped(value?: CreateCLIAuthCodeReq
 
     return {
 
+        'actor_id': value['actorId'],
         'name': value['name'],
         'token_ttl_days': value['tokenTtlDays'],
     };

@@ -11,6 +11,7 @@ import (
 	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5"
 
+	authdomain "github.com/anby/wiki/backend/internal/auth"
 	"github.com/anby/wiki/backend/internal/platform/db"
 	"github.com/anby/wiki/backend/internal/platform/id"
 )
@@ -614,6 +615,36 @@ func (s *UserAdminService) DeleteUser(
 				}
 			}
 		}
+		// Retain machine authorship after deleting its managing account, while
+		// retiring the identity and removing the local_account FK.
+		rows, err := tx.Query(ctx, `UPDATE actor a SET status='disabled',user_id=NULL
+			FROM local_account la
+			WHERE a.user_id=la.id AND la.actor_id=$1
+			  AND a.actor_type IN ('ai','import') AND starts_with(a.external_key,$2)
+			RETURNING a.id`, targetActorID, authdomain.MachineActorKeyPrefix)
+		if err != nil {
+			return err
+		}
+		retiredMachineIDs := []uuid.UUID{}
+		for rows.Next() {
+			var machineID uuid.UUID
+			if err := rows.Scan(&machineID); err != nil {
+				rows.Close()
+				return err
+			}
+			retiredMachineIDs = append(retiredMachineIDs, machineID)
+		}
+		rows.Close()
+		if err := rows.Err(); err != nil {
+			return err
+		}
+		if _, err := tx.Exec(ctx, `DELETE FROM cli_authorization_code WHERE actor_id=ANY($1::uuid[])`, retiredMachineIDs); err != nil {
+			return err
+		}
+		if _, err := tx.Exec(ctx, `UPDATE cli_access_token SET revoked_at=COALESCE(revoked_at,now())
+			WHERE actor_id=ANY($1::uuid[])`, retiredMachineIDs); err != nil {
+			return err
+		}
 		deleted := false
 		for _, statement := range []string{
 			`DELETE FROM cli_authorization_code WHERE actor_id=$1`,
@@ -644,7 +675,7 @@ func (s *UserAdminService) DeleteUser(
 			return ErrAdminUserNotFound
 		}
 		deleted = true
-		if err := s.insertUserDeletionAudit(ctx, tx, actorID, *user); err != nil {
+		if err := s.insertUserDeletionAudit(ctx, tx, actorID, *user, retiredMachineIDs); err != nil {
 			return err
 		}
 		result = &AdminUserDeletionResult{ActorID: targetActorID, Deleted: deleted}
@@ -900,6 +931,7 @@ func (s *UserAdminService) insertUserDeletionAudit(
 	tx pgx.Tx,
 	actorID uuid.UUID,
 	user AdminUser,
+	retiredMachineIDs []uuid.UUID,
 ) error {
 	auditID, err := s.ids.New()
 	if err != nil {
@@ -910,11 +942,12 @@ func (s *UserAdminService) insertUserDeletionAudit(
 		roles = append(roles, role.Key)
 	}
 	payload, err := json.Marshal(map[string]any{
-		"actor_id":     user.ActorID,
-		"username":     user.Username,
-		"display_name": user.DisplayName,
-		"status":       user.Status,
-		"roles":        roles,
+		"actor_id":                  user.ActorID,
+		"username":                  user.Username,
+		"display_name":              user.DisplayName,
+		"status":                    user.Status,
+		"roles":                     roles,
+		"retired_machine_actor_ids": retiredMachineIDs,
 	})
 	if err != nil {
 		return err

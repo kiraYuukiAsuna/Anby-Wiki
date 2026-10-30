@@ -24,6 +24,30 @@ export interface CLIAuthCode {
      * @type {string}
      * @memberof CLIAuthCode
      */
+    actorId: string;
+    /**
+     *
+     * @type {string}
+     * @memberof CLIAuthCode
+     */
+    wikiId: string;
+    /**
+     *
+     * @type {CLIAuthCodeActorTypeEnum}
+     * @memberof CLIAuthCode
+     */
+    actorType: CLIAuthCodeActorTypeEnum;
+    /**
+     *
+     * @type {string}
+     * @memberof CLIAuthCode
+     */
+    displayName: string;
+    /**
+     *
+     * @type {string}
+     * @memberof CLIAuthCode
+     */
     code: string;
     /**
      *
@@ -45,10 +69,26 @@ export interface CLIAuthCode {
     tokenExpiresAt: Date;
 }
 
+
+/**
+ * @export
+ */
+export const CLIAuthCodeActorTypeEnum = {
+    Human: 'human',
+    Ai: 'ai',
+    Import: 'import'
+} as const;
+export type CLIAuthCodeActorTypeEnum = typeof CLIAuthCodeActorTypeEnum[keyof typeof CLIAuthCodeActorTypeEnum];
+
+
 /**
  * Check if a given object implements the CLIAuthCode interface.
  */
 export function instanceOfCLIAuthCode(value: object): value is CLIAuthCode {
+    if ((!('actorId' in (value as Record<string, any>)) && !('actor_id' in (value as Record<string, any>))) || ((value as Record<string, any>)['actorId'] === undefined && (value as Record<string, any>)['actor_id'] === undefined)) return false;
+    if ((!('wikiId' in (value as Record<string, any>)) && !('wiki_id' in (value as Record<string, any>))) || ((value as Record<string, any>)['wikiId'] === undefined && (value as Record<string, any>)['wiki_id'] === undefined)) return false;
+    if ((!('actorType' in (value as Record<string, any>)) && !('actor_type' in (value as Record<string, any>))) || ((value as Record<string, any>)['actorType'] === undefined && (value as Record<string, any>)['actor_type'] === undefined)) return false;
+    if ((!('displayName' in (value as Record<string, any>)) && !('display_name' in (value as Record<string, any>))) || ((value as Record<string, any>)['displayName'] === undefined && (value as Record<string, any>)['display_name'] === undefined)) return false;
     if (!('code' in value) || value['code'] === undefined) return false;
     if (!('name' in value) || value['name'] === undefined) return false;
     if ((!('expiresAt' in (value as Record<string, any>)) && !('expires_at' in (value as Record<string, any>))) || ((value as Record<string, any>)['expiresAt'] === undefined && (value as Record<string, any>)['expires_at'] === undefined)) return false;
@@ -66,6 +106,10 @@ export function CLIAuthCodeFromJSONTyped(json: any, ignoreDiscriminator: boolean
     }
     return {
 
+        'actorId': json['actor_id'],
+        'wikiId': json['wiki_id'],
+        'actorType': json['actor_type'],
+        'displayName': json['display_name'],
         'code': json['code'],
         'name': json['name'],
         'expiresAt': (new Date(json['expires_at'])),
@@ -84,6 +128,10 @@ export function CLIAuthCodeToJSONTyped(value?: CLIAuthCode | null, ignoreDiscrim
 
     return {
 
+        'actor_id': value['actorId'],
+        'wiki_id': value['wikiId'],
+        'actor_type': value['actorType'],
+        'display_name': value['displayName'],
         'code': value['code'],
         'name': value['name'],
         'expires_at': value['expiresAt'].toISOString(),

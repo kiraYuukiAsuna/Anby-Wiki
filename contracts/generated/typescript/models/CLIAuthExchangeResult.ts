@@ -32,6 +32,18 @@ export interface CLIAuthExchangeResult {
      * @type {string}
      * @memberof CLIAuthExchangeResult
      */
+    wikiId: string;
+    /**
+     *
+     * @type {CLIAuthExchangeResultActorTypeEnum}
+     * @memberof CLIAuthExchangeResult
+     */
+    actorType: CLIAuthExchangeResultActorTypeEnum;
+    /**
+     *
+     * @type {string}
+     * @memberof CLIAuthExchangeResult
+     */
     token: string;
     /**
      *
@@ -53,10 +65,24 @@ export interface CLIAuthExchangeResult {
     tokenInfo: CLIToken;
 }
 
+
+/**
+ * @export
+ */
+export const CLIAuthExchangeResultActorTypeEnum = {
+    Human: 'human',
+    Ai: 'ai',
+    Import: 'import'
+} as const;
+export type CLIAuthExchangeResultActorTypeEnum = typeof CLIAuthExchangeResultActorTypeEnum[keyof typeof CLIAuthExchangeResultActorTypeEnum];
+
+
 /**
  * Check if a given object implements the CLIAuthExchangeResult interface.
  */
 export function instanceOfCLIAuthExchangeResult(value: object): value is CLIAuthExchangeResult {
+    if ((!('wikiId' in (value as Record<string, any>)) && !('wiki_id' in (value as Record<string, any>))) || ((value as Record<string, any>)['wikiId'] === undefined && (value as Record<string, any>)['wiki_id'] === undefined)) return false;
+    if ((!('actorType' in (value as Record<string, any>)) && !('actor_type' in (value as Record<string, any>))) || ((value as Record<string, any>)['actorType'] === undefined && (value as Record<string, any>)['actor_type'] === undefined)) return false;
     if (!('token' in value) || value['token'] === undefined) return false;
     if ((!('actorId' in (value as Record<string, any>)) && !('actor_id' in (value as Record<string, any>))) || ((value as Record<string, any>)['actorId'] === undefined && (value as Record<string, any>)['actor_id'] === undefined)) return false;
     if ((!('displayName' in (value as Record<string, any>)) && !('display_name' in (value as Record<string, any>))) || ((value as Record<string, any>)['displayName'] === undefined && (value as Record<string, any>)['display_name'] === undefined)) return false;
@@ -74,6 +100,8 @@ export function CLIAuthExchangeResultFromJSONTyped(json: any, ignoreDiscriminato
     }
     return {
 
+        'wikiId': json['wiki_id'],
+        'actorType': json['actor_type'],
         'token': json['token'],
         'actorId': json['actor_id'],
         'displayName': json['display_name'],
@@ -92,6 +120,8 @@ export function CLIAuthExchangeResultToJSONTyped(value?: CLIAuthExchangeResult |
 
     return {
 
+        'wiki_id': value['wikiId'],
+        'actor_type': value['actorType'],
         'token': value['token'],
         'actor_id': value['actorId'],
         'display_name': value['displayName'],

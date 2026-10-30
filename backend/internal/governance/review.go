@@ -94,6 +94,17 @@ func (s *ReviewService) submit(
 				return err
 			}
 		}
+		// Human approval is required even when no trust adapter is installed.
+		actorType, status, err := s.repo.GetActor(ctx, tx, p.CreatedBy)
+		if err != nil {
+			return err
+		}
+		if status != "active" {
+			return ErrInvalidActor
+		}
+		if actorType == "ai" || actorType == "import" {
+			decision.AutoApprove = false
+		}
 		reasons, _ := json.Marshal(decision.Reasons)
 		decisionJSON, _ := json.Marshal(decision)
 		if err := s.repo.UpdateProposalPolicy(ctx, tx, proposalID, decision.Level, reasons, decisionJSON); err != nil {

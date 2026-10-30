@@ -7,12 +7,13 @@ import {
   Clock3,
   LoaderCircle,
   LockKeyhole,
+  Plus,
+  Power,
   ShieldAlert,
   ShieldCheck,
   Sparkles,
 } from "lucide-react";
 import Link from "next/link";
-import { WorkspaceLink } from "@/components/workspace-link";
 import { useMemo, useState } from "react";
 import { toast } from "sonner";
 import useSWR from "swr";
@@ -21,12 +22,13 @@ import { z } from "zod";
 import {
   ResponseError,
   type AITrustProfile,
+  type MachineActor,
 } from "../../../../contracts/generated/typescript";
 
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { governanceApi } from "@/lib/api";
+import { authApi, governanceApi, makeRequestId } from "@/lib/api";
 import { isUnauthorized, LOGIN_PATH, useSession } from "@/lib/auth";
 import { cn } from "@/lib/utils";
 
@@ -34,6 +36,11 @@ const profileSchema = z.object({
   trustLevel: z.enum(["untrusted", "assisted", "trusted"]),
   requiredSamplePercent: z.coerce.number().int().min(0).max(100),
 });
+const actorSchema = z.object({
+  displayName: z.string().trim().min(1, "请输入 Actor 名称").max(120),
+  actorType: z.enum(["ai", "import"]),
+});
+const NIL_UUID = "00000000-0000-0000-0000-000000000000";
 
 const LEVELS = [
   {
@@ -45,13 +52,13 @@ const LEVELS = [
   {
     value: "assisted",
     label: "辅助",
-    detail: "仅低风险变更可按比例自动通过",
+    detail: "辅助生成提案，抽样标记重点复核",
     icon: ShieldCheck,
   },
   {
     value: "trusted",
     label: "受信任",
-    detail: "成熟 Actor，仍受风险与抽样策略约束",
+    detail: "成熟 Actor，仍需真人最终审核",
     icon: Sparkles,
   },
 ] as const;
@@ -66,9 +73,11 @@ const DATE_FORMATTER = new Intl.DateTimeFormat("zh-CN", {
 
 function TrustProfileCard({
   profile,
+  actor,
   onSaved,
 }: {
   profile: AITrustProfile;
+  actor: MachineActor | undefined;
   onSaved: () => Promise<unknown>;
 }) {
   const [trustLevel, setTrustLevel] = useState(profile.trustLevel);
@@ -76,6 +85,25 @@ function TrustProfileCard({
     profile.requiredSamplePercent,
   );
   const [saving, setSaving] = useState(false);
+  const [changingStatus, setChangingStatus] = useState(false);
+  const disabled = profile.actorStatus !== "active";
+
+  const changeStatus = async () => {
+    if (!actor) return;
+    setChangingStatus(true);
+    try {
+      await authApi().setMachineActorStatus({
+        id: actor.actorId,
+        setMachineActorStatusRequest: { status: disabled ? "active" : "disabled" },
+      });
+      await onSaved();
+      toast.success(disabled ? "Actor 已启用，请重新生成 CLI 授权码" : "Actor 已停用，所有 CLI 凭证已撤销");
+    } catch {
+      toast.error("Actor 状态更新失败");
+    } finally {
+      setChangingStatus(false);
+    }
+  };
 
   const dirty =
     trustLevel !== profile.trustLevel ||
@@ -116,15 +144,15 @@ function TrustProfileCard({
   };
 
   return (
-    <article className="rounded-3xl border bg-card p-5 shadow-[0_16px_42px_-36px_rgb(15_23_42/0.5)]">
+    <article className="min-w-0 rounded-3xl border bg-card p-5 shadow-[0_16px_42px_-36px_rgb(15_23_42/0.5)]">
       <div className="flex flex-wrap items-start justify-between gap-4">
-        <div className="flex min-w-0 items-start gap-3">
+        <div className="flex min-w-0 max-w-full items-start gap-3">
           <span className="flex size-11 shrink-0 items-center justify-center rounded-2xl bg-fuchsia-100 text-fuchsia-800">
             <Bot className="size-5" aria-hidden />
           </span>
           <div className="min-w-0">
             <div className="flex flex-wrap items-center gap-2">
-              <h2 className="truncate font-semibold">
+              <h2 className="max-w-full truncate font-semibold">
                 {profile.actorDisplayName}
               </h2>
               <span className="rounded-full border bg-muted/45 px-2 py-0.5 text-[10px] font-semibold tracking-wide text-muted-foreground uppercase">
@@ -134,6 +162,9 @@ function TrustProfileCard({
                 <span className="rounded-full bg-amber-100 px-2 py-0.5 text-[10px] font-medium text-amber-800">
                   保守默认值
                 </span>
+              ) : null}
+              {disabled ? (
+                <span className="rounded-full bg-muted px-2 py-0.5 text-[10px] text-muted-foreground">已停用</span>
               ) : null}
             </div>
             <p className="mt-1 truncate font-mono text-[10px] text-muted-foreground">
@@ -159,6 +190,7 @@ function TrustProfileCard({
               <button
                 key={level.value}
                 type="button"
+                disabled={disabled}
                 aria-pressed={selected}
                 onClick={() => {
                   setTrustLevel(level.value);
@@ -209,7 +241,7 @@ function TrustProfileCard({
               min={0}
               max={100}
               value={effectiveSample}
-              disabled={trustLevel === "untrusted"}
+              disabled={disabled || trustLevel === "untrusted"}
               onChange={(event) =>
                 setSamplePercent(Number(event.target.value))
               }
@@ -227,7 +259,7 @@ function TrustProfileCard({
           max={100}
           step={1}
           value={effectiveSample}
-          disabled={trustLevel === "untrusted"}
+          disabled={disabled || trustLevel === "untrusted"}
           onChange={(event) => setSamplePercent(Number(event.target.value))}
           className="mt-4 h-1.5 w-full accent-fuchsia-700 disabled:opacity-45"
           aria-label="调整低风险人工抽样比例"
@@ -239,13 +271,13 @@ function TrustProfileCard({
         ) : null}
       </div>
 
-      <div className="mt-5 flex items-center justify-between gap-4 border-t pt-4">
+      <div className="mt-5 flex flex-wrap items-center justify-between gap-4 border-t pt-4">
         <p className="text-[10px] leading-4 text-muted-foreground">
-          中、高、关键风险不受该比例影响，始终进入审核。
+          抽样标记重点复核；所有机器提案均需真人最终审核。
         </p>
         <Button
           type="button"
-          disabled={!dirty || saving}
+          disabled={disabled || !dirty || saving}
           onClick={() => void save()}
         >
           {saving ? (
@@ -256,12 +288,34 @@ function TrustProfileCard({
           {saving ? "保存中…" : "保存策略"}
         </Button>
       </div>
+      {actor ? (
+        <div className="mt-4 flex flex-wrap items-center justify-between gap-3 border-t pt-4">
+          <p className="text-[10px] leading-4 text-muted-foreground">
+            {actor.ownerActorId === NIL_UUID
+              ? "所属账号已删除，该 Actor 已永久停用。"
+              : "停用会撤销所有 Token；启用后须重新授权。"}
+          </p>
+          <Button type="button" size="sm" variant="outline" disabled={changingStatus || actor.ownerActorId === NIL_UUID} onClick={() => void changeStatus()}>
+            {changingStatus ? <LoaderCircle className="animate-spin" aria-hidden /> : <Power aria-hidden />}
+            {disabled ? "启用 Actor" : "停用 Actor"}
+          </Button>
+        </div>
+      ) : null}
     </article>
   );
 }
 
 export function AITrustWorkspace() {
   const session = useSession();
+  const [actorName, setActorName] = useState("");
+  const [actorType, setActorType] = useState<"ai" | "import">("ai");
+  const [creationKey, setCreationKey] = useState(makeRequestId);
+  const [creatingActor, setCreatingActor] = useState(false);
+  const actors = useSWR(
+    session.isAuthenticated ? ["governance:machine-actors", session.session?.actorId, session.session?.wikiId] : null,
+    () => authApi().listMachineActors(),
+    { revalidateOnFocus: true, shouldRetryOnError: (error) => !isUnauthorized(error) },
+  );
   const profiles = useSWR(
     session.isAuthenticated ? ["governance:ai-trust-profiles", session.session?.actorId, session.session?.wikiId] : null,
     () => governanceApi().listAITrustProfiles(),
@@ -278,6 +332,30 @@ export function AITrustWorkspace() {
   const trusted = items.filter(
     (item) => item.trustLevel === "trusted",
   ).length;
+  const refresh = async () => {
+    await Promise.all([profiles.mutate(), actors.mutate()]);
+  };
+  const createActor = async () => {
+    const parsed = actorSchema.safeParse({ displayName: actorName, actorType });
+    if (!parsed.success) {
+      toast.error(parsed.error.issues[0]?.message ?? "请检查 Actor 配置");
+      return;
+    }
+    setCreatingActor(true);
+    try {
+      await authApi().createMachineActor({ idempotencyKey: creationKey, createMachineActorRequest: parsed.data });
+      setActorName("");
+      setCreationKey(makeRequestId());
+      await refresh();
+      toast.success("Actor 已创建，默认所有提案需人工审核");
+    } catch (error) {
+      toast.error(error instanceof ResponseError && error.response.status === 409
+        ? "创建键已用于不同配置，请调整名称后重试"
+        : "Actor 创建失败，请检查管理员权限后重试");
+    } finally {
+      setCreatingActor(false);
+    }
+  };
 
   if (session.isLoading) {
     return (
@@ -293,7 +371,7 @@ export function AITrustWorkspace() {
         <LockKeyhole className="mx-auto size-8 text-muted-foreground" aria-hidden />
         <h2 className="mt-4 text-lg font-semibold">登录后管理 AI 信任</h2>
         <p className="mt-2 text-sm text-muted-foreground">
-          该策略直接影响 Proposal 是否进入人工审核，仅向管理员开放。
+          创建机器身份并配置重点复核策略，仅向管理员开放。
         </p>
         <Button asChild className="mt-5">
           <Link href={LOGIN_PATH}>前往登录</Link>
@@ -321,6 +399,36 @@ export function AITrustWorkspace() {
 
   return (
     <div className="space-y-8">
+      <section className="rounded-3xl border bg-card p-5">
+        <h2 className="text-lg font-semibold">创建机器 Actor</h2>
+        <p className="mt-1 text-sm leading-6 text-muted-foreground">
+          用于 Agent CLI 的独立身份，归属于当前 Wiki，由创建者账号管理授权。
+        </p>
+        <div className="mt-5 grid gap-4 sm:grid-cols-[minmax(0,1fr)_8rem_auto] sm:items-end">
+          <div className="min-w-0">
+            <Label htmlFor="machine-actor-name">Actor 名称</Label>
+            <Input id="machine-actor-name" className="mt-2" value={actorName} disabled={creatingActor} maxLength={120} placeholder="例如 research-agent"
+              onChange={(event) => { setActorName(event.target.value); setCreationKey(makeRequestId()); }} />
+          </div>
+          <div>
+            <Label htmlFor="machine-actor-type">类型</Label>
+            <select id="machine-actor-type" disabled={creatingActor} className="mt-2 h-8 w-full rounded-lg border border-input bg-background px-2.5 text-sm" value={actorType}
+              onChange={(event) => { setActorType(event.target.value as "ai" | "import"); setCreationKey(makeRequestId()); }}>
+              <option value="ai">AI Agent</option>
+              <option value="import">Import Agent</option>
+            </select>
+          </div>
+          <Button type="button" disabled={creatingActor} onClick={() => void createActor()}>
+            {creatingActor ? <LoaderCircle className="animate-spin" aria-hidden /> : <Plus aria-hidden />}
+            创建 Actor
+          </Button>
+        </div>
+        <p className="mt-4 text-xs leading-5 text-muted-foreground">
+          创建后到 <Link href="/settings/cli" className="underline underline-offset-4">Agent CLI</Link> 选择该身份并生成授权码。
+          机器身份可读取所属 Wiki、创建和提交提案；最终审核与发布由真人完成。
+        </p>
+        {actors.error ? <p className="mt-3 text-xs text-destructive">机器 Actor 暂时无法读取，请刷新重试。</p> : null}
+      </section>
       <section className="grid gap-3 sm:grid-cols-3">
         {[
           { label: "AI / Import Actor", value: items.length, icon: Bot },
@@ -352,7 +460,7 @@ export function AITrustWorkspace() {
             size="sm"
             variant="outline"
             disabled={profiles.isValidating}
-            onClick={() => void profiles.mutate()}
+            onClick={() => void refresh()}
           >
             {profiles.isValidating ? (
               <LoaderCircle className="animate-spin" aria-hidden />
@@ -388,10 +496,10 @@ export function AITrustWorkspace() {
             <Bot className="mx-auto size-8 text-muted-foreground" aria-hidden />
             <h3 className="mt-4 font-semibold">还没有 AI 或 Import Actor</h3>
             <p className="mt-2 text-sm text-muted-foreground">
-              启用 AI 导入并创建 Actor 后，策略会自动出现在这里。
+              在上方创建机器 Actor，再到 Agent CLI 绑定授权，策略会自动出现在这里。
             </p>
             <Button asChild variant="outline" className="mt-5">
-              <WorkspaceLink href="/imports">打开导入中心</WorkspaceLink>
+              <Link href="/settings/cli">打开 Agent CLI</Link>
             </Button>
           </div>
         ) : null}
@@ -399,9 +507,10 @@ export function AITrustWorkspace() {
           <div className="mt-5 grid gap-4 xl:grid-cols-2">
             {items.map((profile) => (
               <TrustProfileCard
-                key={`${profile.actorId}:${profile.trustLevel}:${profile.requiredSamplePercent}`}
+                key={`${profile.actorId}:${profile.actorStatus}:${profile.trustLevel}:${profile.requiredSamplePercent}`}
                 profile={profile}
-                onSaved={() => profiles.mutate()}
+                actor={actors.data?.items.find((actor) => actor.actorId === profile.actorId)}
+                onSaved={refresh}
               />
             ))}
           </div>

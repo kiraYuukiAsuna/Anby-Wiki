@@ -118,6 +118,9 @@ func (s *Service) CreateProposal(ctx context.Context, in CreateProposalParams) (
 
 	var result *Proposal
 	err := s.txm.InTx(ctx, func(tx pgx.Tx) error {
+		if err := s.checkProposalActorInWiki(ctx, tx, in.CreatedBy, in.WikiID); err != nil {
+			return err
+		}
 		if err := s.validateProposalScope(ctx, tx, in); err != nil {
 			return err
 		}
@@ -366,7 +369,7 @@ func (s *Service) checkProposalActorInWiki(
 	if actorType == "anonymous" {
 		return ErrActorNotAllowed
 	}
-	if actorType == "human" &&
+	if (actorType == "human" || actorType == "ai" || actorType == "import") &&
 		(actorWikiID == nil || *actorWikiID != wikiID) {
 		return ErrActorNotAllowed
 	}

@@ -87,8 +87,8 @@ func TestLocalActionSurface(t *testing.T) {
 		}
 		if input.Action == "operations.list" && input.Tag == "" {
 			data := result.Data.(map[string]any)
-			if data["count"] != 179 {
-				t.Fatalf("operation count=%v want=179", data["count"])
+			if data["count"] != 183 {
+				t.Fatalf("operation count=%v want=183", data["count"])
 			}
 		}
 	}
@@ -253,8 +253,14 @@ func TestAuthExchangePersistsTokenWithoutReturningSecret(t *testing.T) {
 			_, _ = writer.Write([]byte(`{
 				"token":"anby_token_secret",
 				"actor_id":"0198a1b2-c3d4-7e5f-8a9b-0c1d2e3f4a01",
+				"actor_type":"human",
+				"wiki_id":"0198a1b2-c3d4-7e5f-8a9b-0c1d2e3f4a02",
 				"display_name":"CLI Test",
 				"token_info":{
+					"actor_id":"0198a1b2-c3d4-7e5f-8a9b-0c1d2e3f4a01",
+					"actor_type":"human",
+					"wiki_id":"0198a1b2-c3d4-7e5f-8a9b-0c1d2e3f4a02",
+					"display_name":"CLI Test",
 					"id":"0198a1b2-c3d4-7e5f-8a9b-0c1d2e3f4a02",
 					"name":"test-agent",
 					"token_prefix":"anby_token_s",
@@ -314,6 +320,9 @@ func TestAuthExchangePersistsTokenWithoutReturningSecret(t *testing.T) {
 	}
 	if config.Token != "anby_token_secret" || config.BaseURL != server.URL {
 		t.Fatalf("unexpected config: %#v", config)
+	}
+	if config.ActorType != "human" || config.WikiID != "0198a1b2-c3d4-7e5f-8a9b-0c1d2e3f4a02" {
+		t.Fatal("exchange did not persist credential identity")
 	}
 	info, err := os.Stat(configPath)
 	if err != nil {

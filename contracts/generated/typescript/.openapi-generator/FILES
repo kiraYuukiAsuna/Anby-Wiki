@@ -94,6 +94,7 @@ docs/CreateEntityFederationLinkRequest.md
 docs/CreateEvidenceSourceRequest.md
 docs/CreateFederatedWikiRequest.md
 docs/CreateImportJobRequest.md
+docs/CreateMachineActorRequest.md
 docs/CreatePageProtectionRequest.md
 docs/CreatePageRedirectRequest.md
 docs/CreatePageRequest.md
@@ -184,6 +185,8 @@ docs/ImportsApi.md
 docs/KnowledgeApi.md
 docs/LinkPreviewMetadata.md
 docs/LoginRequest.md
+docs/MachineActor.md
+docs/MachineActorList.md
 docs/MergeConflict.md
 docs/MergeEntityRequest.md
 docs/MergeProposalToWorkingDocumentRequest.md
@@ -309,6 +312,7 @@ docs/SearchApi.md
 docs/SearchCapabilities.md
 docs/SearchFacetValue.md
 docs/SearchFacets.md
+docs/SetMachineActorStatusRequest.md
 docs/SetPageEntityBindingRequest.md
 docs/SetPrimaryEntityLabelRequest.md
 docs/SnapshotArchiveResult.md
@@ -416,6 +420,7 @@ models/CreateEntityFederationLinkRequest.ts
 models/CreateEvidenceSourceRequest.ts
 models/CreateFederatedWikiRequest.ts
 models/CreateImportJobRequest.ts
+models/CreateMachineActorRequest.ts
 models/CreatePageProtectionRequest.ts
 models/CreatePageRedirectRequest.ts
 models/CreatePageRequest.ts
@@ -501,6 +506,8 @@ models/ImportSkippedClaimReview.ts
 models/ImportStageRun.ts
 models/LinkPreviewMetadata.ts
 models/LoginRequest.ts
+models/MachineActor.ts
+models/MachineActorList.ts
 models/MergeConflict.ts
 models/MergeEntityRequest.ts
 models/MergeProposalToWorkingDocumentRequest.ts
@@ -621,6 +628,7 @@ models/RollbackResponse.ts
 models/SearchCapabilities.ts
 models/SearchFacetValue.ts
 models/SearchFacets.ts
+models/SetMachineActorStatusRequest.ts
 models/SetPageEntityBindingRequest.ts
 models/SetPrimaryEntityLabelRequest.ts
 models/SnapshotArchiveResult.ts

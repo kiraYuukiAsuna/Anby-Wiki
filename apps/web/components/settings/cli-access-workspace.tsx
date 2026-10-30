@@ -39,6 +39,7 @@ import { isUnauthorized, LOGIN_PATH, useSession } from "@/lib/auth";
 import { cn } from "@/lib/utils";
 
 const formSchema = z.object({
+  actorId: z.string().uuid().optional(),
   name: z.string().trim().min(1, "请输入 Agent 名称").max(120),
   tokenTtlDays: z.coerce.number().int().min(1).max(365),
 });
@@ -114,6 +115,9 @@ function AuthorizationCodeDialog({
               </Button>
             </div>
             <p className="text-xs text-muted-foreground">
+              绑定身份：{value.displayName} · {value.actorType}
+            </p>
+            <p className="text-xs text-muted-foreground">
               兑换后的 Token 有效至{" "}
               {DATE_FORMATTER.format(value.tokenExpiresAt)}。
             </p>
@@ -160,6 +164,9 @@ function TokenRow({
         </div>
         <p className="mt-1 font-mono text-[11px] text-muted-foreground">
           {token.tokenPrefix}…
+        </p>
+        <p className="mt-1 break-all text-[11px] text-muted-foreground">
+          {token.displayName} · {token.actorType} · {token.actorId}
         </p>
       </div>
       <div>
@@ -215,6 +222,9 @@ function PendingAuthorizationRow({
         <p className="mt-1 text-[11px] text-muted-foreground">
           一次性授权码已生成，明文不会再次显示。
         </p>
+        <p className="mt-1 break-all text-[11px] text-muted-foreground">
+          {authorization.displayName} · {authorization.actorType}
+        </p>
       </div>
       <div>
         <p className="text-[10px] font-semibold text-muted-foreground uppercase">
@@ -253,6 +263,7 @@ function PendingAuthorizationRow({
 export function CLIAccessWorkspace() {
   const session = useSession();
   const [name, setName] = useState("");
+  const [actorID, setActorID] = useState("");
   const [tokenTtlDays, setTokenTtlDays] = useState("90");
   const [creating, setCreating] = useState(false);
   const [authorizationCode, setAuthorizationCode] = useState<CLIAuthCode>();
@@ -262,16 +273,21 @@ export function CLIAccessWorkspace() {
   const [cleaningInactive, setCleaningInactive] = useState(false);
   const [showInactive, setShowInactive] = useState(false);
   const tokens = useSWR(
-    session.isAuthenticated ? "settings:cli-tokens" : null,
+    session.isAuthenticated ? ["settings:cli-tokens", session.session?.actorId] : null,
     () => authApi().listCLITokens(),
     {
       revalidateOnFocus: true,
       shouldRetryOnError: (error) => !isUnauthorized(error),
     },
   );
+  const actors = useSWR(
+    session.isAuthenticated ? ["settings:cli-actors", session.session?.actorId] : null,
+    () => authApi().listCLIMachineActors(),
+    { revalidateOnFocus: true, shouldRetryOnError: (error) => !isUnauthorized(error) },
+  );
 
   const create = async () => {
-    const parsed = formSchema.safeParse({ name, tokenTtlDays });
+    const parsed = formSchema.safeParse({ name, tokenTtlDays, actorId: actorID || undefined });
     if (!parsed.success) {
       toast.error(parsed.error.issues[0]?.message ?? "请检查授权设置");
       return;
@@ -289,7 +305,7 @@ export function CLIAccessWorkspace() {
       if (isUnauthorized(error)) {
         toast.error("登录状态已失效");
       } else if (error instanceof ResponseError && error.response.status === 403) {
-        toast.error("需要浏览器登录会话");
+        toast.error("Actor 已停用、归属不匹配或管理员权限已失效");
       } else {
         toast.error("CLI 授权码生成失败");
       }
@@ -394,6 +410,31 @@ export function CLIAccessWorkspace() {
           <div className="flex items-center gap-2">
             <TerminalSquare className="size-4 text-emerald-700" aria-hidden />
             <h2 className="text-lg font-semibold">新 Agent 授权</h2>
+          </div>
+          <div className="mt-5 max-w-xl">
+            <Label htmlFor="cli-actor">绑定身份</Label>
+            <select
+              id="cli-actor"
+              className="mt-2 h-9 w-full min-w-0 rounded-lg border border-input bg-background px-2.5 text-sm"
+              value={actorID}
+              onChange={(event) => setActorID(event.target.value)}
+            >
+              <option value="">本人 · {session.session?.displayName}</option>
+              {actors.data?.items.filter((actor) => actor.status === "active").map((actor) => (
+                <option key={actor.actorId} value={actor.actorId}>
+                  {actor.displayName} · {actor.actorType}
+                </option>
+              ))}
+            </select>
+            <p className="mt-2 text-xs leading-5 text-muted-foreground">
+              机器 Actor 的提案按该身份署名，最终需要真人审核。
+              <Link href="/governance/ai-trust" className="ml-1 underline underline-offset-4">
+                创建或管理 Actor
+              </Link>
+            </p>
+            {actors.error ? (
+              <p className="mt-2 text-xs text-destructive">机器 Actor 暂时无法读取，请刷新重试。</p>
+            ) : null}
           </div>
           <div className="mt-5 grid gap-4 sm:grid-cols-[minmax(0,1fr)_10rem_auto] sm:items-end">
             <div>

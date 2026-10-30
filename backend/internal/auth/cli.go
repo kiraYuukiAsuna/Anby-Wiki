@@ -32,6 +32,7 @@ const (
 // CLIAuthorizationCode is returned once to an authenticated browser session.
 // Only CodeHash is persisted.
 type CLIAuthorizationCode struct {
+	CLIActorIdentity
 	Code           string
 	Name           string
 	ExpiresAt      time.Time
@@ -41,6 +42,7 @@ type CLIAuthorizationCode struct {
 // CLIAuthorizationCodeSummary is an unredeemed code audit entry. The
 // plaintext code is intentionally unavailable after creation.
 type CLIAuthorizationCodeSummary struct {
+	CLIActorIdentity
 	ID             uuid.UUID
 	Name           string
 	ExpiresAt      time.Time
@@ -50,6 +52,7 @@ type CLIAuthorizationCodeSummary struct {
 
 // CLIToken is the redacted token record exposed to the account that owns it.
 type CLIToken struct {
+	CLIActorIdentity
 	ID          uuid.UUID
 	Name        string
 	TokenPrefix string
@@ -62,20 +65,28 @@ type CLIToken struct {
 
 // CLIExchangeResult carries the plaintext token only at exchange time.
 type CLIExchangeResult struct {
-	Token       string
-	ActorID     uuid.UUID
-	DisplayName string
-	TokenInfo   CLIToken
+	CLIActorIdentity
+	Token     string
+	TokenInfo CLIToken
+}
+
+type CreateCLIAuthCodeParams struct {
+	IssuedBy     uuid.UUID
+	ActorID      uuid.UUID
+	Name         string
+	TokenTTLDays int
 }
 
 func (s *Service) CreateCLIAuthorizationCode(
 	ctx context.Context,
-	actorID uuid.UUID,
-	name string,
-	tokenTTLDays int,
+	in CreateCLIAuthCodeParams,
 ) (CLIAuthorizationCode, error) {
-	name, err := validateCLITokenName(name)
-	if err != nil || actorID == uuid.Nil ||
+	name, err := validateCLITokenName(in.Name)
+	actorID, tokenTTLDays := in.ActorID, in.TokenTTLDays
+	if actorID == uuid.Nil {
+		actorID = in.IssuedBy
+	}
+	if err != nil || in.IssuedBy == uuid.Nil ||
 		tokenTTLDays < cliTokenMinTTLDays ||
 		tokenTTLDays > cliTokenMaxTTLDays {
 		return CLIAuthorizationCode{}, ErrInvalidCLIInput
@@ -98,24 +109,17 @@ func (s *Service) CreateCLIAuthorizationCode(
 		TokenExpiresAt: now.Add(time.Duration(tokenTTLDays) * 24 * time.Hour),
 	}
 	err = s.txm.InTx(ctx, func(tx pgx.Tx) error {
-		var active bool
-		if err := tx.QueryRow(ctx, `SELECT EXISTS (
-			SELECT 1 FROM actor a
-			LEFT JOIN local_account la ON la.actor_id=a.id
-			WHERE a.id=$1 AND a.status='active'
-			  AND (la.id IS NULL OR la.status='active')
-		)`, actorID).Scan(&active); err != nil {
+		identity, err := lockCLIActor(ctx, tx, actorID, in.IssuedBy)
+		if err != nil {
 			return err
 		}
-		if !active {
-			return ErrUnauthenticated
-		}
+		result.CLIActorIdentity = identity
 		if _, err := tx.Exec(ctx, `DELETE FROM cli_authorization_code
 			WHERE actor_id=$1 AND (used_at IS NOT NULL OR expires_at<=now())`,
 			actorID); err != nil {
 			return err
 		}
-		_, err := tx.Exec(ctx, `INSERT INTO cli_authorization_code
+		_, err = tx.Exec(ctx, `INSERT INTO cli_authorization_code
 			(id,code_hash,actor_id,token_name,token_expires_at,expires_at)
 			VALUES ($1,$2,$3,$4,$5,$6)`,
 			id, codeHash[:], actorID, name, result.TokenExpiresAt, result.ExpiresAt)
@@ -148,30 +152,37 @@ func (s *Service) ExchangeCLIAuthorizationCode(
 	codeHash := tokenHash(code)
 	var result CLIExchangeResult
 	err = s.txm.InTx(ctx, func(tx pgx.Tx) error {
-		var codeID uuid.UUID
-		var name, actorStatus, accountStatus string
-		var expiresAt time.Time
-		err := tx.QueryRow(ctx, `SELECT
-			c.id,c.actor_id,c.token_name,c.token_expires_at,
-			a.display_name,a.status,COALESCE(la.status,'active')
-			FROM cli_authorization_code c
-			JOIN actor a ON a.id=c.actor_id
-			LEFT JOIN local_account la ON la.actor_id=a.id
-			WHERE c.code_hash=$1 AND c.used_at IS NULL AND c.expires_at>now()
-			FOR UPDATE OF c`,
-			codeHash[:],
-		).Scan(
-			&codeID, &result.ActorID, &name, &expiresAt,
-			&result.DisplayName, &actorStatus, &accountStatus,
-		)
-		if errors.Is(err, pgx.ErrNoRows) {
+		var actorID uuid.UUID
+		if err := tx.QueryRow(ctx, `SELECT actor_id FROM cli_authorization_code
+			WHERE code_hash=$1 AND used_at IS NULL AND expires_at>now()`, codeHash[:]).Scan(&actorID); err != nil {
+			if errors.Is(err, pgx.ErrNoRows) {
+				return ErrInvalidCLIAuthorizationCode
+			}
+			return err
+		}
+		identity, err := lockCLIActor(ctx, tx, actorID, uuid.Nil)
+		if errors.Is(err, ErrUnauthenticated) {
 			return ErrInvalidCLIAuthorizationCode
 		}
 		if err != nil {
 			return err
 		}
-		if actorStatus != "active" || accountStatus != "active" {
+		result.CLIActorIdentity = identity
+		var codeID uuid.UUID
+		var name string
+		var expiresAt time.Time
+		err = tx.QueryRow(ctx, `SELECT
+			c.id,c.token_name,c.token_expires_at
+			FROM cli_authorization_code c
+			WHERE c.code_hash=$1 AND c.used_at IS NULL AND c.expires_at>now()
+			FOR UPDATE OF c`,
+			codeHash[:],
+		).Scan(&codeID, &name, &expiresAt)
+		if errors.Is(err, pgx.ErrNoRows) {
 			return ErrInvalidCLIAuthorizationCode
+		}
+		if err != nil {
+			return err
 		}
 		now := s.now().UTC()
 		if !expiresAt.After(now) {
@@ -197,7 +208,8 @@ func (s *Service) ExchangeCLIAuthorizationCode(
 		}
 		result.Token = token
 		result.TokenInfo = CLIToken{
-			ID: tokenID, Name: name, TokenPrefix: prefix,
+			CLIActorIdentity: identity,
+			ID:               tokenID, Name: name, TokenPrefix: prefix,
 			Status: "active", ExpiresAt: expiresAt, CreatedAt: createdAt,
 		}
 		return nil
@@ -219,10 +231,13 @@ func (s *Service) ListCLIAuthorizationCodes(
 		return nil, ErrUnauthenticated
 	}
 	rows, err := s.pool.Query(ctx, `SELECT
-		id,token_name,expires_at,token_expires_at,created_at
-		FROM cli_authorization_code
-		WHERE actor_id=$1 AND used_at IS NULL AND expires_at>now()
-		ORDER BY created_at DESC,id DESC`, actorID)
+		c.id,c.token_name,c.expires_at,c.token_expires_at,c.created_at,
+		a.id,COALESCE(a.wiki_id,$2),a.actor_type,a.display_name
+		FROM cli_authorization_code c JOIN actor a ON a.id=c.actor_id
+		LEFT JOIN local_account la ON la.id=a.user_id
+		WHERE (c.actor_id=$1 OR (a.actor_type IN ('ai','import') AND la.actor_id=$1))
+		  AND c.used_at IS NULL AND c.expires_at>now()
+		ORDER BY c.created_at DESC,c.id DESC`, actorID, uuid.Nil)
 	if err != nil {
 		return nil, fmt.Errorf("auth: list CLI authorization codes: %w", err)
 	}
@@ -233,6 +248,7 @@ func (s *Service) ListCLIAuthorizationCodes(
 		if err := rows.Scan(
 			&item.ID, &item.Name, &item.ExpiresAt,
 			&item.TokenExpiresAt, &item.CreatedAt,
+			&item.ActorID, &item.WikiID, &item.ActorType, &item.DisplayName,
 		); err != nil {
 			return nil, fmt.Errorf("auth: scan CLI authorization code: %w", err)
 		}
@@ -251,8 +267,11 @@ func (s *Service) DeleteCLIAuthorizationCode(
 	if actorID == uuid.Nil || codeID == uuid.Nil {
 		return ErrCLIAuthorizationCodeNotFound
 	}
-	tag, err := s.pool.Exec(ctx, `DELETE FROM cli_authorization_code
-		WHERE id=$1 AND actor_id=$2 AND used_at IS NULL AND expires_at>now()`,
+	tag, err := s.pool.Exec(ctx, `DELETE FROM cli_authorization_code c USING actor a
+		LEFT JOIN local_account la ON la.id=a.user_id
+		WHERE c.actor_id=a.id AND c.id=$1
+		  AND (c.actor_id=$2 OR (a.actor_type IN ('ai','import') AND la.actor_id=$2))
+		  AND c.used_at IS NULL AND c.expires_at>now()`,
 		codeID, actorID)
 	if err != nil {
 		return fmt.Errorf("auth: delete CLI authorization code: %w", err)
@@ -271,10 +290,12 @@ func (s *Service) ListCLITokens(
 		return nil, ErrUnauthenticated
 	}
 	rows, err := s.pool.Query(ctx, `SELECT
-		id,name,token_prefix,expires_at,last_used_at,revoked_at,created_at
-		FROM cli_access_token
-		WHERE actor_id=$1
-		ORDER BY created_at DESC,id DESC`, actorID)
+		t.id,t.name,t.token_prefix,t.expires_at,t.last_used_at,t.revoked_at,t.created_at,
+		a.id,COALESCE(a.wiki_id,$2),a.actor_type,a.display_name
+		FROM cli_access_token t JOIN actor a ON a.id=t.actor_id
+		LEFT JOIN local_account la ON la.id=a.user_id
+		WHERE t.actor_id=$1 OR (a.actor_type IN ('ai','import') AND la.actor_id=$1)
+		ORDER BY t.created_at DESC,t.id DESC`, actorID, uuid.Nil)
 	if err != nil {
 		return nil, fmt.Errorf("auth: list CLI tokens: %w", err)
 	}
@@ -286,6 +307,7 @@ func (s *Service) ListCLITokens(
 		if err := rows.Scan(
 			&item.ID, &item.Name, &item.TokenPrefix, &item.ExpiresAt,
 			&item.LastUsedAt, &item.RevokedAt, &item.CreatedAt,
+			&item.ActorID, &item.WikiID, &item.ActorType, &item.DisplayName,
 		); err != nil {
 			return nil, fmt.Errorf("auth: scan CLI token: %w", err)
 		}
@@ -305,9 +327,11 @@ func (s *Service) RevokeCLIToken(
 	if actorID == uuid.Nil || tokenID == uuid.Nil {
 		return ErrCLITokenNotFound
 	}
-	tag, err := s.pool.Exec(ctx, `UPDATE cli_access_token
-		SET revoked_at=COALESCE(revoked_at,now())
-		WHERE id=$1 AND actor_id=$2`, tokenID, actorID)
+	tag, err := s.pool.Exec(ctx, `UPDATE cli_access_token t
+		SET revoked_at=COALESCE(t.revoked_at,now()) FROM actor a
+		LEFT JOIN local_account la ON la.id=a.user_id
+		WHERE t.actor_id=a.id AND t.id=$1
+		  AND (t.actor_id=$2 OR (a.actor_type IN ('ai','import') AND la.actor_id=$2))`, tokenID, actorID)
 	if err != nil {
 		return fmt.Errorf("auth: revoke CLI token: %w", err)
 	}
@@ -324,9 +348,11 @@ func (s *Service) DeleteCLITokenRecord(
 	if actorID == uuid.Nil || tokenID == uuid.Nil {
 		return ErrCLITokenNotFound
 	}
-	tag, err := s.pool.Exec(ctx, `DELETE FROM cli_access_token
-		WHERE id=$1 AND actor_id=$2
-		  AND (revoked_at IS NOT NULL OR expires_at<=now())`,
+	tag, err := s.pool.Exec(ctx, `DELETE FROM cli_access_token t USING actor a
+		LEFT JOIN local_account la ON la.id=a.user_id
+		WHERE t.actor_id=a.id AND t.id=$1
+		  AND (t.actor_id=$2 OR (a.actor_type IN ('ai','import') AND la.actor_id=$2))
+		  AND (t.revoked_at IS NOT NULL OR t.expires_at<=now())`,
 		tokenID, actorID)
 	if err != nil {
 		return fmt.Errorf("auth: delete CLI token record: %w", err)
@@ -336,7 +362,9 @@ func (s *Service) DeleteCLITokenRecord(
 	}
 	var exists bool
 	if err := s.pool.QueryRow(ctx, `SELECT EXISTS (
-		SELECT 1 FROM cli_access_token WHERE id=$1 AND actor_id=$2
+		SELECT 1 FROM cli_access_token t JOIN actor a ON a.id=t.actor_id
+		LEFT JOIN local_account la ON la.id=a.user_id
+		WHERE t.id=$1 AND (t.actor_id=$2 OR (a.actor_type IN ('ai','import') AND la.actor_id=$2))
 	)`, tokenID, actorID).Scan(&exists); err != nil {
 		return fmt.Errorf("auth: inspect CLI token record: %w", err)
 	}
@@ -353,8 +381,10 @@ func (s *Service) DeleteInactiveCLITokenRecords(
 	if actorID == uuid.Nil {
 		return 0, ErrUnauthenticated
 	}
-	tag, err := s.pool.Exec(ctx, `DELETE FROM cli_access_token
-		WHERE actor_id=$1 AND (revoked_at IS NOT NULL OR expires_at<=now())`,
+	tag, err := s.pool.Exec(ctx, `DELETE FROM cli_access_token t USING actor a
+		LEFT JOIN local_account la ON la.id=a.user_id
+		WHERE t.actor_id=a.id AND (t.actor_id=$1 OR (a.actor_type IN ('ai','import') AND la.actor_id=$1))
+		  AND (t.revoked_at IS NOT NULL OR t.expires_at<=now())`,
 		actorID)
 	if err != nil {
 		return 0, fmt.Errorf("auth: delete inactive CLI token records: %w", err)

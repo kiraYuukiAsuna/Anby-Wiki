@@ -5,17 +5,21 @@ All URIs are relative to *http://localhost:3000*
 | Method | HTTP request | Description |
 |------------- | ------------- | -------------|
 | [**createCLIAuthCode**](AuthApi.md#createcliauthcodeoperation) | **POST** /api/v1/auth/cli/codes | 创建一次性 CLI 授权码 |
+| [**createMachineActor**](AuthApi.md#createmachineactoroperation) | **POST** /api/v1/machine-actors | 真人管理员创建所属账户管理的 AI 或 Import Actor |
 | [**deleteCLIAuthCode**](AuthApi.md#deletecliauthcode) | **DELETE** /api/v1/auth/cli/codes/{id} | 删除当前账号尚未兑换的一次性 CLI 授权码 |
 | [**deleteCLITokenRecord**](AuthApi.md#deleteclitokenrecord) | **DELETE** /api/v1/auth/cli/token-records/{id} | 删除当前账号的单个已失效 CLI Token 记录 |
 | [**deleteInactiveCLITokenRecords**](AuthApi.md#deleteinactiveclitokenrecords) | **DELETE** /api/v1/auth/cli/token-records | 删除当前账号的已失效 CLI Token 记录 |
 | [**exchangeCLIAuthCode**](AuthApi.md#exchangecliauthcodeoperation) | **POST** /api/v1/auth/cli/exchange | 兑换一次性授权码 |
 | [**getSession**](AuthApi.md#getsession) | **GET** /api/v1/auth/session | 获取当前登录 Actor |
-| [**listCLITokens**](AuthApi.md#listclitokens) | **GET** /api/v1/auth/cli/tokens | 列出当前账号的 CLI Token |
+| [**listCLIMachineActors**](AuthApi.md#listclimachineactors) | **GET** /api/v1/auth/cli/actors | 列出当前账户可绑定的机器 Actor |
+| [**listCLITokens**](AuthApi.md#listclitokens) | **GET** /api/v1/auth/cli/tokens | 列出当前账号及其机器 Actor 的 CLI Token |
+| [**listMachineActors**](AuthApi.md#listmachineactors) | **GET** /api/v1/machine-actors | 管理员查看当前 Wiki 的机器 Actor |
 | [**login**](AuthApi.md#loginoperation) | **POST** /api/v1/auth/login | 使用用户名或邮箱和密码登录 |
 | [**logout**](AuthApi.md#logout) | **POST** /api/v1/auth/logout | 吊销当前服务端 session 并清除 cookie |
 | [**register**](AuthApi.md#registeroperation) | **POST** /api/v1/auth/register | 注册本地账号并建立会话 |
 | [**revokeCLIToken**](AuthApi.md#revokeclitoken) | **DELETE** /api/v1/auth/cli/tokens/{id} | 撤销当前账号的指定 CLI Token |
 | [**revokeCurrentCLIToken**](AuthApi.md#revokecurrentclitoken) | **DELETE** /api/v1/auth/cli/token | 撤销当前 Bearer Token |
+| [**setMachineActorStatus**](AuthApi.md#setmachineactorstatusoperation) | **PUT** /api/v1/machine-actors/{id}/status | 真人管理员启用或停用当前 Wiki 的机器 Actor |
 
 
 
@@ -25,7 +29,7 @@ All URIs are relative to *http://localhost:3000*
 
 创建一次性 CLI 授权码
 
-仅浏览器 Session 可调用。授权码十分钟内有效且只能兑换一次；响应中的明文码 不会再次返回，服务端只持久化 SHA-256。
+仅浏览器 Session 可调用。授权码十分钟内有效且只能兑换一次；响应中的明文码 不会再次返回，服务端只持久化 SHA-256。可选择本人创建且所属 Wiki 仍有管理员 权限的机器 Actor；省略 actor_id 时使用当前真人身份。机器身份只读所属 Wiki、 创建与提交提案，最终必须人工审核。
 
 ### Example
 
@@ -89,6 +93,85 @@ example().catch(console.error);
 | **400** | 请求格式错误 |  -  |
 | **401** | 未认证 |  -  |
 | **403** | 已认证但无权限 |  -  |
+| **500** | 服务端内部错误 |  -  |
+
+[[Back to top]](#) [[Back to API list]](../README.md#api-endpoints) [[Back to Model list]](../README.md#models) [[Back to README]](../README.md)
+
+
+## createMachineActor
+
+> MachineActor createMachineActor(idempotencyKey, createMachineActorRequest)
+
+真人管理员创建所属账户管理的 AI 或 Import Actor
+
+同一 Wiki 的 Idempotency-Key 重试返回原 Actor；创建配置不一致返回 409。
+
+### Example
+
+```ts
+import {
+  Configuration,
+  AuthApi,
+} from '';
+import type { CreateMachineActorOperationRequest } from '';
+
+async function example() {
+  console.log("🚀 Testing  SDK...");
+  const config = new Configuration({
+    // To configure API key authorization: sessionCookie
+    apiKey: "YOUR API KEY",
+  });
+  const api = new AuthApi(config);
+
+  const body = {
+    // string
+    idempotencyKey: idempotencyKey_example,
+    // CreateMachineActorRequest
+    createMachineActorRequest: ...,
+  } satisfies CreateMachineActorOperationRequest;
+
+  try {
+    const data = await api.createMachineActor(body);
+    console.log(data);
+  } catch (error) {
+    console.error(error);
+  }
+}
+
+// Run the test
+example().catch(console.error);
+```
+
+### Parameters
+
+
+| Name | Type | Description  | Notes |
+|------------- | ------------- | ------------- | -------------|
+| **idempotencyKey** | `string` |  | [Defaults to `undefined`] |
+| **createMachineActorRequest** | [CreateMachineActorRequest](CreateMachineActorRequest.md) |  | |
+
+### Return type
+
+[**MachineActor**](MachineActor.md)
+
+### Authorization
+
+[sessionCookie](../README.md#sessionCookie)
+
+### HTTP request headers
+
+- **Content-Type**: `application/json`
+- **Accept**: `application/json`
+
+
+### HTTP response details
+| Status code | Description | Response headers |
+|-------------|-------------|------------------|
+| **201** | 新建或幂等返回的机器 Actor |  -  |
+| **400** | 请求格式错误 |  -  |
+| **401** | 未认证 |  -  |
+| **403** | 已认证但无权限 |  -  |
+| **409** | 并发冲突（含陈旧基线、幂等键冲突） |  -  |
 | **500** | 服务端内部错误 |  -  |
 
 [[Back to top]](#) [[Back to API list]](../README.md#api-endpoints) [[Back to Model list]](../README.md#models) [[Back to README]](../README.md)
@@ -444,11 +527,77 @@ No authorization required
 [[Back to top]](#) [[Back to API list]](../README.md#api-endpoints) [[Back to Model list]](../README.md#models) [[Back to README]](../README.md)
 
 
+## listCLIMachineActors
+
+> MachineActorList listCLIMachineActors()
+
+列出当前账户可绑定的机器 Actor
+
+只返回本人创建且本人仍为所属 Wiki 管理员的 Actor；停用的 Actor 不可授权。
+
+### Example
+
+```ts
+import {
+  Configuration,
+  AuthApi,
+} from '';
+import type { ListCLIMachineActorsRequest } from '';
+
+async function example() {
+  console.log("🚀 Testing  SDK...");
+  const config = new Configuration({
+    // To configure API key authorization: sessionCookie
+    apiKey: "YOUR API KEY",
+  });
+  const api = new AuthApi(config);
+
+  try {
+    const data = await api.listCLIMachineActors();
+    console.log(data);
+  } catch (error) {
+    console.error(error);
+  }
+}
+
+// Run the test
+example().catch(console.error);
+```
+
+### Parameters
+
+This endpoint does not need any parameter.
+
+### Return type
+
+[**MachineActorList**](MachineActorList.md)
+
+### Authorization
+
+[sessionCookie](../README.md#sessionCookie)
+
+### HTTP request headers
+
+- **Content-Type**: Not defined
+- **Accept**: `application/json`
+
+
+### HTTP response details
+| Status code | Description | Response headers |
+|-------------|-------------|------------------|
+| **200** | 本人机器 Actor |  -  |
+| **401** | 未认证 |  -  |
+| **403** | 已认证但无权限 |  -  |
+| **500** | 服务端内部错误 |  -  |
+
+[[Back to top]](#) [[Back to API list]](../README.md#api-endpoints) [[Back to Model list]](../README.md#models) [[Back to README]](../README.md)
+
+
 ## listCLITokens
 
 > CLITokenList listCLITokens()
 
-列出当前账号的 CLI Token
+列出当前账号及其机器 Actor 的 CLI Token
 
 ### Example
 
@@ -501,6 +650,70 @@ This endpoint does not need any parameter.
 | Status code | Description | Response headers |
 |-------------|-------------|------------------|
 | **200** | 包含待兑换授权码、有效、过期和已撤销 Token 的审计目录 |  -  |
+| **401** | 未认证 |  -  |
+| **403** | 已认证但无权限 |  -  |
+| **500** | 服务端内部错误 |  -  |
+
+[[Back to top]](#) [[Back to API list]](../README.md#api-endpoints) [[Back to Model list]](../README.md#models) [[Back to README]](../README.md)
+
+
+## listMachineActors
+
+> MachineActorList listMachineActors()
+
+管理员查看当前 Wiki 的机器 Actor
+
+### Example
+
+```ts
+import {
+  Configuration,
+  AuthApi,
+} from '';
+import type { ListMachineActorsRequest } from '';
+
+async function example() {
+  console.log("🚀 Testing  SDK...");
+  const config = new Configuration({
+    // To configure API key authorization: sessionCookie
+    apiKey: "YOUR API KEY",
+  });
+  const api = new AuthApi(config);
+
+  try {
+    const data = await api.listMachineActors();
+    console.log(data);
+  } catch (error) {
+    console.error(error);
+  }
+}
+
+// Run the test
+example().catch(console.error);
+```
+
+### Parameters
+
+This endpoint does not need any parameter.
+
+### Return type
+
+[**MachineActorList**](MachineActorList.md)
+
+### Authorization
+
+[sessionCookie](../README.md#sessionCookie)
+
+### HTTP request headers
+
+- **Content-Type**: Not defined
+- **Accept**: `application/json`
+
+
+### HTTP response details
+| Status code | Description | Response headers |
+|-------------|-------------|------------------|
+| **200** | 当前 Wiki 的受管机器 Actor |  -  |
 | **401** | 未认证 |  -  |
 | **403** | 已认证但无权限 |  -  |
 | **500** | 服务端内部错误 |  -  |
@@ -839,6 +1052,85 @@ This endpoint does not need any parameter.
 |-------------|-------------|------------------|
 | **204** | 当前 Token 已撤销 |  -  |
 | **401** | 未认证 |  -  |
+| **500** | 服务端内部错误 |  -  |
+
+[[Back to top]](#) [[Back to API list]](../README.md#api-endpoints) [[Back to Model list]](../README.md#models) [[Back to README]](../README.md)
+
+
+## setMachineActorStatus
+
+> MachineActor setMachineActorStatus(id, setMachineActorStatusRequest)
+
+真人管理员启用或停用当前 Wiki 的机器 Actor
+
+状态变化撤销全部 CLI Token 并清除授权码；重新启用须重新授权，旧凭证不会复活。
+
+### Example
+
+```ts
+import {
+  Configuration,
+  AuthApi,
+} from '';
+import type { SetMachineActorStatusOperationRequest } from '';
+
+async function example() {
+  console.log("🚀 Testing  SDK...");
+  const config = new Configuration({
+    // To configure API key authorization: sessionCookie
+    apiKey: "YOUR API KEY",
+  });
+  const api = new AuthApi(config);
+
+  const body = {
+    // string
+    id: 38400000-8cf0-11bd-b23e-10b96e4ef00d,
+    // SetMachineActorStatusRequest
+    setMachineActorStatusRequest: ...,
+  } satisfies SetMachineActorStatusOperationRequest;
+
+  try {
+    const data = await api.setMachineActorStatus(body);
+    console.log(data);
+  } catch (error) {
+    console.error(error);
+  }
+}
+
+// Run the test
+example().catch(console.error);
+```
+
+### Parameters
+
+
+| Name | Type | Description  | Notes |
+|------------- | ------------- | ------------- | -------------|
+| **id** | `string` |  | [Defaults to `undefined`] |
+| **setMachineActorStatusRequest** | [SetMachineActorStatusRequest](SetMachineActorStatusRequest.md) |  | |
+
+### Return type
+
+[**MachineActor**](MachineActor.md)
+
+### Authorization
+
+[sessionCookie](../README.md#sessionCookie)
+
+### HTTP request headers
+
+- **Content-Type**: `application/json`
+- **Accept**: `application/json`
+
+
+### HTTP response details
+| Status code | Description | Response headers |
+|-------------|-------------|------------------|
+| **200** | 更新后的机器 Actor |  -  |
+| **400** | 请求格式错误 |  -  |
+| **401** | 未认证 |  -  |
+| **403** | 已认证但无权限 |  -  |
+| **404** | 资源不存在 |  -  |
 | **500** | 服务端内部错误 |  -  |
 
 [[Back to top]](#) [[Back to API list]](../README.md#api-endpoints) [[Back to Model list]](../README.md#models) [[Back to README]](../README.md)

@@ -453,7 +453,15 @@ func (s *Service) resolveActorPrincipal(
 			AND (la.id IS NULL OR la.status='active')
 			AND (
 				a.actor_type='system'
-				OR EXISTS (
+				OR (a.actor_type IN ('ai','import') AND a.wiki_id=w.id
+				  AND starts_with(a.external_key,$4)
+				  AND EXISTS (SELECT 1 FROM local_account owner_account
+				    JOIN actor owner ON owner.id=owner_account.actor_id
+				    JOIN actor_role ar ON ar.actor_id=owner.id AND ar.wiki_id=w.id
+				    JOIN role role ON role.id=ar.role_id AND role.role_key='admin'
+				    WHERE owner_account.id=a.user_id AND owner_account.status='active'
+				      AND owner.status='active' AND owner.actor_type='human'))
+				OR (a.actor_type NOT IN ('ai','import') AND (EXISTS (
 					SELECT 1 FROM actor_role ar
 					WHERE ar.actor_id=a.id AND ar.wiki_id=w.id
 				)
@@ -463,8 +471,8 @@ func (s *Service) resolveActorPrincipal(
 					JOIN page p ON p.id=ps.page_id
 					WHERE ps.actor_id=a.id AND p.wiki_id=w.id
 					  AND p.deleted_at IS NULL
-				)
-			)`, actorID, targetWikiID, uuid.Nil).Scan(
+				)))
+			)`, actorID, targetWikiID, uuid.Nil, MachineActorKeyPrefix).Scan(
 		&principal.ActorID, &principal.WikiID, &principal.HomeWikiID, &principal.WikiName,
 		&principal.MainNamespaceID,
 		&principal.ActorType, &principal.DisplayName, &principal.Username,
@@ -498,6 +506,20 @@ func (s *Service) actorHomeWikiID(ctx context.Context, actorID uuid.UUID) (uuid.
 func (s *Service) ListWikiMemberships(ctx context.Context, actorID uuid.UUID) ([]WikiMembership, error) {
 	if actorID == uuid.Nil {
 		return nil, ErrUnauthenticated
+	}
+	var actorType string
+	if err := s.pool.QueryRow(ctx, `SELECT actor_type FROM actor WHERE id=$1`, actorID).Scan(&actorType); err != nil {
+		return nil, ErrUnauthenticated
+	}
+	if actorType == ActorTypeAI || actorType == ActorTypeImport {
+		principal, err := s.resolveActorPrincipal(ctx, actorID, uuid.Nil, uuid.Nil, "")
+		if err != nil {
+			return nil, err
+		}
+		return []WikiMembership{{
+			WikiID: principal.WikiID, WikiName: principal.WikiName,
+			MainNamespaceID: principal.MainNamespaceID, Roles: []string{},
+		}}, nil
 	}
 	rows, err := s.pool.Query(ctx, `SELECT
 		wiki_id,wiki_name,namespace_id,role_key

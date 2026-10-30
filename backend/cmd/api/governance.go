@@ -335,7 +335,14 @@ func (a *GovernanceAPI) submitProposal(w http.ResponseWriter, r *http.Request) {
 		governanceError(w, r, err)
 		return
 	}
-	httpx.WriteJSON(w, http.StatusOK, result)
+	httpx.WriteJSON(w, http.StatusOK, struct {
+		Proposal   proposalResponse         `json:"proposal"`
+		ReviewTask *governance.ReviewTask   `json:"review_task"`
+		Decision   *governance.RiskDecision `json:"decision"`
+	}{
+		Proposal:   toProposalResponse(result.Proposal, nil, nil),
+		ReviewTask: result.ReviewTask, Decision: result.Decision,
+	})
 }
 
 func (a *GovernanceAPI) previewProposal(w http.ResponseWriter, r *http.Request) {

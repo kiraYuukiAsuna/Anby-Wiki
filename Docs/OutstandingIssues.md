@@ -140,26 +140,31 @@
 3. 当前生产清单明确保持单 API 实例；进入水平扩展里程碑前必须实现跨实例广播或
    WorkingDocument 级连接粘性，并新增多副本 E2E。
 
-## 7. AI Trust Actor 身份闭环尚未完成
+## 7. 普通导入的 AI Trust Actor 身份闭环尚未完成
 
 ### 7.1 现状
 
 - AI Trust 档案、管理员页面、风险策略和审计写入已经实现，契约只允许
   `untrusted`、`assisted`、`trusted`。
-- 档案只列出并更新预先存在的 `ai/import` Actor；本地账号注册只创建 human Actor，
-  当前没有公开 API 或部署命令负责 provision 这两类 Actor。
+- 已提供机器 `ai/import` Actor 的公开创建、列表与启停 API，以及 AI Trust 页创建
+  入口；由真人管理员经 auth 领域服务写入并记录审计。Actor 使用所属 Wiki 和创建者
+  local_account 绑定身份，创建重试幂等。
+- Agent CLI 已支持在浏览器授权时选择本人创建的机器 Actor。机器 Token 可读取所属
+  Wiki、创建和提交署名提案；停用会撤销凭证并清除授权码，启用后必须重新授权。
+  每次使用重查创建者账号和管理员权限；最终机器 Proposal 始终真人审核。
+- AI Trust 档案已按 Wiki 隔离，CLI Proposal 会命中三档策略和稳定抽样；抽样标记重点
+  复核，未抽中的机器提案也不能跳过真人最终审核。
 - 用户发起的 ImportJob 会以发起者 human Actor 创建 Proposal，因此当前普通导入不会
   命中 `AITrustService.ApplyPolicy` 的 `ai/import` 分支。页面可达和空状态正常，但不能
   把 AI Trust 概括为已进入用户导入闭环。
 
 ### 7.2 关闭条件
 
-该项不阻塞当前全人工审核的 Internal Beta，但在承诺 AI 分级抽样或自动批准前必须关闭：
+该项不阻塞当前全人工审核的 Internal Beta，但在承诺普通导入绑定机器身份前必须关闭：
 
-1. 冻结 AI/import Actor、Job 发起者和 Proposal 作者之间的身份/归属模型。
-2. 提供经领域服务和审计保护的 provision/disable/rotation 运维入口，不直接改表。
-3. 让 Import/AI Proposal 使用对应机器 Actor，同时保留 human 发起者的可见性与权限。
-4. 增加 `untrusted/assisted/trusted` 三档策略、抽样命中和管理员更新成功路径 E2E。
+1. 补齐普通 ImportJob 选择机器 Actor、human 发起者和 Proposal 作者之间的身份模型。
+2. 让普通 Import Proposal 使用选定机器 Actor，同时保留 human 发起者的可见性与权限。
+3. 增加该导入路径的信任、抽样及停用恢复 E2E；机器最终 Proposal 仍必须人工审核。
 
 ## 8. 复杂文档持续压力与供应商成本边界尚未验收
 
