@@ -25,6 +25,7 @@ var (
 	ErrModelInputTooLarge  = errors.New("importer: 结构化内容超过模型窗口预算")
 	ErrNoQueuedJob         = errors.New("importer: 没有排队中的导入任务")
 	ErrSourceOnlyFormat    = errors.New("importer: source_only 仅支持确定性解析格式")
+	ErrAuthorUnavailable   = errors.New("importer: 机器作者不可用或不属于当前账户及 Wiki")
 )
 
 const (
@@ -71,6 +72,8 @@ type Job struct {
 	JobType                string          `json:"job_type"`
 	Status                 string          `json:"status"`
 	InitiatedBy            uuid.UUID       `json:"initiated_by"`
+	AuthorActorID          uuid.UUID       `json:"author_actor_id"`
+	AuthorDisplayName      string          `json:"author_display_name"`
 	IdempotencyKey         string          `json:"idempotency_key"`
 	Config                 json.RawMessage `json:"config"`
 	PlanningInput          json.RawMessage `json:"planning_input"`

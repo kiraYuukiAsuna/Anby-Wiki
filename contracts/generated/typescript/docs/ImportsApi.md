@@ -83,7 +83,7 @@ example().catch(console.error);
 |-------------|-------------|------------------|
 | **200** | 已取消的任务详情 |  -  |
 | **401** | 未认证 |  -  |
-| **403** | 已认证但无权限 |  -  |
+| **403** | 无操作权限或浏览器写请求来源不受信任。 非安全方法统一使用 Go CrossOriginProtection 校验浏览器来源；优先检查 Sec-Fetch-Site，缺失时比较 Origin 与 Host。无来源头的 CLI/服务端调用 继续执行原有认证和授权。  |  -  |
 | **404** | 资源不存在 |  -  |
 | **409** | 并发冲突（含陈旧基线、幂等键冲突） |  -  |
 
@@ -162,7 +162,7 @@ example().catch(console.error);
 | **200** | 已重新排队并锁定当前计划的任务详情 |  -  |
 | **400** | 请求格式错误 |  -  |
 | **401** | 未认证 |  -  |
-| **403** | 已认证但无权限 |  -  |
+| **403** | 无操作权限或浏览器写请求来源不受信任。 非安全方法统一使用 Go CrossOriginProtection 校验浏览器来源；优先检查 Sec-Fetch-Site，缺失时比较 Origin 与 Host。无来源头的 CLI/服务端调用 继续执行原有认证和授权。  |  -  |
 | **404** | 资源不存在 |  -  |
 | **409** | 并发冲突（含陈旧基线、幂等键冲突） |  -  |
 | **422** | 请求语义可理解但无法处理（如重定向环/重定向链过深） |  -  |
@@ -242,7 +242,7 @@ example().catch(console.error);
 | **201** | 已排队的导入任务 |  -  |
 | **400** | 请求格式错误 |  -  |
 | **401** | 未认证 |  -  |
-| **403** | 已认证但无权限 |  -  |
+| **403** | 无操作权限或浏览器写请求来源不受信任。 非安全方法统一使用 Go CrossOriginProtection 校验浏览器来源；优先检查 Sec-Fetch-Site，缺失时比较 Origin 与 Host。无来源头的 CLI/服务端调用 继续执行原有认证和授权。  |  -  |
 | **409** | 并发冲突（含陈旧基线、幂等键冲突） |  -  |
 | **422** | 请求语义可理解但无法处理（如重定向环/重定向链过深） |  -  |
 
@@ -251,7 +251,7 @@ example().catch(console.error);
 
 ## createImportUploadJob
 
-> ImportJob createImportUploadJob(idempotencyKey, file, title, instructions, ingestionMode, routeMode, pageId)
+> ImportJob createImportUploadJob(idempotencyKey, file, title, instructions, ingestionMode, routeMode, pageId, authorActorId)
 
 校验并暂存用户文件，幂等创建来源导入任务
 
@@ -291,6 +291,8 @@ async function example() {
     routeMode: routeMode_example,
     // string (optional)
     pageId: 38400000-8cf0-11bd-b23e-10b96e4ef00d,
+    // string | 可选机器作者。必须为当前账户拥有、当前 Wiki 内启用的 ai/import Actor；source_only 不允许指定。省略时以发起者为作者。 (optional)
+    authorActorId: 38400000-8cf0-11bd-b23e-10b96e4ef00d,
   } satisfies CreateImportUploadJobRequest;
 
   try {
@@ -317,6 +319,7 @@ example().catch(console.error);
 | **ingestionMode** | `wiki`, `source_only` | source_only 仅用于 Markdown/HTML/纯文本/JSON/CSV，固化不可变来源与分片且不调用模型或生成 Proposal。 | [Optional] [Defaults to `&#39;wiki&#39;`] [Enum: wiki, source_only] |
 | **routeMode** | `auto`, `force_create`, `force_update` |  | [Optional] [Defaults to `&#39;auto&#39;`] [Enum: auto, force_create, force_update] |
 | **pageId** | `string` |  | [Optional] [Defaults to `undefined`] |
+| **authorActorId** | `string` | 可选机器作者。必须为当前账户拥有、当前 Wiki 内启用的 ai/import Actor；source_only 不允许指定。省略时以发起者为作者。 | [Optional] [Defaults to `undefined`] |
 
 ### Return type
 
@@ -338,7 +341,7 @@ example().catch(console.error);
 | **201** | 已暂存来源并排队的导入任务 |  -  |
 | **400** | 请求格式错误 |  -  |
 | **401** | 未认证 |  -  |
-| **403** | 已认证但无权限 |  -  |
+| **403** | 无操作权限或浏览器写请求来源不受信任。 非安全方法统一使用 Go CrossOriginProtection 校验浏览器来源；优先检查 Sec-Fetch-Site，缺失时比较 Origin 与 Host。无来源头的 CLI/服务端调用 继续执行原有认证和授权。  |  -  |
 | **409** | 并发冲突（含陈旧基线、幂等键冲突） |  -  |
 | **413** | 请求格式错误 |  -  |
 | **422** | 请求语义可理解但无法处理（如重定向环/重定向链过深） |  -  |
@@ -415,7 +418,7 @@ example().catch(console.error);
 |-------------|-------------|------------------|
 | **200** | 导入任务详情 |  -  |
 | **401** | 未认证 |  -  |
-| **403** | 已认证但无权限 |  -  |
+| **403** | 无操作权限或浏览器写请求来源不受信任。 非安全方法统一使用 Go CrossOriginProtection 校验浏览器来源；优先检查 Sec-Fetch-Site，缺失时比较 Origin 与 Host。无来源头的 CLI/服务端调用 继续执行原有认证和授权。  |  -  |
 | **404** | 资源不存在 |  -  |
 
 [[Back to top]](#) [[Back to API list]](../README.md#api-endpoints) [[Back to Model list]](../README.md#models) [[Back to README]](../README.md)
@@ -578,7 +581,7 @@ example().catch(console.error);
 | **200** | 已使用新规划输入重新排队的原任务 |  -  |
 | **400** | 请求格式错误 |  -  |
 | **401** | 未认证 |  -  |
-| **403** | 已认证但无权限 |  -  |
+| **403** | 无操作权限或浏览器写请求来源不受信任。 非安全方法统一使用 Go CrossOriginProtection 校验浏览器来源；优先检查 Sec-Fetch-Site，缺失时比较 Origin 与 Host。无来源头的 CLI/服务端调用 继续执行原有认证和授权。  |  -  |
 | **404** | 资源不存在 |  -  |
 | **409** | 并发冲突（含陈旧基线、幂等键冲突） |  -  |
 | **422** | 请求语义可理解但无法处理（如重定向环/重定向链过深） |  -  |
@@ -654,7 +657,7 @@ example().catch(console.error);
 |-------------|-------------|------------------|
 | **200** | 已重新排队的任务详情 |  -  |
 | **401** | 未认证 |  -  |
-| **403** | 已认证但无权限 |  -  |
+| **403** | 无操作权限或浏览器写请求来源不受信任。 非安全方法统一使用 Go CrossOriginProtection 校验浏览器来源；优先检查 Sec-Fetch-Site，缺失时比较 Origin 与 Host。无来源头的 CLI/服务端调用 继续执行原有认证和授权。  |  -  |
 | **404** | 资源不存在 |  -  |
 | **409** | 并发冲突（含陈旧基线、幂等键冲突） |  -  |
 

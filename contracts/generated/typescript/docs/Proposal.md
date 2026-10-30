@@ -9,6 +9,7 @@ Name | Type
 `id` | string
 `wikiId` | string
 `importJobId` | string
+`importInitiatedBy` | string
 `targetType` | string
 `targetId` | string
 `baseRevisionId` | string
@@ -36,6 +37,7 @@ const example = {
   "id": null,
   "wikiId": null,
   "importJobId": null,
+  "importInitiatedBy": null,
   "targetType": null,
   "targetId": null,
   "baseRevisionId": null,

@@ -4,6 +4,7 @@ import { useEffect, useRef, useState } from "react";
 import { Command } from "cmdk";
 import { CheckCircle2, FilePenLine, FilePlus2, FileText, Network, Search, Upload, X } from "lucide-react";
 import { useRouter } from "next/navigation";
+import Link from "next/link";
 import { toast } from "sonner";
 import useSWR from "swr";
 import { z } from "zod";
@@ -14,8 +15,8 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
-import { importsApi, searchApi } from "@/lib/api";
-import { isUnauthorized, LOGIN_PATH } from "@/lib/auth";
+import { authApi, importsApi, searchApi } from "@/lib/api";
+import { isUnauthorized, LOGIN_PATH, useSession } from "@/lib/auth";
 import { clientUUID } from "@/lib/client-uuid";
 import { httpUrlSchema, safeHttpUrl } from "@/lib/http-url";
 import { importRequestError } from "@/lib/import-error";
@@ -28,6 +29,7 @@ const planningFields = {
   instructions: z.string().trim().max(4000).optional(),
   routeMode: z.enum(["auto", "force_create", "force_update"]),
   pageId: z.string().uuid().optional(),
+  authorActorId: z.string().uuid().optional(),
 };
 
 function validatePlanning(
@@ -121,11 +123,12 @@ export function ImportPageTargetPicker({
   selected: ImportPageTarget | null;
   onSelect: (page: ImportPageTarget | null) => void;
 }) {
+  const { session } = useSession();
   const [query, setQuery] = useState("");
   const debouncedQuery = useDebouncedValue(query);
   const { data, isLoading } = useSWR(
-    debouncedQuery.trim() ? ["import-page-target", debouncedQuery] : null,
-    ([, q]) => searchApi().searchPages({
+    session && debouncedQuery.trim() ? ["import-page-target", session.actorId, session.wikiId, debouncedQuery] : null,
+    ([, , , q]) => searchApi().searchPages({
       q,
       namespace: "main",
       fields: ["title", "alias"],
@@ -187,6 +190,15 @@ export function ImportPageTargetPicker({
 
 export function ImportJobForm() {
   const router = useRouter();
+  const { session } = useSession();
+  const { data: actorChoices, error: actorError, mutate: reloadActors } = useSWR(
+    session ? ["import-actors", session.actorId, session.wikiId] : null,
+    () => authApi().listCLIMachineActors(),
+  );
+  const actors = actorChoices?.items.filter((actor) => actor.wikiId === session?.wikiId) ?? [];
+  const [authorSelection, setAuthorSelection] = useState<{ account: string; wiki: string; id: string } | null>(null);
+  const authorActorId = authorSelection?.account === session?.actorId && authorSelection?.wiki === session?.wikiId
+    ? authorSelection?.id || undefined : undefined;
   const [sourceKind, setSourceKind] = useState<"url" | "upload">("url");
   const [url, setURL] = useState("");
   const [file, setFile] = useState<File | null>(null);
@@ -207,15 +219,19 @@ export function ImportJobForm() {
 
   const submit = async (event: React.FormEvent) => {
     event.preventDefault();
+    if (authorActorId && !actors.some((actor) => actor.actorId === authorActorId && actor.status === "active")) {
+      toast.error("选定的机器作者不可用，请刷新身份列表或选择其他作者");
+      return;
+    }
     const pageId = routeMode === "force_update" ? targetPage?.id : undefined;
     const parsed = sourceKind === "url"
       ? sourceSchema.safeParse({
         url, title: title || undefined, instructions: instructions || undefined,
-        routeMode, pageId,
+        routeMode, pageId, authorActorId,
       })
       : uploadSchema.safeParse({
         file, title: title || undefined, instructions: instructions || undefined,
-        routeMode, pageId,
+        routeMode, pageId, authorActorId,
       });
     if (!parsed.success) {
       if (sourceKind === "upload") {
@@ -238,6 +254,7 @@ export function ImportJobForm() {
                 instructions: instructions || undefined,
                 routeMode,
                 pageId,
+                authorActorId,
               },
             },
           })
@@ -248,6 +265,7 @@ export function ImportJobForm() {
             instructions: instructions || undefined,
             routeMode,
             pageId,
+            authorActorId,
           });
       toast.success("导入任务已排队");
       router.push(`/imports/${job.id}`);
@@ -391,6 +409,33 @@ export function ImportJobForm() {
           </p>
         </div>
       )}
+      <div className="space-y-2">
+        <Label htmlFor="import-author">提案作者</Label>
+        <select id="import-author" value={authorActorId ?? ""} disabled={submitting}
+          onChange={(event) => setAuthorSelection(session ? {
+            account: session.actorId, wiki: session.wikiId, id: event.target.value,
+          } : null)}
+          className="h-9 w-full min-w-0 rounded-md border border-input bg-background px-3 text-sm">
+          <option value="">当前账号（人工作者）</option>
+          {actors.map((actor) => (
+            <option key={actor.actorId} value={actor.actorId} disabled={actor.status !== "active"}>
+              {actor.displayName} · {actor.actorType === "import" ? "导入 Agent" : "AI Agent"}{actor.status !== "active" ? "（已停用）" : ""}
+            </option>
+          ))}
+        </select>
+        <p className="text-xs leading-5 text-muted-foreground">
+          机器作者使用其信任与抽样策略，最终仍需真人审核。任务和来源由你管理，重试保留作者。
+        </p>
+        {actorError ? (
+          <p role="alert" className="text-xs text-destructive">
+            机器身份读取失败。<button type="button" className="ml-1 underline" onClick={() => void reloadActors()}>重试</button>
+          </p>
+        ) : actors.length === 0 ? (
+          <p className="text-xs text-muted-foreground">
+            可在<Link href="/governance/ai-trust" className="mx-1 underline">AI 信任</Link>创建属于当前账户的机器 Actor。
+          </p>
+        ) : null}
+      </div>
       <fieldset className="space-y-2">
         <legend className="text-sm font-medium">页面路由方式</legend>
         <div className="grid gap-2">

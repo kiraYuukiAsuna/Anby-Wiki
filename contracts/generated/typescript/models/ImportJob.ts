@@ -65,6 +65,18 @@ export interface ImportJob {
      */
     initiatedBy: string;
     /**
+     * 最终 Proposal 作者；未绑定机器 Actor 时等于 initiated_by。任务及来源操作继续归发起者管理。
+     * @type {string}
+     * @memberof ImportJob
+     */
+    authorActorId: string;
+    /**
+     *
+     * @type {string}
+     * @memberof ImportJob
+     */
+    authorDisplayName: string;
+    /**
      *
      * @type {string}
      * @memberof ImportJob
@@ -212,6 +224,8 @@ export function instanceOfImportJob(value: object): value is ImportJob {
     if ((!('jobType' in (value as Record<string, any>)) && !('job_type' in (value as Record<string, any>))) || ((value as Record<string, any>)['jobType'] === undefined && (value as Record<string, any>)['job_type'] === undefined)) return false;
     if (!('status' in value) || value['status'] === undefined) return false;
     if ((!('initiatedBy' in (value as Record<string, any>)) && !('initiated_by' in (value as Record<string, any>))) || ((value as Record<string, any>)['initiatedBy'] === undefined && (value as Record<string, any>)['initiated_by'] === undefined)) return false;
+    if ((!('authorActorId' in (value as Record<string, any>)) && !('author_actor_id' in (value as Record<string, any>))) || ((value as Record<string, any>)['authorActorId'] === undefined && (value as Record<string, any>)['author_actor_id'] === undefined)) return false;
+    if ((!('authorDisplayName' in (value as Record<string, any>)) && !('author_display_name' in (value as Record<string, any>))) || ((value as Record<string, any>)['authorDisplayName'] === undefined && (value as Record<string, any>)['author_display_name'] === undefined)) return false;
     if ((!('idempotencyKey' in (value as Record<string, any>)) && !('idempotency_key' in (value as Record<string, any>))) || ((value as Record<string, any>)['idempotencyKey'] === undefined && (value as Record<string, any>)['idempotency_key'] === undefined)) return false;
     if (!('config' in value) || value['config'] === undefined) return false;
     if ((!('planningInput' in (value as Record<string, any>)) && !('planning_input' in (value as Record<string, any>))) || ((value as Record<string, any>)['planningInput'] === undefined && (value as Record<string, any>)['planning_input'] === undefined)) return false;
@@ -237,6 +251,8 @@ export function ImportJobFromJSONTyped(json: any, ignoreDiscriminator: boolean):
         'jobType': json['job_type'],
         'status': json['status'],
         'initiatedBy': json['initiated_by'],
+        'authorActorId': json['author_actor_id'],
+        'authorDisplayName': json['author_display_name'],
         'idempotencyKey': json['idempotency_key'],
         'config': json['config'],
         'planningInput': ImportPlanningInputFromJSON(json['planning_input']),
@@ -272,6 +288,8 @@ export function ImportJobToJSONTyped(value?: ImportJob | null, ignoreDiscriminat
         'job_type': value['jobType'],
         'status': value['status'],
         'initiated_by': value['initiatedBy'],
+        'author_actor_id': value['authorActorId'],
+        'author_display_name': value['authorDisplayName'],
         'idempotency_key': value['idempotencyKey'],
         'config': value['config'],
         'planning_input': ImportPlanningInputToJSON(value['planningInput']),

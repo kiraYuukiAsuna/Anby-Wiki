@@ -28,7 +28,7 @@ export default async function ProposalPage({
           <ShieldCheck className="size-7 text-amber-700" aria-hidden />
           <h2 className="mt-4 text-lg font-semibold text-amber-950">没有查看此提案的权限</h2>
           <p className="mt-2 text-sm leading-6 text-amber-900/70">
-            仅提案创建者或当前 Wiki 的审核者、应用者及管理员可以查看此提案。
+            提案创建者、对应导入任务的发起者或当前 Wiki 的审核者、应用者及管理员可以查看此提案。
           </p>
         </div>
       </div>

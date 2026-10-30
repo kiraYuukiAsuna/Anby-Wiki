@@ -92,7 +92,7 @@ example().catch(console.error);
 | **201** | 一次性授权码 |  -  |
 | **400** | 请求格式错误 |  -  |
 | **401** | 未认证 |  -  |
-| **403** | 已认证但无权限 |  -  |
+| **403** | 无操作权限或浏览器写请求来源不受信任。 非安全方法统一使用 Go CrossOriginProtection 校验浏览器来源；优先检查 Sec-Fetch-Site，缺失时比较 Origin 与 Host。无来源头的 CLI/服务端调用 继续执行原有认证和授权。  |  -  |
 | **500** | 服务端内部错误 |  -  |
 
 [[Back to top]](#) [[Back to API list]](../README.md#api-endpoints) [[Back to Model list]](../README.md#models) [[Back to README]](../README.md)
@@ -170,7 +170,7 @@ example().catch(console.error);
 | **201** | 新建或幂等返回的机器 Actor |  -  |
 | **400** | 请求格式错误 |  -  |
 | **401** | 未认证 |  -  |
-| **403** | 已认证但无权限 |  -  |
+| **403** | 无操作权限或浏览器写请求来源不受信任。 非安全方法统一使用 Go CrossOriginProtection 校验浏览器来源；优先检查 Sec-Fetch-Site，缺失时比较 Origin 与 Host。无来源头的 CLI/服务端调用 继续执行原有认证和授权。  |  -  |
 | **409** | 并发冲突（含陈旧基线、幂等键冲突） |  -  |
 | **500** | 服务端内部错误 |  -  |
 
@@ -246,7 +246,7 @@ example().catch(console.error);
 | **204** | 授权码已删除 |  -  |
 | **400** | 请求格式错误 |  -  |
 | **401** | 未认证 |  -  |
-| **403** | 已认证但无权限 |  -  |
+| **403** | 无操作权限或浏览器写请求来源不受信任。 非安全方法统一使用 Go CrossOriginProtection 校验浏览器来源；优先检查 Sec-Fetch-Site，缺失时比较 Origin 与 Host。无来源头的 CLI/服务端调用 继续执行原有认证和授权。  |  -  |
 | **404** | 资源不存在 |  -  |
 | **500** | 服务端内部错误 |  -  |
 
@@ -322,7 +322,7 @@ example().catch(console.error);
 | **204** | 记录已删除 |  -  |
 | **400** | 请求格式错误 |  -  |
 | **401** | 未认证 |  -  |
-| **403** | 已认证但无权限 |  -  |
+| **403** | 无操作权限或浏览器写请求来源不受信任。 非安全方法统一使用 Go CrossOriginProtection 校验浏览器来源；优先检查 Sec-Fetch-Site，缺失时比较 Origin 与 Host。无来源头的 CLI/服务端调用 继续执行原有认证和授权。  |  -  |
 | **404** | 资源不存在 |  -  |
 | **409** | 并发冲突（含陈旧基线、幂等键冲突） |  -  |
 | **500** | 服务端内部错误 |  -  |
@@ -390,7 +390,7 @@ This endpoint does not need any parameter.
 |-------------|-------------|------------------|
 | **200** | 已删除记录数 |  -  |
 | **401** | 未认证 |  -  |
-| **403** | 已认证但无权限 |  -  |
+| **403** | 无操作权限或浏览器写请求来源不受信任。 非安全方法统一使用 Go CrossOriginProtection 校验浏览器来源；优先检查 Sec-Fetch-Site，缺失时比较 Origin 与 Host。无来源头的 CLI/服务端调用 继续执行原有认证和授权。  |  -  |
 | **500** | 服务端内部错误 |  -  |
 
 [[Back to top]](#) [[Back to API list]](../README.md#api-endpoints) [[Back to Model list]](../README.md#models) [[Back to README]](../README.md)
@@ -461,6 +461,7 @@ No authorization required
 | **200** | CLI Token；明文 token 只在本响应出现 |  -  |
 | **400** | 请求格式错误 |  -  |
 | **401** | 未认证 |  -  |
+| **403** | 无操作权限或浏览器写请求来源不受信任。 非安全方法统一使用 Go CrossOriginProtection 校验浏览器来源；优先检查 Sec-Fetch-Site，缺失时比较 Origin 与 Host。无来源头的 CLI/服务端调用 继续执行原有认证和授权。  |  -  |
 | **409** | 并发冲突（含陈旧基线、幂等键冲突） |  -  |
 | **429** | 触发限流，需退避后重试 |  * Retry-After - 建议等待的秒数 <br>  * X-RateLimit-Limit - 当前窗口配额 <br>  * X-RateLimit-Remaining - 当前窗口剩余配额 <br>  |
 | **500** | 服务端内部错误 |  -  |
@@ -587,7 +588,7 @@ This endpoint does not need any parameter.
 |-------------|-------------|------------------|
 | **200** | 本人机器 Actor |  -  |
 | **401** | 未认证 |  -  |
-| **403** | 已认证但无权限 |  -  |
+| **403** | 无操作权限或浏览器写请求来源不受信任。 非安全方法统一使用 Go CrossOriginProtection 校验浏览器来源；优先检查 Sec-Fetch-Site，缺失时比较 Origin 与 Host。无来源头的 CLI/服务端调用 继续执行原有认证和授权。  |  -  |
 | **500** | 服务端内部错误 |  -  |
 
 [[Back to top]](#) [[Back to API list]](../README.md#api-endpoints) [[Back to Model list]](../README.md#models) [[Back to README]](../README.md)
@@ -651,7 +652,7 @@ This endpoint does not need any parameter.
 |-------------|-------------|------------------|
 | **200** | 包含待兑换授权码、有效、过期和已撤销 Token 的审计目录 |  -  |
 | **401** | 未认证 |  -  |
-| **403** | 已认证但无权限 |  -  |
+| **403** | 无操作权限或浏览器写请求来源不受信任。 非安全方法统一使用 Go CrossOriginProtection 校验浏览器来源；优先检查 Sec-Fetch-Site，缺失时比较 Origin 与 Host。无来源头的 CLI/服务端调用 继续执行原有认证和授权。  |  -  |
 | **500** | 服务端内部错误 |  -  |
 
 [[Back to top]](#) [[Back to API list]](../README.md#api-endpoints) [[Back to Model list]](../README.md#models) [[Back to README]](../README.md)
@@ -715,7 +716,7 @@ This endpoint does not need any parameter.
 |-------------|-------------|------------------|
 | **200** | 当前 Wiki 的受管机器 Actor |  -  |
 | **401** | 未认证 |  -  |
-| **403** | 已认证但无权限 |  -  |
+| **403** | 无操作权限或浏览器写请求来源不受信任。 非安全方法统一使用 Go CrossOriginProtection 校验浏览器来源；优先检查 Sec-Fetch-Site，缺失时比较 Origin 与 Host。无来源头的 CLI/服务端调用 继续执行原有认证和授权。  |  -  |
 | **500** | 服务端内部错误 |  -  |
 
 [[Back to top]](#) [[Back to API list]](../README.md#api-endpoints) [[Back to Model list]](../README.md#models) [[Back to README]](../README.md)
@@ -784,6 +785,7 @@ No authorization required
 | **200** | 登录成功，设置 HttpOnly session cookie |  -  |
 | **400** | 请求格式错误 |  -  |
 | **401** | 未认证 |  -  |
+| **403** | 无操作权限或浏览器写请求来源不受信任。 非安全方法统一使用 Go CrossOriginProtection 校验浏览器来源；优先检查 Sec-Fetch-Site，缺失时比较 Origin 与 Host。无来源头的 CLI/服务端调用 继续执行原有认证和授权。  |  -  |
 | **429** | 触发限流，需退避后重试 |  * Retry-After - 建议等待的秒数 <br>  * X-RateLimit-Limit - 当前窗口配额 <br>  * X-RateLimit-Remaining - 当前窗口剩余配额 <br>  |
 | **500** | 服务端内部错误 |  -  |
 
@@ -843,6 +845,7 @@ No authorization required
 | Status code | Description | Response headers |
 |-------------|-------------|------------------|
 | **204** | 已退出；无活动 session 时同样成功 |  -  |
+| **403** | 无操作权限或浏览器写请求来源不受信任。 非安全方法统一使用 Go CrossOriginProtection 校验浏览器来源；优先检查 Sec-Fetch-Site，缺失时比较 Origin 与 Host。无来源头的 CLI/服务端调用 继续执行原有认证和授权。  |  -  |
 | **500** | 服务端内部错误 |  -  |
 
 [[Back to top]](#) [[Back to API list]](../README.md#api-endpoints) [[Back to Model list]](../README.md#models) [[Back to README]](../README.md)
@@ -912,7 +915,7 @@ No authorization required
 |-------------|-------------|------------------|
 | **201** | 注册成功，设置 HttpOnly session cookie |  -  |
 | **400** | 请求格式错误 |  -  |
-| **403** | 已认证但无权限 |  -  |
+| **403** | 无操作权限或浏览器写请求来源不受信任。 非安全方法统一使用 Go CrossOriginProtection 校验浏览器来源；优先检查 Sec-Fetch-Site，缺失时比较 Origin 与 Host。无来源头的 CLI/服务端调用 继续执行原有认证和授权。  |  -  |
 | **409** | 并发冲突（含陈旧基线、幂等键冲突） |  -  |
 | **429** | 触发限流，需退避后重试 |  * Retry-After - 建议等待的秒数 <br>  * X-RateLimit-Limit - 当前窗口配额 <br>  * X-RateLimit-Remaining - 当前窗口剩余配额 <br>  |
 | **500** | 服务端内部错误 |  -  |
@@ -987,7 +990,7 @@ example().catch(console.error);
 | **204** | Token 已撤销；重复撤销保持成功 |  -  |
 | **400** | 请求格式错误 |  -  |
 | **401** | 未认证 |  -  |
-| **403** | 已认证但无权限 |  -  |
+| **403** | 无操作权限或浏览器写请求来源不受信任。 非安全方法统一使用 Go CrossOriginProtection 校验浏览器来源；优先检查 Sec-Fetch-Site，缺失时比较 Origin 与 Host。无来源头的 CLI/服务端调用 继续执行原有认证和授权。  |  -  |
 | **404** | 资源不存在 |  -  |
 | **500** | 服务端内部错误 |  -  |
 
@@ -1052,6 +1055,7 @@ This endpoint does not need any parameter.
 |-------------|-------------|------------------|
 | **204** | 当前 Token 已撤销 |  -  |
 | **401** | 未认证 |  -  |
+| **403** | 无操作权限或浏览器写请求来源不受信任。 非安全方法统一使用 Go CrossOriginProtection 校验浏览器来源；优先检查 Sec-Fetch-Site，缺失时比较 Origin 与 Host。无来源头的 CLI/服务端调用 继续执行原有认证和授权。  |  -  |
 | **500** | 服务端内部错误 |  -  |
 
 [[Back to top]](#) [[Back to API list]](../README.md#api-endpoints) [[Back to Model list]](../README.md#models) [[Back to README]](../README.md)
@@ -1129,7 +1133,7 @@ example().catch(console.error);
 | **200** | 更新后的机器 Actor |  -  |
 | **400** | 请求格式错误 |  -  |
 | **401** | 未认证 |  -  |
-| **403** | 已认证但无权限 |  -  |
+| **403** | 无操作权限或浏览器写请求来源不受信任。 非安全方法统一使用 Go CrossOriginProtection 校验浏览器来源；优先检查 Sec-Fetch-Site，缺失时比较 Origin 与 Host。无来源头的 CLI/服务端调用 继续执行原有认证和授权。  |  -  |
 | **404** | 资源不存在 |  -  |
 | **500** | 服务端内部错误 |  -  |
 

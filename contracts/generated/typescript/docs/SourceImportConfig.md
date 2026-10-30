@@ -7,6 +7,7 @@
 Name | Type
 ------------ | -------------
 `source` | [SourceImportSource](SourceImportSource.md)
+`authorActorId` | string
 `ingestionMode` | string
 `title` | string
 `instructions` | string
@@ -23,6 +24,7 @@ import type { SourceImportConfig } from ''
 // TODO: Update the object below with actual values
 const example = {
   "source": null,
+  "authorActorId": null,
   "ingestionMode": null,
   "title": null,
   "instructions": null,

@@ -46,6 +46,7 @@ type ComposeParams struct {
 	WikiID          uuid.UUID
 	SourceVersionID uuid.UUID
 	ActorID         uuid.UUID
+	AuthorActorID   uuid.UUID
 	Candidates      *Candidates
 	Plan            *ImportPlan
 	Resolutions     []EntityResolution
@@ -118,10 +119,14 @@ func (c *ProposalComposer) Compose(ctx context.Context, params ComposeParams) (*
 	for _, decision := range params.Decisions {
 		risk = maxImportRisk(risk, decision.Risk)
 	}
+	authorID := params.AuthorActorID
+	if authorID == uuid.Nil {
+		authorID = params.ActorID
+	}
 	proposal, err := c.governance.CreateProposal(ctx, governance.CreateProposalParams{
 		WikiID: params.WikiID, ImportJobID: &params.ImportJobID,
 		TargetType: governance.TargetWiki, TargetID: &params.WikiID,
-		BaseStateVersion: &baseVersion, RiskLevel: risk, CreatedBy: params.ActorID,
+		BaseStateVersion: &baseVersion, RiskLevel: risk, CreatedBy: authorID,
 		IdempotencyKey: fmt.Sprintf("import:%s:composite:source-version:%s", params.ImportJobID, params.SourceVersionID),
 	})
 	if err != nil {

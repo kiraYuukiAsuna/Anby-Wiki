@@ -30,7 +30,9 @@ func (r *Repository) q(tx pgx.Tx) db.Querier {
 const jobColumns = `id,wiki_id,job_type,status,initiated_by,idempotency_key,config_json,
 	planning_input_json,planning_idempotency_key,source_version_id,proposal_id,
 	action_required,current_plan_id,confirmed_plan_id,plan_confirmed_at,
-	current_stage,progress,error_json,created_at,started_at,finished_at,updated_at`
+	current_stage,progress,error_json,created_at,started_at,finished_at,updated_at,
+	COALESCE((config_json->>'author_actor_id')::uuid,initiated_by),
+	(SELECT display_name FROM actor WHERE actor.id=COALESCE((config_json->>'author_actor_id')::uuid,initiated_by))`
 
 func scanJob(row pgx.Row) (*Job, error) {
 	var job Job
@@ -39,7 +41,8 @@ func scanJob(row pgx.Row) (*Job, error) {
 		&job.PlanningIdempotencyKey, &job.SourceVersionID, &job.ProposalID,
 		&job.ActionRequired, &job.CurrentPlanID, &job.ConfirmedPlanID,
 		&job.PlanConfirmedAt, &job.CurrentStage, &job.Progress, &job.Error,
-		&job.CreatedAt, &job.StartedAt, &job.FinishedAt, &job.UpdatedAt)
+		&job.CreatedAt, &job.StartedAt, &job.FinishedAt, &job.UpdatedAt,
+		&job.AuthorActorID, &job.AuthorDisplayName)
 	return &job, err
 }
 
@@ -221,8 +224,8 @@ func (r *Repository) ListOwnedJobs(
 	return result, nil
 }
 
-func (r *Repository) InsertJobIfAbsent(ctx context.Context, job *Job) (bool, error) {
-	err := r.pool.QueryRow(ctx, `INSERT INTO import_job
+func (r *Repository) InsertJobIfAbsent(ctx context.Context, tx pgx.Tx, job *Job) (bool, error) {
+	err := r.q(tx).QueryRow(ctx, `INSERT INTO import_job
 		(id,wiki_id,job_type,status,initiated_by,idempotency_key,
 		 config_json,planning_input_json,current_stage,progress)
 		VALUES ($1,$2,$3,'queued',$4,$5,$6::jsonb,$7::jsonb,'queued',0)

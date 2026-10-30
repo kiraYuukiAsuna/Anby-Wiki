@@ -39,7 +39,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { importsApi } from "@/lib/api";
-import { isUnauthorized, LOGIN_PATH } from "@/lib/auth";
+import { isUnauthorized, LOGIN_PATH, useSession } from "@/lib/auth";
 import { clientUUID } from "@/lib/client-uuid";
 import { importRequestError } from "@/lib/import-error";
 import { cn } from "@/lib/utils";
@@ -262,14 +262,15 @@ function isSourceOnly(config: object) {
 }
 
 export function ImportJobProgress({ id }: { id: string }) {
+  const { session } = useSession();
   const router = useRouter();
   const { data, error, mutate } = useSWR(
-    ["import-job", id],
+    session ? ["import-job", session.actorId, session.wikiId, id] : null,
     () => importsApi().getImportJob({ id }),
     { refreshInterval: (latest) => latest?.job.status === "queued" || latest?.job.status === "running" ? 1500 : 0 },
   );
   const { trigger, isMutating } = useSWRMutation(
-    ["import-job-action", id],
+    ["import-job-action", session?.actorId, session?.wikiId, id],
     (_key, { arg }: { arg: "cancel" | "retry" | "confirm" }) => {
       if (arg === "cancel") return importsApi().cancelImportJob({ id });
       if (arg === "confirm") {
@@ -337,6 +338,11 @@ export function ImportJobProgress({ id }: { id: string }) {
           <div className="min-w-0">
             <p className="text-sm font-semibold">{JOB_STATUS_LABEL[data.job.status]} · {data.job.progress}%</p>
             <p className="mt-1 break-all font-mono text-xs text-muted-foreground">{data.job.id}</p>
+            <p className="mt-2 break-words text-xs text-muted-foreground">
+              提案作者：{data.job.authorDisplayName}
+              {data.job.authorActorId !== data.job.initiatedBy ? "（机器 Actor，需真人审核）" : "（人工作者）"}
+            </p>
+            <p className="mt-1 break-all text-xs text-muted-foreground">发起者：{data.job.initiatedBy}</p>
           </div>
           <div className="flex flex-wrap gap-2">
             {(data.job.status === "queued" || data.job.status === "running" || data.job.status === "action_required") &&

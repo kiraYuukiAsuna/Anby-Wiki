@@ -1,6 +1,6 @@
 # ADR-0020：移除 Origin CSRF 门禁与跨源隔离响应头
 
-- 状态：已接受
+- 状态：CSRF 部分被 [ADR-0024](0024-native-cross-origin-protection.md) 取代；其他决策保留
 - 日期：2026-07-28
 
 ## 背景

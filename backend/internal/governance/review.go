@@ -73,6 +73,9 @@ func (s *ReviewService) submit(
 		if actorID != nil && p.CreatedBy != *actorID {
 			return ErrPermissionDenied
 		}
+		if err := checkImportAuthor(ctx, tx, p.ImportJobID, p.WikiID, p.CreatedBy); err != nil {
+			return err
+		}
 		if p.Status != ProposalDraft {
 			return fmt.Errorf("%w: status=%s", ErrInvalidTransition, p.Status)
 		}

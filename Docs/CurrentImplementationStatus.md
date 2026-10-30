@@ -3,6 +3,10 @@
 > 更新时间：2026-10-30
 > 产品与能力审计依据：[整体设计方案](WikiDesignOnePage.md)
 
+本文集中描述已交付功能、实现边界与验证证据；未解决的实现、验收和责任事项统一维护在
+[待解决问题](OutstandingIssues.md)。带日期的章节保留当次验证范围，历史版本和测试数据
+不作为当前生产版本或当前解析器的验收结论。
+
 ## 总体结论
 
 `WikiDesignOnePage.md` 定义的模块化单体 API、独立 Worker、权威数据、治理写入、
@@ -26,6 +30,61 @@ AI 配置和双会话协作 E2E；当前权威契约为 183 个 operation。“�
 安全边界、账号恢复、备份恢复与人工可访问性等仍须验收。详见
 [待解决问题](OutstandingIssues.md)。
 
+## 当前生产版本
+
+- 业务代码已部署版本为 `477b54bbd86a`，对应提交 `477b54b`；API、Worker、Web、
+  AI Kernel、CLI 和迁移工具六个业务镜像来自同一提交，四个应用服务健康。
+- 本次发布的 8 项 CI、迁移闸门、Doctor 和 HTTPS 冒烟通过；线上管理员身份接口、
+  Wiki 范围、CLI 凭证身份字段、Actor 创建入口与 CLI 绑定选择已验证，
+  390/960px 页面无横向溢出。
+- 当前版本包含只读分享、账户配置与归档隔离、工作台权限入口、组件表单定制、
+  导入失败诊断，以及机器 Actor 与 CLI 绑定。以下对应章节中的功能描述适用于此版本。
+
+## 2026-10-30 浏览器写请求来源校验
+
+- API 路由使用 Go 标准库 `http.CrossOriginProtection`，在认证与业务处理前统一
+  校验写请求；注册、登录、退出和 CLI 授权码兑换也受保护。
+- 优先使用 `Sec-Fetch-Site`，拒绝跨来源和 `same-site` 写入；无 Fetch Metadata 时
+  比较 `Origin` 与请求 Host。GET、HEAD、OPTIONS 允许，无两种来源头的非浏览器
+  调用继续经过原有认证和角色授权。
+- 拒绝响应沿用 `forbidden/403` 和请求 ID；写接口均声明该响应，内嵌 CLI 契约和
+  TypeScript 客户端随 OpenAPI 同步。前端不维护额外 Token 或来源白名单配置。
+- 本机隔离 PostgreSQL 与 S3 兼容测试存储验收通过：真实 Chrome 经 Web rewrite 完成
+  登录、资料保存与重载、页面创建、协作编辑、发布重载、文件上传及退出；跨端口的
+  `same-site` 退出/上传请求实际携带 Cookie，均返回 403 且不改变会话或新增任务。
+  `cross-site` 登录在无 Cookie 时返回 403，正常退出后会话查询返回 401。
+- `make check`、全量 Go 测试、来源校验 race 测试与生成物重生成一致性检查通过。
+  API 直连与 Web 代理的来源校验/CLI E2E、机器 Actor CLI 绑定 E2E，以及代理协作
+  E2E 通过；部署静态检查通过，实际容器验证因本机无 Docker 未运行。
+- 设计与代理边界见 [ADR-0024](adr/0024-native-cross-origin-protection.md)。
+  本轮实现尚未提交或部署；正式环境启用与浏览器验收继续见
+  [待解决问题](OutstandingIssues.md#3-csrf-生产启用与证书恢复演练尚未验收)。
+
+## 2026-10-30 普通导入的机器作者与真人发起者
+
+- 导入表单的 URL 和文件上传共用「提案作者」选择，可绑定本人拥有、当前 Wiki 内
+  启用的 `ai/import` Actor；默认继续使用当前真人。作者固定在不可变任务配置中，
+  无须兑换 CLI 凭证；幂等重放、重试、计划确认与重新规划不能改变作者。
+- ImportJob 始终按真人 `initiated_by` 管理，来源、资产、计划和模型配置保持发起者
+  范围。最终 Proposal 的 `created_by` 使用选定机器，`import_initiated_by` 保留
+  发起者；发起者可读取详情、预览及自己的提案列表，提案编辑/提交和真人审核/应用
+  继续分别授权。任务详情显示作者名称和发起者，相关缓存按账户/Wiki 隔离。
+- 机器必须属于当前账户和 Wiki，所属账户必须活跃并保有管理员权限。阶段启动和
+  Proposal 创建/写入/提交再次核验绑定，用 Actor 行锁与停用串行。停用时记录
+  `author_unavailable`，保留来源与计划历史；恢复身份与权限后可重试。已经生成的
+  提案仍可由有权限的真人处理，机器本身不能审核或发布。
+- Worker 接入现有 AI Trust，普通导入也记录默认 `untrusted/100%` 或配置的信任、
+  比例及完整 Proposal ID 哈希抽样结果；未抽中的机器提案同样必须真人最终审核。
+  `source_only` 不生成提案，不能指定机器作者。
+- 验证：`make check`、全量 Go 测试、相关领域 race 测试和客户端重复生成一致性
+  通过。隔离 PostgreSQL 17 与 S3 覆盖两类 Actor、默认信任、0/100% 抽样、排队与
+  执行中停用、恢复/重新规划、上传幂等与 Wiki/作者冲突、真人可见性、审核和原子
+  发布；模型响应使用受控夹具。真实 API/Next.js/Chrome 覆盖 URL/上传选择、重载、
+  停用拒绝/恢复重试、跨账户拒绝和 `source_only` 边界，320/390/960px 无水平
+  溢出和页面脚本错误；既有机器 Actor CLI 读取/提案/真人审核/Apply E2E 通过。
+- 本轮实现尚未提交或部署；未改数据库主 Schema、AST/Operation/事件版本或依赖锁。
+  使用既有不可变 `config_json` 保存作者，旧任务无需迁移并保留真人署名。
+
 ## 2026-10-30 导入失败诊断与处理建议
 
 - 导入错误使用 `ImportFailure` v1，在 Job、Run、Stage 同时保存阶段、稳定错误码、
@@ -44,6 +103,8 @@ AI 配置和双会话协作 E2E；当前权威契约为 183 个 operation。“�
   阶段启动故障及真实 API 的生成客户端解码通过；Chromium 验证原因、JSON/历史展开、
   请求错误透传、真实重试和队列摘要，320/390/960px 无水平溢出、无页面脚本错误。
   模型供应商故障使用安全错误与受控响应验证。
+- 提示注入判定仍可能误报角色设定等合法来源，后续工作见
+  [提示注入判定误报](OutstandingIssues.md#9-提示注入判定仍可能误报合法来源)。
 
 ## 2026-10-30 组件示例与表单定制
 
@@ -58,6 +119,8 @@ AI 配置和双会话协作 E2E；当前权威契约为 183 个 operation。“�
   选择和已发布版本选择，复用页面主实体，填值、预览成功后在光标位置插入真实区块。
 - 组件与实体缓存按账户/Wiki 隔离；协作 Wiki 可浏览目录和预览，
   创建、编辑、发布、废弃与定制入口仅在后端允许写入的本人 Wiki 显示。
+- 配置区顶部提供“表单 / 高级 JSON”切换，并在滚动时保持可见；底部提供字段添加。
+  当前组件复用两种可信渲染器，不开放任意自定义布局或脚本执行。
 - 验证：`make check` 通过；本机隔离 PostgreSQL 17、真实 API/Next.js/Chromium
   覆盖示例创建、字段修改、预览、发布、复制版本、真实 Claim 动态预览、多行属性、
   页面插入/协作发布/阅读、复杂 Schema 无损保存、版本创建失败重试及协作管理员入口。
@@ -78,7 +141,7 @@ AI 配置和双会话协作 E2E；当前权威契约为 183 个 operation。“�
 - 验证：`make check`、全量 Go 测试、Linux API 构建与隔离 PostgreSQL 17 账户 E2E
   通过；Chromium 覆盖本人管理员、协作管理员、编辑者、审核者、应用者及单页分享角色，
   验证导航/CmdK、URL 权限提示、受限工作台零请求、真实 Wiki 切换、分享阅读/编辑入口，
-  以及 320/390/960px 无水平溢出。本次修复尚未提交或部署。
+  以及 320/390/960px 无水平溢出。功能随 `a59cac5` 发布，已包含在当前生产版本中。
 
 ## 2026-10-29 模型参数范围与个人中心配置隔离
 
@@ -96,7 +159,7 @@ AI 配置和双会话协作 E2E；当前权威契约为 183 个 operation。“�
   E2E 覆盖双账户、协作 Wiki、读写/测试目标、密钥保留、两端值及四种越界拒绝。
   Chromium 使用实际 Next.js 页面和生成客户端验证协作 Wiki 与同浏览器账户切换、
   延迟真实响应时的缓存隔离、未配置状态、首次密钥校验及 320/390/960px 无水平溢出。
-  此验证不包含真实供应商的两千万 Token 请求；本次修复尚未提交或部署。
+  此验证不包含真实供应商的两千万 Token 请求。功能随 `a59cac5` 发布，已包含在当前生产版本中。
 
 ## 2026-10-29 历史版本归档按账户隔离
 
@@ -113,7 +176,7 @@ AI 配置和双会话协作 E2E；当前权威契约为 183 个 operation。“�
   到期当前版本保护、归档重放、真实 S3 回源、Diff 与补偿回滚。
   Chromium 使用实际 Next.js 页面和生成客户端验证协作 Wiki 切换、同一浏览器账户切换、
   新响应到达前不复用旧统计、空账户禁用归档及 320/390/960px 无水平溢出。
-  本次修复尚未提交或部署。
+  功能随 `a59cac5` 发布，已包含在当前生产版本中。
 
 ## 2026-10-29 CI 迁移与安全门禁修复
 
@@ -249,7 +312,7 @@ AI 配置和双会话协作 E2E；当前权威契约为 183 个 operation。“�
   覆盖一次性/永久只读分享、按 ID/标题读取、协作和发布拒绝、不同页面编辑权限隔离及
   编辑中降权后的 WebSocket 1008。真实 Next.js/Chromium 验收覆盖隐藏编辑入口、
   编辑 URL 重定向且不建立草稿/连接、可编辑分享同步、降权停止编辑与拒绝更新、
-  返回阅读和 390px 无横向溢出。以上是本地修复验收，尚未部署。
+  返回阅读和 390px 无横向溢出。功能随 `3bd6eea` 发布，已包含在当前生产版本中。
 
 ## 2026-10-27 Dataset 前端退场
 
@@ -285,12 +348,13 @@ AI 配置和双会话协作 E2E；当前权威契约为 183 个 operation。“�
 
 ## 2026-10-23 生产可靠性与页面鉴权收口
 
-- 当前生产 release 为 `d0285ff6b4e3`。六个业务镜像均使用该提交；API、Worker、
+- 该轮生产 release 为 `d0285ff6b4e3`。六个业务镜像均使用该提交；API、Worker、
   Web、AI Kernel 与数据服务健康，公网 `healthz`/`readyz` 返回 200，生产仓库和
   `Secret/current-release` 一致。
 - 导入队列按 Wiki 选择 AI 任务时使用 `DISTINCT ON (wiki_id)` 和确定性时间/ID 排序，
-  不再对 PostgreSQL UUID 调用不支持的 `min()`；缺少 AI 配置的 Wiki 会被跳过，
-  不阻塞其他 Wiki 或无需模型的 `source_only` 任务。
+  缺少 AI 配置的 Wiki 会被跳过，不阻塞其他 Wiki 或无需模型的 `source_only` 任务。
+- 分窗调用把结构化 JSON 纳入模型输入预算；不可恢复窗口会取消剩余工作，
+  避免在整项失败后继续消耗模型调用。
 - ImportPlan 固化规划时的目标 Revision ID 和 replace Block hash。合成 Proposal 前
   再校验 Current Revision/Block，人工在规划后修改页面时拒绝陈旧计划，不静默覆盖。
 - Entity 身份键保留 `C++`、`C#` 等有语义符号；人员缩写基于全候选集合消歧。
@@ -315,6 +379,8 @@ AI 配置和双会话协作 E2E；当前权威契约为 183 个 operation。“�
 
 ## 2026-10-21 私人 Wiki 多用户隔离
 
+- 本地账号的用户名和邮箱规范化后保持唯一，密码使用 Argon2id 哈希；
+  注册、登录、退出和服务端 Session 经 auth 领域服务管理，退出立即吊销会话。
 - 统一 Wiki 已替换为账号级私人 Wiki。注册事务原子创建 `wiki_site`、七个
   Namespace、默认 ChangeTag、内置信息框、human Actor、admin 角色和首个 Session；
   Session 与 CLI Principal 都携带 `wiki_id`、Wiki 名称和主 Namespace ID。
@@ -383,7 +449,7 @@ AI 配置和双会话协作 E2E；当前权威契约为 183 个 operation。“�
 | 知识图谱 | Entity/Property/Claim、标签/别名/主标签、Page 主 Entity 绑定、Claim 验证、Entity 合并与回滚、联邦 Wiki/Entity 映射、图谱查询 |
 | 证据与媒体 | Source/Version/Chunk/Citation、Asset/AssetRevision、引用校验、相同证据 Citation 幂等复用、按页面聚合并可展开到 Block/Node 的反向使用、按全文首次出现统一编号的 References 投影、逐处正文回链、可审计来源与媒体目录 |
 | 结构化内容 | Component/Version、内置 Entity/Claim 信息框（按页面语言→`und`→任意主标签降级、同属性多值聚合、Entity 可跳转、验证摘要与类型感知排序）、静态与动态 Collection、成员维护、页面反向归属查询与投影；Entity/Claim/Citation 反向使用、页面反链和 Component 依赖在 Web 中按来源页面聚合，并可展开到具体 Block/Node；列表返回真实总位置/页面/区块数并支持游标续页。Dataset/View/Record 仅作为后端兼容层保留，Web 工作台、公开表单、编辑器插入与阅读链接已退场 |
-| 治理 | ProposalOperation v1 全部 24 种 Operation（含可原子应用和补偿回滚的 Page 主 Entity 绑定）、预分配 Page/Entity ID 的同批依赖、Operation 集合事务冻结、Wiki 级多目标 Proposal、跨页面 Revision/Block、Claim 及 Page/Entity 身份冲突检测、并发唯一索引冲突到 HTTP 409 的领域映射、预览、风险、ReviewTask、面向 applier/admin 的跨 Actor 待原子应用队列、带分类失败原因和终态跳过语义的批量审核、ChangeBatch、整批补偿回滚、审计事件、ChangeTag、AI Trust 档案/策略、事实一致性；支持创建、启停和绑定 Agent CLI 的 `ai/import` Actor，机器提案最终必须人工审核，普通 Web 导入仍以 human Actor 创建 Proposal |
+| 治理 | ProposalOperation v1 全部 24 种 Operation（含可原子应用和补偿回滚的 Page 主 Entity 绑定）、预分配 Page/Entity ID 的同批依赖、Operation 集合事务冻结、Wiki 级多目标 Proposal、跨页面 Revision/Block、Claim 及 Page/Entity 身份冲突检测、并发唯一索引冲突到 HTTP 409 的领域映射、预览、风险、ReviewTask、面向 applier/admin 的跨 Actor 待原子应用队列、带分类失败原因和终态跳过语义的批量审核、ChangeBatch、整批补偿回滚、审计事件、ChangeTag、AI Trust 档案/策略、事实一致性；支持创建、启停和绑定 Agent CLI 的 `ai/import` Actor，普通 Web 导入可选择机器作者并保留真人发起者，机器提案最终必须人工审核 |
 | 导入与 AI | URL/Markdown/HTML/文本/PDF/PNG/JPEG/JSON/CSV 获取，基于 DOM 主正文且排除导航/侧栏/页眉/页脚的 HTML 解析，复杂 PDF 的原生文本+逐页视觉双轨解析，表格/图表/图片结构化 Chunk 与页内区域定位，独立图片中英 OCR、来源标题/作者/发布者/日期/DOI 等安全元数据推导、结构化数据规范化、七阶段进度、幂等 Job、同 Job 多 Run/多不可变 ImportPlan 版本、规划 Revision/Block hash 并发保护、解析成功后原子写入且通过 ImportJob API 可见的不可变 SourceVersion 恢复点与无重复来源的失败重试、无需 AI 配置且只为 Markdown/HTML/纯文本/JSON/CSV 固化不可变来源/分片的 `source_only` 模式、Worker 中断任务自动恢复、账号级文档理解模型配置与缺失配置 Wiki 跳过、模型最大输入 Token、来源 Chunk 字符数与中间计划自动确认（默认开启，最终 Proposal 审核不变）、按输入预算与输出安全上限并行分批抽取/规划、单个持久 Chunk 内的临时语义窗口二分及证据回映射、截断或结构不合法窗口重试及跨批去重、轻量模型规划 Schema 与服务端机械字段补全、确定性 ImportPlan 合并、近义内容整合和结构清理、用户标题/内容块上限的跨窗口全局执行、现有页异常扩张硬门禁、对照原始 Chunk 与用户指定范围的生成后保真审计和证据化章节修复、保真分窗的三次语义纠正、并发真因保留及坏修复隔离与覆盖率回退、服务端五维质量评分及默认 0.70 硬门槛、Semantic Kernel 默认三次结构化调用与纠正重试、精确引文的跨 Chunk 安全纠偏、纯空白差异原文回填及坏候选/坏 Claim 隔离、保留语义符号的 Entity 身份归一化、缩写/别名全候选消歧、人工匹配决定、Claim 完整值/有效期去重、Claim 方向/类型/非自引用门禁、`instance_of` 明确分类证据门禁与批内单值属性确定性消歧、作品/RFC 的发布组织、文档编号/类别/状态、更新与废止专用属性、仅由页面路由授权图谱写入、来源概况与按相关性召回的智能多页面 create/update/link/ignore 路由、同批新页面稳定互链、强制创建单页、更新指定页面与用户导入要求、证据约束 Typed Block 生成/补丁及正文 Entity 引用、确定性 H2 层级与标准 See also、主 Entity 绑定及信息框、显式且有证据的页面关联与反链投影、规划结果可视化、单 ImportJob 页面+Entity+Claim 复合 Proposal 与同一 ChangeBatch 原子应用、可持久查询的导入队列 |
 | 投影与搜索 | Outbox 租约/重试/死信、链接/目录/锚点/章节/渲染/知识使用/References/相关推荐/组件依赖/图谱投影、可解释的链接+Collection+Entity 相关度、PostgreSQL fallback、Meilisearch 关键词/混合/语义检索 |
 | 规模与归档 | 章节懒加载、服务端可信 HTML 渲染、Revision 热冷分层与 S3 回源、Projection/Search 重建、容量基准命令 |
@@ -736,6 +802,9 @@ outlines。References/Related 是 Current Revision
 服务端数据统一通过 `apps/web/lib/api.ts` 创建的生成客户端访问，SWR 是唯一服务端
 数据客户端缓存；Zustand 只保存本地交互状态。
 
+BlockEditor 通过 `next/dynamic({ssr:false})` 仅在客户端加载，服务端预渲染不执行
+BlockNote 的浏览器 API；编辑器会话继续执行 BlockNote 与 Typed Block AST 的双向映射。
+
 ## 2026-08-16 导入提案身份冲突修复
 
 - Apply 在打开权威写事务前，按 Page 的 `wiki + namespace + normalized_title`
@@ -757,17 +826,21 @@ outlines。References/Related 是 Current Revision
   Page 行锁与 Current Revision 复核阻止旧 Revision 覆盖新索引。
 - Meilisearch 支持关键词、facet/filter、高亮、混合与语义查询；本地
   HuggingFace embedder 默认不向第三方发送正文。
+- 搜索文档可从 PostgreSQL staging 全量重建，索引提交等待远端 task 终态；
+  删除 Page 会移除对应搜索文档。
+- Outbox 提供租约、重试和死信回放；Worker 依据权威数据重建链接、渲染、目录、
+  References、知识使用与图谱等投影，兼容旧 `claim.changed` 事件的恢复回放。
 - 后端从已校验 AST 生成转义后的可信 HTML 和章节投影；阅读页可按章节懒加载，
   目录通过 MutationObserver 感知新章节并跟踪当前滚动位置。分章节渲染仍使用
   全文首次出现的 Citation 顺序，避免懒加载导致同一引用编号漂移。
 - Revision snapshot 可由 Worker 归档到 S3，读取 API 对热/冷存储透明回源；
-  治理页面的归档状态、容量统计和手动归档限定为当前账户拥有的 Wiki，
+  账户归档页的状态、容量统计和手动归档限定为当前账户拥有的 Wiki，
   手动操作排除跨 Wiki 共用快照。
 
 ## 安全与依赖
 
-- Web 使用 Next.js `16.3.8`；Sharp 固定为 `0.35.5`，`source-map-js` 固定为
-  `1.2.2`。shadcn CLI 位于 devDependencies。
+- Web 使用 Next.js `16.4.3` 和 Zod `4.6.7`；Sharp 固定为 `0.35.5`，
+  `source-map-js` 固定为 `1.2.2`。shadcn CLI 位于 devDependencies。
 - 新披露的 `brace-expansion` 漏洞通过 `5.0.9` 修复；安装期幂等适配器只让
   遗留 `minimatch@3` 读取新版函数导出，未知版本会直接失败，避免“审计通过但
   ESLint 损坏”。
@@ -775,8 +848,8 @@ outlines。References/Related 是 Current Revision
   固定；开发工具链同时锁定已修复的 `fast-uri@3.1.5`、`hono@4.13.1`、
   `ip-address@10.5.0`、`js-yaml@4.3.1` 与 `undici@7.29.0`。
 - 完整 `npm audit --audit-level=high` 与 production-only audit 均为 0。
-- Go 构建基线升级到 `1.26.10`，`golang.org/x/net` 升级到 `0.60.0`，修复
-  `net/http`、`html/template`、TLS、HTTP/2、MIME 与 IDNA 可达漏洞；gRPC 为
+- Go 构建基线为 `1.26.10`，`golang.org/x/net` 为 `0.62.0`，覆盖
+  `net/http`、`html/template`、TLS、HTTP/2、MIME 与 IDNA 的可达漏洞修复；gRPC 为
   `1.83.1`，OpenTelemetry 家族为 `1.45.0`；同时关闭 `GO-2026-6809`
   中间证书信任漏洞，`govulncheck` 报告 0 个可达漏洞。
 - gitleaks 扫描全部 tracked 与未忽略 untracked 源文件，包括环境模板；忽略的本机
@@ -888,14 +961,14 @@ outlines。References/Related 是 Current Revision
   ChangeBatch rollback、Import cancel/retry/upload、AI 配置与 Revision archive。
 - 正式 Session + WebSocket 双用户测试继续覆盖 Presence、update 广播、幂等重放、
   stale sequence 409、当前 sequence 发布和 snapshot/compact 恢复。
-- 修复 `create_entity` 的 Schema/运行时解码漂移：`language` 和 `description` 现在
-  可通过严格 payload 解码，不再让 Schema 合法 Proposal 在 Apply 预检时误报 422。
+- `create_entity` 的 Schema 与运行时严格 payload 解码保持一致，支持标签的
+  `language` 和 `description` 字段，Apply 按相同契约预检。
 - Parse stage 完成或恢复跳过时，Worker 现在在同一事务完成 stage 并写入
   `ImportJob.source_version_id`。即使后续模型调用失败，失败任务 API 仍可导航到
   已持久化 SourceVersion/Chunk，并从同一 checkpoint 重试。
-- AI Trust 已支持创建、启停并绑定 Agent CLI 的 `ai/import` Actor；公开注册仍只创建
-  human，当前用户发起的导入 Proposal 也以 human 为作者，因此该策略尚未进入普通导入闭环，
-  详见 [待解决问题](OutstandingIssues.md)。
+- AI Trust 支持创建、启停并绑定 Agent CLI 的 `ai/import` Actor；公开注册仍只创建
+  human。普通导入现已支持显式绑定本人机器作者及信任/抽样策略，具体边界见上方
+  [普通导入身份](#2026-10-30-普通导入的机器作者与真人发起者)。
 
 ## Agent CLI
 
@@ -906,6 +979,9 @@ outlines。References/Related 是 Current Revision
   通用调用；所有 HTTP operation 均可通过 kebab-case 命令名或 `call <operation>`
   调用，发送前校验 path/query/header、JSON/multipart body，收到 JSON 后按状态码校验
   响应。文件上传读取本地路径，二进制响应统一转为 base64 JSON。
+- 本地输入和契约错误返回 `validation_failed` 或 `operation_not_found` / exit 2，
+  远端或运行错误使用 exit 1；非法 logout 参数不修改本地凭证。响应校验保留
+  `nullable + enum` 的 `null` 语义，允许合法的空 `change_batch_status`。
 - Yjs 协作 WebSocket 不属于 OpenAPI，另由 `collaboration.run` 覆盖恢复、
   durable update、Presence 和 snapshot/compact，opaque bytes 均通过 base64。
 - `/settings/cli` 使用浏览器 Session 生成十分钟一次性授权码，CLI 兑换只显示一次的

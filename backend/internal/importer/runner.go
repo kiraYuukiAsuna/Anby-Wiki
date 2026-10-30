@@ -28,6 +28,7 @@ type SourceImportConfig struct {
 		ContentHash string `json:"content_hash,omitempty"`
 	} `json:"source"`
 	IngestionMode    string     `json:"ingestion_mode,omitempty"`
+	AuthorActorID    *uuid.UUID `json:"author_actor_id,omitempty"`
 	Title            string     `json:"title,omitempty"`
 	Instructions     string     `json:"instructions,omitempty"`
 	RouteMode        string     `json:"route_mode,omitempty"`
@@ -256,6 +257,8 @@ func decodeSourceImportConfig(raw json.RawMessage) (*SourceImportConfig, error) 
 		config.RouteMode = RouteModeAuto
 	}
 	if !validSource ||
+		(config.AuthorActorID != nil && (*config.AuthorActorID == uuid.Nil ||
+			config.IngestionMode == IngestionModeSourceOnly)) ||
 		(config.IngestionMode != IngestionModeWiki && config.IngestionMode != IngestionModeSourceOnly) ||
 		config.QualityThreshold < 0 || config.QualityThreshold > 1 ||
 		(config.RouteMode != RouteModeAuto && config.RouteMode != RouteModeForceCreate &&

@@ -64,9 +64,11 @@ Compose 会把这些值注入容器环境，Docker 管理员可通过 `docker in
 - production 清除可伪造的身份头；
 - API 添加 CSP、nosniff、frame 与 referrer 安全头。
 
-ADR-0020 已移除 Origin/Referer CSRF 门禁和 COOP/CORP。Session cookie 仍为
-HttpOnly、SameSite=Lax；该简化只适用于当前受控部署，在宣称商业发布安全门禁关闭前
-必须重新评估显式 CSRF 防护。
+[ADR-0024](../adr/0024-native-cross-origin-protection.md) 使用 Go 标准库统一校验
+浏览器写请求，覆盖注册、登录、退出、上传和 CLI 授权码兑换；CLI 的无来源头请求
+继续经过认证和授权。代理必须保留 Fetch Metadata；缺少该头时，Origin 的 Host
+必须与 API 收到的 Host 一致。部署后验收同源写入、跨来源拒绝、CLI 与协作路径。
+Session cookie 保持 HttpOnly、Secure、SameSite=Lax；COOP/CORP 仍按 ADR-0020 移除。
 
 默认不信任 `X-Forwarded-For`，因此限流按 API 看到的直连对端计数。只有上游已可靠
 清洗来源头，且 API 直连对端 IP 已明确配置到 `TRUSTED_PROXY_IPS` 时，才能按最终

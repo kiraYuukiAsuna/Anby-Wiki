@@ -246,7 +246,7 @@ func (s *AITrustService) ApplyPolicy(
 		)
 		return nil
 	}
-	if decision.AutoApprove && sampledProposal(proposal.ID, sample) {
+	if sampledProposal(proposal.ID, sample) {
 		decision.SampledForReview = true
 		decision.Reasons = appendUnique(
 			decision.Reasons, "AI 信任策略命中人工抽样",

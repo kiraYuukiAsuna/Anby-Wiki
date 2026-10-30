@@ -188,16 +188,31 @@ func (a *ImportAPI) createUploadJob(w http.ResponseWriter, r *http.Request) {
 		httpx.WriteError(w, r, http.StatusUnprocessableEntity, httpx.CodeValidationFailed, "更新指定页面时必须选择目标页面")
 		return
 	}
+	var authorID *uuid.UUID
+	if rawAuthorID := strings.TrimSpace(r.FormValue("author_actor_id")); rawAuthorID != "" {
+		parsed, err := uuid.Parse(rawAuthorID)
+		if err != nil || parsed == uuid.Nil || ingestionMode == importer.IngestionModeSourceOnly {
+			httpx.WriteError(w, r, http.StatusUnprocessableEntity, httpx.CodeValidationFailed, "机器作者 ID 或导入模式不合法")
+			return
+		}
+		authorID = &parsed
+	}
 	existing, err := a.jobs.FindUploadByKey(r.Context(), actorID, key, importer.UploadIdentity{
+		WikiID:   wikiIDFromRequest(r),
 		Filename: acquired.Filename, MIMEType: acquired.MIMEType,
 		ContentHash: acquired.ContentHash, IngestionMode: ingestionMode, Title: title,
 		Instructions: instructions, RouteMode: routeMode, PageID: pageID,
+		AuthorActorID: authorID,
 	})
 	if err == nil {
 		httpx.WriteJSON(w, http.StatusCreated, existing)
 		return
 	}
 	if !errors.Is(err, importer.ErrJobNotFound) {
+		importError(w, r, err)
+		return
+	}
+	if err := a.jobs.ValidateAuthor(r.Context(), actorID, wikiIDFromRequest(r), authorID); err != nil {
 		importError(w, r, err)
 		return
 	}
@@ -212,7 +227,7 @@ func (a *ImportAPI) createUploadJob(w http.ResponseWriter, r *http.Request) {
 		"mime_type": acquired.MIMEType, "content_hash": acquired.ContentHash,
 	}, "ingestion_mode": ingestionMode, "title": title,
 		"instructions": instructions, "route_mode": routeMode,
-		"page_id": pageID})
+		"page_id": pageID, "author_actor_id": authorID})
 	job, err := a.jobs.Create(
 		r.Context(), actorID, wikiIDFromRequest(r),
 		"source_import", key, config,
@@ -388,6 +403,8 @@ func importActorAndID(w http.ResponseWriter, r *http.Request) (uuid.UUID, uuid.U
 
 func importError(w http.ResponseWriter, r *http.Request, err error) {
 	switch {
+	case errors.Is(err, importer.ErrAuthorUnavailable):
+		httpx.WriteError(w, r, http.StatusForbidden, httpx.CodeForbidden, err.Error())
 	case errors.Is(err, importer.ErrJobNotFound), errors.Is(err, importer.ErrImportPlanNotFound):
 		httpx.WriteError(w, r, http.StatusNotFound, httpx.CodeNotFound, err.Error())
 	case errors.Is(err, importer.ErrInvalidCursor), errors.Is(err, importer.ErrInvalidStatus):

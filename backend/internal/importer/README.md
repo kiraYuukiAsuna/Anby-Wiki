@@ -4,6 +4,20 @@
 Page、Knowledge、Evidence 或 Governance 的权威表。所有正式写入均调用相应领域服务；
 模型只能产生候选，不能发布 Revision/Claim，也不能伪造 Citation。
 
+## 导入身份
+
+普通 URL 与上传导入可在不可变配置中指定 `author_actor_id`：必须是发起者拥有、
+当前 Wiki 内启用的 `ai/import` Actor，且所属账户仍是活跃管理员；省略时保留真人
+Proposal 作者。`initiated_by` 始终保留真人身份，来源、资产、计划操作和模型配置
+继续使用发起者范围；Proposal 提供 `import_initiated_by`，发起者可在自己的提案
+列表与详情中查看它，但不能替机器修改或签署提案。
+
+重试、确认与重新规划保留作者。阶段启动和 Proposal 创建、写入、提交均重新核验
+绑定，并以 Actor 行锁与停用操作串行。停用后保存 `author_unavailable` 诊断，
+恢复 Actor 和所属账户权限后才能继续；已有提案仍可由有权限的真人处理。
+Worker 装配 AI Trust，记录信任等级、抽样比例与稳定抽样标记，机器最终提案全部
+进入真人审核。`source_only` 不生成提案，因此不接受机器作者。
+
 ## 运行时
 
 API 的 `POST /api/v1/import-jobs` 只创建队列项。Provider、API 根地址、模型、输出模式、

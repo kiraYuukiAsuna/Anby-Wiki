@@ -87,6 +87,11 @@ func NewRouter(logger *slog.Logger, deps Deps, writeAPI *WriteAPI, readAPI *Read
 	}
 	r.Use(Recoverer(logger, deps.Service, deps.Metrics))
 	r.Use(AccessLog(logger))
+	crossOrigin := http.NewCrossOriginProtection()
+	crossOrigin.SetDenyHandler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		httpx.WriteError(w, r, http.StatusForbidden, httpx.CodeForbidden, "不允许跨来源写请求")
+	}))
+	r.Use(crossOrigin.Handler)
 	r.Use(Authentication(deps.Authenticator, deps.Environment == ""))
 
 	r.Get("/healthz", healthzHandler(deps.Service, deps.Version))

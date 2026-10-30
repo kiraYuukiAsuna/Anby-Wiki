@@ -53,6 +53,12 @@ export interface Proposal {
      */
     importJobId?: string;
     /**
+     * 导入任务的人类发起者，保留提案读取和任务管理权限；提案编辑与提交权限仍属于 created_by，审核与应用按真人角色授权。
+     * @type {string}
+     * @memberof Proposal
+     */
+    importInitiatedBy?: string;
+    /**
      *
      * @type {ProposalTargetTypeEnum}
      * @memberof Proposal
@@ -238,6 +244,7 @@ export function ProposalFromJSONTyped(json: any, ignoreDiscriminator: boolean): 
         'id': json['id'],
         'wikiId': json['wiki_id'],
         'importJobId': json['import_job_id'] == null ? undefined : json['import_job_id'],
+        'importInitiatedBy': json['import_initiated_by'] == null ? undefined : json['import_initiated_by'],
         'targetType': json['target_type'],
         'targetId': json['target_id'] == null ? undefined : json['target_id'],
         'baseRevisionId': json['base_revision_id'] == null ? undefined : json['base_revision_id'],
@@ -271,6 +278,7 @@ export function ProposalToJSONTyped(value?: Proposal | null, ignoreDiscriminator
         'id': value['id'],
         'wiki_id': value['wikiId'],
         'import_job_id': value['importJobId'],
+        'import_initiated_by': value['importInitiatedBy'],
         'target_type': value['targetType'],
         'target_id': value['targetId'],
         'base_revision_id': value['baseRevisionId'],

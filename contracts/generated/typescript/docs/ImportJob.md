@@ -11,6 +11,8 @@ Name | Type
 `jobType` | string
 `status` | string
 `initiatedBy` | string
+`authorActorId` | string
+`authorDisplayName` | string
 `idempotencyKey` | string
 `config` | { [key: string]: any; }
 `planningInput` | [ImportPlanningInput](ImportPlanningInput.md)
@@ -40,6 +42,8 @@ const example = {
   "jobType": null,
   "status": null,
   "initiatedBy": null,
+  "authorActorId": null,
+  "authorDisplayName": null,
   "idempotencyKey": null,
   "config": null,
   "planningInput": null,

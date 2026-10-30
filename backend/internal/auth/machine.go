@@ -277,3 +277,18 @@ func lockCLIActor(ctx context.Context, tx pgx.Tx, actorID, issuedBy uuid.UUID) (
 	}
 	return result, nil
 }
+
+// CheckMachineActorBinding keeps account ownership and the active administrator
+// requirement identical for CLI credentials and delegated Web imports. The
+// Actor lock serializes job/proposal writes with disabling the identity.
+func CheckMachineActorBinding(ctx context.Context, tx pgx.Tx, actorID, ownerID, wikiID uuid.UUID) error {
+	identity, err := lockCLIActor(ctx, tx, actorID, ownerID)
+	if err != nil {
+		return err
+	}
+	if identity.WikiID != wikiID ||
+		(identity.ActorType != ActorTypeAI && identity.ActorType != ActorTypeImport) {
+		return ErrMachineActorForbidden
+	}
+	return nil
+}

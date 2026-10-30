@@ -54,10 +54,12 @@ export function KnowledgeProposalDetail({ proposal }: { proposal: Proposal }) {
           <span className={`rounded-full px-2.5 py-1 ${RISK_STYLES[proposal.riskLevel] ?? "bg-muted"}`}>风险 {proposal.riskLevel}</span>
         </div>
       </header>
-      <dl className="grid gap-3 rounded-lg border border-border p-4 text-sm sm:grid-cols-3">
+      <dl className="grid min-w-0 gap-3 rounded-lg border border-border p-4 text-sm sm:grid-cols-3 [&_dd]:break-all">
         <div><dt className="text-xs text-muted-foreground">来源 ImportJob</dt><dd className="mt-1 font-mono text-xs">{proposal.importJobId ?? "—"}</dd></div>
         <div><dt className="text-xs text-muted-foreground">目标</dt><dd className="mt-1">{proposal.targetType} · {proposal.targetId ?? "新对象"}</dd></div>
         <div><dt className="text-xs text-muted-foreground">风险依据</dt><dd className="mt-1">{proposal.riskReasons.join("；") || "—"}</dd></div>
+        <div><dt className="text-xs text-muted-foreground">提案作者</dt><dd className="mt-1 font-mono text-xs">{proposal.createdBy}</dd></div>
+        {proposal.importInitiatedBy ? <div><dt className="text-xs text-muted-foreground">人类发起者</dt><dd className="mt-1 font-mono text-xs">{proposal.importInitiatedBy}</dd></div> : null}
       </dl>
       {isWikiImport ? (
         <section className="grid gap-3 sm:grid-cols-4">

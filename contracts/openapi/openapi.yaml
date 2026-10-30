@@ -99,6 +99,7 @@ paths:
               schema: { $ref: "#/components/schemas/AuthResult" }
         "400": { $ref: "#/components/responses/BadRequest" }
         "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/Forbidden" }
         "429": { $ref: "#/components/responses/RateLimited" }
         "500": { $ref: "#/components/responses/Internal" }
   /api/v1/auth/session:
@@ -124,6 +125,7 @@ paths:
       responses:
         "204":
           description: 已退出；无活动 session 时同样成功
+        "403": { $ref: "#/components/responses/Forbidden" }
         "500": { $ref: "#/components/responses/Internal" }
   /api/v1/wiki/members:
     get:
@@ -425,6 +427,7 @@ paths:
               schema: { $ref: "#/components/schemas/AccountProfile" }
         "400": { $ref: "#/components/responses/BadRequest" }
         "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/Forbidden" }
         "404": { $ref: "#/components/responses/NotFound" }
         "409": { $ref: "#/components/responses/Conflict" }
         "500": { $ref: "#/components/responses/Internal" }
@@ -557,6 +560,7 @@ paths:
               schema: { $ref: "#/components/schemas/CLIAuthExchangeResult" }
         "400": { $ref: "#/components/responses/BadRequest" }
         "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/Forbidden" }
         "409": { $ref: "#/components/responses/Conflict" }
         "429": { $ref: "#/components/responses/RateLimited" }
         "500": { $ref: "#/components/responses/Internal" }
@@ -737,6 +741,7 @@ paths:
         "204":
           description: 当前 Token 已撤销
         "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/Forbidden" }
         "500": { $ref: "#/components/responses/Internal" }
   /api/v1/import-jobs:
     get:
@@ -966,6 +971,7 @@ paths:
               schema: { $ref: "#/components/schemas/LinkPreviewMetadata" }
         "400": { $ref: "#/components/responses/BadRequest" }
         "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/Forbidden" }
         "422": { $ref: "#/components/responses/UnprocessableEntity" }
         "502": { $ref: "#/components/responses/Internal" }
   /api/v1/sources/{id}:
@@ -1274,6 +1280,7 @@ paths:
             application/json:
               schema: { $ref: "#/components/schemas/DatasetRecordPage" }
         "400": { $ref: "#/components/responses/BadRequest" }
+        "403": { $ref: "#/components/responses/Forbidden" }
         "404": { $ref: "#/components/responses/NotFound" }
         "422": { $ref: "#/components/responses/UnprocessableEntity" }
   /api/v1/public/dataset-forms/{id}:
@@ -1310,6 +1317,7 @@ paths:
           content:
             application/json:
               schema: { $ref: "#/components/schemas/DatasetRecord" }
+        "403": { $ref: "#/components/responses/Forbidden" }
         "404": { $ref: "#/components/responses/NotFound" }
         "422": { $ref: "#/components/responses/UnprocessableEntity" }
   /api/v1/components:
@@ -1490,6 +1498,7 @@ paths:
           content:
             application/json:
               schema: { $ref: "#/components/schemas/PreviewWikiComponentResult" }
+        "403": { $ref: "#/components/responses/Forbidden" }
         "404": { $ref: "#/components/responses/NotFound" }
         "422": { $ref: "#/components/responses/UnprocessableEntity" }
   /api/v1/import-jobs/uploads:
@@ -1538,6 +1547,10 @@ paths:
                 page_id:
                   type: string
                   format: uuid
+                author_actor_id:
+                  type: string
+                  format: uuid
+                  description: 可选机器作者。必须为当前账户拥有、当前 Wiki 内启用的 ai/import Actor；source_only 不允许指定。省略时以发起者为作者。
       responses:
         "201":
           description: 已暂存来源并排队的导入任务
@@ -1792,6 +1805,7 @@ paths:
               schema:
                 $ref: "#/components/schemas/ProposalOperationRecord"
         "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/Forbidden" }
         "409": { $ref: "#/components/responses/Conflict" }
         "422": { $ref: "#/components/responses/UnprocessableEntity" }
   /api/v1/proposals/{id}/submit:
@@ -1812,6 +1826,7 @@ paths:
               schema:
                 $ref: "#/components/schemas/SubmitProposalResult"
         "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/Forbidden" }
         "409": { $ref: "#/components/responses/Conflict" }
         "422": { $ref: "#/components/responses/UnprocessableEntity" }
   /api/v1/proposals/{id}/preview:
@@ -5864,6 +5879,10 @@ components:
       required: [source]
       properties:
         source: { $ref: "#/components/schemas/SourceImportSource" }
+        author_actor_id:
+          type: string
+          format: uuid
+          description: 固定的机器 Proposal 作者，必须为发起者拥有且在当前 Wiki 启用的 ai/import Actor；source_only 不允许指定。省略时保留 human 作者，重试和重新规划不改变身份。
         ingestion_mode:
           type: string
           enum: [wiki, source_only]
@@ -5945,13 +5964,18 @@ components:
         page: { type: integer, minimum: 1 }
     ImportJob:
       type: object
-      required: [id, wiki_id, job_type, status, initiated_by, idempotency_key, config, planning_input, current_stage, progress, created_at, updated_at]
+      required: [id, wiki_id, job_type, status, initiated_by, author_actor_id, author_display_name, idempotency_key, config, planning_input, current_stage, progress, created_at, updated_at]
       properties:
         id: { type: string, format: uuid }
         wiki_id: { type: string, format: uuid }
         job_type: { type: string }
         status: { type: string, enum: [queued, running, action_required, succeeded, failed, cancelled] }
         initiated_by: { type: string, format: uuid }
+        author_actor_id:
+          type: string
+          format: uuid
+          description: 最终 Proposal 作者；未绑定机器 Actor 时等于 initiated_by。任务及来源操作继续归发起者管理。
+        author_display_name: { type: string }
         idempotency_key: { type: string }
         config: { type: object, additionalProperties: true }
         planning_input: { $ref: "#/components/schemas/ImportPlanningInput" }
@@ -7104,6 +7128,11 @@ components:
         id: { type: string, format: uuid }
         wiki_id: { type: string, format: uuid }
         import_job_id: { type: string, format: uuid, nullable: true }
+        import_initiated_by:
+          type: string
+          format: uuid
+          nullable: true
+          description: 导入任务的人类发起者，保留提案读取和任务管理权限；提案编辑与提交权限仍属于 created_by，审核与应用按真人角色授权。
         target_type: { type: string, enum: [wiki, page, entity, claim, collection, external_resource] }
         target_id: { type: string, format: uuid, nullable: true }
         base_revision_id: { type: string, format: uuid, nullable: true }
@@ -9935,7 +9964,11 @@ components:
           schema:
             $ref: "#/components/schemas/Error"
     Forbidden:
-      description: 已认证但无权限
+      description: |
+        无操作权限或浏览器写请求来源不受信任。
+        非安全方法统一使用 Go CrossOriginProtection 校验浏览器来源；优先检查
+        Sec-Fetch-Site，缺失时比较 Origin 与 Host。无来源头的 CLI/服务端调用
+        继续执行原有认证和授权。
       content:
         application/json:
           schema:

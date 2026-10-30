@@ -10,6 +10,7 @@ import (
 	"github.com/google/uuid"
 
 	"github.com/anby/wiki/backend/internal/ai"
+	"github.com/anby/wiki/backend/internal/governance"
 )
 
 const (
@@ -62,6 +63,7 @@ const (
 	ErrorCancelled                 = "cancelled"
 	ErrorImportTimeout             = "import_timeout"
 	ErrorImportFailed              = "import_failed"
+	ErrorAuthorUnavailable         = "author_unavailable"
 )
 
 // Failure v1 deliberately contains only public diagnostics. Error strings,
@@ -168,9 +170,13 @@ var failureDescriptions = map[string]failureDescription{
 	ErrorCancelled:                 {"导入任务已取消。", "需要继续时可以重试，已保存的来源会被复用。", true},
 	ErrorImportTimeout:             {"导入任务超过执行时间限制。", "请稍后重试；大文件可以拆分后重新导入。", true},
 	ErrorImportFailed:              {"导入阶段执行或状态保存失败。", "请检查服务状态后重试；持续失败时请联系管理员并提供任务 ID。", true},
+	ErrorAuthorUnavailable:         {"选定的机器作者已停用或失去绑定权限。", "请在 AI 信任中恢复 Actor，并确认其所属账户仍有当前 Wiki 的管理员权限，再重试；任务会保留原作者身份。", false},
 }
 
 func newFailure(stage, code string, cause error) Failure {
+	if errors.Is(cause, ErrAuthorUnavailable) || errors.Is(cause, governance.ErrImportAuthorUnavailable) {
+		code = ErrorAuthorUnavailable
+	}
 	description, ok := failureDescriptions[code]
 	if !ok {
 		description = failureDescriptions[ErrorImportFailed]

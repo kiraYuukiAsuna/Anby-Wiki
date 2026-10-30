@@ -120,6 +120,7 @@ type proposalResponse struct {
 	ID                uuid.UUID                  `json:"id"`
 	WikiID            uuid.UUID                  `json:"wiki_id"`
 	ImportJobID       *uuid.UUID                 `json:"import_job_id"`
+	ImportInitiatedBy *uuid.UUID                 `json:"import_initiated_by"`
 	TargetType        string                     `json:"target_type"`
 	TargetID          *uuid.UUID                 `json:"target_id"`
 	BaseRevisionID    *uuid.UUID                 `json:"base_revision_id"`
@@ -908,7 +909,8 @@ func (a *GovernanceAPI) authorizeProposalRead(
 	if proposal == nil || proposal.WikiID != wikiID {
 		return governance.ErrProposalNotFound
 	}
-	if proposal != nil && proposal.CreatedBy == actorID {
+	if proposal.CreatedBy == actorID ||
+		(proposal.ImportInitiatedBy != nil && *proposal.ImportInitiatedBy == actorID) {
 		return nil
 	}
 	if a.auth == nil {
@@ -962,7 +964,8 @@ func toProposalResponse(p *governance.Proposal, operations []operationRecordResp
 	}
 	return proposalResponse{
 		ID: p.ID, WikiID: p.WikiID, ImportJobID: p.ImportJobID,
-		TargetType: p.TargetType, TargetID: p.TargetID,
+		ImportInitiatedBy: p.ImportInitiatedBy,
+		TargetType:        p.TargetType, TargetID: p.TargetID,
 		BaseRevisionID: p.BaseRevisionID, BaseStateVersion: p.BaseStateVersion,
 		Status: p.Status, RiskLevel: p.RiskLevel, RiskReasons: p.RiskReasons,
 		PolicyDecision: p.PolicyDecision, CreatedBy: p.CreatedBy, IdempotencyKey: p.IdempotencyKey,

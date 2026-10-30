@@ -14,6 +14,7 @@ import (
 	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5"
 
+	authdomain "github.com/anby/wiki/backend/internal/auth"
 	"github.com/anby/wiki/backend/internal/platform/db"
 	"github.com/anby/wiki/backend/internal/platform/id"
 )
@@ -25,6 +26,7 @@ type Service struct {
 }
 
 type UploadIdentity struct {
+	WikiID        uuid.UUID
 	Filename      string
 	MIMEType      string
 	ContentHash   string
@@ -33,6 +35,7 @@ type UploadIdentity struct {
 	Instructions  string
 	RouteMode     string
 	PageID        *uuid.UUID
+	AuthorActorID *uuid.UUID
 }
 
 const (
@@ -80,6 +83,13 @@ func (s *Service) Create(
 	if err != nil {
 		return nil, err
 	}
+	var identity struct {
+		AuthorActorID *uuid.UUID `json:"author_actor_id"`
+	}
+	if err := json.Unmarshal(canonical, &identity); err != nil {
+		return nil, ErrInvalidJob
+	}
+	authorID := identity.AuthorActorID
 	if jobType == "source_import" {
 		decoded, decodeErr := decodeSourceImportConfig(canonical)
 		if decodeErr != nil {
@@ -101,12 +111,20 @@ func (s *Service) Create(
 	job := &Job{ID: jobID, WikiID: wikiID, JobType: jobType, Status: JobQueued, InitiatedBy: actorID,
 		IdempotencyKey: key, Config: canonical, PlanningInput: planningInput,
 		CurrentStage: StageQueued}
-	inserted, err := s.repo.InsertJobIfAbsent(ctx, job)
+	var inserted bool
+	err = s.txm.InTx(ctx, func(tx pgx.Tx) error {
+		if err := s.checkAuthor(ctx, tx, actorID, wikiID, authorID); err != nil {
+			return err
+		}
+		var err error
+		inserted, err = s.repo.InsertJobIfAbsent(ctx, tx, job)
+		return err
+	})
 	if err != nil {
 		return nil, err
 	}
 	if inserted {
-		return job, nil
+		return s.repo.GetJob(ctx, nil, job.ID)
 	}
 	existing, err := s.repo.GetJobByKey(ctx, actorID, key)
 	if err != nil {
@@ -143,7 +161,11 @@ func (s *Service) FindUploadByKey(
 	if config.PageID != nil && expected.PageID != nil {
 		samePage = *config.PageID == *expected.PageID
 	}
-	if existing.JobType != "source_import" ||
+	sameAuthor := config.AuthorActorID == nil && expected.AuthorActorID == nil
+	if config.AuthorActorID != nil && expected.AuthorActorID != nil {
+		sameAuthor = *config.AuthorActorID == *expected.AuthorActorID
+	}
+	if existing.WikiID != expected.WikiID || existing.JobType != "source_import" ||
 		config.Source.Kind != "upload" ||
 		config.Source.Filename != expected.Filename ||
 		config.Source.MIMEType != expected.MIMEType ||
@@ -152,10 +174,38 @@ func (s *Service) FindUploadByKey(
 		config.Title != expected.Title ||
 		config.Instructions != expected.Instructions ||
 		config.RouteMode != expected.RouteMode ||
+		!sameAuthor ||
 		!samePage {
 		return nil, ErrIdempotencyMismatch
 	}
 	return existing, nil
+}
+
+// ValidateAuthor is the upload preflight, before storing an Asset.
+func (s *Service) ValidateAuthor(ctx context.Context, actorID, wikiID uuid.UUID, authorID *uuid.UUID) error {
+	return s.txm.InTx(ctx, func(tx pgx.Tx) error {
+		return s.checkAuthor(ctx, tx, actorID, wikiID, authorID)
+	})
+}
+
+func (s *Service) checkAuthor(ctx context.Context, tx pgx.Tx, actorID, wikiID uuid.UUID, authorID *uuid.UUID) error {
+	if authorID == nil {
+		return nil
+	}
+	if err := authdomain.CheckMachineActorBinding(ctx, tx, *authorID, actorID, wikiID); err != nil {
+		if errors.Is(err, authdomain.ErrUnauthenticated) || errors.Is(err, authdomain.ErrMachineActorForbidden) {
+			return ErrAuthorUnavailable
+		}
+		return err
+	}
+	return nil
+}
+
+func (s *Service) checkJobAuthor(ctx context.Context, tx pgx.Tx, job *Job) error {
+	if job.AuthorActorID == job.InitiatedBy {
+		return nil
+	}
+	return s.checkAuthor(ctx, tx, job.InitiatedBy, job.WikiID, &job.AuthorActorID)
 }
 
 func (s *Service) ListOwned(
@@ -362,6 +412,13 @@ func (s *Service) StartStage(ctx context.Context, runID uuid.UUID, stage string,
 		}
 		if runStatus != JobRunning || jobStatus != JobRunning {
 			return ErrCancelled
+		}
+		job, err := s.repo.GetJob(ctx, tx, jobID)
+		if err != nil {
+			return err
+		}
+		if err := s.checkJobAuthor(ctx, tx, job); err != nil {
+			return err
 		}
 		if err := s.repo.InsertStage(ctx, tx, stageRun); err != nil {
 			return err
@@ -580,6 +637,9 @@ func (s *Service) ConfirmPlan(ctx context.Context, jobID, planID uuid.UUID) erro
 			job.ActionRequired == nil || *job.ActionRequired != ActionConfirmPlan {
 			return ErrInvalidTransition
 		}
+		if err := s.checkJobAuthor(ctx, tx, job); err != nil {
+			return err
+		}
 		return s.repo.ConfirmPlan(ctx, tx, jobID, plan.ID)
 	})
 }
@@ -602,6 +662,9 @@ func (s *Service) Replan(
 		}
 		if job.InitiatedBy != actorID {
 			return ErrInvalidJob
+		}
+		if err := s.checkJobAuthor(ctx, tx, job); err != nil {
+			return err
 		}
 		previous, err := decodePlanningInput(job.PlanningInput)
 		if err != nil {
@@ -687,7 +750,11 @@ func (s *Service) Cancel(ctx context.Context, jobID uuid.UUID) error {
 
 func (s *Service) Retry(ctx context.Context, jobID uuid.UUID) error {
 	return s.txm.InTx(ctx, func(tx pgx.Tx) error {
-		if _, err := s.repo.GetJobForUpdate(ctx, tx, jobID); err != nil {
+		job, err := s.repo.GetJobForUpdate(ctx, tx, jobID)
+		if err != nil {
+			return err
+		}
+		if err := s.checkJobAuthor(ctx, tx, job); err != nil {
 			return err
 		}
 		return s.repo.RequeueJob(ctx, tx, jobID)

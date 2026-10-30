@@ -11,20 +11,21 @@ import (
 )
 
 var (
-	ErrProposalNotFound      = errors.New("governance: Proposal 不存在")
-	ErrInvalidActor          = errors.New("governance: 无效 Actor")
-	ErrActorNotAllowed       = errors.New("governance: Actor 无权执行治理操作")
-	ErrInvalidProposal       = errors.New("governance: Proposal 参数非法")
-	ErrInvalidProposalCursor = errors.New("governance: Proposal cursor 非法")
-	ErrInvalidProposalStatus = errors.New("governance: Proposal status 非法")
-	ErrIdempotencyMismatch   = errors.New("governance: 幂等键对应的请求参数不一致")
-	ErrInvalidTransition     = errors.New("governance: Proposal 状态转换非法")
-	ErrProposalNotDraft      = errors.New("governance: Proposal 已提交，Operation 不可修改")
-	ErrProposalHasNoOps      = errors.New("governance: Proposal 没有 Operation")
-	ErrInvalidOperation      = errors.New("governance: Operation 参数非法")
-	ErrOperationSequenceRace = errors.New("governance: Operation 序号冲突")
-	ErrApprovalRequired      = errors.New("governance: 缺少有效审核批准证据")
-	ErrRepairProjectionStale = errors.New("governance: 引用修复投影不是 Current Revision")
+	ErrProposalNotFound        = errors.New("governance: Proposal 不存在")
+	ErrInvalidActor            = errors.New("governance: 无效 Actor")
+	ErrActorNotAllowed         = errors.New("governance: Actor 无权执行治理操作")
+	ErrInvalidProposal         = errors.New("governance: Proposal 参数非法")
+	ErrInvalidProposalCursor   = errors.New("governance: Proposal cursor 非法")
+	ErrInvalidProposalStatus   = errors.New("governance: Proposal status 非法")
+	ErrIdempotencyMismatch     = errors.New("governance: 幂等键对应的请求参数不一致")
+	ErrInvalidTransition       = errors.New("governance: Proposal 状态转换非法")
+	ErrProposalNotDraft        = errors.New("governance: Proposal 已提交，Operation 不可修改")
+	ErrProposalHasNoOps        = errors.New("governance: Proposal 没有 Operation")
+	ErrInvalidOperation        = errors.New("governance: Operation 参数非法")
+	ErrOperationSequenceRace   = errors.New("governance: Operation 序号冲突")
+	ErrApprovalRequired        = errors.New("governance: 缺少有效审核批准证据")
+	ErrImportAuthorUnavailable = errors.New("governance: 导入任务的机器作者不可用")
+	ErrRepairProjectionStale   = errors.New("governance: 引用修复投影不是 Current Revision")
 	// ErrIdentityConflict 表示 Proposal 审核后，其计划创建的页面标题或实体
 	// canonical_key 已被其他 ChangeBatch 占用。该 Proposal 已过期，不能靠重试恢复。
 	ErrIdentityConflict = errors.New("governance: 提案基线已过期，计划创建的页面或实体已存在")
@@ -79,6 +80,7 @@ type Proposal struct {
 	ID                uuid.UUID       `json:"id"`
 	WikiID            uuid.UUID       `json:"wiki_id"`
 	ImportJobID       *uuid.UUID      `json:"import_job_id"`
+	ImportInitiatedBy *uuid.UUID      `json:"import_initiated_by"`
 	TargetType        string          `json:"target_type"`
 	TargetID          *uuid.UUID      `json:"target_id"`
 	BaseRevisionID    *uuid.UUID      `json:"base_revision_id"`

@@ -197,6 +197,13 @@ func (p *Pipeline) run(ctx context.Context, request PipelineRequest, acquire acq
 			pipelineErr = fmt.Errorf("%w: failed to record import failure", pipelineErr)
 		}
 	}()
+	job, err := p.jobs.DetailJob(ctx, request.JobID)
+	if err != nil {
+		return nil, err
+	}
+	if job.WikiID != request.WikiID || job.InitiatedBy != request.ActorID {
+		return nil, ErrInvalidJob
+	}
 	result := &PipelineResult{ProposalIDs: []uuid.UUID{}, Unresolved: []EntityResolution{}}
 	var current *StageRun
 	var extracted *ExtractResult
@@ -355,7 +362,8 @@ func (p *Pipeline) run(ctx context.Context, request PipelineRequest, acquire acq
 	}
 	composed, err := p.composer.Compose(ctx, ComposeParams{ImportJobID: request.JobID, WikiID: request.WikiID,
 		SourceVersionID: version.Version.ID, ActorID: request.ActorID, Candidates: selectedCandidates,
-		Plan: planned.Plan, Resolutions: resolutions, Decisions: decisions})
+		AuthorActorID: job.AuthorActorID,
+		Plan:          planned.Plan, Resolutions: resolutions, Decisions: decisions})
 	if err != nil {
 		return fail(current, ErrorProposalComposeFailed, err)
 	}

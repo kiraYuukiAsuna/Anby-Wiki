@@ -72,7 +72,7 @@ This endpoint does not need any parameter.
 |-------------|-------------|------------------|
 | **200** | 脱敏后的当前配置；未保存时返回安全默认值 |  -  |
 | **401** | 未认证 |  -  |
-| **403** | 已认证但无权限 |  -  |
+| **403** | 无操作权限或浏览器写请求来源不受信任。 非安全方法统一使用 Go CrossOriginProtection 校验浏览器来源；优先检查 Sec-Fetch-Site，缺失时比较 Origin 与 Host。无来源头的 CLI/服务端调用 继续执行原有认证和授权。  |  -  |
 | **500** | 服务端内部错误 |  -  |
 
 [[Back to top]](#) [[Back to API list]](../README.md#api-endpoints) [[Back to Model list]](../README.md#models) [[Back to README]](../README.md)
@@ -202,7 +202,7 @@ This endpoint does not need any parameter.
 |-------------|-------------|------------------|
 | **200** | Semantic Kernel 与模型供应商连通且结构化输出有效 |  -  |
 | **401** | 未认证 |  -  |
-| **403** | 已认证但无权限 |  -  |
+| **403** | 无操作权限或浏览器写请求来源不受信任。 非安全方法统一使用 Go CrossOriginProtection 校验浏览器来源；优先检查 Sec-Fetch-Site，缺失时比较 Origin 与 Host。无来源头的 CLI/服务端调用 继续执行原有认证和授权。  |  -  |
 | **409** | 并发冲突（含陈旧基线、幂等键冲突） |  -  |
 | **502** | 服务端内部错误 |  -  |
 | **504** | 服务端内部错误 |  -  |
@@ -279,7 +279,7 @@ example().catch(console.error);
 | **200** | 脱敏后的已保存配置 |  -  |
 | **400** | 请求格式错误 |  -  |
 | **401** | 未认证 |  -  |
-| **403** | 已认证但无权限 |  -  |
+| **403** | 无操作权限或浏览器写请求来源不受信任。 非安全方法统一使用 Go CrossOriginProtection 校验浏览器来源；优先检查 Sec-Fetch-Site，缺失时比较 Origin 与 Host。无来源头的 CLI/服务端调用 继续执行原有认证和授权。  |  -  |
 | **500** | 服务端内部错误 |  -  |
 
 [[Back to top]](#) [[Back to API list]](../README.md#api-endpoints) [[Back to Model list]](../README.md#models) [[Back to README]](../README.md)
@@ -352,6 +352,7 @@ example().catch(console.error);
 | **200** | 更新后的账号资料 |  -  |
 | **400** | 请求格式错误 |  -  |
 | **401** | 未认证 |  -  |
+| **403** | 无操作权限或浏览器写请求来源不受信任。 非安全方法统一使用 Go CrossOriginProtection 校验浏览器来源；优先检查 Sec-Fetch-Site，缺失时比较 Origin 与 Host。无来源头的 CLI/服务端调用 继续执行原有认证和授权。  |  -  |
 | **404** | 资源不存在 |  -  |
 | **409** | 并发冲突（含陈旧基线、幂等键冲突） |  -  |
 | **500** | 服务端内部错误 |  -  |

@@ -30,14 +30,15 @@ const proposalColumns = `id, wiki_id, import_job_id, target_type, target_id, bas
 	created_by, idempotency_key,
 	(SELECT cb.id FROM change_batch cb WHERE cb.proposal_id=proposal.id LIMIT 1),
 	(SELECT cb.status FROM change_batch cb WHERE cb.proposal_id=proposal.id LIMIT 1),
-	created_at, updated_at`
+	created_at, updated_at,
+	(SELECT initiated_by FROM import_job WHERE import_job.id=proposal.import_job_id)`
 
 func scanProposal(row pgx.Row) (*Proposal, error) {
 	var p Proposal
 	if err := row.Scan(&p.ID, &p.WikiID, &p.ImportJobID, &p.TargetType, &p.TargetID, &p.BaseRevisionID,
 		&p.BaseStateVersion, &p.Status, &p.RiskLevel, &p.RiskReasons, &p.PolicyDecision,
 		&p.CreatedBy, &p.IdempotencyKey, &p.ChangeBatchID, &p.ChangeBatchStatus,
-		&p.CreatedAt, &p.UpdatedAt); err != nil {
+		&p.CreatedAt, &p.UpdatedAt, &p.ImportInitiatedBy); err != nil {
 		return nil, err
 	}
 	return &p, nil
@@ -114,7 +115,9 @@ func (r *Repository) ListOwnedProposals(
 		afterID = after.ID
 	}
 	rows, err := r.pool.Query(ctx, `SELECT `+proposalColumns+` FROM proposal
-		WHERE wiki_id=$1 AND created_by=$2
+		WHERE wiki_id=$1 AND (created_by=$2 OR EXISTS (
+			SELECT 1 FROM import_job j WHERE j.id=proposal.import_job_id
+				AND j.wiki_id=$1 AND j.initiated_by=$2))
 		  AND ($3='' OR status=$3)
 		  AND ($4='' OR target_type=$4)
 		  AND ($5::timestamptz IS NULL OR (proposal.created_at,proposal.id) < ($5,$6))

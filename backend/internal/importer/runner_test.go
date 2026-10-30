@@ -3,7 +3,22 @@ package importer
 import (
 	"encoding/json"
 	"testing"
+
+	"github.com/google/uuid"
 )
+
+func TestSourceOnlyDoesNotAcceptMachineAuthor(t *testing.T) {
+	raw, err := json.Marshal(map[string]any{
+		"source":         map[string]any{"kind": "url", "url": "https://example.com/source.txt"},
+		"ingestion_mode": IngestionModeSourceOnly, "author_actor_id": uuid.New(),
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := decodeSourceImportConfig(raw); err == nil {
+		t.Fatal("source-only archival accepted a Proposal author")
+	}
+}
 
 func TestDecodeSourceImportConfigIngestionMode(t *testing.T) {
 	tests := []struct {

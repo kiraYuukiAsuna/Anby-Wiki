@@ -121,7 +121,10 @@ func assembleImportRunner(ctx context.Context, pool *pgxpool.Pool, cfg config.Co
 		WithCitationChecker(evidenceRepo)
 	governanceRepo := governance.NewRepository(pool)
 	governanceService := governance.NewService(governanceRepo, txm, ids)
-	reviews := governance.NewReviewService(governanceRepo, txm, ids, governance.NewRiskEvaluator(knowledgeService))
+	authorization := governance.NewAuthorizationService(pool)
+	reviews := governance.NewReviewService(governanceRepo, txm, ids, governance.NewRiskEvaluator(knowledgeService)).
+		WithAuthorization(authorization).
+		WithAITrust(governance.NewAITrustService(governanceRepo, authorization, txm, ids))
 	componentService := component.NewService(
 		component.NewRepository(pool), pageRepo, txm, ids,
 		component.NewKnowledgeRegistry(pool),

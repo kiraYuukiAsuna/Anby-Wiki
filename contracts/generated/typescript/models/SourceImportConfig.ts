@@ -34,6 +34,12 @@ export interface SourceImportConfig {
      */
     source: SourceImportSource;
     /**
+     * 固定的机器 Proposal 作者，必须为发起者拥有且在当前 Wiki 启用的 ai/import Actor；source_only 不允许指定。省略时保留 human 作者，重试和重新规划不改变身份。
+     * @type {string}
+     * @memberof SourceImportConfig
+     */
+    authorActorId?: string;
+    /**
      * source_only 仅用于 Markdown/HTML/纯文本/JSON/CSV，在固化 SourceVersion/Chunk 后成功结束且不调用模型或生成 Proposal。
      * @type {SourceImportConfigIngestionModeEnum}
      * @memberof SourceImportConfig
@@ -117,6 +123,7 @@ export function SourceImportConfigFromJSONTyped(json: any, ignoreDiscriminator: 
     return {
 
         'source': SourceImportSourceFromJSON(json['source']),
+        'authorActorId': json['author_actor_id'] == null ? undefined : json['author_actor_id'],
         'ingestionMode': json['ingestion_mode'] == null ? undefined : json['ingestion_mode'],
         'title': json['title'] == null ? undefined : json['title'],
         'instructions': json['instructions'] == null ? undefined : json['instructions'],
@@ -139,6 +146,7 @@ export function SourceImportConfigToJSONTyped(value?: SourceImportConfig | null,
     return {
 
         'source': SourceImportSourceToJSON(value['source']),
+        'author_actor_id': value['authorActorId'],
         'ingestion_mode': value['ingestionMode'],
         'title': value['title'],
         'instructions': value['instructions'],

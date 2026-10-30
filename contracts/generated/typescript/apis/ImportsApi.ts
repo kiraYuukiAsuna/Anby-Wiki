@@ -66,6 +66,7 @@ export interface CreateImportUploadJobRequest {
     ingestionMode?: CreateImportUploadJobIngestionModeEnum;
     routeMode?: CreateImportUploadJobRouteModeEnum;
     pageId?: string;
+    authorActorId?: string;
 }
 
 export interface GetImportJobRequest {
@@ -347,6 +348,10 @@ export class ImportsApi extends runtime.BaseAPI {
 
         if (requestParameters['pageId'] != null) {
             formParams.append('page_id', requestParameters['pageId'] as any);
+        }
+
+        if (requestParameters['authorActorId'] != null) {
+            formParams.append('author_actor_id', requestParameters['authorActorId'] as any);
         }
 
 

@@ -12,14 +12,22 @@ production 启动前必须满足：
 
 ## 浏览器写请求
 
-ADR-0020 已删除 `BrowserWriteGuard` 和 `TRUSTED_ORIGINS`。携带 session cookie 的
-`POST/PUT/PATCH/DELETE` 不再检查 `Origin` 或 `Referer`。
+[ADR-0024](adr/0024-native-cross-origin-protection.md) 使用 Go 标准库
+`http.CrossOriginProtection`，在认证与业务处理前统一保护非安全方法。
+注册、登录、退出和授权码兑换也受校验，不以已有 Cookie 或认证身份作为启用条件。
 
-Session cookie 仍设置 HttpOnly 与 `SameSite=Lax`，Web 仍通过当前 origin 的
-`/api/*` rewrite 访问 Go API。此配置没有启用 CORS，也不支持跨 origin 携凭据直接
-访问 API。`SameSite=Lax` 不是完整 CSRF 防护；在宣称商业发布安全门禁关闭前必须恢复
-同步 token、Fetch Metadata 或等价来源校验，并且不得在缺少等价防护时使用
-`SameSite=None`。
+- 优先检查 `Sec-Fetch-Site`，只允许 `same-origin` 和 `none`；同站点的其他端口或
+  子域也属于不同来源，不放行 `same-site`。
+- 缺少 Fetch Metadata 时，比较 `Origin` 的 Host 与请求 Host；不匹配或 `null`
+  Origin 返回结构化 `forbidden/403` 和请求 ID。
+- GET、HEAD、OPTIONS 允许；两种来源头均缺失的 CLI、Worker 与 Server Component
+  调用继续执行原有认证、角色授权和领域校验。
+- 不配置来源白名单或路径绕过，不使用客户端提供的 `X-Forwarded-Host` 放行请求。
+  生产 Nginx 保留公开 Host，Next.js 同源 rewrite 保留浏览器来源头。
+
+Session Cookie 保持 HttpOnly、Secure 与 `SameSite=Lax`；开发 HTTP 使用非 Secure
+Cookie。浏览器继续访问同源 API，不启用 CORS。WebSocket 的 GET 握手仍使用独立
+Origin 和页面权限校验。来源校验不替代认证、授权或对读取方法的业务副作用约束。
 
 ## 本地账号
 

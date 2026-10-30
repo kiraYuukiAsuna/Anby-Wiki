@@ -12,6 +12,7 @@ import (
 	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5"
 
+	authdomain "github.com/anby/wiki/backend/internal/auth"
 	"github.com/anby/wiki/backend/internal/platform/db"
 	"github.com/anby/wiki/backend/internal/platform/id"
 )
@@ -253,6 +254,9 @@ func (s *Service) addOperations(
 		if actorID != nil && p.CreatedBy != *actorID {
 			return ErrPermissionDenied
 		}
+		if err := checkImportAuthor(ctx, tx, p.ImportJobID, p.WikiID, p.CreatedBy); err != nil {
+			return err
+		}
 		if p.Status != ProposalDraft {
 			return fmt.Errorf("%w: status=%s", ErrProposalNotDraft, p.Status)
 		}
@@ -382,14 +386,8 @@ func (s *Service) validateProposalScope(
 	in CreateProposalParams,
 ) error {
 	if in.ImportJobID != nil {
-		var exists bool
-		if err := tx.QueryRow(ctx, `SELECT EXISTS(
-			SELECT 1 FROM import_job WHERE id=$1 AND wiki_id=$2
-		)`, *in.ImportJobID, in.WikiID).Scan(&exists); err != nil {
+		if err := checkImportAuthor(ctx, tx, in.ImportJobID, in.WikiID, in.CreatedBy); err != nil {
 			return err
-		}
-		if !exists {
-			return ErrInvalidProposal
 		}
 	}
 	if in.BaseRevisionID != nil {
@@ -441,6 +439,33 @@ func (s *Service) validateProposalScope(
 	}
 	if !exists {
 		return ErrInvalidProposal
+	}
+	return nil
+}
+
+func checkImportAuthor(ctx context.Context, tx pgx.Tx, jobID *uuid.UUID, wikiID, authorID uuid.UUID) error {
+	if jobID == nil {
+		return nil
+	}
+	var initiatorID, boundID uuid.UUID
+	err := tx.QueryRow(ctx, `SELECT initiated_by,COALESCE((config_json->>'author_actor_id')::uuid,initiated_by)
+		FROM import_job WHERE id=$1 AND wiki_id=$2`, *jobID, wikiID).Scan(&initiatorID, &boundID)
+	if errors.Is(err, pgx.ErrNoRows) {
+		return ErrInvalidProposal
+	}
+	if err != nil {
+		return err
+	}
+	if boundID != authorID {
+		return ErrPermissionDenied
+	}
+	if authorID != initiatorID {
+		if err := authdomain.CheckMachineActorBinding(ctx, tx, authorID, initiatorID, wikiID); err != nil {
+			if errors.Is(err, authdomain.ErrUnauthenticated) || errors.Is(err, authdomain.ErrMachineActorForbidden) {
+				return fmt.Errorf("%w: %w", ErrPermissionDenied, ErrImportAuthorUnavailable)
+			}
+			return err
+		}
 	}
 	return nil
 }
