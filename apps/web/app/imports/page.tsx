@@ -8,7 +8,7 @@ export default function ImportsPage() {
         <h1 className="text-3xl font-semibold">导入中心</h1>
       </header>
 
-      <div className="mt-9 grid items-start gap-8 lg:grid-cols-[minmax(0,1fr)_22rem] xl:gap-12">
+      <div className="mt-9 grid grid-cols-1 items-start gap-8 lg:grid-cols-[minmax(0,1fr)_22rem] xl:gap-12">
         <ImportJobList />
         <aside className="lg:sticky lg:top-24">
           <div className="mb-4">
