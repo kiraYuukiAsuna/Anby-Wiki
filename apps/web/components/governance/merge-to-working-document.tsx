@@ -7,6 +7,7 @@ import type { Proposal, ProposalPreview } from "../../../../contracts/generated/
 
 import { Button } from "@/components/ui/button";
 import { governanceApi } from "@/lib/api";
+import { useSession } from "@/lib/auth";
 import { parseDocument } from "@/lib/ast/schema";
 import {
   CollaborationClient,
@@ -23,6 +24,8 @@ export function MergeToWorkingDocument({
   preview: ProposalPreview;
 }) {
   const router = useRouter();
+  const { session } = useSession();
+  const actorId = session?.actorId;
   const clientRef = useRef<CollaborationClient | null>(null);
   const [status, setStatus] = useState<CollaborationStatus>("connecting");
   const [merging, setMerging] = useState(false);
@@ -32,10 +35,11 @@ export function MergeToWorkingDocument({
     Boolean(proposal.targetId);
 
   useEffect(() => {
-    if (!enabled || !proposal.targetId) return;
+    if (!enabled || !proposal.targetId || !actorId) return;
     const initialAst = parseDocument(preview.current.ast);
     const client = new CollaborationClient({
       pageId: proposal.targetId,
+      actorId,
       initialAst,
       onAst: () => undefined,
       onStatus: setStatus,
@@ -48,7 +52,7 @@ export function MergeToWorkingDocument({
     };
     // The server component replaces this component when preview data changes.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [enabled, proposal.id, proposal.targetId]);
+  }, [enabled, proposal.id, proposal.targetId, actorId]);
 
   if (!enabled) return null;
 

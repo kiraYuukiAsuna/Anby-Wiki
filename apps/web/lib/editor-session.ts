@@ -5,7 +5,8 @@
  * （页面当前内容）经服务端组件注入为会话初始值，不在此双份缓存。
  *
  * 本地草稿（localStorage）只是崩溃/误关恢复辅助，绝不自动发布：
- * - key 含 pageId + baseRevisionId：`anbywiki.editor-draft.<pageId>.<baseRevisionId|"none">`；
+ * - key 含 actorId + pageId + baseRevisionId；未署名的旧草稿不会跨账户自动恢复；
+ * - 持久离线 Yjs 操作日志由 collaboration/offline-store 管理，优先于 AST 草稿；
  * - 进入编辑页时若草稿 base 落后服务端 current，保留草稿内容并把 base
  *   重置到服务端 current，同时记录 conflict 状态（M2-T06），
  *   由编辑页冲突条提供「查看差异 / 以最新版为基继续编辑 / 放弃我的修改」。
@@ -28,8 +29,8 @@ import { parseDocument, type Document } from "@/lib/ast/schema";
 const DRAFT_KEY_PREFIX = "anbywiki.editor-draft.";
 const NO_REVISION = "none";
 
-export function draftKey(pageId: string, baseRevisionId: string | null): string {
-  return `${DRAFT_KEY_PREFIX}${pageId}.${baseRevisionId ?? NO_REVISION}`;
+export function draftKey(actorId: string, pageId: string, baseRevisionId: string | null): string {
+  return `${DRAFT_KEY_PREFIX}${actorId}.${pageId}.${baseRevisionId ?? NO_REVISION}`;
 }
 
 interface DraftPayload {
@@ -40,12 +41,16 @@ interface DraftPayload {
 /** 草稿恢复结果：无草稿 / 基于当前版本 / 基于旧版本（已 rebase 到当前）。 */
 export type DraftRestore = "none" | "fresh" | "stale";
 
-function listDraftKeys(pageId: string): string[] {
-  const prefix = `${DRAFT_KEY_PREFIX}${pageId}.`;
+function listDraftKeys(actorId: string, pageId: string): string[] {
+  const prefix = `${DRAFT_KEY_PREFIX}${actorId}.${pageId}.`;
   const keys: string[] = [];
-  for (let i = 0; i < window.localStorage.length; i += 1) {
-    const key = window.localStorage.key(i);
-    if (key?.startsWith(prefix)) keys.push(key);
+  try {
+    for (let i = 0; i < window.localStorage.length; i += 1) {
+      const key = window.localStorage.key(i);
+      if (key?.startsWith(prefix)) keys.push(key);
+    }
+  } catch {
+    // Collaboration still works when browser storage is unavailable.
   }
   return keys;
 }
@@ -62,9 +67,21 @@ function readDraftAst(key: string): Document | null {
   }
 }
 
-function removeOtherDrafts(pageId: string, keepKey: string | null): void {
-  for (const key of listDraftKeys(pageId)) {
-    if (key !== keepKey) window.localStorage.removeItem(key);
+function removeOtherDrafts(actorId: string, pageId: string, keepKey: string | null): void {
+  for (const key of listDraftKeys(actorId, pageId)) {
+    try {
+      if (key !== keepKey) window.localStorage.removeItem(key);
+    } catch {
+      // AST drafts are a fallback; IndexedDB reports durable storage failure.
+    }
+  }
+}
+
+function saveDraft(key: string, ast: Document): void {
+  try {
+    window.localStorage.setItem(key, JSON.stringify({ ast, savedAt: new Date().toISOString() }));
+  } catch {
+    // A full AST can exceed localStorage quota; do not interrupt the Yjs write.
   }
 }
 
@@ -79,6 +96,7 @@ export interface EditorConflict {
 }
 
 export interface EditorSessionState {
+  actorId: string | null;
   /** 会话页面 ID；null 表示会话未开始。 */
   pageId: string | null;
   /** 发布基线（乐观锁 expected_revision_id）；首发布为 null。 */
@@ -107,6 +125,7 @@ export interface EditorSessionState {
    */
   startSession: (input: {
     pageId: string;
+    actorId: string;
     baseRevisionId: string | null;
     ast: Document;
   }) => DraftRestore;
@@ -139,6 +158,7 @@ export interface EditorSessionState {
 }
 
 export const useEditorSession = create<EditorSessionState>((set, get) => ({
+  actorId: null,
   pageId: null,
   baseRevisionId: null,
   serverAst: null,
@@ -150,15 +170,15 @@ export const useEditorSession = create<EditorSessionState>((set, get) => ({
   conflict: null,
   rebasedFromConflict: false,
 
-  startSession: ({ pageId, baseRevisionId, ast }) => {
-    const currentKey = draftKey(pageId, baseRevisionId);
+  startSession: ({ actorId, pageId, baseRevisionId, ast }) => {
+    const currentKey = draftKey(actorId, pageId, baseRevisionId);
 
     // 优先精确匹配当前 base 的草稿；否则取任一旧 base 草稿（视为落后）。
     let restore: DraftRestore = "none";
     let draftAst: Document | null = null;
     // stale 草稿的原 base（key 后缀），用于记录 conflict；undefined 表示未恢复草稿。
     let staleDraftBase: string | null | undefined;
-    const keys = listDraftKeys(pageId);
+    const keys = listDraftKeys(actorId, pageId);
     if (keys.includes(currentKey)) {
       draftAst = readDraftAst(currentKey);
       if (draftAst) restore = "fresh";
@@ -167,7 +187,7 @@ export const useEditorSession = create<EditorSessionState>((set, get) => ({
         draftAst = readDraftAst(key);
         if (draftAst) {
           restore = "stale";
-          const suffix = key.slice(`${DRAFT_KEY_PREFIX}${pageId}.`.length);
+          const suffix = key.slice(`${DRAFT_KEY_PREFIX}${actorId}.${pageId}.`.length);
           staleDraftBase = suffix === NO_REVISION ? null : suffix;
           break;
         }
@@ -175,15 +195,13 @@ export const useEditorSession = create<EditorSessionState>((set, get) => ({
     }
 
     // 同一页面只保留一份草稿：恢复后把草稿归一到当前 base 的 key。
-    removeOtherDrafts(pageId, restore === "none" ? null : currentKey);
+    removeOtherDrafts(actorId, pageId, restore === "none" ? null : currentKey);
     if (draftAst) {
-      window.localStorage.setItem(
-        currentKey,
-        JSON.stringify({ ast: draftAst, savedAt: new Date().toISOString() }),
-      );
+      saveDraft(currentKey, draftAst);
     }
 
     set({
+      actorId,
       pageId,
       baseRevisionId,
       serverAst: ast,
@@ -207,13 +225,10 @@ export const useEditorSession = create<EditorSessionState>((set, get) => ({
   },
 
   setAst: (ast) => {
-    const { pageId, baseRevisionId } = get();
+    const { actorId, pageId, baseRevisionId } = get();
     set({ ast, dirty: true });
-    if (pageId) {
-      window.localStorage.setItem(
-        draftKey(pageId, baseRevisionId),
-        JSON.stringify({ ast, savedAt: new Date().toISOString() }),
-      );
+    if (actorId && pageId) {
+      saveDraft(draftKey(actorId, pageId, baseRevisionId), ast);
     }
   },
 
@@ -234,7 +249,7 @@ export const useEditorSession = create<EditorSessionState>((set, get) => ({
   },
 
   rebaseToLatest: () => {
-    const { pageId, ast, conflict } = get();
+    const { actorId, pageId, ast, conflict } = get();
     if (!conflict) return;
     // base 切到服务端 current；本地内容与 dirty 保留（不丢工作）。
     // serverAst 同步更新为最新，使后续 discardDraft 回退到最新版。
@@ -245,21 +260,18 @@ export const useEditorSession = create<EditorSessionState>((set, get) => ({
       rebasedFromConflict: true,
     });
     // 草稿归一到新 base 的 key（继续编辑时 setAst 也会写新 key）。
-    if (pageId) {
-      removeOtherDrafts(pageId, null);
+    if (actorId && pageId) {
+      removeOtherDrafts(actorId, pageId, null);
       if (ast) {
-        window.localStorage.setItem(
-          draftKey(pageId, conflict.currentRevisionId),
-          JSON.stringify({ ast, savedAt: new Date().toISOString() }),
-        );
+        saveDraft(draftKey(actorId, pageId, conflict.currentRevisionId), ast);
       }
     }
   },
 
   resetToServer: () => {
-    const { pageId, conflict } = get();
+    const { actorId, pageId, conflict } = get();
     if (!conflict) return;
-    if (pageId) removeOtherDrafts(pageId, null);
+    if (actorId && pageId) removeOtherDrafts(actorId, pageId, null);
     set({
       baseRevisionId: conflict.currentRevisionId,
       serverAst: conflict.serverAst,
@@ -273,13 +285,13 @@ export const useEditorSession = create<EditorSessionState>((set, get) => ({
   clearRebasedFlag: () => set({ rebasedFromConflict: false }),
 
   discardDraft: () => {
-    const { pageId, serverAst } = get();
-    if (pageId) removeOtherDrafts(pageId, null);
+    const { actorId, pageId, serverAst } = get();
+    if (actorId && pageId) removeOtherDrafts(actorId, pageId, null);
     set({ ast: serverAst, dirty: false, conflict: null });
   },
 
   clearDraft: () => {
-    const { pageId } = get();
-    if (pageId) removeOtherDrafts(pageId, null);
+    const { actorId, pageId } = get();
+    if (actorId && pageId) removeOtherDrafts(actorId, pageId, null);
   },
 }));

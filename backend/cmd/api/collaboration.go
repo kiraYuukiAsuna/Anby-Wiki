@@ -25,6 +25,7 @@ const (
 	maxPresenceBytes        = 4096
 	maxSnapshotMessageBytes = 4*collaboration.MaxSnapshotBytes/3 + 64<<10
 	socketWriteLimit        = 5 * time.Second
+	recoveryInterval        = 10 * time.Second
 )
 
 type CollaborationAPI struct {
@@ -102,7 +103,9 @@ func (a *CollaborationAPI) connect(w http.ResponseWriter, r *http.Request) {
 	var writers sync.WaitGroup
 	writers.Go(func() {
 		defer cancel()
-		a.writeBroadcasts(ctx, conn, subscription.Messages())
+		a.writeBroadcasts(ctx, conn, subscription.Messages(), recovery.Document, func() error {
+			return a.authorization.Check(ctx, principal.ActorID, wikiIDFromRequest(r), governance.ActionEdit, &pageID)
+		})
 	})
 	defer func() {
 		cancel()
@@ -156,7 +159,7 @@ func (a *CollaborationAPI) connect(w http.ResponseWriter, r *http.Request) {
 			}
 			switch envelope.Type {
 			case "presence":
-				presence, err := presenceMessage(value, principal)
+				presence, err := presenceMessage(value, principal, clientID)
 				if err != nil {
 					_ = conn.Close(websocket.StatusPolicyViolation, "invalid presence")
 					return
@@ -267,11 +270,31 @@ func (a *CollaborationAPI) writeBroadcasts(
 	ctx context.Context,
 	conn *websocket.Conn,
 	messages <-chan collaboration.HubMessage,
+	document collaboration.Document,
+	authorize func() error,
 ) {
+	timer := time.NewTicker(recoveryInterval)
+	defer timer.Stop()
+	sequence := document.LatestSequence
 	for {
 		select {
 		case <-ctx.Done():
 			return
+		case <-timer.C:
+			if authorize() != nil {
+				_ = conn.Close(websocket.StatusPolicyViolation, "edit permission revoked")
+				return
+			}
+			recovery, err := a.service.LoadSince(ctx, document.ID, sequence)
+			if err != nil || recovery.Document.Status != "active" {
+				return
+			}
+			if recovery.Document.LatestSequence > sequence {
+				if writeRecovery(ctx, conn, recovery) != nil {
+					return
+				}
+				sequence = recovery.Document.LatestSequence
+			}
 		case message, ok := <-messages:
 			if !ok {
 				return
@@ -279,6 +302,18 @@ func (a *CollaborationAPI) writeBroadcasts(
 			messageType := websocket.MessageText
 			if message.Binary {
 				messageType = websocket.MessageBinary
+				_, received, _, err := collaboration.DecodeServerFrame(message.Data)
+				if err != nil {
+					return
+				}
+				// Never advance past a missing durable update.
+				if received == sequence+1 {
+					sequence = received
+				}
+			}
+			if authorize() != nil {
+				_ = conn.Close(websocket.StatusPolicyViolation, "edit permission revoked")
+				return
 			}
 			if err := writeSocket(ctx, conn, messageType, message.Data); err != nil {
 				return
@@ -298,7 +333,7 @@ func writeSocket(
 	return conn.Write(writeCtx, messageType, value)
 }
 
-func presenceMessage(value []byte, principal authdomain.Principal) ([]byte, error) {
+func presenceMessage(value []byte, principal authdomain.Principal, clientID uuid.UUID) ([]byte, error) {
 	if len(value) == 0 || len(value) > maxPresenceBytes {
 		return nil, errors.New("presence size")
 	}
@@ -310,14 +345,31 @@ func presenceMessage(value []byte, principal authdomain.Principal) ([]byte, erro
 		len(input.Cursor) == 0 || !json.Valid(input.Cursor) {
 		return nil, errors.New("presence shape")
 	}
+	var object map[string]json.RawMessage
+	if json.Unmarshal(input.Cursor, &object) != nil || object == nil {
+		return nil, errors.New("presence cursor")
+	}
+	var cursor struct {
+		Version *int              `json:"version"`
+		Anchor  *presencePosition `json:"anchor"`
+		Head    *presencePosition `json:"head"`
+	}
+	if json.Unmarshal(input.Cursor, &cursor) != nil {
+		return nil, errors.New("presence cursor")
+	}
+	if cursor.Version != nil && (*cursor.Version != 1 ||
+		!validPresencePosition(cursor.Anchor) || !validPresencePosition(cursor.Head)) {
+		return nil, errors.New("presence position")
+	}
 	output, err := json.Marshal(struct {
 		Type             string          `json:"type"`
 		ActorID          uuid.UUID       `json:"actor_id"`
+		ClientID         uuid.UUID       `json:"client_id"`
 		ActorUsername    string          `json:"actor_username,omitempty"`
 		ActorDisplayName string          `json:"actor_display_name,omitempty"`
 		Cursor           json.RawMessage `json:"cursor"`
 	}{
-		Type: "presence", ActorID: principal.ActorID,
+		Type: "presence", ActorID: principal.ActorID, ClientID: clientID,
 		ActorUsername:    principal.Username,
 		ActorDisplayName: principal.DisplayName,
 		Cursor:           input.Cursor,
@@ -326,6 +378,24 @@ func presenceMessage(value []byte, principal authdomain.Principal) ([]byte, erro
 		return nil, fmt.Errorf("encode presence: %w", err)
 	}
 	return output, nil
+}
+
+type presencePosition struct {
+	BlockID          uuid.UUID `json:"block_id"`
+	Offset           *int      `json:"offset"`
+	RelativePosition string    `json:"relative_position"`
+}
+
+func validPresencePosition(position *presencePosition) bool {
+	if position == nil || position.BlockID == uuid.Nil || position.Offset == nil ||
+		*position.Offset < 0 || *position.Offset > collaboration.MaxUpdateBytes {
+		return false
+	}
+	if position.RelativePosition == "" {
+		return true
+	}
+	decoded, err := base64.StdEncoding.DecodeString(position.RelativePosition)
+	return err == nil && len(decoded) > 0 && len(decoded) <= 256
 }
 
 func snapshotMessage(value []byte) (int64, []byte, bool, error) {

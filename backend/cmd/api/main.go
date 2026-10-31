@@ -184,6 +184,21 @@ func main() {
 			pool, db.NewTxManager(pool), id.NewGenerator(),
 		)
 		collaborationHub := collaboration.NewHub()
+		if strings.TrimSpace(cfg.RedisURL) != "" {
+			options, err := redis.ParseURL(cfg.RedisURL)
+			if err != nil {
+				logger.Error("协作 Redis 配置无效", slog.Any("error", err))
+				os.Exit(1)
+			}
+			client := redis.NewClient(options)
+			defer client.Close()
+			collaborationHub, err = collaboration.NewRedisHub(context.Background(), client)
+			if err != nil {
+				logger.Error("初始化协作广播失败", slog.Any("error", err))
+				os.Exit(1)
+			}
+		}
+		defer collaborationHub.Close()
 		collaborationAPI = NewCollaborationAPI(
 			collaborationService,
 			governance.NewAuthorizationService(pool),

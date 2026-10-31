@@ -371,13 +371,27 @@ func (s *Service) LoadSince(
 	if lastSequence < 0 {
 		return Recovery{}, ErrInvalidUpdate
 	}
-	document, err := getByID(ctx, s.pool, documentID)
+	var recovery Recovery
+	err := s.txm.InTx(ctx, func(tx pgx.Tx) error {
+		// Snapshot compaction and new updates must be observed together.
+		if _, err := tx.Exec(ctx, "SET TRANSACTION ISOLATION LEVEL REPEATABLE READ, READ ONLY"); err != nil {
+			return err
+		}
+		var err error
+		recovery, err = loadSince(ctx, tx, documentID, lastSequence)
+		return err
+	})
+	return recovery, err
+}
+
+func loadSince(ctx context.Context, q db.Querier, documentID uuid.UUID, lastSequence int64) (Recovery, error) {
+	document, err := getByID(ctx, q, documentID)
 	if err != nil {
 		return Recovery{}, fmt.Errorf("collaboration: load recovery: %w", err)
 	}
 	recovery := Recovery{Document: document}
 	after := int64(0)
-	snapshot, err := getLatestSnapshot(ctx, s.pool, documentID)
+	snapshot, err := getLatestSnapshot(ctx, q, documentID)
 	if err == nil {
 		if lastSequence < snapshot.UpToSequence {
 			recovery.Snapshot = &snapshot
@@ -390,7 +404,7 @@ func (s *Service) LoadSince(
 	} else {
 		after = lastSequence
 	}
-	rows, err := s.pool.Query(ctx, `SELECT document_id,sequence,actor_id,client_id,
+	rows, err := q.Query(ctx, `SELECT document_id,sequence,actor_id,client_id,
 		client_update_id,update_bytes,update_hash,created_at
 		FROM working_document_update WHERE document_id=$1 AND sequence>$2 ORDER BY sequence`,
 		documentID, after)

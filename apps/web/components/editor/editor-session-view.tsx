@@ -30,7 +30,8 @@ import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { pagesApi, readingApi, sourcesApi } from "@/lib/api";
 import { parseDocument, type Document } from "@/lib/ast/schema";
-import { isUnauthorized, LOGIN_PATH } from "@/lib/auth";
+import { isUnauthorized, LOGIN_PATH, useSession } from "@/lib/auth";
+import type { EditorCursor } from "@/lib/collaboration/presence";
 import {
   CollaborationClient,
   type CollaborationPresence,
@@ -54,6 +55,7 @@ const BlockEditor = dynamic(
 
 interface RemotePresence extends CollaborationPresence {
   lastSeenAt: number;
+  editorCursor: EditorCursor | null;
 }
 
 export interface EditorSessionViewProps {
@@ -76,36 +78,60 @@ async function readErrorCode(error: ResponseError): Promise<string | null> {
   }
 }
 
-export function EditorSessionView({
+export function EditorSessionView(props: EditorSessionViewProps) {
+  const { session } = useSession();
+  const actorId = session?.actorId;
+  return actorId ? (
+    <EditorSessionContent key={`${actorId}.${props.pageId}`} {...props} actorId={actorId} />
+  ) : (
+    <div className="min-h-80 animate-pulse bg-muted" aria-label="编辑身份加载中" />
+  );
+}
+
+function EditorSessionContent({
   pageId,
   displayTitle,
   baseRevisionId,
   initialAst,
-}: EditorSessionViewProps) {
+  actorId,
+}: EditorSessionViewProps & { actorId: string }) {
   const router = useRouter();
   const session = useEditorSession();
   const [publishOpen, setPublishOpen] = useState(false);
   const [collaborationStatus, setCollaborationStatus] =
     useState<CollaborationStatus>("connecting");
   const collaborationRef = useRef<CollaborationClient | null>(null);
-  const presenceCursorRef = useRef<Record<string, unknown> | null>(null);
+  const presenceCursorRef = useRef<EditorCursor | null>(null);
   const [remotePresence, setRemotePresence] = useState<
     Record<string, RemotePresence>
   >({});
   // 丢弃草稿后需要重挂载 BlockEditor（其 initialAst 只在挂载时读取一次）。
   const [editorEpoch, setEditorEpoch] = useState(0);
+  const [remoteAst, setRemoteAst] = useState<Document>();
+  const [remoteCursor, setRemoteCursor] = useState<EditorCursor>();
+  const [editorReady, setEditorReady] = useState(false);
 
   const receivePresence = useCallback((presence: CollaborationPresence) => {
     setRemotePresence((current) => ({
       ...current,
-      [presence.actorId]: {
+      [presence.clientId]: {
         ...presence,
         lastSeenAt: Date.now(),
+        editorCursor: collaborationRef.current?.resolveCursor(presence.cursor) ?? null,
       },
     }));
   }, []);
 
-  const publishPresence = useCallback((cursor: Record<string, unknown>) => {
+  const refreshPresencePositions = useCallback(() => {
+    setRemotePresence((current) => Object.fromEntries(
+      Object.entries(current).map(([id, presence]) => [id, {
+        ...presence,
+        editorCursor: collaborationRef.current?.resolveCursor(presence.cursor) ?? null,
+      }]),
+    ));
+  }, []);
+
+  const publishPresence = useCallback((cursor: EditorCursor) => {
     presenceCursorRef.current = cursor;
     collaborationRef.current?.sendPresence(cursor);
   }, []);
@@ -136,8 +162,11 @@ export function EditorSessionView({
   // 进入编辑页：建立会话并恢复本地草稿。草稿 base 落后时提示，
   // 默认保留内容（base 已重置到服务端 current，可继续编辑或手动丢弃）。
   useEffect(() => {
+    if (!actorId) return;
+    presenceCursorRef.current = null;
     const restore = session.startSession({
       pageId,
+      actorId,
       baseRevisionId,
       ast: initialAst,
     });
@@ -151,13 +180,26 @@ export function EditorSessionView({
     const currentAst = useEditorSession.getState().ast ?? initialAst;
     const collaboration = new CollaborationClient({
       pageId,
+      actorId,
       initialAst: currentAst,
-      onAst: (ast) => {
+      onAst: (ast, cursor) => {
         useEditorSession.getState().setAst(ast);
-        setEditorEpoch((epoch) => epoch + 1);
+        setRemoteAst(ast);
+        setRemoteCursor(cursor);
+        presenceCursorRef.current = cursor ?? null;
+        setEditorReady(true);
+        refreshPresencePositions();
       },
-      onStatus: setCollaborationStatus,
+      onStatus: (status) => {
+        setCollaborationStatus(status);
+        setEditorReady(collaboration.hasWorkingState() && status !== "closed" && status !== "forbidden");
+      },
       onPresence: receivePresence,
+      onStorageError: () => toast.warning("离线恢复存储不可用", {
+        id: "collaboration-storage",
+        description: "请保持编辑页打开并等待同步完成；未同步修改可能无法在关闭浏览器后恢复。",
+        duration: Infinity,
+      }),
     });
     // Only an explicitly restored local draft should override recovered
     // WorkingDocument state. The published initial AST may be stale.
@@ -172,7 +214,7 @@ export function EditorSessionView({
       collaboration.close();
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [pageId, baseRevisionId, receivePresence]);
+  }, [pageId, baseRevisionId, receivePresence, actorId]);
 
   const openPublishDialog = () => {
     if (collaborationStatus === "forbidden" || collaborationStatus === "closed") return;
@@ -390,7 +432,7 @@ export function EditorSessionView({
               const label = presenceLabel(presence);
               return (
                 <span
-                  key={presence.actorId}
+                  key={presence.clientId}
                   className="rounded border bg-muted/40 px-1.5 py-0.5 font-medium text-foreground"
                   title={[
                     presence.actorDisplayName,
@@ -409,19 +451,26 @@ export function EditorSessionView({
       ) : null}
 
       <div className="rounded-lg border border-border p-4">
-        {session.ast ? (
+        {session.ast && session.actorId === actorId ? (
           <BlockEditor
             key={editorEpoch}
             pageId={pageId}
-            editable={collaborationStatus !== "closed"}
+            editable={editorReady}
             resolveLinkPreview={resolveLinkPreview}
             initialAst={session.ast}
+            remoteAst={remoteAst}
+            remoteCursor={remoteCursor}
             onChange={(ast) => {
               if (collaborationStatus === "closed") return;
               session.setAst(ast);
               collaborationRef.current?.syncAst(ast);
+              refreshPresencePositions();
             }}
             onPresenceChange={publishPresence}
+            peers={Object.values(remotePresence).flatMap((presence) => {
+              const cursor = presence.editorCursor;
+              return cursor ? [{ clientId: presence.clientId, label: presenceLabel(presence), cursor }] : [];
+            })}
           />
         ) : null}
       </div>
@@ -475,8 +524,8 @@ export function EditorSessionView({
 }
 
 function presenceLabel(presence: CollaborationPresence): string {
-  if (presence.actorUsername) return `@${presence.actorUsername}`;
   if (presence.actorDisplayName) return presence.actorDisplayName;
+  if (presence.actorUsername) return `@${presence.actorUsername}`;
   return `成员 ${presence.actorId.slice(0, 8)}`;
 }
 

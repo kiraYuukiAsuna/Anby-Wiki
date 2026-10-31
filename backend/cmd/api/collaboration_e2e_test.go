@@ -38,9 +38,12 @@ type e2eHello struct {
 }
 
 type e2ePresence struct {
-	Type    string         `json:"type"`
-	ActorID uuid.UUID      `json:"actor_id"`
-	Cursor  map[string]any `json:"cursor"`
+	Type             string         `json:"type"`
+	ActorID          uuid.UUID      `json:"actor_id"`
+	Cursor           map[string]any `json:"cursor"`
+	ClientID         uuid.UUID      `json:"client_id"`
+	ActorUsername    string         `json:"actor_username"`
+	ActorDisplayName string         `json:"actor_display_name"`
 }
 
 type e2eRecovery struct {
@@ -58,6 +61,10 @@ type e2eServerUpdate struct {
 func TestCollaborationE2E(t *testing.T) {
 	baseURL := strings.TrimRight(os.Getenv("COLLABORATION_E2E_BASE_URL"), "/")
 	password := os.Getenv("COLLABORATION_E2E_PASSWORD")
+	peerURL := strings.TrimRight(os.Getenv("COLLABORATION_E2E_PEER_URL"), "/")
+	if peerURL == "" {
+		peerURL = baseURL
+	}
 	if baseURL == "" || password == "" {
 		t.Skip("set COLLABORATION_E2E_BASE_URL and COLLABORATION_E2E_PASSWORD")
 	}
@@ -97,7 +104,7 @@ func TestCollaborationE2E(t *testing.T) {
 	)
 	defer firstConn.CloseNow()
 	secondConn, secondRecovery := dialE2ECollaboration(
-		t, secondClient, baseURL, page.ID, secondClientID, 0,
+		t, secondClient, peerURL, page.ID, secondClientID, 0,
 	)
 	defer secondConn.CloseNow()
 
@@ -116,11 +123,18 @@ func TestCollaborationE2E(t *testing.T) {
 		"cursor": map[string]any{
 			"block_id":  "0198a1b2-c3d4-7e5f-8a9b-0c1d2e3f4a01",
 			"selection": "text",
+			"version":   1,
+			"anchor":    map[string]any{"block_id": "0198a1b2-c3d4-7e5f-8a9b-0c1d2e3f4a01", "offset": 2},
+			"head":      map[string]any{"block_id": "0198a1b2-c3d4-7e5f-8a9b-0c1d2e3f4a01", "offset": 5},
 		},
 	})
 	presence := readE2EPresence(t, secondConn)
 	if presence.ActorID != firstActor {
 		t.Fatalf("presence actor = %s, want %s", presence.ActorID, firstActor)
+	}
+	if presence.ClientID != firstClientID || presence.ActorUsername != firstUsername ||
+		presence.ActorDisplayName != firstUsername {
+		t.Fatal("presence did not resolve the authenticated actor and client")
 	}
 	if presence.Cursor["selection"] != "text" {
 		t.Fatalf("unexpected presence: %#v", presence)
@@ -186,7 +200,7 @@ func TestCollaborationE2E(t *testing.T) {
 		t.Fatalf("close second collaboration socket: %v", err)
 	}
 	reconnected, recovered := dialE2ECollaboration(
-		t, secondClient, baseURL, page.ID, uuid.New(), 0,
+		t, secondClient, peerURL, page.ID, uuid.New(), 0,
 	)
 	defer reconnected.CloseNow()
 	if recovered.Ready != 1 || len(recovered.Snapshots) != 1 ||
@@ -197,6 +211,42 @@ func TestCollaborationE2E(t *testing.T) {
 		)
 	}
 	assertE2EUpdate(t, recovered.Snapshots[0], 1, snapshotPayload)
+}
+
+func TestCollaborationRecoveryWithoutBroadcastE2E(t *testing.T) {
+	baseURL := strings.TrimRight(os.Getenv("COLLABORATION_E2E_BASE_URL"), "/")
+	peerURL := strings.TrimRight(os.Getenv("COLLABORATION_E2E_RECOVERY_PEER_URL"), "/")
+	password := os.Getenv("COLLABORATION_E2E_PASSWORD")
+	if baseURL == "" || peerURL == "" || password == "" {
+		t.Skip("set collaboration E2E base URL, password and a peer without shared broadcast")
+	}
+	username := fmt.Sprintf("recovery_%d", time.Now().UnixNano())
+	client, _ := registerE2EUser(t, baseURL, username, username+"@example.invalid", password)
+	page := postE2EJSON[e2ePage](t, client, baseURL+"/api/v1/pages", map[string]any{
+		"namespace": "main", "title": username, "content_model": "block-v1",
+	}, http.StatusCreated)
+	first, _ := dialE2ECollaboration(t, client, baseURL, page.ID, uuid.New(), 0)
+	defer first.CloseNow()
+	peer, _ := dialE2ECollaboration(t, client, peerURL, page.ID, uuid.New(), 0)
+	defer peer.CloseNow()
+	update := []byte("persisted-without-peer-broadcast")
+	writeE2EBinary(t, first, encodeE2EClientUpdate(uuid.New(), update))
+	assertE2EUpdate(t, readE2EUpdate(t, first), 1, update)
+	ctx, cancel := context.WithTimeout(context.Background(), 2*collaborationE2ETimeout)
+	defer cancel()
+	messageType, payload, err := peer.Read(ctx)
+	var hello e2eHello
+	if err != nil || messageType != websocket.MessageText ||
+		json.Unmarshal(payload, &hello) != nil || hello.Type != "hello" {
+		t.Fatalf("periodic recovery did not begin: %v", err)
+	}
+	assertE2EUpdate(t, readE2EUpdate(t, peer), 1, update)
+	messageType, payload = readE2EMessage(t, peer)
+	var ready e2eHello
+	if messageType != websocket.MessageText || json.Unmarshal(payload, &ready) != nil ||
+		ready.Type != "ready" || ready.LatestSequence != 1 {
+		t.Fatal("periodic recovery did not finish at sequence 1")
+	}
 }
 
 func registerE2EUser(

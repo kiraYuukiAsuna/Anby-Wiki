@@ -22,7 +22,7 @@
 | Go | 版本见 `backend/go.mod` 的 `go` 指令 |
 | Node.js + npm | 版本见 `apps/web/package.json` |
 | PostgreSQL | 权威数据 + Outbox，需可连接 |
-| Redis | 缓存与限流计数，可丢弃 |
+| Redis | 缓存、限流计数与协作实时广播，可丢弃；协作权威更新保存在 PostgreSQL |
 | S3 兼容对象存储 | 例如 MinIO |
 
 这三个数据组件**不由脚本安装或启动**：用本机安装、远端实例或共享环境都可以，
@@ -213,6 +213,22 @@ down 迁移，也不会删除数据。新实例没有可回滚的旧镜像，修
   访问 API，但 Next 会按 `proxyClientMaxBodySize` 缓冲请求，不适合作为生产大文件入口。
 - **Compose 不终结 TLS。** 一键入口使用宿主机 Nginx 和 Certbot 提供 HTTPS。
 - 数据与搜索层由 Compose 拉起，PostgreSQL、RustFS、Meilisearch 使用根目录 `data/` 持久化；Redis 是可丢弃缓存。
+
+协作 API 副本必须共用 PostgreSQL 和相同的 `REDIS_URL`（含 DB 编号）。
+Redis Pub/Sub 频道按 DB 编号隔离，update、Presence 和快照结果可跨副本传递，
+不要求 WorkingDocument 连接粘性；协作广播独立于 `RATE_LIMIT_ENABLED`。
+配置 Redis 后，API 启动会等待订阅确认，失败则退出；运行中广播中断会断开协作连接，
+客户端重连从 PostgreSQL 恢复。API 另每 10 秒补查更新，覆盖提交后广播遗漏。
+本地未配置 Redis 时只提供进程内广播；多副本部署前应执行：
+
+```bash
+COLLABORATION_E2E_BASE_URL=http://api-a:8080 \
+COLLABORATION_E2E_PEER_URL=http://api-b:8080 \
+COLLABORATION_E2E_PASSWORD=<test-password> \
+go -C backend test ./cmd/api -run TestCollaborationE2E -count=1
+```
+
+测试会注册临时账号并创建、编辑与发布页面，只能指向专用验收环境。
 - 限流、安全响应头、身份头清洗全部在 Go API 内实现，不依赖代理。
 
 ### 2.2 准备环境文件

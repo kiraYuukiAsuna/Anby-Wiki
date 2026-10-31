@@ -21,6 +21,7 @@ func TestPresenceMessageAddsAuthenticatedActor(t *testing.T) {
 			Username:    "alice",
 			DisplayName: "Alice Chen",
 		},
+		uuid.New(),
 	)
 	if err != nil {
 		t.Fatal(err)
@@ -52,8 +53,24 @@ func TestPresenceMessageRejectsInvalidShape(t *testing.T) {
 	if _, err := presenceMessage(
 		[]byte(`{"type":"other","cursor":{}}`),
 		authdomain.Principal{ActorID: uuid.New()},
+		uuid.New(),
 	); err == nil {
 		t.Fatal("invalid presence type was accepted")
+	}
+}
+
+func TestPresenceMessageRejectsInvalidCharacterPosition(t *testing.T) {
+	t.Parallel()
+	for _, cursor := range []string{
+		`null`, `[]`, `"text"`,
+		`{"version":2,"anchor":{},"head":{}}`,
+		`{"version":1,"anchor":{"block_id":"0198a1b2-c3d4-7e5f-8a9b-0c1d2e3f4a01","offset":-1},"head":{}}`,
+		`{"version":1,"anchor":{"block_id":"0198a1b2-c3d4-7e5f-8a9b-0c1d2e3f4a01","offset":0,"relative_position":"***"},"head":{}}`,
+	} {
+		if _, err := presenceMessage([]byte(`{"type":"presence","cursor":`+cursor+`}`),
+			authdomain.Principal{ActorID: uuid.New()}, uuid.New()); err == nil {
+			t.Fatalf("invalid cursor accepted: %s", cursor)
+		}
 	}
 }
 

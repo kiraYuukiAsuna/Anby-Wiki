@@ -10,7 +10,8 @@
 // lib/editor/references.ts 的 helper，不在这里直接拼 BlockNote 结构。
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
+import { TextSelection } from "@tiptap/pm/state";
 
 import { BlockNoteView } from "@blocknote/mantine";
 import { useCreateBlockNote } from "@blocknote/react";
@@ -50,6 +51,8 @@ import { clientUUID } from "@/lib/client-uuid";
 import type { Block, Document } from "@/lib/ast/schema";
 import { fromAst } from "@/lib/editor/fromAst";
 import { createAdapterState, type AdapterState } from "@/lib/editor/ids";
+import { PresenceExtension, editorPosition, resolveEditorPosition, type EditorPeer } from "@/lib/editor/presence";
+import type { EditorCursor } from "@/lib/collaboration/presence";
 import {
   getSelectedPageReference,
   insertDateMention,
@@ -67,10 +70,14 @@ import type { LinkPreviewMetadata } from "../../../../contracts/generated/typesc
 export interface BlockEditorProps {
   /** 初始文档（AST v1）。组件非受控于该 prop：后续变更不会重置编辑器。 */
   initialAst: Document;
+  /** 远端协作内容，应用时保留本地字符选区。 */
+  remoteAst?: Document;
+  remoteCursor?: EditorCursor;
   /** 每次编辑后回传序列化后的 AST v1 Document。 */
   onChange?: (ast: Document) => void;
-  /** 协作 Presence 只发送稳定 Block ID 和选区类型，不发送正文。 */
-  onPresenceChange?: (cursor: Record<string, unknown>) => void;
+  /** 稳定 AST Block ID + UTF-16 字符选区，不发送正文。 */
+  onPresenceChange?: (cursor: EditorCursor) => void;
+  peers?: EditorPeer[];
   /** 传给 BlockNoteView 的 editable。 */
   editable?: boolean;
   /** 既有页面 ID；用于发现主 Entity 并插入可信信息框。 */
@@ -81,14 +88,18 @@ export interface BlockEditorProps {
 
 export function BlockEditor({
   initialAst,
+  remoteAst,
+  remoteCursor,
   onChange,
   onPresenceChange,
+  peers,
   editable = true,
   pageId,
   resolveLinkPreview,
 }: BlockEditorProps) {
   // AdapterState 随组件实例存活（lazy useState），保证会话内 Block ID 稳定。
   const [state] = useState<AdapterState>(() => createAdapterState());
+  const applyingRemote = useRef(false);
 
   // initialContent 只在编辑器创建时读取一次；空文档传 undefined，
   // BlockNote 会默认创建一个空段落（已在 ADR-0005 验证记录中说明）。
@@ -102,7 +113,39 @@ export function BlockEditor({
   const editor = useCreateBlockNote({
     schema: editorSchema,
     initialContent,
+    extensions: [PresenceExtension({ adapter: state })],
   });
+
+  useEffect(() => {
+    editor.getExtension(PresenceExtension)?.setPeers(peers ?? []);
+  }, [editor, peers]);
+
+  useEffect(() => {
+    if (!remoteAst) return;
+    const current = toAst(editor.document as unknown as BNBlock[], state);
+    if (JSON.stringify(current) === JSON.stringify(remoteAst)) return;
+    const selection = editor.prosemirrorState.selection;
+    const anchor = remoteCursor?.anchor ?? editorPosition(selection.$anchor, state);
+    const head = remoteCursor?.head ?? editorPosition(selection.$head, state);
+    applyingRemote.current = true;
+    try {
+      const blocks = fromAst(remoteAst, state);
+      editor.replaceBlocks(editor.document, blocks as never);
+      if (anchor && head) {
+        editor.transact((transaction) => {
+          const from = resolveEditorPosition(transaction.doc, anchor, state);
+          const to = resolveEditorPosition(transaction.doc, head, state);
+          if (from !== null && to !== null) transaction.setSelection(TextSelection.create(transaction.doc, from, to));
+        });
+      }
+    } finally {
+      applyingRemote.current = false;
+    }
+    const restored = editor.prosemirrorState.selection;
+    const restoredAnchor = editorPosition(restored.$anchor, state);
+    const restoredHead = editorPosition(restored.$head, state);
+    if (restoredAnchor && restoredHead) onPresenceChange?.({ anchor: restoredAnchor, head: restoredHead });
+  }, [editor, remoteAst, remoteCursor, state, onPresenceChange]);
 
   // ---- M2-T04 引用编辑 UI 状态 ----
   const [pickerOpen, setPickerOpen] = useState(false);
@@ -124,15 +167,15 @@ export function BlockEditor({
   useEffect(() => {
     if (!editable) return;
     const syncSelection = () => {
+      if (applyingRemote.current) return;
       const selected = getSelectedPageReference(editor);
       setSelectedRef(selected);
       if (selected) setRefDisplayText(selected.displayText);
       try {
-        const cursor = editor.getTextCursorPosition();
-        onPresenceChange?.({
-          block_id: cursor.block.id,
-          selection: selected ? "reference" : "text",
-        });
+        const selection = editor.prosemirrorState.selection;
+        const anchor = editorPosition(selection.$anchor, state);
+        const head = editorPosition(selection.$head, state);
+        if (anchor && head) onPresenceChange?.({ anchor, head });
       } catch {
         // Some atomic node selections do not expose a text cursor.
       }
@@ -142,7 +185,7 @@ export function BlockEditor({
     return () => {
       unsubscribe();
     };
-  }, [editor, editable, onPresenceChange]);
+  }, [editor, editable, onPresenceChange, state]);
 
   const openLinkEditor = () => {
     setLinkDefaultText(editor.getSelectedText());
@@ -445,6 +488,7 @@ export function BlockEditor({
         editable={editable}
         theme="light"
         onChange={() => {
+          if (applyingRemote.current) return;
           onChange?.(toAst(editor.document as unknown as BNBlock[], state));
         }}
       />

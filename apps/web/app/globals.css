@@ -1131,3 +1131,26 @@
     width: 100%;
   }
 }
+
+.collaboration-caret {
+  position: relative;
+  border-left: 2px solid var(--peer-color);
+  margin-left: -1px;
+  pointer-events: none;
+}
+
+.collaboration-caret-label {
+  position: absolute;
+  bottom: 100%;
+  left: -2px;
+  max-width: min(8rem, 25vw);
+  overflow: hidden;
+  border-radius: 3px 3px 3px 0;
+  background: var(--peer-color);
+  padding: 1px 4px;
+  color: white;
+  font-size: 10px;
+  line-height: 1.4;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}

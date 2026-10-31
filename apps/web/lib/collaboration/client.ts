@@ -4,6 +4,8 @@ import { ResponseError } from "../../../../contracts/generated/typescript";
 import { readingApi } from "@/lib/api";
 import type { Document } from "@/lib/ast/schema";
 import { clientUUID } from "@/lib/client-uuid";
+import { OfflineStore, newOfflineRecord, type PendingUpdate } from "@/lib/collaboration/offline-store";
+import { encodePresencePosition, resolvePresencePosition, type EditorCursor, type PresenceCursor } from "@/lib/collaboration/presence";
 import {
   getYjsAstRoot,
   materializeYjsAst,
@@ -11,8 +13,6 @@ import {
 } from "@/lib/collaboration/yjs-ast";
 
 const REMOTE_ORIGIN = Symbol("collaboration-remote");
-const CLIENT_ID_KEY = "anbywiki.collaboration.client-id";
-const SEQUENCE_KEY_PREFIX = "anbywiki.collaboration.sequence.";
 const INITIAL_RECONNECT_DELAY_MS = 500;
 const MAX_RECONNECT_DELAY_MS = 10_000;
 const PRESENCE_HEARTBEAT_MS = 10_000;
@@ -29,15 +29,18 @@ export type CollaborationStatus =
 
 export interface CollaborationClientOptions {
   pageId: string;
+  actorId: string;
   initialAst: Document;
-  onAst: (ast: Document) => void;
+  onAst: (ast: Document, cursor?: EditorCursor) => void;
   onStatus?: (status: CollaborationStatus) => void;
   onPresence?: (presence: CollaborationPresence) => void;
+  onStorageError?: () => void;
   socketFactory?: (url: string) => WebSocket;
 }
 
 export interface CollaborationPresence {
   actorId: string;
+  clientId: string;
   actorUsername?: string;
   actorDisplayName?: string;
   cursor: Record<string, unknown>;
@@ -45,11 +48,6 @@ export interface CollaborationPresence {
 
 export interface PreparedAstUpdate {
   expectedSequence: number;
-  update: Uint8Array;
-}
-
-interface PendingUpdate {
-  id: Uint8Array;
   update: Uint8Array;
 }
 
@@ -63,7 +61,11 @@ export class CollaborationClient {
   readonly ydoc = new Y.Doc();
 
   private readonly options: CollaborationClientOptions;
-  private readonly clientId: string;
+  private clientId: string;
+  private readonly offline: OfflineStore;
+  private readonly restored: Promise<void>;
+  private persistenceQueue = Promise.resolve();
+  private storageFailed = false;
   private socket: WebSocket | null = null;
   private ready = false;
   private closed = false;
@@ -76,15 +78,16 @@ export class CollaborationClient {
   private readonly pendingUpdates: PendingUpdate[] = [];
   private documentId: string | null = null;
   private renderedAstJSON: string;
-  private lastPresence: Record<string, unknown> | null = null;
+  private lastPresence: EditorCursor | null = null;
   private readonly presenceHeartbeat: ReturnType<typeof setInterval>;
   private lastSnapshotSequence = 0;
   private snapshotInFlight = false;
 
   constructor(options: CollaborationClientOptions) {
     this.options = options;
-    this.clientId = browserClientId();
-    this.latestSequence = readSequence(options.pageId);
+    this.clientId = newOfflineRecord().clientId;
+    this.offline = new OfflineStore(options.actorId, options.pageId);
+    this.restored = this.restoreOffline();
     this.renderedAstJSON = JSON.stringify(options.initialAst);
     this.ydoc.on("update", this.onDocumentUpdate);
     this.presenceHeartbeat = setInterval(
@@ -98,6 +101,8 @@ export class CollaborationClient {
     this.connecting = true;
     this.options.onStatus?.("connecting");
     try {
+      await this.restored;
+      if (this.closed) return;
       const page = await readingApi().getPageByID({
         id: this.options.pageId,
         contentMode: "sections",
@@ -188,6 +193,10 @@ export class CollaborationClient {
     return this.ready;
   }
 
+  hasWorkingState(): boolean {
+    return getYjsAstRoot(this.ydoc).size > 0;
+  }
+
   hasPendingUpdates(): boolean {
     return this.pendingUpdates.length > 0;
   }
@@ -228,7 +237,7 @@ export class CollaborationClient {
     }
   }
 
-  sendPresence(cursor: Record<string, unknown>): void {
+  sendPresence(cursor: EditorCursor): void {
     this.lastPresence = cursor;
     this.transmitPresence();
   }
@@ -245,6 +254,7 @@ export class CollaborationClient {
     this.socket = null;
     this.options.onStatus?.("closed");
     this.ydoc.destroy();
+    void this.persistenceQueue.finally(() => this.offline.close());
   }
 
   private denyAccess(): void {
@@ -264,7 +274,9 @@ export class CollaborationClient {
       update: update.slice(),
     };
     this.pendingUpdates.push(pending);
-    this.sendPendingUpdate(pending);
+    // The send follows the durable write, so a lost acknowledgement cannot
+    // lose its original idempotency key on browser restart.
+    void this.persist(pending, null).then(() => this.sendPendingUpdate(pending));
   };
 
   private async receive(value: string | ArrayBuffer | Blob): Promise<void> {
@@ -285,6 +297,7 @@ export class CollaborationClient {
       document_id?: string;
       latest_sequence?: number;
       actor_id?: string;
+      client_id?: string;
       actor_username?: string;
       actor_display_name?: string;
       cursor?: unknown;
@@ -293,6 +306,11 @@ export class CollaborationClient {
     if (message.type === "hello") {
       if (!message.document_id || !isUUID(message.document_id)) {
         throw new Error("invalid collaboration hello message");
+      }
+      if (this.documentId && this.documentId !== message.document_id) {
+        this.options.onStorageError?.();
+        this.denyAccess();
+        return;
       }
       this.documentId = message.document_id;
       return;
@@ -307,6 +325,7 @@ export class CollaborationClient {
       }
       this.options.onPresence?.({
         actorId: message.actor_id,
+        clientId: message.client_id ?? message.actor_id,
         actorUsername: cleanPresenceLabel(message.actor_username),
         actorDisplayName: cleanPresenceLabel(message.actor_display_name),
         cursor: message.cursor,
@@ -334,8 +353,7 @@ export class CollaborationClient {
     ) {
       throw new Error("invalid collaboration ready message");
     }
-    this.latestSequence = message.latest_sequence!;
-    writeSequence(this.options.pageId, this.latestSequence);
+    this.latestSequence = Math.max(this.latestSequence, message.latest_sequence!);
     this.ready = true;
     this.reconnectAttempts = 0;
     const hasRecoveredState =
@@ -349,7 +367,7 @@ export class CollaborationClient {
         pendingAst ?? this.options.initialAst,
         pendingAst ? "editor" : "initial",
       );
-    } else if (pendingAst) {
+    } else if (pendingAst && !this.recoveredOffline) {
       syncYjsAst(this.ydoc, pendingAst, "editor");
     }
     this.transmitPresence();
@@ -358,6 +376,7 @@ export class CollaborationClient {
       this.emitAstIfChanged();
     }
     this.options.onStatus?.("online");
+    void this.persist(null, null);
   }
 
   private receiveBinary(buffer: ArrayBuffer): void {
@@ -372,6 +391,10 @@ export class CollaborationClient {
     }
     const sequence = Number(rawSequence);
     const update = frame.slice(9);
+    if (this.ready && frame[0] === 2 && sequence > this.latestSequence + 1) {
+      this.refresh();
+      return;
+    }
     if (frame[0] === 1) {
       this.lastSnapshotSequence = Math.max(
         this.lastSnapshotSequence,
@@ -380,9 +403,11 @@ export class CollaborationClient {
     } else {
       this.acknowledgePendingUpdate(update);
     }
+    const cursor = this.lastPresence ? this.presenceCursor(this.lastPresence) : null;
     Y.applyUpdate(this.ydoc, update, REMOTE_ORIGIN);
+    if (cursor) this.lastPresence = resolvePresencePosition(this.ydoc, cursor);
     this.latestSequence = Math.max(this.latestSequence, sequence);
-    writeSequence(this.options.pageId, this.latestSequence);
+    void this.persist(null, null);
     if (this.ready) {
       this.emitAstIfChanged();
       this.maybeSaveSnapshot();
@@ -394,7 +419,7 @@ export class CollaborationClient {
     const astJSON = JSON.stringify(ast);
     if (astJSON === this.renderedAstJSON) return;
     this.renderedAstJSON = astJSON;
-    this.options.onAst(ast);
+    this.options.onAst(ast, this.lastPresence ?? undefined);
   }
 
   private sendPendingUpdate(pending: PendingUpdate): void {
@@ -410,9 +435,9 @@ export class CollaborationClient {
   }
 
   private flushPendingUpdates(): void {
-    for (const pending of this.pendingUpdates) {
-      this.sendPendingUpdate(pending);
-    }
+    void this.persistenceQueue.then(() => {
+      for (const pending of this.pendingUpdates) this.sendPendingUpdate(pending);
+    });
   }
 
   private acknowledgePendingUpdate(update: Uint8Array): void {
@@ -420,7 +445,8 @@ export class CollaborationClient {
       equalBytes(pending.update, update),
     );
     if (index >= 0) {
-      this.pendingUpdates.splice(index, 1);
+      const [acknowledged] = this.pendingUpdates.splice(index, 1);
+      void this.persist(null, acknowledged.id);
     }
   }
 
@@ -434,11 +460,24 @@ export class CollaborationClient {
     }
     try {
       this.socket.send(
-        JSON.stringify({ type: "presence", cursor: this.lastPresence }),
+        JSON.stringify({
+          type: "presence",
+          cursor: this.presenceCursor(this.lastPresence),
+        }),
       );
     } catch {
       // Presence is ephemeral; the heartbeat retries after reconnect.
     }
+  }
+
+  private presenceCursor(cursor: EditorCursor): PresenceCursor {
+    return {
+      version: 1,
+      block_id: cursor.head.blockId,
+      selection: "text",
+      anchor: encodePresencePosition(this.ydoc, cursor.anchor),
+      head: encodePresencePosition(this.ydoc, cursor.head),
+    };
   }
 
   private maybeSaveSnapshot(): void {
@@ -483,6 +522,54 @@ export class CollaborationClient {
       this.connect();
     }, delay);
   }
+
+  resolveCursor(cursor: Record<string, unknown>): EditorCursor | null {
+    return resolvePresencePosition(this.ydoc, cursor);
+  }
+
+  private recoveredOffline = false;
+
+  private async restoreOffline(): Promise<void> {
+    try {
+      const record = await this.offline.load();
+      if (this.closed || !record) return;
+      const validation = new Y.Doc();
+      try {
+        Y.applyUpdate(validation, record.state, REMOTE_ORIGIN);
+        if (getYjsAstRoot(validation).size > 0) materializeYjsAst(validation);
+      } finally {
+        validation.destroy();
+      }
+      this.clientId = record.clientId;
+      this.documentId = record.documentId;
+      this.latestSequence = record.sequence;
+      Y.applyUpdate(this.ydoc, record.state, REMOTE_ORIGIN);
+      this.pendingUpdates.push(...record.pending);
+      this.recoveredOffline = getYjsAstRoot(this.ydoc).size > 0;
+      if (this.recoveredOffline) this.emitAstIfChanged();
+    } catch {
+      this.reportStorageError();
+    }
+  }
+
+  private persist(added: PendingUpdate | null, acknowledged: Uint8Array | null): Promise<void> {
+    const record = {
+      clientId: this.clientId,
+      documentId: this.documentId,
+      sequence: this.latestSequence,
+      state: Y.encodeStateAsUpdate(this.ydoc),
+    };
+    this.persistenceQueue = this.persistenceQueue.then(
+      () => this.offline.save(record, added, acknowledged),
+    ).catch(() => this.reportStorageError());
+    return this.persistenceQueue;
+  }
+
+  private reportStorageError(): void {
+    if (this.storageFailed) return;
+    this.storageFailed = true;
+    this.options.onStorageError?.();
+  }
 }
 
 function collaborationURL(
@@ -506,28 +593,6 @@ function cleanPresenceLabel(value: unknown): string | undefined {
 
 function defaultSocketFactory(url: string): WebSocket {
   return new WebSocket(url);
-}
-
-function browserClientId(): string {
-  const existing = window.sessionStorage.getItem(CLIENT_ID_KEY);
-  if (existing) return existing;
-  const id = clientUUID();
-  window.sessionStorage.setItem(CLIENT_ID_KEY, id);
-  return id;
-}
-
-function readSequence(pageId: string): number {
-  const value = Number(
-    window.sessionStorage.getItem(SEQUENCE_KEY_PREFIX + pageId) ?? "0",
-  );
-  return Number.isSafeInteger(value) && value >= 0 ? value : 0;
-}
-
-function writeSequence(pageId: string, sequence: number): void {
-  window.sessionStorage.setItem(
-    SEQUENCE_KEY_PREFIX + pageId,
-    String(sequence),
-  );
 }
 
 function uuidBytes(value: string): Uint8Array {

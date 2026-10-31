@@ -13,9 +13,9 @@
 可重建投影、知识与证据、导入、搜索及平台化主链路已落到代码与 HTTP 契约。适合
 用户操作或查看的主要后端能力已在 Web 中提供持久、可重新发现的入口；导入队列、
 治理任务、审计活动和后台工具不再只存在于一次性流程页面。协作领域已经具备在线
-Yjs update、持久恢复、普通发布与 AI 合并的 sequence CAS、同标签页断线 update
-重发、每 100 个已确认 sequence 自动 snapshot/compact 及 Block 级 Presence；
-跨标签页离线恢复与多 API 实例实时广播尚未闭环，不能概括为全部协作设计能力均已完成。
+Yjs update、按账号/页面持久化的离线恢复、普通发布与 AI 合并的 sequence CAS、
+浏览器重启后的幂等重发、自动 snapshot/compact、姓名与字符级 Presence，以及
+Redis 跨 API 实例广播。新增协作能力已在隔离环境验证，尚未部署到生产。
 
 当前代码已通过自动化测试、编译、契约、依赖安全和部署静态门禁，并在本机隔离环境完成
 PostgreSQL、Redis、RustFS、Meilisearch、API、Linux Worker 与 Next.js Web 的真实
@@ -41,7 +41,33 @@ AI 配置和双会话协作 E2E；当前权威契约为 183 个 operation。“�
   Web 撤销和撤销后 401；临时凭证记录已删除。
 - 当前版本包含只读分享、账户配置与归档隔离、工作台权限入口、组件表单定制、
   导入失败诊断、机器 Actor 与 CLI 绑定、普通导入的机器作者，以及浏览器写请求
-  来源校验。以下对应章节中的功能描述适用于此版本。
+  来源校验。新增的“协作离线恢复、字符光标与跨实例广播”章节描述本地实现，尚未部署；
+  其他对应章节中的功能描述适用于此版本。
+
+## 2026-10-30 协作离线恢复、字符光标与跨实例广播
+
+- IndexedDB 按账号 Actor 和 Page 隔离保存完整 Yjs state、连续 server sequence、
+  WorkingDocument ID、稳定 client ID 和未确认 update 的原始幂等键。严格事务完成后，
+  关闭、重载或重启浏览器再进入编辑页，会先恢复本地 CRDT，再合并远端更新并重放；
+  恢复的 Yjs 状态优先于旧 AST 草稿，不会用旧草稿覆盖已合并内容。
+- 同浏览器多标签页通过原子读/合并/写事务保留各自更新，只移除明确确认的 update。
+  AST 辅助草稿也按账号隔离；编辑会话随账号/页面切换重新创建。存储失败会明确提示，
+  不承诺无法写入本地存储的修改可在关闭后恢复；编辑页加载仍需要正常访问 Web/认证。
+- Presence v1 增加服务端认证解析的 Actor 显示名、用户名和 client ID，字符位置采用
+  稳定 AST Block ID、UTF-16 offset 与 Yjs relative position。编辑器显示姓名光标和
+  选区高亮，并在远端插入后恢复本地相对选区；已删除或替换的文本位置不保留错误光标。
+  Presence 保持 10 秒心跳、30 秒过期，不持久化，也不广播正文。
+- API 通过 Redis Pub/Sub 广播 update、Presence 和快照结果；频道包含 Redis DB 编号，
+  防止不同逻辑数据库的部署相互串扰。实例标识避免回环，慢连接或广播中断会断开连接，
+  由客户端从 PostgreSQL 恢复。每 10 秒补查持久更新，覆盖提交后尚未广播就退出的窗口；
+  读取 sequence、snapshot 和 update 使用同一只读一致性事务，避免与压缩并发遗漏。
+- 验证：隔离 PostgreSQL 17/Redis 7.4 的双 API E2E、Redis Hub race 测试、
+  不共享广播的 API 定期补齐 E2E、全量 Go race 测试和 `make check` 通过。
+  真实 Chrome 覆盖双账号姓名/字符选区、
+  远端插入后的选区跟随、离线编辑持久化、浏览器完整重启后的并发合并和重载；
+  IndexedDB 并发测试覆盖多标签页合并、确认键隔离、账号/页面隔离及 UTF-16/删除位置。
+  Redis 实际重启后编辑恢复、合并内容发布和重载验证通过；
+  320/390px 编辑页无横向溢出。生产容器与多副本部署验收尚未执行。
 
 ## 2026-10-30 浏览器写请求来源校验
 
@@ -466,7 +492,7 @@ AI 配置和双会话协作 E2E；当前权威契约为 183 个 operation。“�
 | 导入与 AI | URL/Markdown/HTML/文本/PDF/PNG/JPEG/JSON/CSV 获取，基于 DOM 主正文且排除导航/侧栏/页眉/页脚的 HTML 解析，复杂 PDF 的原生文本+逐页视觉双轨解析，表格/图表/图片结构化 Chunk 与页内区域定位，独立图片中英 OCR、来源标题/作者/发布者/日期/DOI 等安全元数据推导、结构化数据规范化、七阶段进度、幂等 Job、同 Job 多 Run/多不可变 ImportPlan 版本、规划 Revision/Block hash 并发保护、解析成功后原子写入且通过 ImportJob API 可见的不可变 SourceVersion 恢复点与无重复来源的失败重试、无需 AI 配置且只为 Markdown/HTML/纯文本/JSON/CSV 固化不可变来源/分片的 `source_only` 模式、Worker 中断任务自动恢复、账号级文档理解模型配置与缺失配置 Wiki 跳过、模型最大输入 Token、来源 Chunk 字符数与中间计划自动确认（默认开启，最终 Proposal 审核不变）、按输入预算与输出安全上限并行分批抽取/规划、单个持久 Chunk 内的临时语义窗口二分及证据回映射、截断或结构不合法窗口重试及跨批去重、轻量模型规划 Schema 与服务端机械字段补全、确定性 ImportPlan 合并、近义内容整合和结构清理、用户标题/内容块上限的跨窗口全局执行、现有页异常扩张硬门禁、对照原始 Chunk 与用户指定范围的生成后保真审计和证据化章节修复、保真分窗的三次语义纠正、并发真因保留及坏修复隔离与覆盖率回退、服务端五维质量评分及默认 0.70 硬门槛、Semantic Kernel 默认三次结构化调用与纠正重试、精确引文的跨 Chunk 安全纠偏、纯空白差异原文回填及坏候选/坏 Claim 隔离、保留语义符号的 Entity 身份归一化、缩写/别名全候选消歧、人工匹配决定、Claim 完整值/有效期去重、Claim 方向/类型/非自引用门禁、`instance_of` 明确分类证据门禁与批内单值属性确定性消歧、作品/RFC 的发布组织、文档编号/类别/状态、更新与废止专用属性、仅由页面路由授权图谱写入、来源概况与按相关性召回的智能多页面 create/update/link/ignore 路由、同批新页面稳定互链、强制创建单页、更新指定页面与用户导入要求、证据约束 Typed Block 生成/补丁及正文 Entity 引用、确定性 H2 层级与标准 See also、主 Entity 绑定及信息框、显式且有证据的页面关联与反链投影、规划结果可视化、单 ImportJob 页面+Entity+Claim 复合 Proposal 与同一 ChangeBatch 原子应用、可持久查询的导入队列 |
 | 投影与搜索 | Outbox 租约/重试/死信、链接/目录/锚点/章节/渲染/知识使用/References/相关推荐/组件依赖/图谱投影、可解释的链接+Collection+Entity 相关度、PostgreSQL fallback、Meilisearch 关键词/混合/语义检索 |
 | 规模与归档 | 章节懒加载、服务端可信 HTML 渲染、Revision 热冷分层与 S3 回源、Projection/Search 重建、容量基准命令 |
-| 协作 | Yjs WorkingDocument、持久增量 update、重连游标、普通发布与 AI 合并的 sequence CAS、未确认 update 幂等重发、自动 snapshot/compact、Block 级 Presence、三方合并与人工冲突决议；跨标签页离线恢复和多 API 实例广播仍待实现 |
+| 协作 | Yjs WorkingDocument、持久增量 update、IndexedDB 离线恢复与跨重启幂等重发、普通发布与 AI 合并的 sequence CAS、自动 snapshot/compact、姓名与字符级 Presence、Redis 多 API 广播、三方合并与人工冲突决议；新增演进能力已本地验收，待部署 |
 | 平台 | 每账号私人 Wiki、Wiki 成员/协作者、单文档分享、本地账号/Session/RBAC、请求级 Wiki 切换、个人中心资料与文档理解模型配置、Server Component 登录态透传、一次性授权码与可绑定机器 Actor、撤销及清理的 Agent CLI Bearer Token、183 个 OpenAPI operation 和协作 WebSocket 的 JSON + 人类命令双模式 CLI、Redis 限流、安全头、OTel/Prometheus、手工灾备/恢复演练工具、Doctor、生产部署与验收后清理 |
 
 ## 关键不变量
@@ -673,6 +699,9 @@ AI 配置和双会话协作 E2E；当前权威契约为 183 个 operation。“�
   `up → down → up` 已通过；三次公共表数量为 `85 → 1 → 85`。
 
 ## 2026-08-17 协作链路复核
+
+> 以下是当次历史验收范围；其中离线恢复、字符光标和多 API 广播的缺口已由
+> 2026-10-30 协作演进实现补齐，见上方对应章节。
 
 - 在线 Yjs update 会按客户端幂等键和服务端单调 sequence 持久化，重连可按游标补发；
   AI Proposal 合并使用 `expected_sequence` CAS，服务端重新计算权威合并 AST。

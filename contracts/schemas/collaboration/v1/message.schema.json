@@ -43,9 +43,22 @@
       "properties": {
         "type": { "const": "presence" },
         "actor_id": { "type": "string", "format": "uuid" },
+        "client_id": { "type": "string", "format": "uuid" },
+        "actor_username": { "type": "string" },
+        "actor_display_name": { "type": "string" },
         "cursor": {
           "type": "object",
-          "additionalProperties": true
+          "additionalProperties": true,
+          "properties": {
+            "version": { "const": 1 },
+            "block_id": { "type": "string", "format": "uuid" },
+            "selection": { "type": "string" },
+            "anchor": { "$ref": "#/$defs/position" },
+            "head": { "$ref": "#/$defs/position" }
+          },
+          "dependentRequired": {
+            "version": ["anchor", "head"]
+          }
         }
       }
     },
@@ -58,5 +71,21 @@
         "up_to_sequence": { "type": "integer", "minimum": 0 }
       }
     }
-  ]
+  ],
+  "$defs": {
+    "position": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["block_id", "offset"],
+      "properties": {
+        "block_id": { "type": "string", "format": "uuid" },
+        "offset": { "type": "integer", "minimum": 0, "maximum": 1048576 },
+        "relative_position": {
+          "type": "string",
+          "contentEncoding": "base64",
+          "maxLength": 344
+        }
+      }
+    }
+  }
 }
