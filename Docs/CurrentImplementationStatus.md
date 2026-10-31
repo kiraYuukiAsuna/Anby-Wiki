@@ -1,6 +1,6 @@
 # 当前实现状态
 
-> 更新时间：2026-10-30
+> 更新时间：2026-11-01
 > 产品与能力审计依据：[整体设计方案](WikiDesignOnePage.md)
 
 本文集中描述已交付功能、实现边界与验证证据；未解决的实现、验收和责任事项统一维护在
@@ -15,7 +15,8 @@
 治理任务、审计活动和后台工具不再只存在于一次性流程页面。协作领域已经具备在线
 Yjs update、按账号/页面持久化的离线恢复、普通发布与 AI 合并的 sequence CAS、
 浏览器重启后的幂等重发、自动 snapshot/compact、姓名与字符级 Presence，以及
-Redis 跨 API 实例广播。新增协作能力已在隔离环境验证，尚未部署到生产。
+Redis 跨 API 实例广播。新增协作能力已随 `94546a7` 部署到生产，并完成正式域名浏览器
+验收与生产服务器隔离容器的多 API 验收。
 
 当前代码已通过自动化测试、编译、契约、依赖安全和部署静态门禁，并在本机隔离环境完成
 PostgreSQL、Redis、RustFS、Meilisearch、API、Linux Worker 与 Next.js Web 的真实
@@ -32,17 +33,32 @@ AI 配置和双会话协作 E2E；当前权威契约为 183 个 operation。“�
 
 ## 当前生产版本
 
-- 业务代码已部署版本为 `1846ab2579a1`，对应提交 `1846ab2`；API、Worker、Web、
+- 业务代码已部署版本为 `94546a746eb3`，对应提交 `94546a7`；API、Worker、Web、
   AI Kernel、CLI 和迁移工具六个业务镜像来自同一提交，四个应用服务健康。
-- 本次发布的 8 项 CI、迁移闸门、Doctor 和 HTTPS 冒烟通过；线上管理员身份接口、
-  Wiki 范围、CLI 凭证身份字段、Actor 创建入口与 CLI 绑定选择已验证，
-  导入中心及 CLI 授权页在 320/390/960px 下无横向溢出。
-- 正式 `/settings/cli` 已完成管理员授权码创建、生产 CLI 容器兑换、受保护读取、
+- 本次发布的 8 项 CI（`41233348428`）、六个 OCI target 构建、迁移闸门、Doctor 和
+  HTTPS 冒烟通过；正式域名 Chrome 完成姓名光标、字符选区、离线重启合并、
+  幂等重载与协作发布。编辑页在 320/390px 下无横向溢出。
+- 正式 `/settings/cli` 已在前序版本完成管理员授权码创建、生产 CLI 容器兑换、受保护读取、
   Web 撤销和撤销后 401；临时凭证记录已删除。
 - 当前版本包含只读分享、账户配置与归档隔离、工作台权限入口、组件表单定制、
   导入失败诊断、机器 Actor 与 CLI 绑定、普通导入的机器作者，以及浏览器写请求
-  来源校验。新增的“协作离线恢复、字符光标与跨实例广播”章节描述本地实现，尚未部署；
-  其他对应章节中的功能描述适用于此版本。
+  来源校验，以及持久离线 Yjs 恢复、姓名与字符级 Presence 和 Redis 跨 API 广播。
+
+## 2026-11-01 协作生产发布验收
+
+- `94546a7` 已提交、推送并经一键部署入口发布到 `https://anbywiki.momiya.cloud/`。
+  六个业务镜像的 revision label 均为同一完整提交 SHA；API/Worker/Web/AI Kernel
+  健康，PostgreSQL/Redis 就绪检查和宿主机 HTTPS 冒烟通过。
+- 正式域名 Chrome 使用两个独立浏览器存储上下文，验证服务端解析的姓名、
+  字符选区高亮和远端插入后的相对选区跟随。离线修改严格事务完成后关闭整个浏览器，
+  另一个会话继续编辑；重启后保留原 client ID，合并并重放未确认更新，
+  再次重载内容完整，最终通过 sequence CAS 发布成功。
+- 正式 320/390px 编辑页无横向溢出，浏览器无 JavaScript 异常；
+  未登录时的 Session 401 是正常认证行为，已登录的验收链路未发生 5xx。
+- 生产服务器另用本次业务镜像启动独立 PostgreSQL/Redis 和三个 API 容器，
+  通过 `TestCollaborationE2E` 验证跨实例 Presence/update 广播、幂等重放、
+  发布 CAS 和压缩恢复；不接共享广播的第三个 API 在约 10 秒后从数据库补齐更新。
+  测试未使用生产数据库或对象存储。公网拓扑仍为单 API，跨实例行为由隔离容器覆盖。
 
 ## 2026-10-30 协作离线恢复、字符光标与跨实例广播
 
@@ -67,7 +83,7 @@ AI 配置和双会话协作 E2E；当前权威契约为 183 个 operation。“�
   远端插入后的选区跟随、离线编辑持久化、浏览器完整重启后的并发合并和重载；
   IndexedDB 并发测试覆盖多标签页合并、确认键隔离、账号/页面隔离及 UTF-16/删除位置。
   Redis 实际重启后编辑恢复、合并内容发布和重载验证通过；
-  320/390px 编辑页无横向溢出。生产容器与多副本部署验收尚未执行。
+  320/390px 编辑页无横向溢出。正式域名与服务器多 API 容器验收已完成，见上方生产发布记录。
 
 ## 2026-10-30 浏览器写请求来源校验
 
@@ -492,7 +508,7 @@ AI 配置和双会话协作 E2E；当前权威契约为 183 个 operation。“�
 | 导入与 AI | URL/Markdown/HTML/文本/PDF/PNG/JPEG/JSON/CSV 获取，基于 DOM 主正文且排除导航/侧栏/页眉/页脚的 HTML 解析，复杂 PDF 的原生文本+逐页视觉双轨解析，表格/图表/图片结构化 Chunk 与页内区域定位，独立图片中英 OCR、来源标题/作者/发布者/日期/DOI 等安全元数据推导、结构化数据规范化、七阶段进度、幂等 Job、同 Job 多 Run/多不可变 ImportPlan 版本、规划 Revision/Block hash 并发保护、解析成功后原子写入且通过 ImportJob API 可见的不可变 SourceVersion 恢复点与无重复来源的失败重试、无需 AI 配置且只为 Markdown/HTML/纯文本/JSON/CSV 固化不可变来源/分片的 `source_only` 模式、Worker 中断任务自动恢复、账号级文档理解模型配置与缺失配置 Wiki 跳过、模型最大输入 Token、来源 Chunk 字符数与中间计划自动确认（默认开启，最终 Proposal 审核不变）、按输入预算与输出安全上限并行分批抽取/规划、单个持久 Chunk 内的临时语义窗口二分及证据回映射、截断或结构不合法窗口重试及跨批去重、轻量模型规划 Schema 与服务端机械字段补全、确定性 ImportPlan 合并、近义内容整合和结构清理、用户标题/内容块上限的跨窗口全局执行、现有页异常扩张硬门禁、对照原始 Chunk 与用户指定范围的生成后保真审计和证据化章节修复、保真分窗的三次语义纠正、并发真因保留及坏修复隔离与覆盖率回退、服务端五维质量评分及默认 0.70 硬门槛、Semantic Kernel 默认三次结构化调用与纠正重试、精确引文的跨 Chunk 安全纠偏、纯空白差异原文回填及坏候选/坏 Claim 隔离、保留语义符号的 Entity 身份归一化、缩写/别名全候选消歧、人工匹配决定、Claim 完整值/有效期去重、Claim 方向/类型/非自引用门禁、`instance_of` 明确分类证据门禁与批内单值属性确定性消歧、作品/RFC 的发布组织、文档编号/类别/状态、更新与废止专用属性、仅由页面路由授权图谱写入、来源概况与按相关性召回的智能多页面 create/update/link/ignore 路由、同批新页面稳定互链、强制创建单页、更新指定页面与用户导入要求、证据约束 Typed Block 生成/补丁及正文 Entity 引用、确定性 H2 层级与标准 See also、主 Entity 绑定及信息框、显式且有证据的页面关联与反链投影、规划结果可视化、单 ImportJob 页面+Entity+Claim 复合 Proposal 与同一 ChangeBatch 原子应用、可持久查询的导入队列 |
 | 投影与搜索 | Outbox 租约/重试/死信、链接/目录/锚点/章节/渲染/知识使用/References/相关推荐/组件依赖/图谱投影、可解释的链接+Collection+Entity 相关度、PostgreSQL fallback、Meilisearch 关键词/混合/语义检索 |
 | 规模与归档 | 章节懒加载、服务端可信 HTML 渲染、Revision 热冷分层与 S3 回源、Projection/Search 重建、容量基准命令 |
-| 协作 | Yjs WorkingDocument、持久增量 update、IndexedDB 离线恢复与跨重启幂等重发、普通发布与 AI 合并的 sequence CAS、自动 snapshot/compact、姓名与字符级 Presence、Redis 多 API 广播、三方合并与人工冲突决议；新增演进能力已本地验收，待部署 |
+| 协作 | Yjs WorkingDocument、持久增量 update、IndexedDB 离线恢复与跨重启幂等重发、普通发布与 AI 合并的 sequence CAS、自动 snapshot/compact、姓名与字符级 Presence、Redis 多 API 广播、三方合并与人工冲突决议；已部署，正式浏览器与隔离多 API 容器验收通过 |
 | 平台 | 每账号私人 Wiki、Wiki 成员/协作者、单文档分享、本地账号/Session/RBAC、请求级 Wiki 切换、个人中心资料与文档理解模型配置、Server Component 登录态透传、一次性授权码与可绑定机器 Actor、撤销及清理的 Agent CLI Bearer Token、183 个 OpenAPI operation 和协作 WebSocket 的 JSON + 人类命令双模式 CLI、Redis 限流、安全头、OTel/Prometheus、手工灾备/恢复演练工具、Doctor、生产部署与验收后清理 |
 
 ## 关键不变量
