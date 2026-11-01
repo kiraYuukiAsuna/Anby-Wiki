@@ -1,15 +1,16 @@
 "use client";
 
-import Link from "next/link";
-import { LockKeyhole, ShieldCheck } from "lucide-react";
-import { useEffect } from "react";
+import { Clock3, ShieldCheck } from "lucide-react";
+import { useEffect, useMemo } from "react";
 import { usePathname, useRouter } from "next/navigation";
+import { ResponseError } from "../../../contracts/generated/typescript";
 
 import { SiteFooter } from "@/components/site-footer";
 import { SiteHeader } from "@/components/site-header";
 import { SiteNavigation } from "@/components/site-navigation";
 import { Button } from "@/components/ui/button";
 import { useSession } from "@/lib/auth";
+import { rateLimitRetryAt } from "@/lib/api";
 import { workspaceAccessNotice } from "@/lib/workspace-access";
 
 const AUTH_PATHS = new Set(["/login", "/register"]);
@@ -40,7 +41,6 @@ function PrivateWikiShell({
 }) {
   const { session, isLoading, error, mutate } = useSession();
   const router = useRouter();
-  const loginHref = `/login?next=${encodeURIComponent(pathname)}`;
 
   useEffect(() => {
     if (!isLoading && !session && !error) {
@@ -70,27 +70,9 @@ function PrivateWikiShell({
       <main className="flex min-h-screen items-center justify-center px-5 py-12">
         <div className="flex w-full max-w-sm flex-col items-center text-center">
           <span className="flex size-11 items-center justify-center rounded-lg bg-muted text-muted-foreground">
-            <LockKeyhole className="size-5" aria-hidden />
+            <Clock3 className="size-5" aria-hidden />
           </span>
-          <h1 className="mt-5 text-xl font-semibold">需要登录</h1>
-          <p className="mt-2 text-sm leading-6 text-muted-foreground">
-            登录后才能查看和管理你的私人 Wiki。
-          </p>
-          <div className="mt-6 flex flex-wrap items-center justify-center gap-2">
-            <Button asChild>
-              <Link href={loginHref}>登录</Link>
-            </Button>
-            <Button variant="outline" asChild>
-              <Link href={`/register?next=${encodeURIComponent(pathname)}`}>
-                创建账号
-              </Link>
-            </Button>
-            {error ? (
-              <Button variant="ghost" onClick={() => void mutate()}>
-                重试
-              </Button>
-            ) : null}
-          </div>
+          <SessionErrorNotice error={error} retry={() => void mutate()} />
         </div>
       </main>
     );
@@ -115,6 +97,11 @@ function PrivateWikiShell({
             className="flex min-w-0 flex-1 flex-col"
             key={`${session.actorId}:${session.wikiId}`}
           >
+            {error ? (
+              <div className="border-b bg-muted/50 px-5 py-3 text-sm lg:px-8">
+                <SessionErrorNotice error={error} retry={() => void mutate()} retained />
+              </div>
+            ) : null}
             {notice ? (
               <div className="mx-auto w-full max-w-7xl px-5 py-10 lg:px-8 lg:py-12">
                 <header className="mb-8 border-b border-border/75 pb-6">
@@ -136,5 +123,39 @@ function PrivateWikiShell({
         </div>
       </div>
     </>
+  );
+}
+
+function SessionErrorNotice({
+  error,
+  retry,
+  retained = false,
+}: {
+  error: unknown;
+  retry: () => void;
+  retained?: boolean;
+}) {
+  const retryAt = useMemo(() => {
+    if (!(error instanceof ResponseError) || error.response.status !== 429) return null;
+    const deadline = rateLimitRetryAt(error.response);
+    return deadline === undefined
+      ? null
+      : new Date(deadline).toLocaleTimeString("zh-CN", { hour12: false });
+  }, [error]);
+  return (
+    <div role="status" className={retained ? "" : "mt-5"}>
+      <p className={retained ? "font-medium" : "text-xl font-semibold"}>
+        {retryAt ? "请求暂时受限" : "暂时无法验证登录状态"}
+      </p>
+      <p className="mt-2 text-sm leading-6 text-muted-foreground">
+        {retained ? "已保留当前登录状态。" : ""}
+        {retryAt
+          ? `预计 ${retryAt} 可恢复，系统会自动重试。`
+          : "服务暂时不可用，请稍后重试。"}
+      </p>
+      {!retryAt ? (
+        <Button variant="outline" className="mt-3" onClick={retry}>重试</Button>
+      ) : null}
+    </div>
   );
 }

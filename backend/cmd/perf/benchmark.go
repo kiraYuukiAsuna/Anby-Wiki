@@ -5,6 +5,8 @@ import (
 	"encoding/json"
 	"fmt"
 	"os"
+	"strconv"
+	"strings"
 	"sync"
 	"time"
 
@@ -128,8 +130,36 @@ func benchmark(
 	for _, operation := range operations {
 		result.Metrics = append(result.Metrics, measure(cfg.Iterations, operation.name, operation.fn))
 	}
+	if searchBackend == wikisearch.BackendMeilisearch {
+		result.Metrics = append(result.Metrics, measureSearch(ctx, cfg, search)...)
+	}
 	result.Explains, err = collectExplains(ctx, pool, fixtures, m9)
 	return result, err
+}
+
+func measureSearch(ctx context.Context, cfg config, adapter wikisearch.SearchAdapter) []metric {
+	var metrics []metric
+	for _, mode := range adapter.Capabilities().Modes {
+		for _, filtered := range []bool{false, true} {
+			name := "search_" + string(mode)
+			query := wikisearch.Query{
+				Text: "共同基准词", WikiID: defaultWikiID, Mode: mode, Limit: 20,
+			}
+			if filtered {
+				name += "_filtered"
+				query.Namespace = "main"
+				query.Language = "zh-Hans"
+			}
+			metrics = append(metrics, measureConcurrent(cfg.Iterations, 8, name, func(int) error {
+				hits, err := adapter.Search(ctx, query)
+				if err == nil && len(hits.Hits) == 0 {
+					return fmt.Errorf("performance query returned no hits")
+				}
+				return err
+			}))
+		}
+	}
+	return metrics
 }
 
 func performanceSearch(ctx context.Context, pool *pgxpool.Pool) (wikisearch.SearchAdapter, string, time.Duration, error) {
@@ -140,6 +170,9 @@ func performanceSearch(ctx context.Context, pool *pgxpool.Pool) (wikisearch.Sear
 	if backend == wikisearch.BackendPostgres {
 		return wikisearch.NewPostgresAdapter(pool), backend, 0, nil
 	}
+	if !strings.HasPrefix(os.Getenv("MEILI_INDEX"), "wiki_perf_") {
+		return nil, backend, 0, fmt.Errorf("performance Meilisearch index must start with wiki_perf_")
+	}
 	timeout := 15 * time.Second
 	if raw := os.Getenv("MEILI_TIMEOUT"); raw != "" {
 		parsed, err := time.ParseDuration(raw)
@@ -148,9 +181,33 @@ func performanceSearch(ctx context.Context, pool *pgxpool.Pool) (wikisearch.Sear
 		}
 		timeout = parsed
 	}
+	taskTimeout := 10 * time.Minute
+	if raw := os.Getenv("MEILI_TASK_TIMEOUT"); raw != "" {
+		parsed, err := time.ParseDuration(raw)
+		if err != nil {
+			return nil, backend, 0, fmt.Errorf("parse MEILI_TASK_TIMEOUT: %w", err)
+		}
+		taskTimeout = parsed
+	}
+	semantic := false
+	if raw := os.Getenv("SEARCH_SEMANTIC_ENABLED"); raw != "" {
+		parsed, err := strconv.ParseBool(raw)
+		if err != nil {
+			return nil, backend, 0, fmt.Errorf("parse SEARCH_SEMANTIC_ENABLED: %w", err)
+		}
+		semantic = parsed
+	}
+	if timeout <= 0 || taskTimeout <= 0 {
+		return nil, backend, 0, fmt.Errorf("Meilisearch request and task timeouts must be positive")
+	}
 	adapter, err := wikisearch.NewBackend(pool, wikisearch.BackendConfig{
 		Backend: backend, MeiliURL: os.Getenv("MEILI_URL"), MeiliAPIKey: os.Getenv("MEILI_API_KEY"),
 		MeiliIndex: os.Getenv("MEILI_INDEX"), MeiliTimeout: timeout,
+		MeiliTaskTimeout: taskTimeout, SemanticEnabled: semantic,
+		MeiliEmbedderName:   os.Getenv("MEILI_EMBEDDER_NAME"),
+		MeiliEmbedderSource: os.Getenv("MEILI_EMBEDDER_SOURCE"),
+		MeiliEmbedderModel:  os.Getenv("MEILI_EMBEDDER_MODEL"),
+		MeiliEmbedderAPIKey: os.Getenv("MEILI_EMBEDDER_API_KEY"),
 	})
 	if err != nil {
 		return nil, backend, 0, err

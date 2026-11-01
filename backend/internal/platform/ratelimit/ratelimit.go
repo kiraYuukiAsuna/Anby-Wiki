@@ -1,8 +1,8 @@
 // Package ratelimit implements a Redis-backed fixed-window request limiter.
 //
 // The application is the only rate-limiting layer in the current deployment
-// topology: no reverse proxy sits in front of the API. Limits are therefore
-// enforced here and shared across API replicas through Redis.
+// topology: the host reverse proxy cleans forwarding headers but does not
+// enforce quotas. Limits are shared across API replicas through Redis.
 //
 // Redis holds only short-lived counters. Losing them is acceptable and simply
 // resets the current window, which matches ADR-0003: Redis never stores data
@@ -103,26 +103,32 @@ func ClientIP(r *http.Request, trustedProxies map[string]struct{}) string {
 	if err != nil {
 		peerIP = r.RemoteAddr
 	}
+	if parsed := net.ParseIP(peerIP); parsed != nil {
+		peerIP = parsed.String()
+	}
 	if len(trustedProxies) == 0 {
 		return peerIP
 	}
 	if _, ok := trustedProxies[peerIP]; !ok {
 		return peerIP
 	}
-	forwarded := r.Header.Get("X-Forwarded-For")
+	forwarded := strings.Join(r.Header.Values("X-Forwarded-For"), ",")
 	if forwarded == "" {
 		return peerIP
 	}
-	// Right-most untrusted address is the closest non-proxy client.
+	// Validate the entire chain first. Skipping a malformed hop could cross an
+	// unknown trust boundary and accept a client-controlled address.
 	parts := strings.Split(forwarded, ",")
+	for i, part := range parts {
+		ip := net.ParseIP(strings.TrimSpace(part))
+		if ip == nil {
+			return peerIP
+		}
+		parts[i] = ip.String()
+	}
+	// Right-most untrusted address is the closest non-proxy client.
 	for i := len(parts) - 1; i >= 0; i-- {
-		candidate := strings.TrimSpace(parts[i])
-		if candidate == "" {
-			continue
-		}
-		if net.ParseIP(candidate) == nil {
-			continue
-		}
+		candidate := parts[i]
 		if _, ok := trustedProxies[candidate]; ok {
 			continue
 		}
@@ -135,8 +141,8 @@ func ClientIP(r *http.Request, trustedProxies map[string]struct{}) string {
 func TrustedProxySet(ips []string) map[string]struct{} {
 	set := make(map[string]struct{}, len(ips))
 	for _, ip := range ips {
-		if trimmed := strings.TrimSpace(ip); trimmed != "" {
-			set[trimmed] = struct{}{}
+		if parsed := net.ParseIP(strings.TrimSpace(ip)); parsed != nil {
+			set[parsed.String()] = struct{}{}
 		}
 	}
 	return set

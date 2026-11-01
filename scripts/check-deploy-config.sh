@@ -26,6 +26,10 @@ do
   /bin/sh -n "$script"
 done
 
+python3 -m unittest discover -s "$ROOT/scripts" -p 'production_environment_test.py'
+[ "$(grep -Ec 'proxy_set_header[[:space:]]+X-Forwarded-For[[:space:]]+\$remote_addr;' "$ROOT/infra/deploy/nginx/anby-wiki.conf")" -eq 2 ] ||
+  fail "Nginx must replace client forwarding headers for both API and Web"
+
 grep -Fq 'sh "$ROOT/scripts/cleanup-production.sh"' "$ROOT/scripts/deploy-production.sh" ||
   fail "successful production deployment must run cleanup"
 if grep -Eq 'deploy-backups|pg_dump' "$ROOT/scripts/deploy-production.sh" "$ROOT/scripts/prepare-production.py"; then

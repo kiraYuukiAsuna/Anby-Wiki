@@ -43,6 +43,11 @@ import {
     ReplanImportJobRequestFromJSON,
     ReplanImportJobRequestToJSON,
 } from '../models/ReplanImportJobRequest';
+import {
+    type ReviewImportSafetyRequest,
+    ReviewImportSafetyRequestFromJSON,
+    ReviewImportSafetyRequestToJSON,
+} from '../models/ReviewImportSafetyRequest';
 
 export interface CancelImportJobRequest {
     id: string;
@@ -87,6 +92,11 @@ export interface ReplanImportJobOperationRequest {
 
 export interface RetryImportJobRequest {
     id: string;
+}
+
+export interface ReviewImportSafetyOperationRequest {
+    id: string;
+    reviewImportSafetyRequest: ReviewImportSafetyRequest;
 }
 
 /**
@@ -622,6 +632,71 @@ export class ImportsApi extends runtime.BaseAPI {
      */
     async retryImportJob(requestParameters: RetryImportJobRequest, initOverrides?: RequestInit | runtime.InitOverrideFunction): Promise<ImportJobDetail> {
         const response = await this.retryImportJobRaw(requestParameters, initOverrides);
+        return await response.value();
+    }
+
+    /**
+     * Creates request options for reviewImportSafety without sending the request
+     */
+    async reviewImportSafetyRequestOpts(requestParameters: ReviewImportSafetyOperationRequest): Promise<runtime.RequestOpts> {
+        if (requestParameters['id'] == null) {
+            throw new runtime.RequiredError(
+                'id',
+                'Required parameter "id" was null or undefined when calling reviewImportSafety().'
+            );
+        }
+
+        if (requestParameters['reviewImportSafetyRequest'] == null) {
+            throw new runtime.RequiredError(
+                'reviewImportSafetyRequest',
+                'Required parameter "reviewImportSafetyRequest" was null or undefined when calling reviewImportSafety().'
+            );
+        }
+
+        const queryParameters: any = {};
+
+        const headerParameters: runtime.HTTPHeaders = {};
+
+        headerParameters['Content-Type'] = 'application/json';
+
+        if (this.configuration && this.configuration.accessToken) {
+            const token = this.configuration.accessToken;
+            const tokenString = await token("cliBearer", []);
+
+            if (tokenString) {
+                headerParameters["Authorization"] = `Bearer ${tokenString}`;
+            }
+        }
+
+        let urlPath = `/api/v1/import-jobs/{id}/review-safety`;
+        urlPath = urlPath.replace('{id}', encodeURIComponent(String(requestParameters['id'])));
+
+        return {
+            path: urlPath,
+            method: 'POST',
+            headers: headerParameters,
+            query: queryParameters,
+            body: ReviewImportSafetyRequestToJSON(requestParameters['reviewImportSafetyRequest']),
+        };
+    }
+
+    /**
+     * 仅任务发起者且具 reviewer/admin 权限的真人可复核。结论绑定当前任务与不可变 Extraction，理由与结论写入审计；明确控制指令不能放行。确认误报后重新规划且仍需计划确认和 Proposal 审核。相同 Extraction 的相同结论和理由幂等，变更结论返回 409。
+     * 真人审核导入来源的疑似提示注入
+     */
+    async reviewImportSafetyRaw(requestParameters: ReviewImportSafetyOperationRequest, initOverrides?: RequestInit | runtime.InitOverrideFunction): Promise<runtime.ApiResponse<ImportJobDetail>> {
+        const requestOptions = await this.reviewImportSafetyRequestOpts(requestParameters);
+        const response = await this.request(requestOptions, initOverrides);
+
+        return new runtime.JSONApiResponse(response, (jsonValue) => ImportJobDetailFromJSON(jsonValue));
+    }
+
+    /**
+     * 仅任务发起者且具 reviewer/admin 权限的真人可复核。结论绑定当前任务与不可变 Extraction，理由与结论写入审计；明确控制指令不能放行。确认误报后重新规划且仍需计划确认和 Proposal 审核。相同 Extraction 的相同结论和理由幂等，变更结论返回 409。
+     * 真人审核导入来源的疑似提示注入
+     */
+    async reviewImportSafety(requestParameters: ReviewImportSafetyOperationRequest, initOverrides?: RequestInit | runtime.InitOverrideFunction): Promise<ImportJobDetail> {
+        const response = await this.reviewImportSafetyRaw(requestParameters, initOverrides);
         return await response.value();
     }
 

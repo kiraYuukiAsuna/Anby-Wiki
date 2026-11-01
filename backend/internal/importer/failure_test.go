@@ -27,6 +27,7 @@ func TestFailureProviderDiagnosticsNeverExposeRawErrors(t *testing.T) {
 		{"authentication_failed", "authentication_failed", 0, false, "认证"},
 		{"invalid_request", "invalid_request", 0, false, "参数"},
 		{"rate_limited", "rate_limited", 0, true, "限流"},
+		{ai.ProviderCodeQuotaExhausted, ai.ProviderCodeQuotaExhausted, 0, false, "额度"},
 		{secret, "", 0, true, "供应商"},
 		{"http_401 " + secret, "", 0, true, "供应商"},
 	}

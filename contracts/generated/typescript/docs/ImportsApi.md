@@ -12,6 +12,7 @@ All URIs are relative to *http://localhost:3000*
 | [**listImportJobs**](ImportsApi.md#listimportjobs) | **GET** /api/v1/import-jobs | 分页列出当前账号的导入任务 |
 | [**replanImportJob**](ImportsApi.md#replanimportjoboperation) | **POST** /api/v1/import-jobs/{id}/replan | 在同一任务内追加新的导入计划版本 |
 | [**retryImportJob**](ImportsApi.md#retryimportjob) | **POST** /api/v1/import-jobs/{id}/retry | 将失败或已取消任务重新排队 |
+| [**reviewImportSafety**](ImportsApi.md#reviewimportsafetyoperation) | **POST** /api/v1/import-jobs/{id}/review-safety | 真人审核导入来源的疑似提示注入 |
 
 
 
@@ -660,6 +661,87 @@ example().catch(console.error);
 | **403** | 无操作权限或浏览器写请求来源不受信任。 非安全方法统一使用 Go CrossOriginProtection 校验浏览器来源；优先检查 Sec-Fetch-Site，缺失时比较 Origin 与 Host。无来源头的 CLI/服务端调用 继续执行原有认证和授权。  |  -  |
 | **404** | 资源不存在 |  -  |
 | **409** | 并发冲突（含陈旧基线、幂等键冲突） |  -  |
+
+[[Back to top]](#) [[Back to API list]](../README.md#api-endpoints) [[Back to Model list]](../README.md#models) [[Back to README]](../README.md)
+
+
+## reviewImportSafety
+
+> ImportJobDetail reviewImportSafety(id, reviewImportSafetyRequest)
+
+真人审核导入来源的疑似提示注入
+
+仅任务发起者且具 reviewer/admin 权限的真人可复核。结论绑定当前任务与不可变 Extraction，理由与结论写入审计；明确控制指令不能放行。确认误报后重新规划且仍需计划确认和 Proposal 审核。相同 Extraction 的相同结论和理由幂等，变更结论返回 409。
+
+### Example
+
+```ts
+import {
+  Configuration,
+  ImportsApi,
+} from '';
+import type { ReviewImportSafetyOperationRequest } from '';
+
+async function example() {
+  console.log("🚀 Testing  SDK...");
+  const config = new Configuration({
+    // Configure HTTP bearer authorization: cliBearer
+    accessToken: "YOUR BEARER TOKEN",
+    // To configure API key authorization: sessionCookie
+    apiKey: "YOUR API KEY",
+  });
+  const api = new ImportsApi(config);
+
+  const body = {
+    // string | Proposal、ReviewTask 或 ChangeBatch ID
+    id: 38400000-8cf0-11bd-b23e-10b96e4ef00d,
+    // ReviewImportSafetyRequest
+    reviewImportSafetyRequest: ...,
+  } satisfies ReviewImportSafetyOperationRequest;
+
+  try {
+    const data = await api.reviewImportSafety(body);
+    console.log(data);
+  } catch (error) {
+    console.error(error);
+  }
+}
+
+// Run the test
+example().catch(console.error);
+```
+
+### Parameters
+
+
+| Name | Type | Description  | Notes |
+|------------- | ------------- | ------------- | -------------|
+| **id** | `string` | Proposal、ReviewTask 或 ChangeBatch ID | [Defaults to `undefined`] |
+| **reviewImportSafetyRequest** | [ReviewImportSafetyRequest](ReviewImportSafetyRequest.md) |  | |
+
+### Return type
+
+[**ImportJobDetail**](ImportJobDetail.md)
+
+### Authorization
+
+[cliBearer](../README.md#cliBearer), [sessionCookie](../README.md#sessionCookie)
+
+### HTTP request headers
+
+- **Content-Type**: `application/json`
+- **Accept**: `application/json`
+
+
+### HTTP response details
+| Status code | Description | Response headers |
+|-------------|-------------|------------------|
+| **200** | 已记录复核结论的导入详情 |  -  |
+| **401** | 未认证 |  -  |
+| **403** | 无操作权限或浏览器写请求来源不受信任。 非安全方法统一使用 Go CrossOriginProtection 校验浏览器来源；优先检查 Sec-Fetch-Site，缺失时比较 Origin 与 Host。无来源头的 CLI/服务端调用 继续执行原有认证和授权。  |  -  |
+| **404** | 资源不存在 |  -  |
+| **409** | 并发冲突（含陈旧基线、幂等键冲突） |  -  |
+| **422** | 请求语义可理解但无法处理（如重定向环/重定向链过深） |  -  |
 
 [[Back to top]](#) [[Back to API list]](../README.md#api-endpoints) [[Back to Model list]](../README.md#models) [[Back to README]](../README.md)
 

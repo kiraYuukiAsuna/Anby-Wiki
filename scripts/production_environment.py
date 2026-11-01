@@ -1,12 +1,14 @@
 """Read deployment dotenv without evaluating shell code or interpolating secrets."""
 
 import argparse
+import ipaddress
 import json
 import os
 from pathlib import Path
 import re
 import shlex
 import stat
+import subprocess
 import sys
 
 PUBLIC_KEYS = {
@@ -104,9 +106,71 @@ def domain(values: dict[str, str]) -> dict[str, str]:
     )
 
 
+def trusted_proxy_ips(path: Path, compose_file: Path, values: dict[str, str]) -> str:
+    """Discover exact host bridge and Web peers for the host Nginx topology."""
+    def docker(arguments: list[str]) -> str:
+        result = subprocess.run(
+            ["docker", *arguments], env={**os.environ, **values},
+            capture_output=True, text=True, check=False,
+        )
+        if result.returncode:
+            # Docker errors can include interpolated environment values.
+            raise ValueError("Docker proxy discovery failed.")
+        return result.stdout
+
+    containers = docker([
+        "compose", "--env-file", str(path), "-f", str(compose_file),
+        "ps", "-q", "api", "web",
+    ]).split()
+    if not containers:
+        raise ValueError("API and Web must be running before proxy discovery.")
+    records = [json.loads(line) for line in docker([
+        "inspect", "--format",
+        '{"labels":{{json .Config.Labels}},"networks":{{json .NetworkSettings.Networks}},"running":{{json .State.Running}}}',
+        *containers,
+    ]).splitlines()]
+    projects = {record["labels"].get("com.docker.compose.project") for record in records}
+    services = {record["labels"].get("com.docker.compose.service") for record in records}
+    if (len(projects) != 1 or None in projects or services != {"api", "web"}
+            or not all(record["running"] for record in records)):
+        raise ValueError("Proxy discovery requires running API and Web in one Compose project.")
+    project = projects.pop()
+    shared = set.intersection(*(set(record["networks"]) for record in records))
+    if not shared:
+        raise ValueError("API and Web have no shared network.")
+    networks = [json.loads(line) for line in docker([
+        "network", "inspect", "--format",
+        '{"name":{{json .Name}},"driver":{{json .Driver}},"labels":{{json .Labels}}}',
+        *sorted(shared),
+    ]).splitlines()]
+    app_networks = [
+        network["name"] for network in networks
+        if network["driver"] == "bridge"
+        and network["labels"].get("com.docker.compose.project") == project
+        and network["labels"].get("com.docker.compose.network") == "app"
+    ]
+    if len(app_networks) != 1:
+        raise ValueError("Proxy discovery requires exactly one Compose app bridge.")
+    peers = set()
+    for record in records:
+        endpoint = record["networks"][app_networks[0]]
+        gateway = endpoint.get("Gateway", "")
+        address = endpoint.get("IPAddress", "")
+        if not gateway or not address:
+            raise ValueError("Compose app bridge must have an IP and gateway.")
+        for key in ("Gateway", "IPv6Gateway"):
+            if endpoint.get(key):
+                peers.add(str(ipaddress.ip_address(endpoint[key])))
+        if record["labels"]["com.docker.compose.service"] == "web":
+            for key in ("IPAddress", "GlobalIPv6Address"):
+                if endpoint.get(key):
+                    peers.add(str(ipaddress.ip_address(endpoint[key])))
+    return ",".join(sorted(peers))
+
+
 def main() -> None:
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("command", choices=["exec", "domain", "get"])
+    parser.add_argument("command", choices=["exec", "domain", "get", "proxy-ips"])
     parser.add_argument("environment", type=Path)
     parser.add_argument("arguments", nargs=argparse.REMAINDER)
     args = parser.parse_args()
@@ -121,6 +185,12 @@ def main() -> None:
     elif args.command == "domain":
         for key, value in domain(values).items():
             print(key + "=" + shlex.quote(value))
+    elif args.command == "proxy-ips":
+        if len(args.arguments) != 1:
+            parser.error("proxy-ips requires a Compose file")
+        peers = trusted_proxy_ips(args.environment, Path(args.arguments[0]), values)
+        update(args.environment, {"TRUSTED_PROXY_IPS": peers})
+        print("Trusted proxy IPs refreshed from the running Compose app bridge.")
     else:
         if len(args.arguments) != 1 or args.arguments[0] not in PUBLIC_KEYS:
             parser.error("get accepts one public deployment setting")

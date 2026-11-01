@@ -260,6 +260,33 @@ func (p *Pipeline) run(ctx context.Context, request PipelineRequest, acquire acq
 	if threshold < DefaultQualityThreshold {
 		threshold = DefaultQualityThreshold
 	}
+	decision, err := p.repository.safetyDecision(ctx, nil, job.ID, extracted.Extraction.ID)
+	if err != nil {
+		return nil, err
+	}
+	if DetectPromptInjection(chunkTexts(version.Chunks)) ||
+		decision != nil && decision.Decision == SafetyDecisionReject {
+		return fail(current, ErrorQualityGate, ErrQualityGate)
+	}
+	safetyReviewed := decision != nil && decision.Decision == SafetyDecisionAccept &&
+		decision.SourceVersionID == version.Version.ID
+	if extracted.Candidates.PromptInjectionDetected && !safetyReviewed {
+		failure := extractionFailure(extracted, threshold)
+		if err := p.jobs.RequireActionWithDetails(ctx, job.ID, run.ID, version.Version.ID, ActionQualityGate, failure.JSON()); err != nil {
+			return nil, err
+		}
+		result.Job, err = p.jobs.DetailJob(ctx, job.ID)
+		return result, err
+	}
+	if safetyReviewed {
+		// Do not authorize candidates from an extraction the model considered
+		// unsafe. Re-plan from immutable chunks under the normal evidence gates.
+		extracted.Candidates = &Candidates{
+			SchemaVersion: extracted.Candidates.SchemaVersion, SourceVersionID: version.Version.ID,
+			QualityScore: extracted.Candidates.QualityScore,
+			Entities:     []EntityCandidate{}, Claims: []ClaimCandidate{},
+		}
+	}
 	planningCandidates, err := trustedPlanningCandidates(extracted.Candidates, threshold)
 	if err != nil {
 		return fail(current, ErrorQualityGate, ErrQualityGate)
@@ -274,7 +301,11 @@ func (p *Pipeline) run(ctx context.Context, request PipelineRequest, acquire acq
 	if err != nil {
 		return nil, err
 	}
-	planInput := HashBytes([]byte(extractOutput + "\x00" + string(request.PlanningInput)))
+	planInputValue := extractOutput + "\x00" + string(request.PlanningInput)
+	if safetyReviewed {
+		planInputValue += safetyReviewedInput
+	}
+	planInput := HashBytes([]byte(planInputValue))
 	planned, err := p.planner.Plan(ctx, PlanParams{
 		SourceVersionID: version.Version.ID, SourceLabel: sourceLabel,
 		PreferredTitle: request.Title, Instructions: request.Instructions,
@@ -282,6 +313,7 @@ func (p *Pipeline) run(ctx context.Context, request PipelineRequest, acquire acq
 		WikiID: request.WikiID, Chunks: version.Chunks, Candidates: extracted.Candidates,
 		Provider: request.Provider, Model: request.Model, MaxInputTokens: request.MaxInputTokens,
 		QualityThreshold: threshold,
+		SafetyReviewed:   safetyReviewed,
 		PlanningInput:    request.PlanningInput, ActorID: request.ActorID,
 		InputHash: planInput, ImportJobID: &request.JobID, ImportRunID: &run.ID,
 	})
@@ -289,7 +321,7 @@ func (p *Pipeline) run(ctx context.Context, request PipelineRequest, acquire acq
 		return fail(current, planErrorCode(err), err)
 	}
 	planOutput := planned.Record.ID.String()
-	autoConfirm := request.AutoApprovePlan &&
+	autoConfirm := request.AutoApprovePlan && !safetyReviewed &&
 		planned.Plan.Quality != nil && planned.Plan.Quality.Passed
 	if err := p.jobs.CompletePlanStage(
 		ctx, request.JobID, current, planned.Record.ID, autoConfirm,
@@ -307,7 +339,7 @@ func (p *Pipeline) run(ctx context.Context, request PipelineRequest, acquire acq
 	}
 	planConfirmed := request.ConfirmedPlanID != nil &&
 		*request.ConfirmedPlanID == planned.Record.ID
-	if !request.AutoApprovePlan && !planConfirmed {
+	if (!request.AutoApprovePlan || safetyReviewed) && !planConfirmed {
 		if err := p.jobs.RequireAction(
 			ctx, request.JobID, run.ID, version.Version.ID, ActionConfirmPlan,
 		); err != nil {

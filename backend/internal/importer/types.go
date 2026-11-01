@@ -117,12 +117,13 @@ type StageRun struct {
 }
 
 type JobDetail struct {
-	Job         *Job          `json:"job"`
-	Runs        []Run         `json:"runs"`
-	Stages      []StageRun    `json:"stages"`
-	Plan        *ImportPlan   `json:"plan"`
-	Plans       []PlanVersion `json:"plans"`
-	MatchReview *MatchReview  `json:"match_review,omitempty"`
+	Job          *Job          `json:"job"`
+	Runs         []Run         `json:"runs"`
+	Stages       []StageRun    `json:"stages"`
+	Plan         *ImportPlan   `json:"plan"`
+	Plans        []PlanVersion `json:"plans"`
+	MatchReview  *MatchReview  `json:"match_review,omitempty"`
+	SafetyReview *SafetyReview `json:"safety_review,omitempty"`
 }
 
 type MatchReview struct {

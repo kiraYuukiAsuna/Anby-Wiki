@@ -20,6 +20,7 @@ flock -n 9 || { echo 'Another Anby Wiki deployment is running.' >&2; exit 1; }
 if [ "$pull" = true ]; then git pull --ff-only </dev/null; fi
 DEPLOY_ENV_FILE=${DEPLOY_ENV_FILE:-"$ROOT/.env"}
 export DEPLOY_ENV_FILE
+. "$ROOT/scripts/production-common.sh"
 rollback_state=$(mktemp -d "${TMPDIR:-/tmp}/anby-wiki-deploy.XXXXXX")
 previous=false
 if [ -f "$DEPLOY_ENV_FILE" ]; then
@@ -37,8 +38,12 @@ cleanup() {
   if [ "$result" -ne 0 ] && [ "$previous" = true ]; then
     cp -p "$rollback_state/environment" "$DEPLOY_ENV_FILE"
     old_release=$(python3 "$ROOT/scripts/production_environment.py" get "$DEPLOY_ENV_FILE" RELEASE_ID)
-    if DEPLOY_CONFIRM="DEPLOY:$old_release" sh "$ROOT/scripts/deploy.sh" rollback \
-      > "$rollback_state/rollback.log" 2>&1; then
+    if (
+      DEPLOY_CONFIRM="DEPLOY:$old_release" sh "$ROOT/scripts/deploy.sh" rollback &&
+        python3 "$ROOT/scripts/production_environment.py" proxy-ips "$DEPLOY_ENV_FILE" \
+          "$ROOT/infra/deploy/compose.production.yml" &&
+        production_compose up -d --no-deps --wait --wait-timeout 720 api worker
+    ) > "$rollback_state/rollback.log" 2>&1; then
       echo 'Previous application release restored; database migrations retained.' >&2
     else
       echo 'Automatic application rollback failed:' >&2
@@ -50,7 +55,6 @@ cleanup() {
 }
 trap cleanup EXIT
 python3 "$ROOT/scripts/prepare-production.py" "$ROOT"
-. "$ROOT/scripts/production-common.sh"
 load_production_domain
 bootstrap_pending=$(python3 -c 'import json,pathlib,sys; p=pathlib.Path(sys.argv[1]); print("true" if p.exists() and not json.loads(p.read_text()).get("initialized") else "false")' "$ROOT/Secret/bootstrap-admin.json")
 if [ "$bootstrap_pending" = false ] && [ -s "/etc/letsencrypt/live/$ANBY_DOMAIN/fullchain.pem" ] &&
@@ -61,8 +65,10 @@ else
 fi
 release=$(python3 "$ROOT/scripts/production_environment.py" get "$DEPLOY_ENV_FILE" RELEASE_ID)
 DEPLOY_CONFIRM="DEPLOY:$release" sh "$ROOT/scripts/deploy.sh" deploy </dev/null
+python3 "$ROOT/scripts/production_environment.py" proxy-ips "$DEPLOY_ENV_FILE" \
+  "$ROOT/infra/deploy/compose.production.yml"
 python3 "$ROOT/scripts/bootstrap-administrator.py" "$ROOT" "$DEPLOY_ENV_FILE"
-# Refresh registration settings after the initial administrator has been verified.
+# Apply discovered proxy peers and refreshed bootstrap registration settings.
 production_compose up -d --no-deps --wait --wait-timeout 720 api worker
 sh "$ROOT/scripts/enable-tls.sh" </dev/null
 sh "$ROOT/scripts/smoke-production.sh" </dev/null

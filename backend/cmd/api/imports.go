@@ -278,6 +278,27 @@ func (a *ImportAPI) retryJob(w http.ResponseWriter, r *http.Request) {
 	a.mutateOwnedJob(w, r, a.jobs.Retry)
 }
 
+func (a *ImportAPI) reviewSafety(w http.ResponseWriter, r *http.Request) {
+	actorID, jobID, ok := importActorAndID(w, r)
+	if !ok {
+		return
+	}
+	var input importer.ReviewSafetyInput
+	if !decodeJSON(w, r, &input) {
+		return
+	}
+	if err := a.jobs.ReviewSafety(r.Context(), actorID, wikiIDFromRequest(r), jobID, input); err != nil {
+		importError(w, r, err)
+		return
+	}
+	detail, err := a.jobs.Detail(r.Context(), jobID)
+	if err != nil {
+		importError(w, r, err)
+		return
+	}
+	httpx.WriteJSON(w, http.StatusOK, detail)
+}
+
 type confirmImportPlanRequest struct {
 	PlanID uuid.UUID `json:"plan_id"`
 }

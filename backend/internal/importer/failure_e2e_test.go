@@ -103,6 +103,9 @@ func TestImportFailureLifecycleE2E(t *testing.T) {
 		}
 		return failure
 	}
+	t.Run("prompt injection manual review lifecycle", func(t *testing.T) {
+		testSafetyReviewLifecycle(t, ctx, pool, repo, jobs, wikiID, actorID)
+	})
 	t.Run("atomic failure and late cancellation race", func(t *testing.T) {
 		job := newJob()
 		run, stage := begin(job.ID, nil)

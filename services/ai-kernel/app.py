@@ -35,6 +35,8 @@ from semantic_kernel.contents.utils.author_role import AuthorRole
 PROTOCOL_VERSION = 1
 INTERNAL_TOKEN = os.environ.get("AI_KERNEL_INTERNAL_TOKEN", "")
 DEEPSEEK_MAX_OUTPUT_TOKENS = 8192
+QUOTA_EXHAUSTED_CODE = "quota_exhausted"
+PROVIDER_QUOTA_CODES = frozenset({"insufficient_quota", "billing_hard_limit_reached"})
 
 app = FastAPI(
     title="Anby Wiki AI Kernel",
@@ -347,7 +349,11 @@ async def generate(payload: GenerateRequest) -> JSONResponse:
                 if attempt + 1 >= config.max_attempts:
                     return error_response(504, "timeout", "model request timed out", True)
                 await asyncio.sleep(2**attempt)
-            except openai.RateLimitError:
+            except openai.RateLimitError as exc:
+                if exc.code in PROVIDER_QUOTA_CODES:
+                    return error_response(
+                        429, QUOTA_EXHAUSTED_CODE, "model provider quota is exhausted", False
+                    )
                 if attempt + 1 >= config.max_attempts:
                     return error_response(429, "rate_limited", "model provider rate limited the request", True)
                 await asyncio.sleep(2**attempt)

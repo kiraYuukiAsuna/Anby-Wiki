@@ -65,7 +65,7 @@ export interface ImportFailure {
      */
     suggestion?: string;
     /**
-     * 直接重试是否可能恢复；false 时先按建议修复。缓存的安全门禁结果需要修改来源后重新导入。
+     * 直接重试是否可能恢复；false 时先按建议修复。疑似提示注入需要真人复核或修改来源，重试不会产生复核授权。
      * @type {boolean}
      * @memberof ImportFailure
      */

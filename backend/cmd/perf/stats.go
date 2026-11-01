@@ -5,6 +5,7 @@ import (
 	"math"
 	"runtime"
 	"sort"
+	"sync"
 	"time"
 )
 
@@ -56,16 +57,33 @@ type m9Capacity struct {
 }
 
 func measure(iterations int, name string, fn func(int) error) metric {
+	return measureConcurrent(iterations, 1, name, fn)
+}
+
+func measureConcurrent(iterations, concurrency int, name string, fn func(int) error) metric {
 	durations := make([]time.Duration, 0, iterations)
 	errorsCount := 0
 	started := time.Now()
-	for i := 0; i < iterations; i++ {
-		requestStarted := time.Now()
-		if err := fn(i); err != nil {
-			errorsCount++
-		}
-		durations = append(durations, time.Since(requestStarted))
+	var mu sync.Mutex
+	var wg sync.WaitGroup
+	for worker := 0; worker < min(concurrency, iterations); worker++ {
+		wg.Add(1)
+		go func(worker int) {
+			defer wg.Done()
+			for i := worker; i < iterations; i += concurrency {
+				requestStarted := time.Now()
+				err := fn(i)
+				duration := time.Since(requestStarted)
+				mu.Lock()
+				if err != nil {
+					errorsCount++
+				}
+				durations = append(durations, duration)
+				mu.Unlock()
+			}
+		}(worker)
 	}
+	wg.Wait()
 	elapsed := time.Since(started).Seconds()
 	sort.Slice(durations, func(i, j int) bool { return durations[i] < durations[j] })
 	ms := func(value time.Duration) float64 { return float64(value.Microseconds()) / 1000 }

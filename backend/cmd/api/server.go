@@ -351,6 +351,7 @@ func NewRouter(logger *slog.Logger, deps Deps, writeAPI *WriteAPI, readAPI *Read
 				r.Get("/import-jobs/{id}", importAPI.getJob)
 				r.Post("/import-jobs/{id}/cancel", importAPI.cancelJob)
 				r.Post("/import-jobs/{id}/retry", importAPI.retryJob)
+				r.Post("/import-jobs/{id}/review-safety", importAPI.reviewSafety)
 				r.Post("/import-jobs/{id}/confirm-plan", importAPI.confirmPlan)
 				r.Post("/import-jobs/{id}/replan", importAPI.replanJob)
 			}

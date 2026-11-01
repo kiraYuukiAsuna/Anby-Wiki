@@ -4,6 +4,7 @@ import base64
 import os
 from types import SimpleNamespace
 
+import httpx
 from starlette.testclient import TestClient
 
 
@@ -317,3 +318,45 @@ def test_provider_status_error_code_is_safe_and_actionable():
     assert module.provider_status_error_code(400) == "invalid_request"
     assert module.provider_status_error_code(404) == "invalid_request"
     assert module.provider_status_error_code(500) == "provider_unavailable"
+
+
+def test_quota_exhaustion_does_not_retry_or_expose_supplier_message(monkeypatch):
+    module = importlib.import_module("app")
+    calls = []
+
+    class FakeCompletions:
+        async def create(self, **request):
+            calls.append(request)
+            raise module.openai.RateLimitError(
+                "private supplier message",
+                response=httpx.Response(429, request=httpx.Request("POST", "https://provider.invalid")),
+                body={"code": "insufficient_quota"},
+            )
+
+    class FakeClient:
+        def __init__(self):
+            self.chat = SimpleNamespace(completions=FakeCompletions())
+
+        async def close(self):
+            pass
+
+    monkeypatch.setattr(module, "AsyncOpenAI", lambda **_: FakeClient())
+    response = load_app().post(
+        "/v1/generate",
+        headers={"X-Anby-Internal-Token": "test-token"},
+        json={
+            "version": 1,
+            "config": {
+                "provider": "openai-compatible", "base_url": "https://provider.invalid",
+                "api_key": "not-used", "model": "test-model", "response_format": "json_schema",
+                "request_timeout_seconds": 30, "max_attempts": 3,
+            },
+            "system_prompt": "Return JSON.", "user_prompt": "Return an empty object.",
+            "json_schema": {"type": "object"},
+        },
+    )
+    assert response.status_code == 429
+    assert response.json()["code"] == module.QUOTA_EXHAUSTED_CODE
+    assert response.json()["temporary"] is False
+    assert len(calls) == 1
+    assert "private supplier" not in response.text

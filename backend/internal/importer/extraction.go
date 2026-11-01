@@ -22,7 +22,7 @@ import (
 
 const (
 	ExtractionSchemaURL = "https://anby.wiki/schemas/extraction/v1/candidates.schema.json"
-	ExtractionPromptKey = "source-extraction-v8"
+	ExtractionPromptKey = "source-extraction-v9"
 )
 
 //go:embed schema/candidates.schema.json
@@ -137,7 +137,9 @@ func (s *ExtractionService) Extract(ctx context.Context, params ExtractParams) (
 		// Re-run deterministic identity and relation guards on every read so a
 		// new ImportJob does not inherit duplicate or directionally invalid graph
 		// candidates from an older prompt version.
-		return &ExtractResult{Extraction: existing, Candidates: normalizeCandidatesForUse(&candidates), Reused: true}, nil
+		candidates = *normalizeCandidatesForUse(&candidates)
+		candidates.PromptInjectionDetected = candidates.PromptInjectionDetected || DetectPromptInjection(chunkTexts(params.Chunks))
+		return &ExtractResult{Extraction: existing, Candidates: &candidates, Reused: true}, nil
 	} else if !errors.Is(err, ErrExtractionNotFound) {
 		return nil, err
 	}
@@ -170,7 +172,11 @@ func (s *ExtractionService) Extract(ctx context.Context, params ExtractParams) (
 		if err != nil {
 			return nil, err
 		}
-		_ = json.Unmarshal(extraction.CandidatesJSON, candidates)
+		if err := json.Unmarshal(extraction.CandidatesJSON, candidates); err != nil {
+			return nil, err
+		}
+		candidates = normalizeCandidatesForUse(candidates)
+		candidates.PromptInjectionDetected = candidates.PromptInjectionDetected || DetectPromptInjection(texts)
 	}
 	return &ExtractResult{Extraction: extraction, Candidates: candidates, Reused: !inserted}, nil
 }
@@ -572,18 +578,4 @@ func normalizeEvidence(ctx context.Context, sourceVersionID uuid.UUID, items []C
 		canonicalizeEvidence(item, chunk, matchStart, matchEnd)
 	}
 	return nil
-}
-
-func DetectPromptInjection(texts []string) bool {
-	patterns := []string{"ignore previous instructions", "ignore all previous", "system prompt",
-		"developer message", "reveal your prompt", "忽略之前的指令", "忽略以上指令", "系统提示词"}
-	for _, text := range texts {
-		lower := strings.ToLower(text)
-		for _, pattern := range patterns {
-			if strings.Contains(lower, pattern) {
-				return true
-			}
-		}
-	}
-	return false
 }

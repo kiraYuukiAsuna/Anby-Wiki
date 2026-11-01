@@ -317,6 +317,9 @@ func (s *AuditService) auditEventBelongsToWiki(
 				ctx, `SELECT wiki_id FROM actor WHERE id=$1`,
 				aggregateID,
 			).Scan(&aggregateWikiID)
+		case "import_job":
+			err = tx.QueryRow(ctx, `SELECT wiki_id FROM import_job WHERE id=$1`, aggregateID).
+				Scan(&aggregateWikiID)
 		case "page_protection":
 			err = tx.QueryRow(ctx, `SELECT COALESCE(p.wiki_id,n.wiki_id)
 				FROM page_protection pp
@@ -446,6 +449,10 @@ func (s *AuditService) List(
 			OR (ae.aggregate_type='actor' AND EXISTS (
 				SELECT 1 FROM actor target
 				WHERE target.id=ae.aggregate_id AND target.wiki_id=$7
+			))
+			OR (ae.aggregate_type='import_job' AND EXISTS (
+				SELECT 1 FROM import_job job
+				WHERE job.id=ae.aggregate_id AND job.wiki_id=$7
 			))
 			OR (ae.aggregate_type='change_tag' AND EXISTS (
 				SELECT 1 FROM change_tag ct

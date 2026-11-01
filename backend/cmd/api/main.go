@@ -58,6 +58,16 @@ func main() {
 		}
 		logger.Warn("配置不完整，就绪检查将降级", slog.Any("error", cfgErr))
 	}
+	uploadTemp, cleanupUploadTemp, err := prepareUploadTemp(os.TempDir())
+	if err != nil {
+		logger.Error("初始化上传临时目录失败", slog.Any("error", err))
+		os.Exit(1)
+	}
+	defer cleanupUploadTemp()
+	if err := os.Setenv("TMPDIR", uploadTemp); err != nil {
+		logger.Error("设置上传临时目录失败", slog.Any("error", err))
+		os.Exit(1)
+	}
 	metrics := observability.NewMetrics(serviceName)
 	shutdownTracing, err := observability.InitTracing(context.Background(), observability.TracingConfig{
 		Enabled: cfg.OTelEnabled, Endpoint: cfg.OTLPEndpoint, Insecure: cfg.OTLPInsecure,

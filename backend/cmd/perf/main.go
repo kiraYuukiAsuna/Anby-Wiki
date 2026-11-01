@@ -22,6 +22,7 @@ type config struct {
 	Workers    int
 	Iterations int
 	Output     string
+	SearchOnly bool
 }
 
 func main() {
@@ -40,6 +41,7 @@ func run(ctx context.Context, args []string) error {
 	fs.IntVar(&cfg.Workers, "workers", runtime.NumCPU(), "seed concurrency")
 	fs.IntVar(&cfg.Iterations, "iterations", 0, "requests per benchmark")
 	fs.StringVar(&cfg.Output, "output", "", "JSON report path")
+	fs.BoolVar(&cfg.SearchOnly, "search-only", false, "rebuild and benchmark search using an existing performance database")
 	if err := fs.Parse(args); err != nil {
 		return err
 	}
@@ -58,30 +60,44 @@ func run(ctx context.Context, args []string) error {
 		return err
 	}
 	defer pool.Close()
-	databaseName, err := verifyPerformanceDatabase(ctx, pool)
+	databaseName, err := verifyPerformanceDatabase(ctx, pool, !cfg.SearchOnly)
 	if err != nil {
 		return err
 	}
 
-	started := time.Now()
-	fixtures, err := seed(ctx, pool, cfg)
-	if err != nil {
-		return err
-	}
-	m9Fixtures, err := seedM9(ctx, pool, fixtures)
-	if err != nil {
-		return err
-	}
-	seedDuration := time.Since(started)
-	result, err := benchmark(ctx, pool, cfg, fixtures, m9Fixtures)
-	if err != nil {
-		return err
+	var result report
+	if cfg.SearchOnly {
+		adapter, backend, indexDuration, searchErr := performanceSearch(ctx, pool)
+		if searchErr != nil {
+			return searchErr
+		}
+		result.SearchBackend = backend
+		result.SearchIndexSeconds = indexDuration.Seconds()
+		result.Metrics = measureSearch(ctx, cfg, adapter)
+		if err := pool.QueryRow(ctx, `SELECT count(*) FROM page`).Scan(&result.Pages); err != nil {
+			return err
+		}
+	} else {
+		started := time.Now()
+		fixtures, err := seed(ctx, pool, cfg)
+		if err != nil {
+			return err
+		}
+		m9Fixtures, err := seedM9(ctx, pool, fixtures)
+		if err != nil {
+			return err
+		}
+		seedDuration := time.Since(started)
+		result, err = benchmark(ctx, pool, cfg, fixtures, m9Fixtures)
+		if err != nil {
+			return err
+		}
+		result.Pages = len(fixtures)
+		result.SeedSeconds = seedDuration.Seconds()
 	}
 	result.GeneratedAt = time.Now().UTC()
 	result.Profile = cfg.Profile
 	result.Database = databaseName
-	result.Pages = len(fixtures)
-	result.SeedSeconds = seedDuration.Seconds()
 	result.Machine = machineInfo()
 	if err := collectDatabaseStats(ctx, pool, &result); err != nil {
 		return err

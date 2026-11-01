@@ -48,6 +48,13 @@ import {
     ImportStageRunToJSON,
     ImportStageRunToJSONTyped,
 } from './ImportStageRun';
+import type { ImportSafetyReview } from './ImportSafetyReview';
+import {
+    ImportSafetyReviewFromJSON,
+    ImportSafetyReviewFromJSONTyped,
+    ImportSafetyReviewToJSON,
+    ImportSafetyReviewToJSONTyped,
+} from './ImportSafetyReview';
 import type { ImportJob } from './ImportJob';
 import {
     ImportJobFromJSON,
@@ -98,6 +105,12 @@ export interface ImportJobDetail {
      * @memberof ImportJobDetail
      */
     matchReview?: ImportMatchReview;
+    /**
+     *
+     * @type {ImportSafetyReview}
+     * @memberof ImportJobDetail
+     */
+    safetyReview?: ImportSafetyReview;
 }
 
 /**
@@ -128,6 +141,7 @@ export function ImportJobDetailFromJSONTyped(json: any, ignoreDiscriminator: boo
         'plan': ImportPlanFromJSON(json['plan']),
         'plans': ((json['plans'] as Array<any>).map(ImportPlanVersionFromJSON)),
         'matchReview': json['match_review'] == null ? undefined : ImportMatchReviewFromJSON(json['match_review']),
+        'safetyReview': json['safety_review'] == null ? undefined : ImportSafetyReviewFromJSON(json['safety_review']),
     };
 }
 
@@ -148,6 +162,7 @@ export function ImportJobDetailToJSONTyped(value?: ImportJobDetail | null, ignor
         'plan': ImportPlanToJSON(value['plan']),
         'plans': ((value['plans'] as Array<any>).map(ImportPlanVersionToJSON)),
         'match_review': ImportMatchReviewToJSON(value['matchReview']),
+        'safety_review': ImportSafetyReviewToJSON(value['safetyReview']),
     };
 }
 

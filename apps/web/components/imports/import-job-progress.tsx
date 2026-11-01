@@ -22,6 +22,7 @@ import { useRouter } from "next/navigation";
 import { toast } from "sonner";
 import useSWR from "swr";
 import useSWRMutation from "swr/mutation";
+import { z } from "zod";
 
 import {
   ResponseError,
@@ -264,6 +265,8 @@ function isSourceOnly(config: object) {
 export function ImportJobProgress({ id }: { id: string }) {
   const { session } = useSession();
   const router = useRouter();
+  const [reviewOpen, setReviewOpen] = useState(false);
+  const [reviewReason, setReviewReason] = useState("");
   const { data, error, mutate } = useSWR(
     session ? ["import-job", session.actorId, session.wikiId, id] : null,
     () => importsApi().getImportJob({ id }),
@@ -285,6 +288,33 @@ export function ImportJobProgress({ id }: { id: string }) {
       return importsApi().retryImportJob({ id });
     },
   );
+  const { trigger: reviewSafety, isMutating: reviewingSafety } = useSWRMutation(
+    ["import-safety-review", session?.actorId, session?.wikiId, id],
+    (_key, { arg }: { arg: "accept" | "reject" }) => {
+      const reason = z.string().trim().min(5).max(1000).parse(reviewReason);
+      if (!data?.safetyReview) throw new Error("missing safety review");
+      return importsApi().reviewImportSafety({
+        id,
+        reviewImportSafetyRequest: {
+          schemaVersion: 1, extractionId: data.safetyReview.extractionId, decision: arg, reason,
+        },
+      });
+    },
+  );
+  const submitReview = async (decision: "accept" | "reject") => {
+    try {
+      await reviewSafety(decision);
+      setReviewOpen(false);
+      await mutate();
+      toast.success(decision === "accept" ? "复核已记录，正在重新规划" : "复核已记录，导入已拒绝");
+    } catch (reviewError) {
+      if (reviewError instanceof z.ZodError) {
+        toast.error("请填写 5–1000 字的复核理由");
+      } else {
+        toast.error("人工复核失败", { description: await importRequestError(reviewError, "请刷新任务后重试。") });
+      }
+    }
+  };
   const act = async (action: "cancel" | "retry" | "confirm") => {
     try {
       await trigger(action);
@@ -323,6 +353,9 @@ export function ImportJobProgress({ id }: { id: string }) {
     .filter((stage) => stage.importRunId === latestRun?.id)
     .map((stage) => [stage.stage, stage]));
   const blockedExtraction = data.job.error?.code === "quality_gate" && data.job.error.stage === "extract";
+  const safety = data.safetyReview;
+  const canSubmitReview = blockedExtraction && !safety?.decision &&
+    ["failed", "action_required"].includes(data.job.status) && safety?.canReview;
   const planningInput = data.job.planningInput;
   const sourceOnlyComplete =
     data.job.status === "succeeded" && isSourceOnly(data.job.config);
@@ -349,7 +382,11 @@ export function ImportJobProgress({ id }: { id: string }) {
               <Button variant="destructive" disabled={isMutating} onClick={() => void act("cancel")}>取消</Button>}
             {(data.job.status === "failed" || data.job.status === "cancelled") && !blockedExtraction &&
               <Button disabled={isMutating} onClick={() => void act("retry")}>{data.job.error?.retryable === false ? "修复后重试" : "重试"}</Button>}
-            {data.job.status === "failed" && blockedExtraction &&
+            {canSubmitReview &&
+              <Button disabled={reviewingSafety || isMutating} onClick={() => setReviewOpen(true)}>
+                <ShieldCheck aria-hidden />人工复核
+              </Button>}
+            {blockedExtraction &&
               <Button asChild><Link href="/imports">修改来源后重新导入</Link></Button>}
           </div>
         </div>
@@ -359,7 +396,61 @@ export function ImportJobProgress({ id }: { id: string }) {
         <ImportFailureNotice error={data.job.error} className="mt-4 border-t border-border pt-4" />
       </section>
 
-      {data.job.status === "action_required" ? (
+      {safety ? (
+        <section className="min-w-0 space-y-4 rounded-xl border border-amber-500/40 p-5">
+          <div>
+            <h2 className="font-semibold">来源安全复核</h2>
+            <p className="mt-1 text-sm leading-6 text-muted-foreground">
+              {safety.directControl
+                ? "检测到要求模型改规则、泄露信息或跳过审核的直接指令，不能确认放行。请拒绝导入或修改来源。"
+                : "模型标记了疑似提示注入。角色设定、引用和指令讨论可能误报；请阅读完整来源后判断。"}
+            </p>
+            <p className="mt-2 text-xs text-muted-foreground">以下是部分原文片段；复核结论仅用于本次导入，继续后仍须确认页面计划和审核提案。</p>
+            <Button asChild variant="outline" className="mt-3">
+              <Link href={`/sources/${safety.sourceId}`} target="_blank" rel="noopener noreferrer">查看完整来源</Link>
+            </Button>
+          </div>
+          <ol className="space-y-3">
+            {safety.samples.map((sample) => (
+              <li key={sample.chunkId} className="min-w-0 rounded-lg bg-muted/60 p-3">
+                <p className="mb-2 break-all text-xs text-muted-foreground">
+                  {sample.page ? `第 ${sample.page} 页 · ` : ""}片段 {sample.chunkId}
+                </p>
+                <blockquote className="whitespace-pre-wrap break-words text-sm leading-6 [overflow-wrap:anywhere]">{sample.text}</blockquote>
+              </li>
+            ))}
+          </ol>
+          {safety.decision ? (
+            <div className="space-y-2 text-sm">
+              <p className="font-medium">{safety.decision.decision === "accept" ? "已确认误报并继续" : "已人工拒绝导入"}</p>
+              <p className="break-words [overflow-wrap:anywhere]">理由：{safety.decision.reason}</p>
+              <p className="break-all text-xs text-muted-foreground">审核人 {safety.decision.reviewedBy} · {safety.decision.reviewedAt.toLocaleString()}</p>
+            </div>
+          ) : canSubmitReview && reviewOpen ? (
+            <div className="space-y-3 border-t border-border pt-4">
+              <Label htmlFor="safety-review-reason">复核理由</Label>
+              <Textarea id="safety-review-reason" autoFocus value={reviewReason} maxLength={1000}
+                onChange={(event) => setReviewReason(event.target.value)}
+                placeholder="说明这是角色设定、引用示例，或为何应拒绝此来源（5–1000 字）" />
+              <div className="flex flex-wrap gap-2">
+                {safety.reviewable ? (
+                  <Button disabled={reviewingSafety || isMutating || reviewReason.trim().length < 5}
+                    onClick={() => void submitReview("accept")}>确认误报并继续</Button>
+                ) : null}
+                <Button variant="destructive" disabled={reviewingSafety || isMutating || reviewReason.trim().length < 5}
+                  onClick={() => void submitReview("reject")}>拒绝导入</Button>
+                <Button variant="outline" disabled={reviewingSafety} onClick={() => setReviewOpen(false)}>收起</Button>
+              </div>
+            </div>
+          ) : canSubmitReview ? (
+            <Button disabled={reviewingSafety || isMutating} onClick={() => setReviewOpen(true)}><ShieldCheck aria-hidden />人工复核</Button>
+          ) : blockedExtraction && !safety.canReview ? (
+            <p className="text-sm text-muted-foreground">需要任务发起者具备 reviewer 或 admin 权限，由真人进行复核。</p>
+          ) : null}
+        </section>
+      ) : null}
+
+      {data.job.status === "action_required" && !blockedExtraction ? (
         <section className="rounded-lg border border-primary/40 p-5">
           <div className="flex items-start gap-3">
             {data.job.actionRequired === "quality_gate"

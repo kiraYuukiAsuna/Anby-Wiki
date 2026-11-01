@@ -1623,6 +1623,33 @@ paths:
         "403": { $ref: "#/components/responses/Forbidden" }
         "404": { $ref: "#/components/responses/NotFound" }
         "409": { $ref: "#/components/responses/Conflict" }
+  /api/v1/import-jobs/{id}/review-safety:
+    post:
+      operationId: reviewImportSafety
+      tags: [imports]
+      summary: 真人审核导入来源的疑似提示注入
+      description: 仅任务发起者且具 reviewer/admin 权限的真人可复核。结论绑定当前任务与不可变 Extraction，理由与结论写入审计；明确控制指令不能放行。确认误报后重新规划且仍需计划确认和 Proposal 审核。相同 Extraction 的相同结论和理由幂等，变更结论返回 409。
+      security:
+        - sessionCookie: []
+        - cliBearer: []
+      parameters:
+        - $ref: "#/components/parameters/GovernanceId"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/ReviewImportSafetyRequest" }
+      responses:
+        "200":
+          description: 已记录复核结论的导入详情
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/ImportJobDetail" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "409": { $ref: "#/components/responses/Conflict" }
+        "422": { $ref: "#/components/responses/UnprocessableEntity" }
   /api/v1/import-jobs/{id}/confirm-plan:
     post:
       operationId: confirmImportPlan
@@ -5917,6 +5944,50 @@ components:
       required: [plan_id]
       properties:
         plan_id: { type: string, format: uuid }
+    ReviewImportSafetyRequest:
+      type: object
+      additionalProperties: false
+      required: [schema_version, extraction_id, decision, reason]
+      properties:
+        schema_version: { type: integer, enum: [1] }
+        extraction_id: { type: string, format: uuid }
+        decision: { type: string, enum: [accept, reject] }
+        reason: { type: string, minLength: 5, maxLength: 1000 }
+    ImportSafetyDecision:
+      type: object
+      additionalProperties: false
+      required: [schema_version, source_version_id, extraction_id, decision, reason, reviewed_by, reviewed_at]
+      properties:
+        schema_version: { type: integer, enum: [1] }
+        source_version_id: { type: string, format: uuid }
+        extraction_id: { type: string, format: uuid }
+        decision: { type: string, enum: [accept, reject] }
+        reason: { type: string }
+        reviewed_by: { type: string, format: uuid }
+        reviewed_at: { type: string, format: date-time }
+    ImportSafetySourceSample:
+      type: object
+      additionalProperties: false
+      required: [chunk_id, text]
+      properties:
+        chunk_id: { type: string, format: uuid }
+        page: { type: integer, minimum: 1 }
+        text: { type: string }
+    ImportSafetyReview:
+      type: object
+      additionalProperties: false
+      description: 受保护的任务原文预览，最多 8 个片段、每个最多 800 字；不是全文。未定位到可疑词时返回前 3 个片段。复核前应阅读完整来源。
+      required: [schema_version, source_id, source_version_id, extraction_id, reviewable, can_review, direct_control, samples]
+      properties:
+        schema_version: { type: integer, enum: [1] }
+        source_id: { type: string, format: uuid }
+        source_version_id: { type: string, format: uuid }
+        extraction_id: { type: string, format: uuid }
+        reviewable: { type: boolean }
+        can_review: { type: boolean }
+        direct_control: { type: boolean }
+        samples: { type: array, items: { $ref: "#/components/schemas/ImportSafetySourceSample" } }
+        decision: { $ref: "#/components/schemas/ImportSafetyDecision" }
     ImportPlanningInput:
       type: object
       additionalProperties: false
@@ -5940,7 +6011,7 @@ components:
         suggestion: { type: string }
         retryable:
           type: boolean
-          description: 直接重试是否可能恢复；false 时先按建议修复。缓存的安全门禁结果需要修改来源后重新导入。
+          description: 直接重试是否可能恢复；false 时先按建议修复。疑似提示注入需要真人复核或修改来源，重试不会产生复核授权。
         details: { $ref: "#/components/schemas/ImportFailureDetails" }
         match_review: { $ref: "#/components/schemas/ImportMatchReview" }
     ImportFailureDetails:
@@ -6194,6 +6265,7 @@ components:
           allOf:
             - $ref: "#/components/schemas/ImportMatchReview"
           nullable: true
+        safety_review: { $ref: "#/components/schemas/ImportSafetyReview" }
     ImportEntityAlternative:
       type: object
       additionalProperties: false

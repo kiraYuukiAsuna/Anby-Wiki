@@ -88,8 +88,22 @@ Worker 被强制终止或部署替换后，超过完整任务超时仍处于 run
 
 `quality_gate` / `extract` 表示事实抽取的安全门禁，应优先检查
 `prompt_injection_detected`；不能仅依据质量分数推断原因。疑似提示注入可能误判，
-Web 提醒核查角色设定等来源并修改内容后重新导入。同一 SourceVersion 会复用原
-Extraction，直接重试或调整规划意图不能清除已保存的注入标记。
+模型提示明确区分角色自述、对提示词的讨论及引用示例与针对导入器的控制指令。
+确定性检查不再因 `system prompt` 等名词出现而拒绝来源；明确的忽略规则、泄露信息、
+伪造安全标记或跳过审核指令仍直接拒绝，并在不可变 Extraction/ImportPlan 复用时重查。
+
+仅模型标记的疑似风险进入 `action_required / quality_gate / extract`。Web 提供
+原文片段、页码、完整来源链接和“人工复核”入口；任务发起者必须为具 reviewer/admin
+权限的 active human，并填写 5–1000 字理由。`reviewImportSafety` v1 绑定当前任务和
+Extraction，结论、审核人、时间、理由写入不可变 `import.safety_reviewed` 审计。
+相同结论及理由幂等，其他账号、机器身份、旧 Extraction ID 或覆盖结论均拒绝。
+原文片段只在受保护的详情返回，不进入失败诊断或审计。
+
+确认误报后丢弃风险 Extraction 的图谱候选，复用原始 Chunk 重新规划；原 Extraction
+及标记不修改。页面证据/保真/质量门禁继续执行，且这条路径强制人工计划确认，
+最终 Proposal 继续进入治理审核。明确控制指令不能确认放行；人工拒绝后，
+重试或重新规划仍受任务内已保存的拒绝结论约束。同一 SourceVersion 的新任务
+不会继承另一任务的复核授权。
 旧 `stage/code` 详情在读取时使用失败 Stage 的输入 SourceVersion 查询对应 Extraction，
 补充当时保留的诊断，并按创建时间识别复用；未记录的历史质量阈值保持缺省。
 历史数据库行及不可变制品均不改写。人工实体匹配的 `match_review` 仍完整保留。
@@ -128,7 +142,7 @@ Gateway 相同的权威 JSON Schema 预校验并纠正失败输出；OpenAI comp
 原生 strict JSON Schema。抽取固定 `temperature=0`，DeepSeek 同时关闭 thinking，避免
 推理正文污染 JSON 结果。
 
-`source-extraction-v8` Prompt 同时提供当前固定 Entity type / Claim property 词表，
+`source-extraction-v9` Prompt 同时提供当前固定 Entity type / Claim property 词表，
 明确要求模型生成临时 `candidate_id`、用 `entity_candidate_id` 表达同批 Entity 值、
 禁止猜测持久化 Entity ID，并为 Entity 关系规定严格的 subject/value 类型和方向；
 其中作品/RFC 可使用 `issued_by`、`document_identifier`、`document_category`、
@@ -141,7 +155,7 @@ Entity 值的自引用 Claim；相同约束在逐字证据核验、稳定 ID 分
 相邻技术术语误写成 `JSON instance_of JavaScript`；同一主体的单值属性若在一个模型批次中
 出现多个值，分类器按“支持现有事实优先，其次置信度、证据覆盖、稳定 ID”只保留一个，
 Composer/Apply 前置校验与 Knowledge 写入约束继续防御不可能应用的 Proposal。
-事实候选允许为空：来源随后仍会进入 `source-import-plan-v11`，由不受固定 Entity/Claim
+事实候选允许为空：来源随后仍会进入 `source-import-plan-v12`，由不受固定 Entity/Claim
 词表限制的页面规划判断百科价值。模型提供的
 引文必须逐字存在；服务端会重新推导 rune 范围以纠正模型常见的 Unicode/字节计数偏差。
 引文重复出现时选择离模型提示位置最近的精确匹配，最近距离并列才拒绝；模糊匹配、翻译
@@ -152,7 +166,7 @@ SourceVersion 的某个 Chunk 时纠正引用；仍无法核验的证据与候�
 模型回显错误 SourceVersion 时会使用请求中的权威 ID 纠正；重复的临时候选 ID、悬空或
 歧义 Claim 引用以及非法有效期只淘汰受影响的 Claim，不再否决同批其他可核验候选。
 淘汰比例导致整体质量分低于门槛时，仅在整体分仍达到半门槛、保留候选平均置信度达到
-完整门槛且每个候选都有已核验证据时继续；Prompt Injection 始终直接拒绝。
+完整门槛且每个候选都有已核验证据时继续；疑似提示注入必须先经过上述拒绝或人工复核路径。
 来源标题或上传文件名会作为主体发现上下文，但不能单独构成证据；需求、规格和技术报告
 中的候选仍必须由 Chunk 内逐字引文支持。
 
@@ -177,7 +191,7 @@ Entity、创建新 Entity 或忽略；无法唯一匹配时不静默新建重复
 Claim 去重遍历同一主体/属性的完整现有集合，只有值和有效期都相同才视为重复；
 多值属性不会因第一条现有值不同而被误判为冲突。
 
-`source-import-plan-v11` 在事实抽取之后执行来源理解与页面路由。它先按标题、来源名、
+`source-import-plan-v12` 在事实抽取之后执行来源理解与页面路由。它先按标题、来源名、
 Entity/alias 召回已有 Page 及可替换 Block，再允许一份来源同时生成多个 `create`、
 `update`、`link` 与 `ignore` 路由。`link.related_to` 显式选择同批 create/update
 页面并携带原文证据，随后编译为稳定 `page_reference`，由投影生成反链；每个新写或改写

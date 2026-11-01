@@ -1,0 +1,17 @@
+{
+  "files": {
+    "fixed-scans.pdf": "3cd3f007bdc5472f9962bf4a3d1e53df88024bc2d2a7ca6a0bf0d8c229302760",
+    "rotated-repeat.pdf": "03b3be22a966811afc5d0bdb4b5a1c07f3ded1a600909794bcbe8ae6c2540b3d",
+    "labels.json": "6857ac32cb50921747a1eab52c228a520564beca89abfdb758bd6d67fa35870c"
+  },
+  "labels": "synthetic exact transcription assertions; no independent human quality labels",
+  "languages": [
+    "en",
+    "zh",
+    "ja",
+    "fr",
+    "ru",
+    "es",
+    "de"
+  ]
+}

@@ -3,11 +3,13 @@ package search
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"io"
 	"net/http"
 	"net/http/httptest"
 	"strings"
 	"sync"
+	"sync/atomic"
 	"testing"
 	"time"
 
@@ -185,6 +187,75 @@ func TestMeilisearchAdapter_TaskFailureDoesNotLeakKey(t *testing.T) {
 	err := adapter.Index(context.Background(), validMeiliTestDocument())
 	if err == nil || !strings.Contains(err.Error(), "internal") || strings.Contains(err.Error(), secret) {
 		t.Fatalf("unexpected sanitized error: %v", err)
+	}
+}
+
+func TestMeilisearchAdapter_StartupPollingRecoversWithinTaskDeadline(t *testing.T) {
+	t.Parallel()
+	var polls atomic.Int32
+	var settings atomic.Int32
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		switch {
+		case r.Method == http.MethodGet && r.URL.Path == "/indexes/pages":
+			writeTestJSON(w, http.StatusOK, map[string]string{"uid": "pages"})
+		case r.Method == http.MethodPatch:
+			settings.Add(1)
+			writeTestJSON(w, http.StatusAccepted, map[string]any{"taskUid": 1})
+		case r.Method == http.MethodGet && r.URL.Path == "/tasks/1":
+			switch polls.Add(1) {
+			case 1:
+				<-r.Context().Done()
+			case 2:
+				w.WriteHeader(http.StatusOK)
+				w.(http.Flusher).Flush()
+				<-r.Context().Done()
+			case 3:
+				w.Header().Set("Content-Length", "100")
+				w.WriteHeader(http.StatusOK)
+				_, _ = w.Write([]byte(`{"status":`))
+			case 4:
+				writeTestJSON(w, http.StatusServiceUnavailable, map[string]string{"code": "unavailable"})
+			case 5:
+				writeTestJSON(w, http.StatusOK, map[string]string{"status": "processing"})
+			default:
+				writeTestJSON(w, http.StatusOK, map[string]string{"status": "succeeded"})
+			}
+		default:
+			t.Errorf("unexpected request: %s %s", r.Method, r.URL.Path)
+		}
+	}))
+	defer server.Close()
+	adapter := newTestMeiliAdapter(t, server.URL, "", false)
+	adapter.client.Timeout = 50 * time.Millisecond
+	if err := adapter.EnsureIndex(context.Background()); err != nil {
+		t.Fatal(err)
+	}
+	if polls.Load() != 6 || settings.Load() != 1 {
+		t.Fatalf("polls=%d settings=%d", polls.Load(), settings.Load())
+	}
+}
+
+func TestMeilisearchAdapter_PollingDeadlineAndPermanentFailure(t *testing.T) {
+	t.Parallel()
+	for _, status := range []int{http.StatusServiceUnavailable, http.StatusUnauthorized} {
+		t.Run(http.StatusText(status), func(t *testing.T) {
+			var polls atomic.Int32
+			server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+				polls.Add(1)
+				writeTestJSON(w, status, map[string]string{"code": "failure"})
+			}))
+			defer server.Close()
+			adapter := newTestMeiliAdapter(t, server.URL, "", false)
+			adapter.taskTimeout = 30 * time.Millisecond
+			err := adapter.waitTask(context.Background(), 1)
+			if status == http.StatusServiceUnavailable {
+				if !errors.Is(err, context.DeadlineExceeded) || polls.Load() < 2 {
+					t.Fatalf("err=%v polls=%d", err, polls.Load())
+				}
+			} else if err == nil || polls.Load() != 1 {
+				t.Fatalf("err=%v polls=%d", err, polls.Load())
+			}
+		})
 	}
 }
 

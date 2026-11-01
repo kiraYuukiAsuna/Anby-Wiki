@@ -49,6 +49,8 @@ type Usage struct {
 }
 
 const (
+	ProviderCodeQuotaExhausted = "quota_exhausted"
+
 	UsageSucceeded     = "succeeded"
 	UsageFailed        = "failed"
 	UsageTimeout       = "timeout"

@@ -586,6 +586,12 @@ func (s *Service) RequireActionWithDetails(
 		return ErrInvalidJob
 	}
 	stage := StagePlan
+	var failure Failure
+	extractionReview := action == ActionQualityGate && json.Unmarshal(errorJSON, &failure) == nil &&
+		failure.Stage == StageExtract && failure.Code == ErrorQualityGate
+	if extractionReview {
+		stage = StageExtract
+	}
 	if action == ActionResolveEntities {
 		stage = StageMatch
 	}
@@ -597,13 +603,21 @@ func (s *Service) RequireActionWithDetails(
 		if job.Status != JobRunning {
 			return ErrInvalidTransition
 		}
-		if job.CurrentPlanID == nil {
+		if !extractionReview && job.CurrentPlanID == nil {
 			return ErrImportPlanNotFound
 		}
-		if _, err := s.repo.GetImportPlanByID(ctx, jobID, *job.CurrentPlanID); err != nil {
+		if !extractionReview {
+			if _, err := s.repo.GetImportPlanByID(ctx, jobID, *job.CurrentPlanID); err != nil {
+				return err
+			}
+		} else if err := s.repo.FailRunningStages(ctx, tx, runID, errorJSON); err != nil {
 			return err
 		}
-		if err := s.repo.FinishRun(ctx, tx, runID, JobSucceeded, nil); err != nil {
+		var runError []byte
+		if extractionReview {
+			runError = errorJSON
+		}
+		if err := s.repo.FinishRun(ctx, tx, runID, JobSucceeded, runError); err != nil {
 			return err
 		}
 		return s.repo.RequireAction(ctx, tx, jobID, sourceVersionID, action, stage, errorJSON)
@@ -809,6 +823,10 @@ func (s *Service) Detail(ctx context.Context, jobID uuid.UUID) (*JobDetail, erro
 		MatchReview: matchReviewFromJob(job),
 	}
 	if err := s.enrichDetailFailures(ctx, detail); err != nil {
+		return nil, err
+	}
+	detail.SafetyReview, err = s.extractionSafety(ctx, nil, job)
+	if err != nil {
 		return nil, err
 	}
 	return detail, nil

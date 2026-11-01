@@ -61,8 +61,8 @@ x-app-environment: &app-environment
   RATE_LIMIT_GENERAL_PER_MINUTE: ${RATE_LIMIT_GENERAL_PER_MINUTE:-1200}
   RATE_LIMIT_AUTH_PER_MINUTE: ${RATE_LIMIT_AUTH_PER_MINUTE:-10}
   RATE_LIMIT_UPLOAD_PER_MINUTE: ${RATE_LIMIT_UPLOAD_PER_MINUTE:-3}
-  # 默认不信任 X-Forwarded-For：按直连的 web 容器计数。
-  # 只有该对端已可靠清洗来源头时，才把它的固定 IP 列入这里。
+  # 宿主机一键部署在容器创建/回滚后写入 app 网关和 Web 的实际 IP。
+  # 单独使用 Compose 时默认不信任来源头；不得填写整个容器网段。
   TRUSTED_PROXY_IPS: ${TRUSTED_PROXY_IPS:-}
   WORKER_METRICS_ADDR: ${WORKER_METRICS_ADDR:-:9091}
   OBSERVABILITY_DB_INTERVAL: ${OBSERVABILITY_DB_INTERVAL:-30s}

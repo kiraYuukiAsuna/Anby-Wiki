@@ -64,9 +64,13 @@ func (r *Repository) GetActiveAssetByName(ctx context.Context, tx pgx.Tx, wikiID
 	return a, nil
 }
 
-// GetActiveAssetByNameForUpdate 按 (wiki_id, name) 查 active asset 并加行锁，
-// 用于序列化同一 asset 的并发上传；未命中返回 ErrAssetNotFound。
+// GetActiveAssetByNameForUpdate 先锁定名称，再查 active asset 并加行锁。
+// 名称锁也覆盖首次上传尚无行可锁的窗口；未命中返回 ErrAssetNotFound。
 func (r *Repository) GetActiveAssetByNameForUpdate(ctx context.Context, tx pgx.Tx, wikiID uuid.UUID, name string) (*Asset, error) {
+	if _, err := tx.Exec(ctx, `SELECT pg_advisory_xact_lock(
+		hashtextextended('asset:' || $1::text || ':' || $2::text, 0))`, wikiID.String(), name); err != nil {
+		return nil, fmt.Errorf("evidence: 锁定 asset 名称失败: %w", err)
+	}
 	a, err := scanAsset(r.q(tx).QueryRow(ctx, `
 		SELECT `+assetColumns+` FROM asset
 		WHERE wiki_id = $1 AND name = $2 AND status = 'active'

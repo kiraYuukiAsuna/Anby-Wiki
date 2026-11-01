@@ -6,6 +6,7 @@
  * 页面与组件禁止手写 fetch URL 或 DTO 类型，一律经由本模块导出的客户端访问后端；
  * 远端数据缓存统一走 SWR。
  */
+import { toast } from "sonner";
 import {
   AccountApi,
   AdminApi,
@@ -61,6 +62,29 @@ export function makeRequestId(): string {
   return clientUUID();
 }
 
+const rateLimitDeadlines = new WeakMap<Response, number>();
+
+/** 响应到达时记录的恢复时刻，供页面稳定显示。 */
+export function rateLimitRetryAt(response: Response): number | undefined {
+  return rateLimitDeadlines.get(response);
+}
+
+/** Retry-After 支持秒数和 HTTP 日期；缺失时等待一个默认限流窗口。 */
+export function retryAfterSeconds(response: Response): number {
+  const recorded = rateLimitRetryAt(response);
+  if (recorded !== undefined) {
+    return Math.max(1, Math.ceil((recorded - Date.now()) / 1000));
+  }
+  const value = response.headers.get("Retry-After")?.trim();
+  if (value && /^\d+$/.test(value)) {
+    return Math.max(1, Number(value));
+  }
+  const deadline = value ? Date.parse(value) : NaN;
+  return Number.isFinite(deadline)
+    ? Math.max(1, Math.ceil((deadline - Date.now()) / 1000))
+    : 60;
+}
+
 /** 为每个请求注入请求 ID 和当前 Wiki 上下文。 */
 const requestIdMiddleware: Middleware = {
   pre: async (context) => {
@@ -77,6 +101,18 @@ const requestIdMiddleware: Middleware = {
         headers,
       },
     };
+  },
+  post: async ({ response }) => {
+    if (response.status === 429) {
+      rateLimitDeadlines.set(response, Date.now() + retryAfterSeconds(response) * 1000);
+      if (typeof window !== "undefined") {
+        toast.warning("请求过于频繁", {
+          id: "api-rate-limit",
+          description: `请在 ${retryAfterSeconds(response)} 秒后重试。`,
+        });
+      }
+    }
+    return response;
   },
 };
 

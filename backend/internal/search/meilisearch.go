@@ -4,8 +4,10 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
+	"net"
 	"net/http"
 	"net/url"
 	"strconv"
@@ -484,17 +486,29 @@ func (a *MeilisearchAdapter) waitTask(ctx context.Context, uid int64) error {
 	}
 	for {
 		var task meiliTask
-		if _, err := a.do(ctx, http.MethodGet, "/tasks/"+strconv.FormatInt(uid, 10), nil, &task); err != nil {
+		status, err := a.do(ctx, http.MethodGet, "/tasks/"+strconv.FormatInt(uid, 10), nil, &task)
+		if ctx.Err() != nil {
+			return ctx.Err()
+		}
+		// Polling is read-only. A single request timeout or temporary server
+		// failure must not abandon a task that is still running remotely.
+		var transportErr net.Error
+		retryable := status == 0 || status == http.StatusRequestTimeout ||
+			status == http.StatusTooManyRequests || status >= http.StatusInternalServerError ||
+			(status < http.StatusBadRequest && (errors.As(err, &transportErr) || errors.Is(err, io.ErrUnexpectedEOF)))
+		if err != nil && !retryable {
 			return err
 		}
-		switch task.Status {
-		case "succeeded":
-			return nil
-		case "failed", "canceled":
-			if task.Error != nil {
-				return fmt.Errorf("Meilisearch task %d %s: %s", uid, task.Status, task.Error.Code)
+		if err == nil {
+			switch task.Status {
+			case "succeeded":
+				return nil
+			case "failed", "canceled":
+				if task.Error != nil {
+					return fmt.Errorf("Meilisearch task %d %s: %s", uid, task.Status, task.Error.Code)
+				}
+				return fmt.Errorf("Meilisearch task %d %s", uid, task.Status)
 			}
-			return fmt.Errorf("Meilisearch task %d %s", uid, task.Status)
 		}
 		timer := time.NewTimer(a.taskPollInterval)
 		select {

@@ -26,7 +26,7 @@ import (
 const (
 	ImportPlanSchemaURL           = "https://anby.wiki/schemas/import-plan/v1/plan.schema.json"
 	ImportPlanGenerationSchemaURL = "https://anby.wiki/schemas/import-plan-generation/v1/plan.schema.json"
-	ImportPlanPromptKey           = "source-import-plan-v11"
+	ImportPlanPromptKey           = "source-import-plan-v12"
 	planBatchConcurrency          = 3
 	planLeafValidationAttempts    = 3
 
@@ -246,6 +246,7 @@ type PlanParams struct {
 	Model                string
 	MaxInputTokens       int
 	QualityThreshold     float64
+	SafetyReviewed       bool
 	PlanningInput        json.RawMessage
 	ActorID              uuid.UUID
 	InputHash            string
@@ -292,10 +293,16 @@ func (p *PagePlanner) Plan(ctx context.Context, params PlanParams) (*PlanResult,
 			return nil, err
 		}
 	}
+	if DetectPromptInjection(chunkTexts(params.Chunks)) {
+		return nil, ErrQualityGate
+	}
 	if existing, err := p.repo.GetImportPlan(ctx, *params.ImportJobID, params.InputHash); err == nil {
 		var plan ImportPlan
 		if err := json.Unmarshal(existing.PlanJSON, &plan); err != nil {
 			return nil, err
+		}
+		if plan.PromptInjectionDetected && !params.SafetyReviewed {
+			return nil, ErrQualityGate
 		}
 		normalizeImportPlanCollections(&plan)
 		return &PlanResult{Record: existing, Plan: &plan, Reused: true}, nil
@@ -317,10 +324,7 @@ func (p *PagePlanner) Plan(ctx context.Context, params PlanParams) (*PlanResult,
 	}
 	plan := generated.Plan
 	planCoverage := generated.coverage
-	if DetectPromptInjection(chunkTexts(params.Chunks)) {
-		plan.PromptInjectionDetected = true
-	}
-	if plan.PromptInjectionDetected {
+	if plan.PromptInjectionDetected && !params.SafetyReviewed {
 		return nil, ErrQualityGate
 	}
 	collisionPages, err := p.resolveCreateCollisions(ctx, params, plan)

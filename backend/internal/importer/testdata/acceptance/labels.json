@@ -1,0 +1,76 @@
+{
+  "version": 1,
+  "checks": [
+    {
+      "page": 1,
+      "phrases": [
+        "This report records measured values. Preserve the original wording.",
+        "中文说明：这些数值是固定测试数据，不是生产指标。",
+        "日本語：表の数値と注記をそのまま保存します。",
+        "Français : les valeurs doivent rester exactes.",
+        "Code",
+        "Latency / 延迟",
+        "Value",
+        "M-01",
+        "First / 第一",
+        "17.25 ms",
+        "M-02",
+        "Second / 第二",
+        "28.50 ms"
+      ],
+      "small_phrase": "Tiny note TN-731: tolerance ±0.05 ms; do not round 17.25."
+    },
+    {
+      "page": 2,
+      "phrases": [
+        "Русский: значения таблицы нельзя округлять.",
+        "Español: conservar los números y las unidades.",
+        "Deutsch: Zahlen und Einheiten unverändert übernehmen.",
+        "Code",
+        "Throughput",
+        "Unit",
+        "R-11",
+        "123.45",
+        "req/s",
+        "R-12",
+        "678.90",
+        "req/s"
+      ],
+      "small_phrase": "Small note SN-842: 0.125% error; 2026-11-01."
+    },
+    {
+      "page": 3,
+      "phrases": [
+        "This table continues on the next page.",
+        "表格在下一页继续，列名和单位保持一致。",
+        "Code",
+        "Time",
+        "Unit",
+        "C-21",
+        "3.141",
+        "seconds",
+        "C-22",
+        "2.718",
+        "seconds"
+      ],
+      "small_phrase": "Footnote CF-953: keep 3 decimal places."
+    },
+    {
+      "page": 4,
+      "phrases": [
+        "Continuation of the preceding table.",
+        "上一页表格的续表。",
+        "Code",
+        "Time",
+        "Unit",
+        "C-23",
+        "1.414",
+        "seconds",
+        "C-24",
+        "1.732",
+        "seconds"
+      ],
+      "small_phrase": "Footnote CF-964: same units as the previous page."
+    }
+  ]
+}

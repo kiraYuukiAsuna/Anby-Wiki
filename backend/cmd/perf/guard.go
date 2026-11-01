@@ -27,7 +27,7 @@ func validateDatabaseIdentity(name, marker, environment string) error {
 	return nil
 }
 
-func verifyPerformanceDatabase(ctx context.Context, pool *pgxpool.Pool) (string, error) {
+func verifyPerformanceDatabase(ctx context.Context, pool *pgxpool.Pool, requireEmpty bool) (string, error) {
 	var name, marker, environment string
 	err := pool.QueryRow(ctx, `
 		SELECT current_database(),
@@ -45,7 +45,7 @@ func verifyPerformanceDatabase(ctx context.Context, pool *pgxpool.Pool) (string,
 	if err := pool.QueryRow(ctx, `SELECT count(*) FROM page`).Scan(&pages); err != nil {
 		return "", fmt.Errorf("database is not migrated: %w", err)
 	}
-	if pages != 0 {
+	if requireEmpty && pages != 0 {
 		return "", fmt.Errorf("performance database is not empty (%d pages); recreate it", pages)
 	}
 	return name, nil

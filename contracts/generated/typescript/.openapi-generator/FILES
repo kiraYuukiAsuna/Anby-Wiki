@@ -179,6 +179,9 @@ docs/ImportPlannedBlock.md
 docs/ImportPlannedCollectionMembership.md
 docs/ImportPlanningInput.md
 docs/ImportRun.md
+docs/ImportSafetyDecision.md
+docs/ImportSafetyReview.md
+docs/ImportSafetySourceSample.md
 docs/ImportSkippedClaimReview.md
 docs/ImportStageRun.md
 docs/ImportsApi.md
@@ -295,6 +298,7 @@ docs/ReplanImportJobRequest.md
 docs/ResolveLinkPreviewRequest.md
 docs/ResolveMergeConflictRequest.md
 docs/ReviewDecisionRequest.md
+docs/ReviewImportSafetyRequest.md
 docs/ReviewTask.md
 docs/ReviewTaskList.md
 docs/Revision.md
@@ -502,6 +506,9 @@ models/ImportPlannedBlock.ts
 models/ImportPlannedCollectionMembership.ts
 models/ImportPlanningInput.ts
 models/ImportRun.ts
+models/ImportSafetyDecision.ts
+models/ImportSafetyReview.ts
+models/ImportSafetySourceSample.ts
 models/ImportSkippedClaimReview.ts
 models/ImportStageRun.ts
 models/LinkPreviewMetadata.ts
@@ -612,6 +619,7 @@ models/ReplanImportJobRequest.ts
 models/ResolveLinkPreviewRequest.ts
 models/ResolveMergeConflictRequest.ts
 models/ReviewDecisionRequest.ts
+models/ReviewImportSafetyRequest.ts
 models/ReviewTask.ts
 models/ReviewTaskList.ts
 models/Revision.ts

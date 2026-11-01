@@ -23,6 +23,9 @@ import (
 const (
 	defaultRequestBodyLimit int64 = 2 << 20
 	uploadRequestBodyLimit  int64 = importer.DefaultMaxSourceBytes + (1 << 20)
+	generalBucket                 = "general"
+	authBucket                    = "auth"
+	uploadBucket                  = "upload"
 )
 
 // requestIDHeader 透传/回写请求 ID 的响应头。
@@ -261,16 +264,19 @@ type RateLimitConfig struct {
 	TrustedProxies   map[string]struct{}
 }
 
-// bucketFor classifies a request path into a quota bucket. Auth and upload
-// endpoints get far tighter quotas than ordinary reads and writes.
-func bucketFor(path string) (string, bool) {
+// bucketFor reserves the tight auth quota for credential attempts. Session
+// reads and credential management share the ordinary API quota.
+func bucketFor(method, path string) (string, bool) {
 	switch {
-	case path == "/api/v1/import-jobs/uploads":
-		return "upload", true
-	case strings.HasPrefix(path, "/api/v1/auth/"):
-		return "auth", true
+	case method == http.MethodPost && path == "/api/v1/import-jobs/uploads":
+		return uploadBucket, true
+	case method == http.MethodPost &&
+		(path == "/api/v1/auth/login" ||
+			path == "/api/v1/auth/register" ||
+			path == "/api/v1/auth/cli/exchange"):
+		return authBucket, true
 	case strings.HasPrefix(path, "/api/"):
-		return "general", true
+		return generalBucket, true
 	default:
 		// Probes and /metrics are never limited.
 		return "", false
@@ -286,16 +292,16 @@ func bucketFor(path string) (string, bool) {
 func RateLimit(limiter *ratelimit.Limiter, cfg RateLimitConfig, logger *slog.Logger) func(http.Handler) http.Handler {
 	return func(next http.Handler) http.Handler {
 		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-			bucket, limited := bucketFor(r.URL.Path)
+			bucket, limited := bucketFor(r.Method, r.URL.Path)
 			if !limited {
 				next.ServeHTTP(w, r)
 				return
 			}
 			limit := cfg.GeneralPerMinute
 			switch bucket {
-			case "auth":
+			case authBucket:
 				limit = cfg.AuthPerMinute
-			case "upload":
+			case uploadBucket:
 				limit = cfg.UploadPerMinute
 			}
 			client := ratelimit.ClientIP(r, cfg.TrustedProxies)
@@ -314,7 +320,7 @@ func RateLimit(limiter *ratelimit.Limiter, cfg RateLimitConfig, logger *slog.Log
 				w.Header().Set("X-RateLimit-Remaining", strconv.Itoa(decision.Remaining))
 			}
 			if !decision.Allowed {
-				retry := int(decision.RetryAfter.Seconds())
+				retry := int((decision.RetryAfter + time.Second - 1) / time.Second)
 				if retry < 1 {
 					retry = 1
 				}

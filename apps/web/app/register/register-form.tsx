@@ -81,12 +81,12 @@ export function RegisterForm() {
       toast.success(`账号创建成功，已登录为 ${result.displayName}`);
       router.replace(next);
     } catch (error: unknown) {
+      // The shared client displays Retry-After for rate-limited requests.
+      if (error instanceof ResponseError && error.response.status === 429) return;
       if (error instanceof ResponseError && error.response.status === 409) {
         toast.error("用户名或邮箱已被使用");
       } else if (error instanceof ResponseError && error.response.status === 403) {
         toast.error("当前站点已关闭账号注册");
-      } else if (error instanceof ResponseError && error.response.status === 429) {
-        toast.error("尝试过于频繁", { description: "请稍后再试。" });
       } else {
         toast.error("注册失败，请稍后重试");
       }

@@ -70,9 +70,29 @@ Compose 会把这些值注入容器环境，Docker 管理员可通过 `docker in
 必须与 API 收到的 Host 一致。部署后验收同源写入、跨来源拒绝、CLI 与协作路径。
 Session cookie 保持 HttpOnly、Secure、SameSite=Lax；COOP/CORP 仍按 ADR-0020 移除。
 
-默认不信任 `X-Forwarded-For`，因此限流按 API 看到的直连对端计数。只有上游已可靠
-清洗来源头，且 API 直连对端 IP 已明确配置到 `TRUSTED_PROXY_IPS` 时，才能按最终
-客户端 IP 分桶。
+`POST /auth/login`、`/auth/register`、`/auth/cli/exchange` 共用认证尝试额度
+（默认每 IP 每分钟 10 次）；会话读取与 CLI 管理使用普通 API 额度（1200 次），
+上传使用独立额度（3 次）。429 不修改 Session Cookie，返回 `Retry-After`。
+
+生产 Nginx 在 API 和 Web 请求上用 `$remote_addr` 覆盖 `X-Forwarded-For`；
+Web 的 Server Component 调用继续转发这份地址。一键部署在容器创建后从当前
+Compose app bridge 发现网关及 Web 的精确 IP，写入 `TRUSTED_PROXY_IPS`，
+随后刷新 API/Worker；失败回滚后再次发现和刷新。不会信任整个容器网段。
+独立 Compose/其他代理拓扑默认仍按直连对端计数，只有清洗来源头且明确配置了
+可信直连对端时才会使用最终客户端 IP。非法转发链回退直连对端。
+
+绕过一键入口在该宿主机 Nginx 拓扑直接重建 Web、执行底层 deploy/rollback 或恢复
+环境文件后，须重新发现代理地址并应用：
+
+```sh
+python3 scripts/production_environment.py proxy-ips "$DEPLOY_ENV_FILE" infra/deploy/compose.production.yml
+python3 scripts/production_environment.py exec "$DEPLOY_ENV_FILE" \
+  docker compose --env-file "$DEPLOY_ENV_FILE" -f infra/deploy/compose.production.yml \
+  up -d --no-deps --wait --wait-timeout 720 api worker
+```
+
+验收时确认两名客户端的额度互不影响、密集导航不消耗认证尝试额度，以及伪造来源头
+不能绕过限流；未部署的新逻辑不能视为正式域名已通过验收。
 
 生产 Nginx 的 API location 必须保持 `proxy_request_buffering off`，避免接近
 300 MiB 的上传先写入宿主机临时文件；`client_max_body_size`、Go 全局请求体限制和

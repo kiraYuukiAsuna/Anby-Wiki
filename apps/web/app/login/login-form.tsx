@@ -65,10 +65,10 @@ export function LoginForm() {
       toast.success(`已登录为 ${result.displayName}`);
       redirectToNext();
     } catch (error: unknown) {
+      // The shared client displays Retry-After for rate-limited requests.
+      if (error instanceof ResponseError && error.response.status === 429) return;
       if (error instanceof ResponseError && error.response.status === 401) {
         toast.error("用户名、邮箱或密码错误");
-      } else if (error instanceof ResponseError && error.response.status === 429) {
-        toast.error("尝试过于频繁", { description: "请稍后再试。" });
       } else {
         toast.error("登录失败，请稍后重试");
       }

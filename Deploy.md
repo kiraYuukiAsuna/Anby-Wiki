@@ -171,6 +171,9 @@ RustFS Console 关闭；官方 `1.0.1` 镜像固定 digest，使用独立凭据�
 进程默认同时处理一个上传，避免多个 300 MiB 请求叠加磁盘和内存峰值。
 
 Nginx 模板位于 `infra/deploy/nginx/`；安装前先检查，失败恢复原站点配置。
+该模板用 `$remote_addr` 覆盖 API 和 Web 的来源头；一键部署在容器创建和失败回滚后
+自动刷新 `.env` 中的精确可信代理 IP。绕过一键入口手工重建 Web 或恢复环境文件时，
+按 [部署 Runbook](Docs/runbooks/deployment.md) 重新发现并应用代理配置。
 Certbot 使用 webroot 验证，证书位于 `/etc/letsencrypt/live/<域名>/`，通过
 `certbot.timer` 自动续期，成功续期后检查并 reload Nginx。80 端口的 ACME 路径需持续可用。
 
@@ -262,7 +265,7 @@ Compose 会把机密注入容器环境，因此具有 Docker 管理权限的人�
 | `WEB_BIND` `WEB_PORT` | 宿主机端口；默认 `127.0.0.1:60019` 只绑本机 |
 | `API_HOST_PORT` | API 的宿主机回环端口；默认 `60018`，绑定地址不可配置为公网 |
 | `IMPORT_UPLOAD_MAX_CONCURRENCY` | 单 API 进程同时落盘并校验的上传数；目标机默认 `1` |
-| `TRUSTED_PROXY_IPS` | 仅在 API 直连对端可信且其传来的 `X-Forwarded-For` 已被清洗时填写；默认留空最安全 |
+| `TRUSTED_PROXY_IPS` | 宿主机一键部署自动写入 app 网关和 Web 的实际 IP，并在失败回滚后刷新；其他拓扑只填写已清洗来源头的精确代理 IP，不支持 CIDR |
 
 环境文件使用逐行 `KEY=VALUE` 的 dotenv 格式，支持单/双引号，不执行 Shell，不进行
 变量插值；不支持多行值或行尾注释。生产 `DATABASE_URL` 由 Compose
@@ -460,6 +463,11 @@ go test ./internal/wikicli \
 
 4. **限流为应用层 + Redis 固定窗口。**
    Redis 不可达时**放行**并记日志（可用性优先于严格限流），
-   因此限流不能作为唯一的滥用防线。默认不信任 `X-Forwarded-For`，
-   在当前 Web → API 拓扑下会按 Web 容器这个直连对端计数；只有上游已可靠清洗
-   来源头、且 API 对端被列入 `TRUSTED_PROXY_IPS` 后，才会按最终客户端 IP 分桶。
+   因此限流不能作为唯一的滥用防线。每个客户端 IP 的默认额度为：登录、注册及
+   CLI 凭证兑换共 10 次/分钟，普通 API（含会话和 CLI 管理）1200 次/分钟，
+   上传 3 次/分钟。429 返回向上取整的 `Retry-After`；前端保留已有会话并显示恢复
+   时间，Session 自动重试遵循该响应头，只有实际 401 才按未登录处理。
+   Nginx 用 `$remote_addr` 覆盖 API 和 Web 的 `X-Forwarded-For`，Web 的服务端
+   请求继续传递清洗后的地址。一键部署只信任实际 app 网关及 Web IP，容器更新和
+   失败回滚后刷新；其他拓扑留空则按直连对端计数。API 从右往左选择最近的非可信
+   地址，畸形链回退直连对端，并统一 IPv6/IPv4 映射格式。

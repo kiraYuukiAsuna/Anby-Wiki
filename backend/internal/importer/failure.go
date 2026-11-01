@@ -195,7 +195,7 @@ func newFailure(stage, code string, cause error) Failure {
 			"kernel_http_error", "kernel_invalid_response", "invalid_schema",
 			"invalid_structured_output", "provider_error", "timeout",
 			"authentication_failed", "rate_limited", "provider_unavailable",
-			"unauthorized", "invalid_image":
+			"unauthorized", "invalid_image", ai.ProviderCodeQuotaExhausted:
 			details.ProviderCode = provider.Code
 		default:
 			if strings.HasPrefix(provider.Code, "http_") {
@@ -212,8 +212,12 @@ func newFailure(stage, code string, cause error) Failure {
 			failure.Suggestion = "请检查个人中心的模型 API Key 和访问权限；AI Kernel 认证失败时请联系管理员。修复后重试。"
 			failure.Retryable = false
 		case "rate_limited":
-			failure.Message = "模型服务限流或额度不足。"
-			failure.Suggestion = "请检查模型额度，或等待限流解除后重试。"
+			failure.Message = "模型服务暂时限流。"
+			failure.Suggestion = "请等待限流解除后重试。"
+		case ai.ProviderCodeQuotaExhausted:
+			failure.Message = "模型服务额度已耗尽。"
+			failure.Suggestion = "请补充模型额度或调整供应商配额，恢复额度后重试。"
+			failure.Retryable = false
 		case "provider_unavailable", "kernel_unavailable":
 			failure.Message = "模型服务暂时不可用。"
 			failure.Suggestion = "请稍后重试，或检查模型服务状态。"
@@ -289,7 +293,7 @@ func extractionFailure(extracted *ExtractResult, threshold float64) Failure {
 	}
 	if candidates.PromptInjectionDetected {
 		failure.Message = "提取结果标记了疑似提示注入，安全门禁已阻止后续规划。"
-		failure.Suggestion = "请检查来源中要求模型扮演角色、忽略规则或执行指令的内容；角色设定可以改为第三人称资料后重新上传。该标记可能误判，需核查原文。相同来源会复用原提取结果，直接重试或重新规划无法清除这个标记。"
+		failure.Suggestion = "请人工核查原文。角色设定、引用示例或对指令的讨论可能误报；有审核权限的真人可填写理由确认误报并继续。直接要求导入模型改规则、泄露信息或跳过审核的来源不能放行。直接重试不会取得人工复核授权。"
 	}
 	return failure
 }
