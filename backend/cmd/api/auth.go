@@ -68,6 +68,7 @@ type authSessionResponse struct {
 	DisplayName     string               `json:"display_name"`
 	Method          string               `json:"method"`
 	Wikis           []authWikiMembership `json:"wikis"`
+	SystemAdmin     bool                 `json:"system_admin"`
 }
 
 type authWikiMembership struct {
@@ -104,6 +105,9 @@ func (a *AuthAPI) register(w http.ResponseWriter, r *http.Request) {
 		httpx.WriteError(w, r, http.StatusInternalServerError, httpx.CodeInternal, "无法创建账号")
 		return
 	}
+	if !a.recordSessionDevice(w, r, session) {
+		return
+	}
 	a.setSessionCookie(w, session)
 	writeAuthResult(w, http.StatusCreated, session)
 }
@@ -123,6 +127,13 @@ func (a *AuthAPI) login(w http.ResponseWriter, r *http.Request) {
 	}
 	if err != nil {
 		httpx.WriteError(w, r, http.StatusInternalServerError, httpx.CodeInternal, "无法创建会话")
+		return
+	}
+	if session.MFAChallenge != "" {
+		writeAuthResult(w, http.StatusOK, session)
+		return
+	}
+	if !a.recordSessionDevice(w, r, session) {
 		return
 	}
 	a.setSessionCookie(w, session)
@@ -175,7 +186,14 @@ func (a *AuthAPI) session(w http.ResponseWriter, r *http.Request) {
 		httpx.WriteError(w, r, http.StatusInternalServerError, httpx.CodeInternal, "无法读取 Wiki 列表")
 		return
 	}
-	httpx.WriteJSON(w, http.StatusOK, toAuthSessionResponse(principal, memberships))
+	admin, err := a.service.IsSystemAdmin(r.Context(), principal.ActorID)
+	if err != nil {
+		securityError(w, r, err)
+		return
+	}
+	response := toAuthSessionResponse(principal, memberships)
+	response.SystemAdmin = admin
+	httpx.WriteJSON(w, http.StatusOK, response)
 }
 
 func (a *AuthAPI) logout(w http.ResponseWriter, r *http.Request) {
@@ -269,11 +287,22 @@ func (a *AuthAPI) setSessionCookie(w http.ResponseWriter, session authdomain.Ses
 }
 
 func writeAuthResult(w http.ResponseWriter, status int, session authdomain.Session) {
-	httpx.WriteJSON(w, status, map[string]string{
+	httpx.WriteJSON(w, status, map[string]any{
 		"actor_id":          session.ActorID.String(),
 		"wiki_id":           session.WikiID.String(),
 		"wiki_name":         session.WikiName,
 		"main_namespace_id": session.MainNamespaceID.String(),
 		"display_name":      session.DisplayName,
+		"mfa_required":      session.MFAChallenge != "",
+		"challenge_token":   session.MFAChallenge,
 	})
+}
+
+func (a *AuthAPI) recordSessionDevice(w http.ResponseWriter, r *http.Request, session authdomain.Session) bool {
+	if err := a.service.RecordSessionDevice(r.Context(), session.Token, r.UserAgent()); err != nil {
+		_ = a.service.RevokeSession(r.Context(), session.Token)
+		securityError(w, r, err)
+		return false
+	}
+	return true
 }

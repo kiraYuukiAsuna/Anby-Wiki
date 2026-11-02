@@ -6,11 +6,16 @@ All URIs are relative to *http://localhost:3000*
 |------------- | ------------- | -------------|
 | [**deleteAdminUser**](AdminApi.md#deleteadminuser) | **DELETE** /api/v1/admin/users/{actor_id} | 管理员删除本地注册用户 |
 | [**getAIConfig**](AdminApi.md#getaiconfig) | **GET** /api/v1/admin/ai-config | 读取站点 AI 运行时配置 |
+| [**getSystemAccounts**](AdminApi.md#getsystemaccounts) | **GET** /api/v1/system/accounts | 系统管理员读取账号安全概况与系统安全审计 |
+| [**getSystemMail**](AdminApi.md#getsystemmail) | **GET** /api/v1/system/mail | 系统管理员读取全站 SMTP 配置，密码永不返回 |
 | [**grantAdminUserRole**](AdminApi.md#grantadminuserrole) | **PUT** /api/v1/admin/users/{actor_id}/roles/{role_key} | 管理员授予用户角色 |
 | [**listAdminUsers**](AdminApi.md#listadminusers) | **GET** /api/v1/admin/users | 管理员列出本地用户与角色 |
 | [**revokeAdminUserRole**](AdminApi.md#revokeadminuserrole) | **DELETE** /api/v1/admin/users/{actor_id}/roles/{role_key} | 管理员撤销用户角色 |
+| [**setSystemAdministrator**](AdminApi.md#setsystemadministratoroperation) | **PUT** /api/v1/system/administrators | 重新认证后授予或撤销独立的系统管理员权限 |
 | [**testAIConfig**](AdminApi.md#testaiconfig) | **POST** /api/v1/admin/ai-config/test | 使用已保存配置执行最小结构化模型请求 |
+| [**testSystemMail**](AdminApi.md#testsystemmail) | **POST** /api/v1/system/mail/test | 重新认证后向系统管理员本人的邮箱发送测试邮件 |
 | [**updateAIConfig**](AdminApi.md#updateaiconfigoperation) | **PUT** /api/v1/admin/ai-config | 保存站点 AI 运行时配置 |
+| [**updateSystemMail**](AdminApi.md#updatesystemmailoperation) | **PUT** /api/v1/system/mail | 系统管理员重新认证后保存 SMTP 配置 |
 
 
 
@@ -156,6 +161,134 @@ This endpoint does not need any parameter.
 | **401** | 未认证 |  -  |
 | **403** | 无操作权限或浏览器写请求来源不受信任。 非安全方法统一使用 Go CrossOriginProtection 校验浏览器来源；优先检查 Sec-Fetch-Site，缺失时比较 Origin 与 Host。无来源头的 CLI/服务端调用 继续执行原有认证和授权。  |  -  |
 | **500** | 服务端内部错误 |  -  |
+
+[[Back to top]](#) [[Back to API list]](../README.md#api-endpoints) [[Back to Model list]](../README.md#models) [[Back to README]](../README.md)
+
+
+## getSystemAccounts
+
+> SystemAccounts getSystemAccounts()
+
+系统管理员读取账号安全概况与系统安全审计
+
+不返回密码、密钥、令牌或私人 Wiki 内容。
+
+### Example
+
+```ts
+import {
+  Configuration,
+  AdminApi,
+} from '';
+import type { GetSystemAccountsRequest } from '';
+
+async function example() {
+  console.log("🚀 Testing  SDK...");
+  const config = new Configuration({
+    // To configure API key authorization: sessionCookie
+    apiKey: "YOUR API KEY",
+  });
+  const api = new AdminApi(config);
+
+  try {
+    const data = await api.getSystemAccounts();
+    console.log(data);
+  } catch (error) {
+    console.error(error);
+  }
+}
+
+// Run the test
+example().catch(console.error);
+```
+
+### Parameters
+
+This endpoint does not need any parameter.
+
+### Return type
+
+[**SystemAccounts**](SystemAccounts.md)
+
+### Authorization
+
+[sessionCookie](../README.md#sessionCookie)
+
+### HTTP request headers
+
+- **Content-Type**: Not defined
+- **Accept**: `application/json`
+
+
+### HTTP response details
+| Status code | Description | Response headers |
+|-------------|-------------|------------------|
+| **200** | 安全概况 |  -  |
+| **401** | 未认证 |  -  |
+| **403** | 无操作权限或浏览器写请求来源不受信任。 非安全方法统一使用 Go CrossOriginProtection 校验浏览器来源；优先检查 Sec-Fetch-Site，缺失时比较 Origin 与 Host。无来源头的 CLI/服务端调用 继续执行原有认证和授权。  |  -  |
+
+[[Back to top]](#) [[Back to API list]](../README.md#api-endpoints) [[Back to Model list]](../README.md#models) [[Back to README]](../README.md)
+
+
+## getSystemMail
+
+> SystemMailConfig getSystemMail()
+
+系统管理员读取全站 SMTP 配置，密码永不返回
+
+### Example
+
+```ts
+import {
+  Configuration,
+  AdminApi,
+} from '';
+import type { GetSystemMailRequest } from '';
+
+async function example() {
+  console.log("🚀 Testing  SDK...");
+  const config = new Configuration({
+    // To configure API key authorization: sessionCookie
+    apiKey: "YOUR API KEY",
+  });
+  const api = new AdminApi(config);
+
+  try {
+    const data = await api.getSystemMail();
+    console.log(data);
+  } catch (error) {
+    console.error(error);
+  }
+}
+
+// Run the test
+example().catch(console.error);
+```
+
+### Parameters
+
+This endpoint does not need any parameter.
+
+### Return type
+
+[**SystemMailConfig**](SystemMailConfig.md)
+
+### Authorization
+
+[sessionCookie](../README.md#sessionCookie)
+
+### HTTP request headers
+
+- **Content-Type**: Not defined
+- **Accept**: `application/json`
+
+
+### HTTP response details
+| Status code | Description | Response headers |
+|-------------|-------------|------------------|
+| **200** | 邮件配置 |  -  |
+| **401** | 未认证 |  -  |
+| **403** | 无操作权限或浏览器写请求来源不受信任。 非安全方法统一使用 Go CrossOriginProtection 校验浏览器来源；优先检查 Sec-Fetch-Site，缺失时比较 Origin 与 Host。无来源头的 CLI/服务端调用 继续执行原有认证和授权。  |  -  |
 
 [[Back to top]](#) [[Back to API list]](../README.md#api-endpoints) [[Back to Model list]](../README.md#models) [[Back to README]](../README.md)
 
@@ -400,6 +533,81 @@ example().catch(console.error);
 [[Back to top]](#) [[Back to API list]](../README.md#api-endpoints) [[Back to Model list]](../README.md#models) [[Back to README]](../README.md)
 
 
+## setSystemAdministrator
+
+> setSystemAdministrator(setSystemAdministratorRequest)
+
+重新认证后授予或撤销独立的系统管理员权限
+
+最后一个有效系统管理员不能被撤销；Wiki 管理员不自动获得系统权限。
+
+### Example
+
+```ts
+import {
+  Configuration,
+  AdminApi,
+} from '';
+import type { SetSystemAdministratorOperationRequest } from '';
+
+async function example() {
+  console.log("🚀 Testing  SDK...");
+  const config = new Configuration({
+    // To configure API key authorization: sessionCookie
+    apiKey: "YOUR API KEY",
+  });
+  const api = new AdminApi(config);
+
+  const body = {
+    // SetSystemAdministratorRequest
+    setSystemAdministratorRequest: ...,
+  } satisfies SetSystemAdministratorOperationRequest;
+
+  try {
+    const data = await api.setSystemAdministrator(body);
+    console.log(data);
+  } catch (error) {
+    console.error(error);
+  }
+}
+
+// Run the test
+example().catch(console.error);
+```
+
+### Parameters
+
+
+| Name | Type | Description  | Notes |
+|------------- | ------------- | ------------- | -------------|
+| **setSystemAdministratorRequest** | [SetSystemAdministratorRequest](SetSystemAdministratorRequest.md) |  | |
+
+### Return type
+
+`void` (Empty response body)
+
+### Authorization
+
+[sessionCookie](../README.md#sessionCookie)
+
+### HTTP request headers
+
+- **Content-Type**: `application/json`
+- **Accept**: `application/json`
+
+
+### HTTP response details
+| Status code | Description | Response headers |
+|-------------|-------------|------------------|
+| **204** | 权限已更新 |  -  |
+| **400** | 请求格式错误 |  -  |
+| **403** | 无操作权限或浏览器写请求来源不受信任。 非安全方法统一使用 Go CrossOriginProtection 校验浏览器来源；优先检查 Sec-Fetch-Site，缺失时比较 Origin 与 Host。无来源头的 CLI/服务端调用 继续执行原有认证和授权。  |  -  |
+| **409** | 并发冲突（含陈旧基线、幂等键冲突） |  -  |
+| **429** | 触发限流，需退避后重试 |  * Retry-After - 建议等待的秒数 <br>  * X-RateLimit-Limit - 当前窗口配额 <br>  * X-RateLimit-Remaining - 当前窗口剩余配额 <br>  |
+
+[[Back to top]](#) [[Back to API list]](../README.md#api-endpoints) [[Back to Model list]](../README.md#models) [[Back to README]](../README.md)
+
+
 ## testAIConfig
 
 > AIConfigTestResult testAIConfig()
@@ -466,6 +674,79 @@ This endpoint does not need any parameter.
 | **409** | 并发冲突（含陈旧基线、幂等键冲突） |  -  |
 | **502** | 服务端内部错误 |  -  |
 | **504** | 服务端内部错误 |  -  |
+
+[[Back to top]](#) [[Back to API list]](../README.md#api-endpoints) [[Back to Model list]](../README.md#models) [[Back to README]](../README.md)
+
+
+## testSystemMail
+
+> testSystemMail(securityProofRequest)
+
+重新认证后向系统管理员本人的邮箱发送测试邮件
+
+### Example
+
+```ts
+import {
+  Configuration,
+  AdminApi,
+} from '';
+import type { TestSystemMailRequest } from '';
+
+async function example() {
+  console.log("🚀 Testing  SDK...");
+  const config = new Configuration({
+    // To configure API key authorization: sessionCookie
+    apiKey: "YOUR API KEY",
+  });
+  const api = new AdminApi(config);
+
+  const body = {
+    // SecurityProofRequest
+    securityProofRequest: ...,
+  } satisfies TestSystemMailRequest;
+
+  try {
+    const data = await api.testSystemMail(body);
+    console.log(data);
+  } catch (error) {
+    console.error(error);
+  }
+}
+
+// Run the test
+example().catch(console.error);
+```
+
+### Parameters
+
+
+| Name | Type | Description  | Notes |
+|------------- | ------------- | ------------- | -------------|
+| **securityProofRequest** | [SecurityProofRequest](SecurityProofRequest.md) |  | |
+
+### Return type
+
+`void` (Empty response body)
+
+### Authorization
+
+[sessionCookie](../README.md#sessionCookie)
+
+### HTTP request headers
+
+- **Content-Type**: `application/json`
+- **Accept**: `application/json`
+
+
+### HTTP response details
+| Status code | Description | Response headers |
+|-------------|-------------|------------------|
+| **204** | 邮件已提交 SMTP |  -  |
+| **400** | 请求格式错误 |  -  |
+| **403** | 无操作权限或浏览器写请求来源不受信任。 非安全方法统一使用 Go CrossOriginProtection 校验浏览器来源；优先检查 Sec-Fetch-Site，缺失时比较 Origin 与 Host。无来源头的 CLI/服务端调用 继续执行原有认证和授权。  |  -  |
+| **429** | 触发限流，需退避后重试 |  * Retry-After - 建议等待的秒数 <br>  * X-RateLimit-Limit - 当前窗口配额 <br>  * X-RateLimit-Remaining - 当前窗口剩余配额 <br>  |
+| **503** | 服务端内部错误 |  -  |
 
 [[Back to top]](#) [[Back to API list]](../README.md#api-endpoints) [[Back to Model list]](../README.md#models) [[Back to README]](../README.md)
 
@@ -543,6 +824,78 @@ example().catch(console.error);
 | **401** | 未认证 |  -  |
 | **403** | 无操作权限或浏览器写请求来源不受信任。 非安全方法统一使用 Go CrossOriginProtection 校验浏览器来源；优先检查 Sec-Fetch-Site，缺失时比较 Origin 与 Host。无来源头的 CLI/服务端调用 继续执行原有认证和授权。  |  -  |
 | **500** | 服务端内部错误 |  -  |
+
+[[Back to top]](#) [[Back to API list]](../README.md#api-endpoints) [[Back to Model list]](../README.md#models) [[Back to README]](../README.md)
+
+
+## updateSystemMail
+
+> SystemMailConfig updateSystemMail(updateSystemMailRequest)
+
+系统管理员重新认证后保存 SMTP 配置
+
+### Example
+
+```ts
+import {
+  Configuration,
+  AdminApi,
+} from '';
+import type { UpdateSystemMailOperationRequest } from '';
+
+async function example() {
+  console.log("🚀 Testing  SDK...");
+  const config = new Configuration({
+    // To configure API key authorization: sessionCookie
+    apiKey: "YOUR API KEY",
+  });
+  const api = new AdminApi(config);
+
+  const body = {
+    // UpdateSystemMailRequest
+    updateSystemMailRequest: ...,
+  } satisfies UpdateSystemMailOperationRequest;
+
+  try {
+    const data = await api.updateSystemMail(body);
+    console.log(data);
+  } catch (error) {
+    console.error(error);
+  }
+}
+
+// Run the test
+example().catch(console.error);
+```
+
+### Parameters
+
+
+| Name | Type | Description  | Notes |
+|------------- | ------------- | ------------- | -------------|
+| **updateSystemMailRequest** | [UpdateSystemMailRequest](UpdateSystemMailRequest.md) |  | |
+
+### Return type
+
+[**SystemMailConfig**](SystemMailConfig.md)
+
+### Authorization
+
+[sessionCookie](../README.md#sessionCookie)
+
+### HTTP request headers
+
+- **Content-Type**: `application/json`
+- **Accept**: `application/json`
+
+
+### HTTP response details
+| Status code | Description | Response headers |
+|-------------|-------------|------------------|
+| **200** | 已保存 |  -  |
+| **400** | 请求格式错误 |  -  |
+| **403** | 无操作权限或浏览器写请求来源不受信任。 非安全方法统一使用 Go CrossOriginProtection 校验浏览器来源；优先检查 Sec-Fetch-Site，缺失时比较 Origin 与 Host。无来源头的 CLI/服务端调用 继续执行原有认证和授权。  |  -  |
+| **429** | 触发限流，需退避后重试 |  * Retry-After - 建议等待的秒数 <br>  * X-RateLimit-Limit - 当前窗口配额 <br>  * X-RateLimit-Remaining - 当前窗口剩余配额 <br>  |
 
 [[Back to top]](#) [[Back to API list]](../README.md#api-endpoints) [[Back to Model list]](../README.md#models) [[Back to README]](../README.md)
 

@@ -183,6 +183,10 @@ func main() {
 		importRepo := importer.NewRepository(pool)
 		importAPI = NewImportAPI(importer.NewService(importRepo, db.NewTxManager(pool), id.NewGenerator()))
 		authService := authdomain.NewService(pool, db.NewTxManager(pool), id.NewGenerator(), cfg.SessionTTL)
+		if err := authService.ConfigureSecurity(cfg.AIConfigMasterKey); err != nil {
+			logger.Error("初始化账号安全加密失败")
+			os.Exit(1)
+		}
 		deps.Authenticator = authdomain.NewAuthenticator(
 			authService, cfg.SessionCookieName, allowDevActorHeader,
 		)
@@ -270,7 +274,19 @@ func main() {
 				logger.Error("装配 Semantic Kernel 客户端失败", slog.Any("error", kernelErr))
 				os.Exit(1)
 			}
-			aiConfigAPI = NewAIConfigAPI(aiConfigService, kernelProvider, governanceAPI.auth)
+			aiRepo := ai.NewRepository(pool)
+			registry := ai.NewRegistry(aiRepo, db.NewTxManager(pool), id.NewGenerator())
+			for _, prompt := range aiConfigProbePrompts() {
+				if _, err := registry.EnsureActive(context.Background(), prompt.Key, prompt.Version,
+					prompt.System, prompt.User, prompt.OutputSchema); err != nil {
+					logger.Error("注册 AI 配置探针失败", slog.Any("error", err))
+					os.Exit(1)
+				}
+			}
+			probeGateway := ai.NewGateway(aiRepo, aiRepo, id.NewGenerator(),
+				map[string]ai.Provider{aiConfigProbeProvider: kernelProvider},
+				ai.GatewayConfig{Timeout: 10 * time.Minute, MaxAttempts: 1, MaxConcurrent: 4})
+			aiConfigAPI = NewAIConfigAPI(aiConfigService, probeGateway, governanceAPI.auth)
 		}
 		governanceAPI.WithWorkingDocumentMerge(
 			governance.NewMergeWorkingDocumentService(

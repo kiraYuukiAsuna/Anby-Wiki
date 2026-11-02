@@ -28,6 +28,12 @@ import {
  */
 export interface AuthSession {
     /**
+     * 独立系统管理员权限，每次请求重新读取
+     * @type {boolean}
+     * @memberof AuthSession
+     */
+    systemAdmin?: boolean;
+    /**
      *
      * @type {string}
      * @memberof AuthSession
@@ -122,6 +128,7 @@ export function AuthSessionFromJSONTyped(json: any, ignoreDiscriminator: boolean
     }
     return {
 
+        'systemAdmin': json['system_admin'] == null ? undefined : json['system_admin'],
         'actorId': json['actor_id'],
         'wikiId': json['wiki_id'],
         'homeWikiId': json['home_wiki_id'],
@@ -145,6 +152,7 @@ export function AuthSessionToJSONTyped(value?: AuthSession | null, ignoreDiscrim
 
     return {
 
+        'system_admin': value['systemAdmin'],
         'actor_id': value['actorId'],
         'wiki_id': value['wikiId'],
         'home_wiki_id': value['homeWikiId'],

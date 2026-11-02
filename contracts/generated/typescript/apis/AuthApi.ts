@@ -59,6 +59,16 @@ import {
     ExchangeCLIAuthCodeRequestToJSON,
 } from '../models/ExchangeCLIAuthCodeRequest';
 import {
+    type ForgotPassword202Response,
+    ForgotPassword202ResponseFromJSON,
+    ForgotPassword202ResponseToJSON,
+} from '../models/ForgotPassword202Response';
+import {
+    type ForgotPasswordRequest,
+    ForgotPasswordRequestFromJSON,
+    ForgotPasswordRequestToJSON,
+} from '../models/ForgotPasswordRequest';
+import {
     type LoginRequest,
     LoginRequestFromJSON,
     LoginRequestToJSON,
@@ -78,6 +88,11 @@ import {
     RegisterRequestFromJSON,
     RegisterRequestToJSON,
 } from '../models/RegisterRequest';
+import {
+    type SecurityTokenRequest,
+    SecurityTokenRequestFromJSON,
+    SecurityTokenRequestToJSON,
+} from '../models/SecurityTokenRequest';
 import {
     type SetMachineActorStatusRequest,
     SetMachineActorStatusRequestFromJSON,
@@ -105,12 +120,20 @@ export interface ExchangeCLIAuthCodeOperationRequest {
     exchangeCLIAuthCodeRequest: ExchangeCLIAuthCodeRequest;
 }
 
+export interface ForgotPasswordOperationRequest {
+    forgotPasswordRequest: ForgotPasswordRequest;
+}
+
 export interface LoginOperationRequest {
     loginRequest: LoginRequest;
 }
 
 export interface RegisterOperationRequest {
     registerRequest: RegisterRequest;
+}
+
+export interface ResetPasswordRequest {
+    securityTokenRequest: SecurityTokenRequest;
 }
 
 export interface RevokeCLITokenRequest {
@@ -120,6 +143,14 @@ export interface RevokeCLITokenRequest {
 export interface SetMachineActorStatusOperationRequest {
     id: string;
     setMachineActorStatusRequest: SetMachineActorStatusRequest;
+}
+
+export interface VerifyEmailRequest {
+    securityTokenRequest: SecurityTokenRequest;
+}
+
+export interface VerifyMFARequest {
+    securityTokenRequest: SecurityTokenRequest;
 }
 
 /**
@@ -417,6 +448,53 @@ export class AuthApi extends runtime.BaseAPI {
     }
 
     /**
+     * Creates request options for forgotPassword without sending the request
+     */
+    async forgotPasswordRequestOpts(requestParameters: ForgotPasswordOperationRequest): Promise<runtime.RequestOpts> {
+        if (requestParameters['forgotPasswordRequest'] == null) {
+            throw new runtime.RequiredError(
+                'forgotPasswordRequest',
+                'Required parameter "forgotPasswordRequest" was null or undefined when calling forgotPassword().'
+            );
+        }
+
+        const queryParameters: any = {};
+
+        const headerParameters: runtime.HTTPHeaders = {};
+
+        headerParameters['Content-Type'] = 'application/json';
+
+
+        let urlPath = `/api/v1/auth/forgot-password`;
+
+        return {
+            path: urlPath,
+            method: 'POST',
+            headers: headerParameters,
+            query: queryParameters,
+            body: ForgotPasswordRequestToJSON(requestParameters['forgotPasswordRequest']),
+        };
+    }
+
+    /**
+     * 向已验证邮箱发送恢复链接，响应不透露账号是否存在
+     */
+    async forgotPasswordRaw(requestParameters: ForgotPasswordOperationRequest, initOverrides?: RequestInit | runtime.InitOverrideFunction): Promise<runtime.ApiResponse<ForgotPassword202Response>> {
+        const requestOptions = await this.forgotPasswordRequestOpts(requestParameters);
+        const response = await this.request(requestOptions, initOverrides);
+
+        return new runtime.JSONApiResponse(response, (jsonValue) => ForgotPassword202ResponseFromJSON(jsonValue));
+    }
+
+    /**
+     * 向已验证邮箱发送恢复链接，响应不透露账号是否存在
+     */
+    async forgotPassword(requestParameters: ForgotPasswordOperationRequest, initOverrides?: RequestInit | runtime.InitOverrideFunction): Promise<ForgotPassword202Response> {
+        const response = await this.forgotPasswordRaw(requestParameters, initOverrides);
+        return await response.value();
+    }
+
+    /**
      * Creates request options for getSession without sending the request
      */
     async getSessionRequestOpts(): Promise<runtime.RequestOpts> {
@@ -699,6 +777,54 @@ export class AuthApi extends runtime.BaseAPI {
     }
 
     /**
+     * Creates request options for resetPassword without sending the request
+     */
+    async resetPasswordRequestOpts(requestParameters: ResetPasswordRequest): Promise<runtime.RequestOpts> {
+        if (requestParameters['securityTokenRequest'] == null) {
+            throw new runtime.RequiredError(
+                'securityTokenRequest',
+                'Required parameter "securityTokenRequest" was null or undefined when calling resetPassword().'
+            );
+        }
+
+        const queryParameters: any = {};
+
+        const headerParameters: runtime.HTTPHeaders = {};
+
+        headerParameters['Content-Type'] = 'application/json';
+
+
+        let urlPath = `/api/v1/auth/reset-password`;
+
+        return {
+            path: urlPath,
+            method: 'POST',
+            headers: headerParameters,
+            query: queryParameters,
+            body: SecurityTokenRequestToJSON(requestParameters['securityTokenRequest']),
+        };
+    }
+
+    /**
+     * 邮箱必须已经验证；已绑定 MFA 的账号必须同时提供 TOTP 或一次性恢复码。
+     * 一次性重置密码并撤销本人及管理的机器账号凭证
+     */
+    async resetPasswordRaw(requestParameters: ResetPasswordRequest, initOverrides?: RequestInit | runtime.InitOverrideFunction): Promise<runtime.ApiResponse<void>> {
+        const requestOptions = await this.resetPasswordRequestOpts(requestParameters);
+        const response = await this.request(requestOptions, initOverrides);
+
+        return new runtime.VoidApiResponse(response);
+    }
+
+    /**
+     * 邮箱必须已经验证；已绑定 MFA 的账号必须同时提供 TOTP 或一次性恢复码。
+     * 一次性重置密码并撤销本人及管理的机器账号凭证
+     */
+    async resetPassword(requestParameters: ResetPasswordRequest, initOverrides?: RequestInit | runtime.InitOverrideFunction): Promise<void> {
+        await this.resetPasswordRaw(requestParameters, initOverrides);
+    }
+
+    /**
      * Creates request options for revokeCLIToken without sending the request
      */
     async revokeCLITokenRequestOpts(requestParameters: RevokeCLITokenRequest): Promise<runtime.RequestOpts> {
@@ -840,6 +966,99 @@ export class AuthApi extends runtime.BaseAPI {
      */
     async setMachineActorStatus(requestParameters: SetMachineActorStatusOperationRequest, initOverrides?: RequestInit | runtime.InitOverrideFunction): Promise<MachineActor> {
         const response = await this.setMachineActorStatusRaw(requestParameters, initOverrides);
+        return await response.value();
+    }
+
+    /**
+     * Creates request options for verifyEmail without sending the request
+     */
+    async verifyEmailRequestOpts(requestParameters: VerifyEmailRequest): Promise<runtime.RequestOpts> {
+        if (requestParameters['securityTokenRequest'] == null) {
+            throw new runtime.RequiredError(
+                'securityTokenRequest',
+                'Required parameter "securityTokenRequest" was null or undefined when calling verifyEmail().'
+            );
+        }
+
+        const queryParameters: any = {};
+
+        const headerParameters: runtime.HTTPHeaders = {};
+
+        headerParameters['Content-Type'] = 'application/json';
+
+
+        let urlPath = `/api/v1/auth/verify-email`;
+
+        return {
+            path: urlPath,
+            method: 'POST',
+            headers: headerParameters,
+            query: queryParameters,
+            body: SecurityTokenRequestToJSON(requestParameters['securityTokenRequest']),
+        };
+    }
+
+    /**
+     * 一次性确认邮箱或变更邮箱；变更后撤销全部凭证
+     */
+    async verifyEmailRaw(requestParameters: VerifyEmailRequest, initOverrides?: RequestInit | runtime.InitOverrideFunction): Promise<runtime.ApiResponse<void>> {
+        const requestOptions = await this.verifyEmailRequestOpts(requestParameters);
+        const response = await this.request(requestOptions, initOverrides);
+
+        return new runtime.VoidApiResponse(response);
+    }
+
+    /**
+     * 一次性确认邮箱或变更邮箱；变更后撤销全部凭证
+     */
+    async verifyEmail(requestParameters: VerifyEmailRequest, initOverrides?: RequestInit | runtime.InitOverrideFunction): Promise<void> {
+        await this.verifyEmailRaw(requestParameters, initOverrides);
+    }
+
+    /**
+     * Creates request options for verifyMFA without sending the request
+     */
+    async verifyMFARequestOpts(requestParameters: VerifyMFARequest): Promise<runtime.RequestOpts> {
+        if (requestParameters['securityTokenRequest'] == null) {
+            throw new runtime.RequiredError(
+                'securityTokenRequest',
+                'Required parameter "securityTokenRequest" was null or undefined when calling verifyMFA().'
+            );
+        }
+
+        const queryParameters: any = {};
+
+        const headerParameters: runtime.HTTPHeaders = {};
+
+        headerParameters['Content-Type'] = 'application/json';
+
+
+        let urlPath = `/api/v1/auth/mfa/verify`;
+
+        return {
+            path: urlPath,
+            method: 'POST',
+            headers: headerParameters,
+            query: queryParameters,
+            body: SecurityTokenRequestToJSON(requestParameters['securityTokenRequest']),
+        };
+    }
+
+    /**
+     * 消费密码验证后签发的 MFA challenge 并建立会话
+     */
+    async verifyMFARaw(requestParameters: VerifyMFARequest, initOverrides?: RequestInit | runtime.InitOverrideFunction): Promise<runtime.ApiResponse<AuthResult>> {
+        const requestOptions = await this.verifyMFARequestOpts(requestParameters);
+        const response = await this.request(requestOptions, initOverrides);
+
+        return new runtime.JSONApiResponse(response, (jsonValue) => AuthResultFromJSON(jsonValue));
+    }
+
+    /**
+     * 消费密码验证后签发的 MFA challenge 并建立会话
+     */
+    async verifyMFA(requestParameters: VerifyMFARequest, initOverrides?: RequestInit | runtime.InitOverrideFunction): Promise<AuthResult> {
+        const response = await this.verifyMFARaw(requestParameters, initOverrides);
         return await response.value();
     }
 

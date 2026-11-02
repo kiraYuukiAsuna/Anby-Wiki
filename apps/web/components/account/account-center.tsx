@@ -12,6 +12,7 @@ import {
 } from "../../../../contracts/generated/typescript";
 
 import { AIConfigWorkspace } from "@/components/admin/ai-config-workspace";
+import { AccountSecurityPanel } from "@/components/account/account-security-panel";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -34,7 +35,7 @@ function ProfileForm({
   onSaved: (profile: AccountProfile) => Promise<void>;
 }) {
   const [displayName, setDisplayName] = useState(profile.displayName);
-  const [email, setEmail] = useState(profile.email);
+  const email = profile.email;
   const [wikiName, setWikiName] = useState(profile.wikiName);
   const [saving, setSaving] = useState(false);
 
@@ -96,8 +97,9 @@ function ProfileForm({
             type="email"
             autoComplete="email"
             value={email}
-            onChange={(event) => setEmail(event.target.value)}
+            readOnly
           />
+          <p className="mt-2 text-xs text-muted-foreground">请在下方账号安全中验证或变更邮箱。</p>
         </div>
         <div>
           <Label htmlFor="account-display-name">显示名</Label>
@@ -173,6 +175,7 @@ export function AccountCenter() {
           await mutate(AUTH_SESSION_KEY);
         }}
       />
+      <AccountSecurityPanel />
       <div id="document-understanding-model">
         <AIConfigWorkspace mode="account" />
       </div>

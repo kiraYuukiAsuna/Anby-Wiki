@@ -413,7 +413,9 @@ func (a *visionImageAdapter) Parse(ctx context.Context, request ParseRequest) (*
 
 // Native prose is never replaced by an unverified visual transcription.
 // Unique matching regions supply reading order; all remaining native text is
-// retained separately, including text missed by layout detection.
+// retained beside its nearest native anchor, including text missed by layout
+// detection. Appending every remainder at the end would move introductions
+// after the body of the page.
 func groundedPageBlocks(analysis *pageAnalysis, nativeText string) []TextBlock {
 	visual := pageAnalysisBlocks(*analysis)
 	if nativeText == "" {
@@ -423,6 +425,10 @@ func groundedPageBlocks(analysis *pageAnalysis, nativeText string) []TextBlock {
 	normalized, spans := collapseWhitespaceWithSpans(nativeRunes)
 	covered := make([]bool, len(nativeRunes))
 	blocks := make([]TextBlock, 0, len(visual)+1)
+	type nativeAnchor struct {
+		index, start, end int
+	}
+	var anchors []nativeAnchor
 	for index, block := range visual {
 		if block.Kind != evidence.SourceChunkTypeText {
 			blocks = append(blocks, block)
@@ -460,6 +466,7 @@ func groundedPageBlocks(analysis *pageAnalysis, nativeText string) []TextBlock {
 			"source": visionSourceNativeRegion, "reading_order": index, "title": block.Title,
 			"native_char_start": start, "native_char_end": end,
 		})
+		anchors = append(anchors, nativeAnchor{index: len(blocks), start: start, end: end})
 		blocks = append(blocks, block)
 	}
 	page := int32(analysis.Page)
@@ -484,10 +491,35 @@ func groundedPageBlocks(analysis *pageAnalysis, nativeText string) []TextBlock {
 				"source":            visionSourceNativeRemainder,
 				"native_char_start": textStart, "native_char_end": textEnd,
 			})
-			blocks = append(blocks, TextBlock{
+			insertAt, nextStart := len(blocks), len(nativeRunes)+1
+			for _, anchor := range anchors {
+				if anchor.start >= textEnd && anchor.start < nextStart {
+					insertAt, nextStart = anchor.index, anchor.start
+				}
+			}
+			if nextStart == len(nativeRunes)+1 {
+				previousIndex := -1
+				for _, anchor := range anchors {
+					if anchor.end <= textStart && anchor.index > previousIndex {
+						previousIndex = anchor.index
+					}
+				}
+				if previousIndex >= 0 {
+					insertAt = previousIndex + 1
+				}
+			}
+			blocks = append(blocks, TextBlock{})
+			copy(blocks[insertAt+1:], blocks[insertAt:])
+			blocks[insertAt] = TextBlock{
 				Kind: evidence.SourceChunkTypePage, Text: string(nativeRunes[textStart:textEnd]),
 				Page: &page, PageEnd: &page, SectionPath: analysis.SectionPath, Content: content,
-			})
+			}
+			for index := range anchors {
+				if anchors[index].index >= insertAt {
+					anchors[index].index++
+				}
+			}
+			anchors = append(anchors, nativeAnchor{index: insertAt, start: textStart, end: textEnd})
 		}
 		start = end
 	}

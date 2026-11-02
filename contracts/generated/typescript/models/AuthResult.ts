@@ -20,6 +20,18 @@ import { mapValues } from '../runtime';
  */
 export interface AuthResult {
     /**
+     * true 时只完成密码验证
+     * @type {boolean}
+     * @memberof AuthResult
+     */
+    mfaRequired?: boolean;
+    /**
+     * MFA 挑战；5 分钟有效，最多 5 次尝试
+     * @type {string}
+     * @memberof AuthResult
+     */
+    challengeToken?: string;
+    /**
      *
      * @type {string}
      * @memberof AuthResult
@@ -73,6 +85,8 @@ export function AuthResultFromJSONTyped(json: any, ignoreDiscriminator: boolean)
     }
     return {
 
+        'mfaRequired': json['mfa_required'] == null ? undefined : json['mfa_required'],
+        'challengeToken': json['challenge_token'] == null ? undefined : json['challenge_token'],
         'actorId': json['actor_id'],
         'wikiId': json['wiki_id'],
         'wikiName': json['wiki_name'],
@@ -92,6 +106,8 @@ export function AuthResultToJSONTyped(value?: AuthResult | null, ignoreDiscrimin
 
     return {
 
+        'mfa_required': value['mfaRequired'],
+        'challenge_token': value['challengeToken'],
         'actor_id': value['actorId'],
         'wiki_id': value['wikiId'],
         'wiki_name': value['wikiName'],

@@ -4147,5 +4147,7 @@
     "old_business_images_and_unused_build_cache_cleanup": "completed",
     "production_accounts_or_content_jobs_created": false,
     "formal_successful_upload_and_interruption_recovery": "not performed"
-  }
+  },
+  "followup_evidence_file": "ComplexDocumentFollowup-2026-11-02.json",
+  "followup_summary": "API connection probes use the persisted Gateway; PDF Adapter v4 restores native remainder placement; six final real-model regressions and isolated immutable import recovery passed; formal HTTPS upload/retransmission passed with model disabled. Changes remain uncommitted and undeployed."
 }

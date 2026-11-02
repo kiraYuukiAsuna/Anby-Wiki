@@ -18,6 +18,7 @@ import (
 	"github.com/google/uuid"
 
 	"github.com/anby/wiki/backend/internal/ai"
+	"github.com/anby/wiki/backend/internal/evidence"
 )
 
 func visionTestResult(request ai.Request, output string) *ai.Result {
@@ -251,6 +252,29 @@ func TestNativeRegionsPreserveExactTextOrderAndUnmatchedContent(t *testing.T) {
 			string([]rune(native)[span.Start:span.End]) != block.Text {
 			t.Fatalf("incorrect native span: %s", block.Content)
 		}
+	}
+}
+
+func TestNativeRemaindersStayBesideMatchedProse(t *testing.T) {
+	native := "Introduction.\n\nFirst body.\n\nMissing middle.\n\nSecond body.\n\nFootnote."
+	analysis := pageAnalysis{
+		Page: 1,
+		Elements: []pageElement{
+			{Kind: "figure", Text: "Visible figure labels."},
+			{Kind: "text", Text: "First body."},
+			{Kind: "text", Text: "Second body."},
+		},
+	}
+	blocks := groundedPageBlocks(&analysis, native)
+	if len(blocks) != 6 || blocks[0].Kind != evidence.SourceChunkTypeFigure {
+		t.Fatalf("figure placement changed: %#v", blocks)
+	}
+	var prose []string
+	for _, block := range blocks[1:] {
+		prose = append(prose, block.Text)
+	}
+	if strings.Join(prose, "\n\n") != native {
+		t.Fatalf("native remainder moved after later prose: %q", prose)
 	}
 }
 

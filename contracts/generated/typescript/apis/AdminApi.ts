@@ -39,10 +39,35 @@ import {
     AdminUserListToJSON,
 } from '../models/AdminUserList';
 import {
+    type SecurityProofRequest,
+    SecurityProofRequestFromJSON,
+    SecurityProofRequestToJSON,
+} from '../models/SecurityProofRequest';
+import {
+    type SetSystemAdministratorRequest,
+    SetSystemAdministratorRequestFromJSON,
+    SetSystemAdministratorRequestToJSON,
+} from '../models/SetSystemAdministratorRequest';
+import {
+    type SystemAccounts,
+    SystemAccountsFromJSON,
+    SystemAccountsToJSON,
+} from '../models/SystemAccounts';
+import {
+    type SystemMailConfig,
+    SystemMailConfigFromJSON,
+    SystemMailConfigToJSON,
+} from '../models/SystemMailConfig';
+import {
     type UpdateAIConfigRequest,
     UpdateAIConfigRequestFromJSON,
     UpdateAIConfigRequestToJSON,
 } from '../models/UpdateAIConfigRequest';
+import {
+    type UpdateSystemMailRequest,
+    UpdateSystemMailRequestFromJSON,
+    UpdateSystemMailRequestToJSON,
+} from '../models/UpdateSystemMailRequest';
 
 export interface DeleteAdminUserRequest {
     actorId: string;
@@ -63,8 +88,20 @@ export interface RevokeAdminUserRoleRequest {
     roleKey: RevokeAdminUserRoleRoleKeyEnum;
 }
 
+export interface SetSystemAdministratorOperationRequest {
+    setSystemAdministratorRequest: SetSystemAdministratorRequest;
+}
+
+export interface TestSystemMailRequest {
+    securityProofRequest: SecurityProofRequest;
+}
+
 export interface UpdateAIConfigOperationRequest {
     updateAIConfigRequest: UpdateAIConfigRequest;
+}
+
+export interface UpdateSystemMailOperationRequest {
+    updateSystemMailRequest: UpdateSystemMailRequest;
 }
 
 /**
@@ -171,6 +208,82 @@ export class AdminApi extends runtime.BaseAPI {
      */
     async getAIConfig(initOverrides?: RequestInit | runtime.InitOverrideFunction): Promise<AIConfig> {
         const response = await this.getAIConfigRaw(initOverrides);
+        return await response.value();
+    }
+
+    /**
+     * Creates request options for getSystemAccounts without sending the request
+     */
+    async getSystemAccountsRequestOpts(): Promise<runtime.RequestOpts> {
+        const queryParameters: any = {};
+
+        const headerParameters: runtime.HTTPHeaders = {};
+
+
+        let urlPath = `/api/v1/system/accounts`;
+
+        return {
+            path: urlPath,
+            method: 'GET',
+            headers: headerParameters,
+            query: queryParameters,
+        };
+    }
+
+    /**
+     * 不返回密码、密钥、令牌或私人 Wiki 内容。
+     * 系统管理员读取账号安全概况与系统安全审计
+     */
+    async getSystemAccountsRaw(initOverrides?: RequestInit | runtime.InitOverrideFunction): Promise<runtime.ApiResponse<SystemAccounts>> {
+        const requestOptions = await this.getSystemAccountsRequestOpts();
+        const response = await this.request(requestOptions, initOverrides);
+
+        return new runtime.JSONApiResponse(response, (jsonValue) => SystemAccountsFromJSON(jsonValue));
+    }
+
+    /**
+     * 不返回密码、密钥、令牌或私人 Wiki 内容。
+     * 系统管理员读取账号安全概况与系统安全审计
+     */
+    async getSystemAccounts(initOverrides?: RequestInit | runtime.InitOverrideFunction): Promise<SystemAccounts> {
+        const response = await this.getSystemAccountsRaw(initOverrides);
+        return await response.value();
+    }
+
+    /**
+     * Creates request options for getSystemMail without sending the request
+     */
+    async getSystemMailRequestOpts(): Promise<runtime.RequestOpts> {
+        const queryParameters: any = {};
+
+        const headerParameters: runtime.HTTPHeaders = {};
+
+
+        let urlPath = `/api/v1/system/mail`;
+
+        return {
+            path: urlPath,
+            method: 'GET',
+            headers: headerParameters,
+            query: queryParameters,
+        };
+    }
+
+    /**
+     * 系统管理员读取全站 SMTP 配置，密码永不返回
+     */
+    async getSystemMailRaw(initOverrides?: RequestInit | runtime.InitOverrideFunction): Promise<runtime.ApiResponse<SystemMailConfig>> {
+        const requestOptions = await this.getSystemMailRequestOpts();
+        const response = await this.request(requestOptions, initOverrides);
+
+        return new runtime.JSONApiResponse(response, (jsonValue) => SystemMailConfigFromJSON(jsonValue));
+    }
+
+    /**
+     * 系统管理员读取全站 SMTP 配置，密码永不返回
+     */
+    async getSystemMail(initOverrides?: RequestInit | runtime.InitOverrideFunction): Promise<SystemMailConfig> {
+        const response = await this.getSystemMailRaw(initOverrides);
         return await response.value();
     }
 
@@ -356,6 +469,54 @@ export class AdminApi extends runtime.BaseAPI {
     }
 
     /**
+     * Creates request options for setSystemAdministrator without sending the request
+     */
+    async setSystemAdministratorRequestOpts(requestParameters: SetSystemAdministratorOperationRequest): Promise<runtime.RequestOpts> {
+        if (requestParameters['setSystemAdministratorRequest'] == null) {
+            throw new runtime.RequiredError(
+                'setSystemAdministratorRequest',
+                'Required parameter "setSystemAdministratorRequest" was null or undefined when calling setSystemAdministrator().'
+            );
+        }
+
+        const queryParameters: any = {};
+
+        const headerParameters: runtime.HTTPHeaders = {};
+
+        headerParameters['Content-Type'] = 'application/json';
+
+
+        let urlPath = `/api/v1/system/administrators`;
+
+        return {
+            path: urlPath,
+            method: 'PUT',
+            headers: headerParameters,
+            query: queryParameters,
+            body: SetSystemAdministratorRequestToJSON(requestParameters['setSystemAdministratorRequest']),
+        };
+    }
+
+    /**
+     * 最后一个有效系统管理员不能被撤销；Wiki 管理员不自动获得系统权限。
+     * 重新认证后授予或撤销独立的系统管理员权限
+     */
+    async setSystemAdministratorRaw(requestParameters: SetSystemAdministratorOperationRequest, initOverrides?: RequestInit | runtime.InitOverrideFunction): Promise<runtime.ApiResponse<void>> {
+        const requestOptions = await this.setSystemAdministratorRequestOpts(requestParameters);
+        const response = await this.request(requestOptions, initOverrides);
+
+        return new runtime.VoidApiResponse(response);
+    }
+
+    /**
+     * 最后一个有效系统管理员不能被撤销；Wiki 管理员不自动获得系统权限。
+     * 重新认证后授予或撤销独立的系统管理员权限
+     */
+    async setSystemAdministrator(requestParameters: SetSystemAdministratorOperationRequest, initOverrides?: RequestInit | runtime.InitOverrideFunction): Promise<void> {
+        await this.setSystemAdministratorRaw(requestParameters, initOverrides);
+    }
+
+    /**
      * Creates request options for testAIConfig without sending the request
      */
     async testAIConfigRequestOpts(): Promise<runtime.RequestOpts> {
@@ -400,6 +561,52 @@ export class AdminApi extends runtime.BaseAPI {
     async testAIConfig(initOverrides?: RequestInit | runtime.InitOverrideFunction): Promise<AIConfigTestResult> {
         const response = await this.testAIConfigRaw(initOverrides);
         return await response.value();
+    }
+
+    /**
+     * Creates request options for testSystemMail without sending the request
+     */
+    async testSystemMailRequestOpts(requestParameters: TestSystemMailRequest): Promise<runtime.RequestOpts> {
+        if (requestParameters['securityProofRequest'] == null) {
+            throw new runtime.RequiredError(
+                'securityProofRequest',
+                'Required parameter "securityProofRequest" was null or undefined when calling testSystemMail().'
+            );
+        }
+
+        const queryParameters: any = {};
+
+        const headerParameters: runtime.HTTPHeaders = {};
+
+        headerParameters['Content-Type'] = 'application/json';
+
+
+        let urlPath = `/api/v1/system/mail/test`;
+
+        return {
+            path: urlPath,
+            method: 'POST',
+            headers: headerParameters,
+            query: queryParameters,
+            body: SecurityProofRequestToJSON(requestParameters['securityProofRequest']),
+        };
+    }
+
+    /**
+     * 重新认证后向系统管理员本人的邮箱发送测试邮件
+     */
+    async testSystemMailRaw(requestParameters: TestSystemMailRequest, initOverrides?: RequestInit | runtime.InitOverrideFunction): Promise<runtime.ApiResponse<void>> {
+        const requestOptions = await this.testSystemMailRequestOpts(requestParameters);
+        const response = await this.request(requestOptions, initOverrides);
+
+        return new runtime.VoidApiResponse(response);
+    }
+
+    /**
+     * 重新认证后向系统管理员本人的邮箱发送测试邮件
+     */
+    async testSystemMail(requestParameters: TestSystemMailRequest, initOverrides?: RequestInit | runtime.InitOverrideFunction): Promise<void> {
+        await this.testSystemMailRaw(requestParameters, initOverrides);
     }
 
     /**
@@ -456,6 +663,53 @@ export class AdminApi extends runtime.BaseAPI {
      */
     async updateAIConfig(requestParameters: UpdateAIConfigOperationRequest, initOverrides?: RequestInit | runtime.InitOverrideFunction): Promise<AIConfig> {
         const response = await this.updateAIConfigRaw(requestParameters, initOverrides);
+        return await response.value();
+    }
+
+    /**
+     * Creates request options for updateSystemMail without sending the request
+     */
+    async updateSystemMailRequestOpts(requestParameters: UpdateSystemMailOperationRequest): Promise<runtime.RequestOpts> {
+        if (requestParameters['updateSystemMailRequest'] == null) {
+            throw new runtime.RequiredError(
+                'updateSystemMailRequest',
+                'Required parameter "updateSystemMailRequest" was null or undefined when calling updateSystemMail().'
+            );
+        }
+
+        const queryParameters: any = {};
+
+        const headerParameters: runtime.HTTPHeaders = {};
+
+        headerParameters['Content-Type'] = 'application/json';
+
+
+        let urlPath = `/api/v1/system/mail`;
+
+        return {
+            path: urlPath,
+            method: 'PUT',
+            headers: headerParameters,
+            query: queryParameters,
+            body: UpdateSystemMailRequestToJSON(requestParameters['updateSystemMailRequest']),
+        };
+    }
+
+    /**
+     * 系统管理员重新认证后保存 SMTP 配置
+     */
+    async updateSystemMailRaw(requestParameters: UpdateSystemMailOperationRequest, initOverrides?: RequestInit | runtime.InitOverrideFunction): Promise<runtime.ApiResponse<SystemMailConfig>> {
+        const requestOptions = await this.updateSystemMailRequestOpts(requestParameters);
+        const response = await this.request(requestOptions, initOverrides);
+
+        return new runtime.JSONApiResponse(response, (jsonValue) => SystemMailConfigFromJSON(jsonValue));
+    }
+
+    /**
+     * 系统管理员重新认证后保存 SMTP 配置
+     */
+    async updateSystemMail(requestParameters: UpdateSystemMailOperationRequest, initOverrides?: RequestInit | runtime.InitOverrideFunction): Promise<SystemMailConfig> {
+        const response = await this.updateSystemMailRaw(requestParameters, initOverrides);
         return await response.value();
     }
 

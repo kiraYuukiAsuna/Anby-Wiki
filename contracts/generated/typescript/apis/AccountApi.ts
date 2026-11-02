@@ -29,6 +29,21 @@ import {
     AccountProfileToJSON,
 } from '../models/AccountProfile';
 import {
+    type AccountSecurity,
+    AccountSecurityFromJSON,
+    AccountSecurityToJSON,
+} from '../models/AccountSecurity';
+import {
+    type AccountSecurityRequest,
+    AccountSecurityRequestFromJSON,
+    AccountSecurityRequestToJSON,
+} from '../models/AccountSecurityRequest';
+import {
+    type AccountSecurityResult,
+    AccountSecurityResultFromJSON,
+    AccountSecurityResultToJSON,
+} from '../models/AccountSecurityResult';
+import {
     type UpdateAIConfigRequest,
     UpdateAIConfigRequestFromJSON,
     UpdateAIConfigRequestToJSON,
@@ -38,6 +53,10 @@ import {
     UpdateAccountProfileRequestFromJSON,
     UpdateAccountProfileRequestToJSON,
 } from '../models/UpdateAccountProfileRequest';
+
+export interface MutateAccountSecurityRequest {
+    accountSecurityRequest: AccountSecurityRequest;
+}
 
 export interface UpdateAccountAIConfigRequest {
     updateAIConfigRequest: UpdateAIConfigRequest;
@@ -125,6 +144,92 @@ export class AccountApi extends runtime.BaseAPI {
      */
     async getAccountProfile(initOverrides?: RequestInit | runtime.InitOverrideFunction): Promise<AccountProfile> {
         const response = await this.getAccountProfileRaw(initOverrides);
+        return await response.value();
+    }
+
+    /**
+     * Creates request options for getAccountSecurity without sending the request
+     */
+    async getAccountSecurityRequestOpts(): Promise<runtime.RequestOpts> {
+        const queryParameters: any = {};
+
+        const headerParameters: runtime.HTTPHeaders = {};
+
+
+        let urlPath = `/api/v1/account/security`;
+
+        return {
+            path: urlPath,
+            method: 'GET',
+            headers: headerParameters,
+            query: queryParameters,
+        };
+    }
+
+    /**
+     * 本人浏览器会话读取邮箱、MFA、设备会话和安全审计
+     */
+    async getAccountSecurityRaw(initOverrides?: RequestInit | runtime.InitOverrideFunction): Promise<runtime.ApiResponse<AccountSecurity>> {
+        const requestOptions = await this.getAccountSecurityRequestOpts();
+        const response = await this.request(requestOptions, initOverrides);
+
+        return new runtime.JSONApiResponse(response, (jsonValue) => AccountSecurityFromJSON(jsonValue));
+    }
+
+    /**
+     * 本人浏览器会话读取邮箱、MFA、设备会话和安全审计
+     */
+    async getAccountSecurity(initOverrides?: RequestInit | runtime.InitOverrideFunction): Promise<AccountSecurity> {
+        const response = await this.getAccountSecurityRaw(initOverrides);
+        return await response.value();
+    }
+
+    /**
+     * Creates request options for mutateAccountSecurity without sending the request
+     */
+    async mutateAccountSecurityRequestOpts(requestParameters: MutateAccountSecurityRequest): Promise<runtime.RequestOpts> {
+        if (requestParameters['accountSecurityRequest'] == null) {
+            throw new runtime.RequiredError(
+                'accountSecurityRequest',
+                'Required parameter "accountSecurityRequest" was null or undefined when calling mutateAccountSecurity().'
+            );
+        }
+
+        const queryParameters: any = {};
+
+        const headerParameters: runtime.HTTPHeaders = {};
+
+        headerParameters['Content-Type'] = 'application/json';
+
+
+        let urlPath = `/api/v1/account/security`;
+
+        return {
+            path: urlPath,
+            method: 'POST',
+            headers: headerParameters,
+            query: queryParameters,
+            body: AccountSecurityRequestToJSON(requestParameters['accountSecurityRequest']),
+        };
+    }
+
+    /**
+     * verify_email 只发送到账号当前邮箱；其他操作需要当前密码， 已启用 MFA 时还需要未使用的 TOTP 或恢复码。 启用/停用 MFA、修改密码和 revoke_sessions 都会撤销全部浏览器及 CLI 凭证； 启用 MFA 后为已完成密码和 TOTP 验证的当前浏览器重新签发会话。 setup_mfa 的密钥和 regenerate_codes/enable_mfa 的恢复码只返回一次。
+     * 重新认证后变更本人账号安全设置
+     */
+    async mutateAccountSecurityRaw(requestParameters: MutateAccountSecurityRequest, initOverrides?: RequestInit | runtime.InitOverrideFunction): Promise<runtime.ApiResponse<AccountSecurityResult>> {
+        const requestOptions = await this.mutateAccountSecurityRequestOpts(requestParameters);
+        const response = await this.request(requestOptions, initOverrides);
+
+        return new runtime.JSONApiResponse(response, (jsonValue) => AccountSecurityResultFromJSON(jsonValue));
+    }
+
+    /**
+     * verify_email 只发送到账号当前邮箱；其他操作需要当前密码， 已启用 MFA 时还需要未使用的 TOTP 或恢复码。 启用/停用 MFA、修改密码和 revoke_sessions 都会撤销全部浏览器及 CLI 凭证； 启用 MFA 后为已完成密码和 TOTP 验证的当前浏览器重新签发会话。 setup_mfa 的密钥和 regenerate_codes/enable_mfa 的恢复码只返回一次。
+     * 重新认证后变更本人账号安全设置
+     */
+    async mutateAccountSecurity(requestParameters: MutateAccountSecurityRequest, initOverrides?: RequestInit | runtime.InitOverrideFunction): Promise<AccountSecurityResult> {
+        const response = await this.mutateAccountSecurityRaw(requestParameters, initOverrides);
         return await response.value();
     }
 

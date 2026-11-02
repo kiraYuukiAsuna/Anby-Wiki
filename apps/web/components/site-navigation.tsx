@@ -96,6 +96,12 @@ const GROUPS = [
     label: "管理",
     items: [
       {
+        href: "/admin",
+        label: "系统管理台",
+        icon: ShieldCheck,
+        exact: true,
+      },
+      {
         href: "/account",
         label: "个人中心",
         icon: UserRound,
@@ -124,7 +130,7 @@ export function SiteNavigation() {
   const { session } = useSession();
   const groups = GROUPS.map((group) => ({
     ...group,
-    items: group.items.filter((item) => !workspaceAccessNotice(item.href, session)),
+    items: group.items.filter((item) => (item.href !== "/admin" || session?.systemAdmin) && !workspaceAccessNotice(item.href, session)),
   })).filter((group) => group.items.length > 0);
 
   return (

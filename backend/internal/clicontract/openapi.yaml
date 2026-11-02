@@ -93,7 +93,7 @@ paths:
             schema: { $ref: "#/components/schemas/LoginRequest" }
       responses:
         "200":
-          description: 登录成功，设置 HttpOnly session cookie
+          description: 无 MFA 时设置会话；启用 MFA 时返回短时 challenge_token，不设置会话
           content:
             application/json:
               schema: { $ref: "#/components/schemas/AuthResult" }
@@ -127,6 +127,223 @@ paths:
           description: 已退出；无活动 session 时同样成功
         "403": { $ref: "#/components/responses/Forbidden" }
         "500": { $ref: "#/components/responses/Internal" }
+  /api/v1/auth/forgot-password:
+    post:
+      operationId: forgotPassword
+      tags: [auth]
+      summary: 向已验证邮箱发送恢复链接，响应不透露账号是否存在
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [identifier]
+              additionalProperties: false
+              properties:
+                identifier: { type: string, minLength: 1, maxLength: 254 }
+      responses:
+        "202":
+          description: 已受理
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [message]
+                properties:
+                  message: { type: string }
+        "400": { $ref: "#/components/responses/BadRequest" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "429": { $ref: "#/components/responses/RateLimited" }
+        "503": { $ref: "#/components/responses/Internal" }
+  /api/v1/auth/verify-email:
+    post:
+      operationId: verifyEmail
+      tags: [auth]
+      summary: 一次性确认邮箱或变更邮箱；变更后撤销全部凭证
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/SecurityTokenRequest" }
+      responses:
+        "204": { description: 邮箱已确认 }
+        "400": { $ref: "#/components/responses/BadRequest" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "409": { $ref: "#/components/responses/Conflict" }
+        "429": { $ref: "#/components/responses/RateLimited" }
+  /api/v1/auth/reset-password:
+    post:
+      operationId: resetPassword
+      tags: [auth]
+      summary: 一次性重置密码并撤销本人及管理的机器账号凭证
+      description: 邮箱必须已经验证；已绑定 MFA 的账号必须同时提供 TOTP 或一次性恢复码。
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/SecurityTokenRequest" }
+      responses:
+        "204": { description: 已重置，请重新登录 }
+        "400": { $ref: "#/components/responses/BadRequest" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "429": { $ref: "#/components/responses/RateLimited" }
+  /api/v1/auth/mfa/verify:
+    post:
+      operationId: verifyMFA
+      tags: [auth]
+      summary: 消费密码验证后签发的 MFA challenge 并建立会话
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/SecurityTokenRequest" }
+      responses:
+        "200":
+          description: 已验证，设置会话
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/AuthResult" }
+        "400": { $ref: "#/components/responses/BadRequest" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "429": { $ref: "#/components/responses/RateLimited" }
+  /api/v1/account/security:
+    get:
+      operationId: getAccountSecurity
+      tags: [account]
+      summary: 本人浏览器会话读取邮箱、MFA、设备会话和安全审计
+      security: [{ sessionCookie: [] }]
+      responses:
+        "200":
+          description: 账号安全状态
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/AccountSecurity" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+    post:
+      operationId: mutateAccountSecurity
+      tags: [account]
+      summary: 重新认证后变更本人账号安全设置
+      description: >-
+        verify_email 只发送到账号当前邮箱；其他操作需要当前密码，
+        已启用 MFA 时还需要未使用的 TOTP 或恢复码。
+        启用/停用 MFA、修改密码和 revoke_sessions 都会撤销全部浏览器及 CLI 凭证；
+        启用 MFA 后为已完成密码和 TOTP 验证的当前浏览器重新签发会话。
+        setup_mfa 的密钥和 regenerate_codes/enable_mfa 的恢复码只返回一次。
+      security: [{ sessionCookie: [] }]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/AccountSecurityRequest" }
+      responses:
+        "200":
+          description: 已执行
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/AccountSecurityResult" }
+        "400": { $ref: "#/components/responses/BadRequest" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "409": { $ref: "#/components/responses/Conflict" }
+        "429": { $ref: "#/components/responses/RateLimited" }
+        "503": { $ref: "#/components/responses/Internal" }
+  /api/v1/system/mail:
+    get:
+      operationId: getSystemMail
+      tags: [admin]
+      summary: 系统管理员读取全站 SMTP 配置，密码永不返回
+      security: [{ sessionCookie: [] }]
+      responses:
+        "200":
+          description: 邮件配置
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/SystemMailConfig" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+    put:
+      operationId: updateSystemMail
+      tags: [admin]
+      summary: 系统管理员重新认证后保存 SMTP 配置
+      security: [{ sessionCookie: [] }]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/UpdateSystemMailRequest" }
+      responses:
+        "200":
+          description: 已保存
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/SystemMailConfig" }
+        "400": { $ref: "#/components/responses/BadRequest" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "429": { $ref: "#/components/responses/RateLimited" }
+  /api/v1/system/mail/test:
+    post:
+      operationId: testSystemMail
+      tags: [admin]
+      summary: 重新认证后向系统管理员本人的邮箱发送测试邮件
+      security: [{ sessionCookie: [] }]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/SecurityProofRequest" }
+      responses:
+        "204": { description: 邮件已提交 SMTP }
+        "400": { $ref: "#/components/responses/BadRequest" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "429": { $ref: "#/components/responses/RateLimited" }
+        "503": { $ref: "#/components/responses/Internal" }
+  /api/v1/system/accounts:
+    get:
+      operationId: getSystemAccounts
+      tags: [admin]
+      summary: 系统管理员读取账号安全概况与系统安全审计
+      description: 不返回密码、密钥、令牌或私人 Wiki 内容。
+      security: [{ sessionCookie: [] }]
+      responses:
+        "200":
+          description: 安全概况
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/SystemAccounts" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+  /api/v1/system/administrators:
+    put:
+      operationId: setSystemAdministrator
+      tags: [admin]
+      summary: 重新认证后授予或撤销独立的系统管理员权限
+      description: 最后一个有效系统管理员不能被撤销；Wiki 管理员不自动获得系统权限。
+      security: [{ sessionCookie: [] }]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              additionalProperties: false
+              required: [actor_id, grant, password]
+              properties:
+                actor_id: { type: string, format: uuid }
+                grant: { type: boolean }
+                password: { type: string, format: password, maxLength: 128 }
+                code: { type: string, maxLength: 32 }
+      responses:
+        "204": { description: 权限已更新 }
+        "400": { $ref: "#/components/responses/BadRequest" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "409": { $ref: "#/components/responses/Conflict" }
+        "429": { $ref: "#/components/responses/RateLimited" }
   /api/v1/wiki/members:
     get:
       operationId: listWikiMembers
@@ -5079,6 +5296,8 @@ components:
       type: object
       required: [actor_id, wiki_id, wiki_name, main_namespace_id, display_name]
       properties:
+        mfa_required: { type: boolean, description: true 时只完成密码验证 }
+        challenge_token: { type: string, description: MFA 挑战；5 分钟有效，最多 5 次尝试 }
         actor_id:
           type: string
           format: uuid
@@ -5096,6 +5315,7 @@ components:
       type: object
       required: [actor_id, wiki_id, home_wiki_id, wiki_name, main_namespace_id, actor_type, display_name, method, wikis]
       properties:
+        system_admin: { type: boolean, description: 独立系统管理员权限，每次请求重新读取 }
         actor_id:
           type: string
           format: uuid
@@ -5171,6 +5391,125 @@ components:
           type: string
           minLength: 1
           maxLength: 128
+    SecurityTokenRequest:
+      type: object
+      additionalProperties: false
+      required: [token]
+      properties:
+        token: { type: string, minLength: 43, maxLength: 43 }
+        purpose: { type: string, enum: [verify_email, change_email] }
+        password: { type: string, format: password, minLength: 12, maxLength: 128 }
+        code: { type: string, maxLength: 32 }
+    SecurityProofRequest:
+      type: object
+      additionalProperties: false
+      required: [password]
+      properties:
+        password: { type: string, format: password, maxLength: 128 }
+        code: { type: string, maxLength: 32 }
+    AccountSecurityRequest:
+      type: object
+      additionalProperties: false
+      required: [action]
+      properties:
+        action:
+          type: string
+          enum: [verify_email, change_email, setup_mfa, enable_mfa, disable_mfa, regenerate_codes, change_password, revoke_session, revoke_sessions]
+        password: { type: string, format: password, maxLength: 128 }
+        code: { type: string, maxLength: 32 }
+        email: { type: string, format: email, maxLength: 254 }
+        new_password: { type: string, format: password, minLength: 12, maxLength: 128 }
+        session_id: { type: string, format: uuid }
+    AccountSecurityResult:
+      type: object
+      required: [signed_out]
+      properties:
+        signed_out: { type: boolean }
+        setup_secret: { type: string }
+        setup_uri: { type: string }
+        recovery_codes:
+          type: array
+          items: { type: string }
+    DeviceSession:
+      type: object
+      required: [id, user_agent, created_at, last_seen_at, expires_at, current]
+      properties:
+        id: { type: string, format: uuid }
+        user_agent: { type: string }
+        created_at: { type: string, format: date-time }
+        last_seen_at: { type: string, format: date-time }
+        expires_at: { type: string, format: date-time }
+        current: { type: boolean }
+    SecurityEvent:
+      type: object
+      required: [id, action, created_at]
+      properties:
+        id: { type: string, format: uuid }
+        actor_id: { type: string, format: uuid, nullable: true }
+        target_actor_id: { type: string, format: uuid, nullable: true }
+        action: { type: string }
+        created_at: { type: string, format: date-time }
+    AccountSecurity:
+      type: object
+      required: [email, email_verified, mfa_enabled, recovery_codes_remaining, system_admin, mail_enabled, sessions, events]
+      properties:
+        email: { type: string, format: email }
+        email_verified: { type: boolean }
+        mfa_enabled: { type: boolean }
+        recovery_codes_remaining: { type: integer }
+        system_admin: { type: boolean }
+        mail_enabled: { type: boolean }
+        sessions:
+          type: array
+          items: { $ref: "#/components/schemas/DeviceSession" }
+        events:
+          type: array
+          items: { $ref: "#/components/schemas/SecurityEvent" }
+    SystemMailConfig:
+      type: object
+      additionalProperties: false
+      required: [enabled, host, port, tls_mode, username, from_email, from_name, public_url, password_configured]
+      properties:
+        enabled: { type: boolean }
+        host: { type: string, maxLength: 253 }
+        port: { type: integer, minimum: 1, maximum: 65535 }
+        tls_mode: { type: string, enum: [tls, starttls, loopback] }
+        username: { type: string, maxLength: 254 }
+        from_email: { type: string, format: email }
+        from_name: { type: string, maxLength: 128 }
+        public_url: { type: string, format: uri }
+        password_configured: { type: boolean }
+        updated_at: { type: string, format: date-time }
+    UpdateSystemMailRequest:
+      type: object
+      additionalProperties: false
+      required: [configuration, password]
+      properties:
+        configuration: { $ref: "#/components/schemas/SystemMailConfig" }
+        smtp_password: { type: string, format: password, maxLength: 2048, description: 留空保留已保存的 SMTP 密码 }
+        password: { type: string, format: password, maxLength: 128 }
+        code: { type: string, maxLength: 32 }
+    SystemAccount:
+      type: object
+      required: [actor_id, username, email, system_admin, email_verified, mfa_enabled, status]
+      properties:
+        actor_id: { type: string, format: uuid }
+        username: { type: string }
+        email: { type: string, format: email }
+        system_admin: { type: boolean }
+        email_verified: { type: boolean }
+        mfa_enabled: { type: boolean }
+        status: { type: string }
+    SystemAccounts:
+      type: object
+      required: [accounts, events]
+      properties:
+        accounts:
+          type: array
+          items: { $ref: "#/components/schemas/SystemAccount" }
+        events:
+          type: array
+          items: { $ref: "#/components/schemas/SecurityEvent" }
     CreateCLIAuthCodeRequest:
       type: object
       additionalProperties: false

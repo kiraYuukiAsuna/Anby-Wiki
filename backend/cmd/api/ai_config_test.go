@@ -22,6 +22,7 @@ func TestClassifyAIConfigProviderError(t *testing.T) {
 	}{
 		{"authentication_failed", "authentication_failed", "模型供应商拒绝了 API Key"},
 		{"rate_limited", "rate_limited", "模型供应商正在限流，请稍后重试"},
+		{ai.ProviderCodeQuotaExhausted, ai.ProviderCodeQuotaExhausted, "模型供应商额度已耗尽，请恢复额度后重试"},
 		{"invalid_request", "invalid_request", "模型地址、模型 ID 或请求格式不被供应商接受"},
 		{"provider_unavailable", "provider_unavailable", "模型供应商暂时不可用"},
 		{"invalid_structured_output", "structured_output_invalid", "模型未返回兼容的结构化输出"},

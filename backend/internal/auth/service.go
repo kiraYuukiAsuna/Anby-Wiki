@@ -2,6 +2,7 @@ package auth
 
 import (
 	"context"
+	"crypto/cipher"
 	"crypto/rand"
 	"crypto/sha256"
 	"crypto/subtle"
@@ -112,6 +113,7 @@ type UpdateProfileInput struct {
 // Session contains the opaque cookie value. Only its SHA-256 hash is stored.
 type Session struct {
 	Token           string
+	MFAChallenge    string
 	ActorID         uuid.UUID
 	WikiID          uuid.UUID
 	WikiName        string
@@ -131,11 +133,12 @@ type WikiMembership struct {
 // Service is the sole write path for accounts, external identities and
 // authentication sessions.
 type Service struct {
-	pool       db.Querier
-	txm        *db.TxManager
-	ids        idGenerator
-	sessionTTL time.Duration
-	now        func() time.Time
+	pool           db.Querier
+	txm            *db.TxManager
+	ids            idGenerator
+	sessionTTL     time.Duration
+	now            func() time.Time
+	securityCipher cipher.AEAD
 }
 
 func NewService(pool db.Querier, txm *db.TxManager, ids idGenerator, sessionTTL time.Duration) *Service {
@@ -264,30 +267,25 @@ func (s *Service) Login(ctx context.Context, input LoginInput) (Session, error) 
 		return Session{}, ErrInvalidCredentials
 	}
 
-	sessionID, session, hash, err := s.newSession(
-		actorID, wikiID, wikiName, mainNamespaceID, displayName,
-	)
-	if err != nil {
-		return Session{}, err
-	}
+	var session Session
 	err = s.txm.InTx(ctx, func(tx pgx.Tx) error {
-		var currentDisplayName string
-		err := tx.QueryRow(ctx, `UPDATE local_account la
-			SET last_login_at=now(),updated_at=now()
-			FROM actor a
-			WHERE la.id=$1 AND a.id=la.actor_id
-				AND la.status='active' AND a.status='active'
-			RETURNING a.display_name`, accountID).Scan(&currentDisplayName)
-		if errors.Is(err, pgx.ErrNoRows) {
-			return ErrInvalidCredentials
-		}
+		account, err := s.lockSecurityAccount(ctx, tx, actorID)
 		if err != nil {
 			return err
 		}
-		session.DisplayName = currentDisplayName
-		_, err = tx.Exec(ctx, `INSERT INTO auth_session
-			(id,token_hash,actor_id,expires_at) VALUES ($1,$2,$3,$4)`,
-			sessionID, hash[:], actorID, session.ExpiresAt)
+		if account.PasswordHash != passwordHash {
+			return ErrInvalidCredentials
+		}
+		if account.TOTP != "" {
+			token, err := s.createSecurityToken(ctx, tx, actorID, securityMFALogin, "", 5*time.Minute)
+			if err != nil {
+				return err
+			}
+			session.MFAChallenge = token
+			session.ExpiresAt = s.now().Add(5 * time.Minute)
+			return nil
+		}
+		session, err = s.createSecuritySession(ctx, tx, actorID, false)
 		return err
 	})
 	if err != nil {
@@ -404,12 +402,17 @@ func (s *Service) ResolveSession(ctx context.Context, token string, requestedWik
 		return Principal{}, ErrUnauthenticated
 	}
 	hash := tokenHash(token)
-	var actorID uuid.UUID
-	err := s.pool.QueryRow(ctx, `SELECT actor_id
-		FROM auth_session
-		WHERE token_hash=$1 AND revoked_at IS NULL AND expires_at>now()`,
+	var actorID, sessionID uuid.UUID
+	err := s.pool.QueryRow(ctx, `WITH touched AS (
+		UPDATE auth_session SET last_seen_at=now()
+		WHERE token_hash=$1 AND revoked_at IS NULL AND expires_at>now()
+			AND last_seen_at<now()-interval '5 minutes'
+	) SELECT actor_id,id FROM auth_session s
+		WHERE token_hash=$1 AND revoked_at IS NULL AND expires_at>now()
+			AND NOT EXISTS(SELECT 1 FROM local_account la WHERE la.actor_id=s.actor_id
+				AND la.totp_ciphertext<>'' AND NOT s.mfa_verified)`,
 		hash[:],
-	).Scan(&actorID)
+	).Scan(&actorID, &sessionID)
 	if errors.Is(err, pgx.ErrNoRows) {
 		return Principal{}, ErrUnauthenticated
 	}
@@ -417,7 +420,7 @@ func (s *Service) ResolveSession(ctx context.Context, token string, requestedWik
 		return Principal{}, fmt.Errorf("auth: resolve session: %w", err)
 	}
 	return s.resolveActorPrincipal(
-		ctx, actorID, requestedWikiID, uuid.Nil, "session",
+		ctx, actorID, requestedWikiID, sessionID, "session",
 	)
 }
 
@@ -606,12 +609,15 @@ func (s *Service) GetProfile(ctx context.Context, actorID, _ uuid.UUID) (Profile
 
 // UpdateProfile updates only fields owned by the current local account.
 func (s *Service) UpdateProfile(ctx context.Context, input UpdateProfileInput) (Profile, error) {
-	email, normalizedEmail, displayName, wikiName, err := validateProfileUpdate(input)
+	_, normalizedEmail, displayName, wikiName, err := validateProfileUpdate(input)
 	if err != nil {
 		return Profile{}, err
 	}
 	var profile Profile
 	err = s.txm.InTx(ctx, func(tx pgx.Tx) error {
+		if _, err := s.lockSecurityAccount(ctx, tx, input.ActorID); err != nil {
+			return err
+		}
 		tag, err := tx.Exec(ctx, `UPDATE actor
 			SET display_name=$2
 			WHERE id=$1 AND status='active'`,
@@ -623,19 +629,20 @@ func (s *Service) UpdateProfile(ctx context.Context, input UpdateProfileInput) (
 			return ErrAccountNotFound
 		}
 		tag, err = tx.Exec(ctx, `UPDATE local_account
-			SET email=$2, normalized_email=$3, updated_at=now()
+			SET updated_at=now()
 			WHERE actor_id=$1 AND status='active'
+				AND normalized_email=$2
 				AND EXISTS (
 					SELECT 1 FROM actor a
 					WHERE a.id=local_account.actor_id
 						AND a.status='active'
 				)`,
-			input.ActorID, email, normalizedEmail)
+			input.ActorID, normalizedEmail)
 		if err != nil {
 			return err
 		}
 		if tag.RowsAffected() != 1 {
-			return ErrAccountNotFound
+			return &ValidationError{Field: "email", Message: "请在账号安全中验证后变更邮箱"}
 		}
 		tag, err = tx.Exec(ctx, `UPDATE wiki_site
 			SET name=$2

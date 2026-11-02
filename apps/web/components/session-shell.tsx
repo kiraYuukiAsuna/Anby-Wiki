@@ -13,7 +13,7 @@ import { useSession } from "@/lib/auth";
 import { rateLimitRetryAt } from "@/lib/api";
 import { workspaceAccessNotice } from "@/lib/workspace-access";
 
-const AUTH_PATHS = new Set(["/login", "/register"]);
+const AUTH_PATHS = new Set(["/login", "/register", "/forgot-password", "/reset-password", "/verify-email"]);
 
 function currentClientPath(fallback: string) {
   if (typeof window === "undefined") return fallback;

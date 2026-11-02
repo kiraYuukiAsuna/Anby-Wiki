@@ -26,6 +26,8 @@ RUN CGO_ENABLED=0 GOOS=${TARGETOS:-linux} GOARCH=${TARGETARCH:-amd64} \
     CGO_ENABLED=0 GOOS=${TARGETOS:-linux} GOARCH=${TARGETARCH:-amd64} \
     go build -trimpath -ldflags="-s -w" -o /out/wiki-ai-config-import-env ./cmd/ai-config-import-env && \
     CGO_ENABLED=0 GOOS=${TARGETOS:-linux} GOARCH=${TARGETARCH:-amd64} \
+    go build -trimpath -ldflags="-s -w" -o /out/wiki-system-admin ./cmd/system-admin && \
+    CGO_ENABLED=0 GOOS=${TARGETOS:-linux} GOARCH=${TARGETARCH:-amd64} \
     go build -trimpath -ldflags="-s -w" -o /out/wiki-perf ./cmd/perf
 
 FROM ${NODE_IMAGE} AS web-builder
@@ -100,6 +102,7 @@ LABEL org.opencontainers.image.title="Anby Wiki Migration Tools" \
 COPY --from=go-builder /out/wiki-migrate /usr/local/bin/wiki-migrate
 COPY --from=go-builder /out/wiki-doctor /usr/local/bin/wiki-doctor
 COPY --from=go-builder /out/wiki-ai-config-import-env /usr/local/bin/wiki-ai-config-import-env
+COPY --from=go-builder /out/wiki-system-admin /usr/local/bin/wiki-system-admin
 COPY --from=go-builder /out/wiki-perf /usr/local/bin/wiki-perf
 COPY --chown=10001:10001 backend/migrations/ /app/migrations/
 CMD ["wiki-migrate"]

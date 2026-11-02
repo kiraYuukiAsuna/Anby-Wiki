@@ -26,6 +26,7 @@
 | [ADR-0022](./0022-dual-track-document-parsing.md) | 复杂文档采用文本与视觉双轨解析 | 已接受 |
 | [ADR-0023](./0023-llm-layout-and-region-parsing.md) | LLM 布局与区域识别分离，统一 PDF 与图片解析 | 已接受 |
 | [ADR-0024](./0024-native-cross-origin-protection.md) | Go 标准库浏览器写请求来源校验 | 已接受 |
+| [ADR-0025](./0025-account-security-and-system-administration.md) | 邮箱恢复、TOTP 与独立系统管理台 | 已接受 |
 
 新增 ADR 规则：编号只增不复用；状态为「提议 / 已接受 / 已废弃 / 被 ADR-XXXX 取代」；
 涉及实施方案 §8.2 高冲突资源的决策变更必须先更新 ADR 再改代码。

@@ -22,7 +22,7 @@ import (
 const (
 	DocumentPageAnalysisPromptKey     = "document-page-analysis-v1"
 	DocumentPageAnalysisPromptVersion = 2
-	visionPDFParserVersion            = "3"
+	visionPDFParserVersion            = "4"
 	maxAdvancedPDFPages               = 500
 	maxVisionPageImageBytes           = 16 << 20
 	maxVisionNativeTextRunes          = 24000

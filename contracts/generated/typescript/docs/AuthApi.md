@@ -10,6 +10,7 @@ All URIs are relative to *http://localhost:3000*
 | [**deleteCLITokenRecord**](AuthApi.md#deleteclitokenrecord) | **DELETE** /api/v1/auth/cli/token-records/{id} | 删除当前账号的单个已失效 CLI Token 记录 |
 | [**deleteInactiveCLITokenRecords**](AuthApi.md#deleteinactiveclitokenrecords) | **DELETE** /api/v1/auth/cli/token-records | 删除当前账号的已失效 CLI Token 记录 |
 | [**exchangeCLIAuthCode**](AuthApi.md#exchangecliauthcodeoperation) | **POST** /api/v1/auth/cli/exchange | 兑换一次性授权码 |
+| [**forgotPassword**](AuthApi.md#forgotpasswordoperation) | **POST** /api/v1/auth/forgot-password | 向已验证邮箱发送恢复链接，响应不透露账号是否存在 |
 | [**getSession**](AuthApi.md#getsession) | **GET** /api/v1/auth/session | 获取当前登录 Actor |
 | [**listCLIMachineActors**](AuthApi.md#listclimachineactors) | **GET** /api/v1/auth/cli/actors | 列出当前账户可绑定的机器 Actor |
 | [**listCLITokens**](AuthApi.md#listclitokens) | **GET** /api/v1/auth/cli/tokens | 列出当前账号及其机器 Actor 的 CLI Token |
@@ -17,9 +18,12 @@ All URIs are relative to *http://localhost:3000*
 | [**login**](AuthApi.md#loginoperation) | **POST** /api/v1/auth/login | 使用用户名或邮箱和密码登录 |
 | [**logout**](AuthApi.md#logout) | **POST** /api/v1/auth/logout | 吊销当前服务端 session 并清除 cookie |
 | [**register**](AuthApi.md#registeroperation) | **POST** /api/v1/auth/register | 注册本地账号并建立会话 |
+| [**resetPassword**](AuthApi.md#resetpassword) | **POST** /api/v1/auth/reset-password | 一次性重置密码并撤销本人及管理的机器账号凭证 |
 | [**revokeCLIToken**](AuthApi.md#revokeclitoken) | **DELETE** /api/v1/auth/cli/tokens/{id} | 撤销当前账号的指定 CLI Token |
 | [**revokeCurrentCLIToken**](AuthApi.md#revokecurrentclitoken) | **DELETE** /api/v1/auth/cli/token | 撤销当前 Bearer Token |
 | [**setMachineActorStatus**](AuthApi.md#setmachineactorstatusoperation) | **PUT** /api/v1/machine-actors/{id}/status | 真人管理员启用或停用当前 Wiki 的机器 Actor |
+| [**verifyEmail**](AuthApi.md#verifyemail) | **POST** /api/v1/auth/verify-email | 一次性确认邮箱或变更邮箱；变更后撤销全部凭证 |
+| [**verifyMFA**](AuthApi.md#verifymfa) | **POST** /api/v1/auth/mfa/verify | 消费密码验证后签发的 MFA challenge 并建立会话 |
 
 
 
@@ -469,6 +473,75 @@ No authorization required
 [[Back to top]](#) [[Back to API list]](../README.md#api-endpoints) [[Back to Model list]](../README.md#models) [[Back to README]](../README.md)
 
 
+## forgotPassword
+
+> ForgotPassword202Response forgotPassword(forgotPasswordRequest)
+
+向已验证邮箱发送恢复链接，响应不透露账号是否存在
+
+### Example
+
+```ts
+import {
+  Configuration,
+  AuthApi,
+} from '';
+import type { ForgotPasswordOperationRequest } from '';
+
+async function example() {
+  console.log("🚀 Testing  SDK...");
+  const api = new AuthApi();
+
+  const body = {
+    // ForgotPasswordRequest
+    forgotPasswordRequest: ...,
+  } satisfies ForgotPasswordOperationRequest;
+
+  try {
+    const data = await api.forgotPassword(body);
+    console.log(data);
+  } catch (error) {
+    console.error(error);
+  }
+}
+
+// Run the test
+example().catch(console.error);
+```
+
+### Parameters
+
+
+| Name | Type | Description  | Notes |
+|------------- | ------------- | ------------- | -------------|
+| **forgotPasswordRequest** | [ForgotPasswordRequest](ForgotPasswordRequest.md) |  | |
+
+### Return type
+
+[**ForgotPassword202Response**](ForgotPassword202Response.md)
+
+### Authorization
+
+No authorization required
+
+### HTTP request headers
+
+- **Content-Type**: `application/json`
+- **Accept**: `application/json`
+
+
+### HTTP response details
+| Status code | Description | Response headers |
+|-------------|-------------|------------------|
+| **202** | 已受理 |  -  |
+| **400** | 请求格式错误 |  -  |
+| **403** | 无操作权限或浏览器写请求来源不受信任。 非安全方法统一使用 Go CrossOriginProtection 校验浏览器来源；优先检查 Sec-Fetch-Site，缺失时比较 Origin 与 Host。无来源头的 CLI/服务端调用 继续执行原有认证和授权。  |  -  |
+| **429** | 触发限流，需退避后重试 |  * Retry-After - 建议等待的秒数 <br>  * X-RateLimit-Limit - 当前窗口配额 <br>  * X-RateLimit-Remaining - 当前窗口剩余配额 <br>  |
+| **503** | 服务端内部错误 |  -  |
+
+[[Back to top]](#) [[Back to API list]](../README.md#api-endpoints) [[Back to Model list]](../README.md#models) [[Back to README]](../README.md)
+
+
 ## getSession
 
 > AuthSession getSession()
@@ -782,7 +855,7 @@ No authorization required
 ### HTTP response details
 | Status code | Description | Response headers |
 |-------------|-------------|------------------|
-| **200** | 登录成功，设置 HttpOnly session cookie |  -  |
+| **200** | 无 MFA 时设置会话；启用 MFA 时返回短时 challenge_token，不设置会话 |  -  |
 | **400** | 请求格式错误 |  -  |
 | **401** | 未认证 |  -  |
 | **403** | 无操作权限或浏览器写请求来源不受信任。 非安全方法统一使用 Go CrossOriginProtection 校验浏览器来源；优先检查 Sec-Fetch-Site，缺失时比较 Origin 与 Host。无来源头的 CLI/服务端调用 继续执行原有认证和授权。  |  -  |
@@ -919,6 +992,76 @@ No authorization required
 | **409** | 并发冲突（含陈旧基线、幂等键冲突） |  -  |
 | **429** | 触发限流，需退避后重试 |  * Retry-After - 建议等待的秒数 <br>  * X-RateLimit-Limit - 当前窗口配额 <br>  * X-RateLimit-Remaining - 当前窗口剩余配额 <br>  |
 | **500** | 服务端内部错误 |  -  |
+
+[[Back to top]](#) [[Back to API list]](../README.md#api-endpoints) [[Back to Model list]](../README.md#models) [[Back to README]](../README.md)
+
+
+## resetPassword
+
+> resetPassword(securityTokenRequest)
+
+一次性重置密码并撤销本人及管理的机器账号凭证
+
+邮箱必须已经验证；已绑定 MFA 的账号必须同时提供 TOTP 或一次性恢复码。
+
+### Example
+
+```ts
+import {
+  Configuration,
+  AuthApi,
+} from '';
+import type { ResetPasswordRequest } from '';
+
+async function example() {
+  console.log("🚀 Testing  SDK...");
+  const api = new AuthApi();
+
+  const body = {
+    // SecurityTokenRequest
+    securityTokenRequest: ...,
+  } satisfies ResetPasswordRequest;
+
+  try {
+    const data = await api.resetPassword(body);
+    console.log(data);
+  } catch (error) {
+    console.error(error);
+  }
+}
+
+// Run the test
+example().catch(console.error);
+```
+
+### Parameters
+
+
+| Name | Type | Description  | Notes |
+|------------- | ------------- | ------------- | -------------|
+| **securityTokenRequest** | [SecurityTokenRequest](SecurityTokenRequest.md) |  | |
+
+### Return type
+
+`void` (Empty response body)
+
+### Authorization
+
+No authorization required
+
+### HTTP request headers
+
+- **Content-Type**: `application/json`
+- **Accept**: `application/json`
+
+
+### HTTP response details
+| Status code | Description | Response headers |
+|-------------|-------------|------------------|
+| **204** | 已重置，请重新登录 |  -  |
+| **400** | 请求格式错误 |  -  |
+| **403** | 无操作权限或浏览器写请求来源不受信任。 非安全方法统一使用 Go CrossOriginProtection 校验浏览器来源；优先检查 Sec-Fetch-Site，缺失时比较 Origin 与 Host。无来源头的 CLI/服务端调用 继续执行原有认证和授权。  |  -  |
+| **429** | 触发限流，需退避后重试 |  * Retry-After - 建议等待的秒数 <br>  * X-RateLimit-Limit - 当前窗口配额 <br>  * X-RateLimit-Remaining - 当前窗口剩余配额 <br>  |
 
 [[Back to top]](#) [[Back to API list]](../README.md#api-endpoints) [[Back to Model list]](../README.md#models) [[Back to README]](../README.md)
 
@@ -1136,6 +1279,143 @@ example().catch(console.error);
 | **403** | 无操作权限或浏览器写请求来源不受信任。 非安全方法统一使用 Go CrossOriginProtection 校验浏览器来源；优先检查 Sec-Fetch-Site，缺失时比较 Origin 与 Host。无来源头的 CLI/服务端调用 继续执行原有认证和授权。  |  -  |
 | **404** | 资源不存在 |  -  |
 | **500** | 服务端内部错误 |  -  |
+
+[[Back to top]](#) [[Back to API list]](../README.md#api-endpoints) [[Back to Model list]](../README.md#models) [[Back to README]](../README.md)
+
+
+## verifyEmail
+
+> verifyEmail(securityTokenRequest)
+
+一次性确认邮箱或变更邮箱；变更后撤销全部凭证
+
+### Example
+
+```ts
+import {
+  Configuration,
+  AuthApi,
+} from '';
+import type { VerifyEmailRequest } from '';
+
+async function example() {
+  console.log("🚀 Testing  SDK...");
+  const api = new AuthApi();
+
+  const body = {
+    // SecurityTokenRequest
+    securityTokenRequest: ...,
+  } satisfies VerifyEmailRequest;
+
+  try {
+    const data = await api.verifyEmail(body);
+    console.log(data);
+  } catch (error) {
+    console.error(error);
+  }
+}
+
+// Run the test
+example().catch(console.error);
+```
+
+### Parameters
+
+
+| Name | Type | Description  | Notes |
+|------------- | ------------- | ------------- | -------------|
+| **securityTokenRequest** | [SecurityTokenRequest](SecurityTokenRequest.md) |  | |
+
+### Return type
+
+`void` (Empty response body)
+
+### Authorization
+
+No authorization required
+
+### HTTP request headers
+
+- **Content-Type**: `application/json`
+- **Accept**: `application/json`
+
+
+### HTTP response details
+| Status code | Description | Response headers |
+|-------------|-------------|------------------|
+| **204** | 邮箱已确认 |  -  |
+| **400** | 请求格式错误 |  -  |
+| **403** | 无操作权限或浏览器写请求来源不受信任。 非安全方法统一使用 Go CrossOriginProtection 校验浏览器来源；优先检查 Sec-Fetch-Site，缺失时比较 Origin 与 Host。无来源头的 CLI/服务端调用 继续执行原有认证和授权。  |  -  |
+| **409** | 并发冲突（含陈旧基线、幂等键冲突） |  -  |
+| **429** | 触发限流，需退避后重试 |  * Retry-After - 建议等待的秒数 <br>  * X-RateLimit-Limit - 当前窗口配额 <br>  * X-RateLimit-Remaining - 当前窗口剩余配额 <br>  |
+
+[[Back to top]](#) [[Back to API list]](../README.md#api-endpoints) [[Back to Model list]](../README.md#models) [[Back to README]](../README.md)
+
+
+## verifyMFA
+
+> AuthResult verifyMFA(securityTokenRequest)
+
+消费密码验证后签发的 MFA challenge 并建立会话
+
+### Example
+
+```ts
+import {
+  Configuration,
+  AuthApi,
+} from '';
+import type { VerifyMFARequest } from '';
+
+async function example() {
+  console.log("🚀 Testing  SDK...");
+  const api = new AuthApi();
+
+  const body = {
+    // SecurityTokenRequest
+    securityTokenRequest: ...,
+  } satisfies VerifyMFARequest;
+
+  try {
+    const data = await api.verifyMFA(body);
+    console.log(data);
+  } catch (error) {
+    console.error(error);
+  }
+}
+
+// Run the test
+example().catch(console.error);
+```
+
+### Parameters
+
+
+| Name | Type | Description  | Notes |
+|------------- | ------------- | ------------- | -------------|
+| **securityTokenRequest** | [SecurityTokenRequest](SecurityTokenRequest.md) |  | |
+
+### Return type
+
+[**AuthResult**](AuthResult.md)
+
+### Authorization
+
+No authorization required
+
+### HTTP request headers
+
+- **Content-Type**: `application/json`
+- **Accept**: `application/json`
+
+
+### HTTP response details
+| Status code | Description | Response headers |
+|-------------|-------------|------------------|
+| **200** | 已验证，设置会话 |  -  |
+| **400** | 请求格式错误 |  -  |
+| **403** | 无操作权限或浏览器写请求来源不受信任。 非安全方法统一使用 Go CrossOriginProtection 校验浏览器来源；优先检查 Sec-Fetch-Site，缺失时比较 Origin 与 Host。无来源头的 CLI/服务端调用 继续执行原有认证和授权。  |  -  |
+| **429** | 触发限流，需退避后重试 |  * Retry-After - 建议等待的秒数 <br>  * X-RateLimit-Limit - 当前窗口配额 <br>  * X-RateLimit-Remaining - 当前窗口剩余配额 <br>  |
 
 [[Back to top]](#) [[Back to API list]](../README.md#api-endpoints) [[Back to Model list]](../README.md#models) [[Back to README]](../README.md)
 

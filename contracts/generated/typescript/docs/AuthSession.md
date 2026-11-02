@@ -6,6 +6,7 @@
 
 Name | Type
 ------------ | -------------
+`systemAdmin` | boolean
 `actorId` | string
 `wikiId` | string
 `homeWikiId` | string
@@ -23,6 +24,7 @@ import type { AuthSession } from ''
 
 // TODO: Update the object below with actual values
 const example = {
+  "systemAdmin": null,
   "actorId": null,
   "wikiId": null,
   "homeWikiId": null,

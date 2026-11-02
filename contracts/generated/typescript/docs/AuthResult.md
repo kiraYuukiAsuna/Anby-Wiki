@@ -6,6 +6,8 @@
 
 Name | Type
 ------------ | -------------
+`mfaRequired` | boolean
+`challengeToken` | string
 `actorId` | string
 `wikiId` | string
 `wikiName` | string
@@ -19,6 +21,8 @@ import type { AuthResult } from ''
 
 // TODO: Update the object below with actual values
 const example = {
+  "mfaRequired": null,
+  "challengeToken": null,
   "actorId": null,
   "wikiId": null,
   "wikiName": null,

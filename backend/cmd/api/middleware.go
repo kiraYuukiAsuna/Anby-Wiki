@@ -64,6 +64,11 @@ func requestIDFrom(ctx context.Context) string {
 func Authentication(authenticator *authdomain.Authenticator, testHeaderFallback bool) func(http.Handler) http.Handler {
 	return func(next http.Handler) http.Handler {
 		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			if strings.HasPrefix(r.URL.Path, "/api/v1/auth/") ||
+				strings.HasPrefix(r.URL.Path, "/api/v1/account/") ||
+				strings.HasPrefix(r.URL.Path, "/api/v1/system/") {
+				w.Header().Set("Cache-Control", "no-store")
+			}
 			if skipsCredentialAuthentication(r) {
 				next.ServeHTTP(w, r)
 				return
@@ -129,6 +134,7 @@ func skipsCredentialAuthentication(r *http.Request) bool {
 	case r.Method == http.MethodPost &&
 		(r.URL.Path == "/api/v1/auth/register" ||
 			r.URL.Path == "/api/v1/auth/login" ||
+			isPublicSecurityPath(r.URL.Path) ||
 			r.URL.Path == "/api/v1/auth/cli/exchange" ||
 			r.URL.Path == "/api/v1/auth/logout"):
 		return true
@@ -138,6 +144,9 @@ func skipsCredentialAuthentication(r *http.Request) bool {
 }
 
 func isAccountScopedAPI(r *http.Request) bool {
+	if r.URL.Path == "/api/v1/account/security" || strings.HasPrefix(r.URL.Path, "/api/v1/system/") {
+		return true
+	}
 	switch {
 	case (r.Method == http.MethodGet || r.Method == http.MethodPut) &&
 		(r.URL.Path == "/api/v1/account/profile" ||
@@ -174,6 +183,7 @@ func RequireAuthenticatedWiki(next http.Handler) http.Handler {
 		case r.Method == http.MethodPost &&
 			(r.URL.Path == "/api/v1/auth/register" ||
 				r.URL.Path == "/api/v1/auth/login" ||
+				isPublicSecurityPath(r.URL.Path) ||
 				r.URL.Path == "/api/v1/auth/cli/exchange"):
 			public = true
 		case r.Method == http.MethodGet && r.URL.Path == "/api/v1/auth/session":
@@ -273,6 +283,7 @@ func bucketFor(method, path string) (string, bool) {
 	case method == http.MethodPost &&
 		(path == "/api/v1/auth/login" ||
 			path == "/api/v1/auth/register" ||
+			isPublicSecurityPath(path) ||
 			path == "/api/v1/auth/cli/exchange"):
 		return authBucket, true
 	case strings.HasPrefix(path, "/api/"):
@@ -280,6 +291,15 @@ func bucketFor(method, path string) (string, bool) {
 	default:
 		// Probes and /metrics are never limited.
 		return "", false
+	}
+}
+
+func isPublicSecurityPath(path string) bool {
+	switch path {
+	case "/api/v1/auth/forgot-password", "/api/v1/auth/reset-password", "/api/v1/auth/verify-email", "/api/v1/auth/mfa/verify":
+		return true
+	default:
+		return false
 	}
 }
 

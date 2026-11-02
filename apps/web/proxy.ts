@@ -1,7 +1,7 @@
 import type { NextRequest } from "next/server";
 import { NextResponse } from "next/server";
 
-const AUTH_PATHS = new Set(["/login", "/register"]);
+const AUTH_PATHS = new Set(["/login", "/register", "/forgot-password", "/reset-password", "/verify-email"]);
 const SESSION_COOKIE_NAME =
   process.env.SESSION_COOKIE_NAME?.trim() || "anby_session";
 

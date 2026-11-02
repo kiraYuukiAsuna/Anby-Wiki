@@ -109,6 +109,14 @@ func (s *Service) CreateCLIAuthorizationCode(
 		TokenExpiresAt: now.Add(time.Duration(tokenTTLDays) * 24 * time.Hour),
 	}
 	err = s.txm.InTx(ctx, func(tx pgx.Tx) error {
+		if principal, ok := PrincipalFrom(ctx); ok {
+			if _, err := s.securityAccountForPrincipal(ctx, tx, principal); err != nil {
+				return err
+			}
+		}
+		if err := lockCLICredentialAccount(ctx, tx, actorID); err != nil {
+			return err
+		}
 		identity, err := lockCLIActor(ctx, tx, actorID, in.IssuedBy)
 		if err != nil {
 			return err
@@ -158,6 +166,9 @@ func (s *Service) ExchangeCLIAuthorizationCode(
 			if errors.Is(err, pgx.ErrNoRows) {
 				return ErrInvalidCLIAuthorizationCode
 			}
+			return err
+		}
+		if err := lockCLICredentialAccount(ctx, tx, actorID); err != nil {
 			return err
 		}
 		identity, err := lockCLIActor(ctx, tx, actorID, uuid.Nil)
@@ -221,6 +232,18 @@ func (s *Service) ExchangeCLIAuthorizationCode(
 		return CLIExchangeResult{}, fmt.Errorf("auth: exchange CLI authorization code: %w", err)
 	}
 	return result, nil
+}
+
+// Serialize credential issuance with password/MFA changes and mass revocation.
+// This lock precedes Actor and authorization-code locks.
+func lockCLICredentialAccount(ctx context.Context, tx pgx.Tx, actorID uuid.UUID) error {
+	var ownerID uuid.UUID
+	err := tx.QueryRow(ctx, `SELECT la.actor_id FROM local_account la JOIN actor a ON a.user_id=la.id
+		WHERE a.id=$1 FOR UPDATE OF la`, actorID).Scan(&ownerID)
+	if errors.Is(err, pgx.ErrNoRows) {
+		return nil
+	}
+	return err
 }
 
 func (s *Service) ListCLIAuthorizationCodes(

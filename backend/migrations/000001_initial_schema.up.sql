@@ -1463,6 +1463,14 @@ CREATE TABLE local_account (
     email               text        NOT NULL,
     normalized_email    text        NOT NULL UNIQUE,
     password_hash       text        NOT NULL,
+    email_verified_at   timestamptz,
+    system_admin        boolean     NOT NULL DEFAULT false,
+    totp_ciphertext     text        NOT NULL DEFAULT '',
+    totp_pending_ciphertext text    NOT NULL DEFAULT '',
+    totp_pending_expires_at timestamptz,
+    totp_last_step      bigint      NOT NULL DEFAULT -1,
+    security_failures   integer     NOT NULL DEFAULT 0,
+    security_locked_until timestamptz,
     status              text        NOT NULL DEFAULT 'active'
                                     CHECK (status IN ('active', 'disabled', 'locked')),
     password_changed_at timestamptz NOT NULL DEFAULT now(),
@@ -1481,6 +1489,9 @@ CREATE TABLE auth_session (
     actor_id   uuid        NOT NULL REFERENCES actor (id),
     expires_at timestamptz NOT NULL,
     revoked_at timestamptz,
+    user_agent text        NOT NULL DEFAULT '',
+    last_seen_at timestamptz NOT NULL DEFAULT now(),
+    mfa_verified boolean   NOT NULL DEFAULT false,
     created_at timestamptz NOT NULL DEFAULT now(),
     CONSTRAINT auth_session_expiry_check CHECK (expires_at > created_at)
 );
@@ -1489,6 +1500,40 @@ CREATE INDEX auth_session_actor_active_idx
     ON auth_session (actor_id, expires_at)
     WHERE revoked_at IS NULL;
 CREATE INDEX auth_session_expires_idx ON auth_session (expires_at);
+
+CREATE TABLE account_security_token (
+    token_hash bytea PRIMARY KEY,
+    actor_id uuid NOT NULL REFERENCES actor (id) ON DELETE CASCADE,
+    purpose text NOT NULL CHECK (purpose IN ('verify_email','change_email','reset_password','mfa_login')),
+    target text NOT NULL DEFAULT '',
+    expires_at timestamptz NOT NULL,
+    attempts integer NOT NULL DEFAULT 0,
+    used_at timestamptz,
+    created_at timestamptz NOT NULL DEFAULT now()
+);
+CREATE INDEX account_security_token_actor_idx ON account_security_token (actor_id, purpose, created_at);
+
+CREATE TABLE account_recovery_code (
+    actor_id uuid NOT NULL REFERENCES actor (id) ON DELETE CASCADE,
+    code_hash bytea NOT NULL,
+    PRIMARY KEY (actor_id, code_hash)
+);
+
+CREATE TABLE system_mail_config (
+    singleton boolean PRIMARY KEY DEFAULT true CHECK (singleton),
+    configuration jsonb NOT NULL,
+    password_ciphertext text NOT NULL DEFAULT '',
+    updated_at timestamptz NOT NULL DEFAULT now()
+);
+
+CREATE TABLE account_security_event (
+    id uuid PRIMARY KEY,
+    actor_id uuid REFERENCES actor (id) ON DELETE SET NULL,
+    target_actor_id uuid REFERENCES actor (id) ON DELETE SET NULL,
+    action text NOT NULL,
+    created_at timestamptz NOT NULL DEFAULT now()
+);
+CREATE INDEX account_security_event_created_idx ON account_security_event (created_at DESC);
 
 CREATE TABLE cli_authorization_code (
     id               uuid        PRIMARY KEY,

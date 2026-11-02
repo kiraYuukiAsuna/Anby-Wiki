@@ -1,6 +1,6 @@
 "use client";
 
-import { LogIn, LogOut, UserRound } from "lucide-react";
+import { LogIn, LogOut, UserRound, ShieldCheck } from "lucide-react";
 import Link from "next/link";
 import { toast } from "sonner";
 import { useSWRConfig } from "swr";
@@ -63,6 +63,7 @@ export function AccountMenu() {
 
   return (
     <div className="flex shrink-0 items-center gap-1">
+      {session.systemAdmin && <Button size="sm" variant="ghost" asChild className="px-2" aria-label="系统管理台"><Link href="/admin"><ShieldCheck aria-hidden /></Link></Button>}
       <Button
         size="sm"
         variant="ghost"

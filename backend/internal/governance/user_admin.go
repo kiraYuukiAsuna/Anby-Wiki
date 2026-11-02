@@ -586,6 +586,17 @@ func (s *UserAdminService) DeleteUser(
 		if err := s.lockAdminRoleMutation(ctx, tx, "admin"); err != nil {
 			return err
 		}
+		// Wiki authority cannot delete a system administrator.
+		var systemAdmin bool
+		if err := tx.QueryRow(ctx, `SELECT system_admin FROM local_account WHERE actor_id=$1 FOR UPDATE`, targetActorID).Scan(&systemAdmin); err != nil {
+			if errors.Is(err, pgx.ErrNoRows) {
+				return ErrAdminUserNotFound
+			}
+			return err
+		}
+		if systemAdmin {
+			return ErrLastAdminUser
+		}
 		targetStatus, err := s.lockLocalHumanUser(
 			ctx, tx, wikiID, targetActorID,
 		)
@@ -647,6 +658,8 @@ func (s *UserAdminService) DeleteUser(
 		}
 		deleted := false
 		for _, statement := range []string{
+			`DELETE FROM account_security_token WHERE actor_id=$1`,
+			`DELETE FROM account_recovery_code WHERE actor_id=$1`,
 			`DELETE FROM cli_authorization_code WHERE actor_id=$1`,
 			`DELETE FROM cli_access_token WHERE actor_id=$1`,
 			`DELETE FROM auth_session WHERE actor_id=$1`,

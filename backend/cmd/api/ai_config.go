@@ -19,13 +19,38 @@ import (
 )
 
 type AIConfigAPI struct {
-	service  *aiconfig.Service
-	provider ai.Provider
-	auth     *governance.AuthorizationService
+	service *aiconfig.Service
+	gateway *ai.Gateway
+	auth    *governance.AuthorizationService
 }
 
-func NewAIConfigAPI(service *aiconfig.Service, provider ai.Provider, auth *governance.AuthorizationService) *AIConfigAPI {
-	return &AIConfigAPI{service: service, provider: provider, auth: auth}
+const (
+	aiConfigExtractionProbeKey = "ai-config-extraction-probe-v1"
+	aiConfigVisionProbeKey     = "ai-config-vision-probe-v1"
+	aiConfigProbeProvider      = "semantic-kernel"
+	aiConfigProbeSourceID      = "00000000-0000-4000-8000-000000000001"
+)
+
+func aiConfigProbePrompts() []ai.Prompt {
+	return []ai.Prompt{
+		{
+			Key: aiConfigExtractionProbeKey, Version: 1,
+			System: "You are an extraction compatibility check. Return only JSON conforming exactly to the supplied schema.",
+			User: `Return exactly one empty extraction envelope with schema_version 1, source_version_id "` +
+				aiConfigProbeSourceID + `", empty entities and claims arrays, quality_score 0, and prompt_injection_detected false.`,
+			OutputSchema: importer.ExtractionSchemaJSON(),
+		},
+		{
+			Key: aiConfigVisionProbeKey, Version: 1,
+			System:       "Analyze the attached rendered page. Return only JSON conforming exactly to the supplied schema.",
+			User:         "This is page 1 of a one-page diagnostic document. Return schema_version 1 and page 1. The page may contain no meaningful elements.",
+			OutputSchema: importer.DocumentPageAnalysisSchemaJSON(),
+		},
+	}
+}
+
+func NewAIConfigAPI(service *aiconfig.Service, gateway *ai.Gateway, auth *governance.AuthorizationService) *AIConfigAPI {
+	return &AIConfigAPI{service: service, gateway: gateway, auth: auth}
 }
 
 func (a *AIConfigAPI) withWikiScope(
@@ -153,12 +178,9 @@ func (a *AIConfigAPI) test(w http.ResponseWriter, r *http.Request, wikiID uuid.U
 	defer cancel()
 	ctx = ai.WithWikiID(ctx, wikiID)
 	started := time.Now()
-	sourceVersionID := uuid.MustParse("00000000-0000-4000-8000-000000000001")
-	result, err := a.provider.Generate(ctx, ai.ProviderRequest{
-		SystemPrompt: "You are an extraction compatibility check. Return only JSON conforming exactly to the supplied schema.",
-		UserPrompt: `Return exactly one empty extraction envelope with schema_version 1, source_version_id "` +
-			sourceVersionID.String() + `", empty entities and claims arrays, quality_score 0, and prompt_injection_detected false.`,
-		JSONSchema: importer.ExtractionSchemaJSON(),
+	sourceVersionID := uuid.MustParse(aiConfigProbeSourceID)
+	result, err := a.gateway.Generate(ctx, ai.Request{
+		Provider: aiConfigProbeProvider, Model: runtime.Model, PromptKey: aiConfigExtractionProbeKey,
 	})
 	if err != nil {
 		aiConfigError(w, r, err)
@@ -179,10 +201,8 @@ func (a *AIConfigAPI) test(w http.ResponseWriter, r *http.Request, wikiID uuid.U
 		aiConfigError(w, r, err)
 		return
 	}
-	visionResult, err := a.provider.Generate(ctx, ai.ProviderRequest{
-		SystemPrompt: "Analyze the attached rendered page. Return only JSON conforming exactly to the supplied schema.",
-		UserPrompt:   "This is page 1 of a one-page diagnostic document. Return schema_version 1 and page 1. The page may contain no meaningful elements.",
-		JSONSchema:   importer.DocumentPageAnalysisSchemaJSON(),
+	visionResult, err := a.gateway.Generate(ctx, ai.Request{
+		Provider: aiConfigProbeProvider, Model: runtime.Model, PromptKey: aiConfigVisionProbeKey,
 		Images: []ai.ImageInput{{
 			MediaType: "image/png",
 			Data:      probeImage.Bytes(),
@@ -253,6 +273,8 @@ func classifyAIConfigProviderError(err *ai.ProviderError) (string, string) {
 		return "authentication_failed", "模型供应商拒绝了 API Key"
 	case "rate_limited", "http_429":
 		return "rate_limited", "模型供应商正在限流，请稍后重试"
+	case ai.ProviderCodeQuotaExhausted:
+		return ai.ProviderCodeQuotaExhausted, "模型供应商额度已耗尽，请恢复额度后重试"
 	case "invalid_request", "http_400", "http_404":
 		return "invalid_request", "模型地址、模型 ID 或请求格式不被供应商接受"
 	case "provider_unavailable", "transport", "kernel_unavailable":
