@@ -10,6 +10,7 @@ Name | Type
 `username` | string
 `email` | string
 `systemAdmin` | boolean
+`systemAdminProtected` | boolean
 `emailVerified` | boolean
 `mfaEnabled` | boolean
 `status` | string
@@ -25,6 +26,7 @@ const example = {
   "username": null,
   "email": null,
   "systemAdmin": null,
+  "systemAdminProtected": null,
   "emailVerified": null,
   "mfaEnabled": null,
   "status": null,

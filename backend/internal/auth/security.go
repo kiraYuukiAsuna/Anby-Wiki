@@ -24,11 +24,12 @@ import (
 )
 
 var (
-	ErrSecurityUnavailable = errors.New("auth: security configuration unavailable")
-	ErrSecurityForbidden   = errors.New("auth: browser session or system administrator required")
-	ErrSecurityToken       = errors.New("auth: invalid or expired security token")
-	ErrSecurityCooldown    = errors.New("auth: security operation rate limited")
-	ErrLastSystemAdmin     = errors.New("auth: cannot remove last system administrator")
+	ErrSecurityUnavailable  = errors.New("auth: security configuration unavailable")
+	ErrSecurityForbidden    = errors.New("auth: browser session or system administrator required")
+	ErrSecurityToken        = errors.New("auth: invalid or expired security token")
+	ErrSecurityCooldown     = errors.New("auth: security operation rate limited")
+	ErrLastSystemAdmin      = errors.New("auth: cannot remove last system administrator")
+	ErrProtectedSystemAdmin = errors.New("auth: cannot remove bootstrap system administrator")
 )
 
 type SecurityCooldownError struct {
@@ -97,11 +98,13 @@ type SecurityState struct {
 }
 
 type SecurityEvent struct {
-	ID            uuid.UUID  `json:"id"`
-	ActorID       *uuid.UUID `json:"actor_id"`
-	TargetActorID *uuid.UUID `json:"target_actor_id"`
-	Action        string     `json:"action"`
-	CreatedAt     time.Time  `json:"created_at"`
+	ID             uuid.UUID  `json:"id"`
+	ActorID        *uuid.UUID `json:"actor_id"`
+	TargetActorID  *uuid.UUID `json:"target_actor_id"`
+	ActorUsername  *string    `json:"actor_username"`
+	TargetUsername *string    `json:"target_username"`
+	Action         string     `json:"action"`
+	CreatedAt      time.Time  `json:"created_at"`
 }
 
 type securityAccount struct {
@@ -509,22 +512,26 @@ func (s *Service) GetSecurity(ctx context.Context, principal Principal) (Securit
 	if err != nil {
 		return state, err
 	}
-	state.Events, err = s.listSecurityEvents(ctx, principal.ActorID)
+	state.Events, err = s.listSecurityEvents(ctx, principal.ActorID, 50, 0)
 	return state, err
 }
 
-func (s *Service) listSecurityEvents(ctx context.Context, actorID uuid.UUID) ([]SecurityEvent, error) {
+func (s *Service) listSecurityEvents(ctx context.Context, actorID uuid.UUID, limit, offset int) ([]SecurityEvent, error) {
 	events := make([]SecurityEvent, 0)
-	rows, err := s.pool.Query(ctx, `SELECT id,actor_id,target_actor_id,action,created_at FROM account_security_event
-		WHERE $1::uuid='00000000-0000-0000-0000-000000000000' OR actor_id=$1 OR target_actor_id=$1
-		ORDER BY created_at DESC,id DESC LIMIT 50`, actorID)
+	rows, err := s.pool.Query(ctx, `SELECT e.id,e.actor_id,e.target_actor_id,e.action,e.created_at,
+		actor.username,target.username FROM account_security_event e
+		LEFT JOIN local_account actor ON actor.actor_id=e.actor_id
+		LEFT JOIN local_account target ON target.actor_id=e.target_actor_id
+		WHERE $1::uuid='00000000-0000-0000-0000-000000000000' OR e.actor_id=$1 OR e.target_actor_id=$1
+		ORDER BY e.created_at DESC,e.id DESC LIMIT $2 OFFSET $3`, actorID, limit, offset)
 	if err != nil {
 		return nil, err
 	}
 	defer rows.Close()
 	for rows.Next() {
 		var event SecurityEvent
-		if err := rows.Scan(&event.ID, &event.ActorID, &event.TargetActorID, &event.Action, &event.CreatedAt); err != nil {
+		if err := rows.Scan(&event.ID, &event.ActorID, &event.TargetActorID, &event.Action, &event.CreatedAt,
+			&event.ActorUsername, &event.TargetUsername); err != nil {
 			return nil, err
 		}
 		events = append(events, event)

@@ -44,6 +44,12 @@ export interface SystemAccount {
      */
     systemAdmin: boolean;
     /**
+     * 初始 admin 账号，其系统管理员权限不可撤销；此标记不自动授予权限
+     * @type {boolean}
+     * @memberof SystemAccount
+     */
+    systemAdminProtected: boolean;
+    /**
      *
      * @type {boolean}
      * @memberof SystemAccount
@@ -71,6 +77,7 @@ export function instanceOfSystemAccount(value: object): value is SystemAccount {
     if (!('username' in value) || value['username'] === undefined) return false;
     if (!('email' in value) || value['email'] === undefined) return false;
     if ((!('systemAdmin' in (value as Record<string, any>)) && !('system_admin' in (value as Record<string, any>))) || ((value as Record<string, any>)['systemAdmin'] === undefined && (value as Record<string, any>)['system_admin'] === undefined)) return false;
+    if ((!('systemAdminProtected' in (value as Record<string, any>)) && !('system_admin_protected' in (value as Record<string, any>))) || ((value as Record<string, any>)['systemAdminProtected'] === undefined && (value as Record<string, any>)['system_admin_protected'] === undefined)) return false;
     if ((!('emailVerified' in (value as Record<string, any>)) && !('email_verified' in (value as Record<string, any>))) || ((value as Record<string, any>)['emailVerified'] === undefined && (value as Record<string, any>)['email_verified'] === undefined)) return false;
     if ((!('mfaEnabled' in (value as Record<string, any>)) && !('mfa_enabled' in (value as Record<string, any>))) || ((value as Record<string, any>)['mfaEnabled'] === undefined && (value as Record<string, any>)['mfa_enabled'] === undefined)) return false;
     if (!('status' in value) || value['status'] === undefined) return false;
@@ -91,6 +98,7 @@ export function SystemAccountFromJSONTyped(json: any, ignoreDiscriminator: boole
         'username': json['username'],
         'email': json['email'],
         'systemAdmin': json['system_admin'],
+        'systemAdminProtected': json['system_admin_protected'],
         'emailVerified': json['email_verified'],
         'mfaEnabled': json['mfa_enabled'],
         'status': json['status'],
@@ -112,6 +120,7 @@ export function SystemAccountToJSONTyped(value?: SystemAccount | null, ignoreDis
         'username': value['username'],
         'email': value['email'],
         'system_admin': value['systemAdmin'],
+        'system_admin_protected': value['systemAdminProtected'],
         'email_verified': value['emailVerified'],
         'mfa_enabled': value['mfaEnabled'],
         'status': value['status'],

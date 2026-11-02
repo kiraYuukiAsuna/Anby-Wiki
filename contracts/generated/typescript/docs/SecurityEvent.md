@@ -9,6 +9,8 @@ Name | Type
 `id` | string
 `actorId` | string
 `targetActorId` | string
+`actorUsername` | string
+`targetUsername` | string
 `action` | string
 `createdAt` | Date
 
@@ -22,6 +24,8 @@ const example = {
   "id": null,
   "actorId": null,
   "targetActorId": null,
+  "actorUsername": null,
+  "targetUsername": null,
   "action": null,
   "createdAt": null,
 } satisfies SecurityEvent

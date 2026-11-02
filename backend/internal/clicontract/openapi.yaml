@@ -290,16 +290,18 @@ paths:
     post:
       operationId: testSystemMail
       tags: [admin]
-      summary: 重新认证后向系统管理员本人的邮箱发送测试邮件
+      summary: 系统管理员向指定收件邮箱发送测试邮件
+      description: 使用已保存的 SMTP 配置；需要有效的系统管理员浏览器会话，无需再次输入密码或二次验证码。
       security: [{ sessionCookie: [] }]
       requestBody:
         required: true
         content:
           application/json:
-            schema: { $ref: "#/components/schemas/SecurityProofRequest" }
+            schema: { $ref: "#/components/schemas/TestSystemMailRequest" }
       responses:
         "204": { description: 邮件已提交 SMTP }
         "400": { $ref: "#/components/responses/BadRequest" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
         "403": { $ref: "#/components/responses/Forbidden" }
         "429": { $ref: "#/components/responses/RateLimited" }
         "503": { $ref: "#/components/responses/Internal" }
@@ -308,14 +310,35 @@ paths:
       operationId: getSystemAccounts
       tags: [admin]
       summary: 系统管理员读取账号安全概况与系统安全审计
-      description: 不返回密码、密钥、令牌或私人 Wiki 内容。
+      description: |
+        账号与安全审计独立分页，默认各返回 10 条，并返回匹配总数与实际页码；
+        超出结果范围的页码收敛到最后一页。账号搜索覆盖全部账号，不限于当前页。
+        账号按系统管理员优先、创建时间及 Actor ID 排序；审计按时间及 ID 倒序。
+        mfa_enabled 表示当前操作账号的 MFA 状态，不受账号搜索或分页影响。
+        不返回密码、密钥、令牌或私人 Wiki 内容。
       security: [{ sessionCookie: [] }]
+      parameters:
+        - name: search
+          in: query
+          description: 按用户名或邮箱搜索，忽略大小写并按字面子串匹配；最大 254 字节。
+          schema: { type: string, maxLength: 254 }
+        - name: accounts_page
+          in: query
+          schema: { type: integer, minimum: 1, maximum: 1000000, default: 1 }
+        - name: events_page
+          in: query
+          schema: { type: integer, minimum: 1, maximum: 1000000, default: 1 }
+        - name: page_size
+          in: query
+          description: 两类列表各自的每页条数。
+          schema: { type: integer, minimum: 1, maximum: 100, default: 10 }
       responses:
         "200":
           description: 安全概况
           content:
             application/json:
               schema: { $ref: "#/components/schemas/SystemAccounts" }
+        "400": { $ref: "#/components/responses/BadRequest" }
         "401": { $ref: "#/components/responses/Unauthorized" }
         "403": { $ref: "#/components/responses/Forbidden" }
   /api/v1/system/administrators:
@@ -323,7 +346,7 @@ paths:
       operationId: setSystemAdministrator
       tags: [admin]
       summary: 重新认证后授予或撤销独立的系统管理员权限
-      description: 最后一个有效系统管理员不能被撤销；Wiki 管理员不自动获得系统权限。
+      description: 初始 admin 账号的系统管理员权限不可撤销；最后一个有效系统管理员不能被撤销；Wiki 管理员不自动获得系统权限。
       security: [{ sessionCookie: [] }]
       requestBody:
         required: true
@@ -5400,13 +5423,12 @@ components:
         purpose: { type: string, enum: [verify_email, change_email] }
         password: { type: string, format: password, minLength: 12, maxLength: 128 }
         code: { type: string, maxLength: 32 }
-    SecurityProofRequest:
+    TestSystemMailRequest:
       type: object
       additionalProperties: false
-      required: [password]
+      required: [email]
       properties:
-        password: { type: string, format: password, maxLength: 128 }
-        code: { type: string, maxLength: 32 }
+        email: { type: string, format: email, maxLength: 254 }
     AccountSecurityRequest:
       type: object
       additionalProperties: false
@@ -5447,6 +5469,8 @@ components:
         id: { type: string, format: uuid }
         actor_id: { type: string, format: uuid, nullable: true }
         target_actor_id: { type: string, format: uuid, nullable: true }
+        actor_username: { type: string, nullable: true, description: 操作账号当前用户名，已删除或非本地账号时为空 }
+        target_username: { type: string, nullable: true, description: 目标账号当前用户名，已删除或非本地账号时为空 }
         action: { type: string }
         created_at: { type: string, format: date-time }
     AccountSecurity:
@@ -5491,18 +5515,19 @@ components:
         code: { type: string, maxLength: 32 }
     SystemAccount:
       type: object
-      required: [actor_id, username, email, system_admin, email_verified, mfa_enabled, status]
+      required: [actor_id, username, email, system_admin, system_admin_protected, email_verified, mfa_enabled, status]
       properties:
         actor_id: { type: string, format: uuid }
         username: { type: string }
         email: { type: string, format: email }
         system_admin: { type: boolean }
+        system_admin_protected: { type: boolean, description: 初始 admin 账号，其系统管理员权限不可撤销；此标记不自动授予权限 }
         email_verified: { type: boolean }
         mfa_enabled: { type: boolean }
         status: { type: string }
     SystemAccounts:
       type: object
-      required: [accounts, events]
+      required: [accounts, events, accounts_page, events_page, page_size, accounts_total, events_total, mfa_enabled]
       properties:
         accounts:
           type: array
@@ -5510,6 +5535,12 @@ components:
         events:
           type: array
           items: { $ref: "#/components/schemas/SecurityEvent" }
+        accounts_page: { type: integer, minimum: 1 }
+        events_page: { type: integer, minimum: 1 }
+        page_size: { type: integer, minimum: 1, maximum: 100 }
+        accounts_total: { type: integer, format: int64, minimum: 0 }
+        events_total: { type: integer, format: int64, minimum: 0 }
+        mfa_enabled: { type: boolean, description: 当前操作账号已启用 MFA }
     CreateCLIAuthCodeRequest:
       type: object
       additionalProperties: false

@@ -323,7 +323,6 @@ docs/SearchCapabilities.md
 docs/SearchFacetValue.md
 docs/SearchFacets.md
 docs/SecurityEvent.md
-docs/SecurityProofRequest.md
 docs/SecurityTokenRequest.md
 docs/SetMachineActorStatusRequest.md
 docs/SetPageEntityBindingRequest.md
@@ -345,6 +344,7 @@ docs/SubmitPublicDatasetFormRequest.md
 docs/SystemAccount.md
 docs/SystemAccounts.md
 docs/SystemMailConfig.md
+docs/TestSystemMailRequest.md
 docs/UpdateAIConfigRequest.md
 docs/UpdateAITrustProfileRequest.md
 docs/UpdateAccountProfileRequest.md
@@ -657,7 +657,6 @@ models/SearchCapabilities.ts
 models/SearchFacetValue.ts
 models/SearchFacets.ts
 models/SecurityEvent.ts
-models/SecurityProofRequest.ts
 models/SecurityTokenRequest.ts
 models/SetMachineActorStatusRequest.ts
 models/SetPageEntityBindingRequest.ts
@@ -678,6 +677,7 @@ models/SubmitPublicDatasetFormRequest.ts
 models/SystemAccount.ts
 models/SystemAccounts.ts
 models/SystemMailConfig.ts
+models/TestSystemMailRequest.ts
 models/UpdateAIConfigRequest.ts
 models/UpdateAITrustProfileRequest.ts
 models/UpdateAccountProfileRequest.ts

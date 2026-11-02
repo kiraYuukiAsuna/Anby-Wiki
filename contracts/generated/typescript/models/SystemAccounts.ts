@@ -46,6 +46,42 @@ export interface SystemAccounts {
      * @memberof SystemAccounts
      */
     events: Array<SecurityEvent>;
+    /**
+     *
+     * @type {number}
+     * @memberof SystemAccounts
+     */
+    accountsPage: number;
+    /**
+     *
+     * @type {number}
+     * @memberof SystemAccounts
+     */
+    eventsPage: number;
+    /**
+     *
+     * @type {number}
+     * @memberof SystemAccounts
+     */
+    pageSize: number;
+    /**
+     *
+     * @type {number}
+     * @memberof SystemAccounts
+     */
+    accountsTotal: number;
+    /**
+     *
+     * @type {number}
+     * @memberof SystemAccounts
+     */
+    eventsTotal: number;
+    /**
+     * 当前操作账号已启用 MFA
+     * @type {boolean}
+     * @memberof SystemAccounts
+     */
+    mfaEnabled: boolean;
 }
 
 /**
@@ -54,6 +90,12 @@ export interface SystemAccounts {
 export function instanceOfSystemAccounts(value: object): value is SystemAccounts {
     if (!('accounts' in value) || value['accounts'] === undefined) return false;
     if (!('events' in value) || value['events'] === undefined) return false;
+    if ((!('accountsPage' in (value as Record<string, any>)) && !('accounts_page' in (value as Record<string, any>))) || ((value as Record<string, any>)['accountsPage'] === undefined && (value as Record<string, any>)['accounts_page'] === undefined)) return false;
+    if ((!('eventsPage' in (value as Record<string, any>)) && !('events_page' in (value as Record<string, any>))) || ((value as Record<string, any>)['eventsPage'] === undefined && (value as Record<string, any>)['events_page'] === undefined)) return false;
+    if ((!('pageSize' in (value as Record<string, any>)) && !('page_size' in (value as Record<string, any>))) || ((value as Record<string, any>)['pageSize'] === undefined && (value as Record<string, any>)['page_size'] === undefined)) return false;
+    if ((!('accountsTotal' in (value as Record<string, any>)) && !('accounts_total' in (value as Record<string, any>))) || ((value as Record<string, any>)['accountsTotal'] === undefined && (value as Record<string, any>)['accounts_total'] === undefined)) return false;
+    if ((!('eventsTotal' in (value as Record<string, any>)) && !('events_total' in (value as Record<string, any>))) || ((value as Record<string, any>)['eventsTotal'] === undefined && (value as Record<string, any>)['events_total'] === undefined)) return false;
+    if ((!('mfaEnabled' in (value as Record<string, any>)) && !('mfa_enabled' in (value as Record<string, any>))) || ((value as Record<string, any>)['mfaEnabled'] === undefined && (value as Record<string, any>)['mfa_enabled'] === undefined)) return false;
     return true;
 }
 
@@ -69,6 +111,12 @@ export function SystemAccountsFromJSONTyped(json: any, ignoreDiscriminator: bool
 
         'accounts': ((json['accounts'] as Array<any>).map(SystemAccountFromJSON)),
         'events': ((json['events'] as Array<any>).map(SecurityEventFromJSON)),
+        'accountsPage': json['accounts_page'],
+        'eventsPage': json['events_page'],
+        'pageSize': json['page_size'],
+        'accountsTotal': json['accounts_total'],
+        'eventsTotal': json['events_total'],
+        'mfaEnabled': json['mfa_enabled'],
     };
 }
 
@@ -85,6 +133,12 @@ export function SystemAccountsToJSONTyped(value?: SystemAccounts | null, ignoreD
 
         'accounts': ((value['accounts'] as Array<any>).map(SystemAccountToJSON)),
         'events': ((value['events'] as Array<any>).map(SecurityEventToJSON)),
+        'accounts_page': value['accountsPage'],
+        'events_page': value['eventsPage'],
+        'page_size': value['pageSize'],
+        'accounts_total': value['accountsTotal'],
+        'events_total': value['eventsTotal'],
+        'mfa_enabled': value['mfaEnabled'],
     };
 }
 

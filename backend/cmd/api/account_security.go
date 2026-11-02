@@ -18,11 +18,6 @@ type securityTokenRequest struct {
 	Code     string `json:"code"`
 }
 
-type securityProofRequest struct {
-	Password string `json:"password"`
-	Code     string `json:"code"`
-}
-
 func securityPrincipal(w http.ResponseWriter, r *http.Request) (authdomain.Principal, bool) {
 	principal, ok := authdomain.PrincipalFrom(r.Context())
 	if !ok {
@@ -162,11 +157,13 @@ func (a *AuthAPI) testMailConfig(w http.ResponseWriter, r *http.Request) {
 	if !ok {
 		return
 	}
-	var input securityProofRequest
+	var input struct {
+		Email string `json:"email"`
+	}
 	if !decodeAuthJSON(w, r, &input) {
 		return
 	}
-	if err := a.service.TestMail(r.Context(), principal, input.Password, input.Code); err != nil {
+	if err := a.service.TestMail(r.Context(), principal, input.Email); err != nil {
 		securityError(w, r, err)
 		return
 	}
@@ -178,7 +175,26 @@ func (a *AuthAPI) getSystemState(w http.ResponseWriter, r *http.Request) {
 	if !ok {
 		return
 	}
-	state, err := a.service.GetSystemState(r.Context(), principal)
+	query := r.URL.Query()
+	input := authdomain.SystemStateInput{Search: query.Get("search")}
+	for _, parameter := range []struct {
+		name  string
+		value *int
+	}{
+		{"accounts_page", &input.AccountsPage},
+		{"events_page", &input.EventsPage},
+		{"page_size", &input.PageSize},
+	} {
+		if raw := query.Get(parameter.name); raw != "" {
+			value, err := strconv.Atoi(raw)
+			if err != nil || value < 1 {
+				httpx.WriteError(w, r, http.StatusBadRequest, httpx.CodeValidationFailed, parameter.name+" 必须是正整数")
+				return
+			}
+			*parameter.value = value
+		}
+	}
+	state, err := a.service.GetSystemState(r.Context(), principal, input)
 	if err != nil {
 		securityError(w, r, err)
 		return
@@ -228,6 +244,8 @@ func securityError(w http.ResponseWriter, r *http.Request, err error) {
 		httpx.WriteError(w, r, http.StatusForbidden, httpx.CodeForbidden, "需要本人浏览器会话或系统管理员权限")
 	case errors.Is(err, authdomain.ErrLastSystemAdmin):
 		httpx.WriteError(w, r, http.StatusConflict, httpx.CodeConflict, "必须保留至少一名有效的系统管理员")
+	case errors.Is(err, authdomain.ErrProtectedSystemAdmin):
+		httpx.WriteError(w, r, http.StatusConflict, httpx.CodeConflict, "初始 admin 账号的系统管理员权限不可撤销")
 	case errors.Is(err, authdomain.ErrAccountExists):
 		httpx.WriteError(w, r, http.StatusConflict, httpx.CodeConflict, "邮箱已被使用")
 	case errors.Is(err, authdomain.ErrSecurityUnavailable):

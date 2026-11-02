@@ -8,6 +8,12 @@ Name | Type
 ------------ | -------------
 `accounts` | [Array&lt;SystemAccount&gt;](SystemAccount.md)
 `events` | [Array&lt;SecurityEvent&gt;](SecurityEvent.md)
+`accountsPage` | number
+`eventsPage` | number
+`pageSize` | number
+`accountsTotal` | number
+`eventsTotal` | number
+`mfaEnabled` | boolean
 
 ## Example
 
@@ -18,6 +24,12 @@ import type { SystemAccounts } from ''
 const example = {
   "accounts": null,
   "events": null,
+  "accountsPage": null,
+  "eventsPage": null,
+  "pageSize": null,
+  "accountsTotal": null,
+  "eventsTotal": null,
+  "mfaEnabled": null,
 } satisfies SystemAccounts
 
 console.log(example)

@@ -139,6 +139,25 @@ func TestAccountSecurityE2E(t *testing.T) {
 	if _, err := service.openSecurity(ciphertext, owner.ActorID.String()); err == nil {
 		t.Fatal("ciphertext not bound to purpose")
 	}
+	if err := service.TestMail(ctx, other, "recipient@example.invalid"); !errors.Is(err, ErrSecurityForbidden) {
+		t.Fatal("Wiki admin sent system test mail")
+	}
+	if err := service.TestMail(ctx, cliPrincipal, "recipient@example.invalid"); !errors.Is(err, ErrSecurityForbidden) {
+		t.Fatal("CLI sent system test mail")
+	}
+	for _, email := range []string{"", "invalid", "Recipient <recipient@example.invalid>", "recipient@example.invalid\r\nBcc: other@example.invalid"} {
+		var validation *ValidationError
+		if err := service.TestMail(ctx, principal, email); !errors.As(err, &validation) || validation.Field != "email" {
+			t.Fatalf("invalid test recipient accepted: %q", email)
+		}
+	}
+	if err := service.TestMail(ctx, principal, " recipient@example.invalid "); err != nil {
+		t.Fatalf("test mail without password: %v", err)
+	}
+	testMessage, err := mail.ReadMessage(strings.NewReader(<-messages))
+	if err != nil || testMessage.Header.Get("To") != "recipient@example.invalid" {
+		t.Fatalf("test mail did not use the specified recipient: %v", err)
+	}
 
 	if _, err := service.MutateSecurity(ctx, principal, SecurityInput{Action: SecurityVerifyEmail}); err != nil {
 		t.Fatal(err)
@@ -211,6 +230,9 @@ func TestAccountSecurityE2E(t *testing.T) {
 	if _, err := service.ResolveCLIToken(ctx, cli.Token, uuid.Nil); !errors.Is(err, ErrUnauthenticated) {
 		t.Fatal("password reset retained CLI token")
 	}
+	if err := service.TestMail(ctx, principal, "recipient@example.invalid"); !errors.Is(err, ErrUnauthenticated) {
+		t.Fatal("revoked browser session sent system test mail")
+	}
 	login := func(code string) (Session, Principal) {
 		t.Helper()
 		session, err := service.Login(ctx, LoginInput{Identifier: "security_owner", Password: password})
@@ -260,6 +282,13 @@ func TestAccountSecurityE2E(t *testing.T) {
 	principal, err = service.ResolveSession(ctx, validSession.Token, uuid.Nil)
 	if err != nil {
 		t.Fatal(err)
+	}
+	if err := service.TestMail(ctx, principal, "mfa-recipient@example.invalid"); err != nil {
+		t.Fatalf("MFA browser test mail required another proof: %v", err)
+	}
+	testMessage, err = mail.ReadMessage(strings.NewReader(<-messages))
+	if err != nil || testMessage.Header.Get("To") != "mfa-recipient@example.invalid" {
+		t.Fatalf("MFA test mail did not use the specified recipient: %v", err)
 	}
 	if _, err := service.MutateSecurity(ctx, principal, SecurityInput{Action: SecurityRevokeSession, Password: password, Code: enabled.RecoveryCodes[0], SessionID: other.CredentialID}); !errors.Is(err, ErrSecurityToken) {
 		t.Fatal("foreign session revocation accepted")
@@ -312,6 +341,100 @@ func TestAccountSecurityE2E(t *testing.T) {
 	}
 	if err := service.SetSystemAdminByUsername(ctx, "security_other", false); !errors.Is(err, ErrLastSystemAdmin) {
 		t.Fatal("operator bypassed last admin guard")
+	}
+	bootstrap, bootstrapPrincipal := register(BootstrapSystemAdminUsername)
+	if err := service.SetSystemAdminByUsername(ctx, BootstrapSystemAdminUsername, true); err != nil {
+		t.Fatal(err)
+	}
+	if err := service.SetSystemAdmin(ctx, bootstrapPrincipal, bootstrap.ActorID, false, password, ""); !errors.Is(err, ErrProtectedSystemAdmin) {
+		t.Fatalf("bootstrap administrator revoked itself: %v", err)
+	}
+	if err := service.SetSystemAdmin(ctx, other, bootstrap.ActorID, false, initialPassword, ""); !errors.Is(err, ErrProtectedSystemAdmin) {
+		t.Fatalf("another administrator revoked bootstrap authority: %v", err)
+	}
+	if err := service.SetSystemAdminByUsername(ctx, " ADMIN ", false); !errors.Is(err, ErrProtectedSystemAdmin) {
+		t.Fatalf("operator revoked bootstrap authority: %v", err)
+	}
+	if err := service.SetSystemAdmin(ctx, other, other.ActorID, false, initialPassword, ""); err != nil {
+		t.Fatalf("ordinary administrator could not revoke itself: %v", err)
+	}
+	if _, err := service.GetSystemState(ctx, other, SystemStateInput{}); !errors.Is(err, ErrSecurityForbidden) {
+		t.Fatal("revoked administrator obtained paginated system state")
+	}
+	if err := service.SetSystemAdminByUsername(ctx, "security_other", true); err != nil {
+		t.Fatal(err)
+	}
+	for i := range DefaultSystemPageSize {
+		register(fmt.Sprintf("paged_user_%02d", i))
+	}
+	if err := service.securityTx(ctx, func(tx pgx.Tx) error {
+		for range 55 {
+			if err := service.securityAudit(ctx, tx, bootstrap.ActorID, other.ActorID, securityMailTested); err != nil {
+				return err
+			}
+		}
+		return nil
+	}); err != nil {
+		t.Fatal(err)
+	}
+	system, err := service.GetSystemState(ctx, bootstrapPrincipal, SystemStateInput{})
+	if err != nil || len(system.Accounts) != DefaultSystemPageSize || len(system.Events) != DefaultSystemPageSize ||
+		system.AccountsTotal != int64(DefaultSystemPageSize+3) || system.EventsTotal <= 50 ||
+		system.AccountsPage != 1 || system.EventsPage != 1 {
+		t.Fatalf("default system pagination: %+v, %v", system, err)
+	}
+	second, err := service.GetSystemState(ctx, bootstrapPrincipal, SystemStateInput{AccountsPage: 2})
+	if err != nil || second.AccountsPage != 2 || second.EventsPage != 1 ||
+		len(second.Accounts) != 3 || second.Events[0].ID != system.Events[0].ID {
+		t.Fatalf("account pagination changed audit page: %v", err)
+	}
+	seenEvents := make(map[uuid.UUID]bool)
+	for eventPage := 1; int64(len(seenEvents)) < system.EventsTotal; eventPage++ {
+		result, err := service.GetSystemState(ctx, bootstrapPrincipal, SystemStateInput{EventsPage: eventPage})
+		if err != nil || result.EventsPage != eventPage || result.AccountsPage != 1 || len(result.Events) == 0 {
+			t.Fatalf("system audit pagination: page=%d, %v", eventPage, err)
+		}
+		for _, event := range result.Events {
+			if seenEvents[event.ID] {
+				t.Fatal("system audit pages repeated an event")
+			}
+			seenEvents[event.ID] = true
+			if event.ActorID != nil && *event.ActorID == bootstrap.ActorID {
+				if event.ActorUsername == nil || *event.ActorUsername != BootstrapSystemAdminUsername ||
+					event.TargetUsername == nil || *event.TargetUsername != "security_other" {
+					t.Fatal("audit usernames depend on the current account page")
+				}
+			}
+		}
+	}
+	search, err := service.GetSystemState(ctx, bootstrapPrincipal, SystemStateInput{Search: " PAGED_USER_09 ", AccountsPage: MaxSystemPage})
+	if err != nil || search.AccountsTotal != 1 || search.AccountsPage != 1 || len(search.Accounts) != 1 ||
+		search.Accounts[0].Username != "paged_user_09" {
+		t.Fatalf("search did not cover accounts beyond the first page: %v", err)
+	}
+	search, err = service.GetSystemState(ctx, bootstrapPrincipal, SystemStateInput{Search: "admin@", EventsPage: MaxSystemPage})
+	if err != nil || search.AccountsTotal != 1 || !search.Accounts[0].SystemAdminProtected || !search.Accounts[0].SystemAdmin ||
+		search.EventsPage != int((system.EventsTotal+DefaultSystemPageSize-1)/DefaultSystemPageSize) {
+		t.Fatalf("bootstrap protection flag or page clamping: %v", err)
+	}
+	if err := service.SetSystemAdminByUsername(ctx, "security_owner", true); err != nil {
+		t.Fatal(err)
+	}
+	_, ownerAdmin := login(enabled.RecoveryCodes[5])
+	search, err = service.GetSystemState(ctx, ownerAdmin, SystemStateInput{Search: BootstrapSystemAdminUsername})
+	if err != nil || !search.MFAEnabled || search.AccountsTotal != 1 || search.Accounts[0].ActorID == ownerAdmin.ActorID {
+		t.Fatalf("current MFA state depended on filtered accounts: %v", err)
+	}
+	for _, input := range []SystemStateInput{
+		{AccountsPage: -1}, {EventsPage: MaxSystemPage + 1}, {PageSize: MaxSystemPageSize + 1}, {Search: strings.Repeat("x", 255)},
+	} {
+		var validation *ValidationError
+		if _, err := service.GetSystemState(ctx, bootstrapPrincipal, input); !errors.As(err, &validation) {
+			t.Fatalf("invalid system pagination accepted: %+v", input)
+		}
+	}
+	if _, err := service.GetSystemState(ctx, cliPrincipal, SystemStateInput{}); !errors.Is(err, ErrSecurityForbidden) {
+		t.Fatal("CLI obtained paginated system state")
 	}
 	// MFA challenge and account failures remain bounded across fresh challenges.
 	challenge, err = service.Login(ctx, LoginInput{Identifier: "security_owner", Password: password})

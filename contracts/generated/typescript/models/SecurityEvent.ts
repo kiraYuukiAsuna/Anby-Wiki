@@ -38,6 +38,18 @@ export interface SecurityEvent {
      */
     targetActorId?: string;
     /**
+     * 操作账号当前用户名，已删除或非本地账号时为空
+     * @type {string}
+     * @memberof SecurityEvent
+     */
+    actorUsername?: string;
+    /**
+     * 目标账号当前用户名，已删除或非本地账号时为空
+     * @type {string}
+     * @memberof SecurityEvent
+     */
+    targetUsername?: string;
+    /**
      *
      * @type {string}
      * @memberof SecurityEvent
@@ -74,6 +86,8 @@ export function SecurityEventFromJSONTyped(json: any, ignoreDiscriminator: boole
         'id': json['id'],
         'actorId': json['actor_id'] == null ? undefined : json['actor_id'],
         'targetActorId': json['target_actor_id'] == null ? undefined : json['target_actor_id'],
+        'actorUsername': json['actor_username'] == null ? undefined : json['actor_username'],
+        'targetUsername': json['target_username'] == null ? undefined : json['target_username'],
         'action': json['action'],
         'createdAt': (new Date(json['created_at'])),
     };
@@ -93,6 +107,8 @@ export function SecurityEventToJSONTyped(value?: SecurityEvent | null, ignoreDis
         'id': value['id'],
         'actor_id': value['actorId'],
         'target_actor_id': value['targetActorId'],
+        'actor_username': value['actorUsername'],
+        'target_username': value['targetUsername'],
         'action': value['action'],
         'created_at': value['createdAt'].toISOString(),
     };

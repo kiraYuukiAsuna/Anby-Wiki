@@ -1,0 +1,182 @@
+{
+  "schema_version": 1,
+  "domain": "https://anbywiki.momiya.cloud",
+  "release": "7f8b4c30d619",
+  "started_at": "2026-11-02T13:12:17.633592+00:00",
+  "verified_at": "2026-11-02T13:21:46.715527+00:00",
+  "status": "partial_pass_smtp_blocked",
+  "scope": "Formal HTTPS domain, account security, TOTP/recovery codes and password-change credential revocation. Actual supplier email receipt and emailed password recovery remain unverified.",
+  "http_check_count": 64,
+  "http_checks": {
+    "administrator_login": { "status": 200, "passed": true },
+    "administrator_session": { "status": 200, "passed": true },
+    "mail_configuration_read": { "status": 200, "passed": true },
+    "temporary_account_registered": { "status": 201, "passed": true },
+    "temporary_wiki_admin_cannot_read_system_mail": { "status": 403, "passed": true },
+    "temporary_account_cannot_access_real_admin_wiki": { "status": 401, "passed": true },
+    "system_admin_cannot_access_temporary_private_wiki": { "status": 401, "passed": true },
+    "temporary_cleanup_membership_added": { "status": 201, "passed": true },
+    "cleanup_authority_verified": { "status": 200, "passed": true },
+    "members_before_mfa": { "status": 200, "passed": true },
+    "temporary_security_read": { "status": 200, "passed": true },
+    "temporary_machine_created": { "status": 201, "passed": true },
+    "human_cli_code_created": { "status": 201, "passed": true },
+    "human_cli_exchanged": { "status": 200, "passed": true },
+    "human_cli_active": { "status": 200, "passed": true },
+    "human_cli_pending_created": { "status": 201, "passed": true },
+    "machine_cli_code_created": { "status": 201, "passed": true },
+    "machine_cli_exchanged": { "status": 200, "passed": true },
+    "machine_cli_active": { "status": 200, "passed": true },
+    "machine_cli_pending_created": { "status": 201, "passed": true },
+    "totp_setup": { "status": 200, "passed": true },
+    "totp_enabled": { "status": 200, "passed": true },
+    "mfa_old_browser_revoked": { "status": 401, "passed": true },
+    "mfa_human_cli_revoked": { "status": 401, "passed": true },
+    "mfa_machine_cli_revoked": { "status": 401, "passed": true },
+    "mfa_human_pending_code_revoked": { "status": 401, "passed": true },
+    "mfa_machine_pending_code_revoked": { "status": 401, "passed": true },
+    "security_after_mfa": { "status": 200, "passed": true },
+    "identity_after_mfa": { "status": 200, "passed": true },
+    "members_after_mfa": { "status": 200, "passed": true },
+    "recovery_login_password_step": { "status": 200, "passed": true },
+    "unused_recovery_code_login": { "status": 200, "passed": true },
+    "recovery_replay_password_step": { "status": 200, "passed": true },
+    "consumed_recovery_code_rejected": { "status": 400, "passed": true },
+    "replayed_code_does_not_create_browser_session": { "status": 401, "passed": true },
+    "recovery_codes_regenerated": { "status": 200, "passed": true },
+    "previous_unused_recovery_code_rejected": { "status": 400, "passed": true },
+    "password_human_cli_code_created": { "status": 201, "passed": true },
+    "password_human_cli_exchanged": { "status": 200, "passed": true },
+    "password_human_cli_active": { "status": 200, "passed": true },
+    "password_human_cli_pending_created": { "status": 201, "passed": true },
+    "password_machine_cli_code_created": { "status": 201, "passed": true },
+    "password_machine_cli_exchanged": { "status": 200, "passed": true },
+    "password_machine_cli_active": { "status": 200, "passed": true },
+    "password_machine_cli_pending_created": { "status": 201, "passed": true },
+    "password_changed_with_second_factor": { "status": 200, "passed": true },
+    "password_change_current_browser_revoked": { "status": 401, "passed": true },
+    "password_change_human_cli_revoked": { "status": 401, "passed": true },
+    "password_change_machine_cli_revoked": { "status": 401, "passed": true },
+    "password_change_human_pending_code_revoked": { "status": 401, "passed": true },
+    "password_change_machine_pending_code_revoked": { "status": 401, "passed": true },
+    "old_password_rejected": { "status": 401, "passed": true },
+    "new_password_requires_mfa": { "status": 200, "passed": true },
+    "new_password_alone_does_not_create_session": { "status": 401, "passed": true },
+    "new_password_and_totp_login": { "status": 200, "passed": true },
+    "same_identity_after_password_change": { "status": 200, "passed": true },
+    "members_after_password_change": { "status": 200, "passed": true },
+    "security_after_password_change": { "status": 200, "passed": true },
+    "new_password_session_logout": { "status": 204, "passed": true },
+    "smtp_configuration_unchanged": { "status": 200, "passed": true },
+    "temporary_machine_disabled": { "status": 200, "passed": true },
+    "temporary_login_account_deleted": { "status": 200, "passed": true },
+    "temporary_session_invalid_after_cleanup": { "status": 401, "passed": true },
+    "administrator_logout": { "status": 204, "passed": true }
+  },
+  "mail_configuration": {
+    "enabled": false,
+    "host": "",
+    "port": 587,
+    "tls_mode": "starttls",
+    "public_url": "",
+    "password_configured": false,
+    "updated_at": null,
+    "unchanged_by_acceptance": true
+  },
+  "domain_security": {
+    "tls_protocol": "TLSv1.3",
+    "cipher": "TLS_AES_256_GCM_SHA384",
+    "certificate_trusted": true,
+    "hostname_verified": true,
+    "certificate_valid_until": "2027-01-05T22:37:02Z",
+    "http_redirect": {
+      "status": 301,
+      "location": "https://anbywiki.momiya.cloud/reset-password"
+    },
+    "hsts": "max-age=31536000",
+    "referrer_policy": "strict-origin-when-cross-origin",
+    "account_security_cache_control": "no-store",
+    "pages": {
+      "/healthz": 200,
+      "/readyz": 200,
+      "/login": 200,
+      "/forgot-password": 200,
+      "/reset-password": 200,
+      "/verify-email": 200
+    }
+  },
+  "security_invariants": {
+    "mfa_enabled": true,
+    "initial_recovery_code_count": 10,
+    "regenerated_recovery_code_count": 10,
+    "password_change_signed_out": true,
+    "new_password_preserves_mfa": true,
+    "identity_and_private_wiki_preserved_after_mfa": true,
+    "membership_preserved_after_mfa": true,
+    "identity_and_wiki_preserved_after_password_change": true,
+    "membership_preserved_after_password_change": true,
+    "after_password_change": {
+      "mfa_enabled": true,
+      "recovery_codes_remaining": 9,
+      "active_session_count": 1,
+      "only_new_session_active": true
+    }
+  },
+  "browser": {
+    "engine": "Chrome",
+    "verified_interactions": [
+      "TOTP login through the formal-domain login page",
+      "Password alone requires a second factor",
+      "Recovery-code login decreases the remaining count from 10 to 9",
+      "Email verification/change actions are disabled while SMTP is unavailable"
+    ],
+    "layouts": [
+      { "page": "/account", "width": 320, "viewport": 320, "document": 320, "body": 320 },
+      { "page": "/account", "width": 390, "viewport": 390, "document": 390, "body": 390 }
+    ],
+    "public_token_pages": [
+      {
+        "route": "/verify-email",
+        "status": 200,
+        "fragment_removed": true,
+        "marker_absent_from_network_urls": true,
+        "get_does_not_consume_token": true
+      },
+      {
+        "route": "/reset-password",
+        "status": 200,
+        "fragment_removed": true,
+        "marker_absent_from_network_urls": true,
+        "get_does_not_consume_token": true
+      }
+    ],
+    "uncaught_page_error_count_in_completed_checks": 0,
+    "remaining_interaction_status": "not_completed",
+    "limitation": "Browser bridge navigation and the second independent Chrome context timed out. Recovery-code replay/regeneration and password-change revocation were verified through formal HTTPS APIs; complete browser coverage is not claimed. Public token-page checks used a non-secret sentinel, not a delivered production email token."
+  },
+  "cleanup": {
+    "machine_disabled": true,
+    "account_deleted_via_domain_api": true,
+    "audit_identities_retained": true,
+    "temporary_pages_created": 0,
+    "real_administrator_private_wiki_unchanged": true,
+    "secret_state_removed": true,
+    "pending": false,
+    "retained_empty_wiki": {
+      "reason": "No Wiki deletion API; retain the empty Wiki and its final active administrator.",
+      "wiki_id": "01a19c63-a81e-7951-ab82-c5faef0fe29c",
+      "pages_created": 0,
+      "temporary_owner_disabled": true
+    }
+  },
+  "unverified": [
+    "Real SMTP configuration and supplier authentication",
+    "Actual recipient receipt, spam handling and SPF/DKIM/DMARC",
+    "Email verification and email change using delivered messages",
+    "Emailed password recovery with MFA",
+    "Old browser/human CLI/machine CLI/pending-code revocation after emailed password recovery",
+    "Actor/private Wiki/member/share isolation after emailed password recovery",
+    "Share relationships during this production acceptance"
+  ],
+  "outstanding_issue_2_closed": false
+}

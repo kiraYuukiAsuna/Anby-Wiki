@@ -26,6 +26,11 @@ const (
 	MailTLS      = "tls"
 	MailSTARTTLS = "starttls"
 	MailLoopback = "loopback"
+
+	BootstrapSystemAdminUsername = "admin"
+	DefaultSystemPageSize        = 10
+	MaxSystemPageSize            = 100
+	MaxSystemPage                = 1_000_000
 )
 
 // Password is accepted only on writes; it is never stored in configuration JSON.
@@ -50,18 +55,32 @@ type MailConfigInput struct {
 }
 
 type SystemAccount struct {
-	ActorID       uuid.UUID `json:"actor_id"`
-	Username      string    `json:"username"`
-	Email         string    `json:"email"`
-	SystemAdmin   bool      `json:"system_admin"`
-	EmailVerified bool      `json:"email_verified"`
-	MFAEnabled    bool      `json:"mfa_enabled"`
-	Status        string    `json:"status"`
+	ActorID              uuid.UUID `json:"actor_id"`
+	Username             string    `json:"username"`
+	Email                string    `json:"email"`
+	SystemAdmin          bool      `json:"system_admin"`
+	SystemAdminProtected bool      `json:"system_admin_protected"`
+	EmailVerified        bool      `json:"email_verified"`
+	MFAEnabled           bool      `json:"mfa_enabled"`
+	Status               string    `json:"status"`
+}
+
+type SystemStateInput struct {
+	Search       string
+	AccountsPage int
+	EventsPage   int
+	PageSize     int
 }
 
 type SystemState struct {
-	Accounts []SystemAccount `json:"accounts"`
-	Events   []SecurityEvent `json:"events"`
+	Accounts      []SystemAccount `json:"accounts"`
+	Events        []SecurityEvent `json:"events"`
+	AccountsPage  int             `json:"accounts_page"`
+	EventsPage    int             `json:"events_page"`
+	PageSize      int             `json:"page_size"`
+	AccountsTotal int64           `json:"accounts_total"`
+	EventsTotal   int64           `json:"events_total"`
+	MFAEnabled    bool            `json:"mfa_enabled"`
 }
 
 func (s *Service) IsSystemAdmin(ctx context.Context, actorID uuid.UUID) (bool, error) {
@@ -207,9 +226,14 @@ func (s *Service) UpdateMailConfig(ctx context.Context, principal Principal, inp
 	return s.GetMailConfig(ctx, principal)
 }
 
-func (s *Service) TestMail(ctx context.Context, principal Principal, password, code string) error {
+func (s *Service) TestMail(ctx context.Context, principal Principal, email string) error {
 	if err := s.requireSystemAdmin(ctx, principal); err != nil {
 		return err
+	}
+	email = strings.TrimSpace(email)
+	address, err := mail.ParseAddress(email)
+	if err != nil || address.Address != email || len(email) > 254 {
+		return &ValidationError{Field: "email", Message: "请输入有效收件邮箱"}
 	}
 	return s.securityTx(ctx, func(tx pgx.Tx) error {
 		account, err := s.securityAccountForPrincipal(ctx, tx, principal)
@@ -219,15 +243,11 @@ func (s *Service) TestMail(ctx context.Context, principal Principal, password, c
 		if !account.SystemAdmin {
 			return ErrSecurityForbidden
 		}
-		if err := s.securityProof(ctx, tx, account, password, code, true); err != nil {
-			return err
-		}
 		config, ciphertext, err := s.mailConfiguration(ctx, tx)
 		if err != nil {
 			return err
 		}
-		// Tests are sent only to the authenticated administrator's address.
-		if err := s.deliverMail(ctx, config, ciphertext, account.Email, "邮件配置测试", "Anby Wiki 邮件发送配置测试成功。"); err != nil {
+		if err := s.deliverMail(ctx, config, ciphertext, email, "邮件配置测试", "Anby Wiki 邮件发送配置测试成功。"); err != nil {
 			return err
 		}
 		return s.securityAudit(ctx, tx, principal.ActorID, principal.ActorID, securityMailTested)
@@ -447,19 +467,52 @@ func (s *Service) ResetPassword(ctx context.Context, token, password, code strin
 	})
 }
 
-func (s *Service) GetSystemState(ctx context.Context, principal Principal) (SystemState, error) {
-	state := SystemState{Accounts: make([]SystemAccount, 0)}
+func (s *Service) GetSystemState(ctx context.Context, principal Principal, input SystemStateInput) (SystemState, error) {
+	state := SystemState{Accounts: make([]SystemAccount, 0), Events: make([]SecurityEvent, 0)}
 	if err := s.requireSystemAdmin(ctx, principal); err != nil {
 		return state, err
 	}
+	if input.AccountsPage == 0 {
+		input.AccountsPage = 1
+	}
+	if input.EventsPage == 0 {
+		input.EventsPage = 1
+	}
+	if input.PageSize == 0 {
+		input.PageSize = DefaultSystemPageSize
+	}
+	if input.AccountsPage < 1 || input.AccountsPage > MaxSystemPage ||
+		input.EventsPage < 1 || input.EventsPage > MaxSystemPage ||
+		input.PageSize < 1 || input.PageSize > MaxSystemPageSize {
+		return state, &ValidationError{Field: "pagination", Message: "请检查页码和每页条数"}
+	}
+	input.Search = strings.ToLower(strings.TrimSpace(input.Search))
+	if len(input.Search) > 254 {
+		return state, &ValidationError{Field: "search", Message: "搜索内容不能超过 254 字节"}
+	}
+	err := s.pool.QueryRow(ctx, `SELECT
+		(SELECT count(*) FROM local_account WHERE $2='' OR strpos(normalized_username,$2)>0 OR strpos(lower(email),$2)>0),
+		(SELECT count(*) FROM account_security_event),totp_ciphertext<>''
+		FROM local_account WHERE actor_id=$1`, principal.ActorID, input.Search).
+		Scan(&state.AccountsTotal, &state.EventsTotal, &state.MFAEnabled)
+	if err != nil {
+		return state, err
+	}
+	state.PageSize = input.PageSize
+	state.AccountsPage = min(input.AccountsPage, max(1, int((state.AccountsTotal+int64(input.PageSize)-1)/int64(input.PageSize))))
+	state.EventsPage = min(input.EventsPage, max(1, int((state.EventsTotal+int64(input.PageSize)-1)/int64(input.PageSize))))
 	rows, err := s.pool.Query(ctx, `SELECT actor_id,username,email,system_admin,email_verified_at IS NOT NULL,
-		totp_ciphertext<>'',status FROM local_account ORDER BY system_admin DESC,created_at LIMIT 500`)
+		totp_ciphertext<>'',status,normalized_username=$1 FROM local_account
+		WHERE $2='' OR strpos(normalized_username,$2)>0 OR strpos(lower(email),$2)>0
+		ORDER BY system_admin DESC,created_at,actor_id LIMIT $3 OFFSET $4`,
+		BootstrapSystemAdminUsername, input.Search, input.PageSize, (state.AccountsPage-1)*input.PageSize)
 	if err != nil {
 		return state, err
 	}
 	for rows.Next() {
 		var account SystemAccount
-		if err := rows.Scan(&account.ActorID, &account.Username, &account.Email, &account.SystemAdmin, &account.EmailVerified, &account.MFAEnabled, &account.Status); err != nil {
+		if err := rows.Scan(&account.ActorID, &account.Username, &account.Email, &account.SystemAdmin, &account.EmailVerified,
+			&account.MFAEnabled, &account.Status, &account.SystemAdminProtected); err != nil {
 			rows.Close()
 			return state, err
 		}
@@ -470,7 +523,7 @@ func (s *Service) GetSystemState(ctx context.Context, principal Principal) (Syst
 	if err != nil {
 		return state, err
 	}
-	state.Events, err = s.listSecurityEvents(ctx, uuid.Nil)
+	state.Events, err = s.listSecurityEvents(ctx, uuid.Nil, input.PageSize, (state.EventsPage-1)*input.PageSize)
 	return state, err
 }
 
@@ -500,6 +553,9 @@ func (s *Service) setSystemAdmin(ctx context.Context, tx pgx.Tx, actorID, target
 	target, err := s.lockSecurityAccount(ctx, tx, targetID)
 	if err != nil {
 		return err
+	}
+	if !grant && target.Username == BootstrapSystemAdminUsername {
+		return ErrProtectedSystemAdmin
 	}
 	if target.SystemAdmin == grant {
 		return nil
