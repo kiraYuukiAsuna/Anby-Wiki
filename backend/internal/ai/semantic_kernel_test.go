@@ -5,6 +5,7 @@ import (
 	"encoding/base64"
 	"encoding/json"
 	"errors"
+	"io"
 	"net/http"
 	"net/http/httptest"
 	"strings"
@@ -104,7 +105,7 @@ func TestSemanticKernelProviderEncodesImageInputs(t *testing.T) {
 		}
 		w.Header().Set("Content-Type", "application/json")
 		_, _ = w.Write([]byte(`{
-			"version":1,
+			"version":2,
 			"provider":"deepseek",
 			"model":"vision-model",
 			"json":{},
@@ -138,4 +139,66 @@ func TestSemanticKernelProviderEncodesImageInputs(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
+}
+
+func TestKernelStreamRetainsReceiptsWhenCallerCancels(t *testing.T) {
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/x-ndjson")
+		_, _ = w.Write([]byte(`{"type":"attempt_started","attempt":{"id":"019a438e-c200-7000-8000-000000000001","provider":"deepseek","model":"test","status":"failed","error_code":"interrupted","usage_reported":false}}` + "\n"))
+		w.(http.Flusher).Flush()
+		<-r.Context().Done()
+	}))
+	defer server.Close()
+	response, err := http.Get(server.URL)
+	if err != nil {
+		t.Fatal(err)
+	}
+	reader := &cancelAfterReceiptReader{reader: response.Body, cancel: cancel}
+	result, err := readKernelStream(ctx, reader)
+	response.Body.Close()
+	if !errors.Is(err, context.Canceled) || len(result.Attempts) != 1 ||
+		result.Attempts[0].UsageReported {
+		t.Fatalf("lost canceled receipt: %#v err=%v", result, err)
+	}
+}
+
+func TestKernelStreamRejectsBrokenReceiptSequence(t *testing.T) {
+	attempt := `{"id":"019a438e-c200-7000-8000-000000000001","provider":"deepseek","model":"test","status":"failed","error_code":"interrupted","usage_reported":false}`
+	started := `{"type":"attempt_started","attempt":` + attempt + "}\n"
+	finished := `{"type":"attempt_finished","attempt":` + attempt + "}\n"
+	result := `{"type":"result","status":503,"body":{"code":"provider_unavailable","temporary":true}}`
+	for _, tc := range []struct {
+		name, stream, code string
+	}{
+		{"duplicate_start", started + started, kernelCodeInvalidReceipt},
+		{"finish_without_start", finished, kernelCodeInvalidReceipt},
+		{"duplicate_finish", started + finished + finished, kernelCodeInvalidReceipt},
+		{"unfinished_result", started + result, kernelCodeIncompleteReceipt},
+		{"negative_tokens", strings.Replace(started, `"usage_reported":false`, `"input_tokens":-1`, 1), kernelCodeInvalidReceipt},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			_, err := readKernelStream(context.Background(), strings.NewReader(tc.stream))
+			var providerErr *ProviderError
+			if !errors.As(err, &providerErr) || providerErr.Code != tc.code || !errors.Is(err, ErrInvalidOutput) {
+				t.Fatalf("unexpected receipt error: %v", err)
+			}
+		})
+	}
+}
+
+type cancelAfterReceiptReader struct {
+	reader io.Reader
+	cancel context.CancelFunc
+	read   bool
+}
+
+func (r *cancelAfterReceiptReader) Read(data []byte) (int, error) {
+	if r.read {
+		r.cancel()
+		return 0, context.Canceled
+	}
+	r.read = true
+	return r.reader.Read(data)
 }

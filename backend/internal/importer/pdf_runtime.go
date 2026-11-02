@@ -12,6 +12,32 @@ import (
 const maxPDFInfoBytes = int64(1 << 20)
 
 var pdfPagesPattern = regexp.MustCompile(`(?m)^Pages:\s+([0-9]+)\s*$`)
+var pdfRotationPattern = regexp.MustCompile(`(?m)^Page\s+([0-9]+) rot:\s+([0-9]+)\s*$`)
+
+func pdfPageRotations(ctx context.Context, pdfInfoPath string, content []byte, count int) ([]int, error) {
+	command := exec.CommandContext(ctx, pdfInfoPath, "-f", "1", "-l", strconv.Itoa(count), "-")
+	command.Env = []string{}
+	command.Stdin = bytes.NewReader(content)
+	command.Stderr = io.Discard
+	output, err := readBoundedCommandOutput(ctx, command, maxPDFInfoBytes, ErrParseFailed)
+	if err != nil {
+		return nil, err
+	}
+	matches := pdfRotationPattern.FindAllSubmatch(output, -1)
+	if len(matches) != count {
+		return nil, ErrParseFailed
+	}
+	rotations := make([]int, count)
+	for index, match := range matches {
+		page, _ := strconv.Atoi(string(match[1]))
+		rotation, _ := strconv.Atoi(string(match[2]))
+		if page != index+1 || rotation > 270 || rotation%90 != 0 {
+			return nil, ErrParseFailed
+		}
+		rotations[index] = rotation
+	}
+	return rotations, nil
+}
 
 func pdfPageCount(
 	ctx context.Context,

@@ -28,8 +28,8 @@ API 与 Worker 各自创建独立 Prometheus registry，不使用进程全局 re
 | `wiki_importer_job_duration_seconds_sum/count` | `service,status` | 已结束任务累计耗时与样本数 |
 | `wiki_importer_stages` | `service,stage,status` | 固定七阶段状态数量 |
 | `wiki_importer_stage_duration_seconds_sum/count` | `service,stage,status` | 已结束阶段累计耗时与样本数 |
-| `wiki_ai_requests` | `service,status` | 持久化 AI usage 请求数 |
-| `wiki_ai_tokens` | `service,direction,status` | input/output token 累计量 |
+| `wiki_ai_requests` | `service,status` | 持久化 AI usage 行数；协议 2 中每次物理尝试一行 |
+| `wiki_ai_tokens` | `service,direction,status` | 已报告 input/output token 累计下界 |
 | `wiki_ai_latency_seconds_sum` | `service,status` | AI 请求累计延迟 |
 
 Importer 与 AI 指标直接汇总持久化记录，进程重启不会丢失；它们是 gauge 快照，
@@ -84,6 +84,17 @@ M7-T05/ADR-0012 的内部 Beta 初始阈值为 API 5xx `<1%`、API p95 `<=1s`、
 
 应用内 metrics/tracing 配置随 `make build-go` 编译检查；运行时接入需在目标环境
 人工确认指标端点、OTLP 连接与告警规则。
+
+供应商监控还应覆盖 `rate_limited`、`quota_exhausted`、`timeout`、
+`:usage_unreported` 和 `ai.usage_record_failed=true`；未知用量或审计失败不能按零成本
+放行预算。当前指标没有单独的未知用量标签，需由只读 Usage 查询和 Trace 补充；
+不能向 Prometheus 标签写入请求 ID。接收器、实际投递和响应责任仍由外部观测系统配置。
+
+协议 2 下 Usage ID 可与供应商边界的 `X-Client-Request-Id` 核对。金额需要进一步核对
+供应商返回的缓存分项、执行时段价格、币种和最终账单；余额变化只能证明共享账号的净扣减。
+连接测试等未经过 Gateway 的入口也占配额。固定部署上限仍为最多 2 API/2 Worker、
+2 个导入任务、8 个导入模型调用，其他模型入口另计；这个限制依赖运维控制副本数。
+共享账号或自动扩容前必须落实全局租约、背压及经负责人确认的账号预算。
 
 ## 故障排查
 

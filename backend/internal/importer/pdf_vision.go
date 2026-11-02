@@ -22,7 +22,7 @@ import (
 const (
 	DocumentPageAnalysisPromptKey     = "document-page-analysis-v1"
 	DocumentPageAnalysisPromptVersion = 2
-	visionPDFParserVersion            = "2"
+	visionPDFParserVersion            = "3"
 	maxAdvancedPDFPages               = 500
 	maxVisionPageImageBytes           = 16 << 20
 	maxVisionNativeTextRunes          = 24000
@@ -63,14 +63,15 @@ type pageAnalysis struct {
 }
 
 type pageElement struct {
-	Kind           string            `json:"kind"`
-	Title          string            `json:"title"`
-	Text           string            `json:"text"`
-	Summary        string            `json:"summary"`
-	SectionPath    []string          `json:"section_path"`
-	Region         *normalizedRegion `json:"region"`
-	StructuredData json.RawMessage   `json:"structured_data"`
-	Confidence     float64           `json:"confidence"`
+	Kind           string                `json:"kind"`
+	Title          string                `json:"title"`
+	Text           string                `json:"text"`
+	Summary        string                `json:"summary"`
+	SectionPath    []string              `json:"section_path"`
+	Region         *normalizedRegion     `json:"region"`
+	StructuredData json.RawMessage       `json:"structured_data"`
+	Confidence     float64               `json:"confidence"`
+	SourceRegion   *evidence.ImageRegion `json:"-"`
 }
 
 type normalizedRegion struct {
@@ -81,9 +82,10 @@ type normalizedRegion struct {
 }
 
 type renderedVisionPage struct {
-	Data   []byte
-	Width  int32
-	Height int32
+	Data     []byte
+	Width    int32
+	Height   int32
+	Rotation int
 }
 
 func (a *visionPDFAdapter) Parse(
@@ -115,12 +117,16 @@ func (a *visionPDFAdapter) Parse(
 	if pageCount > maxAdvancedPDFPages {
 		return nil, ErrPDFPageLimitExceeded
 	}
+	rotations, err := pdfPageRotations(ctx, pdfInfoPath, request.Content, pageCount)
+	if err != nil {
+		return nil, err
+	}
 	nativePages, err := extractNativePDFPages(ctx, textPath, request.Content, pageCount)
 	if err != nil {
 		return nil, err
 	}
 	analyses, err := a.analyzePages(
-		ctx, request, rasterizerPath, nativePages, pageCount,
+		ctx, request, rasterizerPath, nativePages, rotations, pageCount,
 	)
 	if err != nil {
 		return nil, err
@@ -196,6 +202,7 @@ func (a *visionPDFAdapter) analyzePages(
 	request ParseRequest,
 	rasterizerPath string,
 	nativePages []string,
+	rotations []int,
 	pageCount int,
 ) ([]pageAnalysis, error) {
 	workerCount := min(visionPageWorkers, pageCount)
@@ -219,6 +226,7 @@ func (a *visionPDFAdapter) analyzePages(
 					workCtx, rasterizerPath, request.Content, pageIndex+1,
 				)
 				if err == nil {
+					rendered.Rotation = rotations[pageIndex]
 					results[pageIndex], err = a.analyzePage(
 						workCtx, request, rendered, nativePages[pageIndex],
 						pageIndex+1, pageCount,
@@ -288,14 +296,16 @@ func pageAnalysisBlocks(analysis pageAnalysis) []TextBlock {
 			"source":          "vision_page",
 			"reading_order":   index,
 		})
+		region := element.SourceRegion
+		if region == nil {
+			region = normalizedToPixelRegion(element.Region, analysis.RenderWidth, analysis.RenderHeight)
+		}
 		blocks = append(blocks, TextBlock{
 			Kind: element.Kind, Title: element.Title, Text: element.Text,
 			Page: &page, PageEnd: &page,
 			SectionPath: append([]string(nil), sectionPath...),
-			ImageRegion: normalizedToPixelRegion(
-				element.Region, analysis.RenderWidth, analysis.RenderHeight,
-			),
-			Content: content,
+			ImageRegion: region,
+			Content:     content,
 		})
 	}
 	return blocks
@@ -319,11 +329,12 @@ func normalizedToPixelRegion(
 	if width <= 0 || height <= 0 {
 		return nil
 	}
+	left, top := x*imageWidth/1000, y*imageHeight/1000
 	return &evidence.ImageRegion{
-		X:          x * imageWidth / 1000,
-		Y:          y * imageHeight / 1000,
-		Width:      max(1, width*imageWidth/1000),
-		Height:     max(1, height*imageHeight/1000),
+		X:          left,
+		Y:          top,
+		Width:      ((x+width)*imageWidth+999)/1000 - left,
+		Height:     ((y+height)*imageHeight+999)/1000 - top,
 		ImageWidth: imageWidth, ImageHeight: imageHeight,
 		Unit: evidence.ImageRegionUnitPixel,
 	}

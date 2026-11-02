@@ -7,7 +7,11 @@ import (
 	"errors"
 	"image"
 	"image/color"
+	"image/draw"
 	"image/png"
+	"os"
+	"os/exec"
+	"slices"
 	"strings"
 	"testing"
 
@@ -70,7 +74,7 @@ func TestVisionImageUsesOrderedOriginalResolutionCrops(t *testing.T) {
 			}`), nil
 		}
 		if request.PromptKey != DocumentRegionAnalysisPromptKey ||
-			img.Bounds().Dx() != 1200 || img.Bounds().Dy() != 1200 {
+			img.Bounds().Dx() != 1354 || img.Bounds().Dy() != 1200 {
 			t.Fatalf("region prompt=%s, bounds=%v", request.PromptKey, img.Bounds())
 		}
 		r, _, b, _ := img.At(600, 600).RGBA()
@@ -109,7 +113,7 @@ func TestVisionImageUsesOrderedOriginalResolutionCrops(t *testing.T) {
 		t.Fatalf("unexpected result: calls=%d result=%#v", calls, result)
 	}
 	region := result.Chunks[0].Locator.ImageRegion
-	if region == nil || region.X != 1200 || region.Width != 1200 ||
+	if region == nil || region.X != 1046 || region.Width != 1354 ||
 		region.ImageWidth != 2400 || region.ImageHeight != 1200 {
 		t.Fatalf("locator lost original geometry: %#v", region)
 	}
@@ -133,6 +137,86 @@ func TestVisionImageUsesOrderedOriginalResolutionCrops(t *testing.T) {
 	if json.Unmarshal(result.Chunks[0].Content, &content) != nil ||
 		content.ReadingOrder != 0 || !bytes.Contains(content.Data, []byte("120 ms")) {
 		t.Fatalf("structured content=%s", result.Chunks[0].Content)
+	}
+}
+
+func TestVisionRotationMapsRecognizedCropBackToOriginalRaster(t *testing.T) {
+	for _, rotation := range []int{0, 90, 180, 270} {
+		t.Run(string(rune('0'+rotation/90)), func(t *testing.T) {
+			img, err := decodeVisionImage(visionTestImage(t, 120, 80))
+			if err != nil {
+				t.Fatal(err)
+			}
+			base := unrotateVisionImage(img, rotation)
+			region := &normalizedRegion{X: 100, Y: 200, Width: 300, Height: 400}
+			upright := normalizedToPixelRegion(region, int32(base.Bounds().Dx()), int32(base.Bounds().Dy()))
+			original := originalVisionCrop(image.Rect(int(upright.X), int(upright.Y),
+				int(upright.X+upright.Width), int(upright.Y+upright.Height)), 120, 80, rotation)
+			if original.Width*original.Height != upright.Width*upright.Height {
+				t.Fatalf("area changed: original=%#v upright=%#v", original, upright)
+			}
+			// The center of the mapped rectangle has the same pixel color as
+			// the center of the recognition crop, for all four orientations.
+			want := img.At(int(original.X+original.Width/2), int(original.Y+original.Height/2))
+			got := base.At(int(upright.X+upright.Width/2), int(upright.Y+upright.Height/2))
+			if want != got {
+				t.Fatalf("rotation %d mapped to a different source pixel", rotation)
+			}
+		})
+	}
+}
+
+func TestPDFRotationMetadataMatchesFixedCorpus(t *testing.T) {
+	requirePDFTestRuntime(t)
+	content, err := os.ReadFile("testdata/acceptance/rotated-repeat.pdf")
+	if err != nil {
+		t.Fatal(err)
+	}
+	path, err := exec.LookPath("pdfinfo")
+	if err != nil {
+		t.Fatal(err)
+	}
+	rotations, err := pdfPageRotations(context.Background(), path, content, 5)
+	if err != nil || !slices.Equal(rotations, []int{0, 90, 180, 270, 0}) {
+		t.Fatalf("rotations=%v err=%v", rotations, err)
+	}
+}
+
+func TestVisionOuterWhitespaceTrimPreservesSmallContentAndOriginalLocator(t *testing.T) {
+	img := image.NewRGBA(image.Rect(0, 0, 1000, 2000))
+	draw.Draw(img, img.Bounds(), &image.Uniform{C: color.White}, image.Point{}, draw.Src)
+	draw.Draw(img, image.Rect(100, 80, 900, 120), &image.Uniform{C: color.Black}, image.Point{}, draw.Src)
+	// A tiny footnote far below the main content must remain in the layout.
+	draw.Draw(img, image.Rect(100, 500, 160, 508), &image.Uniform{C: color.Black}, image.Point{}, draw.Src)
+	bounds := visionContentBounds(img)
+	if bounds != image.Rect(88, 68, 912, 520) {
+		t.Fatalf("trim clipped content or retained blank page: %v", bounds)
+	}
+	var encoded bytes.Buffer
+	if err := png.Encode(&encoded, img); err != nil {
+		t.Fatal(err)
+	}
+	generator := parserGeneratorFunc(func(_ context.Context, request ai.Request) (*ai.Result, error) {
+		if request.PromptKey == DocumentPageLayoutPromptKey {
+			config, _, err := image.DecodeConfig(bytes.NewReader(request.Images[0].Data))
+			if err != nil || config.Width != bounds.Dx() || config.Height != bounds.Dy() {
+				t.Fatalf("layout did not use whitespace trim: %#v err=%v", config, err)
+			}
+			return visionTestResult(request, `{"schema_version":1,"section_path":[],"warnings":[],
+				"elements":[{"kind":"text","title":"","section_path":[],"region":{"x":0,"y":0,"width":1000,"height":1000}}]}`), nil
+		}
+		return visionTestResult(request, `{"schema_version":1,"text":"Original.","summary":"","structured_data":{},"confidence":1,"warnings":[]}`), nil
+	})
+	result, err := NewParser(0, generator).Parse(context.Background(), ParseRequest{
+		MIMEType: "image/png", Content: encoded.Bytes(),
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	region := result.Chunks[0].Locator.ImageRegion
+	if region.X != 88 || region.Y != 68 || region.Width != 824 || region.Height != 452 ||
+		region.ImageWidth != 1000 || region.ImageHeight != 2000 {
+		t.Fatalf("trim coordinates escaped into source locator: %#v", region)
 	}
 }
 

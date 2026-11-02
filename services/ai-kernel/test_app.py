@@ -1,4 +1,5 @@
 import importlib
+import json
 import asyncio
 import base64
 import os
@@ -17,7 +18,7 @@ def load_app():
 def test_healthz():
     response = load_app().get("/healthz")
     assert response.status_code == 200
-    assert response.json() == {"status": "ok", "version": 1}
+    assert response.json() == {"status": "ok", "version": 2}
 
 
 def test_generate_rejects_missing_internal_token():
@@ -203,8 +204,12 @@ def test_generate_json_object_supplies_schema_and_targeted_repair(monkeypatch):
     assert response.status_code == 200
     assert response.json()["json"] == {"ok": True}
     assert len(calls) == 2
+    assert response.json()["input_tokens"] == 8
+    assert response.json()["output_tokens"] == 4
+    assert [a["status"] for a in response.json()["attempts"]] == ["invalid_output", "succeeded"]
     assert "Required output JSON Schema" in calls[0]["messages"][0]["content"]
     assert '"required":["ok"]' in calls[0]["messages"][0]["content"]
+    assert calls[1]["messages"][-2] == {"role": "assistant", "content": '{"wrong":true}'}
     assert "at $ (additionalProperties)" in calls[1]["messages"][-1]["content"]
 
 
@@ -254,6 +259,8 @@ def test_generate_reports_output_truncation(monkeypatch):
 
     assert response.status_code == 502
     assert response.json()["code"] == "output_truncated"
+    assert response.json()["attempts"][0]["output_tokens"] == 8192
+    assert response.json()["attempts"][0]["usage_reported"] is True
 
 
 def test_schema_validation_location_excludes_model_values():
@@ -360,3 +367,49 @@ def test_quota_exhaustion_does_not_retry_or_expose_supplier_message(monkeypatch)
     assert response.json()["temporary"] is False
     assert len(calls) == 1
     assert "private supplier" not in response.text
+    assert response.json()["attempts"][0]["usage_reported"] is False
+
+
+def test_v2_stream_receipts_include_failed_attempts_and_request_ids(monkeypatch):
+    module = importlib.import_module("app")
+    requests = []
+    outputs = iter(['{"wrong":true}', '{"ok":true}'])
+
+    class FakeCompletions:
+        async def create(self, **request):
+            requests.append(request)
+            return SimpleNamespace(
+                choices=[SimpleNamespace(message=SimpleNamespace(content=next(outputs)), finish_reason="stop")],
+                usage=SimpleNamespace(prompt_tokens=7, completion_tokens=3),
+            )
+
+    class FakeClient:
+        def __init__(self):
+            self.chat = SimpleNamespace(completions=FakeCompletions())
+
+        async def close(self):
+            pass
+
+    monkeypatch.setattr(module, "AsyncOpenAI", lambda **_: FakeClient())
+    response = load_app().post("/v1/generate", headers={"X-Anby-Internal-Token": "test-token"}, json={
+        "version": 2, "config": {
+            "provider": "deepseek", "base_url": "https://provider.invalid", "api_key": "not-used",
+            "model": "test", "response_format": "json_object", "request_timeout_seconds": 30, "max_attempts": 2,
+        }, "system_prompt": "Return JSON.", "user_prompt": "Return ok.",
+        "json_schema": {"type": "object", "required": ["ok"], "properties": {"ok": {"const": True}}},
+    })
+    events = [json.loads(line) for line in response.text.splitlines()]
+    from pathlib import Path
+    import jsonschema
+    schema = json.loads(Path(__file__).with_name("generate-stream-v2.schema.json").read_text())
+    for event in events:
+        jsonschema.validate(event, schema, format_checker=jsonschema.FormatChecker())
+    assert [e["type"] for e in events] == [
+        "attempt_started", "attempt_finished", "attempt_started", "attempt_finished", "result",
+    ]
+    for index in range(2):
+        assert requests[index]["extra_headers"]["X-Client-Request-Id"] == events[index*2]["attempt"]["id"]
+    assert events[1]["attempt"]["status"] == "invalid_output"
+    assert events[1]["attempt"]["input_tokens"] == 7
+    assert events[-1]["body"]["input_tokens"] == 14
+    assert events[-1]["status"] == 200

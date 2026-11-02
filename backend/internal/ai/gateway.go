@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"time"
 
+	"github.com/google/uuid"
 	"github.com/santhosh-tekuri/jsonschema/v6"
 	"go.opentelemetry.io/otel"
 	"go.opentelemetry.io/otel/attribute"
@@ -99,8 +100,16 @@ func (g *Gateway) Generate(ctx context.Context, request Request) (*Result, error
 	var response *ProviderResponse
 	var callErr error
 	attempts := 0
+	var physical []ProviderAttempt
+	var auditErr error
+retryLoop:
 	for attempts < g.config.MaxAttempts {
+		if ctx.Err() != nil {
+			callErr = ctx.Err()
+			break
+		}
 		attempts++
+		callStarted := time.Now()
 		callCtx, cancel := context.WithTimeout(ctx, g.config.Timeout)
 		response, callErr = provider.Generate(callCtx, ProviderRequest{
 			Model: request.Model, SystemPrompt: system, UserPrompt: user,
@@ -108,10 +117,37 @@ func (g *Gateway) Generate(ctx context.Context, request Request) (*Result, error
 		})
 		deadline := errors.Is(callCtx.Err(), context.DeadlineExceeded)
 		cancel()
+		if response != nil && response.Attempts != nil {
+			physical = append(physical, response.Attempts...)
+		} else {
+			a := ProviderAttempt{Provider: request.Provider, Model: request.Model,
+				Status: UsageFailed, ErrorCode: "provider_error", LatencyMS: time.Since(callStarted).Milliseconds()}
+			if response != nil {
+				a.InputTokens, a.OutputTokens = response.InputTokens, response.OutputTokens
+				a.UsageReported = callErr == nil
+				if response.Provider != "" {
+					a.Provider = response.Provider
+				}
+				if response.Model != "" {
+					a.Model = response.Model
+				}
+			}
+			if callErr == nil && !deadline {
+				a.Status, a.ErrorCode = UsageSucceeded, ""
+			} else if deadline || errors.Is(callErr, ErrTimeout) || errors.Is(callErr, context.DeadlineExceeded) {
+				a.Status, a.ErrorCode = UsageTimeout, "timeout"
+			} else {
+				var e *ProviderError
+				if errors.As(callErr, &e) {
+					a.ErrorCode = e.Code
+				}
+			}
+			physical = append(physical, a)
+		}
 		if callErr == nil && !deadline {
 			break
 		}
-		if deadline || errors.Is(callErr, context.DeadlineExceeded) {
+		if deadline || errors.Is(callErr, ErrTimeout) || errors.Is(callErr, context.DeadlineExceeded) {
 			callErr, status, errorCode = ErrTimeout, UsageTimeout, "timeout"
 		}
 		var providerErr *ProviderError
@@ -125,13 +161,23 @@ func (g *Gateway) Generate(ctx context.Context, request Request) (*Result, error
 		case <-ctx.Done():
 			timer.Stop()
 			callErr = ctx.Err()
-			attempts = g.config.MaxAttempts
+			break retryLoop
 		}
 	}
 
 	if callErr == nil {
-		if err := validateStructuredOutput(prompt, response.JSON); err != nil {
+		if response == nil {
+			callErr, status, errorCode = ErrInvalidOutput, UsageInvalidOutput, "schema_validation"
+			if len(physical) > 0 {
+				physical[len(physical)-1].Status = status
+				physical[len(physical)-1].ErrorCode = errorCode
+			}
+		} else if err := validateStructuredOutput(prompt, response.JSON); err != nil {
 			callErr, status, errorCode = err, UsageInvalidOutput, "schema_validation"
+			if len(physical) > 0 {
+				physical[len(physical)-1].Status = status
+				physical[len(physical)-1].ErrorCode = errorCode
+			}
 		} else {
 			status, errorCode = UsageSucceeded, ""
 		}
@@ -144,33 +190,36 @@ func (g *Gateway) Generate(ctx context.Context, request Request) (*Result, error
 			errorCode = providerErr.Code
 		}
 	}
-	usageID, idErr := g.ids.New()
-	if idErr != nil {
-		return nil, idErr
-	}
-	u := &Usage{ID: usageID, ImportJobID: request.ImportJobID, ImportRunID: request.ImportRunID,
-		Provider: request.Provider, Model: request.Model, PromptKey: prompt.Key,
-		PromptVersion: prompt.Version, AttemptCount: attempts, Latency: time.Since(started),
-		Status: status, ErrorCode: errorCode}
-	if response != nil {
-		if response.Provider != "" {
-			u.Provider = response.Provider
-		}
-		if response.Model != "" {
-			u.Model = response.Model
-		}
-		u.InputTokens, u.OutputTokens = response.InputTokens, response.OutputTokens
-	}
 	// Usage is an audit record for the provider call that has already
 	// completed. A sibling request may cancel ctx while this record is being
 	// written, so retain context values but give the insert its own short
 	// lifetime. Otherwise context.Canceled can both lose the audit row and mask
 	// the causal model/validation error.
+	totalInput, totalOutput := 0, 0
 	usageCtx, cancelUsage := context.WithTimeout(context.WithoutCancel(ctx), usageRecordTimeout)
-	usageErr := g.usage.InsertUsage(usageCtx, u)
-	cancelUsage()
-	if usageErr != nil {
-		wrappedUsageErr := fmt.Errorf("ai: 记录用量失败: %w", usageErr)
+	defer cancelUsage()
+	for _, a := range physical {
+		if a.ID == uuid.Nil {
+			var err error
+			a.ID, err = g.ids.New()
+			if err != nil {
+				return nil, err
+			}
+		}
+		if !a.UsageReported {
+			a.ErrorCode += UsageUnreportedSuffix
+		}
+		u := &Usage{ID: a.ID, ImportJobID: request.ImportJobID, ImportRunID: request.ImportRunID,
+			Provider: a.Provider, Model: a.Model, PromptKey: prompt.Key, PromptVersion: prompt.Version,
+			AttemptCount: 1, InputTokens: a.InputTokens, OutputTokens: a.OutputTokens,
+			Latency: time.Duration(a.LatencyMS) * time.Millisecond, Status: a.Status, ErrorCode: a.ErrorCode}
+		usageErr := g.usage.InsertUsage(usageCtx, u)
+		auditErr = errors.Join(auditErr, usageErr)
+		totalInput += a.InputTokens
+		totalOutput += a.OutputTokens
+	}
+	if auditErr != nil {
+		wrappedUsageErr := fmt.Errorf("ai: 记录用量失败: %w", auditErr)
 		span.RecordError(wrappedUsageErr)
 		span.SetAttributes(attribute.Bool("ai.usage_record_failed", true))
 		if callErr == nil {
@@ -183,7 +232,8 @@ func (g *Gateway) Generate(ctx context.Context, request Request) (*Result, error
 	}
 	span.SetAttributes(
 		attribute.String("ai.result", status),
-		attribute.Int("ai.attempt_count", attempts),
+		attribute.Int("ai.attempt_count", len(physical)),
+		attribute.Int64("ai.latency_ms", time.Since(started).Milliseconds()),
 	)
 	if callErr != nil {
 		span.RecordError(callErr)
@@ -198,8 +248,8 @@ func (g *Gateway) Generate(ctx context.Context, request Request) (*Result, error
 		effectiveModel = response.Model
 	}
 	return &Result{JSON: response.JSON, PromptKey: prompt.Key, PromptVersion: prompt.Version,
-		Provider: effectiveProvider, Model: effectiveModel, InputTokens: response.InputTokens,
-		OutputTokens: response.OutputTokens}, nil
+		Provider: effectiveProvider, Model: effectiveModel, InputTokens: totalInput,
+		OutputTokens: totalOutput}, nil
 }
 
 func validateImageInputs(images []ImageInput) error {

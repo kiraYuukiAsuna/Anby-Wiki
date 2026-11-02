@@ -14,12 +14,14 @@ import binascii
 import json
 import os
 import secrets
+import time
+import uuid
 from typing import Any, Literal
 
 import openai
 import jsonschema
 from fastapi import FastAPI, Request
-from fastapi.responses import JSONResponse
+from fastapi.responses import JSONResponse, StreamingResponse
 from openai import AsyncOpenAI
 from pydantic import AnyHttpUrl, BaseModel, ConfigDict, Field, SecretStr
 from semantic_kernel.connectors.ai.chat_completion_client_base import (
@@ -32,7 +34,10 @@ from semantic_kernel.contents.chat_history import ChatHistory
 from semantic_kernel.contents.chat_message_content import ChatMessageContent
 from semantic_kernel.contents.utils.author_role import AuthorRole
 
-PROTOCOL_VERSION = 1
+PROTOCOL_VERSION = 2
+EVENT_ATTEMPT_STARTED = "attempt_started"
+EVENT_ATTEMPT_FINISHED = "attempt_finished"
+EVENT_RESULT = "result"
 INTERNAL_TOKEN = os.environ.get("AI_KERNEL_INTERNAL_TOKEN", "")
 DEEPSEEK_MAX_OUTPUT_TOKENS = 8192
 QUOTA_EXHAUSTED_CODE = "quota_exhausted"
@@ -69,7 +74,7 @@ class ImageInput(BaseModel):
 class GenerateRequest(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
-    version: Literal[1]
+    version: Literal[1, 2]
     config: RuntimeConfig
     system_prompt: str = Field(min_length=1)
     user_prompt: str = Field(min_length=1)
@@ -85,6 +90,7 @@ class OpenAICompatibleExecutionSettings(PromptExecutionSettings):
     extra_body: dict[str, Any] | None = None
     max_tokens: int | None = Field(default=None, ge=1)
     images: list[ImageInput] = Field(default_factory=list, max_length=4)
+    request_id: str = ""
 
 
 class ModelOutputTruncatedError(ValueError):
@@ -163,6 +169,8 @@ class OpenAICompatibleChatCompletion(ChatCompletionClientBase):
             request["extra_body"] = settings.extra_body
         if settings.max_tokens is not None:
             request["max_tokens"] = settings.max_tokens
+        if settings.request_id:
+            request["extra_headers"] = {"X-Client-Request-Id": settings.request_id}
 
         response = await self.client.chat.completions.create(**request)
         choice = response.choices[0] if response.choices else None
@@ -233,8 +241,62 @@ async def internal_authentication(request: Request, call_next: Any) -> JSONRespo
 
 
 @app.post("/v1/generate")
-async def generate(payload: GenerateRequest) -> JSONResponse:
+async def generate(payload: GenerateRequest) -> Any:
+    # v2 emits a receipt before each physical call. If Go disconnects after
+    # that receipt it retains an explicitly unreported attempt instead of
+    # losing the entire call's audit trail.
+    attempts: list[dict[str, Any]] = []
+    if payload.version == 1:
+        result = await generate_result(payload, attempts, None)
+        content = json.loads(result.body)
+        content["version"] = 1
+        content["attempts"] = attempts
+        content["input_tokens"] = sum(a["input_tokens"] for a in attempts)
+        content["output_tokens"] = sum(a["output_tokens"] for a in attempts)
+        return JSONResponse(status_code=result.status_code, content=content)
+
+    async def stream():
+        queue: asyncio.Queue[dict[str, Any]] = asyncio.Queue()
+
+        async def produce():
+            try:
+                result = await generate_result(payload, attempts, queue.put_nowait)
+                queue.put_nowait({
+                    "type": EVENT_RESULT, "status": result.status_code,
+                    "body": json.loads(result.body),
+                })
+            except asyncio.CancelledError:
+                raise
+            except Exception:
+                queue.put_nowait({
+                    "type": EVENT_RESULT, "status": 500,
+                    "body": {"code": "internal_error", "temporary": False},
+                })
+
+        task = asyncio.create_task(produce())
+        try:
+            while True:
+                event = await queue.get()
+                yield json.dumps(event, ensure_ascii=False, separators=(",", ":")) + "\n"
+                if event["type"] == EVENT_RESULT:
+                    break
+        finally:
+            task.cancel()
+            try:
+                await task
+            except asyncio.CancelledError:
+                pass
+
+    return StreamingResponse(stream(), media_type="application/x-ndjson",
+                             headers={"X-Anby-Protocol-Version": str(PROTOCOL_VERSION)})
+
+
+async def generate_result(payload: GenerateRequest, attempts: list[dict[str, Any]], emit: Any) -> JSONResponse:
     config = payload.config
+    try:
+        jsonschema.Draft202012Validator.check_schema(payload.json_schema)
+    except jsonschema.SchemaError:
+        return error_response(500, "invalid_schema", "structured output schema is invalid", False)
     for image in payload.images:
         try:
             decoded = base64.b64decode(image.data_base64, validate=True)
@@ -292,11 +354,29 @@ async def generate(payload: GenerateRequest) -> JSONResponse:
     try:
         for attempt in range(config.max_attempts):
             message: ChatMessageContent | None = None
+            started = time.monotonic()
+            receipt = {
+                "id": str(uuid.uuid4()), "provider": config.provider, "model": config.model,
+                "status": "failed", "error_code": "interrupted", "usage_reported": False,
+                "input_tokens": 0, "output_tokens": 0, "latency_ms": 0,
+            }
+            settings.request_id = receipt["id"]
+            attempts.append(receipt)
+            if emit:
+                emit({"type": EVENT_ATTEMPT_STARTED, "attempt": dict(receipt)})
             try:
                 message = await asyncio.wait_for(
                     service.get_chat_message_content(chat_history=history, settings=settings),
                     timeout=float(config.request_timeout_seconds) + 5,
                 )
+                usage = (message.metadata or {}).get("usage") if message else None
+                if usage is not None:
+                    receipt["input_tokens"] = int(getattr(usage, "prompt_tokens", 0) or 0)
+                    receipt["output_tokens"] = int(getattr(usage, "completion_tokens", 0) or 0)
+                    receipt["usage_reported"] = (
+                        getattr(usage, "prompt_tokens", None) is not None
+                        and getattr(usage, "completion_tokens", None) is not None
+                    )
                 if message is None or not message.content:
                     raise ValueError("empty response")
                 if (message.metadata or {}).get("finish_reason") == "length":
@@ -305,9 +385,7 @@ async def generate(payload: GenerateRequest) -> JSONResponse:
                 if not isinstance(document, dict):
                     raise ValueError("JSON root is not an object")
                 jsonschema.validate(instance=document, schema=payload.json_schema)
-                usage = (message.metadata or {}).get("usage")
-                input_tokens = int(getattr(usage, "prompt_tokens", 0) or 0)
-                output_tokens = int(getattr(usage, "completion_tokens", 0) or 0)
+                receipt.update(status="succeeded", error_code="")
                 return JSONResponse(
                     status_code=200,
                     content={
@@ -315,13 +393,15 @@ async def generate(payload: GenerateRequest) -> JSONResponse:
                         "provider": config.provider,
                         "model": config.model,
                         "json": document,
-                        "input_tokens": input_tokens,
-                        "output_tokens": output_tokens,
+                        "input_tokens": sum(a["input_tokens"] for a in attempts),
+                        "output_tokens": sum(a["output_tokens"] for a in attempts),
                     },
                 )
             except jsonschema.SchemaError:
+                receipt["error_code"] = "invalid_schema"
                 return error_response(500, "invalid_schema", "structured output schema is invalid", False)
             except ModelOutputTruncatedError:
+                receipt.update(status="invalid_output", error_code="output_truncated")
                 if attempt + 1 >= config.max_attempts:
                     return error_response(502, "output_truncated", "model output reached token limit", False)
                 history.add_user_message(
@@ -329,6 +409,7 @@ async def generate(payload: GenerateRequest) -> JSONResponse:
                     "Avoid duplicate candidates and use the shortest exact evidence quotations."
                 )
             except jsonschema.ValidationError as exc:
+                receipt.update(status="invalid_output", error_code="invalid_structured_output")
                 if attempt + 1 >= config.max_attempts:
                     location = schema_validation_location(exc)
                     return error_response(
@@ -337,8 +418,10 @@ async def generate(payload: GenerateRequest) -> JSONResponse:
                         f"model output failed schema validation at {location}",
                         False,
                     )
+                history.add_assistant_message(message.content)
                 history.add_user_message(schema_validation_feedback(exc))
             except (json.JSONDecodeError, TypeError, ValueError):
+                receipt.update(status="invalid_output", error_code="invalid_structured_output")
                 if attempt + 1 >= config.max_attempts:
                     return error_response(502, "invalid_structured_output", "model output failed schema validation", False)
                 history.add_user_message(
@@ -346,11 +429,14 @@ async def generate(payload: GenerateRequest) -> JSONResponse:
                     "that conforms exactly to the supplied schema; do not include Markdown or explanations."
                 )
             except (asyncio.TimeoutError, openai.APITimeoutError):
+                receipt.update(status="timeout", error_code="timeout")
                 if attempt + 1 >= config.max_attempts:
                     return error_response(504, "timeout", "model request timed out", True)
                 await asyncio.sleep(2**attempt)
             except openai.RateLimitError as exc:
+                receipt["error_code"] = "rate_limited"
                 if exc.code in PROVIDER_QUOTA_CODES:
+                    receipt["error_code"] = QUOTA_EXHAUSTED_CODE
                     return error_response(
                         429, QUOTA_EXHAUSTED_CODE, "model provider quota is exhausted", False
                     )
@@ -358,10 +444,12 @@ async def generate(payload: GenerateRequest) -> JSONResponse:
                     return error_response(429, "rate_limited", "model provider rate limited the request", True)
                 await asyncio.sleep(2**attempt)
             except openai.APIConnectionError:
+                receipt["error_code"] = "provider_unavailable"
                 if attempt + 1 >= config.max_attempts:
                     return error_response(503, "provider_unavailable", "model provider is unavailable", True)
                 await asyncio.sleep(2**attempt)
             except openai.APIStatusError as exc:
+                receipt["error_code"] = provider_status_error_code(exc.status_code)
                 temporary = exc.status_code == 429 or exc.status_code >= 500
                 if temporary and attempt + 1 < config.max_attempts:
                     await asyncio.sleep(2**attempt)
@@ -373,6 +461,10 @@ async def generate(payload: GenerateRequest) -> JSONResponse:
                     f"model provider returned HTTP {exc.status_code}",
                     temporary,
                 )
+            finally:
+                receipt["latency_ms"] = max(0, int((time.monotonic() - started) * 1000))
+                if emit:
+                    emit({"type": EVENT_ATTEMPT_FINISHED, "attempt": dict(receipt)})
         return error_response(502, "semantic_kernel_error", "Semantic Kernel request failed", False)
     finally:
         await client.close()

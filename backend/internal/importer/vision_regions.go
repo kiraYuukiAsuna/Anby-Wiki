@@ -9,6 +9,7 @@ import (
 	"image/color"
 	"image/jpeg"
 	_ "image/png"
+	"slices"
 	"strings"
 	"unicode"
 
@@ -19,11 +20,13 @@ import (
 )
 
 const (
-	DocumentPageLayoutPromptKey     = "document-page-layout-v1"
-	DocumentRegionAnalysisPromptKey = "document-region-analysis-v1"
-	DocumentVisionPromptVersion     = 1
+	DocumentPageLayoutPromptKey     = "document-page-layout-v2"
+	DocumentRegionAnalysisPromptKey = "document-region-analysis-v2"
+	DocumentVisionPromptVersion     = 2
 	visionLayoutEdge                = 1600
 	visionRegionEdge                = 2000
+	visionCropPadding               = 32
+	visionCropHorizontalPadding     = 64
 	maxVisionImagePixels            = int64(40_000_000)
 	visionSourceNativeRegion        = "native_text_region"
 	visionSourceNativeRemainder     = "native_text_remainder"
@@ -102,7 +105,11 @@ func analyzeVisionPage(
 	if img.Bounds().Dx() != int(rendered.Width) || img.Bounds().Dy() != int(rendered.Height) {
 		return pageAnalysis{}, ErrParseFailed
 	}
-	layoutImage, err := encodeVisionImage(img, img.Bounds(), visionLayoutEdge)
+	img = unrotateVisionImage(img, rendered.Rotation)
+	// Large blank margins distort model estimates of normalized geometry.
+	// Trim only the outer whitespace; layout and transcription stay model-led.
+	contentBounds := visionContentBounds(img)
+	layoutImage, err := encodeVisionImage(img, contentBounds, visionLayoutEdge)
 	if err != nil {
 		return pageAnalysis{}, err
 	}
@@ -147,15 +154,21 @@ func analyzeVisionPage(
 	// Native character correction is performed after recognition by exact
 	// matching in groundedPageBlocks instead.
 	variables["native_text"] = ""
-	for index, element := range layout.Elements {
+	for index, element := range consolidateVisionText(layout.Elements) {
 		if err := ctx.Err(); err != nil {
 			return pageAnalysis{}, err
 		}
-		pixelRegion := normalizedToPixelRegion(element.Region, rendered.Width, rendered.Height)
+		// Layout boxes are approximate. Include a small margin to avoid
+		// clipping punctuation and footnotes, and persist the actual crop.
+		r := *element.Region
+		right, bottom := min(1000, r.X+r.Width+visionCropHorizontalPadding), min(1000, r.Y+r.Height+visionCropPadding)
+		r.X, r.Y = max(0, r.X-visionCropHorizontalPadding), max(0, r.Y-visionCropPadding)
+		r.Width, r.Height = right-r.X, bottom-r.Y
+		pixelRegion := normalizedToPixelRegion(&r, int32(contentBounds.Dx()), int32(contentBounds.Dy()))
 		crop := image.Rect(
 			int(pixelRegion.X), int(pixelRegion.Y),
 			int(pixelRegion.X+pixelRegion.Width), int(pixelRegion.Y+pixelRegion.Height),
-		)
+		).Add(contentBounds.Min)
 		data, err := encodeVisionImage(img, crop, visionRegionEdge)
 		if err != nil {
 			return pageAnalysis{}, err
@@ -181,12 +194,111 @@ func analyzeVisionPage(
 		element.Summary = strings.TrimSpace(recognized.Summary)
 		element.StructuredData = recognized.StructuredData
 		element.Confidence = recognized.Confidence
+		element.SourceRegion = originalVisionCrop(crop, rendered.Width, rendered.Height, rendered.Rotation)
 		analysis.Elements = append(analysis.Elements, element)
 		analysis.PromptVersion = generated.PromptVersion
 		analysis.QualityScore = min(analysis.QualityScore, recognized.Confidence)
 		analysis.Warnings = append(analysis.Warnings, recognized.Warnings...)
 	}
 	return analysis, nil
+}
+
+func visionContentBounds(img image.Image) image.Rectangle {
+	bounds := img.Bounds()
+	left, top, right, bottom := bounds.Max.X, bounds.Max.Y, bounds.Min.X, bounds.Min.Y
+	// Sampling at four pixels bounds preprocessing work at 10M samples for
+	// the largest allowed image. Composite alpha on white, as in encoding.
+	for y := bounds.Min.Y; y < bounds.Max.Y; y += 4 {
+		for x := bounds.Min.X; x < bounds.Max.X; x += 4 {
+			r, g, b, a := img.At(x, y).RGBA()
+			if r+65535-a < 62000 || g+65535-a < 62000 || b+65535-a < 62000 {
+				left, top = min(left, x), min(top, y)
+				right, bottom = max(right, x+4), max(bottom, y+4)
+			}
+		}
+	}
+	if left >= right || top >= bottom {
+		return bounds
+	}
+	// Keep unsampled character edges and antialiasing inside the image.
+	return image.Rect(left-12, top-12, right+12, bottom+12).Intersect(bounds)
+}
+
+// pdftoppm applies /Rotate to the raster. Recognition uses PDF base coordinates;
+// locators are transformed back to the raster consumed by source previews.
+func unrotateVisionImage(img image.Image, rotation int) image.Image {
+	if rotation == 0 {
+		return img
+	}
+	width, height := img.Bounds().Dx(), img.Bounds().Dy()
+	outputWidth, outputHeight := width, height
+	if rotation == 90 || rotation == 270 {
+		outputWidth, outputHeight = height, width
+	}
+	output := image.NewRGBA(image.Rect(0, 0, outputWidth, outputHeight))
+	for y := range outputHeight {
+		for x := range outputWidth {
+			sx, sy := x, y
+			switch rotation {
+			case 90:
+				sx, sy = width-1-y, x
+			case 180:
+				sx, sy = width-1-x, height-1-y
+			case 270:
+				sx, sy = y, height-1-x
+			}
+			output.Set(x, y, img.At(sx+img.Bounds().Min.X, sy+img.Bounds().Min.Y))
+		}
+	}
+	return output
+}
+
+func originalVisionCrop(crop image.Rectangle, width, height int32, rotation int) *evidence.ImageRegion {
+	x, y, w, h := int32(crop.Min.X), int32(crop.Min.Y), int32(crop.Dx()), int32(crop.Dy())
+	switch rotation {
+	case 90:
+		x, y, w, h = width-y-h, x, h, w
+	case 180:
+		x, y = width-x-w, height-y-h
+	case 270:
+		x, y, w, h = y, height-x-w, h, w
+	}
+	return &evidence.ImageRegion{X: x, Y: y, Width: w, Height: h,
+		ImageWidth: width, ImageHeight: height, Unit: evidence.ImageRegionUnitPixel}
+}
+
+// Only adjacent prose in the same column and section is combined. Tables,
+// charts, figures and section boundaries retain their own requests and order.
+func consolidateVisionText(elements []pageElement) []pageElement {
+	result := make([]pageElement, 0, len(elements))
+	for _, element := range elements {
+		if len(result) > 0 {
+			previous := &result[len(result)-1]
+			a, b := previous.Region, element.Region
+			if previous.Kind == evidence.SourceChunkTypeText && element.Kind == previous.Kind &&
+				slices.Equal(previous.SectionPath, element.SectionPath) &&
+				b.Y >= a.Y+a.Height && b.Y <= a.Y+a.Height+30 &&
+				abs32(b.X-a.X) <= 30 && abs32(b.Width-a.Width) <= 30 &&
+				b.Y+b.Height-a.Y <= 650 {
+				merged := normalizedRegion{
+					X: min(a.X, b.X), Y: a.Y,
+					Width:  max(a.X+a.Width, b.X+b.Width) - min(a.X, b.X),
+					Height: b.Y + b.Height - a.Y,
+				}
+				previous.Region = &merged
+				if previous.Title != element.Title {
+					previous.Title = ""
+				}
+				continue
+			}
+		}
+		result = append(result, element)
+	}
+	return result
+}
+
+func abs32(value int32) int32 {
+	return max(value, -value)
 }
 
 func validVisionResult(result *ai.Result, schema *jsonschema.Schema) bool {
@@ -259,7 +371,7 @@ type visionImageAdapter struct {
 }
 
 func (*visionImageAdapter) Name() string    { return "anby-vision-image" }
-func (*visionImageAdapter) Version() string { return "1" }
+func (*visionImageAdapter) Version() string { return "2" }
 func (*visionImageAdapter) Supports(mimeType string) bool {
 	return mimeType == "image/png" || mimeType == "image/jpeg"
 }

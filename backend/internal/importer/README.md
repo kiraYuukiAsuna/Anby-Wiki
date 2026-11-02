@@ -40,7 +40,7 @@ Worker 不领取该 Wiki 中需要模型的 `source_import`，已有任务保持
 模型调用经私网 Semantic Kernel Sidecar：OpenAI-compatible 可使用原生 strict JSON
 Schema，DeepSeek 使用 JSON Object；Sidecar 对 JSON 和权威 Schema 失败执行有限纠正重试，
 Go Gateway 再执行最终独立校验。Sidecar 不访问数据库、对象存储或用户会话。
-`document-page-layout-v1` 与 `document-region-analysis-v1` 使用同一边界识别全页布局与
+`document-page-layout-v2` 与 `document-region-analysis-v2` 使用同一边界识别全页布局与
 局部裁图；图片只在当前页调用期间保留，并与普通结构化调用一样记录 Prompt 版本、
 模型、Token、耗时和状态。布局和识别的实际 Prompt 版本同时参与解析指纹。
 个人中心的文档理解模型测试会分别验证文本结构化输出和图片输入，文本模型不能通过配置验收。
@@ -134,6 +134,10 @@ Worker 使用 Poppler 从标准输入读取 PDF：`pdftotext` 保留每页原生
 完整解析 manifest 另存对象存储，SourceVersion 固化 Adapter/MIME/Provider/Prompt/模型与警告。
 PNG/JPEG 共用上述 LLM 流程，限制 4000 万像素；区域始终绑定原始图像尺寸，
 不会因布局图或裁图缩小而改变 Citation 定位。Worker 不再依赖 Tesseract。
+PDF Adapter v3、图片 Adapter v2 在布局前移除全图外缘空白，并按 PDF 每页 `/Rotate`
+还原识别方向；这里只做图像边界采样，不执行语义布局或独立 OCR。布局后合并同列、同章节的
+相邻正文，裁图留出水平 64/1000、垂直 32/1000 的边缘安全区；持久区域使用实际像素裁图并映射回原始旋转图，
+避免中文、标点和脚注被裁断。原始资产和已发布 SourceVersion 不修改。
 本实现不使用 embedding 或独立 OCR/布局/表格模型。依据与调用成本限制见
 [`Docs/MinerUReferencePlan.md`](../../../Docs/MinerUReferencePlan.md)。
 

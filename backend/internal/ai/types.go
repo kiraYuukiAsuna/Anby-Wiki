@@ -51,10 +51,11 @@ type Usage struct {
 const (
 	ProviderCodeQuotaExhausted = "quota_exhausted"
 
-	UsageSucceeded     = "succeeded"
-	UsageFailed        = "failed"
-	UsageTimeout       = "timeout"
-	UsageInvalidOutput = "invalid_output"
+	UsageSucceeded        = "succeeded"
+	UsageFailed           = "failed"
+	UsageTimeout          = "timeout"
+	UsageInvalidOutput    = "invalid_output"
+	UsageUnreportedSuffix = ":usage_unreported"
 )
 
 // Request 是业务层唯一需要了解的模型请求；不暴露供应商 DTO。
@@ -100,6 +101,21 @@ type ProviderResponse struct {
 	Model        string
 	InputTokens  int
 	OutputTokens int
+	Attempts     []ProviderAttempt
+}
+
+// One physical supplier attempt. ID is also sent as X-Client-Request-Id.
+// Unreported tokens are a lower bound, never evidence of a zero-cost call.
+type ProviderAttempt struct {
+	ID            uuid.UUID `json:"id"`
+	Provider      string    `json:"provider"`
+	Model         string    `json:"model"`
+	Status        string    `json:"status"`
+	ErrorCode     string    `json:"error_code"`
+	UsageReported bool      `json:"usage_reported"`
+	InputTokens   int       `json:"input_tokens"`
+	OutputTokens  int       `json:"output_tokens"`
+	LatencyMS     int64     `json:"latency_ms"`
 }
 
 type Provider interface {

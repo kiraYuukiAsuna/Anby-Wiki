@@ -11,9 +11,19 @@ import (
 	"net/http"
 	"net/url"
 	"strings"
+
+	"github.com/google/uuid"
 )
 
-const semanticKernelProtocolVersion = 1
+const (
+	semanticKernelProtocolVersion = 2
+	kernelEventAttemptStarted     = "attempt_started"
+	kernelEventAttemptFinished    = "attempt_finished"
+	kernelEventResult             = "result"
+	kernelCodeInvalidReceipt      = "kernel_invalid_receipt"
+	kernelCodeIncompleteReceipt   = "kernel_incomplete_receipt"
+	kernelCodeInvalidEvent        = "kernel_invalid_event"
+)
 
 type SemanticKernelConfig struct {
 	Provider              string
@@ -147,6 +157,9 @@ func (p *SemanticKernelProvider) Generate(ctx context.Context, request ProviderR
 		}
 	}
 	defer response.Body.Close()
+	if strings.HasPrefix(response.Header.Get("Content-Type"), "application/x-ndjson") {
+		return readKernelStream(ctx, response.Body)
+	}
 	payload, err := io.ReadAll(io.LimitReader(response.Body, 4<<20))
 	if err != nil {
 		return nil, &ProviderError{
@@ -182,4 +195,94 @@ func (p *SemanticKernelProvider) Generate(ctx context.Context, request ProviderR
 		JSON: value.JSON, Provider: value.Provider, Model: value.Model,
 		InputTokens: value.InputTokens, OutputTokens: value.OutputTokens,
 	}, nil
+}
+
+func readKernelStream(ctx context.Context, body io.Reader) (*ProviderResponse, error) {
+	result := &ProviderResponse{}
+	finished := make(map[uuid.UUID]bool)
+	decoder := json.NewDecoder(io.LimitReader(body, 4<<20))
+	for {
+		var event struct {
+			Type    string          `json:"type"`
+			Attempt ProviderAttempt `json:"attempt"`
+			Status  int             `json:"status"`
+			Body    json.RawMessage `json:"body"`
+		}
+		if err := decoder.Decode(&event); err != nil {
+			if ctx.Err() != nil {
+				return result, ctx.Err()
+			}
+			return result, &ProviderError{Code: "kernel_response_read", Err: ErrProvider}
+		}
+		switch event.Type {
+		case kernelEventAttemptStarted, kernelEventAttemptFinished:
+			a := event.Attempt
+			if a.ID == uuid.Nil || a.Provider == "" || a.Model == "" ||
+				a.InputTokens < 0 || a.OutputTokens < 0 || a.LatencyMS < 0 ||
+				(a.Status != UsageSucceeded && a.Status != UsageFailed &&
+					a.Status != UsageTimeout && a.Status != UsageInvalidOutput) {
+				return result, &ProviderError{Code: kernelCodeInvalidReceipt, Err: ErrInvalidOutput}
+			}
+			index := -1
+			for i := range result.Attempts {
+				if result.Attempts[i].ID == a.ID {
+					index = i
+					break
+				}
+			}
+			if event.Type == kernelEventAttemptStarted {
+				if index >= 0 || len(result.Attempts) >= 5 {
+					return result, &ProviderError{Code: kernelCodeInvalidReceipt, Err: ErrInvalidOutput}
+				}
+				result.Attempts = append(result.Attempts, a)
+			} else {
+				if index < 0 || finished[a.ID] ||
+					result.Attempts[index].Provider != a.Provider || result.Attempts[index].Model != a.Model {
+					return result, &ProviderError{Code: kernelCodeInvalidReceipt, Err: ErrInvalidOutput}
+				}
+				result.Attempts[index] = a
+				finished[a.ID] = true
+			}
+		case kernelEventResult:
+			if result.Attempts == nil {
+				result.Attempts = []ProviderAttempt{}
+			}
+			for _, a := range result.Attempts {
+				if !finished[a.ID] {
+					return result, &ProviderError{Code: kernelCodeIncompleteReceipt, Err: ErrInvalidOutput}
+				}
+			}
+			for _, a := range result.Attempts {
+				result.InputTokens += a.InputTokens
+				result.OutputTokens += a.OutputTokens
+			}
+			if event.Status < 200 || event.Status >= 300 {
+				var e semanticKernelError
+				if json.Unmarshal(event.Body, &e) != nil || e.Code == "" {
+					return result, &ProviderError{Code: "kernel_invalid_response", Err: ErrInvalidOutput}
+				}
+				cause := ErrProvider
+				if e.Code == "timeout" {
+					cause = ErrTimeout
+				} else if e.Code == "invalid_schema" || e.Code == "invalid_structured_output" || e.Code == "output_truncated" {
+					cause = ErrInvalidOutput
+				}
+				// Kernel already exhausted the configured physical attempt
+				// budget. Do not multiply it with an outer gateway retry.
+				if e.Message != "" {
+					cause = fmt.Errorf("%w: %s", cause, e.Message)
+				}
+				return result, &ProviderError{Code: e.Code, Err: cause}
+			}
+			var value semanticKernelGenerateResponse
+			if json.Unmarshal(event.Body, &value) != nil ||
+				value.Version != semanticKernelProtocolVersion || len(value.JSON) == 0 || len(result.Attempts) == 0 {
+				return result, &ProviderError{Code: "kernel_invalid_response", Err: ErrInvalidOutput}
+			}
+			result.JSON, result.Provider, result.Model = value.JSON, value.Provider, value.Model
+			return result, nil
+		default:
+			return result, &ProviderError{Code: kernelCodeInvalidEvent, Err: ErrInvalidOutput}
+		}
+	}
 }

@@ -1,0 +1,47 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://anby.wiki/internal/ai-kernel/generate-stream-v2.schema.json",
+  "title": "AI Kernel protocol 2 NDJSON event",
+  "oneOf": [
+    {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["type", "attempt"],
+      "properties": {
+        "type": {"enum": ["attempt_started", "attempt_finished"]},
+        "attempt": {"$ref": "#/$defs/attempt"}
+      }
+    },
+    {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["type", "status", "body"],
+      "properties": {
+        "type": {"const": "result"},
+        "status": {"type": "integer", "minimum": 100, "maximum": 599},
+        "body": {"type": "object"}
+      }
+    }
+  ],
+  "$defs": {
+    "attempt": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "id", "provider", "model", "status", "error_code", "usage_reported",
+        "input_tokens", "output_tokens", "latency_ms"
+      ],
+      "properties": {
+        "id": {"type": "string", "format": "uuid"},
+        "provider": {"type": "string", "minLength": 1},
+        "model": {"type": "string", "minLength": 1},
+        "status": {"enum": ["succeeded", "failed", "timeout", "invalid_output"]},
+        "error_code": {"type": "string"},
+        "usage_reported": {"type": "boolean"},
+        "input_tokens": {"type": "integer", "minimum": 0},
+        "output_tokens": {"type": "integer", "minimum": 0},
+        "latency_ms": {"type": "integer", "minimum": 0}
+      }
+    }
+  }
+}

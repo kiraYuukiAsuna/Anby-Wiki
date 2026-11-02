@@ -1,0 +1,3911 @@
+{
+  "schema_version": 1,
+  "date": "2026-11-02",
+  "scope": "isolated containers on production host; no production data writes or deployment",
+  "parser": {
+    "pdf_adapter_version": "3",
+    "image_adapter_version": "2",
+    "layout_prompt": "document-page-layout-v2",
+    "region_prompt": "document-region-analysis-v2",
+    "prompt_version": 2,
+    "kernel_protocol_version": 2,
+    "kernel_sha256": "5a06c1be3ae128b95392f623284f6360002a5386a872c6f87f0268465ab9f244",
+    "acceptance_binary_sha256": "cf0e076a672e5ba0d12dfd035d370ac67ac336210f4e5a68bc62eb838b4949af",
+    "prompt_sha256": "e42348135e617597c0a773ea816650cda54f210b9782e428135d687a402f85cf"
+  },
+  "fixed_three_rounds": [
+    {
+      "name": "fixed-scans-1",
+      "seconds": 18.930023245,
+      "error": null,
+      "peak_bytes": 260354048,
+      "sha256": "3cd3f007bdc5472f9962bf4a3d1e53df88024bc2d2a7ca6a0bf0d8c229302760",
+      "supplier": "deepseek",
+      "model": "deepseek-flash",
+      "physical_requests": 20,
+      "audit_rows": 20,
+      "input_tokens": 20479,
+      "output_tokens": 1818,
+      "unreported": 0,
+      "usage_matches_boundary": true,
+      "page_assertions": [
+        {
+          "page": 1,
+          "total": 13,
+          "matched": 13,
+          "missing": [],
+          "footnote": true
+        },
+        {
+          "page": 2,
+          "total": 12,
+          "matched": 12,
+          "missing": [],
+          "footnote": true
+        },
+        {
+          "page": 3,
+          "total": 11,
+          "matched": 11,
+          "missing": [],
+          "footnote": true
+        },
+        {
+          "page": 4,
+          "total": 11,
+          "matched": 11,
+          "missing": [],
+          "footnote": true
+        }
+      ],
+      "statuses": {
+        "200": 20
+      },
+      "within_regression_limits": true,
+      "peak_cache_miss_usd_upper_estimate": 0.008325299999999999
+    },
+    {
+      "name": "rotated-repeat-1",
+      "seconds": 21.879730429,
+      "error": null,
+      "peak_bytes": 485801984,
+      "sha256": "03b3be22a966811afc5d0bdb4b5a1c07f3ded1a600909794bcbe8ae6c2540b3d",
+      "supplier": "deepseek",
+      "model": "deepseek-flash",
+      "physical_requests": 26,
+      "audit_rows": 26,
+      "input_tokens": 26728,
+      "output_tokens": 2392,
+      "unreported": 0,
+      "usage_matches_boundary": true,
+      "page_assertions": [
+        {
+          "page": 1,
+          "total": 13,
+          "matched": 13,
+          "missing": [],
+          "footnote": true
+        },
+        {
+          "page": 2,
+          "total": 12,
+          "matched": 12,
+          "missing": [],
+          "footnote": true
+        },
+        {
+          "page": 3,
+          "total": 11,
+          "matched": 11,
+          "missing": [],
+          "footnote": true
+        },
+        {
+          "page": 4,
+          "total": 11,
+          "matched": 11,
+          "missing": [],
+          "footnote": true
+        },
+        {
+          "page": 5,
+          "total": 13,
+          "matched": 13,
+          "missing": [],
+          "footnote": true
+        }
+      ],
+      "statuses": {
+        "200": 26
+      },
+      "within_regression_limits": true,
+      "peak_cache_miss_usd_upper_estimate": 0.010888799999999999
+    },
+    {
+      "name": "fixed-scans-2",
+      "seconds": 17.886790231,
+      "error": null,
+      "peak_bytes": 260227072,
+      "sha256": "3cd3f007bdc5472f9962bf4a3d1e53df88024bc2d2a7ca6a0bf0d8c229302760",
+      "supplier": "deepseek",
+      "model": "deepseek-flash",
+      "physical_requests": 21,
+      "audit_rows": 21,
+      "input_tokens": 21134,
+      "output_tokens": 1863,
+      "unreported": 0,
+      "usage_matches_boundary": true,
+      "page_assertions": [
+        {
+          "page": 1,
+          "total": 13,
+          "matched": 13,
+          "missing": [],
+          "footnote": true
+        },
+        {
+          "page": 2,
+          "total": 12,
+          "matched": 12,
+          "missing": [],
+          "footnote": true
+        },
+        {
+          "page": 3,
+          "total": 11,
+          "matched": 11,
+          "missing": [],
+          "footnote": true
+        },
+        {
+          "page": 4,
+          "total": 11,
+          "matched": 11,
+          "missing": [],
+          "footnote": true
+        }
+      ],
+      "statuses": {
+        "200": 21
+      },
+      "within_regression_limits": true,
+      "peak_cache_miss_usd_upper_estimate": 0.0085758
+    },
+    {
+      "name": "rotated-repeat-2",
+      "seconds": 26.911561684,
+      "error": null,
+      "peak_bytes": 449609728,
+      "sha256": "03b3be22a966811afc5d0bdb4b5a1c07f3ded1a600909794bcbe8ae6c2540b3d",
+      "supplier": "deepseek",
+      "model": "deepseek-flash",
+      "physical_requests": 26,
+      "audit_rows": 26,
+      "input_tokens": 26772,
+      "output_tokens": 2458,
+      "unreported": 0,
+      "usage_matches_boundary": true,
+      "page_assertions": [
+        {
+          "page": 1,
+          "total": 13,
+          "matched": 13,
+          "missing": [],
+          "footnote": true
+        },
+        {
+          "page": 2,
+          "total": 12,
+          "matched": 12,
+          "missing": [],
+          "footnote": true
+        },
+        {
+          "page": 3,
+          "total": 11,
+          "matched": 11,
+          "missing": [],
+          "footnote": true
+        },
+        {
+          "page": 4,
+          "total": 11,
+          "matched": 11,
+          "missing": [],
+          "footnote": true
+        },
+        {
+          "page": 5,
+          "total": 13,
+          "matched": 13,
+          "missing": [],
+          "footnote": true
+        }
+      ],
+      "statuses": {
+        "200": 26
+      },
+      "within_regression_limits": true,
+      "peak_cache_miss_usd_upper_estimate": 0.010981199999999998
+    },
+    {
+      "name": "fixed-scans-3",
+      "seconds": 18.827299838,
+      "error": null,
+      "peak_bytes": 260182016,
+      "sha256": "3cd3f007bdc5472f9962bf4a3d1e53df88024bc2d2a7ca6a0bf0d8c229302760",
+      "supplier": "deepseek",
+      "model": "deepseek-flash",
+      "physical_requests": 24,
+      "audit_rows": 24,
+      "input_tokens": 22959,
+      "output_tokens": 2052,
+      "unreported": 0,
+      "usage_matches_boundary": true,
+      "page_assertions": [
+        {
+          "page": 1,
+          "total": 13,
+          "matched": 13,
+          "missing": [],
+          "footnote": true
+        },
+        {
+          "page": 2,
+          "total": 12,
+          "matched": 12,
+          "missing": [],
+          "footnote": true
+        },
+        {
+          "page": 3,
+          "total": 11,
+          "matched": 11,
+          "missing": [],
+          "footnote": true
+        },
+        {
+          "page": 4,
+          "total": 11,
+          "matched": 11,
+          "missing": [],
+          "footnote": true
+        }
+      ],
+      "statuses": {
+        "200": 24
+      },
+      "within_regression_limits": true,
+      "peak_cache_miss_usd_upper_estimate": 0.0093501
+    },
+    {
+      "name": "rotated-repeat-3",
+      "seconds": 21.48778172,
+      "error": null,
+      "peak_bytes": 474144768,
+      "sha256": "03b3be22a966811afc5d0bdb4b5a1c07f3ded1a600909794bcbe8ae6c2540b3d",
+      "supplier": "deepseek",
+      "model": "deepseek-flash",
+      "physical_requests": 26,
+      "audit_rows": 26,
+      "input_tokens": 26727,
+      "output_tokens": 2422,
+      "unreported": 0,
+      "usage_matches_boundary": true,
+      "page_assertions": [
+        {
+          "page": 1,
+          "total": 13,
+          "matched": 13,
+          "missing": [],
+          "footnote": true
+        },
+        {
+          "page": 2,
+          "total": 12,
+          "matched": 12,
+          "missing": [],
+          "footnote": true
+        },
+        {
+          "page": 3,
+          "total": 11,
+          "matched": 11,
+          "missing": [],
+          "footnote": true
+        },
+        {
+          "page": 4,
+          "total": 11,
+          "matched": 11,
+          "missing": [],
+          "footnote": true
+        },
+        {
+          "page": 5,
+          "total": 13,
+          "matched": 13,
+          "missing": [],
+          "footnote": true
+        }
+      ],
+      "statuses": {
+        "200": 26
+      },
+      "within_regression_limits": true,
+      "peak_cache_miss_usd_upper_estimate": 0.0109245
+    }
+  ],
+  "fixed_three_rounds_passed": true,
+  "fixed_supplier_receipts": [
+    {
+      "request_id": "e97a311f-6961-4023-8603-f573c0131e8a",
+      "status": 200,
+      "input_tokens": 1540,
+      "output_tokens": 218,
+      "seconds": 1.872953234007582,
+      "started_at": "2026-11-02T08:14:55.640105+00:00",
+      "response_model": "deepseek-flash",
+      "cache_hit_tokens": 1406,
+      "cache_miss_tokens": 134
+    },
+    {
+      "request_id": "ea674782-134e-45ca-aaa2-7439eca0b12b",
+      "status": 200,
+      "input_tokens": 1580,
+      "output_tokens": 152,
+      "seconds": 1.6915228529833257,
+      "started_at": "2026-11-02T08:14:55.640380+00:00",
+      "response_model": "deepseek-flash",
+      "cache_hit_tokens": 1408,
+      "cache_miss_tokens": 172
+    },
+    {
+      "request_id": "2bf4d4ce-f6c4-484e-895c-c733dd1c9a39",
+      "status": 200,
+      "input_tokens": 1700,
+      "output_tokens": 173,
+      "seconds": 1.7929447049973533,
+      "started_at": "2026-11-02T08:14:55.640588+00:00",
+      "response_model": "deepseek-flash",
+      "cache_hit_tokens": 1536,
+      "cache_miss_tokens": 164
+    },
+    {
+      "request_id": "dfe60652-11b0-43cf-abff-2df8a9e4213b",
+      "status": 200,
+      "input_tokens": 744,
+      "output_tokens": 37,
+      "seconds": 1.0913032350072172,
+      "started_at": "2026-11-02T08:14:57.558285+00:00",
+      "response_model": "deepseek-flash",
+      "cache_hit_tokens": 384,
+      "cache_miss_tokens": 360
+    },
+    {
+      "request_id": "d1f54002-cb78-4fcd-9161-c74c8d520184",
+      "status": 200,
+      "input_tokens": 1278,
+      "output_tokens": 76,
+      "seconds": 1.8911711990076583,
+      "started_at": "2026-11-02T08:14:57.636630+00:00",
+      "response_model": "deepseek-flash",
+      "cache_hit_tokens": 1024,
+      "cache_miss_tokens": 254
+    },
+    {
+      "request_id": "16e3b1b3-5c41-4ba0-9ee7-d02e0e2a8389",
+      "status": 200,
+      "input_tokens": 758,
+      "output_tokens": 37,
+      "seconds": 1.020052783016581,
+      "started_at": "2026-11-02T08:14:57.639492+00:00",
+      "response_model": "deepseek-flash",
+      "cache_hit_tokens": 512,
+      "cache_miss_tokens": 246
+    },
+    {
+      "request_id": "33e76a02-fff3-4a6a-bb29-fc2ffaf07ded",
+      "status": 200,
+      "input_tokens": 803,
+      "output_tokens": 49,
+      "seconds": 1.0563606840150896,
+      "started_at": "2026-11-02T08:14:58.776386+00:00",
+      "response_model": "deepseek-flash",
+      "cache_hit_tokens": 384,
+      "cache_miss_tokens": 419
+    },
+    {
+      "request_id": "eb8f11bf-1b1d-4730-920e-26131a9a6fa4",
+      "status": 200,
+      "input_tokens": 1274,
+      "output_tokens": 88,
+      "seconds": 1.3282833890116308,
+      "started_at": "2026-11-02T08:14:58.906347+00:00",
+      "response_model": "deepseek-flash",
+      "cache_hit_tokens": 1024,
+      "cache_miss_tokens": 250
+    },
+    {
+      "request_id": "1e9f1720-1d3c-496d-8e0d-42d2410ef23b",
+      "status": 200,
+      "input_tokens": 980,
+      "output_tokens": 108,
+      "seconds": 1.0723021769954357,
+      "started_at": "2026-11-02T08:14:59.699354+00:00",
+      "response_model": "deepseek-flash",
+      "cache_hit_tokens": 768,
+      "cache_miss_tokens": 212
+    },
+    {
+      "request_id": "05d94948-a6d7-45ed-9acb-2ac74ceebe57",
+      "status": 200,
+      "input_tokens": 1029,
+      "output_tokens": 102,
+      "seconds": 1.1689222940185573,
+      "started_at": "2026-11-02T08:15:00.005718+00:00",
+      "response_model": "deepseek-flash",
+      "cache_hit_tokens": 895,
+      "cache_miss_tokens": 134
+    },
+    {
+      "request_id": "9253fbaa-ea43-4682-abe1-a75e107495dc",
+      "status": 200,
+      "input_tokens": 1078,
+      "output_tokens": 131,
+      "seconds": 1.4200799870013725,
+      "started_at": "2026-11-02T08:15:00.417421+00:00",
+      "response_model": "deepseek-flash",
+      "cache_hit_tokens": 896,
+      "cache_miss_tokens": 182
+    },
+    {
+      "request_id": "9035b5e8-6836-479a-a62c-930706f72174",
+      "status": 200,
+      "input_tokens": 754,
+      "output_tokens": 49,
+      "seconds": 0.8380791770177893,
+      "started_at": "2026-11-02T08:15:00.842855+00:00",
+      "response_model": "deepseek-flash",
+      "cache_hit_tokens": 512,
+      "cache_miss_tokens": 242
+    },
+    {
+      "request_id": "d395a79e-3d1e-43b4-b85c-3c280d755a30",
+      "status": 200,
+      "input_tokens": 744,
+      "output_tokens": 39,
+      "seconds": 0.7664441479719244,
+      "started_at": "2026-11-02T08:15:01.239940+00:00",
+      "response_model": "deepseek-flash",
+      "cache_hit_tokens": 384,
+      "cache_miss_tokens": 360
+    },
+    {
+      "request_id": "4ec986d4-09da-4316-b36d-08d7cadc8fe6",
+      "status": 200,
+      "input_tokens": 719,
+      "output_tokens": 50,
+      "seconds": 0.9847301490081009,
+      "started_at": "2026-11-02T08:15:01.933852+00:00",
+      "response_model": "deepseek-flash",
+      "cache_hit_tokens": 512,
+      "cache_miss_tokens": 207
+    },
+    {
+      "request_id": "8ef632b8-f5b5-4c53-bf28-5b6afcd1b472",
+      "status": 200,
+      "input_tokens": 1540,
+      "output_tokens": 260,
+      "seconds": 1.6472165560116991,
+      "started_at": "2026-11-02T08:15:02.781409+00:00",
+      "response_model": "deepseek-flash",
+      "cache_hit_tokens": 1406,
+      "cache_miss_tokens": 134
+    },
+    {
+      "request_id": "714f8949-7a17-47d4-a31e-d1741822ed3b",
+      "status": 200,
+      "input_tokens": 724,
+      "output_tokens": 37,
+      "seconds": 1.0684127119893674,
+      "started_at": "2026-11-02T08:15:04.525121+00:00",
+      "response_model": "deepseek-flash",
+      "cache_hit_tokens": 512,
+      "cache_miss_tokens": 212
+    },
+    {
+      "request_id": "10f6ee85-e4e7-44f4-945d-0ab913b72832",
+      "status": 200,
+      "input_tokens": 745,
+      "output_tokens": 36,
+      "seconds": 1.0773070649884176,
+      "started_at": "2026-11-02T08:15:05.685449+00:00",
+      "response_model": "deepseek-flash",
+      "cache_hit_tokens": 512,
+      "cache_miss_tokens": 233
+    },
+    {
+      "request_id": "3123c049-9907-4567-8789-910b48a6f019",
+      "status": 200,
+      "input_tokens": 737,
+      "output_tokens": 34,
+      "seconds": 1.3885584940144327,
+      "started_at": "2026-11-02T08:15:06.827288+00:00",
+      "response_model": "deepseek-flash",
+      "cache_hit_tokens": 512,
+      "cache_miss_tokens": 225
+    },
+    {
+      "request_id": "e9de170c-67fe-493e-9f30-8f1b34f80236",
+      "status": 200,
+      "input_tokens": 1033,
+      "output_tokens": 102,
+      "seconds": 1.4590670400066301,
+      "started_at": "2026-11-02T08:15:08.390938+00:00",
+      "response_model": "deepseek-flash",
+      "cache_hit_tokens": 896,
+      "cache_miss_tokens": 137
+    },
+    {
+      "request_id": "1a146c6e-0226-47b6-8d93-602ccbde049a",
+      "status": 200,
+      "input_tokens": 719,
+      "output_tokens": 40,
+      "seconds": 0.8790811280196067,
+      "started_at": "2026-11-02T08:15:09.919212+00:00",
+      "response_model": "deepseek-flash",
+      "cache_hit_tokens": 384,
+      "cache_miss_tokens": 335
+    },
+    {
+      "request_id": "3582bbcd-7a21-4eb0-b716-dc2a36e1c4d2",
+      "status": 200,
+      "input_tokens": 1700,
+      "output_tokens": 172,
+      "seconds": 2.123834256984992,
+      "started_at": "2026-11-02T08:15:14.755595+00:00",
+      "response_model": "deepseek-flash",
+      "cache_hit_tokens": 1536,
+      "cache_miss_tokens": 164
+    },
+    {
+      "request_id": "2c238f4a-08b0-4431-bd0d-2e221029da00",
+      "status": 200,
+      "input_tokens": 1540,
+      "output_tokens": 237,
+      "seconds": 1.5935686539742164,
+      "started_at": "2026-11-02T08:15:16.644876+00:00",
+      "response_model": "deepseek-flash",
+      "cache_hit_tokens": 1406,
+      "cache_miss_tokens": 134
+    },
+    {
+      "request_id": "5a86f7f3-70af-49b9-8935-dd9f6fd5385e",
+      "status": 200,
+      "input_tokens": 744,
+      "output_tokens": 37,
+      "seconds": 1.057646664994536,
+      "started_at": "2026-11-02T08:15:17.023517+00:00",
+      "response_model": "deepseek-flash",
+      "cache_hit_tokens": 512,
+      "cache_miss_tokens": 232
+    },
+    {
+      "request_id": "65c5e536-78ac-42bd-a473-d06668c4b80b",
+      "status": 200,
+      "input_tokens": 1580,
+      "output_tokens": 152,
+      "seconds": 1.4980612770013977,
+      "started_at": "2026-11-02T08:15:17.528155+00:00",
+      "response_model": "deepseek-flash",
+      "cache_hit_tokens": 1408,
+      "cache_miss_tokens": 172
+    },
+    {
+      "request_id": "4e44b0d7-feb5-4d8e-88b4-fb3981fefc39",
+      "status": 200,
+      "input_tokens": 1274,
+      "output_tokens": 88,
+      "seconds": 1.4979853729892056,
+      "started_at": "2026-11-02T08:15:18.359420+00:00",
+      "response_model": "deepseek-flash",
+      "cache_hit_tokens": 1024,
+      "cache_miss_tokens": 250
+    },
+    {
+      "request_id": "cde6c154-6c81-46f3-9f2e-0838395517af",
+      "status": 200,
+      "input_tokens": 758,
+      "output_tokens": 37,
+      "seconds": 1.0338582219847012,
+      "started_at": "2026-11-02T08:15:18.362329+00:00",
+      "response_model": "deepseek-flash",
+      "cache_hit_tokens": 512,
+      "cache_miss_tokens": 246
+    },
+    {
+      "request_id": "cd84f310-a527-4377-a272-a652d5248722",
+      "status": 200,
+      "input_tokens": 1278,
+      "output_tokens": 76,
+      "seconds": 1.3279025410010945,
+      "started_at": "2026-11-02T08:15:19.231425+00:00",
+      "response_model": "deepseek-flash",
+      "cache_hit_tokens": 384,
+      "cache_miss_tokens": 894
+    },
+    {
+      "request_id": "79424fe8-a275-4141-9bbe-6e9ae9ec3313",
+      "status": 200,
+      "input_tokens": 739,
+      "output_tokens": 36,
+      "seconds": 0.9520777320140041,
+      "started_at": "2026-11-02T08:15:19.483302+00:00",
+      "response_model": "deepseek-flash",
+      "cache_hit_tokens": 512,
+      "cache_miss_tokens": 227
+    },
+    {
+      "request_id": "fce56713-c292-42b4-b8ce-9add957cf23f",
+      "status": 200,
+      "input_tokens": 1078,
+      "output_tokens": 131,
+      "seconds": 1.3173361720109824,
+      "started_at": "2026-11-02T08:15:20.045626+00:00",
+      "response_model": "deepseek-flash",
+      "cache_hit_tokens": 896,
+      "cache_miss_tokens": 182
+    },
+    {
+      "request_id": "458d7f6f-86e5-473d-b789-8a47a4763808",
+      "status": 200,
+      "input_tokens": 749,
+      "output_tokens": 39,
+      "seconds": 1.0544320110057015,
+      "started_at": "2026-11-02T08:15:20.520930+00:00",
+      "response_model": "deepseek-flash",
+      "cache_hit_tokens": 512,
+      "cache_miss_tokens": 237
+    },
+    {
+      "request_id": "523279ac-02e6-47e1-bc70-734a49369ad1",
+      "status": 200,
+      "input_tokens": 980,
+      "output_tokens": 108,
+      "seconds": 1.0007934190216474,
+      "started_at": "2026-11-02T08:15:20.721832+00:00",
+      "response_model": "deepseek-flash",
+      "cache_hit_tokens": 768,
+      "cache_miss_tokens": 212
+    },
+    {
+      "request_id": "b6c521af-6e92-40dd-b5f9-1d7a05d2eb7b",
+      "status": 200,
+      "input_tokens": 719,
+      "output_tokens": 50,
+      "seconds": 1.2572304559871554,
+      "started_at": "2026-11-02T08:15:21.434851+00:00",
+      "response_model": "deepseek-flash",
+      "cache_hit_tokens": 512,
+      "cache_miss_tokens": 207
+    },
+    {
+      "request_id": "e9ccc5f0-fd79-428d-9148-6f0c4fd0eada",
+      "status": 200,
+      "input_tokens": 1029,
+      "output_tokens": 102,
+      "seconds": 1.3269238359935116,
+      "started_at": "2026-11-02T08:15:21.771203+00:00",
+      "response_model": "deepseek-flash",
+      "cache_hit_tokens": 895,
+      "cache_miss_tokens": 134
+    },
+    {
+      "request_id": "72e8356e-dff2-4d71-8f69-b5d06bb20123",
+      "status": 200,
+      "input_tokens": 754,
+      "output_tokens": 49,
+      "seconds": 0.8337439490132965,
+      "started_at": "2026-11-02T08:15:21.830511+00:00",
+      "response_model": "deepseek-flash",
+      "cache_hit_tokens": 512,
+      "cache_miss_tokens": 242
+    },
+    {
+      "request_id": "dc7df31c-3553-447c-852e-b63e6120b9a8",
+      "status": 200,
+      "input_tokens": 734,
+      "output_tokens": 39,
+      "seconds": 1.0335406969825272,
+      "started_at": "2026-11-02T08:15:23.158469+00:00",
+      "response_model": "deepseek-flash",
+      "cache_hit_tokens": 384,
+      "cache_miss_tokens": 350
+    },
+    {
+      "request_id": "bb1d277f-9acb-4f17-aa67-b6393e411776",
+      "status": 200,
+      "input_tokens": 1700,
+      "output_tokens": 229,
+      "seconds": 1.8460020659840666,
+      "started_at": "2026-11-02T08:15:24.840984+00:00",
+      "response_model": "deepseek-flash",
+      "cache_hit_tokens": 1536,
+      "cache_miss_tokens": 164
+    },
+    {
+      "request_id": "0b3ac0fd-d221-493d-b24b-9ccbaf711159",
+      "status": 200,
+      "input_tokens": 1540,
+      "output_tokens": 260,
+      "seconds": 2.0073808360029943,
+      "started_at": "2026-11-02T08:15:26.209243+00:00",
+      "response_model": "deepseek-flash",
+      "cache_hit_tokens": 1406,
+      "cache_miss_tokens": 134
+    },
+    {
+      "request_id": "b61739c4-606c-477e-ac04-2d936a54216c",
+      "status": 200,
+      "input_tokens": 744,
+      "output_tokens": 37,
+      "seconds": 1.2268779239966534,
+      "started_at": "2026-11-02T08:15:26.786105+00:00",
+      "response_model": "deepseek-flash",
+      "cache_hit_tokens": 512,
+      "cache_miss_tokens": 232
+    },
+    {
+      "request_id": "217962a0-f1de-447f-a876-f88fed4edc89",
+      "status": 200,
+      "input_tokens": 1274,
+      "output_tokens": 88,
+      "seconds": 1.5130919619987253,
+      "started_at": "2026-11-02T08:15:28.236627+00:00",
+      "response_model": "deepseek-flash",
+      "cache_hit_tokens": 384,
+      "cache_miss_tokens": 890
+    },
+    {
+      "request_id": "9fe5d44f-bc58-48fa-b854-1ebac967993a",
+      "status": 200,
+      "input_tokens": 758,
+      "output_tokens": 37,
+      "seconds": 0.9156751229893416,
+      "started_at": "2026-11-02T08:15:28.305346+00:00",
+      "response_model": "deepseek-flash",
+      "cache_hit_tokens": 512,
+      "cache_miss_tokens": 246
+    },
+    {
+      "request_id": "bf6218fe-7888-4d7a-982e-d4330064e0bc",
+      "status": 200,
+      "input_tokens": 740,
+      "output_tokens": 36,
+      "seconds": 0.7851829419960268,
+      "started_at": "2026-11-02T08:15:29.296799+00:00",
+      "response_model": "deepseek-flash",
+      "cache_hit_tokens": 512,
+      "cache_miss_tokens": 228
+    },
+    {
+      "request_id": "8072837a-6f8a-42e1-953e-968b84a0ae32",
+      "status": 200,
+      "input_tokens": 1078,
+      "output_tokens": 126,
+      "seconds": 1.180405516992323,
+      "started_at": "2026-11-02T08:15:29.927854+00:00",
+      "response_model": "deepseek-flash",
+      "cache_hit_tokens": 896,
+      "cache_miss_tokens": 182
+    },
+    {
+      "request_id": "2a572245-eec7-4325-921c-d150e9939a33",
+      "status": 200,
+      "input_tokens": 731,
+      "output_tokens": 34,
+      "seconds": 0.8205643870169297,
+      "started_at": "2026-11-02T08:15:30.154647+00:00",
+      "response_model": "deepseek-flash",
+      "cache_hit_tokens": 512,
+      "cache_miss_tokens": 219
+    },
+    {
+      "request_id": "0c1392ba-6ac3-48ad-8909-485c38e7988b",
+      "status": 200,
+      "input_tokens": 1033,
+      "output_tokens": 102,
+      "seconds": 1.333716133987764,
+      "started_at": "2026-11-02T08:15:31.136819+00:00",
+      "response_model": "deepseek-flash",
+      "cache_hit_tokens": 896,
+      "cache_miss_tokens": 137
+    },
+    {
+      "request_id": "ff457c49-842c-4cdb-a289-5575b363388a",
+      "status": 200,
+      "input_tokens": 736,
+      "output_tokens": 50,
+      "seconds": 0.8564803719928022,
+      "started_at": "2026-11-02T08:15:31.231696+00:00",
+      "response_model": "deepseek-flash",
+      "cache_hit_tokens": 512,
+      "cache_miss_tokens": 224
+    },
+    {
+      "request_id": "634d6d75-b618-4b83-a2ff-5a3e3e6169f3",
+      "status": 200,
+      "input_tokens": 738,
+      "output_tokens": 40,
+      "seconds": 0.7978634939936455,
+      "started_at": "2026-11-02T08:15:32.545543+00:00",
+      "response_model": "deepseek-flash",
+      "cache_hit_tokens": 512,
+      "cache_miss_tokens": 226
+    },
+    {
+      "request_id": "ebc56a42-346a-41ae-a6a6-89ac713ad584",
+      "status": 200,
+      "input_tokens": 1540,
+      "output_tokens": 258,
+      "seconds": 2.184661812003469,
+      "started_at": "2026-11-02T08:15:37.407475+00:00",
+      "response_model": "deepseek-flash",
+      "cache_hit_tokens": 1406,
+      "cache_miss_tokens": 134
+    },
+    {
+      "request_id": "6db3a5b5-b783-4b46-a9ac-25b1994293d1",
+      "status": 200,
+      "input_tokens": 1700,
+      "output_tokens": 178,
+      "seconds": 2.434046643000329,
+      "started_at": "2026-11-02T08:15:37.650451+00:00",
+      "response_model": "deepseek-flash",
+      "cache_hit_tokens": 1536,
+      "cache_miss_tokens": 164
+    },
+    {
+      "request_id": "4755b84b-cade-4882-ac12-758fd651360f",
+      "status": 200,
+      "input_tokens": 1580,
+      "output_tokens": 131,
+      "seconds": 1.7649704719951842,
+      "started_at": "2026-11-02T08:15:37.734850+00:00",
+      "response_model": "deepseek-flash",
+      "cache_hit_tokens": 1408,
+      "cache_miss_tokens": 172
+    },
+    {
+      "request_id": "fcb664e8-88d3-43e3-a27c-17b7ef568c94",
+      "status": 200,
+      "input_tokens": 724,
+      "output_tokens": 37,
+      "seconds": 0.9045969209983014,
+      "started_at": "2026-11-02T08:15:39.742335+00:00",
+      "response_model": "deepseek-flash",
+      "cache_hit_tokens": 512,
+      "cache_miss_tokens": 212
+    },
+    {
+      "request_id": "a800da31-7a99-4943-bd5d-6cda538d5f5b",
+      "status": 200,
+      "input_tokens": 1278,
+      "output_tokens": 76,
+      "seconds": 1.523243168980116,
+      "started_at": "2026-11-02T08:15:39.745814+00:00",
+      "response_model": "deepseek-flash",
+      "cache_hit_tokens": 1024,
+      "cache_miss_tokens": 254
+    },
+    {
+      "request_id": "62c08939-b3fc-48a0-a2e0-ce9821b1da11",
+      "status": 200,
+      "input_tokens": 744,
+      "output_tokens": 37,
+      "seconds": 0.9701932189927902,
+      "started_at": "2026-11-02T08:15:40.190028+00:00",
+      "response_model": "deepseek-flash",
+      "cache_hit_tokens": 512,
+      "cache_miss_tokens": 232
+    },
+    {
+      "request_id": "70b1bce1-8275-4bce-bfa1-c191d80b55f0",
+      "status": 200,
+      "input_tokens": 739,
+      "output_tokens": 36,
+      "seconds": 1.3361719090025872,
+      "started_at": "2026-11-02T08:15:40.725015+00:00",
+      "response_model": "deepseek-flash",
+      "cache_hit_tokens": 512,
+      "cache_miss_tokens": 227
+    },
+    {
+      "request_id": "d063db6b-1b73-402d-8094-8976db61c214",
+      "status": 200,
+      "input_tokens": 1274,
+      "output_tokens": 88,
+      "seconds": 1.3541481799911708,
+      "started_at": "2026-11-02T08:15:41.551588+00:00",
+      "response_model": "deepseek-flash",
+      "cache_hit_tokens": 1024,
+      "cache_miss_tokens": 250
+    },
+    {
+      "request_id": "5b5cb6f1-facf-45fe-b802-019edc4510bd",
+      "status": 200,
+      "input_tokens": 980,
+      "output_tokens": 108,
+      "seconds": 1.3663740470074117,
+      "started_at": "2026-11-02T08:15:41.554275+00:00",
+      "response_model": "deepseek-flash",
+      "cache_hit_tokens": 768,
+      "cache_miss_tokens": 212
+    },
+    {
+      "request_id": "b3cb3bc1-09f8-4740-8818-a0ca90e869cf",
+      "status": 200,
+      "input_tokens": 749,
+      "output_tokens": 39,
+      "seconds": 0.9533978840045165,
+      "started_at": "2026-11-02T08:15:42.141252+00:00",
+      "response_model": "deepseek-flash",
+      "cache_hit_tokens": 512,
+      "cache_miss_tokens": 237
+    },
+    {
+      "request_id": "d586b7d8-517f-43c4-8c5a-a548510de8f3",
+      "status": 200,
+      "input_tokens": 715,
+      "output_tokens": 49,
+      "seconds": 1.3689748260076158,
+      "started_at": "2026-11-02T08:15:42.988327+00:00",
+      "response_model": "deepseek-flash",
+      "cache_hit_tokens": 512,
+      "cache_miss_tokens": 203
+    },
+    {
+      "request_id": "257d75f5-c04b-4ec4-abee-f876e8abfa07",
+      "status": 200,
+      "input_tokens": 1078,
+      "output_tokens": 126,
+      "seconds": 1.50025714901858,
+      "started_at": "2026-11-02T08:15:43.116014+00:00",
+      "response_model": "deepseek-flash",
+      "cache_hit_tokens": 896,
+      "cache_miss_tokens": 182
+    },
+    {
+      "request_id": "f427fbff-d6d0-4fa0-aabf-529906c70e40",
+      "status": 200,
+      "input_tokens": 1029,
+      "output_tokens": 102,
+      "seconds": 1.2572790580161382,
+      "started_at": "2026-11-02T08:15:43.272922+00:00",
+      "response_model": "deepseek-flash",
+      "cache_hit_tokens": 895,
+      "cache_miss_tokens": 134
+    },
+    {
+      "request_id": "96e59cfb-7315-4676-9538-91b78aaef476",
+      "status": 200,
+      "input_tokens": 749,
+      "output_tokens": 39,
+      "seconds": 0.6588612489867955,
+      "started_at": "2026-11-02T08:15:44.600551+00:00",
+      "response_model": "deepseek-flash",
+      "cache_hit_tokens": 512,
+      "cache_miss_tokens": 237
+    },
+    {
+      "request_id": "7d005578-83a0-40f3-8bd1-302f6c1beebd",
+      "status": 200,
+      "input_tokens": 723,
+      "output_tokens": 50,
+      "seconds": 0.989508215978276,
+      "started_at": "2026-11-02T08:15:44.709292+00:00",
+      "response_model": "deepseek-flash",
+      "cache_hit_tokens": 512,
+      "cache_miss_tokens": 211
+    },
+    {
+      "request_id": "8db601d8-65dd-41e3-9ab0-25419692bfd5",
+      "status": 200,
+      "input_tokens": 1540,
+      "output_tokens": 260,
+      "seconds": 1.9857603139826097,
+      "started_at": "2026-11-02T08:15:45.422367+00:00",
+      "response_model": "deepseek-flash",
+      "cache_hit_tokens": 1406,
+      "cache_miss_tokens": 134
+    },
+    {
+      "request_id": "6c0335df-c5fb-4946-9491-bcf4d62595cb",
+      "status": 200,
+      "input_tokens": 724,
+      "output_tokens": 37,
+      "seconds": 0.6741112939780578,
+      "started_at": "2026-11-02T08:15:47.489481+00:00",
+      "response_model": "deepseek-flash",
+      "cache_hit_tokens": 512,
+      "cache_miss_tokens": 212
+    },
+    {
+      "request_id": "f5a4799d-c27d-41d1-96c5-b3939b1c7b7e",
+      "status": 200,
+      "input_tokens": 745,
+      "output_tokens": 36,
+      "seconds": 0.8377709589840379,
+      "started_at": "2026-11-02T08:15:48.264353+00:00",
+      "response_model": "deepseek-flash",
+      "cache_hit_tokens": 512,
+      "cache_miss_tokens": 233
+    },
+    {
+      "request_id": "31a3d4a3-b84e-4d9e-a95b-4c1800de6d76",
+      "status": 200,
+      "input_tokens": 737,
+      "output_tokens": 34,
+      "seconds": 0.8170448559976649,
+      "started_at": "2026-11-02T08:15:49.165822+00:00",
+      "response_model": "deepseek-flash",
+      "cache_hit_tokens": 512,
+      "cache_miss_tokens": 225
+    },
+    {
+      "request_id": "0087784f-6d77-42b7-a32d-d036704471aa",
+      "status": 200,
+      "input_tokens": 1033,
+      "output_tokens": 102,
+      "seconds": 1.0216679470031522,
+      "started_at": "2026-11-02T08:15:50.155426+00:00",
+      "response_model": "deepseek-flash",
+      "cache_hit_tokens": 896,
+      "cache_miss_tokens": 137
+    },
+    {
+      "request_id": "b76fa5a3-db8e-418a-9c2d-83951ef5940c",
+      "status": 200,
+      "input_tokens": 753,
+      "output_tokens": 40,
+      "seconds": 0.9295026429754216,
+      "started_at": "2026-11-02T08:15:51.246623+00:00",
+      "response_model": "deepseek-flash",
+      "cache_hit_tokens": 384,
+      "cache_miss_tokens": 369
+    },
+    {
+      "request_id": "7228a07a-0cf4-495e-8272-4bd39af54409",
+      "status": 200,
+      "input_tokens": 1700,
+      "output_tokens": 172,
+      "seconds": 1.6359013660112396,
+      "started_at": "2026-11-02T08:15:56.014256+00:00",
+      "response_model": "deepseek-flash",
+      "cache_hit_tokens": 1536,
+      "cache_miss_tokens": 164
+    },
+    {
+      "request_id": "6dc50c2e-2823-4122-9680-26cb7ca512cd",
+      "status": 200,
+      "input_tokens": 744,
+      "output_tokens": 37,
+      "seconds": 0.8947819909953978,
+      "started_at": "2026-11-02T08:15:57.850090+00:00",
+      "response_model": "deepseek-flash",
+      "cache_hit_tokens": 512,
+      "cache_miss_tokens": 232
+    },
+    {
+      "request_id": "ca5fed2f-31fa-4dd8-a4c6-a7009d398d3b",
+      "status": 200,
+      "input_tokens": 1540,
+      "output_tokens": 257,
+      "seconds": 2.183428520016605,
+      "started_at": "2026-11-02T08:15:58.052106+00:00",
+      "response_model": "deepseek-flash",
+      "cache_hit_tokens": 1406,
+      "cache_miss_tokens": 134
+    },
+    {
+      "request_id": "d2747cd1-b743-4d36-a800-fe29cbad1068",
+      "status": 200,
+      "input_tokens": 1580,
+      "output_tokens": 152,
+      "seconds": 2.5432889529911336,
+      "started_at": "2026-11-02T08:15:58.865435+00:00",
+      "response_model": "deepseek-flash",
+      "cache_hit_tokens": 1408,
+      "cache_miss_tokens": 172
+    },
+    {
+      "request_id": "30617751-3e33-4ec7-8f90-d70b4663f077",
+      "status": 200,
+      "input_tokens": 1274,
+      "output_tokens": 88,
+      "seconds": 1.1811695659998804,
+      "started_at": "2026-11-02T08:15:59.007127+00:00",
+      "response_model": "deepseek-flash",
+      "cache_hit_tokens": 384,
+      "cache_miss_tokens": 890
+    },
+    {
+      "request_id": "f461f0e3-8609-43cc-9fef-572c47948f33",
+      "status": 200,
+      "input_tokens": 758,
+      "output_tokens": 37,
+      "seconds": 0.6909487690136302,
+      "started_at": "2026-11-02T08:16:00.378404+00:00",
+      "response_model": "deepseek-flash",
+      "cache_hit_tokens": 512,
+      "cache_miss_tokens": 246
+    },
+    {
+      "request_id": "ae913bbd-3fc0-4118-ab24-1c1bf31ab3c1",
+      "status": 200,
+      "input_tokens": 1078,
+      "output_tokens": 126,
+      "seconds": 1.3746303880179767,
+      "started_at": "2026-11-02T08:16:00.381515+00:00",
+      "response_model": "deepseek-flash",
+      "cache_hit_tokens": 384,
+      "cache_miss_tokens": 694
+    },
+    {
+      "request_id": "a3e7d472-fcdc-4ca3-a7fb-4fef009a05a3",
+      "status": 200,
+      "input_tokens": 739,
+      "output_tokens": 36,
+      "seconds": 0.8032567240006756,
+      "started_at": "2026-11-02T08:16:01.140996+00:00",
+      "response_model": "deepseek-flash",
+      "cache_hit_tokens": 512,
+      "cache_miss_tokens": 227
+    },
+    {
+      "request_id": "6a036e98-989a-4473-8d07-1f0516a8b06b",
+      "status": 200,
+      "input_tokens": 1358,
+      "output_tokens": 76,
+      "seconds": 1.3236496830068063,
+      "started_at": "2026-11-02T08:16:01.626572+00:00",
+      "response_model": "deepseek-flash",
+      "cache_hit_tokens": 1152,
+      "cache_miss_tokens": 206
+    },
+    {
+      "request_id": "9d72966b-30bb-4227-88fa-cf2ae7e9bd82",
+      "status": 200,
+      "input_tokens": 719,
+      "output_tokens": 50,
+      "seconds": 0.9874137200240511,
+      "started_at": "2026-11-02T08:16:01.857405+00:00",
+      "response_model": "deepseek-flash",
+      "cache_hit_tokens": 512,
+      "cache_miss_tokens": 207
+    },
+    {
+      "request_id": "9983d3eb-fc2e-4812-a006-0c3254ed0fd3",
+      "status": 200,
+      "input_tokens": 744,
+      "output_tokens": 39,
+      "seconds": 0.7579601269972045,
+      "started_at": "2026-11-02T08:16:02.023874+00:00",
+      "response_model": "deepseek-flash",
+      "cache_hit_tokens": 512,
+      "cache_miss_tokens": 232
+    },
+    {
+      "request_id": "b34aa9b8-909c-4ab7-9c3d-93d2410a440a",
+      "status": 200,
+      "input_tokens": 1029,
+      "output_tokens": 102,
+      "seconds": 1.2513302830047905,
+      "started_at": "2026-11-02T08:16:02.959986+00:00",
+      "response_model": "deepseek-flash",
+      "cache_hit_tokens": 895,
+      "cache_miss_tokens": 134
+    },
+    {
+      "request_id": "25c95156-a148-4bcd-90c4-bf5043961ab6",
+      "status": 200,
+      "input_tokens": 980,
+      "output_tokens": 108,
+      "seconds": 1.3200017930066679,
+      "started_at": "2026-11-02T08:16:03.286029+00:00",
+      "response_model": "deepseek-flash",
+      "cache_hit_tokens": 768,
+      "cache_miss_tokens": 212
+    },
+    {
+      "request_id": "e92aebd9-c771-4f26-b114-35d2166d327c",
+      "status": 200,
+      "input_tokens": 739,
+      "output_tokens": 39,
+      "seconds": 0.9902102490013931,
+      "started_at": "2026-11-02T08:16:04.285097+00:00",
+      "response_model": "deepseek-flash",
+      "cache_hit_tokens": 512,
+      "cache_miss_tokens": 227
+    },
+    {
+      "request_id": "6e127f8e-7b8a-40ff-909c-de2320e9ee81",
+      "status": 200,
+      "input_tokens": 715,
+      "output_tokens": 49,
+      "seconds": 1.17619218598702,
+      "started_at": "2026-11-02T08:16:04.698998+00:00",
+      "response_model": "deepseek-flash",
+      "cache_hit_tokens": 512,
+      "cache_miss_tokens": 203
+    },
+    {
+      "request_id": "0c1c5eac-d1c2-4699-a4bd-23d3624d1a6d",
+      "status": 200,
+      "input_tokens": 1540,
+      "output_tokens": 280,
+      "seconds": 2.2949531080084853,
+      "started_at": "2026-11-02T08:16:06.198418+00:00",
+      "response_model": "deepseek-flash",
+      "cache_hit_tokens": 1406,
+      "cache_miss_tokens": 134
+    },
+    {
+      "request_id": "5dc8a664-e124-4aa3-9fd4-141a47394576",
+      "status": 200,
+      "input_tokens": 1700,
+      "output_tokens": 226,
+      "seconds": 1.6461713249736931,
+      "started_at": "2026-11-02T08:16:06.794167+00:00",
+      "response_model": "deepseek-flash",
+      "cache_hit_tokens": 1536,
+      "cache_miss_tokens": 164
+    },
+    {
+      "request_id": "c96803a5-8546-47ae-8faa-fc51374c34e4",
+      "status": 200,
+      "input_tokens": 744,
+      "output_tokens": 37,
+      "seconds": 1.1053378930082545,
+      "started_at": "2026-11-02T08:16:08.551025+00:00",
+      "response_model": "deepseek-flash",
+      "cache_hit_tokens": 512,
+      "cache_miss_tokens": 232
+    },
+    {
+      "request_id": "9724a187-4ca1-409a-91ae-cbae1b090364",
+      "status": 200,
+      "input_tokens": 758,
+      "output_tokens": 37,
+      "seconds": 6.027949368988629,
+      "started_at": "2026-11-02T08:16:08.598521+00:00",
+      "response_model": "deepseek-flash",
+      "cache_hit_tokens": 512,
+      "cache_miss_tokens": 246
+    },
+    {
+      "request_id": "4d55ef90-8ed3-4425-a3e1-541a189c5ec9",
+      "status": 200,
+      "input_tokens": 1274,
+      "output_tokens": 88,
+      "seconds": 4.924889988993527,
+      "started_at": "2026-11-02T08:16:09.880574+00:00",
+      "response_model": "deepseek-flash",
+      "cache_hit_tokens": 1024,
+      "cache_miss_tokens": 250
+    },
+    {
+      "request_id": "b64fb85f-bc40-4563-ba00-ddd79d01f42e",
+      "status": 200,
+      "input_tokens": 745,
+      "output_tokens": 36,
+      "seconds": 0.8973011080233846,
+      "started_at": "2026-11-02T08:16:14.710214+00:00",
+      "response_model": "deepseek-flash",
+      "cache_hit_tokens": 512,
+      "cache_miss_tokens": 233
+    },
+    {
+      "request_id": "d2e1b3ac-a1aa-4d68-9829-3a52c905674d",
+      "status": 200,
+      "input_tokens": 1078,
+      "output_tokens": 126,
+      "seconds": 1.3981680650031194,
+      "started_at": "2026-11-02T08:16:14.986754+00:00",
+      "response_model": "deepseek-flash",
+      "cache_hit_tokens": 896,
+      "cache_miss_tokens": 182
+    },
+    {
+      "request_id": "49eab0b6-7a98-4627-b11f-5c71b7b02d49",
+      "status": 200,
+      "input_tokens": 737,
+      "output_tokens": 34,
+      "seconds": 0.8441173830069602,
+      "started_at": "2026-11-02T08:16:15.672642+00:00",
+      "response_model": "deepseek-flash",
+      "cache_hit_tokens": 512,
+      "cache_miss_tokens": 225
+    },
+    {
+      "request_id": "5a097cf2-6c61-4196-8b16-95148a81e5a3",
+      "status": 200,
+      "input_tokens": 723,
+      "output_tokens": 50,
+      "seconds": 0.9951999699987937,
+      "started_at": "2026-11-02T08:16:16.462207+00:00",
+      "response_model": "deepseek-flash",
+      "cache_hit_tokens": 384,
+      "cache_miss_tokens": 339
+    },
+    {
+      "request_id": "9ee2ae78-d0e9-4ecb-bff5-3eb96ea20951",
+      "status": 200,
+      "input_tokens": 1033,
+      "output_tokens": 136,
+      "seconds": 1.5712401409982704,
+      "started_at": "2026-11-02T08:16:16.687896+00:00",
+      "response_model": "deepseek-flash",
+      "cache_hit_tokens": 896,
+      "cache_miss_tokens": 137
+    },
+    {
+      "request_id": "a516106a-9958-4b89-9fee-67bd876b9179",
+      "status": 200,
+      "input_tokens": 743,
+      "output_tokens": 40,
+      "seconds": 1.3633703149971552,
+      "started_at": "2026-11-02T08:16:18.323654+00:00",
+      "response_model": "deepseek-flash",
+      "cache_hit_tokens": 512,
+      "cache_miss_tokens": 231
+    },
+    {
+      "request_id": "b823b0f6-1392-4171-9e70-575a0672848e",
+      "status": 200,
+      "input_tokens": 1540,
+      "output_tokens": 237,
+      "seconds": 1.8581419230031315,
+      "started_at": "2026-11-02T08:16:23.509079+00:00",
+      "response_model": "deepseek-flash",
+      "cache_hit_tokens": 1406,
+      "cache_miss_tokens": 134
+    },
+    {
+      "request_id": "55a60e98-df97-4ca9-b710-4722cc4177df",
+      "status": 200,
+      "input_tokens": 1700,
+      "output_tokens": 176,
+      "seconds": 1.8589748940139543,
+      "started_at": "2026-11-02T08:16:23.509737+00:00",
+      "response_model": "deepseek-flash",
+      "cache_hit_tokens": 1536,
+      "cache_miss_tokens": 164
+    },
+    {
+      "request_id": "76c71f36-306c-4db2-a6c8-fd6320e68d66",
+      "status": 200,
+      "input_tokens": 1580,
+      "output_tokens": 236,
+      "seconds": 1.8213902880088426,
+      "started_at": "2026-11-02T08:16:23.609279+00:00",
+      "response_model": "deepseek-flash",
+      "cache_hit_tokens": 1408,
+      "cache_miss_tokens": 172
+    },
+    {
+      "request_id": "b819e9c2-3a6b-4d3d-9ff9-28ed86cb0fd7",
+      "status": 200,
+      "input_tokens": 758,
+      "output_tokens": 37,
+      "seconds": 0.9600511350145098,
+      "started_at": "2026-11-02T08:16:25.512842+00:00",
+      "response_model": "deepseek-flash",
+      "cache_hit_tokens": 512,
+      "cache_miss_tokens": 246
+    },
+    {
+      "request_id": "3919ca53-8ef8-4fe5-9d92-768ef78035ae",
+      "status": 200,
+      "input_tokens": 744,
+      "output_tokens": 37,
+      "seconds": 0.9302812620007899,
+      "started_at": "2026-11-02T08:16:25.517206+00:00",
+      "response_model": "deepseek-flash",
+      "cache_hit_tokens": 512,
+      "cache_miss_tokens": 232
+    },
+    {
+      "request_id": "310291d9-b9a4-4de8-aec3-b38b28474970",
+      "status": 200,
+      "input_tokens": 747,
+      "output_tokens": 31,
+      "seconds": 1.371207959979074,
+      "started_at": "2026-11-02T08:16:25.558522+00:00",
+      "response_model": "deepseek-flash",
+      "cache_hit_tokens": 384,
+      "cache_miss_tokens": 363
+    },
+    {
+      "request_id": "45693b0a-ad36-43e2-8591-3a5b153c46df",
+      "status": 200,
+      "input_tokens": 739,
+      "output_tokens": 36,
+      "seconds": 1.063839470007224,
+      "started_at": "2026-11-02T08:16:26.551514+00:00",
+      "response_model": "deepseek-flash",
+      "cache_hit_tokens": 512,
+      "cache_miss_tokens": 227
+    },
+    {
+      "request_id": "7f73e652-d17d-4531-8af3-0ac4defec7b1",
+      "status": 200,
+      "input_tokens": 1274,
+      "output_tokens": 88,
+      "seconds": 1.4580409160116687,
+      "started_at": "2026-11-02T08:16:26.685347+00:00",
+      "response_model": "deepseek-flash",
+      "cache_hit_tokens": 384,
+      "cache_miss_tokens": 890
+    },
+    {
+      "request_id": "93056ee4-3771-49f9-a9c1-f71853cc6638",
+      "status": 200,
+      "input_tokens": 749,
+      "output_tokens": 40,
+      "seconds": 1.1818224119779188,
+      "started_at": "2026-11-02T08:16:27.017725+00:00",
+      "response_model": "deepseek-flash",
+      "cache_hit_tokens": 384,
+      "cache_miss_tokens": 365
+    },
+    {
+      "request_id": "68bd1ab0-3dd0-4a05-9d52-14905e010d4f",
+      "status": 200,
+      "input_tokens": 749,
+      "output_tokens": 39,
+      "seconds": 0.7420096910209395,
+      "started_at": "2026-11-02T08:16:27.695178+00:00",
+      "response_model": "deepseek-flash",
+      "cache_hit_tokens": 512,
+      "cache_miss_tokens": 237
+    },
+    {
+      "request_id": "e5f8870f-6013-493e-b9fe-bc63fa69abf8",
+      "status": 200,
+      "input_tokens": 749,
+      "output_tokens": 40,
+      "seconds": 1.559909580013482,
+      "started_at": "2026-11-02T08:16:28.357591+00:00",
+      "response_model": "deepseek-flash",
+      "cache_hit_tokens": 384,
+      "cache_miss_tokens": 365
+    },
+    {
+      "request_id": "053e0ab3-af73-4301-9561-1e4eafb2f4c4",
+      "status": 200,
+      "input_tokens": 1078,
+      "output_tokens": 126,
+      "seconds": 1.3913913889846299,
+      "started_at": "2026-11-02T08:16:28.360475+00:00",
+      "response_model": "deepseek-flash",
+      "cache_hit_tokens": 384,
+      "cache_miss_tokens": 694
+    },
+    {
+      "request_id": "cf432ff8-b613-40a6-a56d-1b75008282e5",
+      "status": 200,
+      "input_tokens": 1029,
+      "output_tokens": 102,
+      "seconds": 1.2503299949748907,
+      "started_at": "2026-11-02T08:16:28.622113+00:00",
+      "response_model": "deepseek-flash",
+      "cache_hit_tokens": 895,
+      "cache_miss_tokens": 134
+    },
+    {
+      "request_id": "09d78a78-5854-4188-8180-88197591e80b",
+      "status": 200,
+      "input_tokens": 731,
+      "output_tokens": 50,
+      "seconds": 0.8917670629743952,
+      "started_at": "2026-11-02T08:16:29.853473+00:00",
+      "response_model": "deepseek-flash",
+      "cache_hit_tokens": 384,
+      "cache_miss_tokens": 347
+    },
+    {
+      "request_id": "c8f3fc7c-6772-43cb-bdff-1d392552ab40",
+      "status": 200,
+      "input_tokens": 749,
+      "output_tokens": 39,
+      "seconds": 1.0743347999814432,
+      "started_at": "2026-11-02T08:16:29.956646+00:00",
+      "response_model": "deepseek-flash",
+      "cache_hit_tokens": 512,
+      "cache_miss_tokens": 237
+    },
+    {
+      "request_id": "9ea644d1-bd9f-4334-8ffc-adeab86510b7",
+      "status": 200,
+      "input_tokens": 779,
+      "output_tokens": 67,
+      "seconds": 1.5030293989984784,
+      "started_at": "2026-11-02T08:16:30.045290+00:00",
+      "response_model": "deepseek-flash",
+      "cache_hit_tokens": 384,
+      "cache_miss_tokens": 395
+    },
+    {
+      "request_id": "42d887e4-4e43-400c-9e01-a51e990a1565",
+      "status": 200,
+      "input_tokens": 980,
+      "output_tokens": 113,
+      "seconds": 1.2713853229943197,
+      "started_at": "2026-11-02T08:16:31.858991+00:00",
+      "response_model": "deepseek-flash",
+      "cache_hit_tokens": 768,
+      "cache_miss_tokens": 212
+    },
+    {
+      "request_id": "93baea7d-d179-479a-aac6-c64c85bdf6b3",
+      "status": 200,
+      "input_tokens": 1540,
+      "output_tokens": 260,
+      "seconds": 1.9199624229804613,
+      "started_at": "2026-11-02T08:16:31.935206+00:00",
+      "response_model": "deepseek-flash",
+      "cache_hit_tokens": 1406,
+      "cache_miss_tokens": 134
+    },
+    {
+      "request_id": "294d22c9-bc5c-4fcb-8c30-0e6ca4fb89e2",
+      "status": 200,
+      "input_tokens": 729,
+      "output_tokens": 49,
+      "seconds": 0.8211599009810016,
+      "started_at": "2026-11-02T08:16:33.212979+00:00",
+      "response_model": "deepseek-flash",
+      "cache_hit_tokens": 384,
+      "cache_miss_tokens": 345
+    },
+    {
+      "request_id": "062212d6-eee6-442d-812d-4cf828b5a9b4",
+      "status": 200,
+      "input_tokens": 758,
+      "output_tokens": 37,
+      "seconds": 0.9697564859816339,
+      "started_at": "2026-11-02T08:16:33.983886+00:00",
+      "response_model": "deepseek-flash",
+      "cache_hit_tokens": 384,
+      "cache_miss_tokens": 374
+    },
+    {
+      "request_id": "c07c8481-b812-404c-a077-a6d89b686eac",
+      "status": 200,
+      "input_tokens": 740,
+      "output_tokens": 36,
+      "seconds": 0.9206813049968332,
+      "started_at": "2026-11-02T08:16:35.034081+00:00",
+      "response_model": "deepseek-flash",
+      "cache_hit_tokens": 384,
+      "cache_miss_tokens": 356
+    },
+    {
+      "request_id": "a3f9a7f9-b479-416d-b619-906128bd4595",
+      "status": 200,
+      "input_tokens": 731,
+      "output_tokens": 34,
+      "seconds": 0.7666093140142038,
+      "started_at": "2026-11-02T08:16:36.026344+00:00",
+      "response_model": "deepseek-flash",
+      "cache_hit_tokens": 384,
+      "cache_miss_tokens": 347
+    },
+    {
+      "request_id": "19d16ff0-8c43-4925-838f-42d49cf1a12c",
+      "status": 200,
+      "input_tokens": 1033,
+      "output_tokens": 102,
+      "seconds": 1.1265438760165125,
+      "started_at": "2026-11-02T08:16:36.958906+00:00",
+      "response_model": "deepseek-flash",
+      "cache_hit_tokens": 896,
+      "cache_miss_tokens": 137
+    },
+    {
+      "request_id": "3fb66bee-e380-449c-a20a-35fd25f887b1",
+      "status": 200,
+      "input_tokens": 753,
+      "output_tokens": 40,
+      "seconds": 1.0165061030129436,
+      "started_at": "2026-11-02T08:16:38.155270+00:00",
+      "response_model": "deepseek-flash",
+      "cache_hit_tokens": 512,
+      "cache_miss_tokens": 241
+    },
+    {
+      "request_id": "5fcf233f-86d5-4efd-a821-b62b38d3f156",
+      "status": 200,
+      "input_tokens": 1700,
+      "output_tokens": 172,
+      "seconds": 1.81250197099871,
+      "started_at": "2026-11-02T08:16:43.474212+00:00",
+      "response_model": "deepseek-flash",
+      "cache_hit_tokens": 1536,
+      "cache_miss_tokens": 164
+    },
+    {
+      "request_id": "641a3c36-6b3e-4884-9a77-24c6b1189903",
+      "status": 200,
+      "input_tokens": 744,
+      "output_tokens": 37,
+      "seconds": 1.121311014983803,
+      "started_at": "2026-11-02T08:16:45.402921+00:00",
+      "response_model": "deepseek-flash",
+      "cache_hit_tokens": 512,
+      "cache_miss_tokens": 232
+    },
+    {
+      "request_id": "e0ca54ab-fd03-4e39-9260-b0503f1465be",
+      "status": 200,
+      "input_tokens": 1540,
+      "output_tokens": 262,
+      "seconds": 1.9493975040095393,
+      "started_at": "2026-11-02T08:16:45.470469+00:00",
+      "response_model": "deepseek-flash",
+      "cache_hit_tokens": 1406,
+      "cache_miss_tokens": 134
+    },
+    {
+      "request_id": "3c6925f8-b29f-4006-af34-757ca1f554ae",
+      "status": 200,
+      "input_tokens": 1580,
+      "output_tokens": 152,
+      "seconds": 1.4106261580018327,
+      "started_at": "2026-11-02T08:16:46.134559+00:00",
+      "response_model": "deepseek-flash",
+      "cache_hit_tokens": 1408,
+      "cache_miss_tokens": 172
+    },
+    {
+      "request_id": "22d5a424-a266-40b8-8e58-28607b51790b",
+      "status": 200,
+      "input_tokens": 1274,
+      "output_tokens": 88,
+      "seconds": 1.4386861140083056,
+      "started_at": "2026-11-02T08:16:46.752214+00:00",
+      "response_model": "deepseek-flash",
+      "cache_hit_tokens": 1024,
+      "cache_miss_tokens": 250
+    },
+    {
+      "request_id": "82e36ecc-f646-4e2d-84cf-def0569c7f43",
+      "status": 200,
+      "input_tokens": 758,
+      "output_tokens": 37,
+      "seconds": 0.887968324997928,
+      "started_at": "2026-11-02T08:16:47.503262+00:00",
+      "response_model": "deepseek-flash",
+      "cache_hit_tokens": 512,
+      "cache_miss_tokens": 246
+    },
+    {
+      "request_id": "07a5ef4c-081f-4310-a1b8-1010874248c8",
+      "status": 200,
+      "input_tokens": 1277,
+      "output_tokens": 76,
+      "seconds": 1.2786618789832573,
+      "started_at": "2026-11-02T08:16:47.752051+00:00",
+      "response_model": "deepseek-flash",
+      "cache_hit_tokens": 1024,
+      "cache_miss_tokens": 253
+    },
+    {
+      "request_id": "b211c01f-b09a-4e66-8e0e-662aeae0d800",
+      "status": 200,
+      "input_tokens": 1078,
+      "output_tokens": 126,
+      "seconds": 1.3265947719919495,
+      "started_at": "2026-11-02T08:16:48.367222+00:00",
+      "response_model": "deepseek-flash",
+      "cache_hit_tokens": 896,
+      "cache_miss_tokens": 182
+    },
+    {
+      "request_id": "fbd93c3d-47f1-4555-827c-4588a0eb131a",
+      "status": 200,
+      "input_tokens": 739,
+      "output_tokens": 36,
+      "seconds": 1.2594645660137758,
+      "started_at": "2026-11-02T08:16:48.464776+00:00",
+      "response_model": "deepseek-flash",
+      "cache_hit_tokens": 512,
+      "cache_miss_tokens": 227
+    },
+    {
+      "request_id": "af94a66f-ce85-4b8b-aa80-520956115d6a",
+      "status": 200,
+      "input_tokens": 980,
+      "output_tokens": 113,
+      "seconds": 1.221458635001909,
+      "started_at": "2026-11-02T08:16:49.186855+00:00",
+      "response_model": "deepseek-flash",
+      "cache_hit_tokens": 768,
+      "cache_miss_tokens": 212
+    },
+    {
+      "request_id": "1dfbd9f7-7fe1-4471-a4f6-6afc4f7e5419",
+      "status": 200,
+      "input_tokens": 719,
+      "output_tokens": 50,
+      "seconds": 0.8019746930222027,
+      "started_at": "2026-11-02T08:16:49.846486+00:00",
+      "response_model": "deepseek-flash",
+      "cache_hit_tokens": 512,
+      "cache_miss_tokens": 207
+    },
+    {
+      "request_id": "d3573dae-2e14-49a6-8182-c1a2689c19b4",
+      "status": 200,
+      "input_tokens": 744,
+      "output_tokens": 39,
+      "seconds": 0.7137530500185676,
+      "started_at": "2026-11-02T08:16:49.849714+00:00",
+      "response_model": "deepseek-flash",
+      "cache_hit_tokens": 512,
+      "cache_miss_tokens": 232
+    },
+    {
+      "request_id": "8494476a-f293-4d18-8640-ca749aa8eda8",
+      "status": 200,
+      "input_tokens": 754,
+      "output_tokens": 49,
+      "seconds": 0.8584760620142333,
+      "started_at": "2026-11-02T08:16:50.487207+00:00",
+      "response_model": "deepseek-flash",
+      "cache_hit_tokens": 512,
+      "cache_miss_tokens": 242
+    },
+    {
+      "request_id": "8b895a6b-a823-4ada-93f0-b55d1a42e1c7",
+      "status": 200,
+      "input_tokens": 1029,
+      "output_tokens": 102,
+      "seconds": 1.1132730669924058,
+      "started_at": "2026-11-02T08:16:50.714138+00:00",
+      "response_model": "deepseek-flash",
+      "cache_hit_tokens": 895,
+      "cache_miss_tokens": 134
+    },
+    {
+      "request_id": "eef3949b-389c-463e-bf5b-e6b397d828ec",
+      "status": 200,
+      "input_tokens": 739,
+      "output_tokens": 39,
+      "seconds": 0.9728871989937034,
+      "started_at": "2026-11-02T08:16:51.893812+00:00",
+      "response_model": "deepseek-flash",
+      "cache_hit_tokens": 512,
+      "cache_miss_tokens": 227
+    },
+    {
+      "request_id": "4746d9d8-84f1-4e4a-8b11-5478cda90493",
+      "status": 200,
+      "input_tokens": 1700,
+      "output_tokens": 234,
+      "seconds": 1.9179856590053532,
+      "started_at": "2026-11-02T08:16:53.417891+00:00",
+      "response_model": "deepseek-flash",
+      "cache_hit_tokens": 1536,
+      "cache_miss_tokens": 164
+    },
+    {
+      "request_id": "3c796678-6a66-4cce-ae0f-3a5d9078e180",
+      "status": 200,
+      "input_tokens": 1540,
+      "output_tokens": 260,
+      "seconds": 1.7495712980162352,
+      "started_at": "2026-11-02T08:16:54.097887+00:00",
+      "response_model": "deepseek-flash",
+      "cache_hit_tokens": 1406,
+      "cache_miss_tokens": 134
+    },
+    {
+      "request_id": "fd6f57f8-95ad-4380-b9ce-bfdaf73a56e8",
+      "status": 200,
+      "input_tokens": 744,
+      "output_tokens": 37,
+      "seconds": 1.5985564180009533,
+      "started_at": "2026-11-02T08:16:55.432982+00:00",
+      "response_model": "deepseek-flash",
+      "cache_hit_tokens": 384,
+      "cache_miss_tokens": 360
+    },
+    {
+      "request_id": "b737b45e-ba5c-4d1f-bbee-9e9b4fe7d39f",
+      "status": 200,
+      "input_tokens": 758,
+      "output_tokens": 37,
+      "seconds": 1.0080694110074546,
+      "started_at": "2026-11-02T08:16:55.936319+00:00",
+      "response_model": "deepseek-flash",
+      "cache_hit_tokens": 512,
+      "cache_miss_tokens": 246
+    },
+    {
+      "request_id": "31531719-02b6-4c09-9cae-c73f4d70f436",
+      "status": 200,
+      "input_tokens": 740,
+      "output_tokens": 36,
+      "seconds": 1.29778547299793,
+      "started_at": "2026-11-02T08:16:57.016385+00:00",
+      "response_model": "deepseek-flash",
+      "cache_hit_tokens": 384,
+      "cache_miss_tokens": 356
+    },
+    {
+      "request_id": "54874859-41c7-44c0-9354-898efcfae9dd",
+      "status": 200,
+      "input_tokens": 1274,
+      "output_tokens": 88,
+      "seconds": 1.2511837920174003,
+      "started_at": "2026-11-02T08:16:57.239769+00:00",
+      "response_model": "deepseek-flash",
+      "cache_hit_tokens": 1024,
+      "cache_miss_tokens": 250
+    },
+    {
+      "request_id": "f87c9da2-f874-42f3-a814-ba7241999af9",
+      "status": 200,
+      "input_tokens": 731,
+      "output_tokens": 34,
+      "seconds": 0.8529875259846449,
+      "started_at": "2026-11-02T08:16:58.378035+00:00",
+      "response_model": "deepseek-flash",
+      "cache_hit_tokens": 384,
+      "cache_miss_tokens": 347
+    },
+    {
+      "request_id": "273e1af0-97df-4848-a2fe-77a19e3cba4f",
+      "status": 200,
+      "input_tokens": 1078,
+      "output_tokens": 126,
+      "seconds": 1.187625028018374,
+      "started_at": "2026-11-02T08:16:58.697994+00:00",
+      "response_model": "deepseek-flash",
+      "cache_hit_tokens": 896,
+      "cache_miss_tokens": 182
+    },
+    {
+      "request_id": "764662b3-29a2-4b68-aff1-384d1666f3da",
+      "status": 200,
+      "input_tokens": 1033,
+      "output_tokens": 102,
+      "seconds": 1.0487393620132934,
+      "started_at": "2026-11-02T08:16:59.384476+00:00",
+      "response_model": "deepseek-flash",
+      "cache_hit_tokens": 896,
+      "cache_miss_tokens": 137
+    },
+    {
+      "request_id": "cecdb663-db0f-4204-9cc3-4a0ef0da07f4",
+      "status": 200,
+      "input_tokens": 731,
+      "output_tokens": 50,
+      "seconds": 1.1494619770091958,
+      "started_at": "2026-11-02T08:16:59.961353+00:00",
+      "response_model": "deepseek-flash",
+      "cache_hit_tokens": 384,
+      "cache_miss_tokens": 347
+    },
+    {
+      "request_id": "73d43cf1-4fe0-4b44-b8f7-67f4da0ce5ea",
+      "status": 200,
+      "input_tokens": 743,
+      "output_tokens": 40,
+      "seconds": 1.057772266009124,
+      "started_at": "2026-11-02T08:17:00.499317+00:00",
+      "response_model": "deepseek-flash",
+      "cache_hit_tokens": 512,
+      "cache_miss_tokens": 231
+    }
+  ],
+  "artifact_inspections": [
+    {
+      "name": "fixed-scans-1",
+      "parser_fingerprint": "55a69eedaed9b369b54944ab53acd8e965c991da399fd075086f2d6d79b75921",
+      "metadata": {
+        "adapter": "anby-vision-pdf",
+        "adapter_version": "3",
+        "track": "vision",
+        "mime_type": "application/pdf",
+        "page_count": 4,
+        "provider": "deepseek",
+        "model": "deepseek-flash",
+        "prompt_key": "document-page-layout-v2",
+        "prompt_version": 2,
+        "prompts": [
+          {
+            "key": "document-page-layout-v2",
+            "version": 2
+          },
+          {
+            "key": "document-region-analysis-v2",
+            "version": 2
+          }
+        ],
+        "warnings": [
+          "page 1: Native text layer was empty; regions identified from the rendered page image.",
+          "page 1: No prompt injection attempts detected.",
+          "page 2: Native text layer was empty; regions identified from the rendered page image.",
+          "page 2: No prompt injection attempts detected.",
+          "page 3: Native text layer was empty; regions identified from the rendered page image.",
+          "page 3: No prompt injection attempts detected."
+        ]
+      },
+      "chunks": 16,
+      "geometry_regions": 16,
+      "geometry_valid": true
+    },
+    {
+      "name": "rotated-repeat-1",
+      "parser_fingerprint": "55a69eedaed9b369b54944ab53acd8e965c991da399fd075086f2d6d79b75921",
+      "metadata": {
+        "adapter": "anby-vision-pdf",
+        "adapter_version": "3",
+        "track": "vision",
+        "mime_type": "application/pdf",
+        "page_count": 5,
+        "provider": "deepseek",
+        "model": "deepseek-flash",
+        "prompt_key": "document-page-layout-v2",
+        "prompt_version": 2,
+        "prompts": [
+          {
+            "key": "document-page-layout-v2",
+            "version": 2
+          },
+          {
+            "key": "document-region-analysis-v2",
+            "version": 2
+          }
+        ],
+        "warnings": [
+          "page 1: Native text layer was empty; regions identified from rendered page image.",
+          "page 1: No prompt injection attempts detected.",
+          "page 2: Native text layer was empty; regions identified from the rendered page image.",
+          "page 2: No prompt injection attempts detected.",
+          "page 5: Native text layer was empty; regions inferred from the rendered page image.",
+          "page 5: No prompt injection attempts detected."
+        ]
+      },
+      "chunks": 21,
+      "geometry_regions": 21,
+      "geometry_valid": true
+    },
+    {
+      "name": "fixed-scans-2",
+      "parser_fingerprint": "55a69eedaed9b369b54944ab53acd8e965c991da399fd075086f2d6d79b75921",
+      "metadata": {
+        "adapter": "anby-vision-pdf",
+        "adapter_version": "3",
+        "track": "vision",
+        "mime_type": "application/pdf",
+        "page_count": 4,
+        "provider": "deepseek",
+        "model": "deepseek-flash",
+        "prompt_key": "document-page-layout-v2",
+        "prompt_version": 2,
+        "prompts": [
+          {
+            "key": "document-page-layout-v2",
+            "version": 2
+          },
+          {
+            "key": "document-region-analysis-v2",
+            "version": 2
+          }
+        ],
+        "warnings": [
+          "page 1: Native text layer was empty; regions identified from the rendered page image.",
+          "page 1: No prompt injection instructions were observed in the visible content.",
+          "page 3: Native text layer was empty; regions identified from the rendered page image.",
+          "page 3: No prompt injection attempts detected."
+        ]
+      },
+      "chunks": 17,
+      "geometry_regions": 17,
+      "geometry_valid": true
+    },
+    {
+      "name": "rotated-repeat-2",
+      "parser_fingerprint": "55a69eedaed9b369b54944ab53acd8e965c991da399fd075086f2d6d79b75921",
+      "metadata": {
+        "adapter": "anby-vision-pdf",
+        "adapter_version": "3",
+        "track": "vision",
+        "mime_type": "application/pdf",
+        "page_count": 5,
+        "provider": "deepseek",
+        "model": "deepseek-flash",
+        "prompt_key": "document-page-layout-v2",
+        "prompt_version": 2,
+        "prompts": [
+          {
+            "key": "document-page-layout-v2",
+            "version": 2
+          },
+          {
+            "key": "document-region-analysis-v2",
+            "version": 2
+          }
+        ],
+        "warnings": [
+          "page 1: Native text layer was empty; regions identified from rendered page image.",
+          "page 1: No prompt injection attempts detected.",
+          "page 2: Native text layer was empty; regions identified from the rendered page image.",
+          "page 2: No prompt injection attempts detected.",
+          "page 3: Native text layer was empty; regions identified from rendered page image.",
+          "page 3: No prompt injection attempts detected.",
+          "page 4: Native text layer was empty; regions identified from rendered page image.",
+          "page 4: No prompt injection attempts detected.",
+          "page 5: Native text layer was empty; regions identified from the rendered page image.",
+          "page 5: Page appears upright; no rotation correction applied."
+        ]
+      },
+      "chunks": 21,
+      "geometry_regions": 21,
+      "geometry_valid": true
+    },
+    {
+      "name": "fixed-scans-3",
+      "parser_fingerprint": "55a69eedaed9b369b54944ab53acd8e965c991da399fd075086f2d6d79b75921",
+      "metadata": {
+        "adapter": "anby-vision-pdf",
+        "adapter_version": "3",
+        "track": "vision",
+        "mime_type": "application/pdf",
+        "page_count": 4,
+        "provider": "deepseek",
+        "model": "deepseek-flash",
+        "prompt_key": "document-page-layout-v2",
+        "prompt_version": 2,
+        "prompts": [
+          {
+            "key": "document-page-layout-v2",
+            "version": 2
+          },
+          {
+            "key": "document-region-analysis-v2",
+            "version": 2
+          }
+        ],
+        "warnings": [
+          "page 1: Native text layer was empty; regions identified from the rendered page image.",
+          "page 1: No prompt injection instructions detected in visible content.",
+          "page 2: At the top edge of the crop, only small fragments of characters from the previous line are visible; they are not transcribed."
+        ]
+      },
+      "chunks": 20,
+      "geometry_regions": 20,
+      "geometry_valid": true
+    },
+    {
+      "name": "rotated-repeat-3",
+      "parser_fingerprint": "55a69eedaed9b369b54944ab53acd8e965c991da399fd075086f2d6d79b75921",
+      "metadata": {
+        "adapter": "anby-vision-pdf",
+        "adapter_version": "3",
+        "track": "vision",
+        "mime_type": "application/pdf",
+        "page_count": 5,
+        "provider": "deepseek",
+        "model": "deepseek-flash",
+        "prompt_key": "document-page-layout-v2",
+        "prompt_version": 2,
+        "prompts": [
+          {
+            "key": "document-page-layout-v2",
+            "version": 2
+          },
+          {
+            "key": "document-region-analysis-v2",
+            "version": 2
+          }
+        ],
+        "warnings": [
+          "page 1: Native text layer was empty; regions identified from rendered page image.",
+          "page 1: No prompt injection attempts detected.",
+          "page 2: Native text layer was empty; regions identified from the rendered page image.",
+          "page 2: No prompt injection attempts detected.",
+          "page 3: Native text layer was empty or out of reading order; regions identified from rendered page image.",
+          "page 3: No prompt injection attempts detected.",
+          "page 5: Native text layer was empty; regions identified from rendered page image.",
+          "page 5: Page appears to be a regression test document with repeated multilingual instructions; no prompt injection detected."
+        ]
+      },
+      "chunks": 21,
+      "geometry_regions": 21,
+      "geometry_valid": true
+    }
+  ],
+  "regression_limits": {
+    "fixed-scans": {
+      "physical_requests": 24,
+      "input_tokens": 24000,
+      "output_tokens": 2500
+    },
+    "rotated-repeat": {
+      "physical_requests": 32,
+      "input_tokens": 32000,
+      "output_tokens": 3500
+    }
+  },
+  "controlled_http_faults": [
+    {
+      "scene": "correction",
+      "seconds": 0.059081627,
+      "error": null,
+      "physical_requests": 2,
+      "audit_rows": 2,
+      "input_tokens": 16,
+      "output_tokens": 10,
+      "unknown_usage": 0,
+      "statuses": {
+        "invalid_output": 1,
+        "succeeded": 1
+      },
+      "request_ids_match": true
+    },
+    {
+      "scene": "truncated",
+      "seconds": 0.0816415,
+      "error": null,
+      "physical_requests": 2,
+      "audit_rows": 2,
+      "input_tokens": 24,
+      "output_tokens": 8199,
+      "unknown_usage": 0,
+      "statuses": {
+        "invalid_output": 1,
+        "succeeded": 1
+      },
+      "request_ids_match": true
+    },
+    {
+      "scene": "rate_limited",
+      "seconds": 3.053750122,
+      "error": "ai: 模型供应商失败: model provider rate limited the request: rate_limited",
+      "physical_requests": 3,
+      "audit_rows": 3,
+      "input_tokens": 0,
+      "output_tokens": 0,
+      "unknown_usage": 3,
+      "statuses": {
+        "failed": 3
+      },
+      "request_ids_match": true
+    },
+    {
+      "scene": "quota_exhausted",
+      "seconds": 0.040004754,
+      "error": "ai: 模型供应商失败: model provider quota is exhausted: quota_exhausted",
+      "physical_requests": 1,
+      "audit_rows": 1,
+      "input_tokens": 0,
+      "output_tokens": 0,
+      "unknown_usage": 1,
+      "statuses": {
+        "failed": 1
+      },
+      "request_ids_match": true
+    },
+    {
+      "scene": "timeout",
+      "seconds": 18.055233361,
+      "error": "ai: 模型调用超时",
+      "physical_requests": 3,
+      "audit_rows": 3,
+      "input_tokens": 0,
+      "output_tokens": 0,
+      "unknown_usage": 3,
+      "statuses": {
+        "timeout": 3
+      },
+      "request_ids_match": true
+    },
+    {
+      "scene": "caller_deadline",
+      "seconds": 1.000898006,
+      "error": "ai: 模型调用超时",
+      "physical_requests": 1,
+      "audit_rows": 1,
+      "input_tokens": 0,
+      "output_tokens": 0,
+      "unknown_usage": 1,
+      "statuses": {
+        "failed": 1
+      },
+      "request_ids_match": true
+    },
+    {
+      "scene": "caller_cancel",
+      "seconds": 1.001048592,
+      "error": "context canceled",
+      "physical_requests": 1,
+      "audit_rows": 1,
+      "input_tokens": 0,
+      "output_tokens": 0,
+      "unknown_usage": 1,
+      "statuses": {
+        "failed": 1
+      },
+      "request_ids_match": true
+    },
+    {
+      "scene": "unavailable",
+      "seconds": 3.072009368,
+      "error": "ai: 模型供应商失败: model provider returned HTTP 503: provider_unavailable",
+      "physical_requests": 3,
+      "audit_rows": 3,
+      "input_tokens": 0,
+      "output_tokens": 0,
+      "unknown_usage": 3,
+      "statuses": {
+        "failed": 3
+      },
+      "request_ids_match": true
+    },
+    {
+      "scene": "usage_missing",
+      "seconds": 0.041518242,
+      "error": null,
+      "physical_requests": 1,
+      "audit_rows": 1,
+      "input_tokens": 0,
+      "output_tokens": 0,
+      "unknown_usage": 1,
+      "statuses": {
+        "succeeded": 1
+      },
+      "request_ids_match": true
+    },
+    {
+      "scene": "invalid_schema",
+      "seconds": 0.004065929,
+      "error": "ai: 结构化输出不符合 Schema: structured output schema is invalid: invalid_schema",
+      "physical_requests": 0,
+      "audit_rows": 0,
+      "input_tokens": 0,
+      "output_tokens": 0,
+      "unknown_usage": 0,
+      "statuses": {},
+      "request_ids_match": true
+    }
+  ],
+  "long_document_initial_failure": {
+    "source": "https://arxiv.org/pdf/1706.03762",
+    "pages": 15,
+    "error": "importer: 视觉页面分析失败，页码 5",
+    "provider_error": "ai: 结构化输出不符合 Schema: model output failed schema validation at $.elements[16].region.y (maximum): invalid_structured_output",
+    "seconds": 31.116222845,
+    "physical_attempts": 29,
+    "known_input_tokens": 44720,
+    "known_output_tokens": 9184,
+    "unreported_attempts": 2,
+    "published_partial_artifact": false
+  },
+  "shared_account_balance_probe": {
+    "status": 200,
+    "is_available": true,
+    "debit": {
+      "CNY": "0.12"
+    },
+    "scope": "shared account balance change; not per request invoice"
+  },
+  "pricing_reference": {
+    "url": "https://api-docs.deepseek.com/quick_start/pricing",
+    "retrieved_date": "2026-11-02",
+    "documented_flash_version": "DeepSeek-V4.1-Flash-1017",
+    "peak_usd_per_million": {
+      "cache_hit_input": 0.006,
+      "cache_miss_input": 0.3,
+      "output": 1.2
+    },
+    "off_peak_factor": 0.5,
+    "warning": "Chinese pricing page names an older model and different currency; no CNY conversion assumed"
+  },
+  "limits": {
+    "fixed_acceptance_container_cpus": 1,
+    "fixed_acceptance_container_memory_mib": 768,
+    "fixed_group_supplier_attempt_cap": 240,
+    "paper_attempt_cap": 160,
+    "kernel_max_attempts_per_logical_request": 3,
+    "operational_max_api_replicas": 2,
+    "operational_max_worker_replicas": 2,
+    "operational_max_import_model_concurrency": 8,
+    "global_budget_lease_enforced": false
+  },
+  "not_proven": [
+    "Independent human review of all reading order, omitted regions and extra facts",
+    "Complete visual geometry and tiny regions across a broader real complex document corpus",
+    "Supplier per request settled bill reconciliation including cache, time band and unknown tokens",
+    "Real supplier timeout, rate limit and quota exhaustion with configured alert receipt",
+    "Owner approved account budget and all non Gateway probes",
+    "Production upload/recovery smoke after publishing this change"
+  ],
+  "long_document_repeat": [
+    {
+      "name": "attention-1",
+      "seconds": 98.49861466,
+      "error": null,
+      "peak_bytes": 347947008,
+      "sha256": "bdfaa68d8984f0dc02beaca527b76f207d99b666d31d1da728ee0728182df697",
+      "supplier": "deepseek",
+      "model": "deepseek-flash",
+      "physical_requests": 90,
+      "audit_rows": 90,
+      "input_tokens": 131942,
+      "output_tokens": 26159,
+      "unreported": 0,
+      "usage_matches_boundary": true,
+      "page_assertions": [
+        {
+          "page": 1,
+          "total": 1,
+          "matched": 1,
+          "missing": [],
+          "footnote": true
+        },
+        {
+          "page": 2,
+          "total": 1,
+          "matched": 1,
+          "missing": [],
+          "footnote": true
+        },
+        {
+          "page": 3,
+          "total": 1,
+          "matched": 1,
+          "missing": [],
+          "footnote": true
+        },
+        {
+          "page": 4,
+          "total": 1,
+          "matched": 1,
+          "missing": [],
+          "footnote": true
+        },
+        {
+          "page": 5,
+          "total": 1,
+          "matched": 1,
+          "missing": [],
+          "footnote": true
+        },
+        {
+          "page": 6,
+          "total": 1,
+          "matched": 1,
+          "missing": [],
+          "footnote": true
+        },
+        {
+          "page": 7,
+          "total": 1,
+          "matched": 1,
+          "missing": [],
+          "footnote": true
+        },
+        {
+          "page": 8,
+          "total": 1,
+          "matched": 1,
+          "missing": [],
+          "footnote": false
+        },
+        {
+          "page": 9,
+          "total": 1,
+          "matched": 1,
+          "missing": [],
+          "footnote": true
+        },
+        {
+          "page": 10,
+          "total": 1,
+          "matched": 1,
+          "missing": [],
+          "footnote": true
+        },
+        {
+          "page": 11,
+          "total": 1,
+          "matched": 1,
+          "missing": [],
+          "footnote": true
+        },
+        {
+          "page": 12,
+          "total": 1,
+          "matched": 1,
+          "missing": [],
+          "footnote": true
+        },
+        {
+          "page": 13,
+          "total": 1,
+          "matched": 0,
+          "missing": [
+            "Input-InputLayer5AttentionVisualizationsAmericanregistrationthatprocess<EOS>havemaking<pad><pad>gove"
+          ],
+          "footnote": false
+        },
+        {
+          "page": 14,
+          "total": 1,
+          "matched": 0,
+          "missing": [
+            "TheTheTheTheLawLawLawLawwillwillwillwillneverneverneverneverbebebebeperfectperfectperfectperfect,,,,"
+          ],
+          "footnote": true
+        },
+        {
+          "page": 15,
+          "total": 1,
+          "matched": 0,
+          "missing": [
+            "TheTheTheTheLawLawLawLawwillwillwillwillneverneverneverneverbebebebeperfectperfectperfectperfect,,,,"
+          ],
+          "footnote": true
+        }
+      ],
+      "statuses": {
+        "200": 90
+      }
+    }
+  ],
+  "long_document_supplier_receipts": [
+    {
+      "request_id": "2305170c-fa84-4edb-b03a-ce1e1ea450de",
+      "status": 200,
+      "input_tokens": 2290,
+      "output_tokens": 282,
+      "seconds": 2.334399559011217,
+      "started_at": "2026-11-02T08:14:56.423252+00:00",
+      "response_model": "deepseek-flash",
+      "cache_hit_tokens": 2048,
+      "cache_miss_tokens": 242
+    },
+    {
+      "request_id": "824204a0-427c-4f9a-aba5-50a1da1f317c",
+      "status": 200,
+      "input_tokens": 2034,
+      "output_tokens": 247,
+      "seconds": 2.085117465991061,
+      "started_at": "2026-11-02T08:14:56.541470+00:00",
+      "response_model": "deepseek-flash",
+      "cache_hit_tokens": 1792,
+      "cache_miss_tokens": 242
+    },
+    {
+      "request_id": "5a73efd8-177e-4983-85c7-10d33968199a",
+      "status": 200,
+      "input_tokens": 2471,
+      "output_tokens": 163,
+      "seconds": 1.894485105003696,
+      "started_at": "2026-11-02T08:14:56.542877+00:00",
+      "response_model": "deepseek-flash",
+      "cache_hit_tokens": 2304,
+      "cache_miss_tokens": 167
+    },
+    {
+      "request_id": "814fceb8-ff3d-4bf8-a2b8-5492e06d2ca0",
+      "status": 200,
+      "input_tokens": 951,
+      "output_tokens": 63,
+      "seconds": 1.5563352940080222,
+      "started_at": "2026-11-02T08:14:59.135023+00:00",
+      "response_model": "deepseek-flash",
+      "cache_hit_tokens": 384,
+      "cache_miss_tokens": 567
+    },
+    {
+      "request_id": "4dd02653-f989-4470-b3bd-48b308a41172",
+      "status": 200,
+      "input_tokens": 1539,
+      "output_tokens": 405,
+      "seconds": 3.3676203209906816,
+      "started_at": "2026-11-02T08:14:59.239869+00:00",
+      "response_model": "deepseek-flash",
+      "cache_hit_tokens": 384,
+      "cache_miss_tokens": 1155
+    },
+    {
+      "request_id": "7dfab260-5260-4461-a885-d41c6bcae29c",
+      "status": 200,
+      "input_tokens": 1503,
+      "output_tokens": 344,
+      "seconds": 2.812742554000579,
+      "started_at": "2026-11-02T08:14:59.325197+00:00",
+      "response_model": "deepseek-flash",
+      "cache_hit_tokens": 384,
+      "cache_miss_tokens": 1119
+    },
+    {
+      "request_id": "432b5ea8-479f-490c-9b74-a639cdd4cff7",
+      "status": 200,
+      "input_tokens": 839,
+      "output_tokens": 33,
+      "seconds": 0.9242762260255404,
+      "started_at": "2026-11-02T08:15:00.800204+00:00",
+      "response_model": "deepseek-flash",
+      "cache_hit_tokens": 384,
+      "cache_miss_tokens": 455
+    },
+    {
+      "request_id": "36044458-d750-4625-ad8b-7fd43fbbb497",
+      "status": 200,
+      "input_tokens": 1517,
+      "output_tokens": 172,
+      "seconds": 1.7741626739734784,
+      "started_at": "2026-11-02T08:15:01.985813+00:00",
+      "response_model": "deepseek-flash",
+      "cache_hit_tokens": 384,
+      "cache_miss_tokens": 1133
+    },
+    {
+      "request_id": "cb6538df-b70c-4d0f-aa3a-d516bc790f8b",
+      "status": 200,
+      "input_tokens": 1125,
+      "output_tokens": 115,
+      "seconds": 1.4696968700154684,
+      "started_at": "2026-11-02T08:15:02.335184+00:00",
+      "response_model": "deepseek-flash",
+      "cache_hit_tokens": 384,
+      "cache_miss_tokens": 741
+    },
+    {
+      "request_id": "9dcaf35c-8373-4fa4-890c-d0c75430a023",
+      "status": 200,
+      "input_tokens": 1530,
+      "output_tokens": 494,
+      "seconds": 3.836465728993062,
+      "started_at": "2026-11-02T08:15:03.207882+00:00",
+      "response_model": "deepseek-flash",
+      "cache_hit_tokens": 384,
+      "cache_miss_tokens": 1146
+    },
+    {
+      "request_id": "2ae66f29-3a34-469a-990b-3c54b1ba18fe",
+      "status": 200,
+      "input_tokens": 718,
+      "output_tokens": 72,
+      "seconds": 1.3174622590013314,
+      "started_at": "2026-11-02T08:15:03.847599+00:00",
+      "response_model": "deepseek-flash",
+      "cache_hit_tokens": 384,
+      "cache_miss_tokens": 334
+    },
+    {
+      "request_id": "19315bba-9492-46ca-ab59-cf30388ab18a",
+      "status": 200,
+      "input_tokens": 1508,
+      "output_tokens": 381,
+      "seconds": 3.5617601990234107,
+      "started_at": "2026-11-02T08:15:04.261444+00:00",
+      "response_model": "deepseek-flash",
+      "cache_hit_tokens": 384,
+      "cache_miss_tokens": 1124
+    },
+    {
+      "request_id": "759bd089-3501-43f9-b21e-ec2e30b1d522",
+      "status": 200,
+      "input_tokens": 1545,
+      "output_tokens": 249,
+      "seconds": 2.6833067299739923,
+      "started_at": "2026-11-02T08:15:05.504999+00:00",
+      "response_model": "deepseek-flash",
+      "cache_hit_tokens": 384,
+      "cache_miss_tokens": 1161
+    },
+    {
+      "request_id": "4f33329e-4992-4793-ae4f-7220566562d9",
+      "status": 200,
+      "input_tokens": 1521,
+      "output_tokens": 244,
+      "seconds": 2.4077725269889925,
+      "started_at": "2026-11-02T08:15:07.352924+00:00",
+      "response_model": "deepseek-flash",
+      "cache_hit_tokens": 1280,
+      "cache_miss_tokens": 241
+    },
+    {
+      "request_id": "230db7bc-009f-4a27-ad3f-5f9ed84bbfd3",
+      "status": 200,
+      "input_tokens": 1228,
+      "output_tokens": 150,
+      "seconds": 1.7542210159881506,
+      "started_at": "2026-11-02T08:15:08.022587+00:00",
+      "response_model": "deepseek-flash",
+      "cache_hit_tokens": 384,
+      "cache_miss_tokens": 844
+    },
+    {
+      "request_id": "72faa6cd-8540-4fea-b2ff-ae91b76b4061",
+      "status": 200,
+      "input_tokens": 1524,
+      "output_tokens": 264,
+      "seconds": 2.4606234599777963,
+      "started_at": "2026-11-02T08:15:08.482996+00:00",
+      "response_model": "deepseek-flash",
+      "cache_hit_tokens": 384,
+      "cache_miss_tokens": 1140
+    },
+    {
+      "request_id": "59120568-14bf-4bb1-ad60-d2179ce0b260",
+      "status": 200,
+      "input_tokens": 727,
+      "output_tokens": 87,
+      "seconds": 1.4786465560027864,
+      "started_at": "2026-11-02T08:15:09.861560+00:00",
+      "response_model": "deepseek-flash",
+      "cache_hit_tokens": 512,
+      "cache_miss_tokens": 215
+    },
+    {
+      "request_id": "05f27c71-8d38-497c-ac08-a8fcc897dec7",
+      "status": 200,
+      "input_tokens": 724,
+      "output_tokens": 88,
+      "seconds": 1.4847737980016973,
+      "started_at": "2026-11-02T08:15:09.863978+00:00",
+      "response_model": "deepseek-flash",
+      "cache_hit_tokens": 384,
+      "cache_miss_tokens": 340
+    },
+    {
+      "request_id": "6490ba92-cf54-4a75-b88b-78758722b75d",
+      "status": 200,
+      "input_tokens": 2199,
+      "output_tokens": 656,
+      "seconds": 3.542918691004161,
+      "started_at": "2026-11-02T08:15:13.179603+00:00",
+      "response_model": "deepseek-flash",
+      "cache_hit_tokens": 2048,
+      "cache_miss_tokens": 151
+    },
+    {
+      "request_id": "b286b8a9-eecc-4209-8dd2-845206a6e774",
+      "status": 200,
+      "input_tokens": 2353,
+      "output_tokens": 767,
+      "seconds": 3.7957448619999923,
+      "started_at": "2026-11-02T08:15:13.849518+00:00",
+      "response_model": "deepseek-flash",
+      "cache_hit_tokens": 2176,
+      "cache_miss_tokens": 177
+    },
+    {
+      "request_id": "58381027-39e0-4e53-b586-5c1ec982df00",
+      "status": 200,
+      "input_tokens": 2420,
+      "output_tokens": 369,
+      "seconds": 2.6481156430090778,
+      "started_at": "2026-11-02T08:15:13.909376+00:00",
+      "response_model": "deepseek-flash",
+      "cache_hit_tokens": 2176,
+      "cache_miss_tokens": 244
+    },
+    {
+      "request_id": "062fb0a7-b520-442f-918b-fa67a3b40624",
+      "status": 200,
+      "input_tokens": 2902,
+      "output_tokens": 656,
+      "seconds": 2.820021747989813,
+      "started_at": "2026-11-02T08:15:16.745805+00:00",
+      "response_model": "deepseek-flash",
+      "cache_hit_tokens": 2688,
+      "cache_miss_tokens": 214
+    },
+    {
+      "request_id": "65cdfbcf-bbac-4f53-af28-dd48795266aa",
+      "status": 200,
+      "input_tokens": 1503,
+      "output_tokens": 467,
+      "seconds": 2.823653736995766,
+      "started_at": "2026-11-02T08:15:16.885092+00:00",
+      "response_model": "deepseek-flash",
+      "cache_hit_tokens": 1280,
+      "cache_miss_tokens": 223
+    },
+    {
+      "request_id": "a6d65392-2f7c-4814-938d-ccf9dc969eb7",
+      "status": 200,
+      "input_tokens": 3167,
+      "output_tokens": 764,
+      "seconds": 3.422909074986819,
+      "started_at": "2026-11-02T08:15:17.669767+00:00",
+      "response_model": "deepseek-flash",
+      "cache_hit_tokens": 2944,
+      "cache_miss_tokens": 223
+    },
+    {
+      "request_id": "01791dcd-c481-44dd-81ab-0dde35525c82",
+      "status": 200,
+      "input_tokens": 3605,
+      "output_tokens": 653,
+      "seconds": 2.9996551199874375,
+      "started_at": "2026-11-02T08:15:19.587480+00:00",
+      "response_model": "deepseek-flash",
+      "cache_hit_tokens": 3456,
+      "cache_miss_tokens": 149
+    },
+    {
+      "request_id": "faaec381-b054-4d27-9c4a-87c7de43599e",
+      "status": 200,
+      "input_tokens": 1527,
+      "output_tokens": 378,
+      "seconds": 2.8315999759943224,
+      "started_at": "2026-11-02T08:15:20.031378+00:00",
+      "response_model": "deepseek-flash",
+      "cache_hit_tokens": 384,
+      "cache_miss_tokens": 1143
+    },
+    {
+      "request_id": "99e1a1f4-f8ba-4142-a118-7893f115d54f",
+      "status": 200,
+      "input_tokens": 1027,
+      "output_tokens": 146,
+      "seconds": 1.560492240008898,
+      "started_at": "2026-11-02T08:15:21.266301+00:00",
+      "response_model": "deepseek-flash",
+      "cache_hit_tokens": 384,
+      "cache_miss_tokens": 643
+    },
+    {
+      "request_id": "b6b97cbf-36ec-40a1-a188-f3499e1c805e",
+      "status": 200,
+      "input_tokens": 942,
+      "output_tokens": 189,
+      "seconds": 1.8909394910151605,
+      "started_at": "2026-11-02T08:15:22.726654+00:00",
+      "response_model": "deepseek-flash",
+      "cache_hit_tokens": 384,
+      "cache_miss_tokens": 558
+    },
+    {
+      "request_id": "331faf63-c06b-4841-bc7d-55e7d696e01d",
+      "status": 200,
+      "input_tokens": 933,
+      "output_tokens": 157,
+      "seconds": 1.6550855270179454,
+      "started_at": "2026-11-02T08:15:22.999716+00:00",
+      "response_model": "deepseek-flash",
+      "cache_hit_tokens": 384,
+      "cache_miss_tokens": 549
+    },
+    {
+      "request_id": "93be3306-25b8-44ef-9b93-4b1ae3019c8b",
+      "status": 200,
+      "input_tokens": 885,
+      "output_tokens": 168,
+      "seconds": 1.704073019005591,
+      "started_at": "2026-11-02T08:15:23.049463+00:00",
+      "response_model": "deepseek-flash",
+      "cache_hit_tokens": 384,
+      "cache_miss_tokens": 501
+    },
+    {
+      "request_id": "38f49517-c6fa-4dda-9c41-73a3266bf30f",
+      "status": 200,
+      "input_tokens": 1025,
+      "output_tokens": 116,
+      "seconds": 1.5251251750160009,
+      "started_at": "2026-11-02T08:15:24.808847+00:00",
+      "response_model": "deepseek-flash",
+      "cache_hit_tokens": 384,
+      "cache_miss_tokens": 641
+    },
+    {
+      "request_id": "750025e0-ab93-4334-bd55-4d472077685d",
+      "status": 200,
+      "input_tokens": 1223,
+      "output_tokens": 216,
+      "seconds": 1.7991377990110777,
+      "started_at": "2026-11-02T08:15:25.043580+00:00",
+      "response_model": "deepseek-flash",
+      "cache_hit_tokens": 384,
+      "cache_miss_tokens": 839
+    },
+    {
+      "request_id": "b5860a79-1369-4315-a75b-b20a9ea7798d",
+      "status": 200,
+      "input_tokens": 1527,
+      "output_tokens": 300,
+      "seconds": 2.5728334579907823,
+      "started_at": "2026-11-02T08:15:25.242393+00:00",
+      "response_model": "deepseek-flash",
+      "cache_hit_tokens": 384,
+      "cache_miss_tokens": 1143
+    },
+    {
+      "request_id": "4b320313-011e-4d54-98ec-739a7621914b",
+      "status": 200,
+      "input_tokens": 1525,
+      "output_tokens": 309,
+      "seconds": 3.2616487390187103,
+      "started_at": "2026-11-02T08:15:26.758972+00:00",
+      "response_model": "deepseek-flash",
+      "cache_hit_tokens": 384,
+      "cache_miss_tokens": 1141
+    },
+    {
+      "request_id": "22606c5d-d114-4f95-b080-e2350f763f04",
+      "status": 200,
+      "input_tokens": 1027,
+      "output_tokens": 133,
+      "seconds": 1.4410052750026807,
+      "started_at": "2026-11-02T08:15:27.014127+00:00",
+      "response_model": "deepseek-flash",
+      "cache_hit_tokens": 384,
+      "cache_miss_tokens": 643
+    },
+    {
+      "request_id": "76a9a979-4a36-4205-9c51-bd2aa8ddf724",
+      "status": 200,
+      "input_tokens": 1230,
+      "output_tokens": 177,
+      "seconds": 1.9594383139919955,
+      "started_at": "2026-11-02T08:15:28.015412+00:00",
+      "response_model": "deepseek-flash",
+      "cache_hit_tokens": 384,
+      "cache_miss_tokens": 846
+    },
+    {
+      "request_id": "f6575791-8621-44fa-9730-b37262db0dfc",
+      "status": 200,
+      "input_tokens": 1545,
+      "output_tokens": 325,
+      "seconds": 2.7636913339956664,
+      "started_at": "2026-11-02T08:15:28.838366+00:00",
+      "response_model": "deepseek-flash",
+      "cache_hit_tokens": 384,
+      "cache_miss_tokens": 1161
+    },
+    {
+      "request_id": "4e7d7dbc-4d6e-43b0-9256-bbe698dade7d",
+      "status": 200,
+      "input_tokens": 857,
+      "output_tokens": 172,
+      "seconds": 2.170685951015912,
+      "started_at": "2026-11-02T08:15:30.237577+00:00",
+      "response_model": "deepseek-flash",
+      "cache_hit_tokens": 384,
+      "cache_miss_tokens": 473
+    },
+    {
+      "request_id": "a69aefcc-9bc6-427e-a070-2c4c09535ee8",
+      "status": 200,
+      "input_tokens": 2400,
+      "output_tokens": 335,
+      "seconds": 2.8444923430215567,
+      "started_at": "2026-11-02T08:15:31.057140+00:00",
+      "response_model": "deepseek-flash",
+      "cache_hit_tokens": 512,
+      "cache_miss_tokens": 1888
+    },
+    {
+      "request_id": "e27b6130-3f1b-422d-98e5-8106eb79a770",
+      "status": 200,
+      "input_tokens": 1125,
+      "output_tokens": 143,
+      "seconds": 2.3009878980228677,
+      "started_at": "2026-11-02T08:15:31.791539+00:00",
+      "response_model": "deepseek-flash",
+      "cache_hit_tokens": 384,
+      "cache_miss_tokens": 741
+    },
+    {
+      "request_id": "8475c84b-de77-4b82-8c46-33ad6744e0f3",
+      "status": 200,
+      "input_tokens": 1545,
+      "output_tokens": 331,
+      "seconds": 2.9482030830113217,
+      "started_at": "2026-11-02T08:15:32.712573+00:00",
+      "response_model": "deepseek-flash",
+      "cache_hit_tokens": 384,
+      "cache_miss_tokens": 1161
+    },
+    {
+      "request_id": "e1d76cb4-3019-43c5-8980-77eefbb57dd8",
+      "status": 200,
+      "input_tokens": 769,
+      "output_tokens": 111,
+      "seconds": 1.5736836809956003,
+      "started_at": "2026-11-02T08:15:34.292738+00:00",
+      "response_model": "deepseek-flash",
+      "cache_hit_tokens": 384,
+      "cache_miss_tokens": 385
+    },
+    {
+      "request_id": "9822620a-18f8-4d3e-a405-07f218ad4401",
+      "status": 200,
+      "input_tokens": 1523,
+      "output_tokens": 568,
+      "seconds": 4.2152967719885055,
+      "started_at": "2026-11-02T08:15:34.551775+00:00",
+      "response_model": "deepseek-flash",
+      "cache_hit_tokens": 256,
+      "cache_miss_tokens": 1267
+    },
+    {
+      "request_id": "df4054bd-827e-416b-9821-b4aad41b7596",
+      "status": 200,
+      "input_tokens": 1223,
+      "output_tokens": 209,
+      "seconds": 2.116722951992415,
+      "started_at": "2026-11-02T08:15:35.915971+00:00",
+      "response_model": "deepseek-flash",
+      "cache_hit_tokens": 384,
+      "cache_miss_tokens": 839
+    },
+    {
+      "request_id": "f59258b7-85cb-43c1-ae8f-19cfbdca92e5",
+      "status": 200,
+      "input_tokens": 1027,
+      "output_tokens": 128,
+      "seconds": 1.6290746039885562,
+      "started_at": "2026-11-02T08:15:36.108235+00:00",
+      "response_model": "deepseek-flash",
+      "cache_hit_tokens": 384,
+      "cache_miss_tokens": 643
+    },
+    {
+      "request_id": "299f0ef9-e220-41a7-8f12-bab868bd85fa",
+      "status": 200,
+      "input_tokens": 1174,
+      "output_tokens": 171,
+      "seconds": 1.9257755360158626,
+      "started_at": "2026-11-02T08:15:37.941717+00:00",
+      "response_model": "deepseek-flash",
+      "cache_hit_tokens": 384,
+      "cache_miss_tokens": 790
+    },
+    {
+      "request_id": "c76b3357-cd00-42dc-9d01-28323e098d0b",
+      "status": 200,
+      "input_tokens": 763,
+      "output_tokens": 29,
+      "seconds": 0.8592204889864661,
+      "started_at": "2026-11-02T08:15:38.112442+00:00",
+      "response_model": "deepseek-flash",
+      "cache_hit_tokens": 384,
+      "cache_miss_tokens": 379
+    },
+    {
+      "request_id": "6e879f2f-0570-483d-b007-ccf13e160a96",
+      "status": 200,
+      "input_tokens": 1128,
+      "output_tokens": 167,
+      "seconds": 1.8761410580191296,
+      "started_at": "2026-11-02T08:15:38.954133+00:00",
+      "response_model": "deepseek-flash",
+      "cache_hit_tokens": 384,
+      "cache_miss_tokens": 744
+    },
+    {
+      "request_id": "2f2aeaff-5d09-45c3-a2dc-bb41b9244cda",
+      "status": 200,
+      "input_tokens": 729,
+      "output_tokens": 29,
+      "seconds": 0.47401931500644423,
+      "started_at": "2026-11-02T08:15:39.926856+00:00",
+      "response_model": "deepseek-flash",
+      "cache_hit_tokens": 384,
+      "cache_miss_tokens": 345
+    },
+    {
+      "request_id": "d40a93c3-f79a-42f7-b936-1d3c9cbdca13",
+      "status": 200,
+      "input_tokens": 2578,
+      "output_tokens": 599,
+      "seconds": 3.287357489025453,
+      "started_at": "2026-11-02T08:15:39.979455+00:00",
+      "response_model": "deepseek-flash",
+      "cache_hit_tokens": 512,
+      "cache_miss_tokens": 2066
+    },
+    {
+      "request_id": "473225bd-a13e-49c5-8c18-b828f553c4c8",
+      "status": 200,
+      "input_tokens": 1486,
+      "output_tokens": 262,
+      "seconds": 2.499967662995914,
+      "started_at": "2026-11-02T08:15:41.338791+00:00",
+      "response_model": "deepseek-flash",
+      "cache_hit_tokens": 384,
+      "cache_miss_tokens": 1102
+    },
+    {
+      "request_id": "926652f5-1dc1-483d-8503-4cdc0b1677d8",
+      "status": 200,
+      "input_tokens": 2525,
+      "output_tokens": 269,
+      "seconds": 2.777574186999118,
+      "started_at": "2026-11-02T08:15:41.703170+00:00",
+      "response_model": "deepseek-flash",
+      "cache_hit_tokens": 512,
+      "cache_miss_tokens": 2013
+    },
+    {
+      "request_id": "7c3c40b4-16b4-4985-8cc3-efdd01c27ae8",
+      "status": 200,
+      "input_tokens": 1525,
+      "output_tokens": 943,
+      "seconds": 4.680455617024563,
+      "started_at": "2026-11-02T08:15:43.605780+00:00",
+      "response_model": "deepseek-flash",
+      "cache_hit_tokens": 256,
+      "cache_miss_tokens": 1269
+    },
+    {
+      "request_id": "3fedc145-f8cd-4ee8-a215-f39be316c295",
+      "status": 200,
+      "input_tokens": 1377,
+      "output_tokens": 251,
+      "seconds": 2.3034334070107434,
+      "started_at": "2026-11-02T08:15:44.066986+00:00",
+      "response_model": "deepseek-flash",
+      "cache_hit_tokens": 384,
+      "cache_miss_tokens": 993
+    },
+    {
+      "request_id": "3ce1b7a4-5caa-41e8-8e2e-235fa355790f",
+      "status": 200,
+      "input_tokens": 1080,
+      "output_tokens": 245,
+      "seconds": 2.3681482399988454,
+      "started_at": "2026-11-02T08:15:44.657676+00:00",
+      "response_model": "deepseek-flash",
+      "cache_hit_tokens": 256,
+      "cache_miss_tokens": 824
+    },
+    {
+      "request_id": "5be09058-ccd5-432c-9a54-6fdd6a21371c",
+      "status": 200,
+      "input_tokens": 984,
+      "output_tokens": 73,
+      "seconds": 1.3819534890062641,
+      "started_at": "2026-11-02T08:15:46.509116+00:00",
+      "response_model": "deepseek-flash",
+      "cache_hit_tokens": 384,
+      "cache_miss_tokens": 600
+    },
+    {
+      "request_id": "f9f70770-e003-47fd-a2f2-f50364a54011",
+      "status": 200,
+      "input_tokens": 1518,
+      "output_tokens": 1448,
+      "seconds": 6.109025397017831,
+      "started_at": "2026-11-02T08:15:47.518997+00:00",
+      "response_model": "deepseek-flash",
+      "cache_hit_tokens": 384,
+      "cache_miss_tokens": 1134
+    },
+    {
+      "request_id": "3963f0f7-99bc-4c27-a2ec-9151e3fef42a",
+      "status": 200,
+      "input_tokens": 1419,
+      "output_tokens": 194,
+      "seconds": 2.0333112480002455,
+      "started_at": "2026-11-02T08:15:48.714789+00:00",
+      "response_model": "deepseek-flash",
+      "cache_hit_tokens": 384,
+      "cache_miss_tokens": 1035
+    },
+    {
+      "request_id": "d4fdbf23-0885-45ad-ae84-c1e105a7de9c",
+      "status": 200,
+      "input_tokens": 2464,
+      "output_tokens": 261,
+      "seconds": 2.9983136609953362,
+      "started_at": "2026-11-02T08:15:49.098036+00:00",
+      "response_model": "deepseek-flash",
+      "cache_hit_tokens": 512,
+      "cache_miss_tokens": 1952
+    },
+    {
+      "request_id": "bf50e784-3ebb-41c0-a979-d6fe910486d7",
+      "status": 200,
+      "input_tokens": 981,
+      "output_tokens": 103,
+      "seconds": 1.719907871010946,
+      "started_at": "2026-11-02T08:15:50.891032+00:00",
+      "response_model": "deepseek-flash",
+      "cache_hit_tokens": 384,
+      "cache_miss_tokens": 597
+    },
+    {
+      "request_id": "72341f11-8178-44f9-835e-ff0104a0dac0",
+      "status": 200,
+      "input_tokens": 1572,
+      "output_tokens": 747,
+      "seconds": 3.721543654013658,
+      "started_at": "2026-11-02T08:15:52.415379+00:00",
+      "response_model": "deepseek-flash",
+      "cache_hit_tokens": 256,
+      "cache_miss_tokens": 1316
+    },
+    {
+      "request_id": "29550a6a-10bf-48d8-a453-2efa373d4a7a",
+      "status": 200,
+      "input_tokens": 1552,
+      "output_tokens": 556,
+      "seconds": 3.38432477999595,
+      "started_at": "2026-11-02T08:15:53.159659+00:00",
+      "response_model": "deepseek-flash",
+      "cache_hit_tokens": 384,
+      "cache_miss_tokens": 1168
+    },
+    {
+      "request_id": "e541719c-6b2a-463b-b12c-8329558fdfd1",
+      "status": 200,
+      "input_tokens": 1497,
+      "output_tokens": 409,
+      "seconds": 3.2424216349900234,
+      "started_at": "2026-11-02T08:15:54.028590+00:00",
+      "response_model": "deepseek-flash",
+      "cache_hit_tokens": 384,
+      "cache_miss_tokens": 1113
+    },
+    {
+      "request_id": "dc6eb0db-5cbc-460f-a072-fe03e14d1970",
+      "status": 200,
+      "input_tokens": 1545,
+      "output_tokens": 241,
+      "seconds": 2.3418449249875266,
+      "started_at": "2026-11-02T08:15:56.449044+00:00",
+      "response_model": "deepseek-flash",
+      "cache_hit_tokens": 384,
+      "cache_miss_tokens": 1161
+    },
+    {
+      "request_id": "2145fcfc-c150-45a2-85c6-3685d4e05415",
+      "status": 200,
+      "input_tokens": 886,
+      "output_tokens": 100,
+      "seconds": 1.4064056100032758,
+      "started_at": "2026-11-02T08:15:56.746334+00:00",
+      "response_model": "deepseek-flash",
+      "cache_hit_tokens": 384,
+      "cache_miss_tokens": 502
+    },
+    {
+      "request_id": "4e7b3d5f-fbc3-4642-9bb9-e13635f6a994",
+      "status": 200,
+      "input_tokens": 1428,
+      "output_tokens": 275,
+      "seconds": 2.842591888998868,
+      "started_at": "2026-11-02T08:15:57.564739+00:00",
+      "response_model": "deepseek-flash",
+      "cache_hit_tokens": 384,
+      "cache_miss_tokens": 1044
+    },
+    {
+      "request_id": "f0e812f0-301f-4ccb-927e-76aee720e893",
+      "status": 200,
+      "input_tokens": 733,
+      "output_tokens": 62,
+      "seconds": 1.0456323050020728,
+      "started_at": "2026-11-02T08:15:58.273766+00:00",
+      "response_model": "deepseek-flash",
+      "cache_hit_tokens": 384,
+      "cache_miss_tokens": 349
+    },
+    {
+      "request_id": "e199a9f6-3014-4d03-a3d6-15f2842175f0",
+      "status": 200,
+      "input_tokens": 1532,
+      "output_tokens": 552,
+      "seconds": 3.777800871990621,
+      "started_at": "2026-11-02T08:15:59.382077+00:00",
+      "response_model": "deepseek-flash",
+      "cache_hit_tokens": 384,
+      "cache_miss_tokens": 1148
+    },
+    {
+      "request_id": "4dd1de94-4027-4b9a-969c-13a29caca95e",
+      "status": 200,
+      "input_tokens": 833,
+      "output_tokens": 74,
+      "seconds": 1.3315154599840753,
+      "started_at": "2026-11-02T08:15:59.432434+00:00",
+      "response_model": "deepseek-flash",
+      "cache_hit_tokens": 384,
+      "cache_miss_tokens": 449
+    },
+    {
+      "request_id": "4cb4f2e9-672f-4169-8e75-87799294d31c",
+      "status": 200,
+      "input_tokens": 733,
+      "output_tokens": 64,
+      "seconds": 0.932020037987968,
+      "started_at": "2026-11-02T08:16:00.496118+00:00",
+      "response_model": "deepseek-flash",
+      "cache_hit_tokens": 384,
+      "cache_miss_tokens": 349
+    },
+    {
+      "request_id": "27e3146b-c8b8-4372-adba-0ff49cb2bee9",
+      "status": 200,
+      "input_tokens": 2560,
+      "output_tokens": 97,
+      "seconds": 2.173783320002258,
+      "started_at": "2026-11-02T08:16:01.931753+00:00",
+      "response_model": "deepseek-flash",
+      "cache_hit_tokens": 512,
+      "cache_miss_tokens": 2048
+    },
+    {
+      "request_id": "c92d4def-5b36-4fba-89c9-0733060973e4",
+      "status": 200,
+      "input_tokens": 2561,
+      "output_tokens": 77,
+      "seconds": 2.0234540560049936,
+      "started_at": "2026-11-02T08:16:02.631510+00:00",
+      "response_model": "deepseek-flash",
+      "cache_hit_tokens": 512,
+      "cache_miss_tokens": 2049
+    },
+    {
+      "request_id": "e5fcab54-2ca1-4c15-9ad4-acdc37bcff5e",
+      "status": 200,
+      "input_tokens": 1028,
+      "output_tokens": 123,
+      "seconds": 1.4054387130017858,
+      "started_at": "2026-11-02T08:16:03.342836+00:00",
+      "response_model": "deepseek-flash",
+      "cache_hit_tokens": 384,
+      "cache_miss_tokens": 644
+    },
+    {
+      "request_id": "5316f5df-7480-4c65-9112-cdd06e2284d5",
+      "status": 200,
+      "input_tokens": 1537,
+      "output_tokens": 973,
+      "seconds": 5.575887522980338,
+      "started_at": "2026-11-02T08:16:04.729113+00:00",
+      "response_model": "deepseek-flash",
+      "cache_hit_tokens": 256,
+      "cache_miss_tokens": 1281
+    },
+    {
+      "request_id": "52b8cc02-402e-43ab-a292-22fe229e107a",
+      "status": 200,
+      "input_tokens": 1525,
+      "output_tokens": 267,
+      "seconds": 2.815938918996835,
+      "started_at": "2026-11-02T08:16:05.353591+00:00",
+      "response_model": "deepseek-flash",
+      "cache_hit_tokens": 384,
+      "cache_miss_tokens": 1141
+    },
+    {
+      "request_id": "94803e09-2d5a-4d0b-9bbd-bb7e2dae85b8",
+      "status": 200,
+      "input_tokens": 1537,
+      "output_tokens": 995,
+      "seconds": 5.472656056983396,
+      "started_at": "2026-11-02T08:16:05.617018+00:00",
+      "response_model": "deepseek-flash",
+      "cache_hit_tokens": 256,
+      "cache_miss_tokens": 1281
+    },
+    {
+      "request_id": "228bdda0-a3fb-4371-bcfc-247a9cda4d1c",
+      "status": 200,
+      "input_tokens": 1884,
+      "output_tokens": 220,
+      "seconds": 6.369302121020155,
+      "started_at": "2026-11-02T08:16:09.546797+00:00",
+      "response_model": "deepseek-flash",
+      "cache_hit_tokens": 512,
+      "cache_miss_tokens": 1372
+    },
+    {
+      "request_id": "c4b82350-1358-4b78-9b6c-7d8ce0f1d946",
+      "status": 200,
+      "input_tokens": 732,
+      "output_tokens": 72,
+      "seconds": 1.40053225599695,
+      "started_at": "2026-11-02T08:16:16.013540+00:00",
+      "response_model": "deepseek-flash",
+      "cache_hit_tokens": 256,
+      "cache_miss_tokens": 476
+    },
+    {
+      "request_id": "1566e01c-de92-41d4-83c6-c87775965b93",
+      "status": 200,
+      "input_tokens": 1993,
+      "output_tokens": 181,
+      "seconds": 1.991167635016609,
+      "started_at": "2026-11-02T08:16:17.338398+00:00",
+      "response_model": "deepseek-flash",
+      "cache_hit_tokens": 512,
+      "cache_miss_tokens": 1481
+    },
+    {
+      "request_id": "2943cc5e-934a-4367-aefb-f5ec5cab14eb",
+      "status": 200,
+      "input_tokens": 1537,
+      "output_tokens": 562,
+      "seconds": 3.707112393982243,
+      "started_at": "2026-11-02T08:16:18.514398+00:00",
+      "response_model": "deepseek-flash",
+      "cache_hit_tokens": 384,
+      "cache_miss_tokens": 1153
+    },
+    {
+      "request_id": "2855f82f-43bf-4e53-94ae-580444e24a53",
+      "status": 200,
+      "input_tokens": 1981,
+      "output_tokens": 183,
+      "seconds": 1.8924462310096715,
+      "started_at": "2026-11-02T08:16:19.521837+00:00",
+      "response_model": "deepseek-flash",
+      "cache_hit_tokens": 512,
+      "cache_miss_tokens": 1469
+    },
+    {
+      "request_id": "720a5a63-ea42-48af-894e-9a3a1147984b",
+      "status": 200,
+      "input_tokens": 1620,
+      "output_tokens": 514,
+      "seconds": 4.702066488011042,
+      "started_at": "2026-11-02T08:16:19.966166+00:00",
+      "response_model": "deepseek-flash",
+      "cache_hit_tokens": 256,
+      "cache_miss_tokens": 1364
+    },
+    {
+      "request_id": "f8c78580-5bc4-4691-b755-435aecdf643c",
+      "status": 200,
+      "input_tokens": 1503,
+      "output_tokens": 299,
+      "seconds": 2.9657889250083826,
+      "started_at": "2026-11-02T08:16:21.778304+00:00",
+      "response_model": "deepseek-flash",
+      "cache_hit_tokens": 256,
+      "cache_miss_tokens": 1247
+    },
+    {
+      "request_id": "c17ea723-dd1a-49c0-b468-1229bc130ce3",
+      "status": 200,
+      "input_tokens": 1325,
+      "output_tokens": 44,
+      "seconds": 0.9418003069877159,
+      "started_at": "2026-11-02T08:16:22.430650+00:00",
+      "response_model": "deepseek-flash",
+      "cache_hit_tokens": 384,
+      "cache_miss_tokens": 941
+    },
+    {
+      "request_id": "0ba591e0-3a6a-48b0-968f-a2a5faa3fb28",
+      "status": 200,
+      "input_tokens": 1406,
+      "output_tokens": 75,
+      "seconds": 1.2302071799931582,
+      "started_at": "2026-11-02T08:16:23.385151+00:00",
+      "response_model": "deepseek-flash",
+      "cache_hit_tokens": 1152,
+      "cache_miss_tokens": 254
+    },
+    {
+      "request_id": "a045b769-e05a-46f5-8d23-ae9d5aea5272",
+      "status": 200,
+      "input_tokens": 743,
+      "output_tokens": 29,
+      "seconds": 1.0061153399874456,
+      "started_at": "2026-11-02T08:16:24.680838+00:00",
+      "response_model": "deepseek-flash",
+      "cache_hit_tokens": 384,
+      "cache_miss_tokens": 359
+    },
+    {
+      "request_id": "ba3f9d56-7285-448c-ac0b-4467948019ea",
+      "status": 200,
+      "input_tokens": 737,
+      "output_tokens": 29,
+      "seconds": 0.7681822069862392,
+      "started_at": "2026-11-02T08:16:24.755824+00:00",
+      "response_model": "deepseek-flash",
+      "cache_hit_tokens": 384,
+      "cache_miss_tokens": 353
+    },
+    {
+      "request_id": "bb6f2665-a941-48a1-a6a6-2872b67dc57a",
+      "status": 200,
+      "input_tokens": 1503,
+      "output_tokens": 387,
+      "seconds": 3.3404626729898155,
+      "started_at": "2026-11-02T08:16:25.098756+00:00",
+      "response_model": "deepseek-flash",
+      "cache_hit_tokens": 384,
+      "cache_miss_tokens": 1119
+    },
+    {
+      "request_id": "6cb24433-d2f8-4967-803d-6310568ad5be",
+      "status": 200,
+      "input_tokens": 1125,
+      "output_tokens": 83,
+      "seconds": 1.2805574359954335,
+      "started_at": "2026-11-02T08:16:28.617263+00:00",
+      "response_model": "deepseek-flash",
+      "cache_hit_tokens": 384,
+      "cache_miss_tokens": 741
+    },
+    {
+      "request_id": "87ea0fac-3298-4158-8045-77bf467f95a5",
+      "status": 200,
+      "input_tokens": 735,
+      "output_tokens": 29,
+      "seconds": 0.8241542859759647,
+      "started_at": "2026-11-02T08:16:29.971778+00:00",
+      "response_model": "deepseek-flash",
+      "cache_hit_tokens": 384,
+      "cache_miss_tokens": 351
+    }
+  ],
+  "long_document_inspection": {
+    "parser_fingerprint": "14ded77b3f956e4de5967b7c1e92e7f3d672b4ceed5ad1ad8deb495cf8cc3541",
+    "metadata": {
+      "adapter": "anby-vision-pdf",
+      "adapter_version": "3",
+      "track": "hybrid",
+      "mime_type": "application/pdf",
+      "page_count": 15,
+      "provider": "deepseek",
+      "model": "deepseek-flash",
+      "prompt_key": "document-page-layout-v2",
+      "prompt_version": 2,
+      "prompts": [
+        {
+          "key": "document-page-layout-v2",
+          "version": 2
+        },
+        {
+          "key": "document-region-analysis-v2",
+          "version": 2
+        }
+      ],
+      "warnings": [
+        "page 1: Reading order follows the two-column author block and the single-column abstract; author affiliations are grouped as one region.",
+        "page 1: Footnote markers and conference footer are included in their associated text regions.",
+        "page 1: The email address line is cropped at both edges; the full address is not visible.",
+        "page 1: No abstract body text is visible in this crop, only the heading.",
+        "page 1: Top line is partially cut off at the top edge of the crop; the preceding text is not visible.",
+        "page 1: native_region_unmatched",
+        "page 1: native_region_unmatched",
+        "page 1: native_region_unmatched",
+        "page 1: native_region_unmatched",
+        "page 2: Citation numbers are enclosed in green boxes in the source; transcribed as bracketed numbers.",
+        "page 2: Top line is partially cut off at the top edge of the crop; only the lower portion of that line is visible and it was not transcribed.",
+        "page 2: Crop is cut off on both left and right edges; the first line is a fragment ('symbols as addi') and may be incomplete.",
+        "page 2: The isolated numeral '2' appears to be a page number or fragment; its context is not visible.",
+        "page 2: native_region_unmatched",
+        "page 2: native_region_unmatched",
+        "page 2: native_region_unmatched",
+        "page 2: native_region_unmatched",
+        "page 2: visual analysis quality 0.55",
+        "page 3: Figure 1 is a diagram; internal labels are not transcribed as separate text regions.",
+        "page 3: Page number '3' at bottom center included as a small text region.",
+        "page 3: Figure caption text is not visible in the crop; only the diagram labels were transcribed.",
+        "page 3: The crop includes only the bottom labels of the figure diagram; the rest of the diagram is outside the region.",
+        "page 3: Reference markers appear as bracketed numbers (e.g., [1]) in the crop; the original PDF likely uses superscript citation numbers.",
+        "page 3: Top edge of the crop shows partially cut-off text from the preceding line, which was not transcribed.",
+        "page 3: Crop is cut off at the top, right, and bottom edges; words are truncated (e.g., \"query\", \"T\").",
+        "page 3: Only fragments of two text lines and a page number are visible; surrounding context is missing.",
+        "page 3: native_region_unmatched",
+        "page 3: native_region_unmatched",
+        "page 3: native_region_unmatched",
+        "page 3: visual analysis quality 0.55",
+        "page 4: Native text layer appears out of reading order and includes duplicated content; regions were identified from the rendered page layout.",
+        "page 4: Figure 2 caption and surrounding prose were grouped as separate text regions to preserve reading order.",
+        "page 4: Top of crop shows only the labels V, K, Q with vertical bars; the corresponding diagram is cut off.",
+        "page 4: Bottom line is truncated mid-sentence (\"...dot-product (multi-\").",
+        "page 4: Crop is cut off at the left and bottom edges; several lines begin or end mid-word (e.g., \"mmonly\", \"d\", \"n.\", \"feed-forw\", \"ever.\", \"dot-pr\").",
+        "page 4: The formula is transcribed as visible; subscript/superscript formatting is approximated in plain text.",
+        "page 4: The crop cuts off the final line mid-sentence (\"On each of these projected versions of\").",
+        "page 4: Reference markers [2], [3], and [4] are enclosed in colored boxes in the source; transcribed as bracketed numerals.",
+        "page 4: The section heading '3.2.2 Multi-Head Attention' is partially cut off at the top of the crop; only a fragment is visible and it was not transcribed.",
+        "page 4: native_region_unmatched",
+        "page 4: native_region_unmatched",
+        "page 4: native_region_unmatched",
+        "page 4: native_region_unmatched",
+        "page 4: native_region_unmatched",
+        "page 5: Page number '5' at bottom center is included as a text element.",
+        "page 5: No prompt injection attempts detected.",
+        "page 5: The formula at the bottom is partially cut off at the lower edge of the crop; the superscript O on W is visible but the baseline may be slightly clipped.",
+        "page 5: The bottom line is cut off at the left edge; the beginning of the word (likely \"projections\") is not visible.",
+        "page 5: The bottom line is also cut off at the right edge after \"W^V\".",
+        "page 5: The final line is cut off at the bottom edge of the crop; the sentence continues beyond the visible region.",
+        "page 5: Bottom line of the crop is partially cut off; the final sentence is incomplete in the visible region.",
+        "page 5: Crop is cut off at the top, bottom, and right edges; partial lines and words are truncated (e.g., the top formula and the words 'use', 'convolutions', 'inner-laye').",
+        "page 5: Top edge of the crop is slightly clipped; a small fragment of the preceding line is partially visible but not transcribed.",
+        "page 5: The subscript in d_model is rendered in a smaller font; transcribed as d_model.",
+        "page 5: The square brackets around reference 30 appear highlighted in green in the crop.",
+        "page 5: native_region_unmatched",
+        "page 5: native_region_unmatched",
+        "page 5: native_region_unmatched",
+        "page 5: native_region_unmatched",
+        "page 5: native_region_unmatched",
+        "page 5: native_region_unmatched",
+        "page 5: native_region_unmatched",
+        "page 5: native_region_unmatched",
+        "page 5: native_region_unmatched",
+        "page 6: Reading order follows the single-column layout; the table caption and table are grouped together.",
+        "page 6: The page is cut off at the bottom; the final paragraph continues onto the next page.",
+        "page 6: The final line of prose is cut off at the bottom edge of the crop; the sentence continues beyond the visible region.",
+        "page 6: Top line is partially cut off at the top edge of the crop; the visible fragment reads \"Since our model contains no recurrence and no convolution, in order for the model to make use of the\".",
+        "page 6: Bottom line is partially cut off at the bottom edge of the crop and is not transcribed.",
+        "page 6: Reference marker [9] is highlighted in green in the source.",
+        "page 6: Crop is cut off on the left and right edges; words are truncated (e.g., 'nce', 'd with', 'an', 'th', 'than').",
+        "page 6: The subscript in PE_{pos+k} is rendered as inline text; exact subscript formatting is uncertain.",
+        "page 6: Green and red boxes around '[9]' and '3' are annotation overlays, not document content.",
+        "page 6: Bottom line is partially cut off at the crop edge; the final words are only partially visible.",
+        "page 6: Reference markers [12] and Table 1 are enclosed in colored boxes in the source; transcribed as plain text.",
+        "page 6: native_region_unmatched",
+        "page 6: native_region_unmatched",
+        "page 6: native_region_unmatched",
+        "page 7: Page content continues beyond the visible bottom edge; the 5.3 Optimizer section and formula (3) are cut off and not fully captured.",
+        "page 7: No tables, charts, or figures are present on this page.",
+        "page 7: The final line is cut off at the bottom of the crop; the text after \"25000\" is not visible.",
+        "page 7: Citation markers [3] and [38] are highlighted with green boxes in the crop; transcribed as visible.",
+        "page 7: Top line is a partial fragment ('target tokens.') from the preceding section.",
+        "page 7: Bottom of the crop shows partially cut-off formula fragments that are not fully legible.",
+        "page 7: Red and green boxes around '3' and '20' appear to be annotation overlays, not part of the original text.",
+        "page 7: Top line is partially cut off at the top edge; the superscript exponent of ϵ (10⁻⁹) is only partially visible and was inferred from context.",
+        "page 7: The visible title '5.2 Hardware and Schedule' does not appear in this crop; the crop instead contains section 5.4 Regularization.",
+        "page 7: Visible title metadata says \"5.3 Optimizer\" but the crop shows section heading \"5.4 Regularization\".",
+        "page 7: native_region_unmatched",
+        "page 7: native_region_unmatched",
+        "page 7: native_region_unmatched",
+        "page 7: native_region_unmatched",
+        "page 8: Footnote 5 text overlaps with the 6.2 Model Variations paragraph region; coordinates approximate.",
+        "page 8: Table 2 spans a large area; internal cell text not transcribed.",
+        "page 8: The final line ('Residual Dropout We apply dropout [33] to the output of each sub-layer, before it is added to the') is cut off at the bottom edge of the crop.",
+        "page 8: Green bounding boxes around citation numbers are annotation overlays, not part of the original table content.",
+        "page 8: Bottom line '6.1 Machine Translation' is partially cut off at the lower edge of the crop.",
+        "page 8: The crop cuts off the sentence after \"2.0\"; the continuation is not visible.",
+        "page 8: Superscript footnote marker 5 appears after 'GPU' in the body text and is rendered as a red boxed reference in the crop.",
+        "page 8: Top edge shows a partially cut-off line of text that is not fully legible; only the footnote and page number are transcribed.",
+        "page 8: Crop contains only the page number \"8\" and fragments of descenders from the line above; those fragments are not legible as text and were not transcribed.",
+        "page 8: native_region_unmatched",
+        "page 8: native_region_unmatched",
+        "page 8: native_region_unmatched",
+        "page 8: native_region_unmatched",
+        "page 8: native_region_unmatched",
+        "page 8: visual analysis quality 0.55",
+        "page 9: Table 3 contains merged cells and multi-row groupings (A)-(E); cell-level structure is not fully recoverable from the native text layer.",
+        "page 9: The page number '9' at the bottom is included as a small text region.",
+        "page 9: Table body rows are cut off at the bottom of the crop; only the header row is visible.",
+        "page 9: The first column header is empty in the crop.",
+        "page 9: Some cells are intentionally blank in the source table; blanks were preserved rather than inferred.",
+        "page 9: The (E) row spans a merged text cell across the hyperparameter columns.",
+        "page 9: The crop ends mid-sentence at the bottom (\"portion of the\").",
+        "page 9: Reference numbers 3, 9, and 37 appear inside colored boxes in the source; transcribed as bracketed/plain numerals.",
+        "page 9: The phrase 'corpora from with approximately 17M sentences' appears as printed in the source; no correction made.",
+        "page 9: The crop ends mid-sentence at 'During inference, we'.",
+        "page 9: Crop contains only the page number 9; the tops of characters from the preceding line are partially visible at the upper edge but are cut off and not transcribable.",
+        "page 9: native_region_unmatched",
+        "page 9: native_region_unmatched",
+        "page 9: native_region_unmatched",
+        "page 9: native_region_unmatched",
+        "page 9: visual analysis quality 0.55",
+        "page 10: Table 4 caption and table body are grouped as one table region.",
+        "page 10: Reference list is grouped as a single text region; individual references are not separated.",
+        "page 10: The trailing sentence fragment at the bottom ('increased the maximum output length...') is partially cut off by the crop boundary.",
+        "page 10: Reference numbers 4, 8, 37, and 29 are enclosed in colored boxes (red/green) in the crop; transcribed as plain bracketed numbers.",
+        "page 10: Some reference entries are cut off at the right edge of the crop; text was transcribed as visible.",
+        "page 10: Highlighted boxes around citation numbers and URLs are treated as annotations, not content.",
+        "page 10: The URL is split across two lines and enclosed in a cyan highlight box; transcribed as displayed.",
+        "page 10: Top edge of the crop cuts off a preceding line; only the fragment \"comments, corrections and inspiration.\" is visible.",
+        "page 10: Two arXiv identifiers are highlighted with cyan boxes in the source image; highlighting is not represented in the transcription.",
+        "page 10: native_region_unmatched",
+        "page 10: native_region_unmatched",
+        "page 10: native_region_unmatched",
+        "page 10: native_region_unmatched",
+        "page 11: Page is a single-column reference list; all entries grouped into one text region.",
+        "page 11: Some arXiv identifiers are highlighted with cyan boxes; these are treated as part of the reference text.",
+        "page 11: No prompt injection attempts detected.",
+        "page 11: native_region_unmatched",
+        "page 12: Page is a single-column reference list; all entries grouped into one text region.",
+        "page 12: No prompt injection attempts detected.",
+        "page 12: native_region_unmatched",
+        "page 13: Native text layer is fragmented and out of reading order; figure labels were not transcribed.",
+        "page 13: Possible prompt injection text in native layer (e.g., '<pad>', '<EOS>') ignored.",
+        "page 13: The crop contains only the heading \"Attention Visualizations\" and a small partial glyph (appears to be \"s\") at the bottom right; the rest of the region is blank.",
+        "page 13: Attention line endpoints and grid cell colors are approximate; exact attention weights are not labeled with numeric values.",
+        "page 13: Some grid cells are very faint and their colors may be imprecise.",
+        "page 13: The provided crop appears blank; no visible text or caption content could be transcribed.",
+        "page 13: Placeholder text was inserted only to satisfy the non-empty text requirement and is not document content.",
+        "page 13: native_region_unmatched",
+        "page 13: native_region_unmatched",
+        "page 13: visual analysis quality 0.00",
+        "page 14: Native text layer is heavily fragmented and out of reading order; figure labels were not transcribed as body text.",
+        "page 14: No visible section headings on this page.",
+        "page 14: Attention weights are shown as lines without numeric values; no attention values were estimated.",
+        "page 15: Native text layer is fragmented and out of reading order; regions were identified from the rendered page.",
+        "page 15: The two attention diagrams are treated as figures; their internal token labels and attention lines are not transcribed.",
+        "page 15: No axis labels, legend, or numeric attention values are visible; individual edge weights cannot be transcribed.",
+        "page 15: A partially cut-off label appears at the bottom center of the crop (\"on\"), likely from surrounding page text.",
+        "page 15: Attention line weights are not quantified; only visible connections are noted.",
+        "page 15: Caption is cut off at the bottom of the crop; final line may be partially truncated."
+      ]
+    },
+    "chunks": 41,
+    "geometry_regions": 22,
+    "geometry_valid": true,
+    "native_preservation": [
+      {
+        "page": 1,
+        "native_chunks": 4,
+        "exact_spans": true,
+        "required_characters": 2461,
+        "retained_characters": 2461,
+        "complete": true
+      },
+      {
+        "page": 2,
+        "native_chunks": 1,
+        "exact_spans": true,
+        "required_characters": 3631,
+        "retained_characters": 3631,
+        "complete": true
+      },
+      {
+        "page": 3,
+        "native_chunks": 3,
+        "exact_spans": true,
+        "required_characters": 1534,
+        "retained_characters": 1534,
+        "complete": true
+      },
+      {
+        "page": 4,
+        "native_chunks": 1,
+        "exact_spans": true,
+        "required_characters": 2108,
+        "retained_characters": 2108,
+        "complete": true
+      },
+      {
+        "page": 5,
+        "native_chunks": 3,
+        "exact_spans": true,
+        "required_characters": 2673,
+        "retained_characters": 2673,
+        "complete": true
+      },
+      {
+        "page": 6,
+        "native_chunks": 2,
+        "exact_spans": true,
+        "required_characters": 2925,
+        "retained_characters": 2925,
+        "complete": true
+      },
+      {
+        "page": 7,
+        "native_chunks": 2,
+        "exact_spans": true,
+        "required_characters": 2800,
+        "retained_characters": 2800,
+        "complete": true
+      },
+      {
+        "page": 8,
+        "native_chunks": 3,
+        "exact_spans": true,
+        "required_characters": 2658,
+        "retained_characters": 2658,
+        "complete": true
+      },
+      {
+        "page": 9,
+        "native_chunks": 1,
+        "exact_spans": true,
+        "required_characters": 2480,
+        "retained_characters": 2480,
+        "complete": true
+      },
+      {
+        "page": 10,
+        "native_chunks": 1,
+        "exact_spans": true,
+        "required_characters": 2647,
+        "retained_characters": 2647,
+        "complete": true
+      },
+      {
+        "page": 11,
+        "native_chunks": 1,
+        "exact_spans": true,
+        "required_characters": 2783,
+        "retained_characters": 2783,
+        "complete": true
+      },
+      {
+        "page": 12,
+        "native_chunks": 1,
+        "exact_spans": true,
+        "required_characters": 2766,
+        "retained_characters": 2766,
+        "complete": true
+      },
+      {
+        "page": 13,
+        "native_chunks": 2,
+        "exact_spans": true,
+        "required_characters": 686,
+        "retained_characters": 686,
+        "complete": true
+      },
+      {
+        "page": 14,
+        "native_chunks": 2,
+        "exact_spans": true,
+        "required_characters": 657,
+        "retained_characters": 657,
+        "complete": true
+      },
+      {
+        "page": 15,
+        "native_chunks": 3,
+        "exact_spans": true,
+        "required_characters": 661,
+        "retained_characters": 661,
+        "complete": true
+      }
+    ],
+    "visual_assertions": [
+      {
+        "page": 3,
+        "kind": "figure",
+        "visual_chunks": 1,
+        "phrases": [
+          "Softmax",
+          "Add & Norm",
+          "Masked",
+          "Multi-Head",
+          "Feed"
+        ],
+        "missing": [],
+        "passed": true
+      },
+      {
+        "page": 4,
+        "kind": "figure",
+        "visual_chunks": 2,
+        "phrases": [
+          "MatMul",
+          "SoftMax",
+          "Mask",
+          "Linear",
+          "Concat"
+        ],
+        "missing": [],
+        "passed": true
+      },
+      {
+        "page": 6,
+        "kind": "table",
+        "visual_chunks": 1,
+        "phrases": [
+          "Self-Attention",
+          "Recurrent",
+          "Convolutional"
+        ],
+        "missing": [],
+        "passed": true
+      },
+      {
+        "page": 8,
+        "kind": "table",
+        "visual_chunks": 1,
+        "phrases": [
+          "Transformer",
+          "28.4",
+          "41.8"
+        ],
+        "missing": [],
+        "passed": true
+      },
+      {
+        "page": 9,
+        "kind": "table",
+        "visual_chunks": 1,
+        "phrases": [
+          "25.8",
+          "213"
+        ],
+        "missing": [],
+        "passed": true
+      },
+      {
+        "page": 10,
+        "kind": "table",
+        "visual_chunks": 1,
+        "phrases": [
+          "Transformer",
+          "91.3",
+          "92.7"
+        ],
+        "missing": [],
+        "passed": true
+      },
+      {
+        "page": 13,
+        "kind": "figure",
+        "visual_chunks": 1,
+        "phrases": [
+          "Attention",
+          "Figure 3"
+        ],
+        "missing": [],
+        "passed": true
+      },
+      {
+        "page": 14,
+        "kind": "figure",
+        "visual_chunks": 1,
+        "phrases": [
+          "Law",
+          "perfect",
+          "Figure 4"
+        ],
+        "missing": [],
+        "passed": true
+      },
+      {
+        "page": 15,
+        "kind": "figure",
+        "visual_chunks": 2,
+        "phrases": [
+          "Law",
+          "perfect",
+          "Figure 5"
+        ],
+        "missing": [],
+        "passed": true
+      }
+    ]
+  },
+  "long_document_acceptance": {
+    "parse_succeeded": true,
+    "full_native_character_preservation": true,
+    "limited_visual_spot_checks_passed": true,
+    "independent_complete_visual_and_reading_order_review_passed": false,
+    "known_sample_concatenation_assertions": "12/15 and small text proxy 13/15; retained as failed diagnostics",
+    "peak_cache_miss_usd_upper_estimate": 0.07097339999999999
+  },
+  "cleanup": {
+    "containers_removed": 41,
+    "networks_removed": 9,
+    "temporary_directories_removed": 9,
+    "exported_secret_files_removed": true
+  },
+  "final_production_checks": {
+    "release": "36cb429225c0",
+    "healthz_http": 200,
+    "readyz_http": 200,
+    "postgres": "ok",
+    "redis": "ok",
+    "web_after_redirect_http": 200
+  }
+}
