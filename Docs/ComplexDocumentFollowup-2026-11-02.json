@@ -10,7 +10,7 @@
     "kernel_protocol_version": 2,
     "acceptance_binary_sha256": "4e659caed96f27fbf8eb7d8243b8cc835a265c1088c66c980941f79c06607dd4",
     "worker_binary_sha256": "40370c3c22eb4a83978c3e44b009ee35111a18078f32ed69f7355d09ad15c35e",
-    "api_binary_sha256": "972a47bdc9ff6f134dc7925429116955226159f49700342603bc6681063af7b0"
+    "binary_sha256": "972a47bdc9ff6f134dc7925429116955226159f49700342603bc6681063af7b0"
   },
   "fixed_three_rounds": [
     {
