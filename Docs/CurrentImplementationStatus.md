@@ -34,9 +34,9 @@ AI 配置和双会话协作 E2E；当前权威契约为 184 个 operation。“�
 
 ## 当前生产版本
 
-- 业务代码已部署版本为 `36cb429225c0`，对应提交 `36cb429`；API、Worker、Web、
+- 业务代码已部署版本为 `b197cad349b8`，对应提交 `b197cad`；API、Worker、Web、
   AI Kernel、CLI 和迁移工具六个业务镜像来自同一提交，四个应用服务健康。
-- 本次发布的 8 项 CI（`41333866539`）、六个业务镜像构建、迁移闸门和 HTTPS 冒烟
+- 本次发布的 8 项 CI（`41413209212`）、六个业务镜像构建、迁移闸门和 HTTPS 冒烟
   通过；迁移保持 `current=4 expected=4 compatible=4..4 dirty=false`，Doctor 无
   error/critical，两个历史认证清理 warning 不阻塞部署。前序 `94546a7` 的正式
   Chrome 协作、离线恢复与 320/390px 证据仍保留在对应日期章节。
@@ -46,7 +46,30 @@ AI 配置和双会话协作 E2E；当前权威契约为 184 个 operation。“�
   导入失败诊断、机器 Actor 与 CLI 绑定、普通导入的机器作者，以及浏览器写请求
   来源校验，以及持久离线 Yjs 恢复、姓名与字符级 Presence 和 Redis 跨 API 广播。
   本轮新增导入疑似注入人工复核、上传残留/同名并发及供应商配额修复、搜索任务轮询
-  恢复，以及认证查询分桶、可信代理 IP 自动发现与 429 页面恢复。
+  恢复，以及认证查询分桶、可信代理 IP 自动发现与 429 页面恢复；
+  最新版本进一步包含文档旋转/裁剪修复、视觉 Prompt v2 与 Kernel 逐次物理用量审计。
+
+## 2026-11-02 复杂文档修改生产发布验收
+
+- `b197cad` 已提交、推送，本地 `make ci` 与远端八项 CI `41413209212` 全部通过，
+  目标机 `make deploy-check` 的真实 Compose 校验通过。六个业务镜像已构建，OCI
+  source revision 全部为 `b197cad349b81a8640a6e51a8861e6ac6f5c2ab1`。
+- 经一键入口按 Kernel→API→Worker→Web 顺序部署；迁移仍为
+  `current=4 expected=4 compatible=4..4 dirty=false`，Doctor 为 0 error/critical、
+  2 个历史 warning。四个应用服务健康，HTTPS `healthz` 返回 `b197cad349b8`，
+  `readyz` 的 PostgreSQL/Redis 均为 `ok`，发布后的结构化日志无 ERROR。
+- Kernel 协议 1/2 均在非法 Schema 时拒绝且未发供应商请求；两个视觉 Prompt v2
+  均以 version 2 激活。正式 HTTPS 登录、Session、账号资料/模型配置及
+  `/imports`、`/account`、`/settings/cli`、`/pages` 均为 200，探针退出为 204。
+- 引导账号未启用模型，因此其账号连接探针未调用供应商；另以现有已启用配置、
+  同代码冻结 Go helper 和已部署 Kernel 验证真实 `deepseek-flash`：
+  1.584 秒、一次物理尝试、76 输入/5 输出 Token，严格 JSON 输出及回执通过。
+  此 Usage 为 helper 临时内存审计，不是生产持久账本；没有创建生产账号、来源或
+  导入任务，模型配置未修改，临时导出密钥已清理。
+- `TRUSTED_PROXY_IPS` 的 `172.25.0.1,172.25.0.9` 与当前 app 网关/Web 精确匹配。
+  预构建期间 15 次生产就绪采样均为 200；发布完成后旧业务镜像与未使用构建缓存
+  按标准脚本清理。正式成功上传与中断恢复仍待专项验收，完整数据见
+  [复杂文档报告](ComplexDocumentAcceptance-2026-11-02.md)。
 
 ## 2026-11-02 当前修改生产发布验收
 
@@ -155,8 +178,8 @@ AI 配置和双会话协作 E2E；当前权威契约为 184 个 operation。“�
   本机 Docker 不可用，Compose/镜像动态门禁仍标为 BLOCKED；远端解析容器
   不替代新版本正式发布。未修改主 Schema、AST、ProposalOperation、Apply/发布
   事务、根配置或依赖锁；临时环境与导出密钥已清理。
-- 当前生产仍为 `36cb429225c0`；本轮未提交或部署。结算账单、账号预算、
-  真实供应商故障/告警、完整人工质量复核和发布后冒烟仍见
+- 本轮已随 `b197cad349b8` 提交并部署，发布结果见上文。结算账单、账号预算、
+  真实供应商故障/告警、完整人工质量复核和正式上传/恢复专项仍见
   [待解决问题 §8](OutstandingIssues.md#8-复杂文档持续压力与供应商成本边界尚未验收)。
   完整数据与回归门槛见 [本轮报告](ComplexDocumentAcceptance-2026-11-02.md)。
 

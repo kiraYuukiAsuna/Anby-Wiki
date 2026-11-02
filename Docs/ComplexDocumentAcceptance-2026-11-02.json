@@ -3907,5 +3907,245 @@
     "postgres": "ok",
     "redis": "ok",
     "web_after_redirect_http": 200
+  },
+  "production_deployment": {
+    "commit": "b197cad349b81a8640a6e51a8861e6ac6f5c2ab1",
+    "release": "b197cad349b8",
+    "ci": {
+      "url": "https://github.com/kiraYuukiAsuna/Anby-Wiki/actions/runs/41413209212",
+      "conclusion": "success",
+      "jobs": [
+        {
+          "name": "ai-kernel",
+          "conclusion": "success"
+        },
+        {
+          "name": "migrations",
+          "conclusion": "success"
+        },
+        {
+          "name": "security",
+          "conclusion": "success"
+        },
+        {
+          "name": "web",
+          "conclusion": "success"
+        },
+        {
+          "name": "contracts",
+          "conclusion": "success"
+        },
+        {
+          "name": "backend",
+          "conclusion": "success"
+        },
+        {
+          "name": "deploy",
+          "conclusion": "success"
+        },
+        {
+          "name": "client-drift",
+          "conclusion": "success"
+        }
+      ]
+    },
+    "target_compose_validation": "passed",
+    "images": {
+      "images": [
+        "anby-wiki-ai-kernel:b197cad349b8",
+        "anby-wiki-api:b197cad349b8",
+        "anby-wiki-worker:b197cad349b8",
+        "anby-wiki-web:b197cad349b8",
+        "anby-wiki-cli:b197cad349b8",
+        "anby-wiki-migrate:b197cad349b8"
+      ],
+      "all_source_revisions_match": true
+    },
+    "migration_gate": {
+      "result": "pass",
+      "current": 4,
+      "expected": 4,
+      "min_compatible": 4,
+      "max_compatible": 4,
+      "dirty": false
+    },
+    "doctor": {
+      "warning": 2,
+      "error": 0,
+      "critical": 0
+    },
+    "runtime": {
+      "services": [
+        {
+          "name": "anby-wiki-production-api-1",
+          "image": "anby-wiki-api:b197cad349b8",
+          "source_revision": "b197cad349b81a8640a6e51a8861e6ac6f5c2ab1",
+          "health": "healthy",
+          "started_at": "2026-11-02T08:36:52.802207827Z",
+          "structured_error_logs": 0
+        },
+        {
+          "name": "anby-wiki-production-worker-1",
+          "image": "anby-wiki-worker:b197cad349b8",
+          "source_revision": "b197cad349b81a8640a6e51a8861e6ac6f5c2ab1",
+          "health": "healthy",
+          "started_at": "2026-11-02T08:37:04.163587625Z",
+          "structured_error_logs": 0
+        },
+        {
+          "name": "anby-wiki-production-web-1",
+          "image": "anby-wiki-web:b197cad349b8",
+          "source_revision": "b197cad349b81a8640a6e51a8861e6ac6f5c2ab1",
+          "health": "healthy",
+          "started_at": "2026-11-02T08:37:10.391471932Z",
+          "structured_error_logs": 0
+        },
+        {
+          "name": "anby-wiki-production-ai-kernel-1",
+          "image": "anby-wiki-ai-kernel:b197cad349b8",
+          "source_revision": "b197cad349b81a8640a6e51a8861e6ac6f5c2ab1",
+          "health": "healthy",
+          "started_at": "2026-11-02T08:36:46.559817537Z",
+          "structured_error_logs": 0
+        }
+      ],
+      "trusted_proxy_ips": [
+        "172.25.0.1",
+        "172.25.0.9"
+      ],
+      "trusted_proxy_matches_current_network": true,
+      "https": {
+        "healthz": {
+          "status": 200,
+          "body": {
+            "service": "wiki-api",
+            "version": "b197cad349b8"
+          }
+        },
+        "readyz": {
+          "status": 200,
+          "body": {
+            "checks": {
+              "postgres": "ok",
+              "redis": "ok"
+            },
+            "status": "ok"
+          }
+        }
+      }
+    },
+    "authenticated_smoke": {
+      "release": "b197cad349b8",
+      "http": [
+        {
+          "method": "POST",
+          "path": "/api/v1/auth/login",
+          "status": 200
+        },
+        {
+          "method": "GET",
+          "path": "/api/v1/auth/session",
+          "status": 200
+        },
+        {
+          "method": "GET",
+          "path": "/api/v1/account/profile",
+          "status": 200
+        },
+        {
+          "method": "GET",
+          "path": "/api/v1/account/ai-config",
+          "status": 200
+        },
+        {
+          "method": "GET",
+          "path": "/imports",
+          "status": 200
+        },
+        {
+          "method": "GET",
+          "path": "/account",
+          "status": 200
+        },
+        {
+          "method": "GET",
+          "path": "/settings/cli",
+          "status": 200
+        },
+        {
+          "method": "GET",
+          "path": "/pages",
+          "status": 200
+        },
+        {
+          "method": "POST",
+          "path": "/api/v1/auth/logout",
+          "status": 204
+        }
+      ],
+      "kernel_protocols": [
+        {
+          "version": 1,
+          "invalid_schema_rejected": true,
+          "supplier_calls": 0
+        },
+        {
+          "version": 2,
+          "invalid_schema_rejected": true,
+          "supplier_calls": 0
+        }
+      ],
+      "active_prompts": [
+        {
+          "key": "document-page-layout-v2",
+          "version": 2
+        },
+        {
+          "key": "document-region-analysis-v2",
+          "version": 2
+        }
+      ],
+      "model_probe": {
+        "skipped": "bootstrap account model config is disabled"
+      }
+    },
+    "real_kernel_probe": {
+      "passed": true,
+      "scope": "production Kernel and frozen same-code Go helper; no production Job or account/config writes",
+      "provider": "deepseek",
+      "model": "deepseek-flash",
+      "seconds": 1.583691695,
+      "physical_attempts": 1,
+      "input_tokens": 76,
+      "output_tokens": 5,
+      "usage": [
+        {
+          "ID": "3f11743f-ffca-4783-8070-1e3d04d2bd57",
+          "ImportJobID": null,
+          "ImportRunID": null,
+          "Provider": "deepseek",
+          "Model": "deepseek-flash",
+          "PromptKey": "acceptance",
+          "PromptVersion": 1,
+          "AttemptCount": 1,
+          "InputTokens": 76,
+          "OutputTokens": 5,
+          "Latency": 1523000000,
+          "Status": "succeeded",
+          "ErrorCode": "",
+          "CreatedAt": "0001-01-01T00:00:00Z"
+        }
+      ],
+      "temporary_secret_files_removed": true
+    },
+    "real_kernel_probe_usage_storage": "temporary in-memory helper audit; not a persisted production Usage row",
+    "prebuild_readiness": {
+      "samples": 15,
+      "all_http_200": true
+    },
+    "standard_deployment_smoke": "passed",
+    "old_business_images_and_unused_build_cache_cleanup": "completed",
+    "production_accounts_or_content_jobs_created": false,
+    "formal_successful_upload_and_interruption_recovery": "not performed"
   }
 }
