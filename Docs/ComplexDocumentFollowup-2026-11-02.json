@@ -1,8 +1,9 @@
 {
   "schema_version": 1,
   "date": "2026-11-02",
-  "scope": "uncommitted API/Worker changes verified in isolation; formal HTTPS upload on b197cad349b8",
-  "release_pending": true,
+  "scope": "API/Worker changes verified in isolation and deployed as 7f8b4c30d619; formal HTTPS upload evidence collected on b197cad349b8",
+  "release_pending": false,
+  "production_release": "7f8b4c30d619",
   "parser": {
     "pdf_adapter_version": "4",
     "image_adapter_version": "2",
