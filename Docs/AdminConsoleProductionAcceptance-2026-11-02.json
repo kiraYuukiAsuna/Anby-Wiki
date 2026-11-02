@@ -1,0 +1,125 @@
+{
+  "schema_version": 1,
+  "scope": "Production deployment of administrator list pagination, initial admin protection and the independent mail test form.",
+  "release": "29267a5dd90f",
+  "source_revision": "29267a5dd90fe40ffc9484820af7404278ea5671",
+  "domain": "https://anbywiki.momiya.cloud",
+  "verified_at": "2026-11-02T14:20:08.399999+00:00",
+  "ci": {
+    "run_id": 41458900769,
+    "status": "completed",
+    "conclusion": "success",
+    "jobs_passed": 8,
+    "url": "https://github.com/kiraYuukiAsuna/Anby-Wiki/actions/runs/41458900769",
+    "jobs": [
+      {"name": "ai-kernel", "conclusion": "success"},
+      {"name": "web", "conclusion": "success"},
+      {"name": "client-drift", "conclusion": "success"},
+      {"name": "migrations", "conclusion": "success"},
+      {"name": "security", "conclusion": "success"},
+      {"name": "deploy", "conclusion": "success"},
+      {"name": "backend", "conclusion": "success"},
+      {"name": "contracts", "conclusion": "success"}
+    ]
+  },
+  "local_validation": {
+    "make_check": "passed",
+    "auth_api_cli_race": "passed",
+    "isolated_pagination_api_browser_operator_checks": 13,
+    "isolated_mail_test_browser_checks": 9,
+    "mobile_widths": [320, 390]
+  },
+  "preflight": {
+    "existing_administrator_login": "passed",
+    "mail_enabled": true,
+    "smtp_password_configured": true
+  },
+  "production_checkout_clean": true,
+  "healthy_services": [
+    "ai-kernel",
+    "api",
+    "meilisearch",
+    "postgres",
+    "redis",
+    "rustfs",
+    "web",
+    "worker"
+  ],
+  "image_provenance": {
+    "verified_targets": ["api", "worker", "web", "ai-kernel", "cli", "migrate"],
+    "all_match_source_revision": true,
+    "application_release": "29267a5dd90f"
+  },
+  "migration_gate": {
+    "status": "passed",
+    "current": 4,
+    "expected": 4,
+    "compatible": [4, 4],
+    "dirty": false
+  },
+  "doctor": {
+    "warning": 2,
+    "error": 0,
+    "critical": 0
+  },
+  "checks": {
+    "/healthz": 200,
+    "/readyz": 200,
+    "/login": 200,
+    "/api/v1/auth/login": 200,
+    "/api/v1/auth/session": 200,
+    "/api/v1/account/security": 200,
+    "/api/v1/system/mail": 200,
+    "/api/v1/system/accounts": 200,
+    "/api/v1/system/accounts?search=admin": 200,
+    "/api/v1/system/accounts?events_page=2": 200,
+    "/admin": 200,
+    "/api/v1/auth/logout": 204,
+    "unauthenticated /api/v1/account/security": 401,
+    "unauthenticated /api/v1/system/mail": 401,
+    "unauthenticated /api/v1/system/accounts": 401
+  },
+  "account_security_cache_control": "no-store",
+  "smtp_configuration_preserved": true,
+  "mail_enabled": true,
+  "smtp_password_configured": true,
+  "initial_system_administrator": "admin",
+  "initial_administrator_protected": true,
+  "pagination": {
+    "page_size": 10,
+    "accounts_total": 5,
+    "events_total": 15,
+    "first_page_accounts": 5,
+    "first_page_events": 10,
+    "independent_event_page": "passed"
+  },
+  "browser": {
+    "existing_administrator_login": "passed",
+    "mail_test_form": {
+      "independent_form": true,
+      "required_email_input": true,
+      "password_or_mfa_inputs": 0,
+      "save_form_still_requires_password": true
+    },
+    "list_rows": [5, 10],
+    "protected_administrator_control_disabled": true,
+    "independent_pagination_controls": "passed",
+    "audit_next_page_interaction": "passed",
+    "mobile_widths": {
+      "320": {"viewport": 320, "documentWidth": 320, "bodyWidth": 320},
+      "390": {"viewport": 390, "documentWidth": 390, "bodyWidth": 390}
+    },
+    "uncaught_page_errors": 0,
+    "failed_api_responses": []
+  },
+  "cleanup": {
+    "owned_test_browser_sessions_revoked": 2,
+    "successful_test_session_logged_out": true,
+    "preflight_and_cleanup_api_sessions_logged_out": true
+  },
+  "external_mail_sent": false,
+  "smtp_configuration_modified": false,
+  "administrator_permissions_modified": false,
+  "formal_email_domain_acceptance": "cancelled_by_user",
+  "status": "passed"
+}
