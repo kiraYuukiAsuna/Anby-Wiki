@@ -187,8 +187,7 @@ func testSafetyReviewLifecycle(t *testing.T, ctx context.Context, pool *pgxpool.
 				}
 				_, err = pipeline.run(ctx, PipelineRequest{
 					JobID: job.ID, RunKey: uuid.NewString(), WikiID: wikiID, ActorID: actorID,
-					Title: test.name, Provider: "test", Model: "test", AutoApprovePlan: true,
-					ConfirmedPlanID: current.ConfirmedPlanID,
+					Title: test.name, Provider: "test", Model: "test", ConfirmedPlanID: current.ConfirmedPlanID,
 				}, func(context.Context) (*AcquiredSource, error) {
 					t.Fatal("resume reacquired immutable source")
 					return nil, ErrFetchFailed
@@ -335,7 +334,7 @@ func testSafetyReviewLifecycle(t *testing.T, ctx context.Context, pool *pgxpool.
 					}
 					result, err := pipeline.run(ctx, PipelineRequest{
 						JobID: sibling.ID, RunKey: uuid.NewString(), WikiID: wikiID, ActorID: actorID,
-						Title: test.name, Provider: "test", Model: "test", AutoApprovePlan: true,
+						Title: test.name, Provider: "test", Model: "test",
 					}, func(context.Context) (*AcquiredSource, error) {
 						t.Fatal("sibling reacquired immutable source")
 						return nil, ErrFetchFailed

@@ -33,7 +33,7 @@ import { isUnauthorized, LOGIN_PATH, useSession } from "@/lib/auth";
 import { cn } from "@/lib/utils";
 
 const profileSchema = z.object({
-  trustLevel: z.enum(["untrusted", "assisted", "trusted"]),
+  trustLevel: z.enum(["untrusted", "assisted", "trusted", "full_access"]),
   requiredSamplePercent: z.coerce.number().int().min(0).max(100),
 });
 const actorSchema = z.object({
@@ -60,6 +60,12 @@ const LEVELS = [
     label: "受信任",
     detail: "成熟 Actor，仍需真人最终审核",
     icon: Sparkles,
+  },
+  {
+    value: "full_access",
+    label: "Full Access",
+    detail: "全自动批准并应用导入提案",
+    icon: CircleGauge,
   },
 ] as const;
 
@@ -105,10 +111,14 @@ function TrustProfileCard({
     }
   };
 
+  const effectiveSample = trustLevel === "untrusted"
+    ? 100
+    : trustLevel === "full_access"
+      ? 0
+      : samplePercent;
   const dirty =
     trustLevel !== profile.trustLevel ||
-    samplePercent !== profile.requiredSamplePercent;
-  const effectiveSample = trustLevel === "untrusted" ? 100 : samplePercent;
+    effectiveSample !== profile.requiredSamplePercent;
 
   const save = async () => {
     const parsed = profileSchema.safeParse({
@@ -127,7 +137,9 @@ function TrustProfileCard({
       });
       await onSaved();
       toast.success("AI 信任策略已更新", {
-        description: `${profile.actorDisplayName} · ${effectiveSample}% 低风险人工抽样`,
+        description: trustLevel === "full_access"
+          ? `${profile.actorDisplayName} · Full Access 全自动导入`
+          : `${profile.actorDisplayName} · ${effectiveSample}% 低风险人工抽样`,
       });
     } catch (error) {
       if (
@@ -182,7 +194,7 @@ function TrustProfileCard({
 
       <div className="mt-6">
         <Label>信任等级</Label>
-        <div className="mt-2 grid gap-2 md:grid-cols-3">
+        <div className="mt-2 grid gap-2 md:grid-cols-4">
           {LEVELS.map((level) => {
             const Icon = level.icon;
             const selected = trustLevel === level.value;
@@ -195,6 +207,7 @@ function TrustProfileCard({
                 onClick={() => {
                   setTrustLevel(level.value);
                   if (level.value === "untrusted") setSamplePercent(100);
+                  if (level.value === "full_access") setSamplePercent(0);
                 }}
                 className={cn(
                   "rounded-2xl border p-3 text-left transition",
@@ -231,7 +244,7 @@ function TrustProfileCard({
               低风险人工抽样
             </Label>
             <p className="mt-1 text-[10px] leading-4 text-muted-foreground">
-              基于 Proposal ID 确定性抽样，重试不会改变结果。
+              Full Access 会跳过抽样，自动批准并应用导入提案。
             </p>
           </div>
           <div className="relative w-24">
@@ -241,7 +254,7 @@ function TrustProfileCard({
               min={0}
               max={100}
               value={effectiveSample}
-              disabled={disabled || trustLevel === "untrusted"}
+              disabled={disabled || trustLevel === "untrusted" || trustLevel === "full_access"}
               onChange={(event) =>
                 setSamplePercent(Number(event.target.value))
               }
@@ -259,7 +272,7 @@ function TrustProfileCard({
           max={100}
           step={1}
           value={effectiveSample}
-          disabled={disabled || trustLevel === "untrusted"}
+          disabled={disabled || trustLevel === "untrusted" || trustLevel === "full_access"}
           onChange={(event) => setSamplePercent(Number(event.target.value))}
           className="mt-4 h-1.5 w-full accent-fuchsia-700 disabled:opacity-45"
           aria-label="调整低风险人工抽样比例"
@@ -268,12 +281,16 @@ function TrustProfileCard({
           <p className="mt-3 text-[10px] font-medium text-amber-800">
             未受信任 Actor 固定为 100% 人工审核。
           </p>
+        ) : trustLevel === "full_access" ? (
+          <p className="mt-3 text-[10px] font-medium text-rose-800">
+            Full Access 会自动批准并应用导入提案；只授予已验证的专用 Actor。
+          </p>
         ) : null}
       </div>
 
       <div className="mt-5 flex flex-wrap items-center justify-between gap-4 border-t pt-4">
         <p className="text-[10px] leading-4 text-muted-foreground">
-          抽样标记重点复核；所有机器提案均需真人最终审核。
+          Full Access 以外的机器提案仍需真人最终审核；抽样只标记重点复核。
         </p>
         <Button
           type="button"
@@ -330,7 +347,7 @@ export function AITrustWorkspace() {
   );
   const configured = items.filter((item) => item.configured).length;
   const trusted = items.filter(
-    (item) => item.trustLevel === "trusted",
+    (item) => item.trustLevel === "trusted" || item.trustLevel === "full_access",
   ).length;
   const refresh = async () => {
     await Promise.all([profiles.mutate(), actors.mutate()]);
@@ -391,7 +408,7 @@ export function AITrustWorkspace() {
         </h2>
         <p className="mt-2 max-w-2xl text-sm leading-6 text-amber-900/70">
           审核者可以处理 AI 提案，但只有管理员能够调整 Actor
-          的信任等级和抽样策略。
+          的信任等级、抽样策略和 Full Access。
         </p>
       </div>
     );
@@ -433,7 +450,7 @@ export function AITrustWorkspace() {
         {[
           { label: "AI / Import Actor", value: items.length, icon: Bot },
           { label: "已显式配置", value: configured, icon: ShieldCheck },
-          { label: "受信任 Actor", value: trusted, icon: CircleGauge },
+          { label: "可信 Actor", value: trusted, icon: CircleGauge },
         ].map(({ label, value, icon: Icon }) => (
           <div key={label} className="rounded-2xl border bg-card p-5">
             <Icon className="size-4 text-fuchsia-700" aria-hidden />

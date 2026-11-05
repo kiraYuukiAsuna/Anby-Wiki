@@ -49,11 +49,10 @@ type RunnerConfig struct {
 }
 
 type RunnerRuntime struct {
-	Available        bool
-	Model            string
-	MaxInputTokens   int
-	ChunkCharacters  int
-	AutoApprovePlans bool
+	Available       bool
+	Model           string
+	MaxInputTokens  int
+	ChunkCharacters int
 }
 
 type Runner struct {
@@ -107,7 +106,6 @@ func (r *Runner) ProcessOne(ctx context.Context) (bool, error) {
 	defer span.End()
 	maxInputTokens := DefaultModelMaxInputTokens
 	chunkCharacters := 0
-	autoApprovePlans := true
 	model := r.config.Model
 	recovered, err := r.jobs.RecoverStale(ctx, time.Now().Add(-r.config.JobTimeout))
 	if err != nil {
@@ -147,7 +145,6 @@ func (r *Runner) ProcessOne(ctx context.Context) (bool, error) {
 			if runtime.ChunkCharacters > 0 {
 				chunkCharacters = runtime.ChunkCharacters
 			}
-			autoApprovePlans = runtime.AutoApprovePlans
 			job, run, err = r.jobs.ClaimNextForWiki(ctx, wikiID)
 			if errors.Is(err, ErrNoQueuedJob) {
 				continue
@@ -204,8 +201,8 @@ func (r *Runner) ProcessOne(ctx context.Context) (bool, error) {
 		Title: planning.Title, Instructions: planning.Instructions,
 		RouteMode: planning.RouteMode, PlanningInput: job.PlanningInput,
 		SourceOnly:      config.IngestionMode == IngestionModeSourceOnly,
-		AutoApprovePlan: autoApprovePlans, ConfirmedPlanID: job.ConfirmedPlanID,
-		Provider: r.config.Provider, Model: model,
+		ConfirmedPlanID: job.ConfirmedPlanID,
+		Provider:        r.config.Provider, Model: model,
 		MaxInputTokens:   maxInputTokens,
 		ChunkCharacters:  chunkCharacters,
 		QualityThreshold: planning.QualityThreshold,

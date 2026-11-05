@@ -10,6 +10,9 @@ Name | Type
 `reasons` | Array&lt;string&gt;
 `autoApprove` | boolean
 `policy` | string
+`aiTrustLevel` | string
+`requiredSamplePercent` | number
+`sampledForReview` | boolean
 
 ## Example
 
@@ -22,6 +25,9 @@ const example = {
   "reasons": null,
   "autoApprove": null,
   "policy": null,
+  "aiTrustLevel": null,
+  "requiredSamplePercent": null,
+  "sampledForReview": null,
 } satisfies RiskDecision
 
 console.log(example)

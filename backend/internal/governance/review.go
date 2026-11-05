@@ -97,7 +97,9 @@ func (s *ReviewService) submit(
 				return err
 			}
 		}
-		// Human approval is required even when no trust adapter is installed.
+		// Human approval is required for ordinary machine proposals even when no
+		// trust adapter is installed. Full Access is the explicit opt-in escape
+		// hatch and is persisted in policy_decision_json before this check.
 		actorType, status, err := s.repo.GetActor(ctx, tx, p.CreatedBy)
 		if err != nil {
 			return err
@@ -105,7 +107,8 @@ func (s *ReviewService) submit(
 		if status != "active" {
 			return ErrInvalidActor
 		}
-		if actorType == "ai" || actorType == "import" {
+		if (actorType == "ai" || actorType == "import") &&
+			decision.AITrustLevel != AITrustFullAccess {
 			decision.AutoApprove = false
 		}
 		reasons, _ := json.Marshal(decision.Reasons)

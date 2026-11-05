@@ -165,9 +165,9 @@ go test ./internal/wikicli \
 `actor_id`、`actor_type` 与 `wiki_id`，机器 Proposal 的 `created_by` 使用该 Actor。
 
 机器身份只可读取所属 Wiki、创建和提交自己的 Proposal，不继承创建者的管理、
-直接编辑、审核或 Apply 权限。所有机器提案最终必须真人审核；信任与抽样策略记录
-复核标记，低风险未抽中的提案仍进入人工队列。抽样使用完整 Proposal ID 的哈希，
-重试不会改变结果。
+直接编辑、审核或 Apply 权限。默认机器提案最终必须真人审核；Full Access 仅对导入提案
+自动批准并由 Worker 应用。信任与抽样策略记录复核标记，抽样使用完整 Proposal ID
+的哈希，重试不会改变结果。
 
 只有创建者账号可以签发和管理机器凭证；所属 Wiki 的真人管理员可以启用或停用
 Actor。停用撤销全部 Token 并清除待兑换授权码，重新启用须重新授权，旧凭证不会

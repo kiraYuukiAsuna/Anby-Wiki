@@ -24,6 +24,7 @@ var (
 	ErrRendererRegistered = errors.New("component: renderer already registered")
 	ErrVersionFrozen      = errors.New("component: version is frozen")
 	ErrInvalidTransition  = errors.New("component: invalid version transition")
+	ErrProtectedComponent = errors.New("component: protected system component")
 	ErrInvalidCursor      = errors.New("component: invalid cursor")
 )
 

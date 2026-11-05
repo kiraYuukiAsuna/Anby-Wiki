@@ -1970,9 +1970,9 @@ Web 当前提供三种常用模式：
 同一个 ImportJob 可以拥有多个不可变 ImportPlan 版本。重新规划只更新该 Job 的规划输入，
 新增 ImportRun 和 ImportPlan，不创建子 Job；历史版本通过 `revision` 与
 `parent_plan_id` 保留。Job 同时保存 `current_plan_id` 与 `confirmed_plan_id`，手工确认
-必须提交精确的 plan ID，避免并发重新规划时确认错误版本。管理员可以在 `/account` 个人中心
-开启“通过质量门禁后自动确认中间计划”，但它不绕过质量门禁，也不会自动批准或应用最终
-Proposal。
+必须提交精确的 plan ID，避免并发重新规划时确认错误版本。通过质量门禁且未经过安全复核的
+中间计划始终自动确认；安全复核后的重新规划仍需发起者确认精确版本。计划确认不绕过质量门禁，
+也不会直接批准或应用最终 Proposal。
 
 ### 9.12 页面计划的确定性整理
 
@@ -3208,7 +3208,7 @@ Claim 独立后：
 - Revision 冷归档与 S3 透明回源；
 - 34 个桌面路由和 390×844 移动端浏览器回归；
 - OpenAPI operation 与 Web 生成客户端调用路径覆盖检查；
-- 同 Job 重新规划、Plan 版本精确确认和自动确认开关；
+- 同 Job 重新规划、Plan 版本精确确认和始终开启的中间计划自动确认；
 - HTML fragment 导入、跨窗口重复规划收敛、现有页异常扩张拒绝；
 - JSON Web 相关页面导入中，36 个近义段落收敛为一个标题和三个互补正文块；
 - `JSON.parse()`、`Response.json()` 等用户明确点名标识符覆盖；
@@ -3290,10 +3290,9 @@ Claim 独立后：
 
 ### 18.4 AI Trust 的当前边界
 
-AI Trust 档案、管理页面、风险策略和审计已经实现，但只作用于预置的 `ai/import`
-Actor。公开注册只创建 human Actor，当前用户发起的 ImportJob 也以该 human 创建
-Proposal，因此普通导入尚未使用 AI Trust 分档。分享时可以展示控制面和策略设计，
-不能宣称 `untrusted/assisted/trusted` 已经控制现有导入的抽样或自动批准。
+AI Trust 档案、管理页面、风险策略和审计已经实现，作用于预置的 `ai/import`
+Actor。普通导入可指定机器作者；除 Full Access 的导入提案会自动批准并由 Worker 应用外，
+机器提案仍进入人工审核队列。Full Access 不授予机器 Actor 直接编辑、审核或 Apply 权限。
 
 ### 18.5 不能宣称“生产就绪”的部分
 

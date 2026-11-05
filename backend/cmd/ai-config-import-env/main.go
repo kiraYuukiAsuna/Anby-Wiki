@@ -71,9 +71,8 @@ func run(ctx context.Context) error {
 		WikiID: wikiID, ActorID: systemActorID, Enabled: enabled,
 		Provider: provider, BaseURL: baseURL, Model: model,
 		ResponseFormat: responseFormat, MaxInputTokens: aiconfig.DefaultMaxInputTokens,
-		ChunkCharacters:        aiconfig.DefaultChunkCharacters,
-		AutoApproveImportPlans: true,
-		RequestTimeoutSeconds:  180, MaxAttempts: 3, APIKey: apiKey,
+		ChunkCharacters:       aiconfig.DefaultChunkCharacters,
+		RequestTimeoutSeconds: 180, MaxAttempts: 3, APIKey: apiKey,
 	})
 	if err != nil {
 		return err

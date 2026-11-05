@@ -40,7 +40,8 @@ export interface UpdateAITrustProfileRequest {
 export const UpdateAITrustProfileRequestTrustLevelEnum = {
     Untrusted: 'untrusted',
     Assisted: 'assisted',
-    Trusted: 'trusted'
+    Trusted: 'trusted',
+    FullAccess: 'full_access'
 } as const;
 export type UpdateAITrustProfileRequestTrustLevelEnum = typeof UpdateAITrustProfileRequestTrustLevelEnum[keyof typeof UpdateAITrustProfileRequestTrustLevelEnum];
 

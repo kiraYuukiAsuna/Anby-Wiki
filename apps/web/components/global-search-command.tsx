@@ -71,7 +71,7 @@ const QUICK_LINKS = [
   },
   { href: "/governance/protections", label: "页面保护", detail: "角色门槛与标题预留", icon: LockKeyhole },
   { href: "/governance/fact-check", label: "事实一致性", detail: "冲突、证据与 Entity 引用检查", icon: ShieldAlert },
-  { href: "/governance/ai-trust", label: "AI 信任策略", detail: "Actor 信任等级与人工抽样", icon: BrainCircuit },
+  { href: "/governance/ai-trust", label: "AI 信任策略", detail: "Full Access 与机器 Actor 策略", icon: BrainCircuit },
   { href: "/governance/revision-storage", label: "历史版本存储", detail: "Revision 冷热分层与归档", icon: Archive },
   { href: "/account", label: "个人中心", detail: "个人资料与模型配置", icon: UserRound },
   { href: "/admin/members", label: "成员与角色", detail: "协作者与当前 Wiki 权限", icon: UsersRound },

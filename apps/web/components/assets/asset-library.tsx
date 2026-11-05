@@ -3,6 +3,7 @@
 import {
   ArrowUpRight,
   Check,
+  CheckCircle2,
   Copy,
   FileArchive,
   FileText,
@@ -13,6 +14,7 @@ import {
   RefreshCw,
   Upload,
   Video,
+  X,
 } from "lucide-react";
 import Link from "next/link";
 import { useRef, useState } from "react";
@@ -45,6 +47,35 @@ const FILTERS: Array<{ value: Filter; label: string }> = [
   { value: "pdf", label: "PDF" },
   { value: "other", label: "其他" },
 ];
+
+const MAX_ASSET_UPLOAD_BYTES = 50 * 1024 * 1024;
+
+function assetFileError(file: File): string {
+  if (file.size <= 0) return "文件不能为空";
+  if (file.size > MAX_ASSET_UPLOAD_BYTES) return "文件不能超过 50 MiB";
+  return "";
+}
+
+function fileKindLabel(file: File): string {
+  if (file.type.startsWith("image/")) return "图片";
+  if (file.type.startsWith("video/")) return "视频";
+  if (file.type.startsWith("audio/")) return "音频";
+  if (file.type === "application/pdf" || /\.pdf$/i.test(file.name)) return "PDF";
+  return file.name.split(".").pop()?.toUpperCase() || "文件";
+}
+
+function FileKindIcon({ file }: { file: File }) {
+  const Icon = file.type.startsWith("image/")
+    ? ImageIcon
+    : file.type.startsWith("video/")
+      ? Video
+      : file.type.startsWith("audio/")
+        ? Music2
+        : file.type === "application/pdf" || /\.pdf$/i.test(file.name)
+          ? FileText
+          : FileArchive;
+  return <Icon className="size-5" aria-hidden />;
+}
 
 const DATE_FORMATTER = new Intl.DateTimeFormat("zh-CN", {
   year: "numeric",
@@ -131,7 +162,7 @@ function AssetCard({ asset }: { asset: Asset }) {
         </div>
         <Button asChild type="button" size="sm" variant="outline" className="mt-4 w-full">
           <Link href={`/assets/revisions/${revision.id}`}>
-            查看不可变版本
+            查看资产信息
             <ArrowUpRight aria-hidden />
           </Link>
         </Button>
@@ -143,6 +174,9 @@ function AssetCard({ asset }: { asset: Asset }) {
 export function AssetLibrary() {
   const [filter, setFilter] = useState<Filter>("all");
   const [name, setName] = useState("");
+  const [file, setFile] = useState<File | null>(null);
+  const [fileError, setFileError] = useState("");
+  const [dragging, setDragging] = useState(false);
   const [uploading, setUploading] = useState(false);
   const inputRef = useRef<HTMLInputElement>(null);
   const { isAuthenticated, isLoading: sessionLoading } = useSession();
@@ -173,9 +207,15 @@ export function AssetLibrary() {
   const lastPage = pageCount > 0 ? data?.[pageCount - 1] : undefined;
   const reachedEnd = Boolean(data && !lastPage?.nextCursor);
   const loadingMore = isValidating && pageCount > 0 && size > pageCount;
+  const uploadDisabled = !isAuthenticated || uploading || sessionLoading;
+
+  const selectFile = (selected: File) => {
+    const error = assetFileError(selected);
+    setFile(error ? null : selected);
+    setFileError(error);
+  };
 
   const upload = async () => {
-    const file = inputRef.current?.files?.[0];
     if (!file) {
       toast.error("请先选择文件");
       return;
@@ -192,6 +232,8 @@ export function AssetLibrary() {
       });
       await mutate();
       if (inputRef.current) inputRef.current.value = "";
+      setFile(null);
+      setFileError("");
       setName("");
       toast.success("资产已保存", {
         description: `不可变版本 ${compactId(asset.currentRevision.id)}`,
@@ -303,14 +345,147 @@ export function AssetLibrary() {
           </span>
           <h2 className="mt-4 font-semibold">上传新资产</h2>
           <div className="mt-5 space-y-4">
-            <div className="space-y-2">
-              <Label htmlFor="asset-file">文件</Label>
-              <Input
+            <div className="space-y-3">
+              <div className="flex items-center justify-between gap-3">
+                <Label htmlFor="asset-file" id="asset-file-label">
+                  文件
+                </Label>
+                <span className="text-xs text-muted-foreground">最大 50 MiB</span>
+              </div>
+              <input
                 ref={inputRef}
                 id="asset-file"
                 type="file"
-                disabled={!isAuthenticated || uploading || sessionLoading}
+                className="sr-only"
+                tabIndex={-1}
+                aria-invalid={Boolean(fileError)}
+                aria-describedby={
+                  fileError ? "asset-file-error asset-file-help" : "asset-file-help"
+                }
+                disabled={uploadDisabled}
+                onChange={(event) => {
+                  const selected = event.target.files?.[0];
+                  if (selected) selectFile(selected);
+                  event.target.value = "";
+                }}
               />
+              <div
+                aria-labelledby="asset-file-label"
+                aria-describedby={
+                  fileError ? "asset-file-error asset-file-help" : "asset-file-help"
+                }
+                className={cn(
+                  "rounded-xl border border-dashed transition-colors",
+                  dragging ? "border-primary bg-primary/5" : "border-border bg-muted/20",
+                  fileError && "border-destructive/50",
+                )}
+                onDragOver={(event) => {
+                  event.preventDefault();
+                  if (!uploadDisabled && event.dataTransfer.types.includes("Files")) {
+                    setDragging(true);
+                  }
+                }}
+                onDragLeave={(event) => {
+                  if (!event.currentTarget.contains(event.relatedTarget as Node | null)) {
+                    setDragging(false);
+                  }
+                }}
+                onDrop={(event) => {
+                  event.preventDefault();
+                  setDragging(false);
+                  if (uploadDisabled) return;
+                  const dropped = event.dataTransfer.files;
+                  if (dropped.length !== 1) {
+                    setFile(null);
+                    setFileError("每次请选择一个资产文件");
+                    return;
+                  }
+                  selectFile(dropped[0]);
+                }}
+              >
+                {file ? (
+                  <>
+                    <div className="flex items-center gap-3 p-4">
+                      <span className="flex size-11 shrink-0 items-center justify-center rounded-xl bg-primary/10 text-primary">
+                        <FileKindIcon file={file} />
+                      </span>
+                      <div className="min-w-0 flex-1">
+                        <p className="truncate text-sm font-medium" title={file.name}>
+                          {file.name}
+                        </p>
+                        <p className="mt-1 text-xs text-muted-foreground">
+                          {fileKindLabel(file)} · {formatBytes(file.size)}
+                        </p>
+                      </div>
+                    </div>
+                    <div className="flex items-center justify-between gap-2 border-t border-border/60 px-4 py-2">
+                      <span className="flex items-center gap-1.5 text-xs text-muted-foreground" role="status">
+                        <CheckCircle2 className="size-3.5 text-primary" aria-hidden />
+                        {dragging ? "松开以更换文件" : "已选择"}
+                      </span>
+                      <div className="flex items-center gap-1">
+                        <Button
+                          type="button"
+                          variant="ghost"
+                          size="sm"
+                          disabled={uploadDisabled}
+                          onClick={() => inputRef.current?.click()}
+                        >
+                          更换文件
+                        </Button>
+                        <Button
+                          type="button"
+                          variant="ghost"
+                          size="icon-sm"
+                          aria-label="移除资产文件"
+                          disabled={uploadDisabled}
+                          onClick={() => {
+                            setFile(null);
+                            setFileError("");
+                          }}
+                        >
+                          <X aria-hidden />
+                        </Button>
+                      </div>
+                    </div>
+                  </>
+                ) : (
+                  <div className="flex flex-col items-center gap-3 px-4 py-6 text-center">
+                    <span className="flex size-11 items-center justify-center rounded-xl border border-border bg-background text-muted-foreground">
+                      <Upload className="size-5" aria-hidden />
+                    </span>
+                    <div className="space-y-1">
+                      <p className="text-sm font-medium">
+                        {dragging ? "松开即可选择文件" : "拖放文件到这里"}
+                      </p>
+                      <p className="text-xs text-muted-foreground">
+                        保存图片、PDF、音视频或其他附件到媒体库
+                      </p>
+                    </div>
+                    <Button
+                      type="button"
+                      variant="outline"
+                      disabled={uploadDisabled}
+                      aria-describedby={fileError ? "asset-file-error" : "asset-file-help"}
+                      onClick={() => inputRef.current?.click()}
+                    >
+                      选择文件
+                    </Button>
+                  </div>
+                )}
+              </div>
+              {fileError ? (
+                <p id="asset-file-error" role="alert" className="text-xs text-destructive">
+                  {fileError}
+                </p>
+              ) : null}
+              <div id="asset-file-help" className="flex flex-wrap gap-1.5 text-xs text-muted-foreground">
+                {["图片", "PDF", "音视频", "其他附件"].map((format) => (
+                  <span key={format} className="rounded-md bg-muted px-2 py-1">
+                    {format}
+                  </span>
+                ))}
+              </div>
             </div>
             <div className="space-y-2">
               <Label htmlFor="asset-name">站内名称（可选）</Label>
@@ -319,13 +494,13 @@ export function AssetLibrary() {
                 value={name}
                 onChange={(event) => setName(event.target.value)}
                 placeholder="默认使用文件名"
-                disabled={!isAuthenticated || uploading || sessionLoading}
+                disabled={uploadDisabled}
               />
             </div>
             <Button
               type="button"
               className="w-full"
-              disabled={!isAuthenticated || uploading || sessionLoading}
+              disabled={uploadDisabled || !file}
               onClick={() => void upload()}
             >
               {uploading ? (
@@ -336,9 +511,6 @@ export function AssetLibrary() {
               {isAuthenticated ? "保存到媒体库" : "登录后上传"}
             </Button>
           </div>
-          <p className="mt-4 text-[11px] leading-5 text-muted-foreground">
-            最大 50 MiB
-          </p>
         </div>
       </aside>
     </div>

@@ -14,7 +14,6 @@ Name | Type
 `responseFormat` | string
 `maxInputTokens` | number
 `chunkCharacters` | number
-`autoApproveImportPlans` | boolean
 `requestTimeoutSeconds` | number
 `maxAttempts` | number
 `apiKeyConfigured` | boolean
@@ -36,7 +35,6 @@ const example = {
   "responseFormat": null,
   "maxInputTokens": null,
   "chunkCharacters": null,
-  "autoApproveImportPlans": null,
   "requestTimeoutSeconds": null,
   "maxAttempts": null,
   "apiKeyConfigured": null,

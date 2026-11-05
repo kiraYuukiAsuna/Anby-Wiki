@@ -215,7 +215,11 @@ func (s *Service) transition(
 		); err != nil {
 			return err
 		}
-		if _, err := s.repo.Lock(ctx, tx, wikiID, componentID); err != nil {
+		definition, err := s.repo.Lock(ctx, tx, wikiID, componentID)
+		if err != nil {
+			return err
+		}
+		if err := validateSystemComponentTransition(definition, target); err != nil {
 			return err
 		}
 		current, err := s.repo.LockVersion(ctx, tx, componentID, version)
@@ -242,6 +246,13 @@ func (s *Service) transition(
 		return err
 	})
 	return value, err
+}
+
+func validateSystemComponentTransition(value *Component, target string) error {
+	if target == StatusDeprecated && value != nil && value.ComponentKey == BuiltinArticleInfoboxKey {
+		return ErrProtectedComponent
+	}
+	return nil
 }
 
 func (s *Service) ValidateProps(

@@ -144,13 +144,12 @@ func TestWebImportActorE2E(t *testing.T) {
 		Classifier: NewClaimClassifier(knowledgeService),
 		Composer:   NewProposalComposer(sources, proposals, knowledgeService, pages, components, ids), Reviews: reviews,
 	})
-	autoConfirm := true
 	runner := NewRunner(jobs, pipeline, RunnerConfig{
 		UploadStore: store, Runtime: func(_ context.Context, wikiID uuid.UUID) (RunnerRuntime, error) {
 			if wikiID != owner.WikiID {
 				t.Error("model runtime left the human initiator's Wiki")
 			}
-			return RunnerRuntime{Available: true, Model: "test", AutoApprovePlans: autoConfirm}, nil
+			return RunnerRuntime{Available: true, Model: "test"}, nil
 		},
 	})
 	raw := func(value any) json.RawMessage {
@@ -285,7 +284,6 @@ func TestWebImportActorE2E(t *testing.T) {
 			if err := jobs.Retry(ctx, job.ID); err != nil {
 				t.Fatal(err)
 			}
-			autoConfirm = false
 			generator.afterExtract = func() { setStatus(authdomain.ActorStatusDisabled) }
 			if _, err := runner.ProcessOne(ctx); err == nil {
 				t.Fatal("Actor disabled during extraction continued to compose")
@@ -302,29 +300,8 @@ func TestWebImportActorE2E(t *testing.T) {
 				t.Fatal(err)
 			}
 			process(t)
-			waiting := detail(job.ID)
-			if waiting.Job.Status != JobActionRequired || waiting.Job.CurrentPlanID == nil {
-				t.Fatal("manual plan confirmation missing")
-			}
-			setStatus(authdomain.ActorStatusDisabled)
-			if err := jobs.ConfirmPlan(ctx, job.ID, *waiting.Job.CurrentPlanID); !errors.Is(err, ErrAuthorUnavailable) {
-				t.Fatalf("disabled confirmation accepted: %v", err)
-			}
-			setStatus(authdomain.ActorStatusActive)
-			replanned, err := jobs.Replan(ctx, owner.ActorID, job.ID, uuid.NewString(), ReplanInput{
-				Title: "Import " + test.name, Instructions: "Keep verified prose.", RouteMode: RouteModeForceCreate,
-			})
-			if err != nil || replanned.AuthorActorID != machine.ActorID {
-				t.Fatalf("replan changed author: %v", err)
-			}
-			process(t)
-			waiting = detail(job.ID)
-			if err := jobs.ConfirmPlan(ctx, job.ID, *waiting.Job.CurrentPlanID); err != nil {
-				t.Fatal(err)
-			}
-			process(t)
 			done := detail(job.ID)
-			if done.Job.Status != JobSucceeded || done.Job.ProposalID == nil || len(done.Plans) != 2 {
+			if done.Job.Status != JobSucceeded || done.Job.ProposalID == nil || len(done.Plans) != 1 {
 				t.Fatalf("import failed to resume with immutable plans: %+v", done.Job)
 			}
 			proposal, err := governanceRepo.GetProposal(ctx, nil, *done.Job.ProposalID)
@@ -372,7 +349,6 @@ func TestWebImportActorE2E(t *testing.T) {
 			}
 		})
 	}
-	autoConfirm = true
 	human, err := jobs.Create(ctx, owner.ActorID, owner.WikiID, "source_import", uuid.NewString(), newConfig(nil, "Human import"))
 	if err != nil {
 		t.Fatal(err)

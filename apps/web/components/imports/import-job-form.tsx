@@ -424,7 +424,7 @@ export function ImportJobForm() {
           ))}
         </select>
         <p className="text-xs leading-5 text-muted-foreground">
-          机器作者使用其信任与抽样策略，最终仍需真人审核。任务和来源由你管理，重试保留作者。
+          机器作者使用其信任策略；Full Access 可自动批准并应用导入提案。任务和来源由你管理，重试保留作者。
         </p>
         {actorError ? (
           <p role="alert" className="text-xs text-destructive">

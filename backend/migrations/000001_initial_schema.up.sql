@@ -2070,7 +2070,7 @@ CREATE TABLE ai_trust_profile (
     wiki_id                 uuid        NOT NULL REFERENCES wiki_site (id),
     actor_id                uuid        NOT NULL REFERENCES actor (id),
     trust_level             text        NOT NULL
-                                         CHECK (trust_level IN ('untrusted','assisted','trusted')),
+                                         CHECK (trust_level IN ('untrusted','assisted','trusted','full_access')),
     required_sample_percent integer     NOT NULL DEFAULT 100
                                          CHECK (required_sample_percent BETWEEN 0 AND 100),
     updated_by              uuid        NOT NULL REFERENCES actor (id),

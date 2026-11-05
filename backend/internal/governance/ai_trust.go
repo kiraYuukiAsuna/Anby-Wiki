@@ -23,9 +23,10 @@ var (
 )
 
 const (
-	AITrustUntrusted = "untrusted"
-	AITrustAssisted  = "assisted"
-	AITrustTrusted   = "trusted"
+	AITrustUntrusted  = "untrusted"
+	AITrustAssisted   = "assisted"
+	AITrustTrusted    = "trusted"
+	AITrustFullAccess = "full_access"
 )
 
 type AITrustProfile struct {
@@ -121,6 +122,9 @@ func (s *AITrustService) Update(
 		params.RequiredSamplePercent > 100 {
 		return nil, ErrInvalidAITrustProfile
 	}
+	if params.TrustLevel == AITrustFullAccess {
+		params.RequiredSamplePercent = 0
+	}
 
 	var result *AITrustProfile
 	err := s.txm.InTx(ctx, func(tx pgx.Tx) error {
@@ -205,7 +209,7 @@ func (s *AITrustService) Update(
 }
 
 // ApplyPolicy makes AI/import trust an explicit, persisted input to submission
-// policy. High-risk decisions remain review-only regardless of trust.
+// policy. Full Access is an explicit import-only auto-approval policy.
 func (s *AITrustService) ApplyPolicy(
 	ctx context.Context,
 	tx pgx.Tx,
@@ -236,6 +240,14 @@ func (s *AITrustService) ApplyPolicy(
 	if err != nil && !errors.Is(err, pgx.ErrNoRows) {
 		return err
 	}
+	applyAITrustDecision(proposal, decision, level, sample)
+	return nil
+}
+
+func applyAITrustDecision(proposal *Proposal, decision *RiskDecision, level string, sample int) {
+	if level == AITrustFullAccess {
+		sample = 0
+	}
 	decision.AITrustLevel = level
 	decision.RequiredSamplePercent = sample
 	if level == AITrustUntrusted {
@@ -244,7 +256,22 @@ func (s *AITrustService) ApplyPolicy(
 		decision.Reasons = appendUnique(
 			decision.Reasons, "未受信任 AI 的变更必须人工审核",
 		)
-		return nil
+		return
+	}
+	if level == AITrustFullAccess {
+		decision.SampledForReview = false
+		if proposal.ImportJobID != nil {
+			decision.AutoApprove = true
+			decision.Reasons = appendUnique(
+				decision.Reasons, "Full Access AI 信任策略自动批准导入提案",
+			)
+			return
+		}
+		decision.AutoApprove = false
+		decision.Reasons = appendUnique(
+			decision.Reasons, "Full Access 仅自动批准导入提案，非导入机器提案仍需人工审核",
+		)
+		return
 	}
 	if sampledProposal(proposal.ID, sample) {
 		decision.SampledForReview = true
@@ -254,13 +281,13 @@ func (s *AITrustService) ApplyPolicy(
 	}
 	decision.AutoApprove = false
 	decision.Reasons = appendUnique(decision.Reasons, "机器 Actor 提案最终必须由真人审核")
-	return nil
 }
 
 func validAITrustLevel(level string) bool {
 	return level == AITrustUntrusted ||
 		level == AITrustAssisted ||
-		level == AITrustTrusted
+		level == AITrustTrusted ||
+		level == AITrustFullAccess
 }
 
 func sampledProposal(id uuid.UUID, percent int) bool {

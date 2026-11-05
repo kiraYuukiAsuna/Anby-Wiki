@@ -149,6 +149,8 @@ const STATUS_META = {
   },
 } as const;
 
+const ARTICLE_INFOBOX_COMPONENT_KEY = "article-infobox";
+
 export function ComponentWorkspace({ id }: { id: string }) {
   const [editorOpen, setEditorOpen] = useState(false);
   const [editingVersion, setEditingVersion] =
@@ -191,6 +193,8 @@ export function ComponentWorkspace({ id }: { id: string }) {
 
   const component = componentState.data;
   const versions = versionState.data.items;
+  const isSystemDefaultComponent =
+    component.componentKey === ARTICLE_INFOBOX_COMPONENT_KEY;
 
   const transition = async (
     version: WikiComponentVersion,
@@ -239,18 +243,30 @@ export function ComponentWorkspace({ id }: { id: string }) {
             <p className="mt-2 break-all font-mono text-xs text-muted-foreground">
               {component.componentKey}
             </p>
+            {isSystemDefaultComponent ? (
+              <p className="mt-3 inline-flex items-center gap-1.5 rounded-full border bg-muted/40 px-2.5 py-1 text-xs text-muted-foreground">
+                <LockKeyhole className="size-3.5" aria-hidden />
+                系统默认组件，已发布版本不可废弃
+              </p>
+            ) : null}
           </div>
-          {canWrite ? <Button
-            type="button"
-            onClick={() => {
-              setEditingVersion(null);
-              setCopyFrom(versions.find((version) => version.status === "published") ?? versions[0] ?? null);
-              setEditorOpen(true);
-            }}
-          >
-            <Plus aria-hidden />
-            创建新版本
-          </Button> : null}
+          {canWrite ? (
+            <Button
+              type="button"
+              onClick={() => {
+                setEditingVersion(null);
+                setCopyFrom(
+                  versions.find((version) => version.status === "published") ??
+                    versions[0] ??
+                    null,
+                );
+                setEditorOpen(true);
+              }}
+            >
+              <Plus aria-hidden />
+              创建新版本
+            </Button>
+          ) : null}
         </div>
       </header>
 
@@ -319,11 +335,21 @@ export function ComponentWorkspace({ id }: { id: string }) {
                         <Eye aria-hidden />
                         预览
                       </Button>
-                      {canWrite && version.status !== "draft" ? <Button type="button" size="sm" variant="outline" onClick={() => {
-                        setEditingVersion(null);
-                        setCopyFrom(version);
-                        setEditorOpen(true);
-                      }}><Plus aria-hidden />定制新版本</Button> : null}
+                      {canWrite && version.status !== "draft" ? (
+                        <Button
+                          type="button"
+                          size="sm"
+                          variant="outline"
+                          onClick={() => {
+                            setEditingVersion(null);
+                            setCopyFrom(version);
+                            setEditorOpen(true);
+                          }}
+                        >
+                          <Plus aria-hidden />
+                          定制新版本
+                        </Button>
+                      ) : null}
                       {canWrite && version.status === "draft" ? (
                         <>
                           <Button
@@ -357,22 +383,33 @@ export function ComponentWorkspace({ id }: { id: string }) {
                         </>
                       ) : null}
                       {canWrite && version.status === "published" ? (
-                        <Button
-                          type="button"
-                          size="sm"
-                          variant="destructive"
-                          disabled={
-                            transitioning.startsWith(busyPrefix)
-                          }
-                          onClick={() => void transition(version, "deprecate")}
-                        >
-                          {transitioning === `${version.version}:deprecate` ? (
-                            <LoaderCircle className="animate-spin" aria-hidden />
-                          ) : (
-                            <CircleDot aria-hidden />
-                          )}
-                          废弃
-                        </Button>
+                        isSystemDefaultComponent ? (
+                          <Button
+                            type="button"
+                            size="sm"
+                            variant="outline"
+                            disabled
+                            title="系统默认组件不可废弃"
+                          >
+                            <LockKeyhole aria-hidden />
+                            不可废弃
+                          </Button>
+                        ) : (
+                          <Button
+                            type="button"
+                            size="sm"
+                            variant="destructive"
+                            disabled={transitioning.startsWith(busyPrefix)}
+                            onClick={() => void transition(version, "deprecate")}
+                          >
+                            {transitioning === `${version.version}:deprecate` ? (
+                              <LoaderCircle className="animate-spin" aria-hidden />
+                            ) : (
+                              <CircleDot aria-hidden />
+                            )}
+                            废弃
+                          </Button>
+                        )
                       ) : null}
                     </div>
                   </div>

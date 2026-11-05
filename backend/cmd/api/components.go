@@ -292,7 +292,8 @@ func componentError(w http.ResponseWriter, r *http.Request, err error) {
 		httpx.WriteError(w, r, http.StatusNotFound, httpx.CodeNotFound, err.Error())
 	case errors.Is(err, component.ErrDuplicateKey),
 		errors.Is(err, component.ErrVersionFrozen),
-		errors.Is(err, component.ErrInvalidTransition):
+		errors.Is(err, component.ErrInvalidTransition),
+		errors.Is(err, component.ErrProtectedComponent):
 		httpx.WriteError(w, r, http.StatusConflict, httpx.CodeConflict, err.Error())
 	case errors.Is(err, component.ErrInvalidCursor):
 		httpx.WriteError(w, r, http.StatusBadRequest, httpx.CodeBadRequest, err.Error())

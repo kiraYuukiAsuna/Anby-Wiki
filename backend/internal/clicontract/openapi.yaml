@@ -2650,7 +2650,7 @@ paths:
     get:
       operationId: listAITrustProfiles
       tags: [governance]
-      summary: 列出 AI/Import Actor 的信任与抽样策略
+      summary: 列出 AI/Import Actor 的信任策略
       security:
         - sessionCookie: []
         - cliBearer: []
@@ -2666,7 +2666,7 @@ paths:
     put:
       operationId: updateAITrustProfile
       tags: [governance]
-      summary: 更新 AI 信任等级与低风险人工抽样比例
+      summary: 更新 AI 信任等级、Full Access 与低风险人工抽样比例
       security:
         - sessionCookie: []
         - cliBearer: []
@@ -2760,7 +2760,7 @@ paths:
       description: >-
         需要当前账户拥有的 Wiki 的管理员权限。仅统计该 Wiki 的 Revision 引用的
         不可变 ContentSnapshot，每个快照只计一次；选择协作 Wiki 不改变统计范围。
-        到期候选排除当前版本和其他 Wiki 共用的快照，不返回 AST 正文或对象存储键。
+        可迁移快照排除当前版本和其他 Wiki 共用的快照，不返回 AST 正文或对象存储键。
       security:
         - sessionCookie: []
         - cliBearer: []
@@ -7355,7 +7355,7 @@ components:
         actor_status: { type: string }
         trust_level:
           type: string
-          enum: [untrusted, assisted, trusted]
+          enum: [untrusted, assisted, trusted, full_access]
         required_sample_percent:
           type: integer
           minimum: 0
@@ -7378,7 +7378,7 @@ components:
       properties:
         trust_level:
           type: string
-          enum: [untrusted, assisted, trusted]
+          enum: [untrusted, assisted, trusted, full_access]
         required_sample_percent:
           type: integer
           minimum: 0
@@ -7395,7 +7395,6 @@ components:
         - response_format
         - max_input_tokens
         - chunk_characters
-        - auto_approve_import_plans
         - request_timeout_seconds
         - max_attempts
         - api_key_configured
@@ -7424,10 +7423,6 @@ components:
           maximum: 20000000
           default: 32000
           description: 来源持久化分片的最大 Unicode 字符数；新解析的来源版本使用此值。
-        auto_approve_import_plans:
-          type: boolean
-          default: true
-          description: 自动确认通过质量门禁的中间导入计划；最终 Proposal 仍必须经过治理审核。
         request_timeout_seconds:
           type: integer
           minimum: 5
@@ -7450,7 +7445,6 @@ components:
         - response_format
         - max_input_tokens
         - chunk_characters
-        - auto_approve_import_plans
         - request_timeout_seconds
         - max_attempts
       properties:
@@ -7473,9 +7467,6 @@ components:
           minimum: 12800
           maximum: 20000000
           default: 32000
-        auto_approve_import_plans:
-          type: boolean
-          default: true
         request_timeout_seconds:
           type: integer
           minimum: 5
@@ -7643,6 +7634,11 @@ components:
         reasons: { type: array, items: { type: string } }
         auto_approve: { type: boolean }
         policy: { type: string }
+        ai_trust_level:
+          type: string
+          enum: [untrusted, assisted, trusted, full_access]
+        required_sample_percent: { type: integer, minimum: 0, maximum: 100 }
+        sampled_for_review: { type: boolean }
     ReviewTask:
       type: object
       required: [id, proposal_id, status, created_at]

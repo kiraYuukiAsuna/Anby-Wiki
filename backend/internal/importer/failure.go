@@ -58,6 +58,7 @@ const (
 	ErrorClaimClassifyFailed       = "claim_classification_failed"
 	ErrorProposalComposeFailed     = "proposal_compose_failed"
 	ErrorReviewSubmitFailed        = "review_submit_failed"
+	ErrorProposalApplyFailed       = "proposal_apply_failed"
 	ErrorInvalidConfig             = "invalid_config"
 	ErrorWorkerInterrupted         = "worker_interrupted"
 	ErrorCancelled                 = "cancelled"
@@ -165,6 +166,7 @@ var failureDescriptions = map[string]failureDescription{
 	ErrorClaimClassifyFailed:       {"事实声明分类失败。", "请检查知识数据及服务状态后重试。", true},
 	ErrorProposalComposeFailed:     {"审核提案合成失败。", "请检查目标页面和实体状态后重试；持续失败时请联系管理员。", true},
 	ErrorReviewSubmitFailed:        {"提案提交审核失败。", "请检查提案状态及审核权限后重试。", true},
+	ErrorProposalApplyFailed:       {"Full Access 自动应用提案失败。", "请检查页面/事实是否已被并发修改；可在治理队列中人工处理已生成的提案。", true},
 	ErrorInvalidConfig:             {"导入任务配置或规划参数不合法。", "请检查来源和路由参数，重新创建导入任务。", false},
 	ErrorWorkerInterrupted:         {"Worker 中断，未能完成本次导入。", "任务已自动重新排队，将从已保存的来源继续。", true},
 	ErrorCancelled:                 {"导入任务已取消。", "需要继续时可以重试，已保存的来源会被复用。", true},

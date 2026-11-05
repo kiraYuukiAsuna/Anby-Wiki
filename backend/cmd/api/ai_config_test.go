@@ -68,9 +68,9 @@ func TestAPIAccountAIConfigIsolationE2E(t *testing.T) {
 		"enabled": true, "provider": "openai-compatible",
 		"base_url": "https://api-e2e.invalid/v1", "model": "other-account",
 		"response_format": "json_schema", "max_input_tokens": 128000,
-		"chunk_characters": 32000, "auto_approve_import_plans": true,
-		"request_timeout_seconds": 5, "max_attempts": 1,
-		"api_key": "isolated-model-test-key-b",
+		"chunk_characters": 32000, "request_timeout_seconds": 5,
+		"max_attempts": 1,
+		"api_key":      "isolated-model-test-key-b",
 	}
 	requestE2EMap(t, second, http.MethodPut, endpoint, body, http.StatusOK)
 	page := requestE2EMap(t, second, http.MethodPost, baseURL+"/api/v1/pages",

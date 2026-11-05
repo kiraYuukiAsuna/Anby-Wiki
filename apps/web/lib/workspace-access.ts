@@ -12,7 +12,7 @@ const WORKSPACES = [
   { path: "/governance/activity", title: "审计与变更标签", roles: ["reviewer", "admin"], permission: "审核者或管理员" },
   { path: "/governance/apply", title: "待应用", roles: ["applier", "admin"], permission: "应用者或管理员" },
   { path: "/governance/protections", title: "页面保护策略", roles: ["admin"], permission: "管理员" },
-  { path: "/governance/ai-trust", title: "AI 信任与人工抽样", roles: ["admin"], permission: "管理员" },
+  { path: "/governance/ai-trust", title: "AI 信任策略", roles: ["admin"], permission: "管理员" },
   { path: "/admin/members", title: "成员与角色", roles: ["admin"], permission: "管理员" },
   { path: "/admin/users", title: "成员与角色", roles: ["admin"], permission: "管理员" },
   { path: "/governance/revision-storage", title: "历史版本存储", roles: ["admin"], permission: "管理员", accountScope: true },

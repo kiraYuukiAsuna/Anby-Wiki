@@ -103,7 +103,8 @@ export type AITrustProfileActorTypeEnum = typeof AITrustProfileActorTypeEnum[key
 export const AITrustProfileTrustLevelEnum = {
     Untrusted: 'untrusted',
     Assisted: 'assisted',
-    Trusted: 'trusted'
+    Trusted: 'trusted',
+    FullAccess: 'full_access'
 } as const;
 export type AITrustProfileTrustLevelEnum = typeof AITrustProfileTrustLevelEnum[keyof typeof AITrustProfileTrustLevelEnum];
 

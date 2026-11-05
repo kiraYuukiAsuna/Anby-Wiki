@@ -123,6 +123,7 @@ func assembleImportRunner(ctx context.Context, pool *pgxpool.Pool, cfg config.Co
 	governanceRepo := governance.NewRepository(pool)
 	governanceService := governance.NewService(governanceRepo, txm, ids)
 	authorization := governance.NewAuthorizationService(pool)
+	conflictService := governance.NewConflictService(governanceRepo, pageService, knowledgeService, txm, ids)
 	reviews := governance.NewReviewService(governanceRepo, txm, ids, governance.NewRiskEvaluator(knowledgeService)).
 		WithAuthorization(authorization).
 		WithAITrust(governance.NewAITrustService(governanceRepo, authorization, txm, ids))
@@ -201,6 +202,11 @@ func assembleImportRunner(ctx context.Context, pool *pgxpool.Pool, cfg config.Co
 	importRepo := importer.NewRepository(pool)
 	jobs := importer.NewService(importRepo, txm, ids)
 	collections := collection.NewService(collection.NewRepository(pool), pageRepo, txm, ids)
+	knowledgePatch := governance.NewKnowledgePatchEngine(knowledgeService)
+	applyService := governance.NewApplyService(
+		governanceRepo, pageService, governance.NewPagePatchEngine(),
+		knowledgePatch, conflictService, txm, ids,
+	).WithAuthorization(authorization).WithCollections(collections)
 	pipeline := importer.NewPipeline(importer.PipelineServices{
 		Jobs: jobs, Repository: importRepo, Evidence: evidenceService,
 		Parser:     importer.NewParser(0, gateway),
@@ -211,7 +217,7 @@ func assembleImportRunner(ctx context.Context, pool *pgxpool.Pool, cfg config.Co
 			evidenceService, governanceService, knowledgeService,
 			pageService, componentService, ids,
 		),
-		Reviews: reviews, Fetcher: importer.NewFetcher(importer.DefaultURLPolicy(), nil, nil),
+		Reviews: reviews, Apply: applyService, Fetcher: importer.NewFetcher(importer.DefaultURLPolicy(), nil, nil),
 	})
 	return importer.NewRunner(jobs, pipeline, importer.RunnerConfig{
 		Provider: "semantic-kernel", Model: "managed", Logger: logger,
@@ -225,8 +231,7 @@ func assembleImportRunner(ctx context.Context, pool *pgxpool.Pool, cfg config.Co
 				return importer.RunnerRuntime{}, err
 			}
 			return importer.RunnerRuntime{Available: true, Model: runtime.Model, MaxInputTokens: runtime.MaxInputTokens,
-				ChunkCharacters:  runtime.ChunkCharacters,
-				AutoApprovePlans: runtime.AutoApproveImportPlans}, nil
+				ChunkCharacters: runtime.ChunkCharacters}, nil
 		},
 	}), nil
 }

@@ -20,6 +20,8 @@ import (
 
 const DefaultQualityThreshold = 0.70
 
+var fullAccessApplyActorID = uuid.MustParse("00000000-0000-7000-8000-000000000201")
+
 type Pipeline struct {
 	jobs       *Service
 	repository *Repository
@@ -31,6 +33,7 @@ type Pipeline struct {
 	classifier *ClaimClassifier
 	composer   *ProposalComposer
 	reviews    *governance.ReviewService
+	apply      *governance.ApplyService
 	fetcher    *Fetcher
 	scanner    MalwareScanner
 }
@@ -46,6 +49,7 @@ type PipelineServices struct {
 	Classifier *ClaimClassifier
 	Composer   *ProposalComposer
 	Reviews    *governance.ReviewService
+	Apply      *governance.ApplyService
 	Fetcher    *Fetcher
 	Scanner    MalwareScanner
 }
@@ -53,7 +57,7 @@ type PipelineServices struct {
 func NewPipeline(services PipelineServices) *Pipeline {
 	p := &Pipeline{jobs: services.Jobs, repository: services.Repository, evidence: services.Evidence,
 		parser: services.Parser, extraction: services.Extraction, planner: services.Planner, matcher: services.Matcher,
-		classifier: services.Classifier, composer: services.Composer, reviews: services.Reviews,
+		classifier: services.Classifier, composer: services.Composer, reviews: services.Reviews, apply: services.Apply,
 		fetcher: services.Fetcher, scanner: services.Scanner}
 	if p.parser == nil {
 		p.parser = NewParser(0, nil)
@@ -76,7 +80,6 @@ type PipelineRequest struct {
 	RouteMode        string
 	PlanningInput    json.RawMessage
 	SourceOnly       bool
-	AutoApprovePlan  bool
 	Provider         string
 	Model            string
 	MaxInputTokens   int
@@ -321,7 +324,7 @@ func (p *Pipeline) run(ctx context.Context, request PipelineRequest, acquire acq
 		return fail(current, planErrorCode(err), err)
 	}
 	planOutput := planned.Record.ID.String()
-	autoConfirm := request.AutoApprovePlan && !safetyReviewed &&
+	autoConfirm := !safetyReviewed &&
 		planned.Plan.Quality != nil && planned.Plan.Quality.Passed
 	if err := p.jobs.CompletePlanStage(
 		ctx, request.JobID, current, planned.Record.ID, autoConfirm,
@@ -339,7 +342,7 @@ func (p *Pipeline) run(ctx context.Context, request PipelineRequest, acquire acq
 	}
 	planConfirmed := request.ConfirmedPlanID != nil &&
 		*request.ConfirmedPlanID == planned.Record.ID
-	if (!request.AutoApprovePlan || safetyReviewed) && !planConfirmed {
+	if safetyReviewed && !planConfirmed {
 		if err := p.jobs.RequireAction(
 			ctx, request.JobID, run.ID, version.Version.ID, ActionConfirmPlan,
 		); err != nil {
@@ -427,8 +430,16 @@ func (p *Pipeline) run(ctx context.Context, request PipelineRequest, acquire acq
 	}
 	for _, proposal := range composed.Proposals {
 		if proposal.Status == governance.ProposalDraft {
-			if _, err := p.reviews.Submit(ctx, proposal.ID); err != nil {
+			submitted, err := p.reviews.Submit(ctx, proposal.ID)
+			if err != nil {
 				return fail(current, ErrorReviewSubmitFailed, err)
+			}
+			if p.apply != nil && submitted.Decision != nil &&
+				submitted.Decision.AutoApprove &&
+				submitted.Decision.AITrustLevel == governance.AITrustFullAccess {
+				if _, err := p.apply.Apply(ctx, proposal.ID, fullAccessApplyActorID); err != nil {
+					return fail(current, ErrorProposalApplyFailed, err)
+				}
 			}
 		}
 	}

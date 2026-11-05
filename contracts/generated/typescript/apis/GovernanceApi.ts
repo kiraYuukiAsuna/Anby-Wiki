@@ -1234,7 +1234,7 @@ export class GovernanceApi extends runtime.BaseAPI {
     }
 
     /**
-     * 需要当前账户拥有的 Wiki 的管理员权限。仅统计该 Wiki 的 Revision 引用的 不可变 ContentSnapshot，每个快照只计一次；选择协作 Wiki 不改变统计范围。 到期候选排除当前版本和其他 Wiki 共用的快照，不返回 AST 正文或对象存储键。
+     * 需要当前账户拥有的 Wiki 的管理员权限。仅统计该 Wiki 的 Revision 引用的 不可变 ContentSnapshot，每个快照只计一次；选择协作 Wiki 不改变统计范围。 可迁移快照排除当前版本和其他 Wiki 共用的快照，不返回 AST 正文或对象存储键。
      * 查看当前账户 Wiki 的 Revision 快照冷热分层状态
      */
     async getRevisionStorageStatsRaw(initOverrides?: RequestInit | runtime.InitOverrideFunction): Promise<runtime.ApiResponse<RevisionStorageStats>> {
@@ -1245,7 +1245,7 @@ export class GovernanceApi extends runtime.BaseAPI {
     }
 
     /**
-     * 需要当前账户拥有的 Wiki 的管理员权限。仅统计该 Wiki 的 Revision 引用的 不可变 ContentSnapshot，每个快照只计一次；选择协作 Wiki 不改变统计范围。 到期候选排除当前版本和其他 Wiki 共用的快照，不返回 AST 正文或对象存储键。
+     * 需要当前账户拥有的 Wiki 的管理员权限。仅统计该 Wiki 的 Revision 引用的 不可变 ContentSnapshot，每个快照只计一次；选择协作 Wiki 不改变统计范围。 可迁移快照排除当前版本和其他 Wiki 共用的快照，不返回 AST 正文或对象存储键。
      * 查看当前账户 Wiki 的 Revision 快照冷热分层状态
      */
     async getRevisionStorageStats(initOverrides?: RequestInit | runtime.InitOverrideFunction): Promise<RevisionStorageStats> {
@@ -1281,7 +1281,7 @@ export class GovernanceApi extends runtime.BaseAPI {
     }
 
     /**
-     * 列出 AI/Import Actor 的信任与抽样策略
+     * 列出 AI/Import Actor 的信任策略
      */
     async listAITrustProfilesRaw(initOverrides?: RequestInit | runtime.InitOverrideFunction): Promise<runtime.ApiResponse<AITrustProfileList>> {
         const requestOptions = await this.listAITrustProfilesRequestOpts();
@@ -1291,7 +1291,7 @@ export class GovernanceApi extends runtime.BaseAPI {
     }
 
     /**
-     * 列出 AI/Import Actor 的信任与抽样策略
+     * 列出 AI/Import Actor 的信任策略
      */
     async listAITrustProfiles(initOverrides?: RequestInit | runtime.InitOverrideFunction): Promise<AITrustProfileList> {
         const response = await this.listAITrustProfilesRaw(initOverrides);
@@ -2232,7 +2232,7 @@ export class GovernanceApi extends runtime.BaseAPI {
     }
 
     /**
-     * 更新 AI 信任等级与低风险人工抽样比例
+     * 更新 AI 信任等级、Full Access 与低风险人工抽样比例
      */
     async updateAITrustProfileRaw(requestParameters: UpdateAITrustProfileOperationRequest, initOverrides?: RequestInit | runtime.InitOverrideFunction): Promise<runtime.ApiResponse<AITrustProfile>> {
         const requestOptions = await this.updateAITrustProfileRequestOpts(requestParameters);
@@ -2242,7 +2242,7 @@ export class GovernanceApi extends runtime.BaseAPI {
     }
 
     /**
-     * 更新 AI 信任等级与低风险人工抽样比例
+     * 更新 AI 信任等级、Full Access 与低风险人工抽样比例
      */
     async updateAITrustProfile(requestParameters: UpdateAITrustProfileOperationRequest, initOverrides?: RequestInit | runtime.InitOverrideFunction): Promise<AITrustProfile> {
         const response = await this.updateAITrustProfileRaw(requestParameters, initOverrides);

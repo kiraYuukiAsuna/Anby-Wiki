@@ -43,6 +43,24 @@ export interface RiskDecision {
      * @memberof RiskDecision
      */
     policy: string;
+    /**
+     *
+     * @type {RiskDecisionAiTrustLevelEnum}
+     * @memberof RiskDecision
+     */
+    aiTrustLevel?: RiskDecisionAiTrustLevelEnum;
+    /**
+     *
+     * @type {number}
+     * @memberof RiskDecision
+     */
+    requiredSamplePercent?: number;
+    /**
+     *
+     * @type {boolean}
+     * @memberof RiskDecision
+     */
+    sampledForReview?: boolean;
 }
 
 
@@ -56,6 +74,17 @@ export const RiskDecisionLevelEnum = {
     Critical: 'critical'
 } as const;
 export type RiskDecisionLevelEnum = typeof RiskDecisionLevelEnum[keyof typeof RiskDecisionLevelEnum];
+
+/**
+ * @export
+ */
+export const RiskDecisionAiTrustLevelEnum = {
+    Untrusted: 'untrusted',
+    Assisted: 'assisted',
+    Trusted: 'trusted',
+    FullAccess: 'full_access'
+} as const;
+export type RiskDecisionAiTrustLevelEnum = typeof RiskDecisionAiTrustLevelEnum[keyof typeof RiskDecisionAiTrustLevelEnum];
 
 
 /**
@@ -83,6 +112,9 @@ export function RiskDecisionFromJSONTyped(json: any, ignoreDiscriminator: boolea
         'reasons': json['reasons'],
         'autoApprove': json['auto_approve'],
         'policy': json['policy'],
+        'aiTrustLevel': json['ai_trust_level'] == null ? undefined : json['ai_trust_level'],
+        'requiredSamplePercent': json['required_sample_percent'] == null ? undefined : json['required_sample_percent'],
+        'sampledForReview': json['sampled_for_review'] == null ? undefined : json['sampled_for_review'],
     };
 }
 
@@ -101,6 +133,9 @@ export function RiskDecisionToJSONTyped(value?: RiskDecision | null, ignoreDiscr
         'reasons': value['reasons'],
         'auto_approve': value['autoApprove'],
         'policy': value['policy'],
+        'ai_trust_level': value['aiTrustLevel'],
+        'required_sample_percent': value['requiredSamplePercent'],
+        'sampled_for_review': value['sampledForReview'],
     };
 }
 

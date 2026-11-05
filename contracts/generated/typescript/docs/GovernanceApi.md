@@ -20,7 +20,7 @@ All URIs are relative to *http://localhost:3000*
 | [**getBulkReviewBatch**](GovernanceApi.md#getbulkreviewbatch) | **GET** /api/v1/bulk-review-batches/{id} | 读取批量审核、Proposal 决策与固定 wave |
 | [**getProposal**](GovernanceApi.md#getproposal) | **GET** /api/v1/proposals/{id} | 读取 Proposal、Operation 与冲突 |
 | [**getRevisionStorageStats**](GovernanceApi.md#getrevisionstoragestats) | **GET** /api/v1/revision-storage | 查看当前账户 Wiki 的 Revision 快照冷热分层状态 |
-| [**listAITrustProfiles**](GovernanceApi.md#listaitrustprofiles) | **GET** /api/v1/ai-trust-profiles | 列出 AI/Import Actor 的信任与抽样策略 |
+| [**listAITrustProfiles**](GovernanceApi.md#listaitrustprofiles) | **GET** /api/v1/ai-trust-profiles | 列出 AI/Import Actor 的信任策略 |
 | [**listAuditEvents**](GovernanceApi.md#listauditevents) | **GET** /api/v1/audit-events | 分页查询当前 Wiki 的不可变审计流 |
 | [**listBulkReviewAuditEvents**](GovernanceApi.md#listbulkreviewauditevents) | **GET** /api/v1/bulk-review-batches/{id}/audit-events | 查询批量审核、决策、暂停和 wave Apply 审计 |
 | [**listBulkReviewBatches**](GovernanceApi.md#listbulkreviewbatches) | **GET** /api/v1/bulk-review-batches | 查询当前 Wiki 的批量审核批次 |
@@ -37,7 +37,7 @@ All URIs are relative to *http://localhost:3000*
 | [**resumeBulkReviewBatch**](GovernanceApi.md#resumebulkreviewbatch) | **POST** /api/v1/bulk-review-batches/{id}/resume | 恢复后续 Proposal Apply |
 | [**rollbackChangeBatch**](GovernanceApi.md#rollbackchangebatch) | **POST** /api/v1/change-batches/{id}/rollback | 以新版本补偿回滚 ChangeBatch |
 | [**submitProposal**](GovernanceApi.md#submitproposal) | **POST** /api/v1/proposals/{id}/submit | 提交并执行风险策略 |
-| [**updateAITrustProfile**](GovernanceApi.md#updateaitrustprofileoperation) | **PUT** /api/v1/ai-trust-profiles/{actor_id} | 更新 AI 信任等级与低风险人工抽样比例 |
+| [**updateAITrustProfile**](GovernanceApi.md#updateaitrustprofileoperation) | **PUT** /api/v1/ai-trust-profiles/{actor_id} | 更新 AI 信任等级、Full Access 与低风险人工抽样比例 |
 
 
 
@@ -1188,7 +1188,7 @@ example().catch(console.error);
 
 查看当前账户 Wiki 的 Revision 快照冷热分层状态
 
-需要当前账户拥有的 Wiki 的管理员权限。仅统计该 Wiki 的 Revision 引用的 不可变 ContentSnapshot，每个快照只计一次；选择协作 Wiki 不改变统计范围。 到期候选排除当前版本和其他 Wiki 共用的快照，不返回 AST 正文或对象存储键。
+需要当前账户拥有的 Wiki 的管理员权限。仅统计该 Wiki 的 Revision 引用的 不可变 ContentSnapshot，每个快照只计一次；选择协作 Wiki 不改变统计范围。 可迁移快照排除当前版本和其他 Wiki 共用的快照，不返回 AST 正文或对象存储键。
 
 ### Example
 
@@ -1254,7 +1254,7 @@ This endpoint does not need any parameter.
 
 > AITrustProfileList listAITrustProfiles()
 
-列出 AI/Import Actor 的信任与抽样策略
+列出 AI/Import Actor 的信任策略
 
 ### Example
 
@@ -2541,7 +2541,7 @@ example().catch(console.error);
 
 > AITrustProfile updateAITrustProfile(actorId, updateAITrustProfileRequest)
 
-更新 AI 信任等级与低风险人工抽样比例
+更新 AI 信任等级、Full Access 与低风险人工抽样比例
 
 ### Example
 

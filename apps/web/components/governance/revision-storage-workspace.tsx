@@ -188,7 +188,7 @@ function ArchiveDialog({
 
         <div className="rounded-xl border bg-muted/35 p-4">
           <div className="flex items-center justify-between gap-4 text-sm">
-            <span className="text-muted-foreground">当前到期候选</span>
+            <span className="text-muted-foreground">可迁移快照</span>
             <strong>{stats.eligibleSnapshots.toLocaleString("zh-CN")} 个</strong>
           </div>
           <label className="mt-4 block text-xs font-medium" htmlFor="archive-limit">
@@ -357,15 +357,15 @@ export function RevisionStorageWorkspace() {
         />
         <Metric
           icon={Clock3}
-          label="归档保留期"
+          label="数据库热存储时间"
           value={formatDuration(stats.retentionSeconds)}
-          detail="超过此年龄且不是当前版本时成为候选"
+          detail="超过此时间且不是当前版本时可迁移到冷存储"
         />
         <Metric
           icon={Archive}
-          label="当前到期候选"
+          label="可迁移到冷存储"
           value={stats.eligibleSnapshots.toLocaleString("zh-CN")}
-          detail={`默认每批最多 ${stats.defaultBatchSize} 个`}
+          detail={`只迁移存放位置，不删除内容；默认每批最多 ${stats.defaultBatchSize} 个`}
         />
       </section>
 
@@ -374,10 +374,10 @@ export function RevisionStorageWorkspace() {
           <div className="flex flex-wrap items-start justify-between gap-4">
             <div>
               <p className="text-xs font-semibold tracking-[0.14em] text-primary uppercase">
-                Physical tier distribution
+                Storage overview
               </p>
               <h2 className="mt-2 text-xl font-semibold tracking-tight">
-                不可变历史的物理分布
+                历史版本存储概览
               </h2>
             </div>
             <span
