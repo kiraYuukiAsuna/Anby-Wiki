@@ -2,17 +2,19 @@
 
 import { LogIn, LogOut, UserRound, ShieldCheck } from "lucide-react";
 import Link from "next/link";
+import { useRouter } from "next/navigation";
 import { toast } from "sonner";
 import { useSWRConfig } from "swr";
 
 import { Button } from "@/components/ui/button";
 import { authApi } from "@/lib/api";
 import { AUTH_SESSION_KEY, LOGIN_PATH, useSession } from "@/lib/auth";
-import { clearSelectedWikiID } from "@/lib/wiki-context";
+import { clearSelectedWikiID, persistSelectedWikiID } from "@/lib/wiki-context";
 
 export function AccountMenu() {
   const { session, isLoading, error } = useSession();
   const { mutate } = useSWRConfig();
+  const router = useRouter();
 
   if (isLoading) {
     return (
@@ -61,30 +63,42 @@ export function AccountMenu() {
     }
   };
 
+  const openAccountCenter = async () => {
+    try {
+      if (session.homeWikiId !== session.wikiId) {
+        persistSelectedWikiID(session.homeWikiId);
+        await mutate(AUTH_SESSION_KEY);
+      }
+      router.push("/account");
+      router.refresh();
+    } catch {
+      toast.error("切换到个人中心失败，请稍后重试");
+    }
+  };
+
   return (
     <div className="flex shrink-0 items-center gap-1">
       {session.systemAdmin && <Button size="sm" variant="ghost" asChild className="px-2" aria-label="系统管理台"><Link href="/admin"><ShieldCheck aria-hidden /></Link></Button>}
       <Button
+        type="button"
         size="sm"
         variant="ghost"
-        asChild
         className="hidden max-w-36 gap-1 px-2 md:inline-flex"
+        title={`${session.displayName} (${session.actorType})`}
+        onClick={() => void openAccountCenter()}
       >
-        <Link href="/account" title={`${session.displayName} (${session.actorType})`}>
-          <UserRound aria-hidden />
-          <span className="truncate">{session.displayName}</span>
-        </Link>
+        <UserRound aria-hidden />
+        <span className="truncate">{session.displayName}</span>
       </Button>
       <Button
+        type="button"
         size="sm"
         variant="ghost"
-        asChild
         className="px-2 md:hidden"
         aria-label="个人中心"
+        onClick={() => void openAccountCenter()}
       >
-        <Link href="/account">
-          <UserRound aria-hidden />
-        </Link>
+        <UserRound aria-hidden />
       </Button>
       <Button
         size="sm"

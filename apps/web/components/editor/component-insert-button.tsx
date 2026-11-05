@@ -21,6 +21,7 @@ import {
 import { Label } from "@/components/ui/label";
 import { componentsApi, knowledgeApi } from "@/lib/api";
 import { useSession } from "@/lib/auth";
+import { workspaceAccessNotice } from "@/lib/workspace-access";
 
 function ComponentPicker({
   pageId,
@@ -81,6 +82,7 @@ function ComponentPicker({
   const primary = bindings.data?.items.find(
     (binding) => binding.role === "primary",
   );
+  const componentCenterVisible = !workspaceAccessNotice("/components", session);
   const unavailable = catalog.error || versions.error;
 
   return (
@@ -180,14 +182,20 @@ function ComponentPicker({
         <DialogHeader>
           <DialogTitle>暂无可插入的已发布版本</DialogTitle>
           <DialogDescription>
-            选择其他组件，或
-            <Link
-              href={component ? `/components/${component.id}` : "/components"}
-              className="underline"
-            >
-              前往组件中心
-            </Link>
-            创建、预览并发布一个版本。
+            {componentCenterVisible ? (
+              <>
+                选择其他组件，或
+                <Link
+                  href={component ? `/components/${component.id}` : "/components"}
+                  className="underline"
+                >
+                  前往组件中心
+                </Link>
+                创建、预览并发布一个版本。
+              </>
+            ) : (
+              "切换到自己的 Wiki 后可前往组件中心创建、预览并发布一个版本。"
+            )}
           </DialogDescription>
         </DialogHeader>
       )}

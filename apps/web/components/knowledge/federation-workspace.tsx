@@ -41,6 +41,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { knowledgeApi } from "@/lib/api";
 import { LOGIN_PATH, useSession } from "@/lib/auth";
+import { workspaceAccessNotice } from "@/lib/workspace-access";
 import {
   FEDERATION_TRUST_LEVELS,
   RELATION_LABEL,
@@ -446,6 +447,7 @@ export function FederationWorkspace() {
   const debouncedQuery = useDebouncedValue(query, 220);
   const parsedQuery = querySchema.safeParse(debouncedQuery);
   const normalizedQuery = parsedQuery.success ? parsedQuery.data : "";
+  const entitiesVisible = !workspaceAccessNotice("/entities", session.session);
 
   const wikiState = useSWR("federation:wikis:all", () =>
     knowledgeApi().listFederatedWikis({ includeDisabled: true }),
@@ -671,9 +673,11 @@ export function FederationWorkspace() {
           <div className="mt-5 rounded-2xl border border-dashed px-6 py-12 text-center">
             <Inbox className="mx-auto size-8 text-muted-foreground" aria-hidden />
             <h3 className="mt-4 font-semibold">没有符合条件的映射</h3>
-            <Button asChild variant="outline" className="mt-5">
-              <Link href="/entities">浏览 Entity</Link>
-            </Button>
+            {entitiesVisible ? (
+              <Button asChild variant="outline" className="mt-5">
+                <Link href="/entities">浏览 Entity</Link>
+              </Button>
+            ) : null}
           </div>
         ) : null}
         {links.length > 0 ? (

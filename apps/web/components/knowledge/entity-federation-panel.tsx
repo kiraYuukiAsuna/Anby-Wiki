@@ -36,6 +36,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { knowledgeApi } from "@/lib/api";
 import { isUnauthorized, LOGIN_PATH, useSession } from "@/lib/auth";
+import { workspaceAccessNotice } from "@/lib/workspace-access";
 import {
   FEDERATION_RELATIONS,
   FEDERATION_VERIFICATIONS,
@@ -347,6 +348,7 @@ export function EntityFederationPanel({
   const items = linksState.data?.items ?? [];
   const activeWikis = wikisState.data?.items ?? [];
   const canWrite = session.isAuthenticated && status === "active";
+  const federationCenterVisible = !workspaceAccessNotice("/federation", session.session);
 
   const startCreate = () => {
     if (!session.isAuthenticated) {
@@ -368,9 +370,11 @@ export function EntityFederationPanel({
           跨 Wiki 身份
         </p>
         <div className="flex gap-2">
-          <Button asChild type="button" variant="outline" size="sm">
-            <Link href="/federation">Federation 中心</Link>
-          </Button>
+          {federationCenterVisible ? (
+            <Button asChild type="button" variant="outline" size="sm">
+              <Link href="/federation">Federation 中心</Link>
+            </Button>
+          ) : null}
           {canWrite ? (
             <Button
               type="button"

@@ -31,13 +31,14 @@ export function WikiHome() {
   const wikiID = session?.wikiId;
   const wikiName = session?.wikiName ?? "Anby Wiki";
   const canReadCollections = !workspaceAccessNotice("/collections", session);
+  const canReadEntities = !workspaceAccessNotice("/entities", session);
   const pages = useSWR(wikiID ? ["wiki-home:recent-pages", session?.actorId, wikiID] : null, () =>
     readingApi().listPublishedPages({ sort: "recent", pageSize: 12 }),
   );
   const collections = useSWR(wikiID && canReadCollections ? ["wiki-home:collections", session?.actorId, wikiID] : null, () =>
     collectionsApi().listCollections({ pageSize: 6 }),
   );
-  const entities = useSWR(wikiID ? ["wiki-home:entities", session?.actorId, wikiID] : null, () =>
+  const entities = useSWR(wikiID && canReadEntities ? ["wiki-home:entities", session?.actorId, wikiID] : null, () =>
     knowledgeApi().listEntities({ status: "active", pageSize: 8 }),
   );
 
@@ -80,16 +81,18 @@ export function WikiHome() {
                 <p className="text-xs text-muted-foreground">已发布页面</p>
               </div>
             </div>
-            <div className="mt-5 grid grid-cols-2 gap-2 border-t pt-4 text-center">
-              {canReadCollections ? <div className="rounded-xl bg-muted/55 p-3">
-                <p className="font-semibold tabular-nums">{collections.data?.items.length ?? "—"}</p>
-                <p className="mt-1 text-[10px] text-muted-foreground">专题</p>
-              </div> : null}
-              <div className="rounded-xl bg-muted/55 p-3">
-                <p className="font-semibold tabular-nums">{entities.data?.items.length ?? "—"}</p>
-                <p className="mt-1 text-[10px] text-muted-foreground">实体</p>
+            {canReadCollections || canReadEntities ? (
+              <div className="mt-5 grid grid-cols-2 gap-2 border-t pt-4 text-center">
+                {canReadCollections ? <div className="rounded-xl bg-muted/55 p-3">
+                  <p className="font-semibold tabular-nums">{collections.data?.items.length ?? "—"}</p>
+                  <p className="mt-1 text-[10px] text-muted-foreground">专题</p>
+                </div> : null}
+                {canReadEntities ? <div className="rounded-xl bg-muted/55 p-3">
+                  <p className="font-semibold tabular-nums">{entities.data?.items.length ?? "—"}</p>
+                  <p className="mt-1 text-[10px] text-muted-foreground">实体</p>
+                </div> : null}
               </div>
-            </div>
+            ) : null}
             <Button asChild variant="outline" className="mt-4 w-full">
               <WorkspaceLink href="/new"><SquarePen aria-hidden />创建页面</WorkspaceLink>
             </Button>
@@ -166,7 +169,7 @@ export function WikiHome() {
             )}
           </section> : null}
 
-          <section aria-labelledby="entities-title" className="rounded-2xl border bg-card p-5">
+          {canReadEntities ? <section aria-labelledby="entities-title" className="rounded-2xl border bg-card p-5">
             <div className="flex items-center justify-between gap-3">
               <div>
                 <h2 id="entities-title" className="font-semibold">实体</h2>
@@ -184,7 +187,7 @@ export function WikiHome() {
               ))}
             </ul>
             <Button asChild variant="outline" className="mt-3 w-full"><Link href="/entities">全部实体</Link></Button>
-          </section>
+          </section> : null}
         </div>
       </div>
     </div>

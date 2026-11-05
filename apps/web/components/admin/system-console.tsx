@@ -14,6 +14,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } f
 import { adminApi } from "@/lib/api";
 import { AUTH_SESSION_KEY, useSession } from "@/lib/auth";
 import { SECURITY_ACTION_LABELS, securityErrorMessage } from "@/lib/account-security";
+import { workspaceAccessNotice } from "@/lib/workspace-access";
 
 const mailSchema = z.object({
   enabled: z.boolean(),
@@ -128,6 +129,7 @@ export function SystemConsole() {
   const { session } = useSession();
   const { mutate } = useSWRConfig();
   const permitted = !!session?.systemAdmin && session.method === "session";
+  const accountVisible = !workspaceAccessNotice("/account", session);
   const mail = useSWR(permitted ? ["system:mail", session.actorId] : null, () => adminApi().getSystemMail(), { revalidateOnFocus: false });
   const [target, setTarget] = useState<SystemAccount | null>(null);
   const [password, setPassword] = useState("");
@@ -161,7 +163,7 @@ export function SystemConsole() {
     finally { setBusy(false); }
   };
 
-  if (!permitted) return <div className="mt-7 rounded-2xl border p-6"><ShieldCheck className="size-6" /><h2 className="mt-3 font-semibold">需要系统管理员权限</h2><p className="mt-2 text-sm text-muted-foreground">Wiki 成员管理使用 Wiki 管理员权限。系统管理台需要运维人员单独授予系统管理员权限。</p><Button className="mt-4" variant="outline" asChild><Link href="/account">返回个人中心</Link></Button></div>;
+  if (!permitted) return <div className="mt-7 rounded-2xl border p-6"><ShieldCheck className="size-6" /><h2 className="mt-3 font-semibold">需要系统管理员权限</h2><p className="mt-2 text-sm text-muted-foreground">Wiki 成员管理使用 Wiki 管理员权限。系统管理台需要运维人员单独授予系统管理员权限。</p>{accountVisible ? <Button className="mt-4" variant="outline" asChild><Link href="/account">返回个人中心</Link></Button> : null}</div>;
   if (mail.isLoading || (accounts.isLoading && !accounts.data)) return <p className="mt-7 flex items-center gap-2 text-sm"><LoaderCircle className="size-4 animate-spin" />正在读取系统配置…</p>;
   if (mail.error || accounts.error || !mail.data || !accounts.data) return <div className="mt-7 rounded-2xl border p-6"><p>系统配置暂不可用。</p><Button className="mt-3" onClick={() => { void mail.mutate(); void accounts.mutate(); }}>重试</Button></div>;
   const items = accounts.data.accounts;

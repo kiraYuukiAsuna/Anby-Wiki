@@ -5,6 +5,14 @@ const WIKI_ROLES = ["editor", "reviewer", "applier", "admin"] as const;
 const WORKSPACES = [
   { path: "/imports", title: "导入中心", homeOnly: true },
   { path: "/governance/proposals/new", title: "新建人工提案", homeOnly: true },
+  { path: "/components", title: "组件中心", homeOnly: true },
+  { path: "/assets", title: "媒体与附件", homeOnly: true },
+  { path: "/sources", title: "来源与证据", homeOnly: true },
+  { path: "/entities", title: "实体与知识", homeOnly: true },
+  { path: "/federation", title: "跨 Wiki 身份", homeOnly: true },
+  { path: "/governance/fact-check", title: "事实一致性检查", homeOnly: true },
+  { path: "/account", title: "个人中心", homeOnly: true },
+  { path: "/settings/cli", title: "Agent CLI 授权", homeOnly: true },
   { path: "/new", title: "创建页面", roles: ["editor", "admin"], permission: "编辑者或管理员" },
   { path: "/collections", title: "专题合集", roles: WIKI_ROLES, permission: "Wiki 成员" },
   { path: "/governance/review", title: "人工审核队列", roles: ["reviewer", "admin"], permission: "审核者或管理员" },
@@ -15,7 +23,7 @@ const WORKSPACES = [
   { path: "/governance/ai-trust", title: "AI 信任策略", roles: ["admin"], permission: "管理员" },
   { path: "/admin/members", title: "成员与角色", roles: ["admin"], permission: "管理员" },
   { path: "/admin/users", title: "成员与角色", roles: ["admin"], permission: "管理员" },
-  { path: "/governance/revision-storage", title: "历史版本存储", roles: ["admin"], permission: "管理员", accountScope: true },
+  { path: "/governance/revision-storage", title: "历史版本存储", homeOnly: true, roles: ["admin"], permission: "管理员", accountScope: true },
 ] as const;
 
 export function workspaceAccessNotice(href: string, session: AuthSession | undefined) {
@@ -28,14 +36,14 @@ export function workspaceAccessNotice(href: string, session: AuthSession | undef
     return { title: workspace.title, heading: "需要登录", message: "登录后才能访问该工作台。" };
   }
   if (session.actorType === "system") return undefined;
-  if ("homeOnly" in workspace) {
-    if (session.homeWikiId === session.wikiId) return undefined;
+  if ("homeOnly" in workspace && session.homeWikiId !== session.wikiId) {
     return {
       title: workspace.title,
       heading: "请切换到自己的 Wiki",
       message: `${workspace.title}仅支持当前账户自己的 Wiki。当前选中的是协作 Wiki，请切换到自己的 Wiki 后使用。`,
     };
   }
+  if (!("roles" in workspace)) return undefined;
   const wikiId = "accountScope" in workspace ? session.homeWikiId : session.wikiId;
   const roles = session.wikis.find((wiki) => wiki.wikiId === wikiId)?.roles ?? [];
   if (workspace.roles.some((role) => roles.includes(role))) return undefined;

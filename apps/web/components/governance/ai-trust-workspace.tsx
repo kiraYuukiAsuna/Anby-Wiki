@@ -30,6 +30,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { authApi, governanceApi, makeRequestId } from "@/lib/api";
 import { isUnauthorized, LOGIN_PATH, useSession } from "@/lib/auth";
+import { workspaceAccessNotice } from "@/lib/workspace-access";
 import { cn } from "@/lib/utils";
 
 const profileSchema = z.object({
@@ -349,6 +350,7 @@ export function AITrustWorkspace() {
   const trusted = items.filter(
     (item) => item.trustLevel === "trusted" || item.trustLevel === "full_access",
   ).length;
+  const cliVisible = !workspaceAccessNotice("/settings/cli", session.session);
   const refresh = async () => {
     await Promise.all([profiles.mutate(), actors.mutate()]);
   };
@@ -441,7 +443,11 @@ export function AITrustWorkspace() {
           </Button>
         </div>
         <p className="mt-4 text-xs leading-5 text-muted-foreground">
-          创建后到 <Link href="/settings/cli" className="underline underline-offset-4">Agent CLI</Link> 选择该身份并生成授权码。
+          {cliVisible ? (
+            <>创建后到 <Link href="/settings/cli" className="underline underline-offset-4">Agent CLI</Link> 选择该身份并生成授权码。</>
+          ) : (
+            "切换到自己的 Wiki 后可在 Agent CLI 中选择该身份并生成授权码。"
+          )}
           机器身份可读取所属 Wiki、创建和提交提案；最终审核与发布由真人完成。
         </p>
         {actors.error ? <p className="mt-3 text-xs text-destructive">机器 Actor 暂时无法读取，请刷新重试。</p> : null}
@@ -515,9 +521,11 @@ export function AITrustWorkspace() {
             <p className="mt-2 text-sm text-muted-foreground">
               在上方创建机器 Actor，再到 Agent CLI 绑定授权，策略会自动出现在这里。
             </p>
-            <Button asChild variant="outline" className="mt-5">
-              <Link href="/settings/cli">打开 Agent CLI</Link>
-            </Button>
+            {cliVisible ? (
+              <Button asChild variant="outline" className="mt-5">
+                <Link href="/settings/cli">打开 Agent CLI</Link>
+              </Button>
+            ) : null}
           </div>
         ) : null}
         {items.length > 0 ? (

@@ -1,4 +1,3 @@
-import Link from "next/link";
 import { WorkspaceLink } from "@/components/workspace-link";
 
 export function SiteFooter() {
@@ -13,18 +12,18 @@ export function SiteFooter() {
           <WorkspaceLink href="/imports" className="transition-colors hover:text-foreground">
             导入中心
           </WorkspaceLink>
-          <Link href="/assets" className="transition-colors hover:text-foreground">
+          <WorkspaceLink href="/assets" className="transition-colors hover:text-foreground">
             媒体库
-          </Link>
-          <Link href="/sources" className="transition-colors hover:text-foreground">
+          </WorkspaceLink>
+          <WorkspaceLink href="/sources" className="transition-colors hover:text-foreground">
             来源
-          </Link>
-          <Link href="/entities" className="transition-colors hover:text-foreground">
+          </WorkspaceLink>
+          <WorkspaceLink href="/entities" className="transition-colors hover:text-foreground">
             实体
-          </Link>
-          <Link href="/components" className="transition-colors hover:text-foreground">
+          </WorkspaceLink>
+          <WorkspaceLink href="/components" className="transition-colors hover:text-foreground">
             组件
-          </Link>
+          </WorkspaceLink>
           <WorkspaceLink
             href="/governance/review"
             className="transition-colors hover:text-foreground"
