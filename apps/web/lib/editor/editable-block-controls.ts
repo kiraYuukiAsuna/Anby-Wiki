@@ -91,12 +91,15 @@ export function createEditableBlockShell(options: {
   summary?: string;
   className?: string;
 }): HTMLElement {
-  const root = document.createElement("section");
+  const root = document.createElement("details");
   root.className = ["ast-editable-block", options.className]
     .filter(Boolean)
     .join(" ");
   root.dataset.editorBlockType = options.type;
   root.contentEditable = "false";
+
+  const summaryWrapper = document.createElement("summary");
+  summaryWrapper.className = "ast-editable-block__summary-trigger";
 
   const header = document.createElement("div");
   header.className = "ast-editable-block__header";
@@ -113,7 +116,13 @@ export function createEditableBlockShell(options: {
     header.appendChild(summary);
   }
 
-  root.appendChild(header);
+  const hint = document.createElement("span");
+  hint.className = "ast-editable-block__hint";
+  hint.textContent = "点击编辑";
+  header.appendChild(hint);
+
+  summaryWrapper.appendChild(header);
+  root.appendChild(summaryWrapper);
   return root;
 }
 

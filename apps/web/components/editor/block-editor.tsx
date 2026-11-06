@@ -21,16 +21,11 @@ import {
 } from "@blocknote/react";
 import {
   AtSign,
-  BookMarked,
-  BookOpenCheck,
   CodeXml,
   Columns3,
   FileAudio,
   FileText,
-  Globe2,
-  Heading2,
   Link2,
-  List,
   MousePointerClick,
   Navigation,
   PanelsTopLeft,
@@ -197,18 +192,6 @@ export function BlockEditor({
     if (mapped) insertTemplate(mapped as Record<string, unknown>);
   };
 
-  const insertEndSection = (title: string, placeholder: string) => {
-    const lastBlock = editor.document.at(-1);
-    if (!lastBlock) return;
-    editor.insertBlocks(
-      [
-        { type: "heading", props: { level: 2 }, content: title },
-        { type: "bulletListItem", content: placeholder },
-      ] as never,
-      lastBlock,
-      "after",
-    );
-  };
 
   const customSlashItems: DefaultReactSuggestionItem[] = [
     {
@@ -234,22 +217,6 @@ export function BlockEditor({
       group: "Anby",
       icon: <Link2 className="size-4" />,
       onItemClick: openLinkEditor,
-    },
-    {
-      title: "章节标题",
-      subtext: "插入 H2 标题",
-      aliases: ["h2", "heading", "标题"],
-      group: "Anby",
-      icon: <Heading2 className="size-4" />,
-      onItemClick: () => insertTemplate({ type: "heading", props: { level: 2 }, content: "章节标题" }),
-    },
-    {
-      title: "列表项",
-      subtext: "插入无序列表项",
-      aliases: ["list", "bullet", "列表"],
-      group: "Anby",
-      icon: <List className="size-4" />,
-      onItemClick: () => insertTemplate({ type: "bulletListItem", content: "列表项" }),
     },
     {
       title: "语义表格",
@@ -331,30 +298,6 @@ export function BlockEditor({
       group: "Anby",
       icon: <PanelsTopLeft className="size-4" />,
       onItemClick: () => setComponentOpen(true),
-    },
-    {
-      title: "参见章节",
-      subtext: "在文末插入参见章节",
-      aliases: ["see also", "参见"],
-      group: "Anby",
-      icon: <BookOpenCheck className="size-4" />,
-      onItemClick: () => insertEndSection("参见", "插入相关页面引用"),
-    },
-    {
-      title: "拓展阅读章节",
-      subtext: "在文末插入拓展阅读章节",
-      aliases: ["further reading", "拓展阅读"],
-      group: "Anby",
-      icon: <BookMarked className="size-4" />,
-      onItemClick: () => insertEndSection("拓展阅读", "补充书目或来源"),
-    },
-    {
-      title: "外部链接章节",
-      subtext: "在文末插入外部链接章节",
-      aliases: ["external links", "外部链接"],
-      group: "Anby",
-      icon: <Globe2 className="size-4" />,
-      onItemClick: () => insertEndSection("外部链接", "补充外部资源"),
     },
   ];
 

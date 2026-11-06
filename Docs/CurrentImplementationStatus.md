@@ -61,8 +61,9 @@ Meilisearch、认证限流与证书/代理边界、灾备恢复和人工可访�
   `onChange` 继续经 `toAst` 输出 AST v1。
 - 行内原子节点改为文本位置原地编辑；Page/Page Anchor、Entity、Claim、Citation、Math、
   Mention、Date Mention 与历史兼容的 Dataset Mention 均可直接改显示文本和稳定 ID/日期等 props。
-  旧的页面引用顶部编辑面板已移除，编辑入口不再堆到工具栏上方；自定义块、结构块、
-  媒体、外部内容、组件和章节模板统一通过 BlockNote `/` 菜单按光标位置插入。
+  旧的页面引用顶部编辑面板已移除，编辑入口不再堆到工具栏上方；Anby 自定义块、
+  媒体、外部内容、组件和自定义行内节点统一通过 BlockNote `/` 菜单按光标位置插入，
+  不重复内置 Heading/List 等默认菜单项。
 - 表格块在块内支持增删末行/末列，Column 在本列内支持新增/删除列，页面按钮 actions
   在按钮块内提供按类型的表单化编辑和添加/删除动作，保留 JSON 高级编辑入口。
 - JSON 型字段（路径、按钮动作、组件显示配置）在提交前校验；UUID、HTTP URL、数值范围、

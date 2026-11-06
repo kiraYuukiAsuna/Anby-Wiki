@@ -263,6 +263,15 @@
   color: var(--foreground);
 }
 
+.ast-editable-block__summary-trigger {
+  list-style: none;
+  cursor: pointer;
+}
+
+.ast-editable-block__summary-trigger::-webkit-details-marker {
+  display: none;
+}
+
 .ast-editable-block__header {
   display: flex;
   flex-wrap: wrap;
@@ -280,6 +289,21 @@
   overflow-wrap: anywhere;
   color: var(--muted-foreground);
   font-size: 0.75rem;
+}
+
+.ast-editable-block__hint {
+  margin-left: auto;
+  color: var(--muted-foreground);
+  font-size: 0.72rem;
+  font-weight: 500;
+}
+
+.ast-editable-block[open] .ast-editable-block__hint {
+  display: none;
+}
+
+.ast-editable-block:not([open]) > :not(summary) {
+  display: none !important;
 }
 
 .ast-editable-block__grid {
