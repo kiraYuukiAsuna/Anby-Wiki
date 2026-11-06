@@ -61,16 +61,18 @@ Meilisearch、认证限流与证书/代理边界、灾备恢复和人工可访�
   `onChange` 继续经 `toAst` 输出 AST v1。
 - 行内原子节点改为文本位置原地编辑；Page/Page Anchor、Entity、Claim、Citation、Math、
   Mention、Date Mention 与历史兼容的 Dataset Mention 均可直接改显示文本和稳定 ID/日期等 props。
-  旧的页面引用顶部编辑面板已移除，编辑入口不再堆到工具栏上方。
+  旧的页面引用顶部编辑面板已移除，编辑入口不再堆到工具栏上方；自定义块、结构块、
+  媒体、外部内容、组件和章节模板统一通过 BlockNote `/` 菜单按光标位置插入。
 - 表格块在块内支持增删末行/末列，Column 在本列内支持新增/删除列，页面按钮 actions
   在按钮块内提供按类型的表单化编辑和添加/删除动作，保留 JSON 高级编辑入口。
 - JSON 型字段（路径、按钮动作、组件显示配置）在提交前校验；UUID、HTTP URL、数值范围、
   必填标题/Alt text 等约束在控件层提前拦截。阅读态和导出路径仍走原静态 DOM，
   不改变 AST Schema、OpenAPI、数据库 Schema 或发布事务。
 - 验证：`npm run typecheck`、`npm run lint`、`npm run build` 通过；本机 Next.js
-  `/dev/editor` 使用浏览器冒烟，mock session 后确认自定义块和行内原子节点均出现原地编辑控件，
-  修改页面引用显示文本后右侧 `onChange` AST 同步为新值，表格“添加列”后 AST 列数从 2 到 3，
-  页面按钮“添加 Webhook”后 actions 写入 `webhook`，且旧顶部引用编辑面板不存在。
+  `/dev/editor` 使用浏览器冒烟，mock session 后确认 `/` 菜单可搜索并插入“语义表格”，
+  自定义块和行内原子节点均出现原地编辑控件。修改页面引用显示文本后右侧 `onChange`
+  AST 同步为新值，表格“添加列”后 AST 列数从 2 到 3，页面按钮“添加 Webhook”后
+  actions 写入 `webhook`，且顶部工具栏和旧顶部引用编辑面板均不存在。
 
 ## 2026-11-05 协作 Wiki 工作台入口收口
 

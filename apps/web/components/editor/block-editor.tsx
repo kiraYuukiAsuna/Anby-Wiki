@@ -4,17 +4,21 @@
 // 输入初始 AST v1 Document，编辑时经 onChange 回传最新 AST。
 // AdapterState 随组件实例存活，保证会话内 Block ID 稳定。
 //
-// M2-T04 引用编辑：工具栏与快捷键（⌘K 页面引用、⇧⌘K 外链）触发插入；
-// 点击既有 pageReference（NodeSelection）时显示 display_text 编辑面板
-// （只改显示文本，不改 target_page_id）。插入/更新全部经
-// lib/editor/references.ts 的 helper，不在这里直接拼 BlockNote 结构。
+// M2-T04 引用与自定义块插入：⌘K / ⇧⌘K 保留为快捷入口；完整插入入口通过
+// BlockNote slash menu 原地提供。插入/更新引用全部经 lib/editor/references.ts helper。
 "use client";
 
 import { useEffect, useMemo, useRef, useState } from "react";
 import { TextSelection } from "@tiptap/pm/state";
 
 import { BlockNoteView } from "@blocknote/mantine";
-import { useCreateBlockNote } from "@blocknote/react";
+import { filterSuggestionItems, insertOrUpdateBlockForSlashMenu } from "@blocknote/core/extensions";
+import {
+  getDefaultReactSlashMenuItems,
+  SuggestionMenuController,
+  useCreateBlockNote,
+  type DefaultReactSuggestionItem,
+} from "@blocknote/react";
 import {
   AtSign,
   BookMarked,
@@ -42,10 +46,9 @@ import { ExternalContentInsertDialog } from "@/components/editor/external-conten
 import { HTMLBlockInsertDialog } from "@/components/editor/html-block-insert-dialog";
 import { InlineMentionInsertDialog } from "@/components/editor/inline-mention-insert-dialog";
 import { MediaBlockInsertDialog } from "@/components/editor/media-block-insert-dialog";
-import { ComponentInsertButton } from "@/components/editor/component-insert-button";
+import { ComponentInsertDialog } from "@/components/editor/component-insert-button";
 import { PageReferencePicker } from "@/components/editor/page-reference-picker";
 import { PageButtonInsertDialog } from "@/components/editor/page-button-insert-dialog";
-import { Button } from "@/components/ui/button";
 import { clientUUID } from "@/lib/client-uuid";
 import type { Block, Document } from "@/lib/ast/schema";
 import { fromAst } from "@/lib/editor/fromAst";
@@ -151,6 +154,7 @@ export function BlockEditor({
   const [mediaOpen, setMediaOpen] = useState(false);
   const [externalContentOpen, setExternalContentOpen] = useState(false);
   const [mentionOpen, setMentionOpen] = useState(false);
+  const [componentOpen, setComponentOpen] = useState(false);
   // 打开外链编辑器时的默认显示文本（选中文本）。
   const [linkDefaultText, setLinkDefaultText] = useState("");
 
@@ -180,10 +184,9 @@ export function BlockEditor({
     setLinkOpen(true);
   };
 
-  /** 常用结构块的显式入口，避免非技术用户依赖 slash command。 */
+  /** Slash menu / dialog 共用插入：空段落替换，非空块后插入。 */
   const insertTemplate = (block: Record<string, unknown>) => {
-    const cursor = editor.getTextCursorPosition();
-    editor.insertBlocks([block] as never, cursor.block, "after");
+    insertOrUpdateBlockForSlashMenu(editor, block as never);
   };
 
   const insertAstBlock = (block: Block) => {
@@ -207,6 +210,160 @@ export function BlockEditor({
     );
   };
 
+  const customSlashItems: DefaultReactSuggestionItem[] = [
+    {
+      title: "页面引用",
+      subtext: "插入站内页面引用",
+      aliases: ["page", "ref", "页面", "引用"],
+      group: "Anby",
+      icon: <FileText className="size-4" />,
+      onItemClick: () => setPickerOpen(true),
+    },
+    {
+      title: "提及",
+      subtext: "插入人员或日期提及",
+      aliases: ["mention", "date", "提及", "日期"],
+      group: "Anby",
+      icon: <AtSign className="size-4" />,
+      onItemClick: () => setMentionOpen(true),
+    },
+    {
+      title: "外链",
+      subtext: "插入外部链接",
+      aliases: ["link", "url", "外链"],
+      group: "Anby",
+      icon: <Link2 className="size-4" />,
+      onItemClick: openLinkEditor,
+    },
+    {
+      title: "章节标题",
+      subtext: "插入 H2 标题",
+      aliases: ["h2", "heading", "标题"],
+      group: "Anby",
+      icon: <Heading2 className="size-4" />,
+      onItemClick: () => insertTemplate({ type: "heading", props: { level: 2 }, content: "章节标题" }),
+    },
+    {
+      title: "列表项",
+      subtext: "插入无序列表项",
+      aliases: ["list", "bullet", "列表"],
+      group: "Anby",
+      icon: <List className="size-4" />,
+      onItemClick: () => insertTemplate({ type: "bulletListItem", content: "列表项" }),
+    },
+    {
+      title: "语义表格",
+      subtext: "插入可嵌套内容的 AST 表格",
+      aliases: ["table", "表格"],
+      group: "Anby",
+      icon: <Table2 className="size-4" />,
+      onItemClick: () => insertTemplate({
+        type: "astTable",
+        children: [
+          {
+            type: "astTableRow",
+            children: [
+              { type: "astTableCell", children: [{ type: "paragraph", content: "单元格 1" }] },
+              { type: "astTableCell", children: [{ type: "paragraph", content: "单元格 2" }] },
+            ],
+          },
+        ],
+      }),
+    },
+    {
+      title: "页面路径",
+      subtext: "插入 Breadcrumb",
+      aliases: ["breadcrumb", "path", "路径"],
+      group: "Anby",
+      icon: <Navigation className="size-4" />,
+      onItemClick: () => insertTemplate({ type: "breadcrumb", props: { itemsJson: JSON.stringify([{ display_text: "当前页面" }]) } }),
+    },
+    {
+      title: "分栏",
+      subtext: "插入双栏布局",
+      aliases: ["columns", "layout", "分栏"],
+      group: "Anby",
+      icon: <Columns3 className="size-4" />,
+      onItemClick: () => insertTemplate({
+        type: "columnList",
+        children: [
+          { type: "column", props: { widthRatio: 1 }, children: [{ type: "paragraph", content: "左列" }] },
+          { type: "column", props: { widthRatio: 1 }, children: [{ type: "paragraph", content: "右列" }] },
+        ],
+      }),
+    },
+    {
+      title: "页面按钮",
+      subtext: "插入声明式动作按钮",
+      aliases: ["button", "action", "按钮"],
+      group: "Anby",
+      icon: <MousePointerClick className="size-4" />,
+      onItemClick: () => setButtonOpen(true),
+    },
+    {
+      title: "HTML 块",
+      subtext: "插入隔离 HTML 预览",
+      aliases: ["html", "iframe"],
+      group: "Anby",
+      icon: <CodeXml className="size-4" />,
+      onItemClick: () => setHTMLOpen(true),
+    },
+    {
+      title: "媒体",
+      subtext: "插入图片、视频、音频、文件或 PDF",
+      aliases: ["media", "asset", "image", "pdf", "媒体"],
+      group: "Anby",
+      icon: <FileAudio className="size-4" />,
+      onItemClick: () => setMediaOpen(true),
+    },
+    {
+      title: "外部内容",
+      subtext: "插入书签、链接预览或 Embed",
+      aliases: ["bookmark", "embed", "preview", "外部内容"],
+      group: "Anby",
+      icon: <PanelsTopLeft className="size-4" />,
+      onItemClick: () => setExternalContentOpen(true),
+    },
+    {
+      title: "组件",
+      subtext: "插入已发布信息组件",
+      aliases: ["component", "infobox", "组件"],
+      group: "Anby",
+      icon: <PanelsTopLeft className="size-4" />,
+      onItemClick: () => setComponentOpen(true),
+    },
+    {
+      title: "参见章节",
+      subtext: "在文末插入参见章节",
+      aliases: ["see also", "参见"],
+      group: "Anby",
+      icon: <BookOpenCheck className="size-4" />,
+      onItemClick: () => insertEndSection("参见", "插入相关页面引用"),
+    },
+    {
+      title: "拓展阅读章节",
+      subtext: "在文末插入拓展阅读章节",
+      aliases: ["further reading", "拓展阅读"],
+      group: "Anby",
+      icon: <BookMarked className="size-4" />,
+      onItemClick: () => insertEndSection("拓展阅读", "补充书目或来源"),
+    },
+    {
+      title: "外部链接章节",
+      subtext: "在文末插入外部链接章节",
+      aliases: ["external links", "外部链接"],
+      group: "Anby",
+      icon: <Globe2 className="size-4" />,
+      onItemClick: () => insertEndSection("外部链接", "补充外部资源"),
+    },
+  ];
+
+  const getSlashMenuItems = async (query: string) =>
+    filterSuggestionItems(
+      [...customSlashItems, ...getDefaultReactSlashMenuItems(editor)],
+      query,
+    );
+
   // 快捷键：⌘/Ctrl+K 页面引用，⌘/Ctrl+Shift+K 外链。
   useEffect(() => {
     if (!editable) return;
@@ -227,221 +384,26 @@ export function BlockEditor({
 
   return (
     <div className="min-w-0" data-block-editor>
-      {editable ? (
-        <div className="mb-2 flex flex-wrap items-center gap-2" data-editor-toolbar>
-          <Button
-            type="button"
-            variant="outline"
-            size="sm"
-            onClick={() => setPickerOpen(true)}
-          >
-            <FileText className="size-4" />
-            页面引用
-            <kbd className="text-xs text-muted-foreground">⌘K</kbd>
-          </Button>
-          <Button
-            type="button"
-            variant="outline"
-            size="sm"
-            onClick={() => setMentionOpen(true)}
-          >
-            <AtSign className="size-4" />
-            提及
-          </Button>
-          <Button
-            type="button"
-            variant="outline"
-            size="sm"
-            onClick={openLinkEditor}
-          >
-            <Link2 className="size-4" />
-            外链
-            <kbd className="text-xs text-muted-foreground">⇧⌘K</kbd>
-          </Button>
-          <Button
-            type="button"
-            variant="outline"
-            size="sm"
-            onClick={() =>
-              insertTemplate({
-                type: "heading",
-                props: { level: 2 },
-                content: "章节标题",
-              })
-            }
-          >
-            <Heading2 className="size-4" />
-            插入标题
-          </Button>
-          <Button
-            type="button"
-            variant="outline"
-            size="sm"
-            onClick={() =>
-              insertTemplate({ type: "bulletListItem", content: "列表项" })
-            }
-          >
-            <List className="size-4" />
-            插入列表
-          </Button>
-          <Button
-            type="button"
-            variant="outline"
-            size="sm"
-            onClick={() =>
-              insertTemplate({
-                type: "astTable",
-                children: [
-                  {
-                    type: "astTableRow",
-                    children: [
-                      {
-                        type: "astTableCell",
-                        children: [{ type: "paragraph", content: "单元格 1" }],
-                      },
-                      {
-                        type: "astTableCell",
-                        children: [{ type: "paragraph", content: "单元格 2" }],
-                      },
-                    ],
-                  },
-                ],
-              })
-            }
-          >
-            <Table2 className="size-4" />
-            插入表格
-          </Button>
-          <Button
-            type="button"
-            variant="outline"
-            size="sm"
-            onClick={() =>
-              insertTemplate({
-                type: "breadcrumb",
-                props: {
-                  itemsJson: JSON.stringify([
-                    { display_text: "当前页面" },
-                  ]),
-                },
-              })
-            }
-          >
-            <Navigation className="size-4" />
-            路径
-          </Button>
-          <Button
-            type="button"
-            variant="outline"
-            size="sm"
-            onClick={() =>
-              insertTemplate({
-                type: "columnList",
-                children: [
-                  {
-                    type: "column",
-                    props: { widthRatio: 1 },
-                    children: [{ type: "paragraph", content: "左列" }],
-                  },
-                  {
-                    type: "column",
-                    props: { widthRatio: 1 },
-                    children: [{ type: "paragraph", content: "右列" }],
-                  },
-                ],
-              })
-            }
-          >
-            <Columns3 className="size-4" />
-            分栏
-          </Button>
-          <Button
-            type="button"
-            variant="outline"
-            size="sm"
-            onClick={() => setButtonOpen(true)}
-          >
-            <MousePointerClick className="size-4" />
-            按钮
-          </Button>
-          <Button
-            type="button"
-            variant="outline"
-            size="sm"
-            onClick={() => setHTMLOpen(true)}
-          >
-            <CodeXml className="size-4" />
-            HTML
-          </Button>
-          <Button
-            type="button"
-            variant="outline"
-            size="sm"
-            onClick={() => setMediaOpen(true)}
-          >
-            <FileAudio className="size-4" />
-            媒体
-          </Button>
-          <Button
-            type="button"
-            variant="outline"
-            size="sm"
-            onClick={() => setExternalContentOpen(true)}
-          >
-            <PanelsTopLeft className="size-4" />
-            外部内容
-          </Button>
-          <ComponentInsertButton pageId={pageId} onInsert={(selection) => {
-            insertAstBlock({
-              type: "component",
-              id: clientUUID(),
-              component_id: selection.componentId,
-              component_version: selection.componentVersion,
-              entity_id: selection.entityId,
-              display_config: selection.displayConfig,
-            });
-            toast.success("已插入组件");
-          }} />
-          <Button
-            type="button"
-            variant="outline"
-            size="sm"
-            onClick={() => insertEndSection("参见", "插入相关页面引用")}
-          >
-            <BookOpenCheck className="size-4" />
-            参见
-          </Button>
-          <Button
-            type="button"
-            variant="outline"
-            size="sm"
-            onClick={() => insertEndSection("拓展阅读", "补充书目或来源")}
-          >
-            <BookMarked className="size-4" />
-            拓展阅读
-          </Button>
-          <Button
-            type="button"
-            variant="outline"
-            size="sm"
-            onClick={() => insertEndSection("外部链接", "补充外部资源")}
-          >
-            <Globe2 className="size-4" />
-            外部链接
-          </Button>
-        </div>
-      ) : null}
-
-
       <BlockNoteView
         editor={editor}
         editable={editable}
         theme="light"
+        slashMenu={false}
         onChange={() => {
           if (applyingRemote.current) return;
           onChange?.(toAst(editor.document as unknown as BNBlock[], state));
         }}
-      />
+      >
+        {editable ? (
+          <SuggestionMenuController
+            triggerCharacter="/"
+            getItems={getSlashMenuItems}
+            shouldOpen={(menuState) =>
+              !menuState.selection.$from.parent.type.isInGroup("tableContent")
+            }
+          />
+        ) : null}
+      </BlockNoteView>
 
       {editable ? (
         <>
@@ -512,6 +474,22 @@ export function BlockEditor({
             onInsertDate={(date, endDate, displayText) =>
               insertDateMention(editor, date, endDate, displayText)
             }
+          />
+          <ComponentInsertDialog
+            open={componentOpen}
+            onOpenChange={setComponentOpen}
+            pageId={pageId}
+            onInsert={(selection) => {
+              insertAstBlock({
+                type: "component",
+                id: clientUUID(),
+                component_id: selection.componentId,
+                component_version: selection.componentVersion,
+                entity_id: selection.entityId,
+                display_config: selection.displayConfig,
+              });
+              toast.success("已插入组件");
+            }}
           />
         </>
       ) : null}

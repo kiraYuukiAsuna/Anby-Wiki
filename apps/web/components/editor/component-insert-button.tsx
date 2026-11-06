@@ -203,6 +203,34 @@ function ComponentPicker({
   );
 }
 
+export function ComponentInsertDialog({
+  open,
+  onOpenChange,
+  pageId,
+  onInsert,
+}: {
+  open: boolean;
+  onOpenChange: (open: boolean) => void;
+  pageId?: string;
+  onInsert: (selection: ComponentSelection) => void;
+}) {
+  const { session } = useSession();
+  return (
+    <Dialog open={open} onOpenChange={onOpenChange}>
+      <DialogContent className="sm:max-w-4xl">
+        {open ? (
+          <ComponentPicker
+            key={`${session?.actorId}:${session?.wikiId}`}
+            pageId={pageId}
+            onClose={() => onOpenChange(false)}
+            onInsert={onInsert}
+          />
+        ) : null}
+      </DialogContent>
+    </Dialog>
+  );
+}
+
 export function ComponentInsertButton({
   pageId,
   onInsert,
@@ -211,7 +239,6 @@ export function ComponentInsertButton({
   onInsert: (selection: ComponentSelection) => void;
 }) {
   const [open, setOpen] = useState(false);
-  const { session } = useSession();
   return (
     <>
       <Button
@@ -223,18 +250,12 @@ export function ComponentInsertButton({
         <Boxes className="size-4" aria-hidden />
         组件
       </Button>
-      <Dialog open={open} onOpenChange={setOpen}>
-        <DialogContent className="sm:max-w-4xl">
-          {open ? (
-            <ComponentPicker
-              key={`${session?.actorId}:${session?.wikiId}`}
-              pageId={pageId}
-              onClose={() => setOpen(false)}
-              onInsert={onInsert}
-            />
-          ) : null}
-        </DialogContent>
-      </Dialog>
+      <ComponentInsertDialog
+        open={open}
+        onOpenChange={setOpen}
+        pageId={pageId}
+        onInsert={onInsert}
+      />
     </>
   );
 }
