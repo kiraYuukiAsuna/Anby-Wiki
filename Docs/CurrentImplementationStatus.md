@@ -54,27 +54,19 @@ Meilisearch、认证限流与证书/代理边界、灾备恢复和人工可访�
 
 ## 2026-11-06 编辑器自定义块直接编辑
 
-- BlockNote 编辑器的 Anby 自定义块不再只显示静态预览；Callout、语义表格、
-  Preformatted、Equation、Breadcrumb、Column、页面按钮、HTML、Component、Image、
-  Video、Audio、File、PDF、Bookmark、Link Preview 与 Embed 在编辑态内直接显示
-  input/textarea/select/checkbox 控件，更新仍通过 BlockNote `updateBlock` 写回 props，
-  `onChange` 继续经 `toAst` 输出 AST v1。
-- 行内原子节点改为文本位置原地编辑；Page/Page Anchor、Entity、Claim、Citation、Math、
-  Mention 与 Date Mention 均可直接改显示文本和稳定 ID/日期等 props。
-  旧的页面引用顶部编辑面板已移除，编辑入口不再堆到工具栏上方；Anby 自定义块、
-  媒体、外部内容、组件和自定义行内节点统一通过 BlockNote `/` 菜单按光标位置插入，
+- 编辑器内核已从 BlockNote 切换到 Tiptap；`components/editor/block-editor.tsx` 仍是唯一业务入口，
+  Tiptap ↔ AST v1 双向映射保留在 `lib/editor/`。BlockNote 依赖已移除，编辑器 JSON 不成为权威数据。
+- Anby 自定义块仍覆盖 Callout、语义表格、Preformatted、Equation、Breadcrumb、Column、页面按钮、HTML、
+  Component、Image、Video、Audio、File、PDF、Bookmark、Link Preview 与 Embed；编辑态使用 Tiptap NodeView
+  原地呈现，修改后经 `toAst` 回传 AST v1。
+- 行内原子节点支持 Page/Page Anchor、Entity、Claim、Citation、Math、Mention 与 Date Mention；
+  旧的页面引用顶部编辑面板已移除，Anby 自定义块、媒体、外部内容、组件和自定义行内节点统一通过 Tiptap `/` 菜单按光标位置插入，
   不重复内置 Heading/List 等默认菜单项。
-- 表格块在块内支持增删末行/末列，Column 在本列内支持新增/删除列，页面按钮 actions
-  在按钮块内提供按类型的表单化编辑和添加/删除动作，保留 JSON 高级编辑入口。
-- JSON 型字段（路径、按钮动作、组件显示配置）在提交前校验；UUID、HTTP URL、数值范围、
-  必填标题/Alt text 等约束在控件层提前拦截。DatasetView Block 与 Database Mention
-  已从 AST/编辑器/渲染器移除；阅读态和导出路径仍走原静态 DOM，OpenAPI、数据库 Schema
-  与发布事务不变。
-- 验证：`npm run typecheck`、`npm run lint`、`npm run build` 通过；本机 Next.js
-  `/dev/editor` 使用浏览器冒烟，mock session 后确认 `/` 菜单可搜索并插入“语义表格”，
-  自定义块和行内原子节点均出现原地编辑控件。修改页面引用显示文本后右侧 `onChange`
-  AST 同步为新值，表格“添加列”后 AST 列数从 2 到 3，页面按钮“添加 Webhook”后
-  actions 写入 `webhook`，且顶部工具栏、旧顶部引用编辑面板、DatasetView 与 Database Mention 均不存在。
+- 表格块在块内支持属性编辑与单元格直接编辑；Column 在列内编辑宽度，页面按钮 actions 继续提供表单化编辑和 JSON 高级入口。
+- DatasetView Block 与 Database Mention 已从 AST/编辑器/渲染器移除；阅读态和导出路径仍走静态 DOM，OpenAPI、数据库 Schema 与发布事务不变。
+- 验证：`npm run typecheck`、`npm run lint`、`npm run build` 通过；本机 Next.js `/dev/editor`
+  使用浏览器冒烟，mock session 后确认 Tiptap DOM 已挂载、BlockNote DOM 不存在、顶部工具栏不存在、普通文本编辑会同步 `onChange` AST，
+  `/语义` 菜单可搜索并插入“语义表格”，插入后 AST 表格数增加，且 DatasetView 与 Database Mention 均不存在。
 
 ## 2026-11-05 协作 Wiki 工作台入口收口
 

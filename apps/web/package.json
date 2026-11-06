@@ -13,10 +13,12 @@
     "gen:client": "openapi-generator-cli generate -i ../../contracts/openapi/openapi.yaml -g typescript-fetch -o ../../contracts/generated/typescript && node scripts/normalize-generated-client.mjs"
   },
   "dependencies": {
-    "@blocknote/core": "0.52.1",
-    "@blocknote/mantine": "0.52.1",
-    "@blocknote/react": "0.52.1",
+    "@tiptap/core": "3.31.3",
+    "@tiptap/extension-link": "3.31.3",
     "@tiptap/pm": "3.31.3",
+    "@tiptap/react": "3.31.3",
+    "@tiptap/starter-kit": "3.31.3",
+    "@tiptap/suggestion": "3.31.3",
     "class-variance-authority": "0.7.1",
     "clsx": "2.1.1",
     "cmdk": "1.1.1",
