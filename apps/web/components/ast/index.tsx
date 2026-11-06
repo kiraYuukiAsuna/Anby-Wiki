@@ -593,15 +593,6 @@ export function BlockView({
         </figure>
       );
     }
-    case "dataset_view":
-      return (
-        <div
-          className="my-5 rounded-lg border border-dashed bg-muted/40 p-4 text-sm text-muted-foreground"
-          data-retired-block="dataset_view"
-        >
-          此旧结构化视图已停用
-        </div>
-      );
     case "embed": {
       const href = safeHttpUrl(block.url);
       if (!href) {
@@ -887,15 +878,6 @@ export function InlineNodeView({
         >
           {node.display_text}
         </time>
-      );
-    case "database_mention":
-      return (
-        <span
-          data-database-mention=""
-          className="mx-0.5 rounded bg-muted px-1.5 py-0.5 text-sm font-medium text-muted-foreground"
-        >
-          {node.display_text}
-        </span>
       );
   }
 }

@@ -341,8 +341,7 @@ func searchBodyText(doc *ast.Document) (string, error) {
 			} else {
 				appendSearchText(&parts, node.Inline.DisplayText)
 			}
-		case ast.InlinePageAnchorReference, ast.InlineMention, ast.InlineDateMention,
-			ast.InlineDatabaseMention:
+		case ast.InlinePageAnchorReference, ast.InlineMention, ast.InlineDateMention:
 			appendSearchText(&parts, node.Inline.DisplayText)
 		case ast.InlineExternalLink, ast.InlineEntityReference, ast.InlineClaimReference,
 			ast.InlineCitationReference:

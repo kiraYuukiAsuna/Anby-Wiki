@@ -57,7 +57,6 @@ const (
 	BlockPDF          BlockType = "pdf"
 	BlockBookmark     BlockType = "bookmark"
 	BlockLinkPreview  BlockType = "link_preview"
-	BlockDatasetView  BlockType = "dataset_view"
 	BlockEmbed        BlockType = "embed"
 	BlockDivider      BlockType = "divider"
 )
@@ -149,7 +148,6 @@ const (
 	InlineMath                InlineType = "math"
 	InlineMention             InlineType = "mention"
 	InlineDateMention         InlineType = "date_mention"
-	InlineDatabaseMention     InlineType = "database_mention"
 )
 
 // ResolutionUnresolved 是未解析页面引用的 resolution_status 取值。
@@ -228,13 +226,12 @@ type Block struct {
 	ComponentVersion int             `json:"component_version,omitempty"`
 	EntityID         string          `json:"entity_id,omitempty"`
 	DisplayConfig    json.RawMessage `json:"display_config,omitempty"`
-	// 媒体、DatasetView 与安全外部嵌入。
+	// 媒体与安全外部嵌入。
 	AssetRevisionID       string          `json:"asset_revision_id,omitempty"`
 	PosterAssetRevisionID string          `json:"poster_asset_revision_id,omitempty"`
 	AltText               string          `json:"alt_text,omitempty"`
 	Caption               string          `json:"caption,omitempty"`
 	Title                 string          `json:"title,omitempty"`
-	DatasetViewID         string          `json:"dataset_view_id,omitempty"`
 	URL                   string          `json:"url,omitempty"`
 	Content               json.RawMessage `json:"content,omitempty"`
 	Children              []*Block        `json:"children,omitempty"`
@@ -294,7 +291,6 @@ type InlineNode struct {
 	ActorID    string `json:"actor_id,omitempty"`
 	Date       string `json:"date,omitempty"`
 	EndDate    string `json:"end_date,omitempty"`
-	DatasetID  string `json:"dataset_id,omitempty"`
 }
 
 const documentEnvelopeSchemaURL = "https://anby.wiki/schemas/ast/v1/document-envelope.schema.json"
@@ -328,7 +324,6 @@ var blockSchemaDefinitions = map[BlockType]string{
 	BlockPDF:          "pdfBlock",
 	BlockBookmark:     "bookmarkBlock",
 	BlockLinkPreview:  "linkPreviewBlock",
-	BlockDatasetView:  "datasetViewBlock",
 	BlockEmbed:        "embedBlock",
 	BlockDivider:      "dividerBlock",
 }

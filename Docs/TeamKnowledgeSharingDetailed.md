@@ -880,7 +880,6 @@ Markdown 适合文本创作，但对以下能力表达不足：
 - 稳定 Block ID；
 - Entity/Claim/Citation 引用；
 - 冻结 ComponentVersion；
-- DatasetView；
 - 可验证的树形容器规则；
 - 块级移动、Diff 和冲突检测。
 
@@ -920,7 +919,6 @@ callout
 component
 image
 video
-dataset_view
 embed
 divider
 ```
@@ -1156,7 +1154,7 @@ Adapter 和 AST 往返层还支持：
 
 - Code、Quote、Callout；
 - Entity、Claim、Citation 引用；
-- 图片、视频、DatasetView、Embed；
+- 图片、视频、Embed；
 - Component、页内锚点、数学表达式与 Mention。
 
 后面这组能力不等于编辑器已经为每种节点提供人工插入按钮。它们目前主要服务于已有 AST 的无损编辑、AI/Proposal 生成内容和阅读渲染；补齐统一的人工插入选择器仍属于产品体验工作。

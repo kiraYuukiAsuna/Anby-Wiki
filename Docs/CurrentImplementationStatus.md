@@ -60,20 +60,21 @@ Meilisearch、认证限流与证书/代理边界、灾备恢复和人工可访�
   input/textarea/select/checkbox 控件，更新仍通过 BlockNote `updateBlock` 写回 props，
   `onChange` 继续经 `toAst` 输出 AST v1。
 - 行内原子节点改为文本位置原地编辑；Page/Page Anchor、Entity、Claim、Citation、Math、
-  Mention、Date Mention 与历史兼容的 Dataset Mention 均可直接改显示文本和稳定 ID/日期等 props。
+  Mention 与 Date Mention 均可直接改显示文本和稳定 ID/日期等 props。
   旧的页面引用顶部编辑面板已移除，编辑入口不再堆到工具栏上方；Anby 自定义块、
   媒体、外部内容、组件和自定义行内节点统一通过 BlockNote `/` 菜单按光标位置插入，
   不重复内置 Heading/List 等默认菜单项。
 - 表格块在块内支持增删末行/末列，Column 在本列内支持新增/删除列，页面按钮 actions
   在按钮块内提供按类型的表单化编辑和添加/删除动作，保留 JSON 高级编辑入口。
 - JSON 型字段（路径、按钮动作、组件显示配置）在提交前校验；UUID、HTTP URL、数值范围、
-  必填标题/Alt text 等约束在控件层提前拦截。阅读态和导出路径仍走原静态 DOM，
-  不改变 AST Schema、OpenAPI、数据库 Schema 或发布事务。
+  必填标题/Alt text 等约束在控件层提前拦截。DatasetView Block 与 Database Mention
+  已从 AST/编辑器/渲染器移除；阅读态和导出路径仍走原静态 DOM，OpenAPI、数据库 Schema
+  与发布事务不变。
 - 验证：`npm run typecheck`、`npm run lint`、`npm run build` 通过；本机 Next.js
   `/dev/editor` 使用浏览器冒烟，mock session 后确认 `/` 菜单可搜索并插入“语义表格”，
   自定义块和行内原子节点均出现原地编辑控件。修改页面引用显示文本后右侧 `onChange`
   AST 同步为新值，表格“添加列”后 AST 列数从 2 到 3，页面按钮“添加 Webhook”后
-  actions 写入 `webhook`，且顶部工具栏和旧顶部引用编辑面板均不存在。
+  actions 写入 `webhook`，且顶部工具栏、旧顶部引用编辑面板、DatasetView 与 Database Mention 均不存在。
 
 ## 2026-11-05 协作 Wiki 工作台入口收口
 
@@ -966,12 +967,10 @@ Meilisearch、认证限流与证书/代理边界、灾备恢复和人工可访�
 - AST `text` 支持 `underline` mark，以及 gray/brown/red/orange/yellow/green/blue/
   purple/pink 九色白名单内的 `text_color` 和 `background_color`。编辑器可无损往返
   BlockNote 内置样式；任意 CSS 颜色继续在发布前显式拒绝。
-- Person 与 Page 分别保存稳定 Actor ID 和 Page ID；新增 `date_mention` 支持单日或
-  日期区间，新增 `database_mention` 保存稳定 Dataset ID。编辑器提供统一提及入口，
-  Page 继续使用页面搜索选择器，Database 使用站点 Dataset 目录。
-- 服务端 Renderer v12 输出语义化 `<u>`、受限颜色 `data-*`、`<time>` 和 Dataset
-  站内链接；React 阅读兜底、搜索正文、目录纯文本均同步支持。Doctor 会把不存在的
-  Actor 或 Dataset 引用报告为错误。
+- Person 与 Page 分别保存稳定 Actor ID 和 Page ID；`date_mention` 支持单日或日期区间。
+  Database Mention 已退场并从当前 AST/编辑器/渲染器移除，旧 Dataset 工作台不再作为正文控件暴露。
+- 服务端 Renderer v12 输出语义化 `<u>`、受限颜色 `data-*` 和 `<time>`；React 阅读兜底、
+  搜索正文和目录纯文本同步支持。Doctor 会把不存在的 Actor 引用报告为错误。
 
 ## 2026-10-20 Dataset 多视图与交互
 

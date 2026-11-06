@@ -125,14 +125,6 @@ function inlineNodeToBN(node: InlineNode): Record<string, unknown> {
           displayText: node.display_text,
         },
       };
-    case "database_mention":
-      return {
-        type: "databaseMention",
-        props: {
-          datasetId: node.dataset_id,
-          displayText: node.display_text,
-        },
-      };
   }
 }
 
@@ -392,12 +384,6 @@ function blockToBN(block: Block, state: AdapterState): BNPartialBlock {
           siteName: block.site_name ?? "",
           caption: "",
         },
-      };
-    case "dataset_view":
-      return {
-        id: block.id,
-        type: "datasetView",
-        props: { datasetViewId: block.dataset_view_id },
       };
     case "embed":
       return {

@@ -28,7 +28,6 @@ export function inlineToPlainText(nodes: InlineNode[]): string {
         case "citation_reference":
         case "mention":
         case "date_mention":
-        case "database_mention":
           return node.display_text;
         case "math":
           return node.expression;

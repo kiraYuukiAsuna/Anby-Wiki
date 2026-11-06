@@ -32,8 +32,6 @@ const (
 	CodeCitationReferenceOrphan      = "REF_CITATION_ORPHAN"
 	CodeAssetRevisionReferenceOrphan = "REF_ASSET_REVISION_ORPHAN"
 	CodeActorReferenceOrphan         = "REF_ACTOR_ORPHAN"
-	CodeDatasetReferenceOrphan       = "REF_DATASET_ORPHAN"
-	CodeDatasetViewReferenceOrphan   = "REF_DATASET_VIEW_ORPHAN"
 	CodeProjectionStateMissing       = "PROJECTION_STATE_MISSING"
 	CodeProjectionStateError         = "PROJECTION_STATE_ERROR"
 	CodeProjectionSourceStale        = "PROJECTION_SOURCE_REVISION_STALE"
@@ -343,11 +341,6 @@ func (c *Checker) checkCurrentASTReferences(ctx context.Context, issues *[]Issue
 							"AssetRevision", node.Block.PosterAssetRevisionID,
 						})
 					}
-				case ast.BlockDatasetView:
-					refs = append(refs, astReference{
-						CodeDatasetViewReferenceOrphan, "dataset_view",
-						"DatasetView", node.Block.DatasetViewID,
-					})
 				}
 			}
 			if node.Inline == nil {
@@ -366,8 +359,6 @@ func (c *Checker) checkCurrentASTReferences(ctx context.Context, issues *[]Issue
 				refs = append(refs, astReference{CodeCitationReferenceOrphan, "citation", "Citation", node.Inline.CitationID})
 			case ast.InlineMention:
 				refs = append(refs, astReference{CodeActorReferenceOrphan, "actor", "Actor", node.Inline.ActorID})
-			case ast.InlineDatabaseMention:
-				refs = append(refs, astReference{CodeDatasetReferenceOrphan, "dataset", "Dataset", node.Inline.DatasetID})
 			}
 			return true
 		}); err != nil {

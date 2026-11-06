@@ -129,12 +129,6 @@ export const dateMentionNodeSchema = z.strictObject({
   display_text: z.string(),
 });
 
-/** 对稳定 Dataset 的行内提及。 */
-export const databaseMentionNodeSchema = z.strictObject({
-  type: z.literal("database_mention"),
-  dataset_id: idSchema,
-  display_text: z.string(),
-});
 
 /** 行内节点联合；v1 仅以新增判别分支的方式 additive 演进。 */
 export const inlineNodeSchema = z.union([
@@ -149,7 +143,6 @@ export const inlineNodeSchema = z.union([
   mathNodeSchema,
   mentionNodeSchema,
   dateMentionNodeSchema,
-  databaseMentionNodeSchema,
 ]);
 
 export type Mark = z.infer<typeof markSchema>;
@@ -173,7 +166,6 @@ export type CitationReferenceNode = z.infer<
 export type MathNode = z.infer<typeof mathNodeSchema>;
 export type MentionNode = z.infer<typeof mentionNodeSchema>;
 export type DateMentionNode = z.infer<typeof dateMentionNodeSchema>;
-export type DatabaseMentionNode = z.infer<typeof databaseMentionNodeSchema>;
 export type InlineNode = z.infer<typeof inlineNodeSchema>;
 
 // ---- Block 成员接口（手工声明，对应 ast.schema.json 的 $defs；互递归无法推导）----
@@ -433,12 +425,6 @@ export interface LinkPreviewBlock {
   site_name?: string;
 }
 
-/** 可查询数据只保存 DatasetView 稳定 ID，不复制记录。 */
-export interface DatasetViewBlock {
-  id: string;
-  type: "dataset_view";
-  dataset_view_id: string;
-}
 
 /** 外部嵌入以安全链接卡片渲染，不执行第三方脚本。 */
 export interface EmbedBlock {
@@ -486,7 +472,6 @@ export type Block =
   | PDFBlock
   | BookmarkBlock
   | LinkPreviewBlock
-  | DatasetViewBlock
   | EmbedBlock
   | DividerBlock;
 
@@ -777,11 +762,6 @@ export const linkPreviewBlockSchema = z.strictObject({
   site_name: z.string().max(255).optional(),
 });
 
-export const datasetViewBlockSchema = z.strictObject({
-  id: idSchema,
-  type: z.literal("dataset_view"),
-  dataset_view_id: idSchema,
-});
 
 export const embedBlockSchema = z.strictObject({
   id: idSchema,
@@ -826,7 +806,6 @@ export const blockSchema: z.ZodType<Block> = z.union([
   pdfBlockSchema,
   bookmarkBlockSchema,
   linkPreviewBlockSchema,
-  datasetViewBlockSchema,
   embedBlockSchema,
   dividerBlockSchema,
 ]);

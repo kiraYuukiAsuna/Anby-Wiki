@@ -295,12 +295,6 @@ function extendedReferenceToInlineNode(item: any): InlineNode {
       }
       return node;
     }
-    case "databaseMention":
-      return {
-        type: "database_mention",
-        dataset_id: str("datasetId"),
-        display_text: str("displayText"),
-      };
     default:
       throw new UnsupportedBlockNoteFeatureError(
         `无法识别的扩展行内类型 "${String(item.type)}"`,
@@ -339,7 +333,6 @@ function inlineContentToAst(content: unknown, where: string): InlineNode[] {
       case "math":
       case "mention":
       case "dateMention":
-      case "databaseMention":
         out.push(extendedReferenceToInlineNode(item));
         break;
       default:
@@ -895,13 +888,6 @@ function singleBlockToAst(
         ...(siteName ? { site_name: siteName } : {}),
       };
     }
-    case "datasetView":
-      assertSupportedProps(block, ["datasetViewId"], where);
-      return {
-        id,
-        type: "dataset_view",
-        dataset_view_id: String(block.props?.datasetViewId ?? ""),
-      };
     case "embed": {
       assertSupportedProps(
         block,

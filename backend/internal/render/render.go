@@ -461,12 +461,6 @@ func renderBlock(b *strings.Builder, blk *ast.Block, ctx *renderContext) error {
 		b.WriteString("</figure>")
 		return nil
 
-	case ast.BlockDatasetView:
-		fmt.Fprintf(b,
-			`<div class="dataset-view" data-dataset-view-id="%s"><a href="/datasets/views/%s">打开数据视图</a></div>`,
-			html.EscapeString(blk.DatasetViewID), html.EscapeString(blk.DatasetViewID))
-		return nil
-
 	case ast.BlockBookmark:
 		return renderExternalCard(b, blk, "wiki-bookmark")
 
@@ -811,11 +805,6 @@ func renderInline(
 		}
 		fmt.Fprintf(b, `<time datetime="%s" data-date-mention>%s</time>`,
 			html.EscapeString(n.Date), html.EscapeString(n.DisplayText))
-		return nil
-
-	case ast.InlineDatabaseMention:
-		fmt.Fprintf(b, `<a href="/datasets/%s" data-database-mention>%s</a>`,
-			html.EscapeString(n.DatasetID), html.EscapeString(n.DisplayText))
 		return nil
 
 	default:

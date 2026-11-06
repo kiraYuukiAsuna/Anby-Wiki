@@ -341,8 +341,7 @@ func headingPlainText(blk *ast.Block) (string, error) {
 			} else {
 				b.WriteString(n.DisplayText)
 			}
-		case ast.InlinePageAnchorReference, ast.InlineMention, ast.InlineDateMention,
-			ast.InlineDatabaseMention:
+		case ast.InlinePageAnchorReference, ast.InlineMention, ast.InlineDateMention:
 			b.WriteString(n.DisplayText)
 		case ast.InlineExternalLink, ast.InlineEntityReference, ast.InlineClaimReference,
 			ast.InlineCitationReference:

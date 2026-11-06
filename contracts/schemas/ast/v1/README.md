@@ -9,7 +9,7 @@ Wiki 页面正文的权威格式（设计依据：`Docs/WikiDesignOnePage.md` §
 ## 结构概要
 
 - 根节点：`{ type: "document", schema_version: 1, children: Block[] }`。
-- Block 是按 `type` 判别的联合：`heading`（level 1-6，可折叠）、`paragraph`、`bullet_list` / `ordered_list` / `list_item`、`todo`、`toggle`、`table` / `table_row` / `table_cell`、`code`、`preformatted`、`equation`、`breadcrumb`、`column_list` / `column`、`button`、`html`、`quote`、`callout`、`component`、`image`、`video`、`audio`、`file`、`pdf`、`bookmark`、`link_preview`、`dataset_view`、`embed`、`divider`。
+- Block 是按 `type` 判别的联合：`heading`（level 1-6，可折叠）、`paragraph`、`bullet_list` / `ordered_list` / `list_item`、`todo`、`toggle`、`table` / `table_row` / `table_cell`、`code`、`preformatted`、`equation`、`breadcrumb`、`column_list` / `column`、`button`、`html`、`quote`、`callout`、`component`、`image`、`video`、`audio`、`file`、`pdf`、`bookmark`、`link_preview`、`embed`、`divider`。
 - 容器规则：
   - `bullet_list` / `ordered_list` 的 `children` 只能是 `list_item`；
   - `table` → `table_row` → `table_cell` 逐层包裹；`caption`、列头和行头均为可选语义属性；
@@ -22,7 +22,7 @@ Wiki 页面正文的权威格式（设计依据：`Docs/WikiDesignOnePage.md` §
 - Inline 节点：`text`（可选 `marks`：bold/italic/underline/strikethrough/code，
   以及白名单 `text_color` / `background_color`）、`inline_code`、`page_reference`、
   `page_anchor_reference`、`external_link`、`entity_reference`、`claim_reference`、
-  `citation_reference`、`math`、`mention`、`date_mention`、`database_mention`。
+  `citation_reference`、`math`、`mention`、`date_mention`。
 - `page_reference` 两种互斥形态（`oneOf`）：
   - 已解析：`target_page_id`（uuid）+ `display_text`，可选 `target_heading_block_id`（章节锚点，设计 §9）；
   - 未解析：`resolution_status: "unresolved"` + `target_namespace` + `normalized_title`，可选 `expected_entity_type`。
@@ -35,7 +35,6 @@ Wiki 页面正文的权威格式（设计依据：`Docs/WikiDesignOnePage.md` §
 - 媒体 Block 固定到不可变 `asset_revision_id`；视频封面同样使用 AssetRevision。
   `audio` 保存标题、艺术家、专辑、时长等展示元数据；`file` 保存下载文件名；
   `pdf` 保存起始页与阅读器高度。
-- `dataset_view` 只保存稳定 `dataset_view_id`，查询记录不复制进正文快照。
 - `bookmark` 与 `link_preview` 保存作者解析时经服务端净化并冻结的标题、描述与站点名；
   阅读路径不向第三方实时回源。
 - `embed` 只允许 http/https URL；`provider` 仅支持 YouTube、Vimeo、Figma。provider
@@ -47,7 +46,7 @@ Wiki 页面正文的权威格式（设计依据：`Docs/WikiDesignOnePage.md` §
 - `html` 保存最多 200 KB 的原文与固定展示高度；只允许在空 `sandbox` 且
   `default-src 'none'` 的 `srcdoc` iframe 中呈现，不执行脚本、外部资源或表单。
 - `math` 保存 LaTeX 源文本；`mention` 保存稳定 Actor ID 与展示文本；
-  `date_mention` 保存 ISO 日期或日期区间；`database_mention` 保存稳定 Dataset ID。
+  `date_mention` 保存 ISO 日期或日期区间。
 - 所有对象均 `additionalProperties: false`，严格校验。
 
 ## 校验实现约束

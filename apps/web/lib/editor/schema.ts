@@ -34,7 +34,7 @@
 //   entity_reference      → 自定义 inline content "entityReference"
 //   claim_reference       → 自定义 inline content "claimReference"
 //   citation_reference    → 自定义 inline content "citationReference"
-//   mention/date_mention/database_mention → 对应自定义原子 inline content
+//   mention/date_mention → 对应自定义原子 inline content
 //
 // 显式不映射（toAst 遇到即抛 UnsupportedBlockNoteFeatureError，不静默丢弃）：
 //   - BlockNote 块类型：audio / file / image / video / pageBreak
@@ -115,7 +115,6 @@ export const AST_BLOCK_TYPES = [
   "pdf",
   "bookmark",
   "link_preview",
-  "dataset_view",
   "embed",
   "divider",
 ] as const satisfies readonly AstBlock["type"][];
@@ -152,7 +151,6 @@ export const AST_TO_BLOCKNOTE_BLOCK: Record<AstBlockType, string> = {
   pdf: "pdfAsset (自定义原子块)",
   bookmark: "bookmark (自定义原子块)",
   link_preview: "linkPreview (自定义原子块)",
-  dataset_view: "datasetView (自定义原子块)",
   embed: "embed (自定义原子块)",
   divider: "divider",
 };
@@ -1596,22 +1594,6 @@ function externalPreviewSpec(
   );
 }
 
-const datasetViewSpec = createBlockSpec(
-  {
-    type: "datasetView",
-    propSchema: { datasetViewId: { default: "" } },
-    content: "none",
-  },
-  {
-    render: (block) => {
-      const dom = window.document.createElement("div");
-      dom.className = "ast-dataset-view";
-      dom.dataset.datasetViewId = block.props.datasetViewId;
-      dom.textContent = "旧结构化视图已停用";
-      return { dom };
-    },
-  },
-);
 
 const embedSpec = createBlockSpec(
   {
@@ -2033,35 +2015,6 @@ const dateMentionSpec = createInlineContentSpec(
   },
 );
 
-const databaseMentionSpec = createInlineContentSpec(
-  {
-    type: "databaseMention",
-    content: "none",
-    propSchema: {
-      datasetId: { default: "" },
-      displayText: { default: "" },
-    },
-  },
-  {
-    render(inlineContent, updateInlineContent) {
-      const props = inlineContent.props;
-      return editableInlineAtom({
-        context: this,
-        type: "databaseMention",
-        props,
-        update: updateInlineContent as InlineUpdate,
-        className: "ast-database-mention",
-        title: "Dataset 提及",
-        text: props.displayText,
-        decorateStatic: (dom) => { dom.dataset.datasetId = props.datasetId; },
-        fields: (commit) => [
-          inlineTextInput({ label: "显示文本", value: props.displayText, validate: nonEmpty("显示文本不能为空"), onCommit: (value) => commit({ displayText: value }) }),
-          inlineTextInput({ label: "Dataset ID", value: props.datasetId, validate: requiredUUID, onCommit: (value) => commit({ datasetId: value.trim() }) }),
-        ],
-      });
-    },
-  },
-);
 
 // ---- 自定义样式：inlineCode（与 code mark 区分，AST inline_code 专用） ----
 
@@ -2107,7 +2060,6 @@ export const editorSchema = BlockNoteSchema.create({
     pdfAsset: pdfAssetSpec(),
     bookmark: externalPreviewSpec("bookmark", "ast-bookmark")(),
     linkPreview: externalPreviewSpec("linkPreview", "ast-link-preview")(),
-    datasetView: datasetViewSpec(),
     embed: embedSpec(),
     // Do not use BlockNote's reserved `table` type here. Its React extensions
     // would treat this AST container as a native table and crash on selection.
@@ -2125,7 +2077,6 @@ export const editorSchema = BlockNoteSchema.create({
     math: mathSpec,
     mention: mentionSpec,
     dateMention: dateMentionSpec,
-    databaseMention: databaseMentionSpec,
   },
   styleSpecs: {
     ...defaultStyleSpecs,

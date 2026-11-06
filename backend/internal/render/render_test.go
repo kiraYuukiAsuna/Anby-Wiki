@@ -60,7 +60,6 @@ func TestCitationOrderAndBidirectionalAnchors(t *testing.T) {
 
 func TestInlineRichTextAndMentions(t *testing.T) {
 	actorID := uuid.NewString()
-	datasetID := uuid.NewString()
 	raw, err := json.Marshal([]*ast.InlineNode{
 		{
 			Type: ast.InlineText, Text: "<styled>",
@@ -72,7 +71,6 @@ func TestInlineRichTextAndMentions(t *testing.T) {
 			Type: ast.InlineDateMention, Date: "2026-10-20", EndDate: "2026-10-22",
 			DisplayText: "Oct <20-22>",
 		},
-		{Type: ast.InlineDatabaseMention, DatasetID: datasetID, DisplayText: "<Sources>"},
 	})
 	if err != nil {
 		t.Fatal(err)
@@ -94,7 +92,6 @@ func TestInlineRichTextAndMentions(t *testing.T) {
 		`<span data-text-color="red" data-background-color="yellow"><strong><u>&lt;styled&gt;</u></strong></span>`,
 		`class="mention" data-actor-id="` + actorID + `">@&lt;Alice&gt;</span>`,
 		`<time datetime="2026-10-20" data-date-mention data-end-date="2026-10-22">Oct &lt;20-22&gt;</time>`,
-		`<a href="/datasets/` + datasetID + `" data-database-mention>&lt;Sources&gt;</a>`,
 	} {
 		if !strings.Contains(rendered, expected) {
 			t.Fatalf("rendered rich inline HTML missing %q: %s", expected, rendered)

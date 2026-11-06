@@ -44,7 +44,6 @@ M3 引入 RenderedPage 投影与缓存时复用本包，并按 `RendererVersion`
 | `citation_reference` | `<sup id="cite-ref-{block_id}-{node_index}" data-citation-ref="{citation_id}" …><a href="#cite-note-{n}">[n]</a></sup>`；按全文 Citation 首次出现顺序编号，同一 ID 复用序号，并与文末 References 双向导航 |
 | `mention` | `<span class="mention" data-actor-id="{actor_id}">@{display_text}</span>` |
 | `date_mention` | `<time datetime="{date}" data-date-mention …>{display_text}</time>` |
-| `database_mention` | `<a href="/datasets/{dataset_id}" data-database-mention>{display_text}</a>` |
 
 未知 Block/Inline 类型、越界 heading level、无法解码的 content 返回 error，不做静默降级
 （正常路径上文档入库前已经 `ast.ValidateJSON`，不会触发）。

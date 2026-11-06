@@ -223,8 +223,7 @@
   text-decoration-color: oklch(0.65 0.2 25 / 60%);
 }
 .ast-mention,
-.ast-date-mention,
-.ast-database-mention {
+.ast-date-mention {
   display: inline-block;
   border-radius: 0.25rem;
   padding-inline: 0.3rem;
@@ -238,10 +237,6 @@
 .ast-date-mention {
   background: oklch(0.94 0.05 85);
   color: oklch(0.4 0.1 75);
-}
-.ast-database-mention {
-  background: oklch(0.93 0.04 205);
-  color: oklch(0.4 0.1 215);
 }
 .ast-inline-code {
   border-radius: 0.25rem;
@@ -1296,8 +1291,7 @@
 }
 
 .wiki-rendered .mention,
-.wiki-rendered [data-date-mention],
-.wiki-rendered [data-database-mention] {
+.wiki-rendered [data-date-mention] {
   border-radius: 0.25rem;
   padding-inline: 0.3rem;
   font-size: 0.875em;
@@ -1314,15 +1308,6 @@
   color: oklch(0.4 0.1 75);
 }
 
-.wiki-rendered [data-database-mention] {
-  background: oklch(0.93 0.04 205);
-  color: oklch(0.4 0.1 215);
-  text-decoration: none;
-}
-
-.wiki-rendered [data-database-mention]:hover {
-  text-decoration: underline;
-}
 
 @media (max-width: 720px) {
   .wiki-column-list,

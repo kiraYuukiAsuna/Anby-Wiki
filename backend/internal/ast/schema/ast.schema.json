@@ -51,7 +51,6 @@
         { "$ref": "#/$defs/pdfBlock" },
         { "$ref": "#/$defs/bookmarkBlock" },
         { "$ref": "#/$defs/linkPreviewBlock" },
-        { "$ref": "#/$defs/datasetViewBlock" },
         { "$ref": "#/$defs/embedBlock" },
         { "$ref": "#/$defs/dividerBlock" }
       ]
@@ -549,17 +548,6 @@
         "site_name": { "type": "string", "maxLength": 255 }
       }
     },
-    "datasetViewBlock": {
-      "description": "可查询数据不复制进 AST；页面引用冻结的 DatasetView 定义。",
-      "type": "object",
-      "required": ["id", "type", "dataset_view_id"],
-      "additionalProperties": false,
-      "properties": {
-        "id": { "$ref": "#/$defs/blockId" },
-        "type": { "const": "dataset_view" },
-        "dataset_view_id": { "type": "string", "format": "uuid" }
-      }
-    },
     "embedBlock": {
       "description": "外部嵌入保存 http/https URL；provider 命中白名单时以受限 sandbox iframe 交互，否则降级为安全链接。",
       "type": "object",
@@ -600,8 +588,7 @@
         { "$ref": "#/$defs/citationReferenceNode" },
         { "$ref": "#/$defs/mathNode" },
         { "$ref": "#/$defs/mentionNode" },
-        { "$ref": "#/$defs/dateMentionNode" },
-        { "$ref": "#/$defs/databaseMentionNode" }
+        { "$ref": "#/$defs/dateMentionNode" }
       ]
     },
     "mark": {
@@ -758,17 +745,6 @@
         "type": { "const": "date_mention" },
         "date": { "type": "string", "format": "date" },
         "end_date": { "type": "string", "format": "date" },
-        "display_text": { "type": "string" }
-      }
-    },
-    "databaseMentionNode": {
-      "description": "对稳定 Dataset 的行内提及。",
-      "type": "object",
-      "required": ["type", "dataset_id", "display_text"],
-      "additionalProperties": false,
-      "properties": {
-        "type": { "const": "database_mention" },
-        "dataset_id": { "type": "string", "format": "uuid" },
         "display_text": { "type": "string" }
       }
     }

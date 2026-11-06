@@ -391,7 +391,6 @@ Quote
 Code
 Callout
 Component
-DatasetView
 Embed
 Divider
 ```
@@ -423,7 +422,7 @@ Document
 │   └── ListItemBlock
 ├── TableBlock
 ├── ComponentBlock
-└── DatasetViewBlock
+└── Media / Embed / Divider Blocks
 ```
 
 行内节点包括：
@@ -820,10 +819,10 @@ Dynamic Collection 根据查询实时或异步计算。
 → Table Block AST
 
 可查询数据表
-→ Dataset + DatasetRecord + DatasetView
+→ Dataset + DatasetRecord + DatasetView（作为后端数据视图，不再嵌入页面正文 AST）
 ```
 
-页面中只保存 DatasetView Block。
+页面正文使用普通 Table / Component / Embed 等 Block；不再保存 DatasetView Block。
 
 ---
 
