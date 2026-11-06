@@ -6,7 +6,7 @@
 | [ADR-0002](./0002-database-migrations-and-data-access.md) | SQL 迁移（golang-migrate）与数据访问（pgx/v5） | 已接受 |
 | [ADR-0003](./0003-async-tasks-outbox-queue.md) | 异步任务：Postgres Outbox + SKIP LOCKED 轮询 | 已接受 |
 | [ADR-0004](./0004-object-storage.md) | 对象存储：S3 API + 外部开发存储 + 生产 RustFS | 已接受（实现已修订） |
-| [ADR-0005](./0005-editor-selection-blocknote.md) | 编辑器选型：BlockNote（Adapter 验收门槛） | 已接受 |
+| [ADR-0005](./0005-editor-selection-tiptap.md) | 编辑器选型：Tiptap + Adapter | 已接受（实现已修订） |
 | [ADR-0006](./0006-search-adapter.md) | 搜索 Adapter：PostgreSQL staging + 生产 Meilisearch | 已接受 |
 | [ADR-0007](./0007-api-client-generation.md) | 客户端生成：OpenAPI Generator v7 typescript-fetch | 已接受 |
 | [ADR-0008](./0008-id-strategy-uuidv7.md) | ID 策略：UUIDv7 | 已接受 |

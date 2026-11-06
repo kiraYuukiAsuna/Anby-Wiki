@@ -15,7 +15,7 @@ import {
   type PreformattedKind,
 } from "@/lib/ast/schema";
 import { AstValidationError, UnsupportedEditorFeatureError } from "./errors";
-import { newBlockId, type AdapterState } from "./ids";
+import { createAdapterState, resolveBlockId, type AdapterState } from "./ids";
 import type { PMBlock, PMDocument } from "./schema";
 
 const MARK_BY_TIPTAP: Record<string, Mark> = {
@@ -28,9 +28,10 @@ const MARK_BY_TIPTAP: Record<string, Mark> = {
 
 const INLINE_COLORS: Record<string, true> = { gray: true, brown: true, red: true, orange: true, yellow: true, green: true, blue: true, purple: true, pink: true };
 
-function blockId(node: PMBlock): string {
+function blockId(node: PMBlock, state: AdapterState, fallbackKey: string): string {
   const id = node.attrs?.id;
-  return typeof id === "string" && id ? id : newBlockId();
+  if (typeof id === "string" && id) return resolveBlockId(id, state);
+  return resolveBlockId(`missing:${fallbackKey}:${node.type ?? "block"}`, state);
 }
 
 function str(node: PMBlock, key: string): string {
@@ -142,49 +143,49 @@ function inlineContent(nodes: PMBlock[] | undefined, where: string): InlineNode[
   return out;
 }
 
-function childBlocks(node: PMBlock, where: string): AstBlock[] {
-  return blocksToAst(node.content ?? [], `${where}.content`);
+function childBlocks(node: PMBlock, where: string, state: AdapterState): AstBlock[] {
+  return blocksToAst(node.content ?? [], `${where}.content`, state);
 }
 
-function firstParagraphContent(node: PMBlock, where: string): { content: InlineNode[]; rest: AstBlock[] } {
+function firstParagraphContent(node: PMBlock, where: string, state: AdapterState): { content: InlineNode[]; rest: AstBlock[] } {
   const [first, ...rest] = node.content ?? [];
   if (first?.type === "paragraph") {
-    return { content: inlineContent(first.content, `${where}.content[0]`), rest: blocksToAst(rest, `${where}.content`) };
+    return { content: inlineContent(first.content, `${where}.content[0]`), rest: blocksToAst(rest, `${where}.content`, state) };
   }
-  return { content: [], rest: childBlocks(node, where) };
+  return { content: [], rest: childBlocks(node, where, state) };
 }
 
 function parseJSON(value: string, fallback: unknown): unknown {
   try { return JSON.parse(value); } catch { return fallback; }
 }
 
-function singleBlock(node: PMBlock, where: string): AstBlock | null {
-  const id = blockId(node);
+function singleBlock(node: PMBlock, where: string, state: AdapterState): AstBlock | null {
+  const id = blockId(node, state, where);
   switch (node.type) {
     case "paragraph":
       return { id, type: "paragraph", content: inlineContent(node.content, where) };
     case "heading":
       return { id, type: "heading", level: num(node, "level", 1), content: inlineContent(node.content, where) };
     case "blockquote":
-      return { id, type: "quote", children: childBlocks(node, where) };
+      return { id, type: "quote", children: childBlocks(node, where, state) };
     case "bulletList":
-      return { id, type: "bullet_list", children: (node.content ?? []).filter((child) => child.type === "listItem").map((child) => singleBlock(child, where)!).filter(Boolean) as Extract<AstBlock, { type: "list_item" }>[] };
+      return { id, type: "bullet_list", children: (node.content ?? []).filter((child) => child.type === "listItem").map((child, index) => singleBlock(child, `${where}.content[${index}]`, state)!).filter(Boolean) as Extract<AstBlock, { type: "list_item" }>[] };
     case "orderedList":
-      return { id, type: "ordered_list", children: (node.content ?? []).filter((child) => child.type === "listItem").map((child) => singleBlock(child, where)!).filter(Boolean) as Extract<AstBlock, { type: "list_item" }>[] };
+      return { id, type: "ordered_list", children: (node.content ?? []).filter((child) => child.type === "listItem").map((child, index) => singleBlock(child, `${where}.content[${index}]`, state)!).filter(Boolean) as Extract<AstBlock, { type: "list_item" }>[] };
     case "listItem":
-      return { id, type: "list_item", children: childBlocks(node, where) };
+      return { id, type: "list_item", children: childBlocks(node, where, state) };
     case "todoBlock": {
-      const lifted = firstParagraphContent(node, where);
+      const lifted = firstParagraphContent(node, where, state);
       const out: AstBlock = { id, type: "todo", checked: bool(node, "checked"), content: lifted.content };
       if (lifted.rest.length > 0) out.children = lifted.rest;
       return out;
     }
     case "toggleBlock": {
       const summary = parseJSON(str(node, "summaryJson"), [{ type: "text", text: str(node, "summaryText") }]) as InlineNode[];
-      return { id, type: "toggle", content: summary, children: childBlocks(node, where) };
+      return { id, type: "toggle", content: summary, children: childBlocks(node, where, state) };
     }
     case "callout":
-      return { id, type: "callout", kind: str(node, "kind") as CalloutKind, ...(str(node, "icon") ? { icon: str(node, "icon") } : {}), ...(str(node, "color") && str(node, "color") !== "default" ? { color: str(node, "color") as CalloutColor } : {}), children: childBlocks(node, where) };
+      return { id, type: "callout", kind: str(node, "kind") as CalloutKind, ...(str(node, "icon") ? { icon: str(node, "icon") } : {}), ...(str(node, "color") && str(node, "color") !== "default" ? { color: str(node, "color") as CalloutColor } : {}), children: childBlocks(node, where, state) };
     case "codeBlock":
       return { id, type: "code", content: textOf(node), ...(str(node, "language") ? { language: str(node, "language") } : {}), ...(str(node, "caption") ? { caption: str(node, "caption") } : {}) };
     case "preformatted":
@@ -194,9 +195,9 @@ function singleBlock(node: PMBlock, where: string): AstBlock | null {
     case "breadcrumb":
       return { id, type: "breadcrumb", items: breadcrumbItemSchema.array().parse(parseJSON(str(node, "itemsJson"), [])) };
     case "columnList":
-      return { id, type: "column_list", children: childBlocks(node, where) as Extract<AstBlock, { type: "column" }>[] };
+      return { id, type: "column_list", children: childBlocks(node, where, state) as Extract<AstBlock, { type: "column" }>[] };
     case "column":
-      return { id, type: "column", width_ratio: num(node, "widthRatio", 1), children: childBlocks(node, where) };
+      return { id, type: "column", width_ratio: num(node, "widthRatio", 1), children: childBlocks(node, where, state) };
     case "pageButton":
       return { id, type: "button", label: str(node, "label"), ...(str(node, "confirmation") ? { confirmation: str(node, "confirmation") } : {}), actions: buttonActionSchema.array().parse(parseJSON(str(node, "actionsJson"), [])) as ButtonAction[] };
     case "htmlBlock":
@@ -220,11 +221,11 @@ function singleBlock(node: PMBlock, where: string): AstBlock | null {
     case "embedBlock":
       return { id, type: "embed", url: str(node, "url"), ...(str(node, "title") ? { title: str(node, "title") } : {}), ...(str(node, "provider") && str(node, "provider") !== "none" ? { provider: str(node, "provider") as "youtube" | "vimeo" | "figma" } : {}), ...(str(node, "caption") ? { caption: str(node, "caption") } : {}) };
     case "astTable":
-      return { id, type: "table", ...(str(node, "caption") ? { caption: str(node, "caption") } : {}), ...(bool(node, "hasColumnHeader") ? { has_column_header: true } : {}), ...(bool(node, "hasRowHeader") ? { has_row_header: true } : {}), children: childBlocks(node, where) as Extract<AstBlock, { type: "table_row" }>[] };
+      return { id, type: "table", ...(str(node, "caption") ? { caption: str(node, "caption") } : {}), ...(bool(node, "hasColumnHeader") ? { has_column_header: true } : {}), ...(bool(node, "hasRowHeader") ? { has_row_header: true } : {}), children: childBlocks(node, where, state) as Extract<AstBlock, { type: "table_row" }>[] };
     case "astTableRow":
-      return { id, type: "table_row", children: childBlocks(node, where) as Extract<AstBlock, { type: "table_cell" }>[] };
+      return { id, type: "table_row", children: childBlocks(node, where, state) as Extract<AstBlock, { type: "table_cell" }>[] };
     case "astTableCell":
-      return { id, type: "table_cell", children: childBlocks(node, where) };
+      return { id, type: "table_cell", children: childBlocks(node, where, state) };
     case "horizontalRule":
       return { id, type: "divider" };
     default:
@@ -232,10 +233,10 @@ function singleBlock(node: PMBlock, where: string): AstBlock | null {
   }
 }
 
-function blocksToAst(nodes: PMBlock[], where: string): AstBlock[] {
+function blocksToAst(nodes: PMBlock[], where: string, state: AdapterState): AstBlock[] {
   const out: AstBlock[] = [];
   for (let index = 0; index < nodes.length; index += 1) {
-    const block = singleBlock(nodes[index], `${where}[${index}]`);
+    const block = singleBlock(nodes[index], `${where}[${index}]`, state);
     if (block) out.push(block);
   }
   return out;
@@ -249,13 +250,12 @@ function formatIssuePath(path: PropertyKey[]): string {
 
 export function toAst(
   doc: PMDocument | PMBlock,
-  state?: AdapterState,
+  state: AdapterState = createAdapterState(),
 ): Document {
-  void state;
   const raw = {
     type: "document",
     schema_version: 1,
-    children: blocksToAst(doc.content ?? [], "children"),
+    children: blocksToAst(doc.content ?? [], "children", state),
   };
   try {
     return parseDocument(raw);

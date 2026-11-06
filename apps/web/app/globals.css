@@ -468,42 +468,6 @@
   font-size: 0.72rem;
 }
 
-.ast-editable-block--nested {
-  margin-block: 0;
-  background: var(--background);
-}
-
-.ast-editable-block__actions {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 0.5rem;
-}
-
-.ast-editable-block__button {
-  min-height: 2rem;
-  border: 1px solid var(--border);
-  border-radius: 0.5rem;
-  background: var(--background);
-  padding: 0.35rem 0.7rem;
-  color: var(--foreground);
-  font-size: 0.8rem;
-  font-weight: 600;
-  cursor: pointer;
-}
-
-.ast-editable-block__button:hover:not(:disabled) {
-  background: var(--muted);
-}
-
-.ast-editable-block__button:disabled {
-  cursor: not-allowed;
-  opacity: 0.5;
-}
-
-.ast-editable-block__button--danger {
-  border-color: color-mix(in oklch, var(--destructive) 38%, var(--border));
-  color: var(--destructive);
-}
 
 .ast-inline-editor {
   position: relative;

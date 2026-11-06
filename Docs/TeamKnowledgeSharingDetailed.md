@@ -1069,21 +1069,21 @@ divider
 
 ### 7.1 编辑器选型与边界
 
-前端使用 BlockNote，底层是 ProseMirror/TipTap 生态。
+前端使用 Tiptap，底层是 ProseMirror 生态。
 
-但业务代码不直接依赖 BlockNote 内部模型，而是通过 Adapter：
+但业务代码不直接依赖 Tiptap 内部模型，而是通过 Adapter：
 
 ```text
 Typed Block AST
   ↔ BlockEditor Adapter
-    ↔ BlockNote Document
+    ↔ Tiptap JSON Document
 ```
 
 这样做的原因：
 
 - AST 是项目自己的长期内容契约；
 - 编辑器只是可替换的交互实现；
-- BlockNote major 升级不会直接污染业务模型；
+- Tiptap major 升级不会直接污染业务模型；
 - AI、Renderer、Diff、Proposal 不需要理解编辑器私有结构。
 
 ### 7.2 双向转换
@@ -1093,7 +1093,7 @@ Typed Block AST
 ```text
 ContentSnapshot AST
   → fromAst
-    → BlockNote Document
+    → Tiptap JSON Document
       → 用户编辑
         → toAst
           → Zod parseDocument
@@ -1104,20 +1104,16 @@ ContentSnapshot AST
 
 ### 7.3 Block ID 如何保持稳定
 
-已有 AST Block ID 直接传给 BlockNote。
+已有 AST Block ID 直接作为 Tiptap 节点属性传入。
 
 新建 Block 时：
 
-- BlockNote 可能先分配自己的 ID；
-- Adapter 在序列化边界将其稳定映射为 UUIDv7；
+- Tiptap 的 BlockIds 扩展为缺少 ID 的节点补 UUIDv7；
+- Adapter 对尚未写回的临时节点 ID 在序列化边界稳定映射为 UUIDv7；
 - 同一编辑会话中映射保持不变；
 - 已有块编辑和移动不改变 Block ID。
 
-列表因为编辑器模型与 AST 模型不同，还需要额外记录：
-
-- List 容器 ID；
-- 提升到列表项行内内容的 Paragraph ID；
-- 新建块的 ID 映射。
+列表和容器节点都直接持有 AST Block ID；不再维护旧编辑器迁移期的列表容器、提升段落等 sidecar 映射。
 
 ### 7.4 显式拒绝有损特性
 
@@ -1140,7 +1136,7 @@ Adapter 的重要原则不是“尽量转换”，而是：
 
 当前编辑页已经提供的直接交互入口包括：
 
-- 标题、段落、列表、表格等 BlockNote 基础编辑；
+- 标题、段落、列表、表格等 Tiptap 基础编辑；
 - 页面引用和未解析引用；
 - 外部链接；
 - 主 Entity 信息框；
@@ -1228,7 +1224,7 @@ AST Object      → Y.Map
 - CRDT 内部 item ID 不能替代 AST UUIDv7；
 - Block 移动后仍保留同一个 AST Block ID。
 
-当前浏览器集成不是把 BlockNote 直接绑定到 `y-prosemirror`。编辑器每次变化先序列化为 AST，再由 `syncYjsAst` reconcile 到 Y.Map/Y.Array/Y.Text；远端 AST 到达后则更新会话并重挂载编辑器。这个方案保持了 AST Adapter 边界，但协作光标、原生 transaction 保留和大文档重挂载性能仍需要单独完善。
+当前浏览器集成不是把 Tiptap 直接绑定到 `y-prosemirror`。编辑器每次变化先序列化为 AST，再由 `syncYjsAst` reconcile 到 Y.Map/Y.Array/Y.Text；远端 AST 到达后则更新会话并重挂载编辑器。这个方案保持了 AST Adapter 边界，但协作光标、原生 transaction 保留和大文档重挂载性能仍需要单独完善。
 
 ### 8.3 实时同步协议
 
@@ -3175,7 +3171,7 @@ Claim 独立后：
 ### 18.1 已落到代码和契约的能力
 
 - Page、Revision、ContentSnapshot、稳定 Block ID、历史、Diff、补偿回滚、改名、PageRedirect、BlockRedirect 和页面保护；
-- Typed Block AST 与 BlockNote 双向 Adapter；
+- Typed Block AST 与 Tiptap 双向 Adapter；
 - Yjs WorkingDocument、持久增量 update、普通发布与 AI 合并的 sequence CAS、未确认 update 幂等重发、自动 snapshot/compact、Block 级 Presence 和发布换基；
 - Entity、Property、Claim、标签、别名、验证、主 Entity 绑定、合并与回滚、联邦映射和图谱查询；
 - Source、Version、Chunk、Citation、Asset、逐处正文回链、按页面聚合的反向使用和可审计来源目录；
@@ -3431,7 +3427,7 @@ Yjs 可以证明客户端最终看到同一个文档状态，但不能证明这�
 - Typed Block AST；
 - Block ID；
 - PageReference/EntityReference/CitationReference；
-- BlockNote Adapter；
+- Tiptap Adapter；
 - Canonical JSON 与 Expected Hash；
 - 为什么模型不直接输出最终 AST 后落库。
 
@@ -3699,7 +3695,7 @@ AST 适合保存一份不可变文档快照，但不适合高频关系查询。
 
 在 45 分钟版基础上增加：
 
-- BlockNote Adapter；
+- Tiptap Adapter；
 - Yjs sequence/reconnect 与当前协作边界；
 - ImportPlan 与保真审计；
 - Claim 分类；
@@ -3757,7 +3753,7 @@ AST 适合保存一份不可变文档快照，但不适合高频关系查询。
 - [Evidence 领域服务](../backend/internal/evidence/README.md)
 - [Governance 安全写入边界](../backend/internal/governance/README.md)
 - [Projection 与 Outbox](../backend/internal/projection/README.md)
-- [ADR-0005 BlockNote 编辑器](./adr/0005-editor-selection-blocknote.md)
+- [ADR-0005 编辑器 Adapter](./adr/0005-editor-selection-tiptap.md)
 - [ADR-0014 Yjs WorkingDocument](./adr/0014-yjs-working-document-crdt.md)
 - [ADR-0015 AI 合并与 Yjs CAS](./adr/0015-client-assisted-yjs-ai-merge.md)
 - [ADR-0021 Semantic Kernel 与 AI 配置](./adr/0021-semantic-kernel-and-admin-ai-config.md)

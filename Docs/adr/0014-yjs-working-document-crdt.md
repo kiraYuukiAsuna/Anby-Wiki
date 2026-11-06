@@ -9,8 +9,8 @@ M8 需要支持字符编辑、Block 增删/移动、属性修改、离线合并�
 保持 Typed Block AST v1 是正式内容契约。CRDT 状态只属于 WorkingDocument，不能
 替代不可变 Revision/ContentSnapshot，也不能把自动收敛误当成语义冲突裁决。
 
-现有编辑器是 BlockNote/ProseMirror，AST Adapter 已保证稳定 UUIDv7 Block ID 和
-AST v1 无损往返。BlockNote 已声明 Yjs/y-prosemirror 协作生态兼容。
+现有编辑器是 Tiptap/ProseMirror，AST Adapter 已保证稳定 UUIDv7 Block ID 和
+AST v1 无损往返；Yjs 状态仍通过 AST Adapter 物化，不直接替代权威 AST。
 
 ## 决策
 
@@ -32,7 +32,7 @@ AST v1 无损往返。BlockNote 已声明 Yjs/y-prosemirror 协作生态兼容�
 ## 备选方案
 
 - Automerge：数据模型清晰且自带同步协议，但当前编辑器生态需要新增独立
-  ProseMirror/BlockNote 桥接，包体和集成面更大。
+  ProseMirror 事务桥接，包体和集成面更大。
 - 直接使用 ProseMirror transaction 日志：在线协作成熟，但离线因果合并、状态向量
   和跨服务恢复需要自行补齐。
 - 自研 OT/CRDT：无法在 M8 范围内证明正确性和长期维护成本，不采用。
@@ -43,5 +43,5 @@ AST v1 无损往返。BlockNote 已声明 Yjs/y-prosemirror 协作生态兼容�
 - M8-T03 WebSocket 协议以 state vector、binary update 和 server sequence 为核心；
   Presence 是易失数据，不写入权威表。
 - M8-T04 只能经现有 `BlockEditor`/AST Adapter 边界接入，不允许业务组件直接依赖
-  Yjs 或 BlockNote 内部结构。
+  Yjs 或 Tiptap 内部结构。
 - Yjs major 升级或 CRDT 根结构变化必须新增 codec version，并提供旧快照恢复方案。

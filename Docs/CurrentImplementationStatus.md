@@ -54,8 +54,8 @@ Meilisearch、认证限流与证书/代理边界、灾备恢复和人工可访�
 
 ## 2026-11-06 编辑器自定义块直接编辑
 
-- 编辑器内核已从 BlockNote 切换到 Tiptap；`components/editor/block-editor.tsx` 仍是唯一业务入口，
-  Tiptap ↔ AST v1 双向映射保留在 `lib/editor/`。BlockNote 依赖已移除，编辑器 JSON 不成为权威数据。
+- 编辑器内核为 Tiptap；`components/editor/block-editor.tsx` 仍是唯一业务入口，
+  Tiptap ↔ AST v1 双向映射保留在 `lib/editor/`。编辑器 JSON 不成为权威数据。
 - Anby 自定义块仍覆盖 Callout、语义表格、Preformatted、Equation、Breadcrumb、Column、页面按钮、HTML、
   Component、Image、Video、Audio、File、PDF、Bookmark、Link Preview 与 Embed；编辑态使用 Tiptap NodeView
   原地呈现，修改后经 `toAst` 回传 AST v1。
@@ -65,7 +65,7 @@ Meilisearch、认证限流与证书/代理边界、灾备恢复和人工可访�
 - 表格块在块内支持属性编辑与单元格直接编辑；Column 在列内编辑宽度，页面按钮 actions 继续提供表单化编辑和 JSON 高级入口。
 - DatasetView Block 与 Database Mention 已从 AST/编辑器/渲染器移除；阅读态和导出路径仍走静态 DOM，OpenAPI、数据库 Schema 与发布事务不变。
 - 验证：`npm run typecheck`、`npm run lint`、`npm run build` 通过；本机 Next.js `/dev/editor`
-  使用浏览器冒烟，mock session 后确认 Tiptap DOM 已挂载、BlockNote DOM 不存在、顶部工具栏不存在、普通文本编辑会同步 `onChange` AST，
+  使用浏览器冒烟，mock session 后确认 Tiptap DOM 已挂载、顶部工具栏不存在、普通文本编辑会同步 `onChange` AST，
   `/语义` 菜单可搜索并插入“语义表格”，插入后 AST 表格数增加，且 DatasetView 与 Database Mention 均不存在。
 
 ## 2026-11-05 协作 Wiki 工作台入口收口
@@ -958,7 +958,7 @@ Meilisearch、认证限流与证书/代理边界、灾备恢复和人工可访�
 
 - AST `text` 支持 `underline` mark，以及 gray/brown/red/orange/yellow/green/blue/
   purple/pink 九色白名单内的 `text_color` 和 `background_color`。编辑器可无损往返
-  BlockNote 内置样式；任意 CSS 颜色继续在发布前显式拒绝。
+  Tiptap 内置样式；任意 CSS 颜色继续在发布前显式拒绝。
 - Person 与 Page 分别保存稳定 Actor ID 和 Page ID；`date_mention` 支持单日或日期区间。
   Database Mention 已退场并从当前 AST/编辑器/渲染器移除，旧 Dataset 工作台不再作为正文控件暴露。
 - 服务端 Renderer v12 输出语义化 `<u>`、受限颜色 `data-*` 和 `<time>`；React 阅读兜底、
@@ -1175,7 +1175,7 @@ outlines。References/Related 是 Current Revision
 数据客户端缓存；Zustand 只保存本地交互状态。
 
 BlockEditor 通过 `next/dynamic({ssr:false})` 仅在客户端加载，服务端预渲染不执行
-BlockNote 的浏览器 API；编辑器会话继续执行 BlockNote 与 Typed Block AST 的双向映射。
+浏览器编辑器 API；编辑器会话继续执行 Tiptap 与 Typed Block AST 的双向映射。
 
 ## 2026-08-16 导入提案身份冲突修复
 

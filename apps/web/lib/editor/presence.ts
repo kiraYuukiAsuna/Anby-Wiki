@@ -4,7 +4,7 @@ import { Plugin, PluginKey } from "@tiptap/pm/state";
 import { Decoration, DecorationSet } from "@tiptap/pm/view";
 
 import type { EditorCursor, EditorPosition } from "@/lib/collaboration/presence";
-import { resolveBlockId, type AdapterState } from "@/lib/editor/ids";
+import { createAdapterState, resolveBlockId, type AdapterState } from "@/lib/editor/ids";
 
 export interface EditorPeer {
   clientId: string;
@@ -25,7 +25,7 @@ export function setPresencePeers(adapter: AdapterState, peers: EditorPeer[]): vo
 }
 
 function astId(id: string, adapter: AdapterState): string {
-  return adapter.liftedParagraphIds.get(id) ?? resolveBlockId(id, adapter);
+  return resolveBlockId(id, adapter);
 }
 
 export function editorPosition(position: ResolvedPos, adapter: AdapterState): EditorPosition | null {
@@ -61,14 +61,7 @@ export function resolveEditorPosition(doc: Node, position: EditorPosition, adapt
 export const PresenceExtension = Extension.create<PresenceOptions>({
   name: "anbywikiPresence",
   addOptions() {
-    return {
-      adapter: {
-        generatedIds: new Map(),
-        liftedParagraphIds: new Map(),
-        listIds: new Map(),
-        codeCaptions: new Map(),
-      },
-    };
+    return { adapter: createAdapterState() };
   },
   addProseMirrorPlugins() {
     const adapter = this.options.adapter;
