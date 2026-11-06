@@ -99,6 +99,9 @@ function renderSlashItems(
     button.append(icon, text);
     root.append(button);
   }
+  root.querySelector<HTMLElement>(".anby-slash-menu__item--active")?.scrollIntoView({
+    block: "nearest",
+  });
 }
 
 function slashMenuExtension(items: SlashItem[]) {

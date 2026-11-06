@@ -67,6 +67,9 @@ Meilisearch、认证限流与证书/代理边界、灾备恢复和人工可访�
 - 验证：`npm run typecheck`、`npm run lint`、`npm run build` 通过；本机 Next.js `/dev/editor`
   使用浏览器冒烟，mock session 后确认 Tiptap DOM 已挂载、顶部工具栏不存在、普通文本编辑会同步 `onChange` AST，
   `/语义` 菜单可搜索并插入“语义表格”，插入后 AST 表格数增加，且 DatasetView 与 Database Mention 均不存在。
+- 2026-11-06 补充：编辑器段落、标题、列表、引用和代码块已重置浏览器默认 margin，空段落只保留一行高度；
+  自定义块折叠/展开样式改为作用在内部 `details`，避免外层 NodeView 出现整页竖向虚线。
+  `/` 菜单限制最大高度，支持滚动，键盘上下移动会把当前项滚入可视区。
 
 ## 2026-11-05 协作 Wiki 工作台入口收口
 

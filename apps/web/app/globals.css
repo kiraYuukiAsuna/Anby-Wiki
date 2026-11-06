@@ -249,6 +249,25 @@
 .anby-tiptap-editor .tiptap {
   min-height: 20rem;
   outline: none;
+  line-height: 1.65;
+}
+
+.anby-tiptap-editor .tiptap p,
+.anby-tiptap-editor .tiptap h1,
+.anby-tiptap-editor .tiptap h2,
+.anby-tiptap-editor .tiptap h3,
+.anby-tiptap-editor .tiptap h4,
+.anby-tiptap-editor .tiptap h5,
+.anby-tiptap-editor .tiptap h6,
+.anby-tiptap-editor .tiptap ul,
+.anby-tiptap-editor .tiptap ol,
+.anby-tiptap-editor .tiptap blockquote,
+.anby-tiptap-editor .tiptap pre {
+  margin: 0;
+}
+
+.anby-tiptap-editor .tiptap p {
+  min-height: 1.5em;
 }
 
 .anby-tiptap-editor .tiptap > * + * {
@@ -287,17 +306,26 @@
   display: grid;
   min-width: 18rem;
   max-width: min(28rem, 90vw);
+  max-height: min(24rem, calc(100vh - 2rem));
   gap: 0.2rem;
-  overflow: hidden;
+  overflow-x: hidden;
+  overflow-y: auto;
+  overscroll-behavior: contain;
   border: 1px solid var(--border);
   border-radius: 0.75rem;
   background: var(--background);
   padding: 0.35rem;
   box-shadow: 0 18px 44px color-mix(in oklch, var(--foreground) 18%, transparent);
+  scrollbar-width: thin;
 }
 
 .anby-slash-menu__group {
-  padding: 0.35rem 0.5rem 0.2rem;
+  position: sticky;
+  top: -0.35rem;
+  z-index: 1;
+  margin-inline: -0.35rem;
+  padding: 0.35rem 0.85rem 0.2rem;
+  background: var(--background);
   color: var(--muted-foreground);
   font-size: 0.72rem;
   font-weight: 700;
@@ -387,12 +415,17 @@
   font-weight: 500;
 }
 
-.ast-editable-block[open] .ast-editable-block__hint {
-  display: none;
+.ast-editable-block > details {
+  min-width: 0;
 }
 
-.ast-editable-block:not([open]) > :not(summary) {
-  display: none !important;
+.ast-editable-block > details[open] {
+  display: grid;
+  gap: 0.75rem;
+}
+
+.ast-editable-block > details[open] .ast-editable-block__hint {
+  display: none;
 }
 
 .ast-editable-block__grid {
