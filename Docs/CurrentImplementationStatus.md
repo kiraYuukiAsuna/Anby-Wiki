@@ -1,6 +1,6 @@
 # 当前实现状态
 
-> 更新时间：2026-11-05
+> 更新时间：2026-11-06
 > 产品与能力审计依据：[整体设计方案](WikiDesignOnePage.md)
 
 本文集中描述已交付功能、实现边界与验证证据；未解决的实现、验收和责任事项统一维护在
@@ -50,6 +50,27 @@ Meilisearch、认证限流与证书/代理边界、灾备恢复和人工可访�
   最新版本进一步包含文档旋转/裁剪修复、视觉 Prompt v2 与 Kernel 逐次物理用量审计，
   以及账号安全与系统管理台、连接探针持久用量审计和 PDF Adapter v4 阅读顺序修复；
   管理台测试邮件独立收件表单、账号/安全审计分页和初始 `admin` 不可撤销保护已部署。
+
+
+## 2026-11-06 编辑器自定义块直接编辑
+
+- BlockNote 编辑器的 Anby 自定义块不再只显示静态预览；Callout、语义表格、
+  Preformatted、Equation、Breadcrumb、Column、页面按钮、HTML、Component、Image、
+  Video、Audio、File、PDF、Bookmark、Link Preview 与 Embed 在编辑态内直接显示
+  input/textarea/select/checkbox 控件，更新仍通过 BlockNote `updateBlock` 写回 props，
+  `onChange` 继续经 `toAst` 输出 AST v1。
+- 行内原子节点改为文本位置原地编辑；Page/Page Anchor、Entity、Claim、Citation、Math、
+  Mention、Date Mention 与历史兼容的 Dataset Mention 均可直接改显示文本和稳定 ID/日期等 props。
+  旧的页面引用顶部编辑面板已移除，编辑入口不再堆到工具栏上方。
+- 表格块在块内支持增删末行/末列，Column 在本列内支持新增/删除列，页面按钮 actions
+  在按钮块内提供按类型的表单化编辑和添加/删除动作，保留 JSON 高级编辑入口。
+- JSON 型字段（路径、按钮动作、组件显示配置）在提交前校验；UUID、HTTP URL、数值范围、
+  必填标题/Alt text 等约束在控件层提前拦截。阅读态和导出路径仍走原静态 DOM，
+  不改变 AST Schema、OpenAPI、数据库 Schema 或发布事务。
+- 验证：`npm run typecheck`、`npm run lint`、`npm run build` 通过；本机 Next.js
+  `/dev/editor` 使用浏览器冒烟，mock session 后确认自定义块和行内原子节点均出现原地编辑控件，
+  修改页面引用显示文本后右侧 `onChange` AST 同步为新值，表格“添加列”后 AST 列数从 2 到 3，
+  页面按钮“添加 Webhook”后 actions 写入 `webhook`，且旧顶部引用编辑面板不存在。
 
 ## 2026-11-05 协作 Wiki 工作台入口收口
 

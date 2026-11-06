@@ -46,7 +46,6 @@ import { ComponentInsertButton } from "@/components/editor/component-insert-butt
 import { PageReferencePicker } from "@/components/editor/page-reference-picker";
 import { PageButtonInsertDialog } from "@/components/editor/page-button-insert-dialog";
 import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
 import { clientUUID } from "@/lib/client-uuid";
 import type { Block, Document } from "@/lib/ast/schema";
 import { fromAst } from "@/lib/editor/fromAst";
@@ -54,14 +53,11 @@ import { createAdapterState, type AdapterState } from "@/lib/editor/ids";
 import { PresenceExtension, editorPosition, resolveEditorPosition, type EditorPeer } from "@/lib/editor/presence";
 import type { EditorCursor } from "@/lib/collaboration/presence";
 import {
-  getSelectedPageReference,
   insertDateMention,
   insertExternalLink,
   insertPersonMention,
   insertResolvedPageReference,
   insertUnresolvedPageReference,
-  updateSelectedPageReferenceDisplayText,
-  type SelectedPageReference,
 } from "@/lib/editor/references";
 import { editorSchema, type BNBlock } from "@/lib/editor/schema";
 import { toAst } from "@/lib/editor/toAst";
@@ -157,20 +153,12 @@ export function BlockEditor({
   const [mentionOpen, setMentionOpen] = useState(false);
   // 打开外链编辑器时的默认显示文本（选中文本）。
   const [linkDefaultText, setLinkDefaultText] = useState("");
-  // 当前选中的 pageReference 节点（点击引用产生的 NodeSelection）。
-  const [selectedRef, setSelectedRef] = useState<SelectedPageReference | null>(
-    null,
-  );
-  const [refDisplayText, setRefDisplayText] = useState("");
 
-  // 跟踪选区：选中 pageReference 原子节点时展示 display_text 编辑面板。
+  // 跟踪选区：行内原子节点已改为原地编辑；这里仅同步 Presence。
   useEffect(() => {
     if (!editable) return;
     const syncSelection = () => {
       if (applyingRemote.current) return;
-      const selected = getSelectedPageReference(editor);
-      setSelectedRef(selected);
-      if (selected) setRefDisplayText(selected.displayText);
       try {
         const selection = editor.prosemirrorState.selection;
         const anchor = editorPosition(selection.$anchor, state);
@@ -444,44 +432,6 @@ export function BlockEditor({
         </div>
       ) : null}
 
-      {editable && selectedRef ? (
-        <div
-          className="mb-2 flex items-center gap-2 rounded-md border border-border p-2"
-          data-page-ref-panel
-        >
-          {selectedRef.resolved ? (
-            <>
-              <span className="text-xs text-muted-foreground">
-                引用显示文本
-              </span>
-              <Input
-                value={refDisplayText}
-                onChange={(event) => setRefDisplayText(event.target.value)}
-                className="h-8 max-w-64"
-                aria-label="引用显示文本"
-              />
-              <Button
-                type="button"
-                size="sm"
-                variant="outline"
-                onClick={() =>
-                  updateSelectedPageReferenceDisplayText(editor, refDisplayText)
-                }
-              >
-                应用
-              </Button>
-              <span className="text-xs text-muted-foreground">
-                仅修改显示文本，引用目标不变
-              </span>
-            </>
-          ) : (
-            <span className="text-xs text-muted-foreground">
-              未解析引用：{selectedRef.normalizedTitle}
-              （目标页面创建后自动解析）
-            </span>
-          )}
-        </div>
-      ) : null}
 
       <BlockNoteView
         editor={editor}

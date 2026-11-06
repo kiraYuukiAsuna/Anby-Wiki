@@ -251,6 +251,193 @@
   font-size: 0.875em;
 }
 
+.ast-editable-block {
+  display: grid;
+  gap: 0.75rem;
+  max-width: 100%;
+  margin-block: 0.35rem;
+  border: 1px solid var(--border);
+  border-radius: 0.75rem;
+  padding: 0.75rem;
+  background: color-mix(in oklch, var(--muted) 36%, transparent);
+  color: var(--foreground);
+}
+
+.ast-editable-block__header {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 0.5rem;
+}
+
+.ast-editable-block__title {
+  font-size: 0.8rem;
+  font-weight: 700;
+}
+
+.ast-editable-block__summary {
+  min-width: 0;
+  overflow-wrap: anywhere;
+  color: var(--muted-foreground);
+  font-size: 0.75rem;
+}
+
+.ast-editable-block__grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(12rem, 1fr));
+  gap: 0.75rem;
+}
+
+.ast-editable-block__field {
+  display: grid;
+  gap: 0.35rem;
+  min-width: 0;
+}
+
+.ast-editable-block__label {
+  color: var(--muted-foreground);
+  font-size: 0.72rem;
+  font-weight: 600;
+}
+
+.ast-editable-block__control {
+  min-height: 2rem;
+  width: 100%;
+  min-width: 0;
+  border: 1px solid var(--input);
+  border-radius: 0.5rem;
+  background: var(--background);
+  padding: 0.35rem 0.55rem;
+  color: var(--foreground);
+  font-size: 0.8rem;
+  line-height: 1.35;
+  outline: none;
+}
+
+.ast-editable-block__control:focus {
+  border-color: var(--ring);
+  box-shadow: 0 0 0 3px color-mix(in oklch, var(--ring) 25%, transparent);
+}
+
+.ast-editable-block__control[aria-invalid="true"] {
+  border-color: var(--destructive);
+}
+
+.ast-editable-block__textarea {
+  min-height: 5rem;
+  resize: vertical;
+}
+
+.ast-editable-block__control--mono {
+  font-family: var(--font-geist-mono), monospace;
+}
+
+.ast-editable-block__checkbox-row {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.45rem;
+  min-height: 2rem;
+  color: var(--muted-foreground);
+  font-size: 0.8rem;
+}
+
+.ast-editable-block__preview {
+  overflow-wrap: anywhere;
+  border-radius: 0.5rem;
+  background: var(--background);
+  padding: 0.45rem 0.6rem;
+  color: var(--muted-foreground);
+  font-size: 0.8rem;
+}
+
+.ast-editable-block__error {
+  color: var(--destructive);
+  font-size: 0.72rem;
+}
+
+.ast-editable-block--nested {
+  margin-block: 0;
+  background: var(--background);
+}
+
+.ast-editable-block__actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+}
+
+.ast-editable-block__button {
+  min-height: 2rem;
+  border: 1px solid var(--border);
+  border-radius: 0.5rem;
+  background: var(--background);
+  padding: 0.35rem 0.7rem;
+  color: var(--foreground);
+  font-size: 0.8rem;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.ast-editable-block__button:hover:not(:disabled) {
+  background: var(--muted);
+}
+
+.ast-editable-block__button:disabled {
+  cursor: not-allowed;
+  opacity: 0.5;
+}
+
+.ast-editable-block__button--danger {
+  border-color: color-mix(in oklch, var(--destructive) 38%, var(--border));
+  color: var(--destructive);
+}
+
+.ast-inline-editor {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  gap: 0.25rem;
+  cursor: text;
+}
+
+.ast-inline-editor__label {
+  color: currentColor;
+  font-size: 0.75em;
+  font-weight: 700;
+  opacity: 0.72;
+}
+
+.ast-inline-editor__preview {
+  min-width: 0;
+}
+
+.ast-inline-editor__panel {
+  position: absolute;
+  z-index: 30;
+  top: calc(100% + 0.35rem);
+  left: 0;
+  display: none;
+  min-width: min(24rem, 90vw);
+  max-width: min(32rem, 90vw);
+  grid-template-columns: 1fr;
+  gap: 0.6rem;
+  border: 1px solid var(--border);
+  border-radius: 0.75rem;
+  background: var(--background);
+  padding: 0.75rem;
+  box-shadow: 0 16px 38px color-mix(in oklch, var(--foreground) 16%, transparent);
+  color: var(--foreground);
+}
+
+.ast-inline-editor:focus-within .ast-inline-editor__panel,
+.ast-inline-editor:hover .ast-inline-editor__panel {
+  display: grid;
+}
+
+.ast-inline-editor .ast-editable-block__field {
+  min-width: 12rem;
+}
+
 .wiki-column-list,
 .wiki-rendered .column-list {
   display: flex;

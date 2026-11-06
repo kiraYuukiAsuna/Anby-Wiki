@@ -56,7 +56,34 @@ import {
   defaultStyleSpecs,
 } from "@blocknote/core";
 
-import type { Block as AstBlock } from "@/lib/ast/schema";
+import {
+  breadcrumbItemSchema,
+  buttonActionSchema,
+  type Block as AstBlock,
+} from "@/lib/ast/schema";
+import {
+  booleanProp,
+  buttonControl,
+  checkboxField,
+  createActionRow,
+  createEditableBlockShell,
+  createFieldGrid,
+  createPreview,
+  ignoreEditableBlockMutation,
+  isPlainObject,
+  jsonTextareaField,
+  nonEmpty,
+  numberField,
+  numberProp,
+  optionalUUID,
+  patchBlockProps,
+  requiredHTTPURL,
+  requiredUUID,
+  selectField,
+  stringProp,
+  textField,
+  type EditableBlockEditor,
+} from "@/lib/editor/editable-block-controls";
 
 /** AST v1 全部 block 类型（判别值）。 */
 export const AST_BLOCK_TYPES = [
@@ -138,13 +165,404 @@ export const UNMAPPED_BLOCKNOTE_BLOCKS = [
   "pageBreak",
 ] as const;
 
-// ---- 自定义块：callout / astTable*（content "none" 容器） ----
+// ---- 自定义块：直接编辑 props，子块仍交给 BlockNote 渲染 ----
 
 const CALLOUT_LABELS: Record<string, string> = {
   info: "信息",
   warning: "警告",
   danger: "危险",
 };
+
+const CALLOUT_KIND_OPTIONS = [
+  { value: "info", label: "信息" },
+  { value: "warning", label: "警告" },
+  { value: "danger", label: "危险" },
+];
+
+const COLOR_OPTIONS = [
+  { value: "default", label: "默认" },
+  { value: "gray", label: "灰" },
+  { value: "brown", label: "棕" },
+  { value: "orange", label: "橙" },
+  { value: "yellow", label: "黄" },
+  { value: "green", label: "绿" },
+  { value: "blue", label: "蓝" },
+  { value: "purple", label: "紫" },
+  { value: "pink", label: "粉" },
+  { value: "red", label: "红" },
+];
+
+const PREFORMATTED_KIND_OPTIONS = [
+  { value: "ascii_diagram", label: "ASCII 图" },
+  { value: "fixed_table", label: "固定宽表格" },
+  { value: "protocol_trace", label: "协议 Trace" },
+  { value: "formula_text", label: "公式文本" },
+  { value: "plain", label: "纯文本" },
+];
+
+const EMBED_PROVIDER_OPTIONS = [
+  { value: "none", label: "普通链接" },
+  { value: "youtube", label: "YouTube" },
+  { value: "vimeo", label: "Vimeo" },
+  { value: "figma", label: "Figma" },
+];
+
+const breadcrumbItemsSchema = breadcrumbItemSchema.array().min(1).max(32);
+const buttonActionsSchema = buttonActionSchema.array().min(1).max(10);
+
+function isEditableBlockRender(
+  context: unknown,
+  editor: EditableBlockEditor,
+): boolean {
+  return (
+    isPlainObject(context) &&
+    context.renderType === "nodeView" &&
+    editor.isEditable !== false &&
+    typeof editor.updateBlock === "function"
+  );
+}
+
+type PartialEditorBlock = {
+  id?: string;
+  type?: string;
+  props?: Record<string, unknown>;
+  content?: unknown;
+  children?: PartialEditorBlock[];
+};
+
+function newEditorBlockId(): string {
+  const crypto = globalThis.crypto;
+  if (typeof crypto?.randomUUID === "function") return crypto.randomUUID();
+  return `local-${Date.now().toString(36)}-${Math.random().toString(36).slice(2)}`;
+}
+
+function emptyParagraph(text = ""): PartialEditorBlock {
+  return { id: newEditorBlockId(), type: "paragraph", content: text };
+}
+
+function emptyTableCell(text = ""): PartialEditorBlock {
+  return {
+    id: newEditorBlockId(),
+    type: "astTableCell",
+    children: [emptyParagraph(text)],
+  };
+}
+
+function patchBlockChildren(
+  editor: EditableBlockEditor,
+  blockId: string,
+  children: PartialEditorBlock[],
+): void {
+  if (editor.isEditable === false || !editor.updateBlock) return;
+  editor.updateBlock(blockId, { children });
+}
+
+function childBlocks(block: { children?: unknown[] }): PartialEditorBlock[] {
+  return Array.isArray(block.children)
+    ? (block.children as PartialEditorBlock[])
+    : [];
+}
+
+function addTableRow(block: { children?: unknown[] }): PartialEditorBlock[] {
+  const rows = childBlocks(block);
+  const firstRow = rows[0];
+  const columnCount = Math.max(childBlocks(firstRow ?? {}).length, 1);
+  return [
+    ...rows,
+    {
+      id: newEditorBlockId(),
+      type: "astTableRow",
+      children: Array.from({ length: columnCount }, () => emptyTableCell("单元格")),
+    },
+  ];
+}
+
+function addTableColumn(block: { children?: unknown[] }): PartialEditorBlock[] {
+  const rows = childBlocks(block);
+  if (rows.length === 0) {
+    return [
+      {
+        id: newEditorBlockId(),
+        type: "astTableRow",
+        children: [emptyTableCell("单元格")],
+      },
+    ];
+  }
+  return rows.map((row) => ({
+    ...row,
+    children: [...childBlocks(row), emptyTableCell("单元格")],
+  }));
+}
+
+function removeLastTableRow(block: { children?: unknown[] }): PartialEditorBlock[] {
+  const rows = childBlocks(block);
+  return rows.length > 1 ? rows.slice(0, -1) : rows;
+}
+
+function removeLastTableColumn(block: { children?: unknown[] }): PartialEditorBlock[] {
+  return childBlocks(block).map((row) => {
+    const cells = childBlocks(row);
+    return { ...row, children: cells.length > 1 ? cells.slice(0, -1) : cells };
+  });
+}
+
+function findParentBlock(
+  blocks: unknown[] | undefined,
+  childId: string,
+  parentType: string,
+): PartialEditorBlock | null {
+  if (!Array.isArray(blocks)) return null;
+  for (const block of blocks as PartialEditorBlock[]) {
+    const children = childBlocks(block);
+    if (block.type === parentType && children.some((child) => child.id === childId)) {
+      return block;
+    }
+    const nested = findParentBlock(children, childId, parentType);
+    if (nested) return nested;
+  }
+  return null;
+}
+
+function addColumnSibling(editor: EditableBlockEditor, columnId: string): void {
+  const parent = findParentBlock(editor.document, columnId, "columnList");
+  if (!parent?.id) return;
+  const columns = childBlocks(parent);
+  if (columns.length >= 5) return;
+  patchBlockChildren(editor, parent.id, [
+    ...columns,
+    {
+      id: newEditorBlockId(),
+      type: "column",
+      props: { widthRatio: 1 },
+      children: [emptyParagraph("新列")],
+    },
+  ]);
+}
+
+function removeColumn(editor: EditableBlockEditor, columnId: string): void {
+  const parent = findParentBlock(editor.document, columnId, "columnList");
+  if (!parent?.id) return;
+  const columns = childBlocks(parent);
+  if (columns.length <= 2) return;
+  patchBlockChildren(
+    editor,
+    parent.id,
+    columns.filter((column) => column.id !== columnId),
+  );
+}
+
+function parsedJSONArray(value: string, fallback: Record<string, unknown>[]) {
+  try {
+    const parsed = JSON.parse(value) as unknown;
+    return Array.isArray(parsed) && parsed.every(isPlainObject)
+      ? (parsed as Record<string, unknown>[])
+      : fallback;
+  } catch {
+    return fallback;
+  }
+}
+
+function writeJSONProps(
+  editor: EditableBlockEditor,
+  blockId: string,
+  propName: string,
+  value: unknown,
+): void {
+  patchBlockProps(editor, blockId, { [propName]: JSON.stringify(value) });
+}
+
+const DEFAULT_INSERT_BLOCK_ACTION = {
+  type: "insert_blocks",
+  target_page_id: "00000000-0000-7000-8000-000000000000",
+  blocks: [
+    {
+      id: "00000000-0000-7000-8000-000000000001",
+      type: "paragraph",
+      content: [{ type: "text", text: "插入内容" }],
+    },
+  ],
+};
+
+const BUTTON_ACTION_OPTIONS = [
+  { value: "notification", label: "通知" },
+  { value: "insert_blocks", label: "插入内容块" },
+  { value: "webhook", label: "Webhook" },
+  { value: "update_dataset_record", label: "更新数据记录" },
+];
+
+function buttonActions(value: string): Record<string, unknown>[] {
+  return parsedJSONArray(value, [
+    { type: "notification", message: "操作完成", tone: "success" },
+  ]);
+}
+
+function defaultButtonAction(type: string): Record<string, unknown> {
+  switch (type) {
+    case "insert_blocks":
+      return structuredClone(DEFAULT_INSERT_BLOCK_ACTION);
+    case "webhook":
+      return { type, url: "https://example.com/webhook", payload: {} };
+    case "update_dataset_record":
+      return {
+        type,
+        record_id: "00000000-0000-7000-8000-000000000000",
+        values: {},
+      };
+    default:
+      return { type: "notification", message: "操作完成", tone: "success" };
+  }
+}
+
+function updateButtonAction(
+  editor: EditableBlockEditor,
+  blockId: string,
+  actions: Record<string, unknown>[],
+  index: number,
+  patch: Record<string, unknown>,
+): void {
+  const next = actions.map((action, actionIndex) =>
+    actionIndex === index ? { ...action, ...patch } : action,
+  );
+  writeJSONProps(editor, blockId, "actionsJson", next);
+}
+
+function renderButtonActionEditor(
+  editor: EditableBlockEditor,
+  blockId: string,
+  actions: Record<string, unknown>[],
+  action: Record<string, unknown>,
+  index: number,
+): HTMLElement {
+  const panel = createEditableBlockShell({
+    type: "buttonAction",
+    title: `动作 ${index + 1}`,
+    summary: stringProp(action, "type", "notification"),
+  });
+  panel.classList.add("ast-editable-block--nested");
+  const actionType = stringProp(action, "type", "notification");
+  const fields: HTMLElement[] = [
+    selectField({
+      label: "动作类型",
+      value: actionType,
+      options: BUTTON_ACTION_OPTIONS,
+      onCommit: (value) => {
+        const next = actions.map((candidate, actionIndex) =>
+          actionIndex === index ? defaultButtonAction(value) : candidate,
+        );
+        writeJSONProps(editor, blockId, "actionsJson", next);
+      },
+    }),
+  ];
+  if (actionType === "notification") {
+    fields.push(
+      textField({
+        label: "通知内容",
+        value: stringProp(action, "message"),
+        validate: nonEmpty("通知内容不能为空"),
+        onCommit: (value) => updateButtonAction(editor, blockId, actions, index, { message: value }),
+      }),
+      selectField({
+        label: "语气",
+        value: stringProp(action, "tone", "default"),
+        options: [
+          { value: "default", label: "默认" },
+          { value: "success", label: "成功" },
+          { value: "info", label: "信息" },
+          { value: "warning", label: "警告" },
+          { value: "error", label: "错误" },
+        ],
+        onCommit: (value) => updateButtonAction(editor, blockId, actions, index, { tone: value }),
+      }),
+    );
+  } else if (actionType === "insert_blocks") {
+    fields.push(
+      textField({
+        label: "目标页面 ID",
+        value: stringProp(action, "target_page_id"),
+        validate: requiredUUID,
+        onCommit: (value) => updateButtonAction(editor, blockId, actions, index, { target_page_id: value.trim() }),
+      }),
+      jsonTextareaField({
+        label: "插入块 JSON",
+        value: JSON.stringify(action.blocks ?? [], null, 2),
+        fallback: [{ id: newEditorBlockId(), type: "paragraph", content: [{ type: "text", text: "插入内容" }] }],
+        rows: 5,
+        validate: (parsed) => Array.isArray(parsed) && parsed.length > 0 ? null : "至少需要一个块",
+        onCommit: (_jsonText, parsed) => updateButtonAction(editor, blockId, actions, index, { blocks: parsed }),
+      }),
+    );
+  } else if (actionType === "webhook") {
+    fields.push(
+      textField({
+        label: "HTTPS URL",
+        value: stringProp(action, "url"),
+        validate: (value) => value.startsWith("https://") ? requiredHTTPURL(value) : "Webhook 必须使用 HTTPS",
+        onCommit: (value) => updateButtonAction(editor, blockId, actions, index, { url: value.trim() }),
+      }),
+      jsonTextareaField({
+        label: "Payload JSON",
+        value: JSON.stringify(action.payload ?? {}, null, 2),
+        fallback: {},
+        rows: 4,
+        validate: (parsed) => isPlainObject(parsed) ? null : "Payload 必须是 JSON object",
+        onCommit: (_jsonText, parsed) => updateButtonAction(editor, blockId, actions, index, { payload: parsed }),
+      }),
+    );
+  } else {
+    fields.push(
+      textField({
+        label: "Record ID",
+        value: stringProp(action, "record_id"),
+        validate: requiredUUID,
+        onCommit: (value) => updateButtonAction(editor, blockId, actions, index, { record_id: value.trim() }),
+      }),
+      textField({
+        label: "Entity ID（可选）",
+        value: stringProp(action, "entity_id"),
+        validate: optionalUUID,
+        onCommit: (value) => updateButtonAction(editor, blockId, actions, index, { entity_id: value.trim() || null }),
+      }),
+      jsonTextareaField({
+        label: "Values JSON",
+        value: JSON.stringify(action.values ?? {}, null, 2),
+        fallback: {},
+        rows: 4,
+        validate: (parsed) => isPlainObject(parsed) ? null : "Values 必须是 JSON object",
+        onCommit: (_jsonText, parsed) => updateButtonAction(editor, blockId, actions, index, { values: parsed }),
+      }),
+    );
+  }
+  panel.append(
+    createFieldGrid(...fields),
+    createActionRow(
+      buttonControl({
+        label: "删除动作",
+        variant: "danger",
+        disabled: actions.length <= 1,
+        onClick: () => writeJSONProps(editor, blockId, "actionsJson", actions.filter((_, actionIndex) => actionIndex !== index)),
+      }),
+    ),
+  );
+  return panel;
+}
+
+function staticTextBlock(className: string, text: string): HTMLElement {
+  const dom = window.document.createElement("div");
+  dom.className = className;
+  dom.textContent = text;
+  return dom;
+}
+
+function renderStaticCallout(block: { props: Record<string, unknown> }) {
+  const kind = stringProp(block.props, "kind", "info");
+  const icon = stringProp(block.props, "icon");
+  const dom = staticTextBlock(
+    `ast-callout ast-callout--${kind}`,
+    `${icon}${CALLOUT_LABELS[kind] ?? kind}`,
+  );
+  dom.dataset.color = stringProp(block.props, "color", "default");
+  return dom;
+}
 
 const calloutSpec = createBlockSpec(
   {
@@ -174,15 +592,65 @@ const calloutSpec = createBlockSpec(
     content: "none",
   },
   {
-    render: (block) => {
-      const dom = window.document.createElement("div");
-      dom.className = `ast-callout ast-callout--${block.props.kind}`;
-      dom.dataset.color = block.props.color;
-      dom.textContent = `${block.props.icon || ""}${CALLOUT_LABELS[block.props.kind] ?? block.props.kind}`;
-      return { dom };
+    render(this: unknown, block, editor) {
+      const editableEditor = editor as unknown as EditableBlockEditor;
+      if (!isEditableBlockRender(this, editableEditor)) {
+        return { dom: renderStaticCallout(block) };
+      }
+      const kind = stringProp(block.props, "kind", "info");
+      const root = createEditableBlockShell({
+        type: "callout",
+        title: "提示框",
+        summary: CALLOUT_LABELS[kind] ?? kind,
+        className: `ast-callout ast-callout--${kind}`,
+      });
+      root.dataset.color = stringProp(block.props, "color", "default");
+      root.appendChild(
+        createFieldGrid(
+          selectField({
+            label: "类型",
+            value: kind,
+            options: CALLOUT_KIND_OPTIONS,
+            onCommit: (value) =>
+              patchBlockProps(editableEditor, block.id, { kind: value }),
+          }),
+          textField({
+            label: "图标",
+            value: stringProp(block.props, "icon"),
+            onCommit: (value) =>
+              patchBlockProps(editableEditor, block.id, { icon: value.trim() }),
+          }),
+          selectField({
+            label: "颜色",
+            value: stringProp(block.props, "color", "default"),
+            options: COLOR_OPTIONS,
+            onCommit: (value) =>
+              patchBlockProps(editableEditor, block.id, { color: value }),
+          }),
+        ),
+      );
+      return { dom: root, ignoreMutation: ignoreEditableBlockMutation(root) };
     },
   },
 );
+
+function renderStaticPreformatted(block: { props: Record<string, unknown> }) {
+  const figure = window.document.createElement("figure");
+  figure.className = "ast-preformatted";
+  figure.dataset.kind = stringProp(block.props, "kind", "plain");
+  const captionText = stringProp(block.props, "caption");
+  if (captionText) {
+    const caption = window.document.createElement("figcaption");
+    caption.textContent = captionText;
+    figure.appendChild(caption);
+  }
+  const pre = window.document.createElement("pre");
+  const code = window.document.createElement("code");
+  code.textContent = stringProp(block.props, "text");
+  pre.appendChild(code);
+  figure.appendChild(pre);
+  return figure;
+}
 
 const preformattedSpec = createBlockSpec(
   {
@@ -204,24 +672,58 @@ const preformattedSpec = createBlockSpec(
     content: "none",
   },
   {
-    render: (block) => {
-      const figure = window.document.createElement("figure");
-      figure.className = "ast-preformatted";
-      figure.dataset.kind = block.props.kind;
-      if (block.props.caption) {
-        const caption = window.document.createElement("figcaption");
-        caption.textContent = block.props.caption;
-        figure.appendChild(caption);
+    render(this: unknown, block, editor) {
+      const editableEditor = editor as unknown as EditableBlockEditor;
+      if (!isEditableBlockRender(this, editableEditor)) {
+        return { dom: renderStaticPreformatted(block) };
       }
-      const pre = window.document.createElement("pre");
-      const code = window.document.createElement("code");
-      code.textContent = block.props.text;
-      pre.appendChild(code);
-      figure.appendChild(pre);
-      return { dom: figure };
+      const root = createEditableBlockShell({
+        type: "preformatted",
+        title: "固定宽文本",
+        summary: stringProp(block.props, "kind", "plain"),
+        className: "ast-preformatted",
+      });
+      root.append(
+        createFieldGrid(
+          selectField({
+            label: "类型",
+            value: stringProp(block.props, "kind", "plain"),
+            options: PREFORMATTED_KIND_OPTIONS,
+            onCommit: (value) =>
+              patchBlockProps(editableEditor, block.id, { kind: value }),
+          }),
+          textField({
+            label: "说明",
+            value: stringProp(block.props, "caption"),
+            onCommit: (value) =>
+              patchBlockProps(editableEditor, block.id, { caption: value }),
+          }),
+        ),
+        textField({
+          label: "内容",
+          value: stringProp(block.props, "text"),
+          multiline: true,
+          rows: 6,
+          monospace: true,
+          onCommit: (value) =>
+            patchBlockProps(editableEditor, block.id, { text: value }),
+        }),
+      );
+      return { dom: root, ignoreMutation: ignoreEditableBlockMutation(root) };
     },
   },
 );
+
+function renderStaticEquation(block: { props: Record<string, unknown> }) {
+  const expression = stringProp(block.props, "expression");
+  const caption = stringProp(block.props, "caption");
+  const dom = staticTextBlock(
+    "ast-equation",
+    caption ? `${expression} · ${caption}` : expression,
+  );
+  dom.dataset.mathExpression = expression;
+  return dom;
+}
 
 const equationSpec = createBlockSpec(
   {
@@ -233,17 +735,46 @@ const equationSpec = createBlockSpec(
     content: "none",
   },
   {
-    render: (block) => {
-      const dom = window.document.createElement("div");
-      dom.className = "ast-equation";
-      dom.dataset.mathExpression = block.props.expression;
-      dom.textContent = block.props.caption
-        ? `${block.props.expression} · ${block.props.caption}`
-        : block.props.expression;
-      return { dom };
+    render(this: unknown, block, editor) {
+      const editableEditor = editor as unknown as EditableBlockEditor;
+      if (!isEditableBlockRender(this, editableEditor)) {
+        return { dom: renderStaticEquation(block) };
+      }
+      const root = createEditableBlockShell({
+        type: "equation",
+        title: "数学公式",
+        summary: stringProp(block.props, "expression") || "LaTeX",
+        className: "ast-equation",
+      });
+      root.append(
+        textField({
+          label: "表达式",
+          value: stringProp(block.props, "expression"),
+          monospace: true,
+          validate: nonEmpty("公式不能为空"),
+          onCommit: (value) =>
+            patchBlockProps(editableEditor, block.id, { expression: value }),
+        }),
+        textField({
+          label: "说明",
+          value: stringProp(block.props, "caption"),
+          onCommit: (value) =>
+            patchBlockProps(editableEditor, block.id, { caption: value }),
+        }),
+      );
+      return { dom: root, ignoreMutation: ignoreEditableBlockMutation(root) };
     },
   },
 );
+
+function renderStaticTable(block: { props: Record<string, unknown> }) {
+  const dom = staticTextBlock("ast-table", stringProp(block.props, "caption"));
+  dom.dataset.hasColumnHeader = String(
+    booleanProp(block.props, "hasColumnHeader"),
+  );
+  dom.dataset.hasRowHeader = String(booleanProp(block.props, "hasRowHeader"));
+  return dom;
+}
 
 const tableSpec = createBlockSpec(
   {
@@ -256,16 +787,88 @@ const tableSpec = createBlockSpec(
     content: "none",
   },
   {
-    render: (block) => {
-      const dom = window.document.createElement("div");
-      dom.className = "ast-table";
-      dom.dataset.hasColumnHeader = String(block.props.hasColumnHeader);
-      dom.dataset.hasRowHeader = String(block.props.hasRowHeader);
-      dom.textContent = block.props.caption;
-      return { dom };
+    render(this: unknown, block, editor) {
+      const editableEditor = editor as unknown as EditableBlockEditor;
+      if (!isEditableBlockRender(this, editableEditor)) {
+        return { dom: renderStaticTable(block) };
+      }
+      const root = createEditableBlockShell({
+        type: "astTable",
+        title: "语义表格",
+        summary: "标题与表头设置",
+        className: "ast-table",
+      });
+      const rowCount = childBlocks(block).length;
+      const columnCount = Math.max(childBlocks(childBlocks(block)[0] ?? {}).length, 0);
+      root.append(
+        textField({
+          label: "表格标题",
+          value: stringProp(block.props, "caption"),
+          onCommit: (value) =>
+            patchBlockProps(editableEditor, block.id, { caption: value }),
+        }),
+        createFieldGrid(
+          checkboxField({
+            label: "第一行为列头",
+            checked: booleanProp(block.props, "hasColumnHeader"),
+            onCommit: (checked) =>
+              patchBlockProps(editableEditor, block.id, {
+                hasColumnHeader: checked,
+              }),
+          }),
+          checkboxField({
+            label: "第一列为行头",
+            checked: booleanProp(block.props, "hasRowHeader"),
+            onCommit: (checked) =>
+              patchBlockProps(editableEditor, block.id, { hasRowHeader: checked }),
+          }),
+        ),
+        createActionRow(
+          buttonControl({
+            label: "添加行",
+            onClick: () => patchBlockChildren(editableEditor, block.id, addTableRow(block)),
+          }),
+          buttonControl({
+            label: "添加列",
+            onClick: () => patchBlockChildren(editableEditor, block.id, addTableColumn(block)),
+          }),
+          buttonControl({
+            label: "删除末行",
+            disabled: rowCount <= 1,
+            variant: "danger",
+            onClick: () => patchBlockChildren(editableEditor, block.id, removeLastTableRow(block)),
+          }),
+          buttonControl({
+            label: "删除末列",
+            disabled: columnCount <= 1,
+            variant: "danger",
+            onClick: () => patchBlockChildren(editableEditor, block.id, removeLastTableColumn(block)),
+          }),
+        ),
+      );
+      return { dom: root, ignoreMutation: ignoreEditableBlockMutation(root) };
     },
   },
 );
+
+function breadcrumbPreview(itemsJson: string): string {
+  const parsed = breadcrumbItemsSchema.safeParse(JSON.parse(itemsJson));
+  if (!parsed.success) return "页面路径";
+  return parsed.data.map((item) => item.display_text).join(" / ");
+}
+
+function renderStaticBreadcrumb(block: { props: Record<string, unknown> }) {
+  const dom = window.document.createElement("div");
+  dom.className = "ast-breadcrumb";
+  try {
+    dom.textContent = breadcrumbPreview(
+      stringProp(block.props, "itemsJson", "[]"),
+    );
+  } catch {
+    dom.textContent = "页面路径";
+  }
+  return dom;
+}
 
 const breadcrumbSpec = createBlockSpec(
   {
@@ -274,21 +877,33 @@ const breadcrumbSpec = createBlockSpec(
     content: "none",
   },
   {
-    render: (block) => {
-      const dom = window.document.createElement("div");
-      dom.className = "ast-breadcrumb";
-      try {
-        const items = JSON.parse(block.props.itemsJson) as {
-          display_text?: string;
-        }[];
-        dom.textContent = items
-          .map((item) => String(item.display_text ?? ""))
-          .filter(Boolean)
-          .join(" / ");
-      } catch {
-        dom.textContent = "页面路径";
+    render(this: unknown, block, editor) {
+      const editableEditor = editor as unknown as EditableBlockEditor;
+      if (!isEditableBlockRender(this, editableEditor)) {
+        return { dom: renderStaticBreadcrumb(block) };
       }
-      return { dom };
+      const root = createEditableBlockShell({
+        type: "breadcrumb",
+        title: "页面路径",
+        summary: "JSON 列表",
+        className: "ast-breadcrumb",
+      });
+      root.append(
+        createPreview(renderStaticBreadcrumb(block).textContent ?? "页面路径"),
+        jsonTextareaField({
+          label: "路径项 JSON",
+          value: stringProp(block.props, "itemsJson", "[]"),
+          fallback: [{ display_text: "当前页面" }],
+          rows: 5,
+          validate: (parsed) =>
+            breadcrumbItemsSchema.safeParse(parsed).success
+              ? null
+              : "需要 1-32 个 { display_text, target_page_id? }",
+          onCommit: (jsonText) =>
+            patchBlockProps(editableEditor, block.id, { itemsJson: jsonText }),
+        }),
+      );
+      return { dom: root, ignoreMutation: ignoreEditableBlockMutation(root) };
     },
   },
 );
@@ -300,14 +915,61 @@ const columnSpec = createBlockSpec(
     content: "none",
   },
   {
-    render: (block) => {
-      const dom = window.document.createElement("div");
-      dom.className = "ast-column";
-      dom.textContent = `列宽 ${block.props.widthRatio}`;
-      return { dom };
+    render(this: unknown, block, editor) {
+      const editableEditor = editor as unknown as EditableBlockEditor;
+      if (!isEditableBlockRender(this, editableEditor)) {
+        return {
+          dom: staticTextBlock(
+            "ast-column",
+            `列宽 ${numberProp(block.props, "widthRatio", 1)}`,
+          ),
+        };
+      }
+      const root = createEditableBlockShell({
+        type: "column",
+        title: "分栏列",
+        summary: `列宽 ${numberProp(block.props, "widthRatio", 1)}`,
+        className: "ast-column",
+      });
+      const parent = findParentBlock(editableEditor.document, block.id, "columnList");
+      const siblingCount = parent ? childBlocks(parent).length : 0;
+      root.append(
+        numberField({
+          label: "宽度比例",
+          value: numberProp(block.props, "widthRatio", 1),
+          min: 0.1,
+          max: 10,
+          step: 0.1,
+          onCommit: (value) =>
+            patchBlockProps(editableEditor, block.id, { widthRatio: value }),
+        }),
+        createActionRow(
+          buttonControl({
+            label: "添加列",
+            disabled: siblingCount >= 5,
+            onClick: () => addColumnSibling(editableEditor, block.id),
+          }),
+          buttonControl({
+            label: "删除本列",
+            disabled: siblingCount <= 2,
+            variant: "danger",
+            onClick: () => removeColumn(editableEditor, block.id),
+          }),
+        ),
+      );
+      return { dom: root, ignoreMutation: ignoreEditableBlockMutation(root) };
     },
   },
 );
+
+function renderStaticButton(block: { props: Record<string, unknown> }) {
+  const button = window.document.createElement("button");
+  button.className = "wiki-button";
+  button.type = "button";
+  button.disabled = true;
+  button.textContent = stringProp(block.props, "label", "运行操作");
+  return button;
+}
 
 const pageButtonSpec = createBlockSpec(
   {
@@ -320,13 +982,68 @@ const pageButtonSpec = createBlockSpec(
     content: "none",
   },
   {
-    render: (block) => {
-      const dom = window.document.createElement("button");
-      dom.className = "wiki-button";
-      dom.type = "button";
-      dom.disabled = true;
-      dom.textContent = block.props.label;
-      return { dom };
+    render(this: unknown, block, editor) {
+      const editableEditor = editor as unknown as EditableBlockEditor;
+      if (!isEditableBlockRender(this, editableEditor)) {
+        return { dom: renderStaticButton(block) };
+      }
+      const root = createEditableBlockShell({
+        type: "pageButton",
+        title: "页面按钮",
+        summary: stringProp(block.props, "label", "运行操作"),
+      });
+      const actions = buttonActions(stringProp(block.props, "actionsJson", "[]"));
+      root.append(
+        renderStaticButton(block),
+        createFieldGrid(
+          textField({
+            label: "按钮名称",
+            value: stringProp(block.props, "label", "运行操作"),
+            validate: nonEmpty("按钮名称不能为空"),
+            onCommit: (value) =>
+              patchBlockProps(editableEditor, block.id, { label: value.trim() }),
+          }),
+          textField({
+            label: "确认提示",
+            value: stringProp(block.props, "confirmation"),
+            onCommit: (value) =>
+              patchBlockProps(editableEditor, block.id, { confirmation: value }),
+          }),
+        ),
+        createActionRow(
+          buttonControl({
+            label: "添加通知动作",
+            disabled: actions.length >= 10,
+            onClick: () => writeJSONProps(editableEditor, block.id, "actionsJson", [...actions, defaultButtonAction("notification")]),
+          }),
+          buttonControl({
+            label: "添加插入动作",
+            disabled: actions.length >= 10,
+            onClick: () => writeJSONProps(editableEditor, block.id, "actionsJson", [...actions, defaultButtonAction("insert_blocks")]),
+          }),
+          buttonControl({
+            label: "添加 Webhook",
+            disabled: actions.length >= 10,
+            onClick: () => writeJSONProps(editableEditor, block.id, "actionsJson", [...actions, defaultButtonAction("webhook")]),
+          }),
+        ),
+        ...actions.map((action, index) =>
+          renderButtonActionEditor(editableEditor, block.id, actions, action, index),
+        ),
+        jsonTextareaField({
+          label: "高级：动作 JSON",
+          value: stringProp(block.props, "actionsJson", "[]"),
+          fallback: [defaultButtonAction("notification")],
+          rows: 6,
+          validate: (parsed) =>
+            buttonActionsSchema.safeParse(parsed).success
+              ? null
+              : "需要 1-10 个合法按钮动作",
+          onCommit: (jsonText) =>
+            patchBlockProps(editableEditor, block.id, { actionsJson: jsonText }),
+        }),
+      );
+      return { dom: root, ignoreMutation: ignoreEditableBlockMutation(root) };
     },
   },
 );
@@ -345,6 +1062,26 @@ function isolatedHTMLDocument(content: string): string {
   );
 }
 
+function renderStaticHTMLBlock(block: { props: Record<string, unknown> }) {
+  const figure = window.document.createElement("figure");
+  figure.className = "html-block";
+  const iframe = window.document.createElement("iframe");
+  iframe.setAttribute("sandbox", "");
+  iframe.setAttribute("referrerpolicy", "no-referrer");
+  iframe.loading = "lazy";
+  iframe.height = String(numberProp(block.props, "height", 240));
+  iframe.title = stringProp(block.props, "caption") || "HTML content";
+  iframe.srcdoc = isolatedHTMLDocument(stringProp(block.props, "html"));
+  figure.appendChild(iframe);
+  const captionText = stringProp(block.props, "caption");
+  if (captionText) {
+    const caption = window.document.createElement("figcaption");
+    caption.textContent = captionText;
+    figure.appendChild(caption);
+  }
+  return figure;
+}
+
 const htmlBlockSpec = createBlockSpec(
   {
     type: "htmlBlock",
@@ -356,23 +1093,49 @@ const htmlBlockSpec = createBlockSpec(
     content: "none",
   },
   {
-    render: (block) => {
-      const figure = window.document.createElement("figure");
-      figure.className = "html-block";
-      const iframe = window.document.createElement("iframe");
-      iframe.setAttribute("sandbox", "");
-      iframe.setAttribute("referrerpolicy", "no-referrer");
-      iframe.loading = "lazy";
-      iframe.height = String(block.props.height);
-      iframe.title = block.props.caption || "HTML content";
-      iframe.srcdoc = isolatedHTMLDocument(block.props.html);
-      figure.appendChild(iframe);
-      if (block.props.caption) {
-        const caption = window.document.createElement("figcaption");
-        caption.textContent = block.props.caption;
-        figure.appendChild(caption);
+    render(this: unknown, block, editor) {
+      const editableEditor = editor as unknown as EditableBlockEditor;
+      if (!isEditableBlockRender(this, editableEditor)) {
+        return { dom: renderStaticHTMLBlock(block) };
       }
-      return { dom: figure };
+      const root = createEditableBlockShell({
+        type: "htmlBlock",
+        title: "HTML 块",
+        summary: stringProp(block.props, "caption") || "隔离预览",
+      });
+      root.append(
+        createFieldGrid(
+          numberField({
+            label: "高度（px）",
+            value: numberProp(block.props, "height", 240),
+            min: 120,
+            max: 1200,
+            step: 1,
+            integer: true,
+            onCommit: (value) =>
+              patchBlockProps(editableEditor, block.id, { height: value }),
+          }),
+          textField({
+            label: "标题",
+            value: stringProp(block.props, "caption"),
+            onCommit: (value) =>
+              patchBlockProps(editableEditor, block.id, { caption: value }),
+          }),
+        ),
+        textField({
+          label: "HTML",
+          value: stringProp(block.props, "html"),
+          multiline: true,
+          rows: 8,
+          monospace: true,
+          validate: (value) =>
+            value.length <= 200000 ? null : "HTML 不能超过 200000 字符",
+          onCommit: (value) =>
+            patchBlockProps(editableEditor, block.id, { html: value }),
+        }),
+        renderStaticHTMLBlock(block),
+      );
+      return { dom: root, ignoreMutation: ignoreEditableBlockMutation(root) };
     },
   },
 );
@@ -389,16 +1152,80 @@ const componentSpec = createBlockSpec(
     content: "none",
   },
   {
-    render: (block) => {
-      const dom = window.document.createElement("div");
-      dom.className = "ast-component";
-      dom.dataset.componentId = block.props.componentId;
-      dom.dataset.entityId = block.props.entityId;
-      dom.textContent = `组件 v${block.props.componentVersion}`;
-      return { dom };
+    render(this: unknown, block, editor) {
+      const editableEditor = editor as unknown as EditableBlockEditor;
+      if (!isEditableBlockRender(this, editableEditor)) {
+        const dom = staticTextBlock(
+          "ast-component",
+          `组件 v${numberProp(block.props, "componentVersion", 1)}`,
+        );
+        dom.dataset.componentId = stringProp(block.props, "componentId");
+        dom.dataset.entityId = stringProp(block.props, "entityId");
+        return { dom };
+      }
+      const root = createEditableBlockShell({
+        type: "component",
+        title: "组件实例",
+        summary: `v${numberProp(block.props, "componentVersion", 1)}`,
+        className: "ast-component",
+      });
+      root.dataset.componentId = stringProp(block.props, "componentId");
+      root.dataset.entityId = stringProp(block.props, "entityId");
+      root.append(
+        createFieldGrid(
+          textField({
+            label: "Component ID",
+            value: stringProp(block.props, "componentId"),
+            validate: requiredUUID,
+            onCommit: (value) =>
+              patchBlockProps(editableEditor, block.id, {
+                componentId: value.trim(),
+              }),
+          }),
+          numberField({
+            label: "版本",
+            value: numberProp(block.props, "componentVersion", 1),
+            min: 1,
+            step: 1,
+            integer: true,
+            onCommit: (value) =>
+              patchBlockProps(editableEditor, block.id, {
+                componentVersion: value,
+              }),
+          }),
+          textField({
+            label: "Entity ID",
+            value: stringProp(block.props, "entityId"),
+            validate: requiredUUID,
+            onCommit: (value) =>
+              patchBlockProps(editableEditor, block.id, { entityId: value.trim() }),
+          }),
+        ),
+        jsonTextareaField({
+          label: "显示配置 JSON",
+          value: stringProp(block.props, "displayConfig", "{}"),
+          fallback: {},
+          rows: 6,
+          validate: (parsed) =>
+            isPlainObject(parsed) ? null : "显示配置必须是 JSON object",
+          onCommit: (jsonText) =>
+            patchBlockProps(editableEditor, block.id, { displayConfig: jsonText }),
+        }),
+      );
+      return { dom: root, ignoreMutation: ignoreEditableBlockMutation(root) };
     },
   },
 );
+
+function assetSummary(props: Record<string, unknown>, fallback: string): string {
+  return (
+    stringProp(props, "caption") ||
+    stringProp(props, "title") ||
+    stringProp(props, "name") ||
+    stringProp(props, "altText") ||
+    fallback
+  );
+}
 
 const imageAssetSpec = createBlockSpec(
   {
@@ -411,12 +1238,47 @@ const imageAssetSpec = createBlockSpec(
     content: "none",
   },
   {
-    render: (block) => {
-      const dom = window.document.createElement("div");
-      dom.className = "ast-image";
-      dom.dataset.assetRevisionId = block.props.assetRevisionId;
-      dom.textContent = block.props.caption || block.props.altText || "图片";
-      return { dom };
+    render(this: unknown, block, editor) {
+      const editableEditor = editor as unknown as EditableBlockEditor;
+      if (!isEditableBlockRender(this, editableEditor)) {
+        const dom = staticTextBlock("ast-image", assetSummary(block.props, "图片"));
+        dom.dataset.assetRevisionId = stringProp(block.props, "assetRevisionId");
+        return { dom };
+      }
+      const root = createEditableBlockShell({
+        type: "imageAsset",
+        title: "图片",
+        summary: assetSummary(block.props, "图片"),
+        className: "ast-image",
+      });
+      root.dataset.assetRevisionId = stringProp(block.props, "assetRevisionId");
+      root.append(
+        createFieldGrid(
+          textField({
+            label: "AssetRevision ID",
+            value: stringProp(block.props, "assetRevisionId"),
+            validate: requiredUUID,
+            onCommit: (value) =>
+              patchBlockProps(editableEditor, block.id, {
+                assetRevisionId: value.trim(),
+              }),
+          }),
+          textField({
+            label: "Alt text",
+            value: stringProp(block.props, "altText"),
+            validate: nonEmpty("Alt text 不能为空"),
+            onCommit: (value) =>
+              patchBlockProps(editableEditor, block.id, { altText: value }),
+          }),
+          textField({
+            label: "Caption",
+            value: stringProp(block.props, "caption"),
+            onCommit: (value) =>
+              patchBlockProps(editableEditor, block.id, { caption: value }),
+          }),
+        ),
+      );
+      return { dom: root, ignoreMutation: ignoreEditableBlockMutation(root) };
     },
   },
 );
@@ -433,12 +1295,55 @@ const videoAssetSpec = createBlockSpec(
     content: "none",
   },
   {
-    render: (block) => {
-      const dom = window.document.createElement("div");
-      dom.className = "ast-video";
-      dom.dataset.assetRevisionId = block.props.assetRevisionId;
-      dom.textContent = block.props.caption || block.props.title || "视频";
-      return { dom };
+    render(this: unknown, block, editor) {
+      const editableEditor = editor as unknown as EditableBlockEditor;
+      if (!isEditableBlockRender(this, editableEditor)) {
+        const dom = staticTextBlock("ast-video", assetSummary(block.props, "视频"));
+        dom.dataset.assetRevisionId = stringProp(block.props, "assetRevisionId");
+        return { dom };
+      }
+      const root = createEditableBlockShell({
+        type: "videoAsset",
+        title: "视频",
+        summary: assetSummary(block.props, "视频"),
+        className: "ast-video",
+      });
+      root.dataset.assetRevisionId = stringProp(block.props, "assetRevisionId");
+      root.append(
+        createFieldGrid(
+          textField({
+            label: "AssetRevision ID",
+            value: stringProp(block.props, "assetRevisionId"),
+            validate: requiredUUID,
+            onCommit: (value) =>
+              patchBlockProps(editableEditor, block.id, {
+                assetRevisionId: value.trim(),
+              }),
+          }),
+          textField({
+            label: "Poster AssetRevision ID",
+            value: stringProp(block.props, "posterAssetRevisionId"),
+            validate: optionalUUID,
+            onCommit: (value) =>
+              patchBlockProps(editableEditor, block.id, {
+                posterAssetRevisionId: value.trim(),
+              }),
+          }),
+          textField({
+            label: "标题",
+            value: stringProp(block.props, "title"),
+            onCommit: (value) =>
+              patchBlockProps(editableEditor, block.id, { title: value }),
+          }),
+          textField({
+            label: "Caption",
+            value: stringProp(block.props, "caption"),
+            onCommit: (value) =>
+              patchBlockProps(editableEditor, block.id, { caption: value }),
+          }),
+        ),
+      );
+      return { dom: root, ignoreMutation: ignoreEditableBlockMutation(root) };
     },
   },
 );
@@ -457,14 +1362,77 @@ const audioAssetSpec = createBlockSpec(
     content: "none",
   },
   {
-    render: (block) => {
-      const dom = window.document.createElement("div");
-      dom.className = "ast-audio";
-      dom.dataset.assetRevisionId = block.props.assetRevisionId;
-      dom.textContent = [block.props.title, block.props.artist, block.props.album]
-        .filter(Boolean)
-        .join(" · ");
-      return { dom };
+    render(this: unknown, block, editor) {
+      const editableEditor = editor as unknown as EditableBlockEditor;
+      if (!isEditableBlockRender(this, editableEditor)) {
+        const dom = staticTextBlock(
+          "ast-audio",
+          [
+            stringProp(block.props, "title"),
+            stringProp(block.props, "artist"),
+            stringProp(block.props, "album"),
+          ]
+            .filter(Boolean)
+            .join(" · "),
+        );
+        dom.dataset.assetRevisionId = stringProp(block.props, "assetRevisionId");
+        return { dom };
+      }
+      const root = createEditableBlockShell({
+        type: "audioAsset",
+        title: "音频",
+        summary: assetSummary(block.props, "音频"),
+        className: "ast-audio",
+      });
+      root.dataset.assetRevisionId = stringProp(block.props, "assetRevisionId");
+      root.append(
+        createFieldGrid(
+          textField({
+            label: "AssetRevision ID",
+            value: stringProp(block.props, "assetRevisionId"),
+            validate: requiredUUID,
+            onCommit: (value) =>
+              patchBlockProps(editableEditor, block.id, {
+                assetRevisionId: value.trim(),
+              }),
+          }),
+          textField({
+            label: "标题",
+            value: stringProp(block.props, "title"),
+            validate: nonEmpty("标题不能为空"),
+            onCommit: (value) =>
+              patchBlockProps(editableEditor, block.id, { title: value }),
+          }),
+          textField({
+            label: "艺术家",
+            value: stringProp(block.props, "artist"),
+            onCommit: (value) =>
+              patchBlockProps(editableEditor, block.id, { artist: value }),
+          }),
+          textField({
+            label: "专辑",
+            value: stringProp(block.props, "album"),
+            onCommit: (value) =>
+              patchBlockProps(editableEditor, block.id, { album: value }),
+          }),
+          numberField({
+            label: "时长秒数",
+            value: numberProp(block.props, "durationSeconds", 0),
+            min: 0,
+            step: 0.1,
+            emptyValue: 0,
+            onCommit: (value) =>
+              patchBlockProps(editableEditor, block.id, { durationSeconds: value }),
+          }),
+          textField({
+            label: "Caption",
+            value: stringProp(block.props, "caption"),
+            onCommit: (value) =>
+              patchBlockProps(editableEditor, block.id, { caption: value }),
+          }),
+        ),
+      );
+      return { dom: root, ignoreMutation: ignoreEditableBlockMutation(root) };
     },
   },
 );
@@ -480,12 +1448,47 @@ const fileAssetSpec = createBlockSpec(
     content: "none",
   },
   {
-    render: (block) => {
-      const dom = window.document.createElement("div");
-      dom.className = "ast-file";
-      dom.dataset.assetRevisionId = block.props.assetRevisionId;
-      dom.textContent = block.props.name || "文件";
-      return { dom };
+    render(this: unknown, block, editor) {
+      const editableEditor = editor as unknown as EditableBlockEditor;
+      if (!isEditableBlockRender(this, editableEditor)) {
+        const dom = staticTextBlock("ast-file", assetSummary(block.props, "文件"));
+        dom.dataset.assetRevisionId = stringProp(block.props, "assetRevisionId");
+        return { dom };
+      }
+      const root = createEditableBlockShell({
+        type: "fileAsset",
+        title: "文件",
+        summary: assetSummary(block.props, "文件"),
+        className: "ast-file",
+      });
+      root.dataset.assetRevisionId = stringProp(block.props, "assetRevisionId");
+      root.append(
+        createFieldGrid(
+          textField({
+            label: "AssetRevision ID",
+            value: stringProp(block.props, "assetRevisionId"),
+            validate: requiredUUID,
+            onCommit: (value) =>
+              patchBlockProps(editableEditor, block.id, {
+                assetRevisionId: value.trim(),
+              }),
+          }),
+          textField({
+            label: "文件名",
+            value: stringProp(block.props, "name"),
+            validate: nonEmpty("文件名不能为空"),
+            onCommit: (value) =>
+              patchBlockProps(editableEditor, block.id, { name: value }),
+          }),
+          textField({
+            label: "Caption",
+            value: stringProp(block.props, "caption"),
+            onCommit: (value) =>
+              patchBlockProps(editableEditor, block.id, { caption: value }),
+          }),
+        ),
+      );
+      return { dom: root, ignoreMutation: ignoreEditableBlockMutation(root) };
     },
   },
 );
@@ -503,12 +1506,65 @@ const pdfAssetSpec = createBlockSpec(
     content: "none",
   },
   {
-    render: (block) => {
-      const dom = window.document.createElement("div");
-      dom.className = "ast-pdf";
-      dom.dataset.assetRevisionId = block.props.assetRevisionId;
-      dom.textContent = block.props.title || "PDF";
-      return { dom };
+    render(this: unknown, block, editor) {
+      const editableEditor = editor as unknown as EditableBlockEditor;
+      if (!isEditableBlockRender(this, editableEditor)) {
+        const dom = staticTextBlock("ast-pdf", assetSummary(block.props, "PDF"));
+        dom.dataset.assetRevisionId = stringProp(block.props, "assetRevisionId");
+        return { dom };
+      }
+      const root = createEditableBlockShell({
+        type: "pdfAsset",
+        title: "PDF",
+        summary: assetSummary(block.props, "PDF"),
+        className: "ast-pdf",
+      });
+      root.dataset.assetRevisionId = stringProp(block.props, "assetRevisionId");
+      root.append(
+        createFieldGrid(
+          textField({
+            label: "AssetRevision ID",
+            value: stringProp(block.props, "assetRevisionId"),
+            validate: requiredUUID,
+            onCommit: (value) =>
+              patchBlockProps(editableEditor, block.id, {
+                assetRevisionId: value.trim(),
+              }),
+          }),
+          textField({
+            label: "标题",
+            value: stringProp(block.props, "title"),
+            onCommit: (value) =>
+              patchBlockProps(editableEditor, block.id, { title: value }),
+          }),
+          numberField({
+            label: "起始页",
+            value: numberProp(block.props, "startPage", 1),
+            min: 1,
+            step: 1,
+            integer: true,
+            onCommit: (value) =>
+              patchBlockProps(editableEditor, block.id, { startPage: value }),
+          }),
+          numberField({
+            label: "阅读器高度",
+            value: numberProp(block.props, "height", 640),
+            min: 320,
+            max: 1200,
+            step: 1,
+            integer: true,
+            onCommit: (value) =>
+              patchBlockProps(editableEditor, block.id, { height: value }),
+          }),
+          textField({
+            label: "Caption",
+            value: stringProp(block.props, "caption"),
+            onCommit: (value) =>
+              patchBlockProps(editableEditor, block.id, { caption: value }),
+          }),
+        ),
+      );
+      return { dom: root, ignoreMutation: ignoreEditableBlockMutation(root) };
     },
   },
 );
@@ -572,11 +1628,52 @@ const embedSpec = createBlockSpec(
     content: "none",
   },
   {
-    render: (block) => {
-      const dom = window.document.createElement("div");
-      dom.className = "ast-embed";
-      dom.textContent = block.props.title || block.props.url || "外部嵌入";
-      return { dom };
+    render(this: unknown, block, editor) {
+      const editableEditor = editor as unknown as EditableBlockEditor;
+      const summary =
+        stringProp(block.props, "title") ||
+        stringProp(block.props, "url") ||
+        "外部嵌入";
+      if (!isEditableBlockRender(this, editableEditor)) {
+        return { dom: staticTextBlock("ast-embed", summary) };
+      }
+      const root = createEditableBlockShell({
+        type: "embed",
+        title: "外部嵌入",
+        summary,
+        className: "ast-embed",
+      });
+      root.appendChild(
+        createFieldGrid(
+          textField({
+            label: "URL",
+            value: stringProp(block.props, "url"),
+            validate: requiredHTTPURL,
+            onCommit: (value) =>
+              patchBlockProps(editableEditor, block.id, { url: value.trim() }),
+          }),
+          selectField({
+            label: "Provider",
+            value: stringProp(block.props, "provider", "none"),
+            options: EMBED_PROVIDER_OPTIONS,
+            onCommit: (value) =>
+              patchBlockProps(editableEditor, block.id, { provider: value }),
+          }),
+          textField({
+            label: "标题",
+            value: stringProp(block.props, "title"),
+            onCommit: (value) =>
+              patchBlockProps(editableEditor, block.id, { title: value }),
+          }),
+          textField({
+            label: "Caption",
+            value: stringProp(block.props, "caption"),
+            onCommit: (value) =>
+              patchBlockProps(editableEditor, block.id, { caption: value }),
+          }),
+        ),
+      );
+      return { dom: root, ignoreMutation: ignoreEditableBlockMutation(root) };
     },
   },
 );
@@ -595,7 +1692,88 @@ function containerBlockSpec<T extends string>(type: T, className: string) {
   );
 }
 
-// ---- 自定义行内内容：pageReference（原子节点，全部字段存 props） ----
+// ---- 自定义行内内容：原地编辑 props；导出/复制仍使用静态 atom ----
+
+type InlineUpdate = (update: { type: string; props: Record<string, unknown> }) => void;
+
+function isInlineNodeView(context: unknown): boolean {
+  return isPlainObject(context) && context.renderType === "nodeView";
+}
+
+function inlineAtomShell(className: string, text: string): HTMLElement {
+  const dom = window.document.createElement("span");
+  dom.className = className;
+  dom.textContent = text;
+  return dom;
+}
+
+function inlineTextInput(options: {
+  label: string;
+  value: string;
+  onCommit: (value: string) => void;
+  validate?: (value: string) => string | null;
+  type?: string;
+}): HTMLElement {
+  const field = textField({
+    label: options.label,
+    value: options.value,
+    validate: options.validate,
+    onCommit: options.onCommit,
+  });
+  const input = field.querySelector("input");
+  if (input && options.type) input.type = options.type;
+  return field;
+}
+
+function inlineEditorShell(options: {
+  className: string;
+  title: string;
+  text: string;
+  fields: HTMLElement[];
+}): HTMLElement {
+  const root = window.document.createElement("span");
+  root.className = `ast-inline-editor ${options.className}`;
+  root.contentEditable = "false";
+  const label = window.document.createElement("span");
+  label.className = "ast-inline-editor__label";
+  label.textContent = options.title;
+  const preview = window.document.createElement("span");
+  preview.className = "ast-inline-editor__preview";
+  preview.textContent = options.text;
+  const panel = window.document.createElement("span");
+  panel.className = "ast-inline-editor__panel";
+  panel.append(...options.fields);
+  root.append(label, preview, panel);
+  return root;
+}
+
+function editableInlineAtom(options: {
+  context: unknown;
+  type: string;
+  props: Record<string, unknown>;
+  update: InlineUpdate;
+  className: string;
+  title: string;
+  text: string;
+  fields: (commit: (props: Record<string, unknown>) => void) => HTMLElement[];
+  decorateStatic?: (dom: HTMLElement) => void;
+}) {
+  if (!isInlineNodeView(options.context)) {
+    const dom = inlineAtomShell(options.className, options.text);
+    options.decorateStatic?.(dom);
+    return { dom };
+  }
+  const commit = (props: Record<string, unknown>) =>
+    options.update({ type: options.type, props: { ...options.props, ...props } });
+  const dom = inlineEditorShell({
+    className: options.className,
+    title: options.title,
+    text: options.text,
+    fields: options.fields(commit),
+  });
+  options.decorateStatic?.(dom);
+  return { dom };
+}
 
 const pageReferenceSpec = createInlineContentSpec(
   {
@@ -612,15 +1790,31 @@ const pageReferenceSpec = createInlineContentSpec(
     },
   },
   {
-    render: (inlineContent) => {
+    render(inlineContent, updateInlineContent) {
       const props = inlineContent.props;
       const unresolved = props.resolutionStatus === "unresolved";
-      const dom = window.document.createElement("span");
-      dom.className = unresolved
-        ? "ast-page-ref ast-page-ref--unresolved"
-        : "ast-page-ref";
-      dom.textContent = unresolved ? props.normalizedTitle : props.displayText;
-      return { dom };
+      const text = unresolved ? props.normalizedTitle : props.displayText;
+      return editableInlineAtom({
+        context: this,
+        type: "pageReference",
+        props,
+        update: updateInlineContent as InlineUpdate,
+        className: unresolved ? "ast-page-ref ast-page-ref--unresolved" : "ast-page-ref",
+        title: unresolved ? "未解析页面" : "页面引用",
+        text,
+        fields: (commit) =>
+          unresolved
+            ? [
+                inlineTextInput({ label: "页面标题", value: stringProp(props, "normalizedTitle"), validate: nonEmpty("页面标题不能为空"), onCommit: (value) => commit({ normalizedTitle: value.trim() }) }),
+                inlineTextInput({ label: "命名空间", value: stringProp(props, "targetNamespace", "main"), onCommit: (value) => commit({ targetNamespace: value.trim() }) }),
+                inlineTextInput({ label: "期望实体类型", value: stringProp(props, "expectedEntityType"), onCommit: (value) => commit({ expectedEntityType: value.trim() }) }),
+              ]
+            : [
+                inlineTextInput({ label: "显示文本", value: stringProp(props, "displayText"), validate: nonEmpty("显示文本不能为空"), onCommit: (value) => commit({ displayText: value }) }),
+                inlineTextInput({ label: "Page ID", value: stringProp(props, "targetPageId"), validate: requiredUUID, onCommit: (value) => commit({ targetPageId: value.trim() }) }),
+                inlineTextInput({ label: "Heading Block ID", value: stringProp(props, "targetHeadingBlockId"), validate: optionalUUID, onCommit: (value) => commit({ targetHeadingBlockId: value.trim() }) }),
+              ],
+      });
     },
   },
 );
@@ -636,11 +1830,22 @@ const pageAnchorReferenceSpec = createInlineContentSpec(
     },
   },
   {
-    render: (inlineContent) => {
-      const dom = window.document.createElement("span");
-      dom.className = "ast-page-anchor-ref";
-      dom.textContent = inlineContent.props.displayText;
-      return { dom };
+    render(inlineContent, updateInlineContent) {
+      const props = inlineContent.props;
+      return editableInlineAtom({
+        context: this,
+        type: "pageAnchorReference",
+        props,
+        update: updateInlineContent as InlineUpdate,
+        className: "ast-page-anchor-ref",
+        title: "章节引用",
+        text: props.displayText,
+        fields: (commit) => [
+          inlineTextInput({ label: "显示文本", value: props.displayText, validate: nonEmpty("显示文本不能为空"), onCommit: (value) => commit({ displayText: value }) }),
+          inlineTextInput({ label: "Page ID", value: props.targetPageId, validate: requiredUUID, onCommit: (value) => commit({ targetPageId: value.trim() }) }),
+          inlineTextInput({ label: "Heading Block ID", value: props.targetHeadingBlockId, validate: requiredUUID, onCommit: (value) => commit({ targetHeadingBlockId: value.trim() }) }),
+        ],
+      });
     },
   },
 );
@@ -655,12 +1860,22 @@ const entityReferenceSpec = createInlineContentSpec(
     },
   },
   {
-    render: (inlineContent) => {
-      const dom = window.document.createElement("span");
-      dom.className = "ast-entity-ref";
-      dom.dataset.entityRef = inlineContent.props.entityId;
-      dom.textContent = inlineContent.props.displayText;
-      return { dom };
+    render(inlineContent, updateInlineContent) {
+      const props = inlineContent.props;
+      return editableInlineAtom({
+        context: this,
+        type: "entityReference",
+        props,
+        update: updateInlineContent as InlineUpdate,
+        className: "ast-entity-ref",
+        title: "实体引用",
+        text: props.displayText,
+        decorateStatic: (dom) => { dom.dataset.entityRef = props.entityId; },
+        fields: (commit) => [
+          inlineTextInput({ label: "显示文本", value: props.displayText, validate: nonEmpty("显示文本不能为空"), onCommit: (value) => commit({ displayText: value }) }),
+          inlineTextInput({ label: "Entity ID", value: props.entityId, validate: requiredUUID, onCommit: (value) => commit({ entityId: value.trim() }) }),
+        ],
+      });
     },
   },
 );
@@ -675,12 +1890,22 @@ const claimReferenceSpec = createInlineContentSpec(
     },
   },
   {
-    render: (inlineContent) => {
-      const dom = window.document.createElement("span");
-      dom.className = "ast-claim-ref";
-      dom.dataset.claimRef = inlineContent.props.claimId;
-      dom.textContent = inlineContent.props.displayText;
-      return { dom };
+    render(inlineContent, updateInlineContent) {
+      const props = inlineContent.props;
+      return editableInlineAtom({
+        context: this,
+        type: "claimReference",
+        props,
+        update: updateInlineContent as InlineUpdate,
+        className: "ast-claim-ref",
+        title: "Claim 引用",
+        text: props.displayText,
+        decorateStatic: (dom) => { dom.dataset.claimRef = props.claimId; },
+        fields: (commit) => [
+          inlineTextInput({ label: "显示文本", value: props.displayText, validate: nonEmpty("显示文本不能为空"), onCommit: (value) => commit({ displayText: value }) }),
+          inlineTextInput({ label: "Claim ID", value: props.claimId, validate: requiredUUID, onCommit: (value) => commit({ claimId: value.trim() }) }),
+        ],
+      });
     },
   },
 );
@@ -695,13 +1920,25 @@ const citationReferenceSpec = createInlineContentSpec(
     },
   },
   {
-    render: (inlineContent) => {
-      const dom = window.document.createElement("sup");
-      dom.className = "ast-citation-ref";
-      dom.dataset.citationRef = inlineContent.props.citationId;
-      dom.title = inlineContent.props.displayText;
-      dom.textContent = "[引用]";
-      return { dom };
+    render(inlineContent, updateInlineContent) {
+      const props = inlineContent.props;
+      return editableInlineAtom({
+        context: this,
+        type: "citationReference",
+        props,
+        update: updateInlineContent as InlineUpdate,
+        className: "ast-citation-ref",
+        title: "Citation 引用",
+        text: props.displayText || "[引用]",
+        decorateStatic: (dom) => {
+          dom.dataset.citationRef = props.citationId;
+          dom.title = props.displayText;
+        },
+        fields: (commit) => [
+          inlineTextInput({ label: "显示文本", value: props.displayText, onCommit: (value) => commit({ displayText: value }) }),
+          inlineTextInput({ label: "Citation ID", value: props.citationId, validate: requiredUUID, onCommit: (value) => commit({ citationId: value.trim() }) }),
+        ],
+      });
     },
   },
 );
@@ -713,11 +1950,20 @@ const mathSpec = createInlineContentSpec(
     propSchema: { expression: { default: "" } },
   },
   {
-    render: (inlineContent) => {
-      const dom = window.document.createElement("code");
-      dom.className = "ast-math";
-      dom.textContent = inlineContent.props.expression;
-      return { dom };
+    render(inlineContent, updateInlineContent) {
+      const props = inlineContent.props;
+      return editableInlineAtom({
+        context: this,
+        type: "math",
+        props,
+        update: updateInlineContent as InlineUpdate,
+        className: "ast-math",
+        title: "行内公式",
+        text: props.expression,
+        fields: (commit) => [
+          inlineTextInput({ label: "表达式", value: props.expression, validate: nonEmpty("公式不能为空"), onCommit: (value) => commit({ expression: value }) }),
+        ],
+      });
     },
   },
 );
@@ -732,12 +1978,22 @@ const mentionSpec = createInlineContentSpec(
     },
   },
   {
-    render: (inlineContent) => {
-      const dom = window.document.createElement("span");
-      dom.className = "ast-mention";
-      dom.dataset.actorId = inlineContent.props.actorId;
-      dom.textContent = `@${inlineContent.props.displayText}`;
-      return { dom };
+    render(inlineContent, updateInlineContent) {
+      const props = inlineContent.props;
+      return editableInlineAtom({
+        context: this,
+        type: "mention",
+        props,
+        update: updateInlineContent as InlineUpdate,
+        className: "ast-mention",
+        title: "提及",
+        text: `@${props.displayText}`,
+        decorateStatic: (dom) => { dom.dataset.actorId = props.actorId; },
+        fields: (commit) => [
+          inlineTextInput({ label: "显示名称", value: props.displayText, validate: nonEmpty("显示名称不能为空"), onCommit: (value) => commit({ displayText: value }) }),
+          inlineTextInput({ label: "Actor ID", value: props.actorId, validate: requiredUUID, onCommit: (value) => commit({ actorId: value.trim() }) }),
+        ],
+      });
     },
   },
 );
@@ -753,13 +2009,26 @@ const dateMentionSpec = createInlineContentSpec(
     },
   },
   {
-    render: (inlineContent) => {
-      const dom = window.document.createElement("time");
-      dom.className = "ast-date-mention";
-      dom.dateTime = inlineContent.props.date;
-      dom.dataset.endDate = inlineContent.props.endDate;
-      dom.textContent = inlineContent.props.displayText;
-      return { dom };
+    render(inlineContent, updateInlineContent) {
+      const props = inlineContent.props;
+      return editableInlineAtom({
+        context: this,
+        type: "dateMention",
+        props,
+        update: updateInlineContent as InlineUpdate,
+        className: "ast-date-mention",
+        title: "日期",
+        text: props.displayText,
+        decorateStatic: (dom) => {
+          dom.dataset.endDate = props.endDate;
+          if (dom instanceof HTMLTimeElement) dom.dateTime = props.date;
+        },
+        fields: (commit) => [
+          inlineTextInput({ label: "开始日期", value: props.date, type: "date", validate: nonEmpty("开始日期不能为空"), onCommit: (value) => commit({ date: value }) }),
+          inlineTextInput({ label: "结束日期", value: props.endDate, type: "date", onCommit: (value) => commit({ endDate: value }) }),
+          inlineTextInput({ label: "显示文本", value: props.displayText, validate: nonEmpty("显示文本不能为空"), onCommit: (value) => commit({ displayText: value }) }),
+        ],
+      });
     },
   },
 );
@@ -774,12 +2043,22 @@ const databaseMentionSpec = createInlineContentSpec(
     },
   },
   {
-    render: (inlineContent) => {
-      const dom = window.document.createElement("span");
-      dom.className = "ast-database-mention";
-      dom.dataset.datasetId = inlineContent.props.datasetId;
-      dom.textContent = inlineContent.props.displayText;
-      return { dom };
+    render(inlineContent, updateInlineContent) {
+      const props = inlineContent.props;
+      return editableInlineAtom({
+        context: this,
+        type: "databaseMention",
+        props,
+        update: updateInlineContent as InlineUpdate,
+        className: "ast-database-mention",
+        title: "Dataset 提及",
+        text: props.displayText,
+        decorateStatic: (dom) => { dom.dataset.datasetId = props.datasetId; },
+        fields: (commit) => [
+          inlineTextInput({ label: "显示文本", value: props.displayText, validate: nonEmpty("显示文本不能为空"), onCommit: (value) => commit({ displayText: value }) }),
+          inlineTextInput({ label: "Dataset ID", value: props.datasetId, validate: requiredUUID, onCommit: (value) => commit({ datasetId: value.trim() }) }),
+        ],
+      });
     },
   },
 );
