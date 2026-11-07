@@ -100,7 +100,7 @@ export function PageReferencePicker({
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent>
+      <DialogContent className="w-[calc(100vw-2rem)] overflow-hidden sm:max-w-3xl">
         <DialogHeader>
           <DialogTitle>插入页面引用</DialogTitle>
           <DialogDescription>
@@ -108,7 +108,7 @@ export function PageReferencePicker({
           </DialogDescription>
         </DialogHeader>
         {selected ? (
-          <div className="flex flex-col gap-4" data-picker-display-step>
+          <div className="flex min-w-0 flex-col gap-4" data-picker-display-step>
             <div className="flex flex-col gap-2">
               <Label htmlFor="page-ref-display-text">显示文本</Label>
               <Input
@@ -118,7 +118,7 @@ export function PageReferencePicker({
                 placeholder={selected.displayTitle}
                 autoFocus
               />
-              <p className="text-xs text-muted-foreground">
+              <p className="min-w-0 break-words text-xs text-muted-foreground">
                 引用目标：{selected.displayTitle}
                 {selected.matchedOn === "alias" ? "（经别名命中）" : ""}
                 ；显示文本与目标分离，只影响本文档内的展示。
@@ -138,14 +138,14 @@ export function PageReferencePicker({
             </div>
           </div>
         ) : (
-          <Command shouldFilter={false} label="搜索页面">
+          <Command shouldFilter={false} label="搜索页面" className="min-w-0 max-w-full overflow-hidden">
             <Command.Input
               value={query}
               onValueChange={setQuery}
               placeholder="输入页面标题搜索…"
-              className="border-input placeholder:text-muted-foreground flex h-9 w-full rounded-md border bg-transparent px-3 py-1 text-sm shadow-xs outline-none focus-visible:border-ring focus-visible:ring-ring/50 focus-visible:ring-[3px]"
+              className="border-input placeholder:text-muted-foreground box-border flex h-9 w-full min-w-0 max-w-full rounded-md border bg-transparent px-3 py-1 text-sm shadow-xs outline-none focus-visible:border-ring focus-visible:ring-ring/50 focus-visible:ring-[3px]"
             />
-            <Command.List className="mt-2 max-h-64 overflow-y-auto">
+            <Command.List className="mt-2 max-h-64 min-w-0 overflow-x-hidden overflow-y-auto">
               {isLoading && hits.length === 0 ? (
                 <Command.Loading>
                   <div className="px-3 py-2 text-sm text-muted-foreground">
@@ -163,12 +163,12 @@ export function PageReferencePicker({
                   key={hit.id}
                   value={hit.id}
                   onSelect={() => pickHit(hit)}
-                  className="data-[selected=true]:bg-accent data-[selected=true]:text-accent-foreground flex cursor-pointer items-center gap-2 rounded-md px-3 py-2 text-sm"
+                  className="data-[selected=true]:bg-accent data-[selected=true]:text-accent-foreground flex min-w-0 cursor-pointer items-center gap-2 rounded-md px-3 py-2 text-sm"
                 >
                   <FileText className="size-4 shrink-0 text-muted-foreground" />
-                  <span className="truncate">{hit.displayTitle}</span>
+                  <span className="min-w-0 flex-1 truncate" title={hit.displayTitle}>{hit.displayTitle}</span>
                   {hit.matchedOn === "alias" ? (
-                    <span className="ml-auto text-xs text-muted-foreground">
+                    <span className="ml-auto shrink-0 text-xs text-muted-foreground">
                       别名命中
                     </span>
                   ) : null}
@@ -178,10 +178,10 @@ export function PageReferencePicker({
                 <Command.Item
                   value={`__create__:${trimmedQuery}`}
                   onSelect={createUnresolved}
-                  className="data-[selected=true]:bg-accent data-[selected=true]:text-accent-foreground flex cursor-pointer items-center gap-2 rounded-md px-3 py-2 text-sm"
+                  className="data-[selected=true]:bg-accent data-[selected=true]:text-accent-foreground flex min-w-0 cursor-pointer items-center gap-2 rounded-md px-3 py-2 text-sm"
                 >
                   <FilePlus2 className="size-4 shrink-0 text-muted-foreground" />
-                  <span className="truncate">
+                  <span className="min-w-0 flex-1 truncate" title={`创建未解析引用：${trimmedQuery}`}>
                     创建未解析引用：{trimmedQuery}
                   </span>
                 </Command.Item>
