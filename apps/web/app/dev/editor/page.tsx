@@ -7,6 +7,8 @@ import { useState } from "react";
 import dynamic from "next/dynamic";
 import { notFound } from "next/navigation";
 
+import { Button } from "@/components/ui/button";
+import { clientUUID } from "@/lib/client-uuid";
 import { AstDocument } from "@/components/ast";
 import { PageButtonRuntime } from "@/components/page-button-runtime";
 import { parseDocument, type Document } from "@/lib/ast/schema";
@@ -321,18 +323,32 @@ export default function DevEditorPage() {
     notFound();
   }
   const [ast, setAst] = useState<Document>(SAMPLE_AST);
+  const [initialAst, setInitialAst] = useState<Document>(SAMPLE_AST);
+  const [epoch, setEpoch] = useState(0);
+  const [remoteAst, setRemoteAst] = useState<Document>();
   return (
     <div className="mx-auto grid w-full max-w-6xl gap-6 p-8 lg:grid-cols-2">
       <PageButtonRuntime pageId="0198a1b2-c3d4-7e5f-8a9b-0c1d2e3f4b01" />
       <section className="min-w-0">
         <h1 className="mb-4 text-lg font-semibold">BlockEditor（M2-T02 验证页）</h1>
+        <div className="mb-3 flex flex-wrap gap-2">
+          <Button variant="outline" size="sm" onClick={() => { setRemoteAst(undefined); setInitialAst(ast); setEpoch((value) => value + 1); }}>重新载入当前内容</Button>
+          <Button variant="outline" size="sm" onClick={() => {
+            const empty: Document = { type: "document", schema_version: 1, children: [] };
+            setRemoteAst(undefined); setAst(empty); setInitialAst(empty); setEpoch((value) => value + 1);
+          }}>空白文档</Button>
+          <Button variant="outline" size="sm" onClick={() => {
+            const next: Document = { ...ast, children: [...ast.children, { id: clientUUID(), type: "paragraph", content: [{ type: "text", text: "远端新增内容" }] }] };
+            setAst(next); setRemoteAst(next);
+          }}>模拟远端追加</Button>
+        </div>
         <div className="rounded-lg border border-border p-4">
-          <BlockEditor initialAst={SAMPLE_AST} onChange={setAst} />
+          <BlockEditor key={epoch} initialAst={initialAst} remoteAst={remoteAst} onChange={setAst} />
         </div>
       </section>
       <section className="min-w-0">
         <h2 className="mb-4 text-lg font-semibold">onChange 输出的 AST</h2>
-        <pre className="max-h-[80vh] overflow-auto rounded-lg border border-border bg-muted p-4 text-xs leading-5">
+        <pre data-editor-ast className="max-h-[80vh] overflow-auto rounded-lg border border-border bg-muted p-4 text-xs leading-5">
           {JSON.stringify(ast, null, 2)}
         </pre>
       </section>

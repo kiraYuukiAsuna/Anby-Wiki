@@ -122,8 +122,12 @@ function listItemToTiptap(block: Extract<Block, { type: "list_item" }>, state: A
 function blockToTiptap(block: Block, state: AdapterState): JSONContent[] {
   switch (block.type) {
     case "heading": {
-      const heading: JSONContent = textBlock("heading", block.id, block.content, { level: block.level });
-      return block.children?.length ? [heading, ...blocksToTiptap(block.children, state)] : [heading];
+      if (block.children !== undefined || block.is_toggleable !== undefined) return [{
+        type: "sectionHeading",
+        attrs: { id: block.id, level: block.level, isToggleable: block.is_toggleable ?? null, hasChildren: block.children !== undefined },
+        content: [paragraphFromInline(undefined, block.content), ...blocksToTiptap(block.children ?? [], state)],
+      }];
+      return [textBlock("heading", block.id, block.content, { level: block.level })];
     }
     case "paragraph":
       return [paragraphFromInline(block.id, block.content)];
@@ -142,8 +146,8 @@ function blockToTiptap(block: Block, state: AdapterState): JSONContent[] {
     case "toggle":
       return [{
         type: "toggleBlock",
-        attrs: { id: block.id, summaryJson: JSON.stringify(block.content) },
-        content: blocksToTiptap(block.children ?? [], state),
+        attrs: { id: block.id, hasChildren: block.children !== undefined },
+        content: [paragraphFromInline(undefined, block.content), ...blocksToTiptap(block.children ?? [], state)],
       }];
     case "quote":
       return [{ type: "blockquote", attrs: { id: block.id }, content: blocksToTiptap(block.children, state) }];

@@ -10,7 +10,7 @@ import type { Editor, JSONContent } from "@tiptap/core";
 import { Extension } from "@tiptap/core";
 import { EditorContent, useEditor } from "@tiptap/react";
 import { Suggestion, type SuggestionKeyDownProps, type SuggestionProps } from "@tiptap/suggestion";
-import { TextSelection } from "@tiptap/pm/state";
+import { Plugin, TextSelection } from "@tiptap/pm/state";
 import { toast } from "sonner";
 
 import { ExternalLinkEditor } from "@/components/editor/external-link-editor";
@@ -36,6 +36,7 @@ import {
 } from "@/lib/editor/references";
 import { editorExtensions, type PMDocument } from "@/lib/editor/schema";
 import { toAst } from "@/lib/editor/toAst";
+import { applyRemoteDocument } from "@/lib/editor/remote-document";
 import type { LinkPreviewMetadata } from "../../../../contracts/generated/typescript";
 
 export interface BlockEditorProps {
@@ -135,7 +136,7 @@ function slashMenuExtension(items: SlashItem[]) {
             },
             onUpdate: update,
             onKeyDown: ({ event }: SuggestionKeyDownProps) => {
-              if (!current || current.items.length === 0) return false;
+              if (event.isComposing || !current || current.items.length === 0) return false;
               if (event.key === "ArrowDown") {
                 selectedIndex = (selectedIndex + 1) % current.items.length;
                 if (root) renderSlashItems(root, current, selectedIndex);
@@ -204,10 +205,20 @@ export function BlockEditor({
   };
 
   const slashItems: SlashItem[] = useMemo(() => [
+    { title: "正文", subtext: "普通段落", aliases: ["text", "paragraph"], group: "基础", icon: "T", run: (editor) => { editor.chain().focus().setParagraph().run(); } },
+    ...([1, 2, 3] as const).map((level) => ({ title: `标题 ${level}`, subtext: "文档标题", aliases: [`h${level}`, "heading"], group: "基础", icon: `H${level}`, run: (editor: Editor) => { editor.chain().focus().setHeading({ level }).run(); } })),
+    { title: "无序列表", subtext: "项目列表", aliases: ["bullet", "list"], group: "基础", icon: "•", run: (editor) => { editor.chain().focus().toggleBulletList().run(); } },
+    { title: "有序列表", subtext: "编号列表", aliases: ["ordered", "list"], group: "基础", icon: "1.", run: (editor) => { editor.chain().focus().toggleOrderedList().run(); } },
+    { title: "引用", subtext: "引用段落", aliases: ["quote"], group: "基础", icon: "❞", run: (editor) => { editor.chain().focus().toggleBlockquote().run(); } },
+    { title: "代码块", subtext: "多行代码", aliases: ["code"], group: "基础", icon: "</>", run: (editor) => { editor.chain().focus().toggleCodeBlock().run(); } },
+    { title: "分割线", subtext: "分隔内容", aliases: ["divider"], group: "基础", icon: "—", run: (editor) => { editor.chain().focus().setHorizontalRule().run(); } },
+    { title: "待办", subtext: "可勾选事项", aliases: ["todo", "task"], group: "基础", icon: "☑", run: (editor) => insertTemplate(editor, { type: "todoBlock", content: [{ type: "paragraph" }] }) },
+    { title: "折叠块", subtext: "可展开的正文", aliases: ["toggle"], group: "基础", icon: "▸", run: (editor) => insertTemplate(editor, { type: "toggleBlock", content: [{ type: "paragraph", content: [{ type: "text", text: "详情" }] }, { type: "paragraph" }] }) },
+    { title: "提示框", subtext: "强调提示内容", aliases: ["callout"], group: "基础", icon: "!", run: (editor) => insertTemplate(editor, { type: "callout", content: [{ type: "paragraph" }] }) },
     { title: "页面引用", subtext: "插入站内页面引用", aliases: ["page", "ref", "页面", "引用"], group: "Anby", icon: "↗", run: () => setPickerOpen(true) },
     { title: "提及", subtext: "插入人员或日期提及", aliases: ["mention", "date", "提及", "日期"], group: "Anby", icon: "@", run: () => setMentionOpen(true) },
     { title: "外链", subtext: "插入外部链接", aliases: ["link", "url", "外链"], group: "Anby", icon: "🔗", run: (editor: Editor) => { setLinkDefaultText(editor.state.doc.textBetween(editor.state.selection.from, editor.state.selection.to)); setLinkOpen(true); } },
-    { title: "语义表格", subtext: "插入可嵌套内容的 AST 表格", aliases: ["table", "表格"], group: "Anby", icon: "▦", run: (editor: Editor) => insertTemplate(editor, { type: "astTable", content: [{ type: "astTableRow", content: [{ type: "astTableCell", content: [{ type: "paragraph", content: [{ type: "text", text: "单元格 1" }] }] }, { type: "astTableCell", content: [{ type: "paragraph", content: [{ type: "text", text: "单元格 2" }] }] }] }] }) },
+    { title: "语义表格", subtext: "插入可编辑表格", aliases: ["table", "表格"], group: "Anby", icon: "▦", run: (editor: Editor) => insertTemplate(editor, { type: "astTable", content: [{ type: "astTableRow", content: [{ type: "astTableCell", content: [{ type: "paragraph", content: [{ type: "text", text: "单元格 1" }] }] }, { type: "astTableCell", content: [{ type: "paragraph", content: [{ type: "text", text: "单元格 2" }] }] }] }] }) },
     { title: "页面路径", subtext: "插入 Breadcrumb", aliases: ["breadcrumb", "path", "路径"], group: "Anby", icon: "⌁", run: (editor: Editor) => insertTemplate(editor, { type: "breadcrumb", attrs: { itemsJson: JSON.stringify([{ display_text: "当前页面" }]) } }) },
     { title: "分栏", subtext: "插入双栏布局", aliases: ["columns", "layout", "分栏"], group: "Anby", icon: "▥", run: (editor: Editor) => insertTemplate(editor, { type: "columnList", content: [{ type: "column", attrs: { widthRatio: 1 }, content: [{ type: "paragraph", content: [{ type: "text", text: "左列" }] }] }, { type: "column", attrs: { widthRatio: 1 }, content: [{ type: "paragraph", content: [{ type: "text", text: "右列" }] }] }] }) },
     { title: "页面按钮", subtext: "插入声明式动作按钮", aliases: ["button", "action", "按钮"], group: "Anby", icon: "◉", run: () => setButtonOpen(true) },
@@ -227,6 +238,19 @@ export function BlockEditor({
       ...editorExtensions,
       presenceExtension,
       slashMenuExtension(slashItems),
+      Extension.create({
+        name: "anbyAstValidation",
+        addProseMirrorPlugins: () => [new Plugin({
+          filterTransaction: (transaction) => {
+            if (!transaction.docChanged) return true;
+            try { toAst(transaction.doc.toJSON()); return true; }
+            catch (error) {
+              toast.error(error instanceof Error ? error.message : "无法保存该编辑，已保留原内容");
+              return false;
+            }
+          },
+        })],
+      }),
     ],
     content: initialContent,
     editable,
@@ -266,7 +290,10 @@ export function BlockEditor({
     const head = remoteCursor?.head ?? editorPosition(selection.$head, state);
     applyingRemote.current = true;
     try {
-      editor.commands.setContent(fromAst(remoteAst, state), { emitUpdate: false });
+      const next = editor.schema.nodeFromJSON(fromAst(remoteAst, state));
+      const transaction = editor.state.tr;
+      applyRemoteDocument(transaction, next);
+      editor.view.dispatch(transaction);
       if (anchor && head) {
         const from = resolveEditorPosition(editor.state.doc, anchor, state);
         const to = resolveEditorPosition(editor.state.doc, head, state);
@@ -282,8 +309,11 @@ export function BlockEditor({
   useEffect(() => {
     if (!editor || !editable) return;
     const onKeyDown = (event: KeyboardEvent) => {
-      if (!(event.metaKey || event.ctrlKey) || event.key.toLowerCase() !== "k") return;
+      if (event.isComposing || !(event.metaKey || event.ctrlKey) || event.key.toLowerCase() !== "k") return;
+      const target = event.target;
+      if (!(target instanceof Element) || !editor.view.dom.contains(target) || target.closest("input,textarea,select")) return;
       event.preventDefault();
+      event.stopPropagation();
       if (event.shiftKey) {
         setLinkDefaultText(editor.state.doc.textBetween(editor.state.selection.from, editor.state.selection.to));
         setLinkOpen(true);
@@ -291,8 +321,8 @@ export function BlockEditor({
         setPickerOpen(true);
       }
     };
-    window.addEventListener("keydown", onKeyDown);
-    return () => window.removeEventListener("keydown", onKeyDown);
+    window.addEventListener("keydown", onKeyDown, true);
+    return () => window.removeEventListener("keydown", onKeyDown, true);
   }, [editor, editable]);
 
   if (!editor) return <div className="min-h-80 animate-pulse bg-muted" aria-label="编辑器加载中" />;

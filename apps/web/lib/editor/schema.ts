@@ -1,9 +1,14 @@
-import React from "react";
+import React, { useState } from "react";
+import { ChevronRight } from "lucide-react";
+import { toast } from "sonner";
+import { BlockView } from "@/components/ast";
+import { toAst } from "@/lib/editor/toAst";
 import { Extension, Mark, Node, mergeAttributes, type JSONContent } from "@tiptap/core";
 import { ReactNodeViewRenderer, NodeViewContent, NodeViewWrapper, type ReactNodeViewProps } from "@tiptap/react";
 import StarterKit from "@tiptap/starter-kit";
 import Link from "@tiptap/extension-link";
 import { Plugin } from "@tiptap/pm/state";
+import { Mapping } from "@tiptap/pm/transform";
 
 import type { Block as AstBlock } from "@/lib/ast/schema";
 import { newBlockId } from "@/lib/editor/ids";
@@ -53,7 +58,7 @@ export const AST_TO_EDITOR_BLOCK: Record<AstBlockType, string> = {
 };
 
 const blockTypesWithId = [
-  "paragraph", "heading", "bulletList", "orderedList", "listItem", "blockquote", "codeBlock", "horizontalRule",
+  "paragraph", "heading", "sectionHeading", "bulletList", "orderedList", "listItem", "blockquote", "codeBlock", "horizontalRule",
   "preformatted", "equation", "todoBlock", "toggleBlock", "breadcrumb", "columnList", "column", "pageButton", "htmlBlock",
   "callout", "componentBlock", "imageAsset", "videoAsset", "audioAsset", "fileAsset", "pdfAsset", "bookmark", "linkPreview",
   "embedBlock", "astTable", "astTableRow", "astTableCell",
@@ -72,7 +77,17 @@ function numberValue(value: unknown, fallback: number): number {
 }
 
 function updateAttr(props: ReactNodeViewProps, key: string, value: unknown) {
-  props.updateAttributes({ [key]: value });
+  const pos = props.getPos();
+  if (pos === undefined || !props.editor.isEditable) return false;
+  try {
+    const tr = props.editor.state.tr.setNodeAttribute(pos, key, value);
+    toAst(tr.doc.toJSON());
+    props.editor.view.dispatch(tr);
+    return true;
+  } catch {
+    toast.error("输入不符合此内容的要求，已保留原值");
+    return false;
+  }
 }
 
 function Field({ label, children }: { label: string; children?: React.ReactNode }) {
@@ -86,9 +101,13 @@ function TextInput(props: ReactNodeViewProps & { attrName: string; label: string
   const value = textValue(props.node.attrs[props.attrName]);
   const common = {
     className: `${CONTROL_STYLE}${props.multiline ? " ast-editable-block__textarea" : ""}`,
+    key: value,
     defaultValue: value,
+    disabled: !props.editor.isEditable,
     contentEditable: false,
-    onBlur: (event: React.FocusEvent<HTMLInputElement | HTMLTextAreaElement>) => updateAttr(props, props.attrName, event.currentTarget.value),
+    onBlur: (event: React.FocusEvent<HTMLInputElement | HTMLTextAreaElement>) => {
+      if (!updateAttr(props, props.attrName, event.currentTarget.value)) event.currentTarget.value = value;
+    },
     onKeyDown: (event: React.KeyboardEvent<HTMLInputElement | HTMLTextAreaElement>) => event.stopPropagation(),
   };
   return React.createElement(Field, { label: props.label },
@@ -105,13 +124,15 @@ function NumberInput(props: ReactNodeViewProps & { attrName: string; label: stri
       className: CONTROL_STYLE,
       contentEditable: false,
       type: "number",
+      key: value,
       defaultValue: String(value),
+      disabled: !props.editor.isEditable,
       min: props.min,
       max: props.max,
       step: props.step,
       onBlur: (event: React.FocusEvent<HTMLInputElement>) => {
         const next = Number(event.currentTarget.value);
-        if (Number.isFinite(next)) updateAttr(props, props.attrName, next);
+        if (!event.currentTarget.value.trim() || !Number.isFinite(next) || !updateAttr(props, props.attrName, next)) event.currentTarget.value = String(value);
       },
       onKeyDown: (event: React.KeyboardEvent<HTMLInputElement>) => event.stopPropagation(),
     }),
@@ -125,6 +146,7 @@ function SelectInput(props: ReactNodeViewProps & { attrName: string; label: stri
       className: CONTROL_STYLE,
       contentEditable: false,
       value,
+      disabled: !props.editor.isEditable,
       onChange: (event: React.ChangeEvent<HTMLSelectElement>) => updateAttr(props, props.attrName, event.currentTarget.value),
       onKeyDown: (event: React.KeyboardEvent<HTMLSelectElement>) => event.stopPropagation(),
     }, props.options.map((option) => React.createElement("option", { key: option.value, value: option.value }, option.label))),
@@ -136,6 +158,7 @@ function CheckboxInput(props: ReactNodeViewProps & { attrName: string; label: st
     React.createElement("input", {
       type: "checkbox",
       checked: Boolean(props.node.attrs[props.attrName]),
+      disabled: !props.editor.isEditable,
       onChange: (event: React.ChangeEvent<HTMLInputElement>) => updateAttr(props, props.attrName, event.currentTarget.checked),
     }),
     React.createElement("span", null, props.label),
@@ -147,8 +170,19 @@ function BlockShell(props: ReactNodeViewProps & { title: string; summary?: strin
     as: "section",
     className: ["ast-editable-block", props.className].filter(Boolean).join(" "),
     "data-editor-block-type": props.node.type.name,
+    "data-id": props.node.attrs.id,
+    "data-column-header": props.node.attrs.hasColumnHeader || undefined,
+    "data-row-header": props.node.attrs.hasRowHeader || undefined,
+    "data-callout-color": props.node.attrs.color || undefined,
+    style: props.node.type.name === "column" ? { flex: props.node.attrs.widthRatio } : undefined,
   },
-    React.createElement("details", null,
+    props.node.isAtom ? React.createElement("div", {
+      className: "ast-editor-preview", contentEditable: false,
+      onClickCapture: (event: React.MouseEvent) => {
+        if ((event.target as Element).closest("a,button")) { event.preventDefault(); event.stopPropagation(); }
+      },
+    }, React.createElement(BlockView, { block: toAst({ type: "doc", content: [props.node.toJSON()] }).children[0] })) : null,
+    props.editor.isEditable && React.Children.count(props.children) > 0 ? React.createElement("details", null,
       React.createElement("summary", { className: "ast-editable-block__summary-trigger", contentEditable: false },
         React.createElement("div", { className: "ast-editable-block__header" },
           React.createElement("span", { className: "ast-editable-block__title" }, props.title),
@@ -157,7 +191,9 @@ function BlockShell(props: ReactNodeViewProps & { title: string; summary?: strin
         ),
       ),
       React.createElement("div", { className: "ast-editable-block__grid", contentEditable: false }, props.children),
-    ),
+    ) : null,
+    props.node.type.name === "callout" ? React.createElement("div", { className: "ast-callout-title", contentEditable: false }, props.node.attrs.icon || CALLOUT_LABELS[props.node.attrs.kind]) : null,
+    props.node.type.name === "astTable" && props.node.attrs.caption ? React.createElement("div", { className: "text-sm text-muted-foreground", contentEditable: false }, props.node.attrs.caption) : null,
     props.content ? React.createElement(NodeViewContent, { className: "ast-editable-block__content" }) : null,
   );
 }
@@ -204,12 +240,83 @@ function InlineAtomView(props: ReactNodeViewProps & { label: string; className: 
     as: "span",
     className: `ast-inline-editor ${props.className}`,
     contentEditable: false,
+    tabIndex: 0,
+    "aria-label": `${props.label}：${text}`,
   },
-    React.createElement("span", { className: "ast-inline-editor__label" }, props.label),
     React.createElement("span", { className: "ast-inline-editor__preview" }, text),
-    React.createElement("span", { className: "ast-inline-editor__panel" },
+    props.editor.isEditable ? React.createElement("span", { className: "ast-inline-editor__panel" },
       props.fields.map((field) => React.createElement(TextInput, { ...props, key: field.attr, attrName: field.attr, label: field.label, type: field.type })),
-    ),
+    ) : null,
+  );
+}
+
+function OutlineView(props: ReactNodeViewProps) {
+  const [open, setOpen] = useState(true);
+  const heading = props.node.type.name === "sectionHeading";
+  const toggleable = !heading || props.node.attrs.isToggleable;
+  return React.createElement(NodeViewWrapper, {
+    className: `ast-outline${heading ? " ast-outline--heading" : ""}`,
+    "data-level": props.node.attrs.level,
+    "data-open": open,
+    "data-id": props.node.attrs.id,
+    "data-editor-block-type": props.node.type.name,
+  },
+    toggleable ? React.createElement("button", {
+      type: "button", className: "ast-outline__toggle", contentEditable: false,
+      "aria-label": open ? "折叠内容" : "展开内容", "aria-expanded": open,
+      onMouseDown: (event: React.MouseEvent) => event.preventDefault(), onClick: () => setOpen(!open),
+    }, React.createElement(ChevronRight, { size: 16, style: { transform: open ? "rotate(90deg)" : undefined } })) : null,
+    React.createElement(NodeViewContent, { className: "ast-outline__content" }),
+  );
+}
+
+function TodoView(props: ReactNodeViewProps) {
+  return React.createElement(NodeViewWrapper, { className: "ast-todo", "data-checked": props.node.attrs.checked, "data-id": props.node.attrs.id },
+    React.createElement("input", { type: "checkbox", contentEditable: false, "aria-label": "完成事项", checked: props.node.attrs.checked, disabled: !props.editor.isEditable, onChange: (event: React.ChangeEvent<HTMLInputElement>) => updateAttr(props, "checked", event.target.checked) }),
+    React.createElement(NodeViewContent, { className: "ast-todo__content" }),
+  );
+}
+
+function StructureButton({ label, disabled, onClick }: { label: string; disabled?: boolean; onClick: () => void }) {
+  return React.createElement("button", { type: "button", className: "ast-editable-block__control", disabled, onMouseDown: (event: React.MouseEvent) => event.preventDefault(), onClick }, label);
+}
+
+function TableView(props: ReactNodeViewProps) {
+  const append = (column: boolean) => {
+    const pos = props.getPos();
+    if (pos === undefined) return;
+    const { state, view } = props.editor;
+    const node = state.doc.nodeAt(pos);
+    if (!node) return;
+    const cell = () => state.schema.nodes.astTableCell.create(null, state.schema.nodes.paragraph.create());
+    const tr = state.tr;
+    if (column) {
+      node.forEach((row, offset) => tr.insert(tr.mapping.map(pos + 1 + offset + row.nodeSize - 1), cell()));
+    } else {
+      tr.insert(pos + node.nodeSize - 1, state.schema.nodes.astTableRow.create(null, Array.from({ length: node.firstChild?.childCount ?? 1 }, cell)));
+    }
+    view.dispatch(tr);
+  };
+  return React.createElement(BlockShell, { ...props, title: "表格设置", content: true },
+    React.createElement(TextInput, { ...props, label: "标题", attrName: "caption" }),
+    React.createElement(CheckboxInput, { ...props, label: "第一行为列头", attrName: "hasColumnHeader" }),
+    React.createElement(CheckboxInput, { ...props, label: "第一列为行头", attrName: "hasRowHeader" }),
+    React.createElement(StructureButton, { label: "增加一行", onClick: () => append(false) }),
+    React.createElement(StructureButton, { label: "增加一列", onClick: () => append(true) }),
+  );
+}
+
+function ColumnsView(props: ReactNodeViewProps) {
+  const count = props.node.childCount;
+  return React.createElement(BlockShell, { ...props, title: "分栏设置", content: true },
+    React.createElement(StructureButton, { label: "增加一栏", disabled: count >= 5, onClick: () => {
+      const pos = props.getPos();
+      if (pos === undefined) return;
+      const { state, view } = props.editor;
+      const node = state.doc.nodeAt(pos);
+      if (!node || node.childCount >= 5) return;
+      view.dispatch(state.tr.insert(pos + node.nodeSize - 1, state.schema.nodes.column.create(null, state.schema.nodes.paragraph.create())));
+    } }),
   );
 }
 
@@ -230,14 +337,28 @@ const BlockIds = Extension.create({
   },
   addProseMirrorPlugins() {
     return [new Plugin({
-      appendTransaction: (_transactions, _oldState, newState) => {
+      appendTransaction: (transactions, oldState, newState) => {
         const tr = newState.tr;
         let changed = false;
-        newState.doc.descendants((node, pos) => {
-          if (blockTypesWithId.includes(node.type.name) && !node.attrs.id) {
-            tr.setNodeMarkup(pos, undefined, { ...node.attrs, id: newBlockId() });
+        const mapping = new Mapping();
+        for (const transaction of transactions) mapping.appendMapping(transaction.mapping);
+        const owners = new Map<string, number>();
+        oldState.doc.descendants((node, pos) => {
+          if (!node.attrs.id) return;
+          const mapped = mapping.mapResult(pos);
+          if (!mapped.deleted && newState.doc.nodeAt(mapped.pos)?.attrs.id === node.attrs.id) owners.set(node.attrs.id, mapped.pos);
+        });
+        const seen = new Set<string>();
+        newState.doc.descendants((node, pos, parent, index) => {
+          if (!blockTypesWithId.includes(node.type.name)) return;
+          if (index === 0 && node.type.name === "paragraph" && parent && ["todoBlock", "toggleBlock", "sectionHeading"].includes(parent.type.name)) return;
+          let id = node.attrs.id;
+          if (!id || seen.has(id) || (owners.has(id) && owners.get(id) !== pos)) {
+            id = newBlockId();
+            tr.setNodeMarkup(pos, undefined, { ...node.attrs, id });
             changed = true;
           }
+          seen.add(id);
         });
         return changed ? tr : null;
       },
@@ -274,6 +395,7 @@ function containerNode(name: string, content: string, view: React.ComponentType<
 const InlineCode = Mark.create({
   name: "inlineCode",
   code: true,
+  excludes: "",
   parseHTML: () => [{ tag: "code[data-inline-code]" }],
   renderHTML: ({ HTMLAttributes }) => ["code", mergeAttributes(HTMLAttributes, { "data-inline-code": "", class: "ast-inline-code" }), 0],
 });
@@ -297,6 +419,7 @@ function inlineAtomNode(name: string, attrs: Record<string, unknown>, view: Reac
     name,
     group: "inline",
     inline: true,
+    marks: "",
     atom: true,
     selectable: true,
     addAttributes: () => attrs,
@@ -320,14 +443,15 @@ export const editorExtensions = [
   containerNode("callout", "block*", CalloutView, { kind: { default: "info" }, icon: { default: "" }, color: { default: "default" } }),
   atomNode("preformatted", { kind: { default: "plain" }, caption: { default: "" }, text: { default: "" } }, PreformattedView),
   atomNode("equation", { expression: { default: "" }, caption: { default: "" } }, EquationView),
-  containerNode("todoBlock", "block*", (props) => React.createElement(BlockShell, { ...props, title: "待办", summary: props.node.attrs.checked ? "已完成" : "未完成", content: true }, React.createElement(CheckboxInput, { ...props, label: "完成", attrName: "checked" })), { checked: { default: false } }),
-  containerNode("toggleBlock", "block*", (props) => React.createElement(BlockShell, { ...props, title: "折叠块", summary: "详情", content: true }, React.createElement(TextInput, { ...props, label: "摘要", attrName: "summaryText" })), { summaryText: { default: "详情" }, summaryJson: { default: "[]" } }),
+  containerNode("todoBlock", "paragraph block*", TodoView, { checked: { default: false } }),
+  containerNode("toggleBlock", "paragraph block*", OutlineView, { hasChildren: { default: true } }),
+  containerNode("sectionHeading", "paragraph block*", OutlineView, { level: { default: 1 }, isToggleable: { default: null }, hasChildren: { default: false } }),
   atomNode("breadcrumb", { itemsJson: { default: "[]" } }, (props) => React.createElement(SimpleAttrsView, { ...props, title: "页面路径", summaryAttr: "itemsJson", fields: [{ attr: "itemsJson", label: "路径项 JSON", multiline: true }] })),
-  containerNode("columnList", "column+", (props) => React.createElement(BlockShell, { ...props, title: "分栏", content: true })),
+  containerNode("columnList", "column{2,5}", ColumnsView),
   containerNode("column", "block*", (props) => React.createElement(BlockShell, { ...props, title: "列", summary: `宽度 ${props.node.attrs.widthRatio}`, content: true }, React.createElement(NumberInput, { ...props, label: "宽度比例", attrName: "widthRatio", fallback: 1, step: 0.1 })), { widthRatio: { default: 1 } }),
   atomNode("pageButton", { label: { default: "运行操作" }, confirmation: { default: "" }, actionsJson: { default: "[]" } }, (props) => React.createElement(SimpleAttrsView, { ...props, title: "页面按钮", summaryAttr: "label", fields: [{ attr: "label", label: "按钮名称" }, { attr: "confirmation", label: "确认提示" }, { attr: "actionsJson", label: "动作 JSON", multiline: true }] })),
   atomNode("htmlBlock", { html: { default: "" }, height: { default: 240 }, caption: { default: "" } }, (props) => React.createElement(SimpleAttrsView, { ...props, title: "HTML", summaryAttr: "caption", fields: [{ attr: "height", label: "高度", number: true, fallback: 240 }, { attr: "caption", label: "标题" }, { attr: "html", label: "HTML", multiline: true }] })),
-  containerNode("astTable", "astTableRow+", (props) => React.createElement(BlockShell, { ...props, title: "语义表格", summary: props.node.attrs.caption, content: true }, React.createElement(TextInput, { ...props, label: "标题", attrName: "caption" }), React.createElement(CheckboxInput, { ...props, label: "第一行为列头", attrName: "hasColumnHeader" }), React.createElement(CheckboxInput, { ...props, label: "第一列为行头", attrName: "hasRowHeader" })), { caption: { default: "" }, hasColumnHeader: { default: false }, hasRowHeader: { default: false } }),
+  containerNode("astTable", "astTableRow+", TableView, { caption: { default: "" }, hasColumnHeader: { default: false }, hasRowHeader: { default: false } }),
   containerNode("astTableRow", "astTableCell+", () => React.createElement(NodeViewWrapper, { as: "div", className: "ast-table-row" }, React.createElement(NodeViewContent, null))),
   containerNode("astTableCell", "block*", () => React.createElement(NodeViewWrapper, { as: "div", className: "ast-table-cell" }, React.createElement(NodeViewContent, null))),
   atomNode("componentBlock", { componentId: { default: "" }, componentVersion: { default: 1 }, entityId: { default: "" }, displayConfig: { default: "{}" } }, (props) => React.createElement(SimpleAttrsView, { ...props, title: "组件", summaryAttr: "componentId", className: "ast-component", fields: [{ attr: "componentId", label: "Component ID" }, { attr: "componentVersion", label: "版本", number: true, fallback: 1 }, { attr: "entityId", label: "Entity ID" }, { attr: "displayConfig", label: "显示配置", multiline: true }] })),
