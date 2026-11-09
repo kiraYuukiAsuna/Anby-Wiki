@@ -7,8 +7,10 @@ import { Extension, Mark, Node, mergeAttributes, type JSONContent } from "@tipta
 import { ReactNodeViewRenderer, NodeViewContent, NodeViewWrapper, type ReactNodeViewProps } from "@tiptap/react";
 import StarterKit from "@tiptap/starter-kit";
 import Link from "@tiptap/extension-link";
-import { Plugin } from "@tiptap/pm/state";
-import { Mapping } from "@tiptap/pm/transform";
+import { SuggestionPluginKey } from "@tiptap/suggestion";
+import { Plugin, TextSelection } from "@tiptap/pm/state";
+import { canSplit, Mapping } from "@tiptap/pm/transform";
+import type { EditorView } from "@tiptap/pm/view";
 
 import type { Block as AstBlock } from "@/lib/ast/schema";
 import { newBlockId } from "@/lib/editor/ids";
@@ -250,6 +252,56 @@ function InlineAtomView(props: ReactNodeViewProps & { label: string; className: 
   );
 }
 
+function handleBlockEnter(view: EditorView, event: KeyboardEvent): boolean {
+  if (event.key !== "Enter" || event.shiftKey || event.metaKey || event.ctrlKey || event.altKey ||
+      event.isComposing || view.composing || !view.editable ||
+      (event.target as Element).closest("button,input,textarea,select") ||
+      SuggestionPluginKey.getState(view.state)?.active) return false;
+  const { selection } = view.state;
+  const { $from, $to } = selection;
+  if (!(selection instanceof TextSelection) || $from.depth < 2 || !$from.sameParent($to) ||
+      $from.index(-1) !== 0) return false;
+  const block = $from.node(-1);
+  const todo = block.type.name === "todoBlock";
+  if (!todo) {
+    if (!["toggleBlock", "sectionHeading"].includes(block.type.name)) return false;
+    const dom = view.nodeDOM($from.before(-1));
+    if (!(dom instanceof Element) || !dom.querySelector(':scope > .ast-outline[data-open="false"]')) return false;
+  }
+
+  const tr = view.state.tr.deleteSelection();
+  const cursor = tr.selection.$from;
+  if (todo) {
+    if (cursor.parent.content.size === 0) {
+      const start = cursor.before(-1);
+      const paragraph = cursor.parent.type.create({ id: block.attrs.id });
+      tr.replaceWith(start, cursor.after(-1), block.content.replaceChild(0, paragraph));
+      tr.setSelection(TextSelection.create(tr.doc, start + 1));
+    } else {
+      const types = [
+        { type: block.type, attrs: { ...block.attrs, id: null, checked: false } },
+        { type: cursor.parent.type, attrs: { id: null } },
+      ];
+      if (!canSplit(tr.doc, cursor.pos, 2, types)) return false;
+      tr.split(cursor.pos, 2, types);
+      tr.ensureMarks(view.state.storedMarks ?? $from.marks());
+    }
+  } else {
+    // A closed outline must never move the caret into its hidden children.
+    const paragraph = view.state.schema.nodes.paragraph.create(null, cursor.parent.content.cut(cursor.parentOffset));
+    tr.delete(cursor.pos, cursor.end());
+    const after = tr.selection.$from.after(-1);
+    tr.insert(after, paragraph).setSelection(TextSelection.create(tr.doc, after + 1));
+  }
+  view.dispatch(tr.scrollIntoView());
+  return true;
+}
+
+const BlockEnter = Extension.create({
+  name: "anbyBlockEnter",
+  addProseMirrorPlugins: () => [new Plugin({ props: { handleKeyDown: handleBlockEnter } })],
+});
+
 function OutlineView(props: ReactNodeViewProps) {
   const [open, setOpen] = useState(true);
   const heading = props.node.type.name === "sectionHeading";
@@ -384,7 +436,7 @@ function containerNode(name: string, content: string, view: React.ComponentType<
     name,
     group: "block",
     content,
-    isolating: true,
+    isolating: name !== "todoBlock",
     addAttributes: () => idAttrs(attrs),
     parseHTML: () => [{ tag: `[data-node-type="${name}"]` }],
     renderHTML: ({ HTMLAttributes }) => ["div", mergeAttributes(HTMLAttributes, { "data-node-type": name }), 0],
@@ -437,6 +489,7 @@ export const editorExtensions = [
   }),
   Link.configure({ openOnClick: false }),
   BlockIds,
+  BlockEnter,
   InlineCode,
   TextColor,
   BackgroundColor,

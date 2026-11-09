@@ -45,6 +45,113 @@ try {
   const empty = async () => { await page.getByRole('button', { name: '空白文档' }).click(); await editor.locator('.tiptap').waitFor(); await editor.locator('.tiptap').click(); };
   await page.goto(`${baseURL}/dev/editor`, { waitUntil: 'domcontentloaded' });
   await editor.locator('.tiptap').waitFor();
+  const caret = async (locator, offset) => locator.evaluate((node, offset) => {
+    node.closest('[contenteditable="true"]').focus();
+    const range = document.createRange();
+    if (offset === undefined) { range.selectNodeContents(node); range.collapse(false); }
+    else range.setStart(node.firstChild, offset);
+    range.collapse(true);
+    const selection = window.getSelection(); selection.removeAllRanges(); selection.addRange(range);
+    document.dispatchEvent(new Event('selectionchange'));
+  }, offset);
+  const insert = async (query, title) => {
+    await empty(); await page.keyboard.insertText(`/${query}`);
+    await page.getByRole('button', { name: new RegExp(title) }).click();
+  };
+  await check('closed toggle Enter creates a visible sibling without changing hidden children', async () => {
+    await insert('toggle', '折叠块');
+    const toggle = editor.locator('[data-editor-block-type="toggleBlock"]');
+    await toggle.locator('p').nth(1).fill('保留的隐藏正文');
+    const before = (await ast()).children.find(b => b.type === 'toggle');
+    await caret(toggle.locator('p').first());
+    await toggle.getByRole('button', { name: '折叠内容' }).click();
+    await page.keyboard.press('Enter'); await page.keyboard.insertText('块外新行');
+    assert.equal(await editor.getByText('块外新行', { exact: true }).isVisible(), true);
+    const saved = await ast(); const index = saved.children.findIndex(b => b.id === before.id);
+    assert.deepEqual(saved.children[index], before);
+    assert.equal(saved.children[index + 1].type, 'paragraph');
+    assert.equal(saved.children[index + 1].content[0].text, '块外新行');
+    const summaryX = (await bounds(toggle.locator('p').first()))[0].x;
+    const lineX = (await bounds(editor.getByText('块外新行', { exact: true })))[0].x;
+    const editorX = (await bounds(editor.locator('.tiptap')))[0].x;
+    assert.equal(lineX, editorX); assert.ok(summaryX > lineX);
+  });
+  await check('todo Enter creates aligned unchecked siblings and empty Enter exits to a paragraph', async () => {
+    await insert('todo', '待办');
+    const first = editor.locator('.ast-todo').first();
+    await first.locator('p').fill('第一个待办');
+    await first.getByRole('checkbox').check(); await caret(first.locator('p'));
+    const before = (await ast()).children.find(b => b.type === 'todo');
+    await page.keyboard.press('Enter'); await page.keyboard.insertText('第二个待办');
+    const tasks = (await ast()).children.filter(b => b.type === 'todo');
+    assert.equal(tasks.length, 2); assert.deepEqual(tasks[0], before);
+    assert.equal(tasks[1].checked, false); assert.equal(tasks[1].content[0].text, '第二个待办');
+    assert.equal(tasks[0].children?.length ?? 0, 0);
+    const boxes = await bounds(editor.locator('.ast-todo > input'));
+    const lines = await bounds(editor.locator('.ast-todo p'));
+    assert.equal(boxes[0].x, boxes[1].x); assert.equal(lines[0].x, lines[1].x);
+    await page.keyboard.press('Enter'); await page.keyboard.press('Enter'); await page.keyboard.insertText('退出待办的正文');
+    const saved = await ast(); const lastTodo = saved.children.findLastIndex(b => b.type === 'todo');
+    assert.equal(saved.children.filter(b => b.type === 'todo').length, 2);
+    assert.equal(saved.children[lastTodo + 1].type, 'paragraph');
+    assert.equal((await bounds(editor.getByText('退出待办的正文', { exact: true })))[0].x, boxes[0].x);
+  });
+  await check('folded heading Enter preserves its subtree and moves to a visible paragraph', async () => {
+    await page.reload(); await editor.locator('.tiptap').waitFor();
+    const heading = editor.locator('[data-editor-block-type="sectionHeading"]').first();
+    const before = (await ast()).children[0];
+    await caret(heading.locator('p').first());
+    await heading.getByRole('button', { name: '折叠内容' }).click();
+    await page.keyboard.press('Enter'); await page.keyboard.insertText('标题之后');
+    assert.equal(await editor.getByText('标题之后', { exact: true }).isVisible(), true);
+    const saved = await ast(); assert.deepEqual(saved.children[0], before);
+    assert.equal(saved.children[1].content[0].text, '标题之后');
+  });
+  await check('expanded toggle Enter stays in its visible body while folded mid-summary Enter splits outside', async () => {
+    await insert('toggle', '折叠块');
+    let toggle = editor.locator('[data-editor-block-type="toggleBlock"]');
+    await toggle.locator('p').first().fill('前后'); await caret(toggle.locator('p').first(), 1);
+    await page.keyboard.press('Enter');
+    assert.equal((await ast()).children[0].content[0].text, '前');
+    assert.equal((await ast()).children[0].children[0].content[0].text, '后');
+    assert.equal(await toggle.getByText('后', { exact: true }).isVisible(), true);
+    await insert('toggle', '折叠块');
+    toggle = editor.locator('[data-editor-block-type="toggleBlock"]');
+    await toggle.locator('p').first().fill('前后'); await caret(toggle.locator('p').first(), 1);
+    await toggle.getByRole('button', { name: '折叠内容' }).click(); await page.keyboard.press('Enter');
+    const saved = await ast();
+    assert.equal(saved.children[0].content[0].text, '前');
+    assert.equal(saved.children[1].content[0].text, '后');
+    assert.equal(await editor.getByText('后', { exact: true }).isVisible(), true);
+  });
+  await check('todo splitting preserves text, Shift+Enter and undo, and leaves slash selection to the menu', async () => {
+    await insert('todo', '待办');
+    await editor.locator('.ast-todo p').fill('前后'); await caret(editor.locator('.ast-todo p'), 1);
+    const before = await ast();
+    // Separate typing from the next undo event.
+    await page.waitForTimeout(600);
+    await page.keyboard.press('Enter');
+    let tasks = (await ast()).children.filter(b => b.type === 'todo');
+    assert.equal(tasks[0].content[0].text, '前'); assert.equal(tasks[1].content[0].text, '后');
+    await page.keyboard.press('Meta+z'); assert.deepEqual(await ast(), before);
+    await page.keyboard.press('Meta+Shift+z');
+    await caret(editor.locator('.ast-todo p').last()); await page.keyboard.press('Shift+Enter'); await page.keyboard.insertText('同项换行');
+    tasks = (await ast()).children.filter(b => b.type === 'todo'); assert.equal(tasks.length, 2);
+    assert.equal(tasks[1].content.map(n => n.text ?? '').join(''), '后\n同项换行');
+    await caret(editor.locator('.ast-todo p').last(), 0); await page.keyboard.press('Backspace');
+    assert.match(JSON.stringify(await ast()), /前/); assert.match(JSON.stringify(await ast()), /后/);
+    await insert('todo', '待办');
+    const composing = await ast();
+    await editor.locator('.tiptap').dispatchEvent('compositionstart');
+    await editor.locator('.tiptap').dispatchEvent('keydown', { key: 'Enter', code: 'Enter', isComposing: true });
+    assert.deepEqual(await ast(), composing);
+    await editor.locator('.tiptap').dispatchEvent('compositionend');
+    await page.waitForTimeout(50);
+    await editor.locator('.ast-todo p').fill('/table');
+    await page.getByRole('button', { name: /语义表格/ }).waitFor(); await page.keyboard.press('Enter');
+    assert.equal(await editor.locator('[data-editor-block-type="astTable"]').count(), 1);
+  });
+  await page.reload(); await editor.locator('.tiptap').waitFor();
   await check('media uses reader previews and properties start collapsed', async () => {
     await editor.locator('.ast-editor-preview audio').waitFor();
     assert.equal(await editor.locator('details input:visible, details textarea:visible').count(), 0);
