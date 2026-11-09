@@ -260,19 +260,25 @@ function handleBlockEnter(view: EditorView, event: KeyboardEvent): boolean {
   const { selection } = view.state;
   const { $from, $to } = selection;
   if (!(selection instanceof TextSelection) || $from.depth < 2 || !$from.sameParent($to) ||
-      $from.index(-1) !== 0) return false;
+      $from.parent.type.name !== "paragraph") return false;
   const block = $from.node(-1);
   const todo = block.type.name === "todoBlock";
+  const summary = $from.index(-1) === 0;
+  if (todo && !summary && $from.parent.content.size === 0) return false;
   if (!todo) {
     if (!["toggleBlock", "sectionHeading"].includes(block.type.name)) return false;
-    const dom = view.nodeDOM($from.before(-1));
-    if (!(dom instanceof Element) || !dom.querySelector(':scope > .ast-outline[data-open="false"]')) return false;
+    if (summary) {
+      const dom = view.nodeDOM($from.before(-1));
+      if (!(dom instanceof Element) || !dom.querySelector(':scope > .ast-outline[data-open="false"]')) return false;
+    } else if (!selection.empty || $from.parent.content.size !== 0 || $from.index(-1) !== block.childCount - 1) {
+      return false;
+    }
   }
 
   const tr = view.state.tr.deleteSelection();
   const cursor = tr.selection.$from;
   if (todo) {
-    if (cursor.parent.content.size === 0) {
+    if (summary && cursor.parent.content.size === 0) {
       const start = cursor.before(-1);
       const paragraph = cursor.parent.type.create({ id: block.attrs.id });
       tr.replaceWith(start, cursor.after(-1), block.content.replaceChild(0, paragraph));
@@ -286,6 +292,11 @@ function handleBlockEnter(view: EditorView, event: KeyboardEvent): boolean {
       tr.split(cursor.pos, 2, types);
       tr.ensureMarks(view.state.storedMarks ?? $from.marks());
     }
+  } else if (!summary) {
+    const after = cursor.after(-1);
+    tr.delete(cursor.before(), cursor.after());
+    const outside = tr.mapping.map(after);
+    tr.insert(outside, cursor.parent).setSelection(TextSelection.create(tr.doc, outside + 1));
   } else {
     // A closed outline must never move the caret into its hidden children.
     const paragraph = view.state.schema.nodes.paragraph.create(null, cursor.parent.content.cut(cursor.parentOffset));
@@ -306,6 +317,18 @@ function OutlineView(props: ReactNodeViewProps) {
   const [open, setOpen] = useState(true);
   const heading = props.node.type.name === "sectionHeading";
   const toggleable = !heading || props.node.attrs.isToggleable;
+  const toggle = () => {
+    const pos = props.getPos();
+    const { selection } = props.editor.state;
+    if (open && pos !== undefined && props.node.firstChild) {
+      const summaryEnd = pos + props.node.firstChild.nodeSize;
+      // Move a body selection before hiding it so the next key edits visible content.
+      if (selection.from > pos && selection.to > summaryEnd && selection.to < pos + props.node.nodeSize) {
+        props.editor.commands.setTextSelection(summaryEnd);
+      }
+    }
+    setOpen(!open);
+  };
   return React.createElement(NodeViewWrapper, {
     className: `ast-outline${heading ? " ast-outline--heading" : ""}`,
     "data-level": props.node.attrs.level,
@@ -316,7 +339,7 @@ function OutlineView(props: ReactNodeViewProps) {
     toggleable ? React.createElement("button", {
       type: "button", className: "ast-outline__toggle", contentEditable: false,
       "aria-label": open ? "折叠内容" : "展开内容", "aria-expanded": open,
-      onMouseDown: (event: React.MouseEvent) => event.preventDefault(), onClick: () => setOpen(!open),
+      onMouseDown: (event: React.MouseEvent) => event.preventDefault(), onClick: toggle,
     }, React.createElement(ChevronRight, { size: 16, style: { transform: open ? "rotate(90deg)" : undefined } })) : null,
     React.createElement(NodeViewContent, { className: "ast-outline__content" }),
   );

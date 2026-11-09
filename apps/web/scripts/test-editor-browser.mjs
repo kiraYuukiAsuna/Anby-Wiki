@@ -58,6 +58,48 @@ try {
     await empty(); await page.keyboard.insertText(`/${query}`);
     await page.getByRole('button', { name: new RegExp(title) }).click();
   };
+  await check('collapsing with the caret in the body keeps Enter outside the hidden subtree', async () => {
+    await insert('toggle', '折叠块'); await page.keyboard.insertText('隐藏正文');
+    const before = (await ast()).children[0];
+    await editor.getByRole('button', { name: '折叠内容' }).click();
+    await page.keyboard.press('Enter'); await page.keyboard.insertText('收起后正文');
+    const saved = await ast();
+    assert.deepEqual(saved.children[0], before);
+    assert.equal(saved.children[1].content[0].text, '收起后正文');
+    assert.equal((await bounds(editor.getByText('收起后正文', { exact: true })))[0].x, (await bounds(editor.locator('.tiptap')))[0].x);
+  });
+  await check('legacy todo body Enter creates a sibling and empty Enter exits at the checkbox edge', async () => {
+    await empty();
+    await editor.locator('.tiptap').evaluate(root => root.editor.commands.setContent({ type: 'doc', content: [{
+      type: 'todoBlock', content: [
+        { type: 'paragraph', content: [{ type: 'text', text: '原待办' }] },
+        { type: 'paragraph', content: [{ type: 'text', text: '旧版本子段落' }] },
+      ],
+    }] }));
+    await page.getByRole('button', { name: '重新载入当前内容' }).click(); await editor.locator('.tiptap').waitFor();
+    const before = (await ast()).children[0];
+    await caret(editor.locator('.ast-todo p').last()); await page.keyboard.press('Enter');
+    let saved = await ast();
+    assert.deepEqual(saved.children[0], before);
+    assert.equal(saved.children[1].type, 'todo'); assert.equal(saved.children[1].checked, false);
+    const boxes = await bounds(editor.locator('.ast-todo > input')); assert.equal(boxes[0].x, boxes[1].x);
+    await page.keyboard.press('Enter'); await page.keyboard.insertText('退出旧待办');
+    saved = await ast(); assert.equal(saved.children[1].type, 'paragraph');
+    assert.equal((await bounds(editor.getByText('退出旧待办', { exact: true })))[0].x, boxes[0].x);
+    await select(editor.locator('.ast-todo p').last()); await page.keyboard.press('Enter');
+    saved = await ast();
+    assert.deepEqual(saved.children[0].content, before.content);
+    assert.equal(saved.children[1].type, 'todo'); assert.equal(saved.children[1].checked, false);
+    assert.equal(saved.children[2].content[0].text, '退出旧待办');
+  });
+  await check('empty final outline body Enter exits without residual indentation', async () => {
+    await insert('toggle', '折叠块'); await page.keyboard.insertText('保留正文');
+    const before = (await ast()).children[0];
+    await page.keyboard.press('Enter'); await page.keyboard.press('Enter'); await page.keyboard.insertText('退出折叠块');
+    const saved = await ast(); assert.deepEqual(saved.children[0], before);
+    assert.equal(saved.children[1].type, 'paragraph');
+    assert.equal((await bounds(editor.getByText('退出折叠块', { exact: true })))[0].x, (await bounds(editor.locator('.tiptap')))[0].x);
+  });
   await check('closed toggle Enter creates a visible sibling without changing hidden children', async () => {
     await insert('toggle', '折叠块');
     const toggle = editor.locator('[data-editor-block-type="toggleBlock"]');
