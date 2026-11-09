@@ -9,7 +9,7 @@ import StarterKit from "@tiptap/starter-kit";
 import Link from "@tiptap/extension-link";
 import { SuggestionPluginKey } from "@tiptap/suggestion";
 import { Plugin, TextSelection } from "@tiptap/pm/state";
-import { canSplit, Mapping } from "@tiptap/pm/transform";
+import { Mapping } from "@tiptap/pm/transform";
 import type { EditorView } from "@tiptap/pm/view";
 
 import type { Block as AstBlock } from "@/lib/ast/schema";
@@ -252,8 +252,8 @@ function InlineAtomView(props: ReactNodeViewProps & { label: string; className: 
   );
 }
 
-function handleBlockEnter(view: EditorView, event: KeyboardEvent): boolean {
-  if (event.key !== "Enter" || event.shiftKey || event.metaKey || event.ctrlKey || event.altKey ||
+function handleBlockKeyDown(view: EditorView, event: KeyboardEvent): boolean {
+  if (!["Enter", "Backspace"].includes(event.key) || event.shiftKey || event.metaKey || event.ctrlKey || event.altKey ||
       event.isComposing || view.composing || !view.editable ||
       (event.target as Element).closest("button,input,textarea,select") ||
       SuggestionPluginKey.getState(view.state)?.active) return false;
@@ -263,10 +263,20 @@ function handleBlockEnter(view: EditorView, event: KeyboardEvent): boolean {
       $from.parent.type.name !== "paragraph") return false;
   const block = $from.node(-1);
   const todo = block.type.name === "todoBlock";
+  const item = todo || block.type.name === "toggleBlock";
   const summary = $from.index(-1) === 0;
-  if (todo && !summary && $from.parent.content.size === 0) return false;
-  if (!todo) {
-    if (!["toggleBlock", "sectionHeading"].includes(block.type.name)) return false;
+  if (event.key === "Backspace") {
+    if (!["todoBlock", "toggleBlock", "sectionHeading"].includes(block.type.name) ||
+        !summary || !selection.empty || $from.parentOffset !== 0) return false;
+    const paragraph = $from.parent.type.create({ ...$from.parent.attrs, id: block.attrs.id }, $from.parent.content);
+    const start = $from.before(-1);
+    const tr = view.state.tr.replaceWith(start, $from.after(-1), block.content.replaceChild(0, paragraph));
+    tr.setSelection(TextSelection.create(tr.doc, start + 1));
+    view.dispatch(tr.scrollIntoView());
+    return true;
+  }
+  if (!item) {
+    if (block.type.name !== "sectionHeading") return false;
     if (summary) {
       const dom = view.nodeDOM($from.before(-1));
       if (!(dom instanceof Element) || !dom.querySelector(':scope > .ast-outline[data-open="false"]')) return false;
@@ -277,40 +287,27 @@ function handleBlockEnter(view: EditorView, event: KeyboardEvent): boolean {
 
   const tr = view.state.tr.deleteSelection();
   const cursor = tr.selection.$from;
-  if (todo) {
-    if (summary && cursor.parent.content.size === 0) {
-      const start = cursor.before(-1);
-      const paragraph = cursor.parent.type.create({ id: block.attrs.id });
-      tr.replaceWith(start, cursor.after(-1), block.content.replaceChild(0, paragraph));
-      tr.setSelection(TextSelection.create(tr.doc, start + 1));
-    } else {
-      const types = [
-        { type: block.type, attrs: { ...block.attrs, id: null, checked: false } },
-        { type: cursor.parent.type, attrs: { id: null } },
-      ];
-      if (!canSplit(tr.doc, cursor.pos, 2, types)) return false;
-      tr.split(cursor.pos, 2, types);
-      tr.ensureMarks(view.state.storedMarks ?? $from.marks());
-    }
-  } else if (!summary) {
+  if (!item && !summary) {
     const after = cursor.after(-1);
     tr.delete(cursor.before(), cursor.after());
     const outside = tr.mapping.map(after);
     tr.insert(outside, cursor.parent).setSelection(TextSelection.create(tr.doc, outside + 1));
   } else {
-    // A closed outline must never move the caret into its hidden children.
+    // Keep existing children with their block, including children hidden by collapse.
     const paragraph = view.state.schema.nodes.paragraph.create(null, cursor.parent.content.cut(cursor.parentOffset));
     tr.delete(cursor.pos, cursor.end());
     const after = tr.selection.$from.after(-1);
-    tr.insert(after, paragraph).setSelection(TextSelection.create(tr.doc, after + 1));
+    const sibling = item ? block.type.create({ ...block.attrs, id: null, ...(todo ? { checked: false } : {}) }, paragraph) : paragraph;
+    tr.insert(after, sibling).setSelection(TextSelection.create(tr.doc, after + (item ? 2 : 1)));
+    tr.ensureMarks(view.state.storedMarks ?? $from.marks());
   }
   view.dispatch(tr.scrollIntoView());
   return true;
 }
 
-const BlockEnter = Extension.create({
-  name: "anbyBlockEnter",
-  addProseMirrorPlugins: () => [new Plugin({ props: { handleKeyDown: handleBlockEnter } })],
+const BlockKeys = Extension.create({
+  name: "anbyBlockKeys",
+  addProseMirrorPlugins: () => [new Plugin({ props: { handleKeyDown: handleBlockKeyDown } })],
 });
 
 function OutlineView(props: ReactNodeViewProps) {
@@ -512,7 +509,7 @@ export const editorExtensions = [
   }),
   Link.configure({ openOnClick: false }),
   BlockIds,
-  BlockEnter,
+  BlockKeys,
   InlineCode,
   TextColor,
   BackgroundColor,

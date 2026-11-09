@@ -58,6 +58,44 @@ try {
     await empty(); await page.keyboard.insertText(`/${query}`);
     await page.getByRole('button', { name: new RegExp(title) }).click();
   };
+  await check('Backspace at the start removes todo and toggle wrappers without deleting content', async () => {
+    for (const [query, title, selector] of [['todo', '待办', '.ast-todo'], ['toggle', '折叠块', '.ast-outline']]) {
+      await insert(query, title);
+      const block = editor.locator(selector).first();
+      await block.locator('p').first().fill('保留文字');
+      if (query === 'toggle') {
+        await block.locator('p').last().fill('保留隐藏内容');
+        await block.getByRole('button', { name: '折叠内容' }).click();
+      }
+      const before = await ast();
+      await caret(block.locator('p').first(), 0); await page.waitForTimeout(600);
+      await page.keyboard.press('Backspace');
+      const saved = await ast();
+      assert.equal(saved.children[0].type, 'paragraph');
+      assert.equal(saved.children[0].id, before.children[0].id);
+      assert.deepEqual(saved.children[0].content, before.children[0].content);
+      assert.deepEqual(saved.children.slice(1), [...(before.children[0].children ?? []), ...before.children.slice(1)]);
+      assert.equal((await bounds(editor.getByText('保留文字', { exact: true })))[0].x, (await bounds(editor.locator('.tiptap')))[0].x);
+      await page.keyboard.press('Meta+z'); assert.deepEqual(await ast(), before);
+      await page.keyboard.press('Meta+Shift+z'); assert.deepEqual(await ast(), saved);
+    }
+  });
+  await check('Shift+Enter stays inside todo and collapsed toggle blocks', async () => {
+    for (const [query, title, selector] of [['todo', '待办', '.ast-todo'], ['toggle', '折叠块', '.ast-outline']]) {
+      await insert(query, title);
+      const block = editor.locator(selector).first();
+      await block.locator('p').first().fill('第一行'); await caret(block.locator('p').first());
+      if (query === 'toggle') await block.getByRole('button', { name: '折叠内容' }).click();
+      const before = await ast();
+      await page.keyboard.press('Shift+Enter'); await page.keyboard.insertText('第二行');
+      const saved = await ast(); assert.equal(saved.children.length, before.children.length);
+      assert.equal(saved.children[0].type, before.children[0].type);
+      assert.equal(saved.children[0].id, before.children[0].id);
+      assert.equal(saved.children[0].content.map(n => n.text ?? '').join(''), '第一行\n第二行');
+      assert.deepEqual(saved.children[0].children, before.children[0].children);
+      assert.equal(await block.getByText('第二行', { exact: false }).isVisible(), true);
+    }
+  });
   await check('collapsing with the caret in the body keeps Enter outside the hidden subtree', async () => {
     await insert('toggle', '折叠块'); await page.keyboard.insertText('隐藏正文');
     const before = (await ast()).children[0];
@@ -65,10 +103,12 @@ try {
     await page.keyboard.press('Enter'); await page.keyboard.insertText('收起后正文');
     const saved = await ast();
     assert.deepEqual(saved.children[0], before);
+    assert.equal(saved.children[1].type, 'toggle');
     assert.equal(saved.children[1].content[0].text, '收起后正文');
-    assert.equal((await bounds(editor.getByText('收起后正文', { exact: true })))[0].x, (await bounds(editor.locator('.tiptap')))[0].x);
+    const lines = await bounds(editor.locator('.ast-outline p').filter({ hasText: /详情|收起后正文/ }));
+    assert.equal(lines[0].x, lines[1].x);
   });
-  await check('legacy todo body Enter creates a sibling and empty Enter exits at the checkbox edge', async () => {
+  await check('legacy todo body Enter creates a sibling and Backspace exits at the checkbox edge', async () => {
     await empty();
     await editor.locator('.tiptap').evaluate(root => root.editor.commands.setContent({ type: 'doc', content: [{
       type: 'todoBlock', content: [
@@ -83,7 +123,7 @@ try {
     assert.deepEqual(saved.children[0], before);
     assert.equal(saved.children[1].type, 'todo'); assert.equal(saved.children[1].checked, false);
     const boxes = await bounds(editor.locator('.ast-todo > input')); assert.equal(boxes[0].x, boxes[1].x);
-    await page.keyboard.press('Enter'); await page.keyboard.insertText('退出旧待办');
+    await page.keyboard.press('Backspace'); await page.keyboard.insertText('退出旧待办');
     saved = await ast(); assert.equal(saved.children[1].type, 'paragraph');
     assert.equal((await bounds(editor.getByText('退出旧待办', { exact: true })))[0].x, boxes[0].x);
     await select(editor.locator('.ast-todo p').last()); await page.keyboard.press('Enter');
@@ -92,13 +132,20 @@ try {
     assert.equal(saved.children[1].type, 'todo'); assert.equal(saved.children[1].checked, false);
     assert.equal(saved.children[2].content[0].text, '退出旧待办');
   });
-  await check('empty final outline body Enter exits without residual indentation', async () => {
-    await insert('toggle', '折叠块'); await page.keyboard.insertText('保留正文');
-    const before = (await ast()).children[0];
-    await page.keyboard.press('Enter'); await page.keyboard.press('Enter'); await page.keyboard.insertText('退出折叠块');
-    const saved = await ast(); assert.deepEqual(saved.children[0], before);
-    assert.equal(saved.children[1].type, 'paragraph');
-    assert.equal((await bounds(editor.getByText('退出折叠块', { exact: true })))[0].x, (await bounds(editor.locator('.tiptap')))[0].x);
+  await check('repeated Enter keeps todo and toggle types while Backspace exits an empty block', async () => {
+    for (const [query, title] of [['todo', '待办'], ['toggle', '折叠块']]) {
+      await insert(query, title); await page.keyboard.insertText('保留正文');
+      const before = (await ast()).children[0];
+      await page.keyboard.press('Enter'); await page.keyboard.press('Enter');
+      let saved = await ast(); assert.deepEqual(saved.children[0], before);
+      assert.deepEqual(saved.children.slice(0, 3).map(b => b.type), [query, query, query]);
+      assert.equal(new Set(saved.children.map(b => b.id)).size, saved.children.length);
+      const exitingId = saved.children[2].id;
+      await page.keyboard.press('Backspace'); await page.keyboard.insertText('退出正文');
+      saved = await ast(); assert.equal(saved.children[2].type, 'paragraph');
+      assert.equal(saved.children[2].id, exitingId);
+      assert.equal((await bounds(editor.getByText('退出正文', { exact: true })))[0].x, (await bounds(editor.locator('.tiptap')))[0].x);
+    }
   });
   await check('closed toggle Enter creates a visible sibling without changing hidden children', async () => {
     await insert('toggle', '折叠块');
@@ -111,14 +158,14 @@ try {
     assert.equal(await editor.getByText('块外新行', { exact: true }).isVisible(), true);
     const saved = await ast(); const index = saved.children.findIndex(b => b.id === before.id);
     assert.deepEqual(saved.children[index], before);
-    assert.equal(saved.children[index + 1].type, 'paragraph');
+    assert.equal(saved.children[index + 1].type, 'toggle');
     assert.equal(saved.children[index + 1].content[0].text, '块外新行');
-    const summaryX = (await bounds(toggle.locator('p').first()))[0].x;
+    const summaryX = (await bounds(toggle.first().locator('p').first()))[0].x;
     const lineX = (await bounds(editor.getByText('块外新行', { exact: true })))[0].x;
     const editorX = (await bounds(editor.locator('.tiptap')))[0].x;
-    assert.equal(lineX, editorX); assert.ok(summaryX > lineX);
+    assert.equal(lineX, summaryX); assert.ok(summaryX > editorX);
   });
-  await check('todo Enter creates aligned unchecked siblings and empty Enter exits to a paragraph', async () => {
+  await check('todo Enter creates aligned unchecked siblings and empty Backspace exits to a paragraph', async () => {
     await insert('todo', '待办');
     const first = editor.locator('.ast-todo').first();
     await first.locator('p').fill('第一个待办');
@@ -132,7 +179,7 @@ try {
     const boxes = await bounds(editor.locator('.ast-todo > input'));
     const lines = await bounds(editor.locator('.ast-todo p'));
     assert.equal(boxes[0].x, boxes[1].x); assert.equal(lines[0].x, lines[1].x);
-    await page.keyboard.press('Enter'); await page.keyboard.press('Enter'); await page.keyboard.insertText('退出待办的正文');
+    await page.keyboard.press('Enter'); await page.keyboard.press('Backspace'); await page.keyboard.insertText('退出待办的正文');
     const saved = await ast(); const lastTodo = saved.children.findLastIndex(b => b.type === 'todo');
     assert.equal(saved.children.filter(b => b.type === 'todo').length, 2);
     assert.equal(saved.children[lastTodo + 1].type, 'paragraph');
@@ -149,20 +196,22 @@ try {
     const saved = await ast(); assert.deepEqual(saved.children[0], before);
     assert.equal(saved.children[1].content[0].text, '标题之后');
   });
-  await check('expanded toggle Enter stays in its visible body while folded mid-summary Enter splits outside', async () => {
+  await check('expanded and collapsed toggles split into same-level toggles on Enter', async () => {
     await insert('toggle', '折叠块');
     let toggle = editor.locator('[data-editor-block-type="toggleBlock"]');
     await toggle.locator('p').first().fill('前后'); await caret(toggle.locator('p').first(), 1);
     await page.keyboard.press('Enter');
     assert.equal((await ast()).children[0].content[0].text, '前');
-    assert.equal((await ast()).children[0].children[0].content[0].text, '后');
-    assert.equal(await toggle.getByText('后', { exact: true }).isVisible(), true);
+    assert.equal((await ast()).children[1].type, 'toggle');
+    assert.equal((await ast()).children[1].content[0].text, '后');
+    assert.equal(await editor.getByText('后', { exact: true }).isVisible(), true);
     await insert('toggle', '折叠块');
     toggle = editor.locator('[data-editor-block-type="toggleBlock"]');
     await toggle.locator('p').first().fill('前后'); await caret(toggle.locator('p').first(), 1);
     await toggle.getByRole('button', { name: '折叠内容' }).click(); await page.keyboard.press('Enter');
     const saved = await ast();
     assert.equal(saved.children[0].content[0].text, '前');
+    assert.equal(saved.children[1].type, 'toggle');
     assert.equal(saved.children[1].content[0].text, '后');
     assert.equal(await editor.getByText('后', { exact: true }).isVisible(), true);
   });
