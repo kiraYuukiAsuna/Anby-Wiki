@@ -201,6 +201,8 @@ func NewRouter(logger *slog.Logger, deps Deps, writeAPI *WriteAPI, readAPI *Read
 				r.Put("/federated-wikis/{id}", knowledgeReadAPI.updateFederatedWiki)
 				r.Get("/federation-links", knowledgeReadAPI.listFederationLinks)
 				r.Put("/federation-links/{id}", knowledgeReadAPI.updateFederationLink)
+				r.Get("/claims/options", knowledgeReadAPI.listClaimOptions)
+				r.Get("/citations/options", knowledgeReadAPI.listCitationOptions)
 				r.Get("/claims/{id}", knowledgeReadAPI.getClaim)
 				r.Put("/claims/{id}/verification", knowledgeReadAPI.updateClaimVerification)
 				r.Get("/citations/{id}", knowledgeReadAPI.getCitation)
@@ -326,6 +328,7 @@ func NewRouter(logger *slog.Logger, deps Deps, writeAPI *WriteAPI, readAPI *Read
 						"/pages/{id}/shares/{actor_id}",
 						governanceAPI.removePageShare,
 					)
+					r.Get("/wiki/member-options", governanceAPI.listMemberOptions)
 					r.Get("/wiki/members", governanceAPI.listWikiMembers)
 					r.Post("/wiki/members", governanceAPI.addWikiMember)
 					r.Delete(

@@ -1,18 +1,15 @@
 "use client";
 
-import { Command } from "cmdk";
-import { Code2, ListChecks, Plus, RefreshCw, Trash2 } from "lucide-react";
-import { useEffect, useId, useState } from "react";
+import { Code2, ListChecks, Plus, Trash2 } from "lucide-react";
+import { useId, useState } from "react";
 import { toast } from "sonner";
-import useSWR from "swr";
 
 import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
-import { knowledgeApi } from "@/lib/api";
-import { useSession } from "@/lib/auth";
+import { ResourcePicker } from "@/components/editor/resource-picker";
 import {
   COMPONENT_PRESETS,
   COMPONENT_RENDERERS,
@@ -518,100 +515,6 @@ export function ComponentPropsForm({
   );
 }
 
-export function ComponentEntityPicker({
-  value,
-  onChange,
-}: {
-  value: string;
-  onChange: (id: string) => void;
-}) {
-  const { session } = useSession();
-  const [query, setQuery] = useState("");
-  const [debounced, setDebounced] = useState("");
-  useEffect(() => {
-    const timer = setTimeout(() => setDebounced(query.trim()), 200);
-    return () => clearTimeout(timer);
-  }, [query]);
-  const state = useSWR(
-    session
-      ? ["component:entities", session.actorId, session.wikiId, debounced]
-      : null,
-    () =>
-      knowledgeApi().listEntities({
-        q: debounced || undefined,
-        status: "active",
-        pageSize: 20,
-      }),
-  );
-  const selected = useSWR(
-    session && value
-      ? ["component:entity", session.actorId, session.wikiId, value]
-      : null,
-    () => knowledgeApi().getEntity({ id: value }),
-  );
-  const selectedName =
-    state.data?.items.find((item) => item.id === value)?.displayLabel ??
-    selected.data?.labels.find((item) => item.isPrimary)?.label ??
-    selected.data?.canonicalKey;
-  return (
-    <div className="space-y-2">
-      <p className="text-sm font-medium">选择实体</p>
-      <Command shouldFilter={false} label="搜索实体">
-        <Command.Input
-          aria-label="搜索实体"
-          value={query}
-          onValueChange={setQuery}
-          placeholder="按名称搜索…"
-          className="h-9 w-full rounded-lg border px-3 text-sm outline-none focus-visible:ring-2 focus-visible:ring-ring"
-        />
-        <Command.List className="mt-2 max-h-40 overflow-y-auto rounded-lg border p-1">
-          {state.isLoading ? (
-            <p className="p-2 text-xs text-muted-foreground">正在读取实体…</p>
-          ) : null}
-          {state.error ? (
-            <div className="p-2 text-xs text-destructive">
-              实体无法读取。
-              <Button
-                type="button"
-                variant="ghost"
-                size="sm"
-                onClick={() => void state.mutate()}
-              >
-                <RefreshCw aria-hidden />
-                重试
-              </Button>
-            </div>
-          ) : null}
-          {!state.isLoading && !state.error && !state.data?.items.length ? (
-            <p className="p-2 text-xs text-muted-foreground">
-              暂无实体，请先创建实体。
-            </p>
-          ) : null}
-          {state.data?.items.map((item) => (
-            <Command.Item
-              key={item.id}
-              value={item.id}
-              onSelect={() => onChange(item.id)}
-              className={`cursor-pointer rounded-md p-2 text-sm data-[selected=true]:bg-accent ${value === item.id ? "bg-primary/10" : ""}`}
-            >
-              <span className="break-words font-medium">
-                {value === item.id ? "✓ " : ""}
-                {item.displayLabel}
-              </span>
-              <span className="ml-2 text-xs text-muted-foreground">
-                {item.entityType.name} · {item.claimCount} 条事实
-              </span>
-            </Command.Item>
-          ))}
-        </Command.List>
-      </Command>
-      {value ? (
-        <p className="text-xs text-muted-foreground">
-          {selected.error
-            ? "选中的实体无法读取，请重新选择。"
-            : `已选中实体${selectedName ? `：${selectedName}` : "，正在读取名称…"}`}
-        </p>
-      ) : null}
-    </div>
-  );
+export function ComponentEntityPicker({ value, onChange }: { value: string; onChange: (id: string) => void }) {
+  return <div className="space-y-2"><p className="text-sm font-medium">关联实体</p><ResourcePicker kind="entity" value={value} onChange={choice => onChange(choice.id)} /></div>;
 }

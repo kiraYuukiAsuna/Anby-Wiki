@@ -129,6 +129,11 @@ import {
     PageEntityBindingListToJSON,
 } from '../models/PageEntityBindingList';
 import {
+    type ReferenceOptionPage,
+    ReferenceOptionPageFromJSON,
+    ReferenceOptionPageToJSON,
+} from '../models/ReferenceOptionPage';
+import {
     type RollbackEntityMergeResult,
     RollbackEntityMergeResultFromJSON,
     RollbackEntityMergeResultToJSON,
@@ -196,6 +201,18 @@ export interface GetEntityGraphRequest {
 
 export interface GetEntityMergeRequest {
     id: string;
+}
+
+export interface ListCitationOptionsRequest {
+    cursor?: string;
+    pageSize?: number;
+    q?: string;
+}
+
+export interface ListClaimOptionsRequest {
+    cursor?: string;
+    pageSize?: number;
+    q?: string;
 }
 
 export interface ListEntitiesRequest {
@@ -780,6 +797,124 @@ export class KnowledgeApi extends runtime.BaseAPI {
      */
     async getEntityMerge(requestParameters: GetEntityMergeRequest, initOverrides?: RequestInit | runtime.InitOverrideFunction): Promise<EntityMergeResult> {
         const response = await this.getEntityMergeRaw(requestParameters, initOverrides);
+        return await response.value();
+    }
+
+    /**
+     * Creates request options for listCitationOptions without sending the request
+     */
+    async listCitationOptionsRequestOpts(requestParameters: ListCitationOptionsRequest): Promise<runtime.RequestOpts> {
+        const queryParameters: any = {};
+
+        if (requestParameters['cursor'] != null) {
+            queryParameters['cursor'] = requestParameters['cursor'];
+        }
+
+        if (requestParameters['pageSize'] != null) {
+            queryParameters['page_size'] = requestParameters['pageSize'];
+        }
+
+        if (requestParameters['q'] != null) {
+            queryParameters['q'] = requestParameters['q'];
+        }
+
+        const headerParameters: runtime.HTTPHeaders = {};
+
+        if (this.configuration && this.configuration.accessToken) {
+            const token = this.configuration.accessToken;
+            const tokenString = await token("cliBearer", []);
+
+            if (tokenString) {
+                headerParameters["Authorization"] = `Bearer ${tokenString}`;
+            }
+        }
+
+        let urlPath = `/api/v1/citations/options`;
+
+        return {
+            path: urlPath,
+            method: 'GET',
+            headers: headerParameters,
+            query: queryParameters,
+        };
+    }
+
+    /**
+     * 仅 Wiki 成员可用；返回名称和简短说明，不返回邮箱等账号私有字段。按 ID 稳定分页。
+     * 搜索当前 Wiki 的引文
+     */
+    async listCitationOptionsRaw(requestParameters: ListCitationOptionsRequest, initOverrides?: RequestInit | runtime.InitOverrideFunction): Promise<runtime.ApiResponse<ReferenceOptionPage>> {
+        const requestOptions = await this.listCitationOptionsRequestOpts(requestParameters);
+        const response = await this.request(requestOptions, initOverrides);
+
+        return new runtime.JSONApiResponse(response, (jsonValue) => ReferenceOptionPageFromJSON(jsonValue));
+    }
+
+    /**
+     * 仅 Wiki 成员可用；返回名称和简短说明，不返回邮箱等账号私有字段。按 ID 稳定分页。
+     * 搜索当前 Wiki 的引文
+     */
+    async listCitationOptions(requestParameters: ListCitationOptionsRequest = {}, initOverrides?: RequestInit | runtime.InitOverrideFunction): Promise<ReferenceOptionPage> {
+        const response = await this.listCitationOptionsRaw(requestParameters, initOverrides);
+        return await response.value();
+    }
+
+    /**
+     * Creates request options for listClaimOptions without sending the request
+     */
+    async listClaimOptionsRequestOpts(requestParameters: ListClaimOptionsRequest): Promise<runtime.RequestOpts> {
+        const queryParameters: any = {};
+
+        if (requestParameters['cursor'] != null) {
+            queryParameters['cursor'] = requestParameters['cursor'];
+        }
+
+        if (requestParameters['pageSize'] != null) {
+            queryParameters['page_size'] = requestParameters['pageSize'];
+        }
+
+        if (requestParameters['q'] != null) {
+            queryParameters['q'] = requestParameters['q'];
+        }
+
+        const headerParameters: runtime.HTTPHeaders = {};
+
+        if (this.configuration && this.configuration.accessToken) {
+            const token = this.configuration.accessToken;
+            const tokenString = await token("cliBearer", []);
+
+            if (tokenString) {
+                headerParameters["Authorization"] = `Bearer ${tokenString}`;
+            }
+        }
+
+        let urlPath = `/api/v1/claims/options`;
+
+        return {
+            path: urlPath,
+            method: 'GET',
+            headers: headerParameters,
+            query: queryParameters,
+        };
+    }
+
+    /**
+     * 仅 Wiki 成员可用；返回名称和简短说明，不返回邮箱等账号私有字段。按 ID 稳定分页。
+     * 搜索当前 Wiki 的已发布事实
+     */
+    async listClaimOptionsRaw(requestParameters: ListClaimOptionsRequest, initOverrides?: RequestInit | runtime.InitOverrideFunction): Promise<runtime.ApiResponse<ReferenceOptionPage>> {
+        const requestOptions = await this.listClaimOptionsRequestOpts(requestParameters);
+        const response = await this.request(requestOptions, initOverrides);
+
+        return new runtime.JSONApiResponse(response, (jsonValue) => ReferenceOptionPageFromJSON(jsonValue));
+    }
+
+    /**
+     * 仅 Wiki 成员可用；返回名称和简短说明，不返回邮箱等账号私有字段。按 ID 稳定分页。
+     * 搜索当前 Wiki 的已发布事实
+     */
+    async listClaimOptions(requestParameters: ListClaimOptionsRequest = {}, initOverrides?: RequestInit | runtime.InitOverrideFunction): Promise<ReferenceOptionPage> {
+        const response = await this.listClaimOptionsRaw(requestParameters, initOverrides);
         return await response.value();
     }
 

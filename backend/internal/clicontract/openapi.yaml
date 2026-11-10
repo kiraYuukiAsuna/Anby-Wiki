@@ -3915,6 +3915,87 @@ paths:
           $ref: "#/components/responses/NotFound"
         "500":
           $ref: "#/components/responses/Internal"
+  /api/v1/claims/options:
+    get:
+      operationId: listClaimOptions
+      summary: 搜索当前 Wiki 的已发布事实
+      description: 仅 Wiki 成员可用；返回名称和简短说明，不返回邮箱等账号私有字段。按 ID 稳定分页。
+      tags: [knowledge]
+      parameters:
+        - $ref: "#/components/parameters/Cursor"
+        - $ref: "#/components/parameters/PageSize"
+        - name: q
+          in: query
+          schema:
+            type: string
+            maxLength: 255
+      responses:
+        "200":
+          description: 可选项
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ReferenceOptionPage"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+  /api/v1/citations/options:
+    get:
+      operationId: listCitationOptions
+      summary: 搜索当前 Wiki 的引文
+      description: 仅 Wiki 成员可用；返回名称和简短说明，不返回邮箱等账号私有字段。按 ID 稳定分页。
+      tags: [knowledge]
+      parameters:
+        - $ref: "#/components/parameters/Cursor"
+        - $ref: "#/components/parameters/PageSize"
+        - name: q
+          in: query
+          schema:
+            type: string
+            maxLength: 255
+      responses:
+        "200":
+          description: 可选项
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ReferenceOptionPage"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+  /api/v1/wiki/member-options:
+    get:
+      operationId: listMemberOptions
+      summary: 搜索当前 Wiki 的可提及人员
+      description: 仅 Wiki 成员可用；返回名称和简短说明，不返回邮箱等账号私有字段。按 ID 稳定分页。
+      tags: [wiki]
+      parameters:
+        - $ref: "#/components/parameters/Cursor"
+        - $ref: "#/components/parameters/PageSize"
+        - name: q
+          in: query
+          schema:
+            type: string
+            maxLength: 255
+      responses:
+        "200":
+          description: 可选项
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ReferenceOptionPage"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
   /api/v1/entities:
     get:
       operationId: listEntities
@@ -9056,6 +9137,27 @@ components:
         updated_at:
           type: string
           format: date-time
+    ReferenceOption:
+      type: object
+      required: [id, label, description]
+      properties:
+        id:
+          type: string
+          format: uuid
+        label:
+          type: string
+        description:
+          type: string
+    ReferenceOptionPage:
+      type: object
+      required: [items, next_cursor]
+      properties:
+        items:
+          type: array
+          items:
+            $ref: "#/components/schemas/ReferenceOption"
+        next_cursor:
+          type: string
     EntityListPage:
       type: object
       required: [items, next_cursor]

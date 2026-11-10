@@ -39,6 +39,8 @@ export function ComponentConfigure({
   version,
   initialEntityId = "",
   initialLanguage,
+  initialDisplayConfig,
+  submitLabel = "插入组件",
   onClose,
   onInsert,
 }: {
@@ -46,10 +48,13 @@ export function ComponentConfigure({
   version: WikiComponentVersion;
   initialEntityId?: string;
   initialLanguage?: string;
+  initialDisplayConfig?: Record<string, unknown>;
+  submitLabel?: string;
   onClose: () => void;
-  onInsert?: (selection: ComponentSelection) => void;
+  onInsert?: (selection: ComponentSelection) => void | boolean;
 }) {
   const [source, setSource] = useState(() => {
+    if (initialDisplayConfig) return JSON.stringify(initialDisplayConfig, null, 2);
     const defaults = componentDefaultProps(
       version.propsSchema,
       version.rendererRef,
@@ -119,7 +124,7 @@ export function ComponentConfigure({
     <>
       <DialogHeader>
         <DialogTitle>
-          {onInsert ? "插入" : "预览"} {component.name} · v{version.version}
+          {onInsert ? submitLabel : "预览"} {component.name} · v{version.version}
         </DialogTitle>
         <DialogDescription className="sr-only">
           {dynamic
@@ -180,8 +185,7 @@ export function ComponentConfigure({
               const value = selection();
               if (!value) return;
               if (onInsert) {
-                onInsert(value);
-                onClose();
+                if (onInsert(value) !== false) onClose();
               } else {
                 try {
                   await navigator.clipboard.writeText(
@@ -205,7 +209,7 @@ export function ComponentConfigure({
             }}
           >
             {onInsert ? <Plus aria-hidden /> : <Copy aria-hidden />}
-            {onInsert ? "插入组件" : "复制区块配置"}
+            {onInsert ? submitLabel : "复制区块配置"}
           </Button>
         ) : null}
       </DialogFooter>

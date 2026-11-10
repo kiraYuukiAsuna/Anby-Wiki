@@ -54,6 +54,11 @@ import {
     PageShareRemovalResultToJSON,
 } from '../models/PageShareRemovalResult';
 import {
+    type ReferenceOptionPage,
+    ReferenceOptionPageFromJSON,
+    ReferenceOptionPageToJSON,
+} from '../models/ReferenceOptionPage';
+import {
     type UpsertPageShareRequest,
     UpsertPageShareRequestFromJSON,
     UpsertPageShareRequestToJSON,
@@ -90,6 +95,12 @@ export interface CreatePageShareLinkOperationRequest {
 export interface GrantWikiMemberRoleRequest {
     actorId: string;
     roleKey: GrantWikiMemberRoleRoleKeyEnum;
+}
+
+export interface ListMemberOptionsRequest {
+    cursor?: string;
+    pageSize?: number;
+    q?: string;
 }
 
 export interface ListPageSharesRequest {
@@ -364,6 +375,65 @@ export class WikiApi extends runtime.BaseAPI {
      */
     async grantWikiMemberRole(requestParameters: GrantWikiMemberRoleRequest, initOverrides?: RequestInit | runtime.InitOverrideFunction): Promise<WikiMemberMutationResult> {
         const response = await this.grantWikiMemberRoleRaw(requestParameters, initOverrides);
+        return await response.value();
+    }
+
+    /**
+     * Creates request options for listMemberOptions without sending the request
+     */
+    async listMemberOptionsRequestOpts(requestParameters: ListMemberOptionsRequest): Promise<runtime.RequestOpts> {
+        const queryParameters: any = {};
+
+        if (requestParameters['cursor'] != null) {
+            queryParameters['cursor'] = requestParameters['cursor'];
+        }
+
+        if (requestParameters['pageSize'] != null) {
+            queryParameters['page_size'] = requestParameters['pageSize'];
+        }
+
+        if (requestParameters['q'] != null) {
+            queryParameters['q'] = requestParameters['q'];
+        }
+
+        const headerParameters: runtime.HTTPHeaders = {};
+
+        if (this.configuration && this.configuration.accessToken) {
+            const token = this.configuration.accessToken;
+            const tokenString = await token("cliBearer", []);
+
+            if (tokenString) {
+                headerParameters["Authorization"] = `Bearer ${tokenString}`;
+            }
+        }
+
+        let urlPath = `/api/v1/wiki/member-options`;
+
+        return {
+            path: urlPath,
+            method: 'GET',
+            headers: headerParameters,
+            query: queryParameters,
+        };
+    }
+
+    /**
+     * 仅 Wiki 成员可用；返回名称和简短说明，不返回邮箱等账号私有字段。按 ID 稳定分页。
+     * 搜索当前 Wiki 的可提及人员
+     */
+    async listMemberOptionsRaw(requestParameters: ListMemberOptionsRequest, initOverrides?: RequestInit | runtime.InitOverrideFunction): Promise<runtime.ApiResponse<ReferenceOptionPage>> {
+        const requestOptions = await this.listMemberOptionsRequestOpts(requestParameters);
+        const response = await this.request(requestOptions, initOverrides);
+
+        return new runtime.JSONApiResponse(response, (jsonValue) => ReferenceOptionPageFromJSON(jsonValue));
+    }
+
+    /**
+     * 仅 Wiki 成员可用；返回名称和简短说明，不返回邮箱等账号私有字段。按 ID 稳定分页。
+     * 搜索当前 Wiki 的可提及人员
+     */
+    async listMemberOptions(requestParameters: ListMemberOptionsRequest = {}, initOverrides?: RequestInit | runtime.InitOverrideFunction): Promise<ReferenceOptionPage> {
+        const response = await this.listMemberOptionsRaw(requestParameters, initOverrides);
         return await response.value();
     }
 

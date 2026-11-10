@@ -21,6 +21,8 @@ import {
   mentionNodeSchema,
 } from "@/lib/ast/schema";
 
+import { ResourcePicker } from "@/components/editor/resource-picker";
+
 type MentionMode = "person" | "date";
 
 export function InlineMentionInsertDialog({
@@ -51,7 +53,7 @@ export function InlineMentionInsertDialog({
         display_text: personText.trim(),
       });
       if (!parsed.success || !parsed.data.display_text) {
-        toast.error("请填写有效的用户 ID 和显示名称。");
+        toast.error("请选择人员并填写显示名称。");
         return;
       }
       onInsertPerson(parsed.data.actor_id, parsed.data.display_text);
@@ -117,13 +119,8 @@ export function InlineMentionInsertDialog({
         {mode === "person" ? (
           <div className="grid gap-4">
             <div className="grid gap-2">
-              <Label htmlFor="mention-actor-id">身份 ID</Label>
-              <Input
-                id="mention-actor-id"
-                value={actorId}
-                onChange={(event) => setActorId(event.target.value)}
-                placeholder="00000000-0000-0000-0000-000000000000"
-              />
+              <Label>人员</Label>
+              <ResourcePicker kind="member" value={actorId} valueLabel={personText} onChange={item => { setActorId(item.id); setPersonText(item.label); }} />
             </div>
             <div className="grid gap-2">
               <Label htmlFor="mention-person-text">显示名称</Label>

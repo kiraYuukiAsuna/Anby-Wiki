@@ -291,6 +291,8 @@ docs/ReadingApi.md
 docs/ReadyResponse.md
 docs/RebuildCollectionRequest.md
 docs/RebuildCollectionResult.md
+docs/ReferenceOption.md
+docs/ReferenceOptionPage.md
 docs/ReferenceUsage.md
 docs/ReferenceUsageListPage.md
 docs/RegisterRequest.md
@@ -626,6 +628,8 @@ models/PublishRevisionRequest.ts
 models/ReadyResponse.ts
 models/RebuildCollectionRequest.ts
 models/RebuildCollectionResult.ts
+models/ReferenceOption.ts
+models/ReferenceOptionPage.ts
 models/ReferenceUsage.ts
 models/ReferenceUsageListPage.ts
 models/RegisterRequest.ts

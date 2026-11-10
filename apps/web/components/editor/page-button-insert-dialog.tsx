@@ -22,6 +22,8 @@ import {
 } from "@/lib/ast/schema";
 import { newBlockId } from "@/lib/editor/ids";
 
+import { ResourcePicker } from "@/components/editor/resource-picker";
+
 type ActionKind = Exclude<ButtonAction["type"], "update_dataset_record">;
 
 export function PageButtonInsertDialog({
@@ -165,13 +167,7 @@ export function PageButtonInsertDialog({
           ) : null}
           {kind === "insert_blocks" ? (
             <>
-              <Label>
-                目标页面 ID
-                <Input
-                  value={targetPageId}
-                  onChange={(event) => setTargetPageId(event.target.value)}
-                />
-              </Label>
+              <div className="space-y-2"><Label>目标页面</Label><ResourcePicker kind="page" value={targetPageId} onChange={item => setTargetPageId(item.id)} /></div>
               <Label>
                 插入段落
                 <Textarea

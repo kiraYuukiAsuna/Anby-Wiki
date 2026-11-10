@@ -259,6 +259,8 @@ export * from './PublishRevisionRequest';
 export * from './ReadyResponse';
 export * from './RebuildCollectionRequest';
 export * from './RebuildCollectionResult';
+export * from './ReferenceOption';
+export * from './ReferenceOptionPage';
 export * from './ReferenceUsage';
 export * from './ReferenceUsageListPage';
 export * from './RegisterRequest';

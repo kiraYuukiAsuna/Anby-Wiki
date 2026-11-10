@@ -24,6 +24,7 @@ import {
   type Block,
 } from "@/lib/ast/schema";
 import { assetsApi } from "@/lib/api";
+import { ResourcePicker } from "@/components/editor/resource-picker";
 import { newBlockId } from "@/lib/editor/ids";
 
 type MediaType = "image" | "video" | "audio" | "file" | "pdf";
@@ -136,7 +137,7 @@ export function MediaBlockInsertDialog({
       onOpenChange(false);
     } catch {
       toast.error("无法读取文件版本", {
-        description: "请先在媒体库上传文件，再复制文件版本 ID。",
+        description: "请重试选择文件，或先到媒体库上传。",
       });
     } finally {
       setSubmitting(false);
@@ -157,7 +158,7 @@ export function MediaBlockInsertDialog({
             类型
             <select
               value={type}
-              onChange={(event) => setType(event.target.value as MediaType)}
+              onChange={(event) => { setType(event.target.value as MediaType); setRevisionId(""); }}
               className="mt-1 h-9 w-full rounded-lg border border-input bg-background px-2.5 text-sm"
             >
               <option value="image">图片</option>
@@ -167,13 +168,7 @@ export function MediaBlockInsertDialog({
               <option value="pdf">PDF</option>
             </select>
           </Label>
-          <Label>
-            文件版本 ID
-            <Input
-              value={revisionId}
-              onChange={(event) => setRevisionId(event.target.value)}
-            />
-          </Label>
+          <div className="space-y-2"><Label>文件</Label><ResourcePicker kind="asset" mediaKind={type} value={revisionId} onChange={item => { setRevisionId(item.id); setTitle(item.label); setAltText(item.label); }} /></div>
           {type === "image" ? (
             <Label>
               替代文字
@@ -192,13 +187,7 @@ export function MediaBlockInsertDialog({
             </Label>
           )}
           {type === "video" ? (
-            <Label>
-              封面图片版本 ID（可选）
-              <Input
-                value={posterRevisionId}
-                onChange={(event) => setPosterRevisionId(event.target.value)}
-              />
-            </Label>
+            <div className="space-y-2"><Label>封面图片（可选）</Label><ResourcePicker kind="asset" mediaKind="image" label="封面图片" value={posterRevisionId} clearable onChange={item => setPosterRevisionId(item.id)} /></div>
           ) : null}
           {type === "audio" ? (
             <div className="grid gap-4 sm:grid-cols-2">
@@ -263,7 +252,7 @@ export function MediaBlockInsertDialog({
           <Button type="button" variant="outline" onClick={() => onOpenChange(false)}>
             取消
           </Button>
-          <Button type="button" disabled={submitting} onClick={() => void submit()}>
+          <Button type="button" disabled={submitting || !revisionId} onClick={() => void submit()}>
             插入
           </Button>
         </DialogFooter>

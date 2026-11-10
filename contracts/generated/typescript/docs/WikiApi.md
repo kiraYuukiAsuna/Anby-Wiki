@@ -8,6 +8,7 @@ All URIs are relative to *http://localhost:3000*
 | [**addWikiMember**](WikiApi.md#addwikimemberoperation) | **POST** /api/v1/wiki/members | 添加协作者并授予角色 |
 | [**createPageShareLink**](WikiApi.md#createpagesharelinkoperation) | **POST** /api/v1/pages/{id}/share-links | 为当前页面创建分享链接 |
 | [**grantWikiMemberRole**](WikiApi.md#grantwikimemberrole) | **PUT** /api/v1/wiki/members/{actor_id}/roles/{role_key} | 授予当前 Wiki 成员角色 |
+| [**listMemberOptions**](WikiApi.md#listmemberoptions) | **GET** /api/v1/wiki/member-options | 搜索当前 Wiki 的可提及人员 |
 | [**listPageShares**](WikiApi.md#listpageshares) | **GET** /api/v1/pages/{id}/shares | 列出当前页面的单文档分享对象 |
 | [**listWikiMembers**](WikiApi.md#listwikimembers) | **GET** /api/v1/wiki/members | 列出当前 Wiki 成员与角色 |
 | [**removePageShare**](WikiApi.md#removepageshare) | **DELETE** /api/v1/pages/{id}/shares/{actor_id} | 取消当前页面对指定账号的分享 |
@@ -327,6 +328,88 @@ example().catch(console.error);
 | **403** | 无操作权限或浏览器写请求来源不受信任。 非安全方法统一使用 Go CrossOriginProtection 校验浏览器来源；优先检查 Sec-Fetch-Site，缺失时比较 Origin 与 Host。无来源头的 CLI/服务端调用 继续执行原有认证和授权。  |  -  |
 | **404** | 资源不存在 |  -  |
 | **422** | 请求语义可理解但无法处理（如重定向环/重定向链过深） |  -  |
+
+[[Back to top]](#) [[Back to API list]](../README.md#api-endpoints) [[Back to Model list]](../README.md#models) [[Back to README]](../README.md)
+
+
+## listMemberOptions
+
+> ReferenceOptionPage listMemberOptions(cursor, pageSize, q)
+
+搜索当前 Wiki 的可提及人员
+
+仅 Wiki 成员可用；返回名称和简短说明，不返回邮箱等账号私有字段。按 ID 稳定分页。
+
+### Example
+
+```ts
+import {
+  Configuration,
+  WikiApi,
+} from '';
+import type { ListMemberOptionsRequest } from '';
+
+async function example() {
+  console.log("🚀 Testing  SDK...");
+  const config = new Configuration({
+    // Configure HTTP bearer authorization: cliBearer
+    accessToken: "YOUR BEARER TOKEN",
+    // To configure API key authorization: sessionCookie
+    apiKey: "YOUR API KEY",
+  });
+  const api = new WikiApi(config);
+
+  const body = {
+    // string | 上一页响应返回的 next_cursor；首页不传 (optional)
+    cursor: cursor_example,
+    // number | 每页条数，默认 20，最大 100 (optional)
+    pageSize: 56,
+    // string (optional)
+    q: q_example,
+  } satisfies ListMemberOptionsRequest;
+
+  try {
+    const data = await api.listMemberOptions(body);
+    console.log(data);
+  } catch (error) {
+    console.error(error);
+  }
+}
+
+// Run the test
+example().catch(console.error);
+```
+
+### Parameters
+
+
+| Name | Type | Description  | Notes |
+|------------- | ------------- | ------------- | -------------|
+| **cursor** | `string` | 上一页响应返回的 next_cursor；首页不传 | [Optional] [Defaults to `undefined`] |
+| **pageSize** | `number` | 每页条数，默认 20，最大 100 | [Optional] [Defaults to `20`] |
+| **q** | `string` |  | [Optional] [Defaults to `undefined`] |
+
+### Return type
+
+[**ReferenceOptionPage**](ReferenceOptionPage.md)
+
+### Authorization
+
+[cliBearer](../README.md#cliBearer), [sessionCookie](../README.md#sessionCookie)
+
+### HTTP request headers
+
+- **Content-Type**: Not defined
+- **Accept**: `application/json`
+
+
+### HTTP response details
+| Status code | Description | Response headers |
+|-------------|-------------|------------------|
+| **200** | 可选项 |  -  |
+| **400** | 请求格式错误 |  -  |
+| **401** | 未认证 |  -  |
+| **403** | 无操作权限或浏览器写请求来源不受信任。 非安全方法统一使用 Go CrossOriginProtection 校验浏览器来源；优先检查 Sec-Fetch-Site，缺失时比较 Origin 与 Host。无来源头的 CLI/服务端调用 继续执行原有认证和授权。  |  -  |
 
 [[Back to top]](#) [[Back to API list]](../README.md#api-endpoints) [[Back to Model list]](../README.md#models) [[Back to README]](../README.md)
 
