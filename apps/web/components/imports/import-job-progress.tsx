@@ -48,7 +48,7 @@ import { cn } from "@/lib/utils";
 const STAGES = ["fetch", "parse", "extract", "plan", "match", "compose", "review"] as const;
 const LABELS: Record<string, string> = {
   fetch: "获取与安全扫描", parse: "解析与分块", extract: "事实候选抽取",
-  plan: "来源理解与多页面路由", match: "实体与 Claim 匹配", compose: "页面与知识 Proposal 合成", review: "进入审核",
+  plan: "来源理解与多页面路由", match: "实体与事实匹配", compose: "页面与知识修改建议合成", review: "进入审核",
 };
 
 const ROUTE_META = {
@@ -212,7 +212,7 @@ function ReplanPanel({
       <div>
         <h3 className="text-sm font-semibold">调整导入意图</h3>
         <p className="mt-1 text-xs leading-5 text-muted-foreground">
-          保留已校验的来源和抽取结果，在当前任务内追加新的计划版本。
+          使用现有资料和提取结果，重新生成一版导入计划。
         </p>
       </div>
       <div className="grid gap-2 sm:grid-cols-3">
@@ -323,7 +323,7 @@ export function ImportJobProgress({ id }: { id: string }) {
         action === "cancel"
           ? "任务已取消"
           : action === "confirm"
-            ? "计划已确认，正在生成审核提案"
+            ? "计划已确认，正在生成审核修改建议"
             : "任务已重新排队",
       );
     } catch (actionError) {
@@ -372,8 +372,8 @@ export function ImportJobProgress({ id }: { id: string }) {
             <p className="text-sm font-semibold">{JOB_STATUS_LABEL[data.job.status]} · {data.job.progress}%</p>
             <p className="mt-1 break-all font-mono text-xs text-muted-foreground">{data.job.id}</p>
             <p className="mt-2 break-words text-xs text-muted-foreground">
-              提案作者：{data.job.authorDisplayName}
-              {data.job.authorActorId !== data.job.initiatedBy ? "（机器 Actor，需真人审核）" : "（人工作者）"}
+              修改建议作者：{data.job.authorDisplayName}
+              {data.job.authorActorId !== data.job.initiatedBy ? "（机器人账号，需真人审核）" : "（人工作者）"}
             </p>
             <p className="mt-1 break-all text-xs text-muted-foreground">发起者：{data.job.initiatedBy}</p>
           </div>
@@ -405,7 +405,7 @@ export function ImportJobProgress({ id }: { id: string }) {
                 ? "检测到要求模型改规则、泄露信息或跳过审核的直接指令，不能确认放行。请拒绝导入或修改来源。"
                 : "模型标记了疑似提示注入。角色设定、引用和指令讨论可能误报；请阅读完整来源后判断。"}
             </p>
-            <p className="mt-2 text-xs text-muted-foreground">以下是部分原文片段；复核结论仅用于本次导入，继续后仍须确认页面计划和审核提案。</p>
+            <p className="mt-2 text-xs text-muted-foreground">以下是部分原文片段；复核结论仅用于本次导入，继续后仍须确认页面计划和审核修改建议。</p>
             <Button asChild variant="outline" className="mt-3">
               <Link href={`/sources/${safety.sourceId}`} target="_blank" rel="noopener noreferrer">查看完整来源</Link>
             </Button>
@@ -445,7 +445,7 @@ export function ImportJobProgress({ id }: { id: string }) {
           ) : canSubmitReview ? (
             <Button disabled={reviewingSafety || isMutating} onClick={() => setReviewOpen(true)}><ShieldCheck aria-hidden />人工复核</Button>
           ) : blockedExtraction && !safety.canReview ? (
-            <p className="text-sm text-muted-foreground">需要任务发起者具备 reviewer 或 admin 权限，由真人进行复核。</p>
+            <p className="text-sm text-muted-foreground">只有具备审核者或管理员权限的任务发起者，才能人工复核。</p>
           ) : null}
         </section>
       ) : null}
@@ -462,13 +462,13 @@ export function ImportJobProgress({ id }: { id: string }) {
               </h2>
               <p className="mt-1 text-sm leading-6 text-muted-foreground">
                 {data.job.actionRequired === "quality_gate"
-                  ? "查看下方质量分项并调整标题、目标页面或导入要求；低质量计划不能直接进入治理。"
-                  : "确认后将复用当前不可变计划执行实体匹配、Proposal 合成并提交审核。"}
+                  ? "请根据下方检查结果调整标题、目标页面或导入要求。计划通过质量检查后才能继续。"
+                  : "确认后将按这份计划匹配实体、生成修改建议并提交审核。"}
               </p>
               {data.job.actionRequired === "confirm_plan" ? (
                 <Button className="mt-4" disabled={isMutating} onClick={() => void act("confirm")}>
                   <CheckCircle2 aria-hidden />
-                  确认并生成 Proposal
+                  确认并生成修改建议
                 </Button>
               ) : null}
             </div>
@@ -575,7 +575,7 @@ export function ImportJobProgress({ id }: { id: string }) {
                   </div>
                   {(route.collections ?? []).length > 0 ? (
                     <div className="mt-3 space-y-3 border-t border-border pt-3">
-                      <p className="text-xs font-medium">建议加入专题 · 随提案审核</p>
+                      <p className="text-xs font-medium">建议加入专题 · 随修改建议审核</p>
                       {route.collections?.map((recommendation) => (
                         <div key={recommendation.collectionId} className="min-w-0 text-xs leading-5">
                           <div className="flex flex-wrap items-center gap-x-2">
@@ -648,7 +648,7 @@ export function ImportJobProgress({ id }: { id: string }) {
         />
       ) : null}
 
-      {data.job.proposalId ? <Button asChild><Link href={`/governance/proposals/${data.job.proposalId}`}>查看待审核 Proposal</Link></Button> : null}
+      {data.job.proposalId ? <Button asChild><Link href={`/governance/proposals/${data.job.proposalId}`}>查看待审核修改建议</Link></Button> : null}
     </div>
   );
 }

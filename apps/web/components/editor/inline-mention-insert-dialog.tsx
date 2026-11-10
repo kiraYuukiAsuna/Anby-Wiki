@@ -51,7 +51,7 @@ export function InlineMentionInsertDialog({
         display_text: personText.trim(),
       });
       if (!parsed.success || !parsed.data.display_text) {
-        toast.error("Person 提及需要有效 Actor ID 和显示名称");
+        toast.error("请填写有效的用户 ID 和显示名称。");
         return;
       }
       onInsertPerson(parsed.data.actor_id, parsed.data.display_text);
@@ -101,7 +101,7 @@ export function InlineMentionInsertDialog({
             onClick={() => setMode("person")}
           >
             <UserRound className="size-4" />
-            Person
+            人员
           </Button>
           <Button
             type="button"
@@ -110,14 +110,14 @@ export function InlineMentionInsertDialog({
             onClick={() => setMode("date")}
           >
             <CalendarDays className="size-4" />
-            Date
+            日期
           </Button>
         </div>
 
         {mode === "person" ? (
           <div className="grid gap-4">
             <div className="grid gap-2">
-              <Label htmlFor="mention-actor-id">Actor ID</Label>
+              <Label htmlFor="mention-actor-id">身份 ID</Label>
               <Input
                 id="mention-actor-id"
                 value={actorId}

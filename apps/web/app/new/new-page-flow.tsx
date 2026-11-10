@@ -52,7 +52,7 @@ export function NewPageFlow() {
           if (error.response.status === 409) {
             // 标题冲突（含与别名冲突）：跳既有页面阅读页，由用户从那里进入编辑。
             toast.info("页面已存在", {
-              description: "该标题（或其别名）已被占用，已为你跳转到既有页面。",
+              description: "已有页面使用这个标题或别名，已为你打开。",
             });
             router.replace(`/wiki/${encodeURIComponent(title)}`);
             return;
@@ -121,7 +121,7 @@ export function NewPageFlow() {
       <div className="mx-auto flex w-full max-w-md flex-1 flex-col justify-center gap-4 px-4 py-16">
         <h1 className="text-2xl font-semibold">创建失败</h1>
         <p className="text-sm text-muted-foreground">
-          创建「{title}」时出错，请检查网络与 API 服务后重试。
+          创建「{title}」失败，请稍后重试。
         </p>
         <div className="flex gap-2">
           <Button onClick={() => setAttempt((n) => n + 1)}>重试</Button>

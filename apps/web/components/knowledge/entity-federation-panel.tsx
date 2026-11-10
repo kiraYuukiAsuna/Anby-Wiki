@@ -54,12 +54,12 @@ const linkSchema = z.object({
   remoteEntityId: z
     .string()
     .trim()
-    .min(1, "请填写远端 Entity ID")
+    .min(1, "请填写远端实体 ID")
     .max(512, "远端 ID 不能超过 512 个字符"),
   remoteCanonicalKey: z
     .string()
     .trim()
-    .max(255, "远端稳定键不能超过 255 个字符"),
+    .max(255, "远端实体标识不能超过 255 个字符"),
   remoteLabel: z
     .string()
     .trim()
@@ -127,7 +127,7 @@ function FederationLinkEditor({
 
   const save = async () => {
     if (!parsed.success) {
-      toast.error(parsed.error.issues[0]?.message ?? "请检查 Federation 映射");
+      toast.error(parsed.error.issues[0]?.message ?? "请检查跨 Wiki 关联映射");
       return;
     }
     setSaving(true);
@@ -146,8 +146,8 @@ function FederationLinkEditor({
         });
         toast.success(
           parsed.data.status === "deprecated"
-            ? "Federation 映射已弃用"
-            : "Federation 映射已更新",
+            ? "跨 Wiki 关联映射已弃用"
+            : "跨 Wiki 关联映射已更新",
         );
       } else {
         await knowledgeApi().createEntityFederationLink({
@@ -170,14 +170,14 @@ function FederationLinkEditor({
       if (isUnauthorized(error)) {
         toast.error("登录状态已失效");
       } else if (error instanceof ResponseError && error.response.status === 403) {
-        toast.error("只有站点管理员可以管理 Federation");
+        toast.error("只有管理员可以管理跨 Wiki 关联。");
       } else if (
         error instanceof ResponseError &&
         error.response.status === 409
       ) {
         toast.error("该映射已存在，或远端 Wiki 当前不可用");
       } else {
-        toast.error("Federation 映射保存失败");
+        toast.error("跨 Wiki 关联映射保存失败");
       }
     } finally {
       setSaving(false);
@@ -212,7 +212,7 @@ function FederationLinkEditor({
           )}
         </div>
         <div className="space-y-2 sm:col-span-2">
-          <Label htmlFor="entity-federation-remote-id">远端 Entity ID</Label>
+          <Label htmlFor="entity-federation-remote-id">远端实体 ID</Label>
           <Input
             id="entity-federation-remote-id"
             value={draft.remoteEntityId}
@@ -224,7 +224,7 @@ function FederationLinkEditor({
           />
           {draft.id ? (
             <p className="text-[10px] text-muted-foreground">
-              远端目标是映射身份的一部分；如目标错误，请弃用此映射后新建。
+              关联目标创建后不能修改。如需更换，请弃用当前关联后重新添加。
             </p>
           ) : null}
         </div>
@@ -240,7 +240,7 @@ function FederationLinkEditor({
           />
         </div>
         <div className="space-y-2">
-          <Label htmlFor="entity-federation-key">远端稳定键</Label>
+          <Label htmlFor="entity-federation-key">远端实体标识</Label>
           <Input
             id="entity-federation-key"
             value={draft.remoteCanonicalKey}
@@ -352,11 +352,11 @@ export function EntityFederationPanel({
 
   const startCreate = () => {
     if (!session.isAuthenticated) {
-      toast.error("请先登录后管理 Federation");
+      toast.error("请先登录，再管理跨 Wiki 关联。");
       return;
     }
     if (!activeWikis.length) {
-      toast.error("请先在 Federation 中心登记一个启用的远端 Wiki");
+      toast.error("请先在“跨 Wiki 关联”中添加并启用一个 Wiki。");
       return;
     }
     setDraft(emptyDraft(activeWikis[0]?.id));
@@ -367,12 +367,12 @@ export function EntityFederationPanel({
       <div className="flex flex-wrap items-start justify-between gap-4 rounded-xl border bg-muted/20 p-4">
         <p className="flex items-center gap-2 text-sm font-semibold">
           <Globe2 className="size-4 text-indigo-700" aria-hidden />
-          跨 Wiki 身份
+          跨 Wiki 关联
         </p>
         <div className="flex gap-2">
           {federationCenterVisible ? (
             <Button asChild type="button" variant="outline" size="sm">
-              <Link href="/federation">Federation 中心</Link>
+              <Link href="/federation">跨 Wiki 关联中心</Link>
             </Button>
           ) : null}
           {canWrite ? (
@@ -400,8 +400,7 @@ export function EntityFederationPanel({
             aria-hidden
           />
           <p className="text-amber-950/75">
-            当前 Entity 已{status === "merged" ? "合并" : "删除"}，映射只读保留；
-            请在有效身份上继续治理。
+            当前实体已{status === "merged" ? "合并" : "删除"}，这里只保留已有的关联记录。请前往有效实体继续编辑。
           </p>
         </div>
       ) : null}
@@ -526,7 +525,7 @@ export function EntityFederationPanel({
               {draft?.id ? "编辑远端身份映射" : "添加远端身份映射"}
             </DialogTitle>
             <DialogDescription>
-              为「{entityTitle}」声明一个明确、可核验的跨 Wiki 身份关系。
+              为「{entityTitle}」添加跨 Wiki 关联，说明两者之间的关系。
             </DialogDescription>
           </DialogHeader>
           {draft ? (

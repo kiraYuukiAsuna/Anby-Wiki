@@ -65,7 +65,7 @@ export function HTMLBlockInsertDialog({
         <DialogHeader>
           <DialogTitle>插入 HTML</DialogTitle>
           <DialogDescription>
-            内容在无脚本、无网络、无表单权限的 sandbox iframe 中显示。
+            HTML 仅用于展示，不能运行脚本、访问网络或提交表单。
           </DialogDescription>
         </DialogHeader>
         <div className="grid gap-4">

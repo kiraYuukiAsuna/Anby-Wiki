@@ -236,7 +236,7 @@ export function BlockView({
       );
     case "breadcrumb":
       return (
-        <nav className="wiki-breadcrumb my-4" aria-label="Breadcrumb">
+        <nav className="wiki-breadcrumb my-4" aria-label="页面路径">
           <ol className="flex min-w-0 flex-wrap items-center gap-1.5 text-sm text-muted-foreground">
             {block.items.map((item, index) => (
               <li

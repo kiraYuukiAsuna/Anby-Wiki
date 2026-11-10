@@ -10,7 +10,7 @@ export const SECURITY_ACTION_LABELS: Record<string, string> = {
   regenerate_codes: "重新生成恢复码",
   change_password: "修改密码",
   revoke_session: "撤销设备会话",
-  revoke_sessions: "撤销全部会话及 CLI 凭证",
+  revoke_sessions: "退出所有设备并撤销 CLI 授权",
   verify_email_confirmed: "邮箱验证完成",
   change_email_confirmed: "邮箱变更完成",
   reset_password_requested: "申请密码恢复",

@@ -48,26 +48,26 @@ const DATE_FORMATTER = new Intl.DateTimeFormat("zh-CN", {
 });
 
 const AGGREGATE_TYPES = [
-  ["", "全部聚合"],
-  ["page", "Page"],
-  ["working_document", "WorkingDocument"],
-  ["entity", "Entity"],
-  ["federated_wiki", "FederatedWiki"],
-  ["entity_federation_link", "FederationLink"],
-  ["claim", "Claim"],
-  ["collection", "Collection"],
-  ["page_protection", "PageProtection"],
-  ["block_redirect", "BlockRedirect"],
-  ["proposal", "Proposal"],
-  ["entity_merge", "EntityMerge"],
-  ["ai_trust", "AITrust"],
-  ["change_tag", "ChangeTag"],
+  ["", "全部对象"],
+  ["page", "页面"],
+  ["working_document", "编辑草稿"],
+  ["entity", "实体"],
+  ["federated_wiki", "关联 Wiki"],
+  ["entity_federation_link", "跨 Wiki 关联"],
+  ["claim", "事实"],
+  ["collection", "合集"],
+  ["page_protection", "页面保护"],
+  ["block_redirect", "章节跳转"],
+  ["proposal", "修改建议"],
+  ["entity_merge", "实体合并"],
+  ["ai_trust", "AI 审核设置"],
+  ["change_tag", "变更标签"],
 ] as const;
 
 const tagSchema = z.object({
   tagKey: z
     .string()
-    .regex(/^[a-z][a-z0-9._-]{0,63}$/, "Key 需为小写机器标识"),
+    .regex(/^[a-z][a-z0-9._-]{0,63}$/, "标识需使用小写字母、数字、点、下划线或连字符。"),
   name: z.string().trim().min(1, "请填写标签名称").max(120),
   description: z.string().trim().max(1000),
 });
@@ -77,33 +77,33 @@ function eventTitle(eventType: string): string {
     "page.created": "创建页面",
     "page.renamed": "页面改名",
     "page.redirected": "更新页面重定向",
-    "page.deleted": "补偿删除新建页面",
-    "revision.published": "发布 Revision",
-    "revision.rolled_back": "发布回滚补偿版本",
+    "page.deleted": "撤销新建页面",
+    "revision.published": "发布版本",
+    "revision.rolled_back": "发布恢复版本",
     "working_document.created": "打开协作文档",
     "working_document.snapshotted": "保存 CRDT 快照",
     "working_document.rebased": "协作文档换基",
-    "proposal.applied": "应用 Proposal",
-    "proposal.rolled_back": "回滚 ChangeBatch",
+    "proposal.applied": "使修改建议生效",
+    "proposal.rolled_back": "回滚变更批次",
     "proposal.conflict_resolved": "解决合并冲突",
-    "claim.changed": "更新 Claim",
-    "claim.rolled_back": "补偿恢复 Claim",
-    "claim.source_removed": "补偿移除 Claim 来源",
-    "entity.created": "创建 Entity",
-    "entity.deleted": "补偿删除新建 Entity",
-    "entity.merged": "合并 Entity",
-    "entity.merge_rolled_back": "补偿恢复 Entity 合并",
+    "claim.changed": "更新事实",
+    "claim.rolled_back": "撤销事实修改",
+    "claim.source_removed": "撤销事实来源关联",
+    "entity.created": "创建实体",
+    "entity.deleted": "撤销新建实体",
+    "entity.merged": "合并实体",
+    "entity.merge_rolled_back": "撤销实体合并",
     "federated_wiki.registered": "登记远端 Wiki",
     "federated_wiki.updated": "更新远端 Wiki",
     "entity_federation.linked": "创建跨 Wiki 身份映射",
     "entity_federation.updated": "更新跨 Wiki 身份映射",
-    "collection.membership_added": "加入 Collection 成员",
-    "collection.membership_removed": "移除 Collection 成员",
+    "collection.membership_added": "加入合集成员",
+    "collection.membership_removed": "移除合集成员",
     "page_protection.created": "启用页面保护",
     "page_protection.deleted": "撤销页面保护",
-    "block_redirect.updated": "更新稳定章节迁移",
-    "block_redirect.deleted": "删除稳定章节迁移",
-    "ai_trust.updated": "更新 AI 信任策略",
+    "block_redirect.updated": "修改章节跳转",
+    "block_redirect.deleted": "移除章节跳转",
+    "ai_trust.updated": "更新 AI 审核设置",
     "change_tag.created": "创建变更标签",
     "change_tag.assigned": "追加变更标签",
   };
@@ -197,7 +197,7 @@ function AuditCard({
       toast.success("标签已追加到审计事件");
     } catch {
       toast.error("标签追加失败", {
-        description: "需要 reviewer 或 admin 权限。",
+        description: "需要审核者或管理员权限。",
       });
     } finally {
       setSaving(false);
@@ -235,7 +235,7 @@ function AuditCard({
             ))}
             {event.changeBatchId ? (
               <span className="rounded-full border px-2 py-0.5 font-mono text-[10px] text-muted-foreground">
-                batch {compactId(event.changeBatchId)}
+                批次 {compactId(event.changeBatchId)}
               </span>
             ) : null}
           </div>
@@ -254,7 +254,7 @@ function AuditCard({
             ) : null}
             <details className="basis-full">
               <summary className="cursor-pointer text-xs font-medium text-muted-foreground hover:text-foreground">
-                查看结构化 Payload
+                查看详细数据
               </summary>
               <pre className="mt-3 max-h-60 overflow-auto rounded-xl bg-muted/45 p-3 text-[10px] leading-5">
                 {JSON.stringify(event.payload, null, 2)}
@@ -373,7 +373,7 @@ export function AuditActivity() {
       toast.success("不可变 ChangeTag 已创建");
     } catch {
       toast.error("创建标签失败", {
-        description: "Tag key 不能重复，且创建全局词表需要 admin 权限。",
+        description: "标签标识不能重复，只有管理员可以创建全局标签。",
       });
     } finally {
       setCreating(false);
@@ -386,7 +386,7 @@ export function AuditActivity() {
         <ScrollText className="mx-auto size-9 text-muted-foreground" aria-hidden />
         <h2 className="mt-4 text-lg font-semibold">登录后查看 Wiki 审计流</h2>
         <p className="mt-2 text-sm text-muted-foreground">
-          审计 Payload 只向具有 reviewer 或 admin 权限的成员开放。
+          只有审核者和管理员能查看操作详情。
         </p>
         <Button asChild className="mt-5">
           <Link href={LOGIN_PATH}>登录</Link>
@@ -473,7 +473,7 @@ export function AuditActivity() {
           <div className="mt-5 rounded-2xl border border-destructive/20 bg-destructive/5 p-5 text-sm">
             <p className="font-medium text-destructive">审计流无法读取</p>
             <p className="mt-1 text-muted-foreground">
-              当前账号可能没有 reviewer 权限，或 API 暂时不可用。
+              请确认你有审核权限。如果仍无法加载，请稍后重试。
             </p>
           </div>
         ) : null}

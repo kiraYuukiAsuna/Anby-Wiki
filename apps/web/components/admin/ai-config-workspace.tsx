@@ -32,7 +32,7 @@ const configSchema = z
     enabled: z.boolean(),
     provider: z.enum(["openai-compatible", "deepseek"]),
     baseUrl: z
-      .url("请输入合法的 HTTP(S) API 根地址")
+      .url("请输入有效的 HTTP(S) API 根地址")
       .refine((value) => value.startsWith("https://") || value.startsWith("http://"), {
         message: "API 根地址必须使用 HTTP 或 HTTPS",
       }),
@@ -149,7 +149,7 @@ function ConfigForm({
       await onSaved(value);
       toast.success("AI 模型配置已保存", {
         description: value.enabled
-          ? "Worker 将开始领取排队中的导入任务。"
+          ? "排队中的导入任务将开始处理。"
           : "配置已保存，导入消费者保持暂停。",
       });
     } catch (error) {
@@ -225,7 +225,7 @@ function ConfigForm({
               className="mt-2 h-9 w-full rounded-lg border border-input bg-background px-2.5 text-sm outline-none focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50"
             >
               <option value="deepseek">DeepSeek</option>
-              <option value="openai-compatible">OpenAI compatible</option>
+              <option value="openai-compatible">兼容 OpenAI 接口</option>
             </select>
           </div>
           <div>
@@ -279,7 +279,7 @@ function ConfigForm({
               className="mt-2 h-9 w-full rounded-lg border border-input bg-background px-2.5 text-sm outline-none focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50"
             >
               <option value="json_object">JSON object（兼容性更好）</option>
-              <option value="json_schema">Strict JSON Schema</option>
+              <option value="json_schema">严格 JSON 格式</option>
             </select>
           </div>
           <div>
@@ -295,7 +295,7 @@ function ConfigForm({
               onChange={(event) => setMaxInputTokens(event.target.value)}
             />
             <p className="mt-1.5 text-[11px] leading-5 text-muted-foreground">
-              范围 12,800～20,000,000 Token。用于估算上下文并切分来源，预留 Prompt 与输出空间。
+              填写模型支持的输入上限（12,800～20,000,000 Token）。系统会据此拆分资料，并为提示词和输出留出空间。
             </p>
           </div>
           <div>
@@ -311,7 +311,7 @@ function ConfigForm({
               onChange={(event) => setChunkCharacters(event.target.value)}
             />
             <p className="mt-1.5 text-[11px] leading-5 text-muted-foreground">
-              范围 12,800～20,000,000 字符。用于新来源的持久化分片；已固化的来源版本不会重新切分。
+              每段资料最多 12,800～20,000,000 字符。调整后只影响新导入的资料。
             </p>
           </div>
           <div className="grid grid-cols-2 gap-3">
@@ -413,7 +413,7 @@ export function AIConfigWorkspace({
         <p className="mt-2 max-w-2xl text-sm leading-6 text-amber-900/70">
           {personal
             ? "当前账号不能修改这个 Wiki 的模型、密钥和超时策略。"
-            : "编辑者可以发起 AI 导入，但只有 admin 角色能修改模型、密钥和超时策略。"}
+            : "编辑者可以导入资料；只有管理员能修改模型、密钥和超时设置。"}
         </p>
       </div>
     );
@@ -424,7 +424,7 @@ export function AIConfigWorkspace({
         <ShieldAlert className="size-7 text-destructive" aria-hidden />
         <h2 className="mt-4 text-lg font-semibold">AI 配置服务不可用</h2>
         <p className="mt-2 text-sm text-muted-foreground">
-          请检查 API 的加密主密钥与 Semantic Kernel 内网配置。
+          请联系管理员检查密钥加密和 AI 服务连接配置。
         </p>
       </div>
     );

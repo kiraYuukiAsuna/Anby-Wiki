@@ -40,10 +40,10 @@ type RedirectKind = PageRedirectTarget["kind"];
 type SelectedPage = { id: string; displayTitle: string };
 
 const pageTargetSchema = z.object({
-  pageId: z.string().uuid("请选择合法目标 Page"),
+  pageId: z.string().uuid("请选择有效目标 Page"),
 });
 const sectionTargetSchema = pageTargetSchema.extend({
-  anchorBlockId: z.string().uuid("请选择一个稳定章节"),
+  anchorBlockId: z.string().uuid("请选择目标章节"),
 });
 const unresolvedTargetSchema = z.object({
   namespace: z
@@ -81,12 +81,12 @@ const MODES: Array<{
   {
     kind: PageRedirectTargetKindEnum.PageSection,
     label: "页面章节",
-    description: "锁定稳定 Heading ID",
+    description: "链接到指定章节",
     icon: Hash,
   },
   {
     kind: PageRedirectTargetKindEnum.Unresolved,
-    label: "未解析标题",
+    label: "待创建页面标题",
     description: "页面创建后自动落地",
     icon: CircleHelp,
   },
@@ -249,8 +249,8 @@ export function RedirectPageButton({
       toast.success(`「${sourceTitle}」的重定向已保存`, {
         description:
           kind === PageRedirectTargetKindEnum.Unresolved
-            ? "目标标题出现后，阅读路径会自动解析到稳定 Page ID。"
-            : "完整目标与变更前状态已写入审计账本。",
+            ? "目标页面创建后，这个链接会自动指向它。"
+            : "跳转目标已保存，修改前的设置已记录。",
       });
       await onSaved?.();
       router.refresh();
@@ -295,8 +295,7 @@ export function RedirectPageButton({
           <DialogHeader>
             <DialogTitle>管理页面重定向</DialogTitle>
             <DialogDescription>
-              为「{sourceTitle}」选择明确的目标类型。Page ID、Heading ID
-              与未解析标题分别保留各自的稳定语义。
+              为「{sourceTitle}」设置跳转目标：已有页面、指定章节、待创建页面或外部网站。
             </DialogDescription>
           </DialogHeader>
 
@@ -357,15 +356,15 @@ export function RedirectPageButton({
                 </div>
                 {kind === PageRedirectTargetKindEnum.PageSection ? (
                   <div className="mt-4 border-t border-primary/15 pt-4">
-                    <Label>稳定章节</Label>
+                    <Label>指定章节</Label>
                     {outlineState.isLoading ? (
                       <p className="mt-3 flex items-center gap-2 text-xs text-muted-foreground">
                         <LoaderCircle className="size-3.5 animate-spin" aria-hidden />
-                        读取 Heading ID…
+                        读取章节 ID…
                       </p>
                     ) : outlineState.error ? (
                       <p className="mt-3 text-xs text-destructive">
-                        暂时无法读取章节投影，请稍后重试。
+                        暂时无法加载章节列表，请稍后重试。
                       </p>
                     ) : outlineState.data?.items.length ? (
                       <div className="mt-2 max-h-48 space-y-1 overflow-y-auto pr-1">
@@ -391,7 +390,7 @@ export function RedirectPageButton({
                       </div>
                     ) : (
                       <p className="mt-3 text-xs text-muted-foreground">
-                        该页面当前没有可用 Heading；请改用整页目标。
+                        这个页面还没有可选章节，请改为链接到整个页面。
                       </p>
                     )}
                   </div>
@@ -464,7 +463,7 @@ export function RedirectPageButton({
                 />
               </div>
               <p className="text-xs leading-5 text-muted-foreground sm:col-span-2">
-                服务端保存规范化标题。目标 Page 出现后，读取会动态解析并继续检查后续重定向链。
+                填写目标页面的标题。页面创建后，这个链接会自动指向它。
               </p>
             </div>
           ) : (
@@ -490,7 +489,7 @@ export function RedirectPageButton({
               </div>
               <p className="flex items-start gap-2 text-xs leading-5 text-muted-foreground">
                 <Link2 className="mt-0.5 size-3.5 shrink-0" aria-hidden />
-                仅接受无凭据 HTTP(S) 地址；阅读页会明确标注离站，不会把外部正文视为本站权威内容。
+                请输入不含账号或密码的 HTTP(S) 链接。读者打开时会看到离站提示。
               </p>
             </div>
           )}

@@ -84,8 +84,8 @@ export function MergeToWorkingDocument({
           updateBase64: bytesToBase64(prepared.update),
         },
       });
-      toast.success("提案已合并到工作副本", {
-        description: "尚未创建正式 Revision，可在协作编辑器复核后发布。",
+      toast.success("修改建议已合并到工作副本", {
+        description: "内容已合入草稿，尚未发布。请在编辑器中检查后发布。",
       });
       router.refresh();
     } catch (error) {
@@ -104,7 +104,7 @@ export function MergeToWorkingDocument({
         <div>
           <h2 className="font-semibold">协作工作副本</h2>
           <p className="text-sm text-muted-foreground">
-            {statusLabel(status)}。合并不会直接发布 Revision。
+            {statusLabel(status)}。合并不会直接发布版本。
           </p>
         </div>
         <Button

@@ -104,7 +104,7 @@ export function AccountSecurityPanel() {
   return (
     <section id="account-security" className="min-w-0 rounded-3xl border bg-card p-6 sm:p-7">
       <h2 className="flex items-center gap-2 text-xl font-semibold"><ShieldCheck className="size-5" />账号安全</h2>
-      <p className="mt-2 text-sm text-muted-foreground">管理邮箱所有权、验证器、密码和登录设备。</p>
+      <p className="mt-2 text-sm text-muted-foreground">管理邮箱、二次验证、密码和登录设备。</p>
       <div className="mt-6 grid min-w-0 gap-6 lg:grid-cols-2">
         <div className="min-w-0 rounded-xl border p-4">
           <h3 className="flex items-center gap-2 font-medium"><MailCheck className="size-4" />邮箱验证</h3>
@@ -118,7 +118,7 @@ export function AccountSecurityPanel() {
         </div>
         <div className="min-w-0 rounded-xl border p-4">
           <h3 className="flex items-center gap-2 font-medium"><KeyRound className="size-4" />二次验证</h3>
-          <p className="mt-3 text-sm text-muted-foreground">{state.mfaEnabled ? `已启用 TOTP · 剩余 ${state.recoveryCodesRemaining} 个恢复码` : "使用手机验证器生成动态验证码，提高账号安全性。"}</p>
+          <p className="mt-3 text-sm text-muted-foreground">{state.mfaEnabled ? `已绑定验证器 · 剩余 ${state.recoveryCodesRemaining} 个恢复码` : "使用手机验证器生成动态验证码，提高账号安全性。"}</p>
           <div className="mt-4 flex flex-wrap gap-2">
             {state.mfaEnabled ? <>
               <Button size="sm" variant="outline" disabled={busy} onClick={() => begin({ action: Action.RegenerateCodes })}>重新生成恢复码</Button>
@@ -138,13 +138,13 @@ export function AccountSecurityPanel() {
         </div>
       </div>}
       <div className="mt-6 flex flex-wrap items-center justify-between gap-3 border-t pt-5">
-        <div><h3 className="font-medium">登录密码</h3><p className="mt-1 text-sm text-muted-foreground">修改后，全部设备和 CLI 凭证都会失效。</p></div>
+        <div><h3 className="font-medium">登录密码</h3><p className="mt-1 text-sm text-muted-foreground">修改后，所有设备和 CLI 都需要重新登录或授权。</p></div>
         <Button variant="outline" disabled={busy} onClick={() => begin({ action: Action.ChangePassword })}>修改密码</Button>
       </div>
       <div className="mt-6 border-t pt-5">
         <div className="flex flex-wrap items-center justify-between gap-3">
           <h3 className="flex items-center gap-2 font-medium"><Monitor className="size-4" />登录设备</h3>
-          <Button size="sm" variant="outline" disabled={busy} onClick={() => begin({ action: Action.RevokeSessions })}>撤销全部会话及 CLI 凭证</Button>
+          <Button size="sm" variant="outline" disabled={busy} onClick={() => begin({ action: Action.RevokeSessions })}>退出所有设备并撤销 CLI 授权</Button>
         </div>
         <ul className="mt-3 divide-y">
           {state.sessions.map((device) => <li key={device.id} className="flex min-w-0 flex-wrap items-center justify-between gap-3 py-3">
@@ -155,7 +155,7 @@ export function AccountSecurityPanel() {
         </ul>
       </div>
       {state.events.length > 0 && <div className="mt-5 border-t pt-5"><h3 className="font-medium">近期安全活动</h3><ul className="mt-3 space-y-2 text-sm">{state.events.slice(0, 10).map((event) => <li key={event.id} className="flex flex-wrap justify-between gap-2"><span>{SECURITY_ACTION_LABELS[event.action] ?? event.action}</span><time className="text-muted-foreground">{event.createdAt.toLocaleString()}</time></li>)}</ul></div>}
-      {state.systemAdmin && <p className="mt-5 text-sm"><Link className="font-medium text-primary underline underline-offset-4" href="/admin">打开系统管理台</Link></p>}
+      {state.systemAdmin && <p className="mt-5 text-sm"><Link className="font-medium text-primary underline underline-offset-4" href="/admin">打开系统管理</Link></p>}
 
       <Dialog open={!!request} onOpenChange={(open) => { if (!open && !busy) setRequest(null); }}>
         <DialogContent showCloseButton={!busy}>

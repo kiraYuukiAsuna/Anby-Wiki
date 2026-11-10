@@ -74,7 +74,7 @@ export function PageGroupedUsageList({
   if (groups.length === 0) {
     return (
       <p className="text-sm text-muted-foreground">
-        暂无当前 Revision 的页面{occurrenceLabel}；投影异步更新时可能短暂为空。
+        暂无当前版本的页面{occurrenceLabel}；刚更新的内容可能需要稍等片刻。
       </p>
     );
   }
@@ -90,7 +90,7 @@ export function PageGroupedUsageList({
             {group.pageTitle}
           </Link>
           <p className="mt-1 text-xs text-muted-foreground">
-            Revision{" "}
+            版本{" "}
             <span title={group.revisionId}>{compactId(group.revisionId)}</span> ·{" "}
             {group.items.length} 处{occurrenceLabel} · {group.blockCount} 个区块
           </p>
@@ -101,7 +101,7 @@ export function PageGroupedUsageList({
           ) : null}
           {showClaimContexts && group.claimIds.length > 0 ? (
             <p className="mt-1 text-xs text-muted-foreground">
-              Claim 上下文：
+              事实上下文：
               {group.claimIds.map((claimId, index) => (
                 <span key={claimId}>
                   {index > 0 ? "、" : null}
@@ -128,8 +128,8 @@ export function PageGroupedUsageList({
                       href={`/pages/${item.pageId}#${item.blockId}`}
                       className="hover:text-foreground hover:underline"
                     >
-                      Block{" "}
-                      <span title={item.blockId}>{compactId(item.blockId)}</span> · Node{" "}
+                      内容块{" "}
+                      <span title={item.blockId}>{compactId(item.blockId)}</span> · 位置{" "}
                       {item.nodeId}
                       {item.mentionText ? ` · “${item.mentionText}”` : ""}
                     </Link>

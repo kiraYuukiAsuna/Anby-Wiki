@@ -97,7 +97,7 @@ function CreateFromExample({
       !schema ||
       schema.type !== "object"
     ) {
-      toast.error("请填写名称、合法组件键与字段配置");
+      toast.error("请填写名称、有效组件键与字段配置");
       return;
     }
     setCreating(true);
@@ -196,7 +196,7 @@ function CreateFromExample({
           />
           {renderer === COMPONENT_RENDERERS.BuiltinEntityClaimInfobox ? (
             <p className="mt-3 text-xs text-muted-foreground">
-              发布前可选择真实实体，查看服务端生成的实际内容。
+              发布前可以选择一个实体，预览组件的显示效果。
             </p>
           ) : null}
         </div>
@@ -313,7 +313,7 @@ export function ComponentHub() {
           </h2>
         </div>
         <p className="mt-2 text-sm text-muted-foreground">
-          先看效果，再套用并定制。资料卡填写固定内容；动态信息框随实体已发布事实更新。
+          选择模板，预览后修改。资料卡由你填写；动态信息框会随实体的已发布事实更新。
         </p>
         <ul className="mt-5 grid gap-4 md:grid-cols-2 xl:grid-cols-3">
           {COMPONENT_PRESETS.map((item) => (

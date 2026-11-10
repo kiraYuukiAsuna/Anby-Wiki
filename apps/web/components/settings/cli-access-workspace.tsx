@@ -118,7 +118,7 @@ function AuthorizationCodeDialog({
               绑定身份：{value.displayName} · {value.actorType}
             </p>
             <p className="text-xs text-muted-foreground">
-              兑换后的 Token 有效至{" "}
+              授权后的访问凭证有效至{" "}
               {DATE_FORMATTER.format(value.tokenExpiresAt)}。
             </p>
           </div>
@@ -220,7 +220,7 @@ function PendingAuthorizationRow({
           </span>
         </div>
         <p className="mt-1 text-[11px] text-muted-foreground">
-          一次性授权码已生成，明文不会再次显示。
+          授权码只在生成时显示。如未保存，请删除这条记录后重新生成。
         </p>
         <p className="mt-1 break-all text-[11px] text-muted-foreground">
           {authorization.displayName} · {authorization.actorType}
@@ -236,7 +236,7 @@ function PendingAuthorizationRow({
       </div>
       <div>
         <p className="text-[10px] font-semibold text-muted-foreground uppercase">
-          Token 到期
+          访问凭证到期
         </p>
         <p className="mt-1 text-xs">
           {DATE_FORMATTER.format(authorization.tokenExpiresAt)}
@@ -305,7 +305,7 @@ export function CLIAccessWorkspace() {
       if (isUnauthorized(error)) {
         toast.error("登录状态已失效");
       } else if (error instanceof ResponseError && error.response.status === 403) {
-        toast.error("Actor 已停用、归属不匹配或管理员权限已失效");
+        toast.error("所选账号已停用、不属于你，或你已失去管理员权限。");
       } else {
         toast.error("CLI 授权码生成失败");
       }
@@ -319,9 +319,9 @@ export function CLIAccessWorkspace() {
     try {
       await authApi().revokeCLIToken({ id: token.id });
       await tokens.mutate();
-      toast.success("CLI Token 已撤销");
+      toast.success("CLI 访问凭证已撤销");
     } catch {
-      toast.error("CLI Token 撤销失败");
+      toast.error("CLI 访问凭证撤销失败");
     } finally {
       setRevokingID("");
     }
@@ -332,12 +332,12 @@ export function CLIAccessWorkspace() {
     try {
       await authApi().deleteCLITokenRecord({ id: token.id });
       await tokens.mutate();
-      toast.success("CLI Token 记录已删除");
+      toast.success("CLI 访问凭证记录已删除");
     } catch (error) {
       if (error instanceof ResponseError && error.response.status === 409) {
-        toast.error("有效 Token 需要先撤销");
+        toast.error("请先撤销有效的访问凭证，再删除记录。");
       } else {
-        toast.error("CLI Token 记录删除失败");
+        toast.error("CLI 访问凭证记录删除失败");
       }
     } finally {
       setDeletingID("");
@@ -368,11 +368,11 @@ export function CLIAccessWorkspace() {
     try {
       const result = await authApi().deleteInactiveCLITokenRecords();
       await tokens.mutate();
-      toast.success("已清理失效 Token 记录", {
+      toast.success("已清理失效凭证记录", {
         description: `删除 ${result.deleted} 条记录。`,
       });
     } catch {
-      toast.error("失效 Token 记录清理失败");
+      toast.error("失效凭证记录清理失败");
     } finally {
       setCleaningInactive(false);
     }
@@ -427,13 +427,13 @@ export function CLIAccessWorkspace() {
               ))}
             </select>
             <p className="mt-2 text-xs leading-5 text-muted-foreground">
-              机器 Actor 的提案按该身份署名，最终需要真人审核。
+              机器人提交的修改以其账号署名，需要人工审核。导入修改可在 AI 审核设置中开启自动处理。
               <Link href="/governance/ai-trust" className="ml-1 underline underline-offset-4">
-                创建或管理 Actor
+                创建或管理机器人
               </Link>
             </p>
             {actors.error ? (
-              <p className="mt-2 text-xs text-destructive">机器 Actor 暂时无法读取，请刷新重试。</p>
+              <p className="mt-2 text-xs text-destructive">机器人账号暂时无法读取，请刷新重试。</p>
             ) : null}
           </div>
           <div className="mt-5 grid gap-4 sm:grid-cols-[minmax(0,1fr)_10rem_auto] sm:items-end">
@@ -449,7 +449,7 @@ export function CLIAccessWorkspace() {
               />
             </div>
             <div>
-              <Label htmlFor="cli-token-ttl">Token 有效期</Label>
+              <Label htmlFor="cli-token-ttl">访问凭证有效期</Label>
               <select
                 id="cli-token-ttl"
                 className="mt-2 h-8 w-full rounded-lg border border-input bg-background px-2.5 text-sm outline-none focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50"
@@ -481,7 +481,7 @@ export function CLIAccessWorkspace() {
               已授权 Agent
             </h2>
             <p className="mt-1 text-sm text-muted-foreground">
-              Token 明文不会再次显示。
+              这里仅显示授权记录，不显示访问凭证全文。
             </p>
           </div>
           <div className="flex flex-wrap items-center gap-3">
@@ -514,7 +514,7 @@ export function CLIAccessWorkspace() {
           ) : null}
           {tokenListUnavailable ? (
             <div className="flex flex-wrap items-center justify-between gap-3 p-6">
-              <p className="text-sm text-destructive">CLI Token 暂时不可用。</p>
+              <p className="text-sm text-destructive">CLI 访问凭证暂时不可用。</p>
               <Button
                 type="button"
                 size="sm"
@@ -536,7 +536,7 @@ export function CLIAccessWorkspace() {
                 aria-hidden
               />
               <p className="mt-3 text-sm font-semibold">
-                {allTokens.length === 0 ? "还没有已授权 Agent" : "没有需要显示的 Token"}
+                {allTokens.length === 0 ? "还没有已授权 Agent" : "没有符合筛选条件的访问凭证"}
               </p>
             </div>
           ) : null}

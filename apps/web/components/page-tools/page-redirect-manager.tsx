@@ -64,14 +64,14 @@ function targetPresentation(redirect: PageRedirect) {
       };
     case PageRedirectTargetKindEnum.PageSection:
       return {
-        label: "稳定章节",
+        label: "指定章节",
         title: target.targetPageTitle ?? target.targetPageId ?? "未知 Page",
         detail: target.anchorBlockId ?? "",
         icon: Hash,
       };
     case PageRedirectTargetKindEnum.Unresolved:
       return {
-        label: "未解析标题",
+        label: "待创建页面标题",
         title: `${target.namespace ?? "?"}:${target.targetTitle ?? "?"}`,
         detail: "目标创建后将动态解析",
         icon: CircleHelp,
@@ -120,7 +120,7 @@ export function PageRedirectManager({
       await redirectState.mutate(null, { revalidate: false });
       setDeleteOpen(false);
       toast.success("页面重定向已删除", {
-        description: "页面自身 Revision 未受影响，现在会直接展示其当前内容。",
+        description: "页面会恢复显示自身内容，已有版本不变。",
       });
       router.refresh();
     } catch (error) {
@@ -233,7 +233,7 @@ export function PageRedirectManager({
                   </dd>
                 </div>
                 <div>
-                  <dt className="text-violet-800/65">更新 Actor</dt>
+                  <dt className="text-violet-800/65">修改人</dt>
                   <dd className="mt-1 font-mono text-[10px] text-violet-950">
                     {redirect.updatedBy}
                   </dd>
@@ -254,7 +254,7 @@ export function PageRedirectManager({
           <DialogHeader>
             <DialogTitle>删除页面重定向</DialogTitle>
             <DialogDescription>
-              「{pageTitle}」将恢复直接阅读自身内容。历史 Revision 与审计记录不会删除。
+              「{pageTitle}」将恢复直接阅读自身内容。历史版本与审计记录不会删除。
             </DialogDescription>
           </DialogHeader>
           <label className="flex cursor-pointer items-start gap-3 rounded-xl border border-border p-3 text-xs leading-5">
@@ -263,7 +263,7 @@ export function PageRedirectManager({
               onCheckedChange={(value) => setConfirmed(value === true)}
               className="mt-0.5"
             />
-            <span>我确认移除当前目标，并保留该动作的不可变审计记录。</span>
+            <span>我确认移除跳转目标，操作记录会保留。</span>
           </label>
           <DialogFooter>
             <Button

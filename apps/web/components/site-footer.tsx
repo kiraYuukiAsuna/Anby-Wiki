@@ -10,7 +10,7 @@ export function SiteFooter() {
             专题合集
           </WorkspaceLink>
           <WorkspaceLink href="/imports" className="transition-colors hover:text-foreground">
-            导入中心
+            导入资料
           </WorkspaceLink>
           <WorkspaceLink href="/assets" className="transition-colors hover:text-foreground">
             媒体库
@@ -28,7 +28,7 @@ export function SiteFooter() {
             href="/governance/review"
             className="transition-colors hover:text-foreground"
           >
-            审核队列
+            待审核
           </WorkspaceLink>
         </nav>
       </div>

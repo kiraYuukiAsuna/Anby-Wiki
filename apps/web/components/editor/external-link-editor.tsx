@@ -55,7 +55,7 @@ export function ExternalLinkEditor({
   const submit = () => {
     const parsed = externalLinkUrlSchema.safeParse(url.trim());
     if (!parsed.success) {
-      setUrlError(parsed.error.issues[0]?.message ?? "URL 不合法");
+      setUrlError(parsed.error.issues[0]?.message ?? "链接格式不正确");
       return;
     }
     onSubmit(parsed.data, displayText.trim() || parsed.data);
@@ -68,7 +68,7 @@ export function ExternalLinkEditor({
         <DialogHeader>
           <DialogTitle>插入外部链接</DialogTitle>
           <DialogDescription>
-            为选中文本添加 http/https 外链；显示文本与链接地址分离。
+            输入链接地址和显示文字，即可为所选内容添加外部链接。
           </DialogDescription>
         </DialogHeader>
         <div className="flex flex-col gap-4">

@@ -239,7 +239,7 @@ try {
     await editor.locator('.tiptap').dispatchEvent('compositionend');
     await page.waitForTimeout(50);
     await editor.locator('.ast-todo p').fill('/table');
-    await page.getByRole('button', { name: /语义表格/ }).waitFor(); await page.keyboard.press('Enter');
+    await page.getByRole('button', { name: /表格/ }).waitFor(); await page.keyboard.press('Enter');
     assert.equal(await editor.locator('[data-editor-block-type="astTable"]').count(), 1);
   });
   await page.reload(); await editor.locator('.tiptap').waitFor();
@@ -353,7 +353,7 @@ try {
   });
   await check('slash insertion focuses new editable content', async () => {
     await empty(); await page.keyboard.insertText('/table');
-    await page.getByRole('button', { name: /语义表格/ }).click();
+    await page.getByRole('button', { name: /表格/ }).click();
     await page.keyboard.insertText('插入后直接输入');
     assert.match(JSON.stringify((await ast()).children.find(b => b.type === 'table')), /插入后直接输入/);
   });

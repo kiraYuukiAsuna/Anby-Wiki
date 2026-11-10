@@ -49,7 +49,7 @@ const ISSUE_TYPES: ReadonlyArray<{
   { value: "single_value_conflict", label: "单值属性冲突" },
   { value: "multiple_preferred_values", label: "多个首选值" },
   { value: "verified_without_support", label: "已验证但无支持证据" },
-  { value: "merged_entity_target", label: "指向已合并 Entity" },
+  { value: "merged_entity_target", label: "指向已合并实体" },
   { value: "evidence_disagreement", label: "证据支持与反驳并存" },
 ];
 
@@ -58,24 +58,24 @@ const ISSUE_META: Record<
   { title: string; detail: string }
 > = {
   single_value_conflict: {
-    title: "单值属性存在多个已发布 Claim",
-    detail: "该 Property 不允许多值，需要保留一个事实并取代其余 Claim。",
+    title: "单值属性存在多个已发布事实",
+    detail: "这个属性只能保留一个值，请选择要保留的事实并替换其余记录。",
   },
   multiple_preferred_values: {
     title: "多值属性存在多个首选值",
-    detail: "多值可以并存，但同一属性通常只应有一个 preferred Claim。",
+    detail: "这个属性可以有多个值，但通常只应将一条事实设为首选。",
   },
   verified_without_support: {
-    title: "人工验证的 Claim 缺少支持证据",
-    detail: "补充 supports Citation，或重新评估验证状态。",
+    title: "人工验证的事实缺少支持证据",
+    detail: "请补充支持这条事实的引文，或调整核验状态。",
   },
   merged_entity_target: {
-    title: "Claim 指向已合并的 Entity",
-    detail: "目标应更新为合并后的稳定 Entity，避免继续扩散旧身份。",
+    title: "事实指向已合并的实体",
+    detail: "请将引用目标更新为合并后的实体。",
   },
   evidence_disagreement: {
     title: "支持与反驳证据同时存在",
-    detail: "核对证据并把 Claim 标为 disputed，或修正错误的来源关系。",
+    detail: "请核对证据，将事实标为“有争议”，或修正与来源的关系。",
   },
 };
 
@@ -136,7 +136,7 @@ function IssueCard({ issue }: { issue: FactConsistencyIssue }) {
           <div className="mt-4 grid gap-3 rounded-xl bg-muted/35 p-3 sm:grid-cols-2">
             <div>
               <p className="text-[10px] font-semibold tracking-wide text-muted-foreground uppercase">
-                Subject Entity
+                所属实体
               </p>
               <Link
                 href={`/entities/${issue.subjectEntityId}`}
@@ -148,7 +148,7 @@ function IssueCard({ issue }: { issue: FactConsistencyIssue }) {
             </div>
             <div>
               <p className="text-[10px] font-semibold tracking-wide text-muted-foreground uppercase">
-                Property
+                属性
               </p>
               <p className="mt-1 truncate text-sm font-medium">
                 {issue.propertyName || issue.propertyKey || "跨属性检查"}
@@ -170,7 +170,7 @@ function IssueCard({ issue }: { issue: FactConsistencyIssue }) {
                 variant="outline"
               >
                 <Link href={`/claims/${claimId}`}>
-                  Claim {compactId(claimId)}
+                  事实 {compactId(claimId)}
                   <ArrowRight aria-hidden />
                 </Link>
               </Button>
@@ -251,7 +251,7 @@ export function FactConsistencyWorkspace() {
       const result = await knowledgeApi().scanFactConsistency();
       await issues.mutate();
       toast.success("事实一致性扫描完成", {
-        description: `扫描 ${result.scannedSubjects} 个 Entity，发现 ${result.openIssues} 个当前问题，关闭 ${result.resolvedIssues} 个旧问题。`,
+        description: `扫描 ${result.scannedSubjects} 个实体，发现 ${result.openIssues} 个当前问题，关闭 ${result.resolvedIssues} 个旧问题。`,
       });
     } catch (error) {
       if (
@@ -259,7 +259,7 @@ export function FactConsistencyWorkspace() {
         error.response.status === 403
       ) {
         toast.error("只有站点管理员可以发起全量扫描", {
-          description: "审核者仍可查看由 Worker 持续更新的问题队列。",
+          description: "审核者仍可查看自动检查发现的问题。",
         });
       } else {
         toast.error("事实一致性扫描失败");
@@ -283,7 +283,7 @@ export function FactConsistencyWorkspace() {
         <LockKeyhole className="mx-auto size-8 text-muted-foreground" aria-hidden />
         <h2 className="mt-4 text-lg font-semibold">登录后查看一致性问题</h2>
         <p className="mt-2 text-sm text-muted-foreground">
-          问题可能包含尚在治理流程中的 Claim，只向审核者与管理员开放。
+          检查结果可能包含尚未批准的事实，仅审核者和管理员可查看。
         </p>
         <Button asChild className="mt-5">
           <Link href={LOGIN_PATH}>前往登录</Link>
@@ -302,8 +302,7 @@ export function FactConsistencyWorkspace() {
           需要审核者权限
         </h2>
         <p className="mt-2 max-w-2xl text-sm leading-6 text-amber-900/70">
-          普通读者仍可查看已发布事实；一致性问题队列仅向 reviewer 与 admin
-          角色开放。
+          普通读者可查看已发布事实；只有审核者和管理员能查看检查结果。
         </p>
       </div>
     );
@@ -319,7 +318,7 @@ export function FactConsistencyWorkspace() {
             icon: FileWarning,
           },
           { label: "错误级问题", value: errorCount, icon: TriangleAlert },
-          { label: "涉及 Entity", value: entityCount, icon: Waypoints },
+          { label: "涉及实体", value: entityCount, icon: Waypoints },
         ].map(({ label, value, icon: Icon }) => (
           <div key={label} className="rounded-2xl border bg-card p-5">
             <Icon className="size-4 text-amber-700" aria-hidden />
@@ -417,7 +416,7 @@ export function FactConsistencyWorkspace() {
           <div className="mt-5 rounded-2xl border border-destructive/20 bg-destructive/5 p-5 text-sm">
             <p className="font-medium text-destructive">问题队列暂时无法读取</p>
             <p className="mt-1 text-muted-foreground">
-              请确认 API 与数据库可用后重试。
+              请稍后重试。如果问题持续，请联系管理员检查服务状态。
             </p>
           </div>
         ) : null}

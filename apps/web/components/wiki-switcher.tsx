@@ -80,7 +80,7 @@ export function WikiSwitcher() {
     }
     toast.loading(`正在切换到「${target?.wikiName ?? "目标 Wiki"}」`, {
       id: switchToastID,
-      description: "正在更新当前 Wiki 上下文…",
+      description: "正在加载这个 Wiki…",
     });
     void (async () => {
       try {

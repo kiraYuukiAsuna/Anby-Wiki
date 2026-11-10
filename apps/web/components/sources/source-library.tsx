@@ -178,7 +178,7 @@ export function SourceLibrary() {
       }
       metadataObject = value as Record<string, unknown>;
     } catch {
-      toast.error("Metadata 必须是 JSON object");
+      toast.error("补充信息需填写 JSON 对象。");
       return;
     }
     setCreating(true);
@@ -204,7 +204,7 @@ export function SourceLibrary() {
       setMetadata("{}");
       await state.mutate();
       toast.success("来源已登记", {
-        description: `稳定 ID ${compactId(created.id)}`,
+        description: `ID ${compactId(created.id)}`,
       });
     } catch {
       toast.error("来源登记失败", {
@@ -399,7 +399,7 @@ export function SourceLibrary() {
               />
             </div>
             <div className="space-y-2">
-              <Label htmlFor="source-metadata">Metadata JSON</Label>
+              <Label htmlFor="source-metadata">补充信息（JSON）</Label>
               <Textarea
                 id="source-metadata"
                 value={metadata}

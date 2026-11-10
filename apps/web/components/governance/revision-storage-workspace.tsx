@@ -154,7 +154,7 @@ function ArchiveDialog({
         });
       } else {
         toast.error("归档批次执行失败", {
-          description: "数据库不会切换到缺失或校验失败的冷对象，可安全重试。",
+          description: "校验失败的内容不会被归档，你可以重试。",
         });
       }
     }
@@ -216,8 +216,7 @@ function ArchiveDialog({
             onCheckedChange={(value) => setConfirmed(value === true)}
           />
           <span>
-            我理解这只迁移不可变快照的物理存放位置；对象校验失败时批次会停止，
-            不会删除数据库内容。
+            我确认归档只改变内容的存储位置，不删除历史内容；校验失败时会停止本批归档。
           </span>
         </label>
 
@@ -276,7 +275,7 @@ export function RevisionStorageWorkspace() {
     return (
       <div className="rounded-3xl border border-dashed bg-muted/25 p-10 text-center">
         <LockKeyhole className="mx-auto size-8 text-muted-foreground" aria-hidden />
-        <h2 className="mt-4 text-lg font-semibold">登录后查看存储治理</h2>
+        <h2 className="mt-4 text-lg font-semibold">登录后管理版本存储</h2>
         <p className="mt-2 text-sm text-muted-foreground">
           该页面仅展示当前账户 Wiki 的存储容量和归档状态。
         </p>
@@ -297,7 +296,7 @@ export function RevisionStorageWorkspace() {
           需要管理员权限
         </h2>
         <p className="mt-2 max-w-2xl text-sm leading-6 text-amber-900/70">
-          需要当前账户 Wiki 的管理员权限才能查看容量统计和执行手动归档。
+          需要你自己的 Wiki 的管理员权限，才能查看存储用量或归档历史版本。
         </p>
       </div>
     );
@@ -308,7 +307,7 @@ export function RevisionStorageWorkspace() {
         <TriangleAlert className="size-7 text-destructive" aria-hidden />
         <h2 className="mt-4 text-lg font-semibold">暂时无法读取存储状态</h2>
         <p className="mt-2 text-sm text-muted-foreground">
-          请确认 API 与数据库可用后重试。
+          请稍后重试。如果问题持续，请联系管理员检查服务状态。
         </p>
         <Button
           className="mt-5"
@@ -374,7 +373,7 @@ export function RevisionStorageWorkspace() {
           <div className="flex flex-wrap items-start justify-between gap-4">
             <div>
               <p className="text-xs font-semibold tracking-[0.14em] text-primary uppercase">
-                Storage overview
+                存储概览
               </p>
               <h2 className="mt-2 text-xl font-semibold tracking-tight">
                 历史版本存储概览
@@ -408,11 +407,11 @@ export function RevisionStorageWorkspace() {
             <div className="mt-3 flex flex-wrap justify-between gap-2 text-xs text-muted-foreground">
               <span className="inline-flex items-center gap-1.5">
                 <span className="size-2 rounded-full bg-orange-400" />
-                Hot {100 - coldPercent}%
+                在线存储 {100 - coldPercent}%
               </span>
               <span className="inline-flex items-center gap-1.5">
                 <span className="size-2 rounded-full bg-sky-500" />
-                Cold {coldPercent}%
+                归档存储 {coldPercent}%
               </span>
             </div>
           </div>
@@ -440,12 +439,11 @@ export function RevisionStorageWorkspace() {
           <HardDrive className="size-5 text-primary" aria-hidden />
           <h2 className="mt-4 text-lg font-semibold">安全归档</h2>
           <p className="mt-2 text-sm leading-6 text-muted-foreground">
-            上传、Head 校验、数据库行锁与当前版本复核依次完成。历史详情、Diff
-            与回滚会自动读取冷对象，并重新验证大小、SHA-256 和 AST Schema。
+            归档前会校验内容完整性，并再次确认它不是当前版本。归档后仍可查看历史、比较差异和回滚。
           </p>
           {!stats.archiveAvailable ? (
             <p className="mt-4 rounded-xl border border-amber-200 bg-amber-50 p-3 text-xs leading-5 text-amber-900">
-              当前 API 未装配 S3。阅读热版本不受影响；请在运维环境补齐对象存储配置。
+              尚未配置归档存储，现有版本仍可阅读。请联系管理员配置对象存储后再归档。
             </p>
           ) : null}
           <div className="mt-5 flex flex-col gap-2">

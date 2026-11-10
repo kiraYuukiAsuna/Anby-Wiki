@@ -22,8 +22,8 @@ import { cn } from "@/lib/utils";
 
 const statusMeta = {
   reviewing: { label: "抽样审核", tone: "bg-amber-500/10 text-amber-700" },
-  ready: { label: "等待应用", tone: "bg-blue-500/10 text-blue-700" },
-  applying: { label: "正在应用", tone: "bg-violet-500/10 text-violet-700" },
+  ready: { label: "等待生效", tone: "bg-blue-500/10 text-blue-700" },
+  applying: { label: "正在处理", tone: "bg-violet-500/10 text-violet-700" },
   paused: { label: "已暂停", tone: "bg-rose-500/10 text-rose-700" },
   completed: { label: "已完成", tone: "bg-emerald-500/10 text-emerald-700" },
 } as const;
@@ -61,7 +61,7 @@ function BatchCard({ batch }: { batch: BulkReviewBatchSummary }) {
               dateStyle: "medium",
               timeStyle: "short",
             }).format(batch.createdAt)}
-            · {batch.itemCount} 个提案 · wave {batch.waveSize}
+            · {batch.itemCount} 个修改建议 · wave {batch.waveSize}
           </p>
         </div>
         <ArrowRight
@@ -86,7 +86,7 @@ function BatchCard({ batch }: { batch: BulkReviewBatchSummary }) {
         </span>
         <span>
           <strong className="block text-sm text-foreground">{batch.appliedCount}</strong>
-          <span className="text-muted-foreground">已应用</span>
+          <span className="text-muted-foreground">已生效</span>
         </span>
         <span>
           <strong className={cn("block text-sm", batch.failedCount ? "text-destructive" : "text-foreground")}>

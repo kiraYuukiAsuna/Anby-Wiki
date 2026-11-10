@@ -129,14 +129,14 @@ export function BacklinksPanel({
         {state.isLoading && !state.data ? (
           <div className="flex min-h-36 items-center justify-center gap-2 text-sm text-muted-foreground">
             <LoaderCircle className="size-4 animate-spin" aria-hidden />
-            正在读取关系投影…
+            正在加载关联页面…
           </div>
         ) : state.error ? (
           <div className="rounded-xl border border-destructive/20 bg-destructive/5 p-4">
             <TriangleAlert className="size-5 text-destructive" aria-hidden />
             <p className="mt-3 text-sm font-semibold">反向链接暂不可用</p>
             <p className="mt-1 text-xs text-muted-foreground">
-              页面或投影可能刚刚变化，请稍后刷新。
+              页面可能正在更新，请稍后刷新。
             </p>
           </div>
         ) : items.length === 0 ? (
@@ -196,11 +196,11 @@ export function BacklinksPanel({
                               href={`/pages/${item.sourcePageId}#${item.sourceBlockId}`}
                               className="hover:text-foreground hover:underline"
                             >
-                              Block{" "}
+                              内容块{" "}
                               <span title={item.sourceBlockId}>
                                 {compactId(item.sourceBlockId)}
                               </span>{" "}
-                              · Node {item.sourceNodeId} · “{item.displayText}”
+                              · 位置 {item.sourceNodeId} · “{item.displayText}”
                             </Link>
                           </li>
                         ))}
@@ -208,11 +208,11 @@ export function BacklinksPanel({
                     </details>
                   ) : (
                     <p className="mt-2 font-mono text-[9px] text-muted-foreground/75">
-                      Block{" "}
+                      内容块{" "}
                       <span title={group.items[0].sourceBlockId}>
                         {compactId(group.items[0].sourceBlockId)}
                       </span>{" "}
-                      · Node {group.items[0].sourceNodeId}
+                      · 位置 {group.items[0].sourceNodeId}
                     </p>
                   )}
                 </li>

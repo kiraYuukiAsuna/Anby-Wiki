@@ -76,16 +76,16 @@ const OPERATION_LABEL: Record<OperationType, string> = {
   retarget_page_reference: "重定向页面引用",
   insert_entity_reference: "插入实体引用",
   retarget_entity_reference: "重定向实体引用",
-  insert_claim_reference: "插入 Claim 引用",
-  retarget_claim_reference: "重定向 Claim 引用",
-  insert_citation_reference: "插入 Citation 引用",
-  retarget_citation_reference: "重定向 Citation 引用",
+  insert_claim_reference: "插入事实引用",
+  retarget_claim_reference: "重定向事实引用",
+  insert_citation_reference: "插入引文引用",
+  retarget_citation_reference: "重定向引文引用",
   retarget_external_link: "重定向外部链接",
   create_entity: "创建实体",
   merge_entity: "合并实体",
-  create_claim: "创建 Claim",
-  supersede_claim: "取代 Claim",
-  add_claim_source: "绑定 Claim 来源",
+  create_claim: "创建事实",
+  supersede_claim: "取代事实",
+  add_claim_source: "绑定事实来源",
   add_collection_membership: "加入合集",
   remove_collection_membership: "移出合集",
 };
@@ -99,10 +99,10 @@ const proposalSchema = z.object({
     "collection",
     "external_resource",
   ]),
-  targetId: z.union([z.literal(""), z.string().uuid("目标 ID 不是合法 UUID")]),
+  targetId: z.union([z.literal(""), z.string().uuid("目标 ID 不是有效 UUID")]),
   baseRevisionId: z.union([
     z.literal(""),
-    z.string().uuid("基线 Revision ID 不是合法 UUID"),
+    z.string().uuid("原版本 ID 格式不正确，请填写 UUID"),
   ]),
   baseStateVersion: z.union([
     z.literal(""),
@@ -120,7 +120,7 @@ const evidenceSchema = z
   .strict()
   .refine(
     (value) => value.citation_id || value.source_chunk_id || value.note,
-    "证据至少需要 Citation、SourceChunk 或说明",
+    "证据至少需要引文、来源片段或说明",
   );
 
 const operationSchema = z
@@ -161,7 +161,7 @@ function common(type: OperationType, target: Record<string, unknown>) {
     base: { state_version: 0 },
     target,
     expected_hash: null,
-    evidence: [{ note: "人工提案：请在提交审核前补充可验证依据" }],
+    evidence: [{ note: "人工修改建议：请在提交审核前补充可验证依据" }],
     risk: { level: "medium", reasons: ["manual operation requires review"] },
     payload: {},
   };
@@ -402,11 +402,11 @@ export function ProposalOperationStudio() {
   const addTemplate = () => {
     const currentSession = session.session;
     if (!currentSession) {
-      toast.error("请先登录后创建人工提案");
+      toast.error("请先登录后创建人工修改建议");
       return;
     }
     if (createdProposalId && appendedCount === operations.length) {
-      toast.message("可继续向当前草稿追加 Operation");
+      toast.message("可继续向当前草稿追加修改操作");
     }
     if (operations.length === 0 && !createdProposalId) {
       const suggestion = suggestedProposal(
@@ -442,7 +442,7 @@ export function ProposalOperationStudio() {
 
   const save = async () => {
     if (!session.isAuthenticated) {
-      toast.error("请先登录后创建人工提案");
+      toast.error("请先登录后创建人工修改建议");
       router.push(LOGIN_PATH);
       return;
     }
@@ -454,11 +454,11 @@ export function ProposalOperationStudio() {
       riskLevel,
     });
     if (!proposalInput.success) {
-      toast.error(proposalInput.error.issues[0]?.message ?? "请检查提案目标");
+      toast.error(proposalInput.error.issues[0]?.message ?? "请检查修改建议目标");
       return;
     }
     if (operations.length === 0) {
-      toast.error("至少添加一个 Operation");
+      toast.error("至少添加一个修改操作");
       return;
     }
 
@@ -469,12 +469,12 @@ export function ProposalOperationStudio() {
       try {
         raw = JSON.parse(draft.json);
       } catch {
-        toast.error(`Operation ${index + 1} 不是合法 JSON`);
+        toast.error(`修改操作 ${index + 1} 不是有效 JSON`);
         return;
       }
       const parsed = operationSchema.safeParse(raw);
       if (!parsed.success) {
-        toast.error(`Operation ${index + 1} 边界校验失败`, {
+        toast.error(`修改操作 ${index + 1} 边界校验失败`, {
           description: parsed.error.issues[0]?.message,
         });
         return;
@@ -509,8 +509,8 @@ export function ProposalOperationStudio() {
         });
         setAppendedCount((current) => current + 1);
       }
-      toast.success("人工提案草稿已创建", {
-        description: `${operations.length} 个 Operation 已通过权威 Schema。`,
+      toast.success("人工修改建议草稿已创建", {
+        description: `${operations.length} 项修改已通过格式校验。`,
       });
       router.push(`/governance/proposals/${proposalId}`);
       router.refresh();
@@ -519,10 +519,10 @@ export function ProposalOperationStudio() {
         const status = error.response.status;
         toast.error(
           status === 422
-            ? "Operation 未通过服务端权威 Schema"
+            ? "修改内容未通过格式校验"
             : status === 403
-              ? "当前账号没有创建该提案的权限"
-              : "提案草稿尚未完整保存",
+              ? "当前账号没有创建该修改建议的权限"
+              : "修改建议草稿尚未完整保存",
           {
             description: proposalId
               ? "已成功写入的步骤不会丢失；修正当前 JSON 后可从断点继续。"
@@ -530,7 +530,7 @@ export function ProposalOperationStudio() {
           },
         );
       } else {
-        toast.error("提案草稿尚未完整保存", {
+        toast.error("修改建议草稿尚未完整保存", {
           description: proposalId
             ? "草稿已保留，可从当前断点继续。"
             : "请检查网络后重试。",
@@ -550,7 +550,7 @@ export function ProposalOperationStudio() {
               <ShieldCheck className="size-5" aria-hidden />
             </span>
             <div>
-              <h2 className="text-xl font-semibold">提案边界</h2>
+              <h2 className="text-xl font-semibold">修改建议边界</h2>
             </div>
           </div>
 
@@ -568,15 +568,15 @@ export function ProposalOperationStudio() {
                 }
                 className="h-9 w-full rounded-lg border bg-transparent px-2.5 text-sm outline-none focus-visible:ring-3 focus-visible:ring-ring/50"
               >
-                <option value="page">Page</option>
-                <option value="entity">Entity</option>
-                <option value="claim">Claim</option>
-                <option value="collection">Collection</option>
-                <option value="external_resource">External resource</option>
+                <option value="page">页面</option>
+                <option value="entity">实体</option>
+                <option value="claim">事实</option>
+                <option value="collection">合集</option>
+                <option value="external_resource">外部资源</option>
               </select>
             </div>
             <div className="space-y-2">
-              <Label htmlFor="proposal-target-id">目标稳定 ID（新建时留空）</Label>
+              <Label htmlFor="proposal-target-id">目标 ID（新建时留空）</Label>
               <Input
                 id="proposal-target-id"
                 value={targetId}
@@ -587,7 +587,7 @@ export function ProposalOperationStudio() {
               />
             </div>
             <div className="space-y-2">
-              <Label htmlFor="proposal-base-revision">基线 Revision（可选）</Label>
+              <Label htmlFor="proposal-base-revision">原版本（可选）</Label>
               <Input
                 id="proposal-base-revision"
                 value={baseRevisionId}
@@ -635,7 +635,7 @@ export function ProposalOperationStudio() {
             <div className="mt-5 flex flex-wrap items-center justify-between gap-3 rounded-xl border border-emerald-200 bg-emerald-50/60 p-3 text-xs text-emerald-900">
               <span className="flex items-center gap-2">
                 <CheckCircle2 className="size-4" aria-hidden />
-                草稿 {createdProposalId} 已创建，当前从第 {appendedCount + 1} 个 Operation 继续。
+                草稿 {createdProposalId} 已创建，当前从第 {appendedCount + 1} 个修改操作继续。
               </span>
               <Link
                 href={`/governance/proposals/${createdProposalId}`}
@@ -649,7 +649,7 @@ export function ProposalOperationStudio() {
 
         <section className="rounded-3xl border bg-card p-6">
           <div className="flex flex-wrap items-center justify-between gap-4">
-            <h2 className="text-xl font-semibold">Operation 序列</h2>
+            <h2 className="text-xl font-semibold">修改操作序列</h2>
             <div className="flex gap-2">
               <select
                 value={selectedType}
@@ -657,7 +657,7 @@ export function ProposalOperationStudio() {
                   setSelectedType(event.target.value as OperationType)
                 }
                 className="h-9 max-w-52 rounded-lg border bg-transparent px-2.5 text-sm outline-none focus-visible:ring-3 focus-visible:ring-ring/50"
-                aria-label="Operation 模板"
+                aria-label="修改操作模板"
               >
                 {OPERATION_TYPES.map((type) => (
                   <option key={type} value={type}>
@@ -709,7 +709,7 @@ export function ProposalOperationStudio() {
                           size="icon-sm"
                           variant="ghost"
                           onClick={() => removeOperation(index)}
-                          aria-label={`删除 Operation ${index + 1}`}
+                          aria-label={`删除修改操作 ${index + 1}`}
                         >
                           <Trash2 aria-hidden />
                         </Button>
@@ -722,7 +722,7 @@ export function ProposalOperationStudio() {
                         updateOperation(operation.id, event.target.value)
                       }
                       spellCheck={false}
-                      aria-label={`Operation ${index + 1} JSON`}
+                      aria-label={`修改操作 ${index + 1} JSON`}
                       className="min-h-72 resize-y rounded-none border-0 bg-slate-950 p-4 font-mono text-xs leading-5 text-slate-100 focus-visible:ring-0 dark:bg-black"
                     />
                   </li>
@@ -750,10 +750,10 @@ export function ProposalOperationStudio() {
             <ShieldCheck aria-hidden />
           )}
           {saving
-            ? `正在写入 Operation ${appendedCount + 1}…`
+            ? `正在写入修改操作 ${appendedCount + 1}…`
             : createdProposalId
               ? "从断点继续保存"
-              : "创建治理草稿"}
+              : "保存修改草稿"}
         </Button>
       </div>
 
@@ -771,7 +771,7 @@ export function ProposalOperationStudio() {
           href="/governance/review"
           className="group flex items-center justify-between rounded-2xl border bg-muted/30 p-4 text-sm font-semibold transition hover:border-primary/20 hover:bg-primary/5"
         >
-          打开审核队列
+          打开待审核列表
           <ArrowRight
             className="size-4 transition-transform group-hover:translate-x-0.5"
             aria-hidden

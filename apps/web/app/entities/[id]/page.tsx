@@ -12,6 +12,7 @@ import { EntityMergePanel } from "@/components/knowledge/entity-merge-panel";
 import { EntityMetadataManager } from "@/components/knowledge/entity-metadata-manager";
 import { ReferenceUsagePanel } from "@/components/knowledge/reference-usage-panel";
 import { fetchEntityDetail } from "@/lib/knowledge";
+import { ENTITY_STATUS_LABELS } from "@/lib/display-labels";
 
 export const dynamic = "force-dynamic";
 
@@ -30,16 +31,16 @@ export default async function EntityDetailPage({
 
   return (
     <DetailShell
-      eyebrow="Entity"
+      eyebrow="实体"
       title={title}
-      status={detail.status}
-      modeLabel={detail.status === "active" ? "可治理" : "身份映射"}
+      status={ENTITY_STATUS_LABELS[detail.status]}
+      modeLabel={detail.status === "active" ? "可编辑" : "身份映射"}
     >
-      <DetailSection title="稳定身份">
+      <DetailSection title="实体信息">
         <DetailRows
           rows={[
-            { label: "Entity ID", value: detail.id },
-            { label: "Canonical key", value: detail.canonicalKey },
+            { label: "实体 ID", value: detail.id },
+            { label: "实体标识", value: detail.canonicalKey },
             {
               label: "类型",
               value: `${detail.entityType.name} (${detail.entityType.typeKey})`,
@@ -61,7 +62,7 @@ export default async function EntityDetailPage({
         />
       </DetailSection>
 
-      <DetailSection title="实体治理">
+      <DetailSection title="实体管理">
         <EntityMergePanel
           sourceEntityId={detail.id}
           sourceTitle={title}
@@ -83,13 +84,13 @@ export default async function EntityDetailPage({
         >
           <span className="flex items-center gap-2">
             <Network className="size-4" aria-hidden />
-            以此 Entity 为中心打开知识关系图
+            查看这个实体的关系图
           </span>
           <span aria-hidden>→</span>
         </Link>
       </DetailSection>
 
-      <DetailSection title="跨 Wiki 身份">
+      <DetailSection title="跨 Wiki 关联">
         <EntityFederationPanel
           entityID={detail.id}
           entityTitle={title}

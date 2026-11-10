@@ -26,7 +26,7 @@ function decodeActions(button: HTMLButtonElement): ButtonAction[] {
     value = JSON.parse(rawJSON);
   } else {
     const encoded = button.dataset.actions;
-    if (!encoded) throw new Error("按钮缺少动作");
+    if (!encoded) throw new Error("这个按钮尚未设置操作");
     const normalized = encoded.replace(/-/g, "+").replace(/_/g, "/");
     const bytes = Uint8Array.from(atob(normalized), (character) =>
       character.charCodeAt(0),
@@ -103,7 +103,7 @@ async function insertBlocks(action: Extract<ButtonAction, { type: "insert_blocks
     });
   }
   await api.submitProposal({ id: proposal.id });
-  toast.success("插入内容已提交治理审核");
+  toast.success("新增内容已提交审核");
 }
 
 function showNotification(

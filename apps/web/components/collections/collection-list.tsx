@@ -41,14 +41,14 @@ export function CollectionList({
       setItems((current) => [...current, ...page.items]);
       setNextCursor(page.nextCursor ?? null);
     } catch {
-      toast.error("加载 Collection 失败", { description: "请稍后重试。" });
+      toast.error("加载合集失败", { description: "请稍后重试。" });
     }
   };
 
   if (items.length === 0) {
     return (
       <p className="rounded-lg border border-dashed border-border p-8 text-center text-sm text-muted-foreground">
-        当前还没有 Collection。
+        当前还没有合集。
       </p>
     );
   }
@@ -66,10 +66,10 @@ export function CollectionList({
                 <h2 className="font-semibold">{collection.title}</h2>
                 <span className="rounded-full bg-muted px-2 py-0.5 text-xs text-muted-foreground">
                   {collection.collectionType === "manual"
-                    ? "Manual"
+                    ? "手动添加"
                     : collection.collectionType === "rule"
-                      ? "Rule"
-                      : "Dynamic"}
+                      ? "按规则生成"
+                      : "实时查询"}
                 </span>
               </div>
               <p className="mt-2 text-sm text-muted-foreground">

@@ -40,7 +40,7 @@ import { isUnauthorized, LOGIN_PATH, useSession } from "@/lib/auth";
 
 const labelSchema = z.object({
   language: z.string().trim().min(1, "请填写语言标记").max(64),
-  label: z.string().trim().min(1, "请填写标签").max(255),
+  label: z.string().trim().min(1, "请填写名称").max(255),
   description: z.string().trim().max(1000),
   isPrimary: z.boolean(),
 });
@@ -67,9 +67,9 @@ const ALIAS_TYPE_LABEL = {
 function mutationMessage(error: unknown, fallback: string) {
   if (isUnauthorized(error)) return "登录状态已失效";
   if (error instanceof ResponseError) {
-    if (error.response.status === 403) return "当前账号没有 Entity 编辑权限";
+    if (error.response.status === 403) return "当前账号没有实体编辑权限";
     if (error.response.status === 404) return "目标已不存在，请刷新后重试";
-    if (error.response.status === 409) return "该名称已存在，或当前变更会破坏主标签约束";
+    if (error.response.status === 409) return "这个名称已存在，或与当前语言的主名称冲突。";
   }
   return fallback;
 }
@@ -97,7 +97,7 @@ export function EntityMetadataManager({
     if (!labelDraft) return;
     const parsed = labelSchema.safeParse(labelDraft);
     if (!parsed.success) {
-      toast.error(parsed.error.issues[0]?.message ?? "请检查标签");
+      toast.error(parsed.error.issues[0]?.message ?? "请检查名称");
       return;
     }
     setSaving(true);
@@ -113,11 +113,11 @@ export function EntityMetadataManager({
       });
       await entityState.mutate();
       setLabelDraft(undefined);
-      toast.success("Entity 标签已添加", {
-        description: "搜索与动态组件会由 Worker 精准刷新。",
+      toast.success("实体名称已添加", {
+        description: "搜索结果和动态组件会自动更新。",
       });
     } catch (error) {
-      toast.error(mutationMessage(error, "标签添加失败"));
+      toast.error(mutationMessage(error, "名称添加失败"));
     } finally {
       setSaving(false);
     }
@@ -142,7 +142,7 @@ export function EntityMetadataManager({
       });
       await entityState.mutate();
       setAliasDraft(undefined);
-      toast.success("Entity 别名已添加");
+      toast.success("实体别名已添加");
     } catch (error) {
       toast.error(mutationMessage(error, "别名添加失败"));
     } finally {
@@ -161,9 +161,9 @@ export function EntityMetadataManager({
         },
       });
       await entityState.mutate();
-      toast.success(`“${value.label}”已设为 ${value.language} 主标签`);
+      toast.success(`“${value.label}”已设为 ${value.language} 主名称`);
     } catch (error) {
-      toast.error(mutationMessage(error, "主标签更新失败"));
+      toast.error(mutationMessage(error, "主名称更新失败"));
     } finally {
       setSaving(false);
     }
@@ -186,7 +186,7 @@ export function EntityMetadataManager({
         });
       }
       await entityState.mutate();
-      toast.success(removal.kind === "label" ? "标签已移除" : "别名已移除");
+      toast.success(removal.kind === "label" ? "名称已移除" : "别名已移除");
       setRemoval(undefined);
     } catch (error) {
       toast.error(mutationMessage(error, "名称移除失败"));
@@ -232,7 +232,7 @@ export function EntityMetadataManager({
               }
             >
               <Plus aria-hidden />
-              添加标签
+              添加名称
             </Button>
           </div>
         ) : !session.isAuthenticated ? (
@@ -245,14 +245,14 @@ export function EntityMetadataManager({
       {detail.status !== "active" ? (
         <div className="flex items-start gap-3 rounded-xl border border-amber-200 bg-amber-50/60 p-4 text-xs leading-5 text-amber-950/75">
           <TriangleAlert className="mt-0.5 size-4 shrink-0 text-amber-700" aria-hidden />
-          已合并或删除的稳定身份保持只读；请前往活动目标继续维护名称。
+          已合并或删除的实体无法编辑，请前往有效实体修改名称。
         </div>
       ) : null}
 
       <div className="grid gap-4 lg:grid-cols-[1.2fr_0.8fr]">
         <div className="overflow-hidden rounded-xl border">
           <div className="border-b bg-muted/25 px-4 py-3">
-            <p className="text-xs font-semibold">标签 · {detail.labels.length}</p>
+            <p className="text-xs font-semibold">名称 · {detail.labels.length}</p>
           </div>
           <ul className="divide-y">
             {detail.labels.map((item) => (
@@ -269,7 +269,7 @@ export function EntityMetadataManager({
                     {item.isPrimary ? (
                       <span className="inline-flex items-center gap-1 rounded-full bg-amber-100 px-2 py-0.5 text-[9px] font-semibold text-amber-800">
                         <Star className="size-2.5 fill-current" aria-hidden />
-                        主标签
+                        主名称
                       </span>
                     ) : null}
                   </div>
@@ -287,7 +287,7 @@ export function EntityMetadataManager({
                         size="icon-sm"
                         variant="ghost"
                         disabled={saving}
-                        aria-label={`设“${item.label}”为主标签`}
+                        aria-label={`设“${item.label}”为主名称`}
                         onClick={() => void setPrimary(item)}
                       >
                         <Star aria-hidden />
@@ -299,7 +299,7 @@ export function EntityMetadataManager({
                       variant="ghost"
                       disabled={saving || (item.isPrimary && primaryCount <= 1)}
                       className="text-destructive hover:text-destructive"
-                      aria-label={`删除标签“${item.label}”`}
+                      aria-label={`删除名称“${item.label}”`}
                       onClick={() => setRemoval({ kind: "label", value: item })}
                     >
                       <Trash2 aria-hidden />
@@ -346,7 +346,7 @@ export function EntityMetadataManager({
             </ul>
           ) : (
             <div className="px-4 py-9 text-center text-xs text-muted-foreground">
-              暂无别名；canonical key 仍可用于稳定检索。
+              还没有别名，也可以通过实体标识搜索。
             </div>
           )}
         </div>
@@ -360,9 +360,9 @@ export function EntityMetadataManager({
       >
         <DialogContent className="sm:max-w-lg">
           <DialogHeader>
-            <DialogTitle>添加多语言标签</DialogTitle>
+            <DialogTitle>添加多语言名称</DialogTitle>
             <DialogDescription>
-              标签保留大小写并进行 Unicode/空白规范化；同语言只能有一个主标签。
+              名称保留大小写，会自动整理空格和字符格式。每种语言只能有一个主名称。
             </DialogDescription>
           </DialogHeader>
           {labelDraft ? (
@@ -378,7 +378,7 @@ export function EntityMetadataManager({
                 />
               </div>
               <div className="space-y-2">
-                <Label htmlFor="entity-label-value">标签</Label>
+                <Label htmlFor="entity-label-value">名称</Label>
                 <Input
                   id="entity-label-value"
                   autoFocus
@@ -411,7 +411,7 @@ export function EntityMetadataManager({
                   className="mt-0.5"
                 />
                 <span>
-                  设为该语言主标签。若该语言已有主标签，请先作为普通标签添加，再在列表中切换。
+                  设为该语言的主名称。如果已有主名称，请先添加，再在名称列表中切换。
                 </span>
               </label>
             </div>
@@ -431,7 +431,7 @@ export function EntityMetadataManager({
               onClick={() => void addLabel()}
             >
               {saving ? <LoaderCircle className="animate-spin" aria-hidden /> : <Plus aria-hidden />}
-              {saving ? "保存中…" : "添加标签"}
+              {saving ? "保存中…" : "添加名称"}
             </Button>
           </DialogFooter>
         </DialogContent>
@@ -445,9 +445,9 @@ export function EntityMetadataManager({
       >
         <DialogContent className="sm:max-w-lg">
           <DialogHeader>
-            <DialogTitle>添加 Entity 别名</DialogTitle>
+            <DialogTitle>添加实体别名</DialogTitle>
             <DialogDescription>
-              别名用于发现同一稳定身份，不会创建或自动合并新的 Entity。
+              添加别名后，可以用更多名称找到这个实体。不会因此新建或合并实体。
             </DialogDescription>
           </DialogHeader>
           {aliasDraft ? (
@@ -527,7 +527,7 @@ export function EntityMetadataManager({
             <DialogTitle>移除这个名称？</DialogTitle>
             <DialogDescription>
               {removal?.kind === "label"
-                ? `标签“${removal.value.label}”将不再用于展示与搜索。`
+                ? `名称“${removal.value.label}”将不再用于展示与搜索。`
                 : removal
                   ? `别名“${removal.value.alias}”将不再用于检索。`
                   : ""}

@@ -22,13 +22,13 @@ export default async function ProposalPage({
     return (
       <div className="mx-auto w-full max-w-6xl px-5 py-10 lg:px-8 lg:py-12">
         <header className="mb-8 border-b pb-6">
-          <h1 className="text-3xl font-semibold">提案详情</h1>
+          <h1 className="text-3xl font-semibold">修改建议详情</h1>
         </header>
         <div className="rounded-3xl border border-amber-200 bg-amber-50/65 p-8">
           <ShieldCheck className="size-7 text-amber-700" aria-hidden />
-          <h2 className="mt-4 text-lg font-semibold text-amber-950">没有查看此提案的权限</h2>
+          <h2 className="mt-4 text-lg font-semibold text-amber-950">没有查看此修改建议的权限</h2>
           <p className="mt-2 text-sm leading-6 text-amber-900/70">
-            提案创建者、对应导入任务的发起者或当前 Wiki 的审核者、应用者及管理员可以查看此提案。
+            修改建议创建者、对应导入任务的发起者或当前 Wiki 的审核者、发布者及管理员可以查看此修改建议。
           </p>
         </div>
       </div>
@@ -39,7 +39,7 @@ export default async function ProposalPage({
     <div className="mx-auto w-full max-w-6xl px-4 py-8">
       <div className="mb-4 flex justify-end">
         <Button variant="outline" size="sm" asChild>
-          <WorkspaceLink href="/governance/review">返回审核队列</WorkspaceLink>
+          <WorkspaceLink href="/governance/review">返回待审核列表</WorkspaceLink>
         </Button>
       </div>
       <ProposalActions proposal={result.proposal} />

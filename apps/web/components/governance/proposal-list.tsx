@@ -33,6 +33,7 @@ import { Button } from "@/components/ui/button";
 import { governanceApi } from "@/lib/api";
 import { LOGIN_PATH, useSession } from "@/lib/auth";
 import { compactId } from "@/lib/display-id";
+import { PROPOSAL_STATUS_LABELS } from "@/lib/display-labels";
 import { cn } from "@/lib/utils";
 
 const PAGE_SIZE = 20;
@@ -54,52 +55,52 @@ const STATUS_META: Record<
   { label: string; className: string; icon: typeof Clock3 }
 > = {
   draft: {
-    label: "草稿",
+    label: PROPOSAL_STATUS_LABELS.draft,
     className: "bg-slate-100 text-slate-700 ring-slate-200",
     icon: FilePenLine,
   },
   submitted: {
-    label: "已提交",
+    label: PROPOSAL_STATUS_LABELS.submitted,
     className: "bg-blue-50 text-blue-700 ring-blue-200",
     icon: Clock3,
   },
   in_review: {
-    label: "审核中",
+    label: PROPOSAL_STATUS_LABELS.in_review,
     className: "bg-amber-50 text-amber-700 ring-amber-200",
     icon: ShieldAlert,
   },
   approved: {
-    label: "已批准",
+    label: PROPOSAL_STATUS_LABELS.approved,
     className: "bg-emerald-50 text-emerald-700 ring-emerald-200",
     icon: CheckCircle2,
   },
   rejected: {
-    label: "已拒绝",
+    label: PROPOSAL_STATUS_LABELS.rejected,
     className: "bg-rose-50 text-rose-700 ring-rose-200",
     icon: XCircle,
   },
   conflicted: {
-    label: "待解冲突",
+    label: PROPOSAL_STATUS_LABELS.conflicted,
     className: "bg-orange-50 text-orange-700 ring-orange-200",
     icon: GitMerge,
   },
   applying: {
-    label: "应用中",
+    label: PROPOSAL_STATUS_LABELS.applying,
     className: "bg-violet-50 text-violet-700 ring-violet-200",
     icon: LoaderCircle,
   },
   applied: {
-    label: "已生效",
+    label: PROPOSAL_STATUS_LABELS.applied,
     className: "bg-emerald-50 text-emerald-700 ring-emerald-200",
     icon: CheckCircle2,
   },
   failed: {
-    label: "应用失败",
+    label: PROPOSAL_STATUS_LABELS.failed,
     className: "bg-rose-50 text-rose-700 ring-rose-200",
     icon: AlertTriangle,
   },
   rolled_back: {
-    label: "已回滚",
+    label: PROPOSAL_STATUS_LABELS.rolled_back,
     className: "bg-slate-100 text-slate-600 ring-slate-200",
     icon: RotateCcw,
   },
@@ -161,7 +162,7 @@ function ProposalRow({ proposal }: { proposal: Proposal }) {
                   {TARGET_LABEL[proposal.targetType]} · {targetIdentity}
                 </span>
                 <span className="mt-0.5 block truncate font-mono text-[11px] text-muted-foreground">
-                  Proposal {proposal.id}
+                  修改建议 {proposal.id}
                 </span>
               </span>
               <span
@@ -262,7 +263,7 @@ export function ProposalList() {
     return (
       <div className="rounded-2xl border border-dashed bg-muted/25 px-6 py-12 text-center">
         <Inbox className="mx-auto size-8 text-muted-foreground" aria-hidden />
-        <h2 className="mt-4 text-lg font-semibold">登录后恢复你的全部提案</h2>
+        <h2 className="mt-4 text-lg font-semibold">登录后查看你的修改建议</h2>
         <Button asChild className="mt-5">
           <Link href={LOGIN_PATH}>登录并查看</Link>
         </Button>
@@ -274,13 +275,13 @@ export function ProposalList() {
     <section className="min-w-0" aria-labelledby="my-proposals-title">
       <div className="flex flex-wrap items-center justify-between gap-3">
         <h2 id="my-proposals-title" className="text-xl font-semibold">
-          我的提案
+          我的修改建议
         </h2>
         <div className="flex gap-2">
           <Button asChild size="sm">
             <WorkspaceLink href="/governance/proposals/new">
               <Plus aria-hidden />
-              新建提案
+              新建修改建议
             </WorkspaceLink>
           </Button>
           <Button
@@ -301,7 +302,7 @@ export function ProposalList() {
 
       <div
         className="mt-5 flex gap-1 overflow-x-auto rounded-xl bg-muted/70 p-1"
-        aria-label="按状态筛选提案"
+        aria-label="按状态筛选修改建议"
       >
         {FILTERS.map((item) => (
           <button
@@ -322,7 +323,7 @@ export function ProposalList() {
 
       {error ? (
         <div className="mt-4 rounded-2xl border border-destructive/20 bg-destructive/5 p-5 text-sm">
-          <p className="font-medium text-destructive">提案暂时无法读取</p>
+          <p className="font-medium text-destructive">修改建议暂时无法读取</p>
           <p className="mt-1 text-muted-foreground">
             请检查服务状态，或稍后重试。
           </p>
@@ -330,7 +331,7 @@ export function ProposalList() {
       ) : null}
 
       {isLoading && !data ? (
-        <div className="mt-4 space-y-3" aria-label="正在加载提案">
+        <div className="mt-4 space-y-3" aria-label="正在加载修改建议">
           {[0, 1, 2].map((item) => (
             <div
               key={item}
@@ -347,11 +348,11 @@ export function ProposalList() {
             aria-hidden
           />
           <h3 className="mt-4 font-semibold">
-            {filter === "all" ? "还没有提案" : "这个状态下没有提案"}
+            {filter === "all" ? "还没有修改建议" : "这个状态下没有修改建议"}
           </h3>
           <div className="mt-5 flex justify-center gap-2">
             <Button asChild>
-              <WorkspaceLink href="/governance/proposals/new">创建人工提案</WorkspaceLink>
+              <WorkspaceLink href="/governance/proposals/new">创建人工修改建议</WorkspaceLink>
             </Button>
             <Button asChild variant="outline">
               <WorkspaceLink href="/imports">从资料导入</WorkspaceLink>

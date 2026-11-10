@@ -215,11 +215,11 @@ function SourceUsagePageRow({
           </Link>
           <p className="mt-1 text-xs text-muted-foreground">
             {item.usageCount} 处引用 · {item.blockCount} 个区块 ·{" "}
-            {item.citationCount} 个 Citation
+            {item.citationCount} 个引文
           </p>
         </div>
         <span className="max-w-full break-all font-mono text-[10px] text-muted-foreground">
-          revision {item.revisionId}
+          版本 {item.revisionId}
         </span>
       </div>
 
@@ -243,12 +243,12 @@ function SourceUsagePageRow({
                     href={`/pages/${item.pageId}#${location.blockId}`}
                     className="min-w-0 flex-1 break-all font-mono text-[10px] text-muted-foreground hover:text-primary hover:underline"
                   >
-                    Block {location.blockId} · Node {location.nodeId}
+                    内容块 {location.blockId} · 位置 {location.nodeId}
                   </Link>
                   {location.claimId ? (
                     <Button asChild size="xs" variant="ghost">
                       <Link href={`/claims/${location.claimId}`}>
-                        Claim
+                        事实
                         <ArrowRight aria-hidden />
                       </Link>
                     </Button>
@@ -256,7 +256,7 @@ function SourceUsagePageRow({
                   <Button asChild size="xs" variant="outline">
                     <Link href={`/citations/${location.citationId}`}>
                       <Quote aria-hidden />
-                      Citation
+                      引文
                     </Link>
                   </Button>
                 </li>
@@ -395,7 +395,7 @@ export function ComponentUsagePanel({
                     {group.versions.map((item) => `v${item}`).join("、")}
                   </p>
                   <p className="mt-1 font-mono text-[10px] text-muted-foreground">
-                    revision{" "}
+                    版本{" "}
                     <span title={group.revisionId}>{compactId(group.revisionId)}</span>
                   </p>
                 </div>
@@ -403,7 +403,7 @@ export function ComponentUsagePanel({
                   <Button asChild size="xs" variant="outline">
                     <Link href={`/entities/${group.items[0].entityId}`}>
                       <Waypoints aria-hidden />
-                      Entity
+                      实体
                     </Link>
                   </Button>
                 ) : null}
@@ -429,7 +429,7 @@ export function ComponentUsagePanel({
                           href={`/pages/${item.pageId}#${item.blockId}`}
                           className="min-w-0 flex-1 hover:text-foreground hover:underline"
                         >
-                          v{item.componentVersion} · Block{" "}
+                          v{item.componentVersion} · 内容块{" "}
                           <span title={item.blockId}>{compactId(item.blockId)}</span>
                         </Link>
                         <Link
@@ -437,7 +437,7 @@ export function ComponentUsagePanel({
                           title={item.entityId}
                           className="text-violet-700 hover:underline"
                         >
-                          Entity {compactId(item.entityId)}
+                          实体 {compactId(item.entityId)}
                         </Link>
                       </li>
                     ))}

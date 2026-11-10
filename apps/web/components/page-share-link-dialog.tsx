@@ -123,7 +123,7 @@ export function PageShareLinkDialog({
               </select>
             </label>
             <label className="grid gap-2 text-sm font-medium">
-              有效方式
+              链接有效期
               <select
                 value={linkType}
                 onChange={(event) => {

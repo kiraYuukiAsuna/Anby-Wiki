@@ -5,7 +5,7 @@ export default function ImportsPage() {
   return (
     <div className="mx-auto w-full max-w-6xl px-5 py-8 lg:px-8 lg:py-10">
       <header className="border-b border-border/75 pb-6">
-        <h1 className="text-3xl font-semibold">导入中心</h1>
+        <h1 className="text-3xl font-semibold">导入资料</h1>
       </header>
 
       <div className="mt-9 grid grid-cols-1 items-start gap-8 lg:grid-cols-[minmax(0,1fr)_22rem] xl:gap-12">

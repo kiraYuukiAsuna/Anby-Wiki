@@ -46,15 +46,15 @@ const roleOrder: RoleKey[] = ["editor", "reviewer", "applier", "admin"];
 const roleLabels: Record<RoleKey, string> = {
   editor: "编辑者",
   reviewer: "审核者",
-  applier: "应用者",
+  applier: "发布者",
   admin: "管理员",
 };
 
 const roleDescriptions: Record<RoleKey, string> = {
   editor: "创建、编辑、改名",
-  reviewer: "审核 Proposal",
-  applier: "应用与回滚",
-  admin: "全部治理权限",
+  reviewer: "审核修改建议",
+  applier: "发布和撤销修改",
+  admin: "全部内容管理权限",
 };
 
 const searchSchema = z.string().trim().max(128);
@@ -366,7 +366,7 @@ export function UserManagementWorkspace() {
         };
       }, false);
       toast.success("用户已删除", {
-        description: `${deleteTarget.username} 的登录会话和 CLI Token 已失效。`,
+        description: `${deleteTarget.username} 的登录会话和 CLI 访问凭证已失效。`,
       });
       setDeleteTarget(null);
     } catch (error) {
@@ -414,7 +414,7 @@ export function UserManagementWorkspace() {
         <ShieldAlert className="size-7 text-amber-700" aria-hidden />
         <h2 className="mt-4 text-lg font-semibold text-amber-950">需要管理员权限</h2>
         <p className="mt-2 max-w-2xl text-sm leading-6 text-amber-900/70">
-          只有 admin 角色可以查看用户并授予或撤销角色。
+          只有管理员可以查看用户、分配或移除角色。
         </p>
       </div>
     );
@@ -425,7 +425,7 @@ export function UserManagementWorkspace() {
         <ShieldAlert className="size-7 text-destructive" aria-hidden />
         <h2 className="mt-4 text-lg font-semibold">用户管理服务不可用</h2>
         <p className="mt-2 text-sm text-muted-foreground">
-          请检查 API 与认证服务状态。
+          请稍后重试。如果问题持续，请联系管理员检查登录服务。
         </p>
       </div>
     );
@@ -445,7 +445,7 @@ export function UserManagementWorkspace() {
             className="h-9 pl-8"
             value={search}
             onChange={(event) => setSearch(event.target.value)}
-            placeholder="搜索用户名、邮箱、显示名或 Actor ID"
+            placeholder="搜索用户名、邮箱、显示名或身份 ID"
             aria-invalid={!parsedSearch.success}
           />
         </label>
@@ -493,7 +493,7 @@ export function UserManagementWorkspace() {
           </div>
           {activeAdminCount <= 1 ? (
             <span className="rounded border border-amber-200 bg-amber-50 px-2 py-1 text-xs text-amber-900">
-              当前仅 1 个 active admin
+              当前仅有 1 名有效管理员
             </span>
           ) : null}
         </div>
@@ -548,7 +548,7 @@ export function UserManagementWorkspace() {
             <DialogTitle>删除注册用户</DialogTitle>
             <DialogDescription>
               {deleteTarget
-                ? `将删除 ${deleteTarget.username} 的本地登录账号，并使其现有 Session 与 CLI Token 失效。历史内容会保留原 Actor 归属。`
+                ? `将删除 ${deleteTarget.username} 的登录账号，并退出其所有设备、撤销 CLI 授权。历史内容仍保留原作者信息。`
                 : ""}
             </DialogDescription>
           </DialogHeader>

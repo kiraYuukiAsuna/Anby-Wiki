@@ -163,7 +163,7 @@ export function SystemConsole() {
     finally { setBusy(false); }
   };
 
-  if (!permitted) return <div className="mt-7 rounded-2xl border p-6"><ShieldCheck className="size-6" /><h2 className="mt-3 font-semibold">需要系统管理员权限</h2><p className="mt-2 text-sm text-muted-foreground">Wiki 成员管理使用 Wiki 管理员权限。系统管理台需要运维人员单独授予系统管理员权限。</p>{accountVisible ? <Button className="mt-4" variant="outline" asChild><Link href="/account">返回个人中心</Link></Button> : null}</div>;
+  if (!permitted) return <div className="mt-7 rounded-2xl border p-6"><ShieldCheck className="size-6" /><h2 className="mt-3 font-semibold">需要系统管理员权限</h2><p className="mt-2 text-sm text-muted-foreground">Wiki 管理员负责本 Wiki 的成员和内容。管理全站设置还需要由运维人员授予系统管理员权限。</p>{accountVisible ? <Button className="mt-4" variant="outline" asChild><Link href="/account">返回个人中心</Link></Button> : null}</div>;
   if (mail.isLoading || (accounts.isLoading && !accounts.data)) return <p className="mt-7 flex items-center gap-2 text-sm"><LoaderCircle className="size-4 animate-spin" />正在读取系统配置…</p>;
   if (mail.error || accounts.error || !mail.data || !accounts.data) return <div className="mt-7 rounded-2xl border p-6"><p>系统配置暂不可用。</p><Button className="mt-3" onClick={() => { void mail.mutate(); void accounts.mutate(); }}>重试</Button></div>;
   const items = accounts.data.accounts;
@@ -172,11 +172,11 @@ export function SystemConsole() {
     <MailSettings key={mail.data.updatedAt?.toISOString() ?? "initial"} configuration={mail.data} mfaEnabled={mfaEnabled} onSaved={async (value) => { await mail.mutate(value, { revalidate: false }); await accounts.mutate(); }} />
     <section aria-label="账号与系统权限" aria-busy={accounts.isValidating} className="mt-6 min-w-0 rounded-2xl border bg-card p-5 sm:p-7">
       <h2 className="text-xl font-semibold">账号与系统权限</h2>
-      <p className="mt-2 text-sm text-muted-foreground">系统权限用于全站配置和安全概况。私人 Wiki 的内容访问仍由其成员权限决定。</p>
+      <p className="mt-2 text-sm text-muted-foreground">系统管理员可以管理全站设置和查看安全记录，但访问私人 Wiki 的内容仍需相应的成员权限。</p>
       <Input className="mt-5 max-w-md" aria-label="搜索账号" placeholder="按用户名或邮箱搜索" maxLength={254} value={search} onChange={(event) => { setSearch(event.target.value); setAccountsPage(1); }} />
       {accounts.isValidating && <p className="mt-3 text-xs text-muted-foreground">正在更新列表…</p>}
       <ul className="mt-4 divide-y">{items.map((account) => <li key={account.actorId} className="flex min-w-0 flex-wrap items-center justify-between gap-3 py-4">
-        <div className="min-w-0"><p className="break-all font-medium">@{account.username}{account.systemAdmin && <span className="ml-2 text-xs text-primary">{account.systemAdminProtected ? "初始管理员" : "系统管理员"}</span>}</p><p className="mt-1 break-all text-sm text-muted-foreground">{account.email} · {account.emailVerified ? "邮箱已验证" : "邮箱未验证"} · {account.mfaEnabled ? "已启用 MFA" : "未启用 MFA"}</p></div>
+        <div className="min-w-0"><p className="break-all font-medium">@{account.username}{account.systemAdmin && <span className="ml-2 text-xs text-primary">{account.systemAdminProtected ? "初始管理员" : "系统管理员"}</span>}</p><p className="mt-1 break-all text-sm text-muted-foreground">{account.email} · {account.emailVerified ? "邮箱已验证" : "邮箱未验证"} · {account.mfaEnabled ? "已启用二次验证" : "未启用二次验证"}</p></div>
         <Button size="sm" variant="outline" disabled={busy || accounts.isValidating || account.status !== "active" || (account.systemAdmin && account.systemAdminProtected)} onClick={() => { setPassword(""); setCode(""); setTarget(account); }}>{account.systemAdmin ? account.systemAdminProtected ? "不可撤销" : "撤销系统权限" : "授予系统权限"}</Button>
       </li>)}</ul>
       {items.length === 0 && <p className="mt-4 text-sm text-muted-foreground">没有匹配的账号。</p>}

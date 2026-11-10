@@ -90,19 +90,19 @@ const ROUTE_MODE_OPTIONS = [
   {
     value: "auto",
     label: "智能多页面",
-    description: "理解来源主题，检索已有页面，并分别决定创建、更新、仅关联或忽略。",
+    description: "根据资料内容匹配已有页面，决定新建、更新、关联或跳过。",
     icon: Network,
   },
   {
     value: "force_create",
     label: "强制创建单页",
-    description: "不拆分到已有页面，以指定标题生成一个新页面；标题冲突时停止并交由人工处理。",
+    description: "将资料整理为一个新页面。如果标题已被使用，任务会暂停并提示你处理。",
     icon: FilePlus2,
   },
   {
     value: "force_update",
     label: "更新指定页面",
-    description: "仅为选定页面规划新增或替换内容，不创建其他页面。",
+    description: "只更新你选定的页面，不会创建其他页面。",
     icon: FilePenLine,
   },
 ] as const;
@@ -214,7 +214,7 @@ export function ImportJobForm() {
   const selectFile = (selected: File) => {
     const parsed = uploadFileSchema.safeParse(selected);
     setFile(parsed.success ? parsed.data : null);
-    setFileError(parsed.success ? "" : parsed.error.issues[0]?.message ?? "文件不合法");
+    setFileError(parsed.success ? "" : parsed.error.issues[0]?.message ?? "文件不有效");
   };
 
   const submit = async (event: React.FormEvent) => {
@@ -237,7 +237,7 @@ export function ImportJobForm() {
       if (sourceKind === "upload") {
         setFileError(parsed.error.issues.find((issue) => issue.path[0] === "file")?.message ?? "");
       }
-      toast.error(parsed.error.issues[0]?.message ?? "来源参数不合法");
+      toast.error(parsed.error.issues[0]?.message ?? "来源参数不有效");
       return;
     }
     setSubmitting(true);
@@ -294,7 +294,7 @@ export function ImportJobForm() {
           <Label htmlFor="source-url">来源 URL</Label>
           <Input id="source-url" type="url" value={url} onChange={(event) => setURL(event.target.value)}
             placeholder="https://example.com/article" required />
-          <p className="text-xs text-muted-foreground">仅允许 http/https 公网地址；重定向和目标 IP 会经过 SSRF 校验。</p>
+          <p className="text-xs text-muted-foreground">请填写可公开访问的 HTTP(S) 链接，不支持内网地址。</p>
         </div>
       ) : (
         <div className="space-y-3">
@@ -390,7 +390,7 @@ export function ImportJobForm() {
                 </span>
                 <div className="space-y-1">
                   <p className="text-sm font-medium">{dragging ? "松开即可选择文件" : "拖放文件到这里"}</p>
-                  <p className="text-xs text-muted-foreground">将文档或数据导入 Wiki，生成可审核的页面计划</p>
+                  <p className="text-xs text-muted-foreground">上传文件或粘贴链接，整理成可审核的页面内容。</p>
                 </div>
                 <Button type="button" variant="outline" disabled={submitting}
                   aria-describedby={fileError ? "source-file-error" : "source-file-help"}
@@ -410,7 +410,7 @@ export function ImportJobForm() {
         </div>
       )}
       <div className="space-y-2">
-        <Label htmlFor="import-author">提案作者</Label>
+        <Label htmlFor="import-author">修改建议作者</Label>
         <select id="import-author" value={authorActorId ?? ""} disabled={submitting}
           onChange={(event) => setAuthorSelection(session ? {
             account: session.actorId, wiki: session.wikiId, id: event.target.value,
@@ -424,15 +424,15 @@ export function ImportJobForm() {
           ))}
         </select>
         <p className="text-xs leading-5 text-muted-foreground">
-          机器作者使用其信任策略；Full Access 可自动批准并应用导入提案。任务和来源由你管理，重试保留作者。
+          导入内容按所选机器人的审核设置处理。开启全自动处理后，修改会自动批准并生效。任务和来源仍由你管理，重试时作者不变。
         </p>
         {actorError ? (
           <p role="alert" className="text-xs text-destructive">
-            机器身份读取失败。<button type="button" className="ml-1 underline" onClick={() => void reloadActors()}>重试</button>
+            机器人账号读取失败。<button type="button" className="ml-1 underline" onClick={() => void reloadActors()}>重试</button>
           </p>
         ) : actors.length === 0 ? (
           <p className="text-xs text-muted-foreground">
-            可在<Link href="/governance/ai-trust" className="mx-1 underline">AI 信任</Link>创建属于当前账户的机器 Actor。
+            可在<Link href="/governance/ai-trust" className="mx-1 underline">AI 信任</Link>创建你自己的机器人账号。
           </p>
         ) : null}
       </div>
@@ -498,7 +498,7 @@ export function ImportJobForm() {
         <Label htmlFor="source-instructions">导入要求（可选）</Label>
         <Textarea id="source-instructions" value={instructions} onChange={(event) => setInstructions(event.target.value)}
           maxLength={4000} rows={4} placeholder="例如：重点补充角色经历；忽略营销段落；分别整理人物与组织页面。" />
-        <p className="text-xs text-muted-foreground">要求只参与来源理解与页面路由，不能覆盖证据核验、安全扫描和治理审核。</p>
+        <p className="text-xs text-muted-foreground">可以说明如何整理内容，但资料仍需经过安全检查、证据核验和审核。</p>
       </div>
       <Button type="submit" disabled={submitting}>{submitting ? "正在创建…" : "创建导入任务"}</Button>
     </form>

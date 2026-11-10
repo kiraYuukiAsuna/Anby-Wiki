@@ -124,7 +124,7 @@ function EntityCard({ entity }: { entity: EntityCatalogItem }) {
             </h3>
           </Link>
           <p className="mt-2 line-clamp-2 min-h-10 text-xs leading-5 text-muted-foreground">
-            {entity.description || `稳定键 · ${entity.canonicalKey}`}
+            {entity.description || `实体标识 · ${entity.canonicalKey}`}
           </p>
           <p className="mt-2 truncate font-mono text-[10px] text-muted-foreground/75">
             {entity.canonicalKey}
@@ -152,7 +152,7 @@ function EntityCard({ entity }: { entity: EntityCatalogItem }) {
           href={`/entities/${entity.id}`}
           className="mt-4 flex items-center justify-between text-xs font-semibold text-indigo-700"
         >
-          查看稳定身份
+          查看实体信息
           <ArrowRight
             className="size-3.5 transition-transform group-hover:translate-x-0.5"
             aria-hidden
@@ -243,7 +243,7 @@ export function EntityLibrary() {
               value={query}
               onChange={(event) => setQuery(event.target.value)}
               aria-invalid={!querySchema.safeParse(query).success}
-              placeholder="搜索名称、别名或稳定键…"
+              placeholder="搜索名称、别名或实体标识…"
               className="pl-8"
             />
           </label>
@@ -286,7 +286,7 @@ export function EntityLibrary() {
           <div className="mt-5 rounded-2xl border border-destructive/20 bg-destructive/5 p-5 text-sm">
             <p className="font-medium text-destructive">实体目录暂时不可用</p>
             <p className="mt-1 text-muted-foreground">
-              请确认 API 与 PostgreSQL 已启动后重试。
+              请稍后重试。如果问题持续，请联系管理员。
             </p>
           </div>
         ) : null}

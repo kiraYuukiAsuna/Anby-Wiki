@@ -9,7 +9,7 @@ export default function FederationPage() {
         <span className="flex size-11 items-center justify-center rounded-2xl bg-indigo-600 text-white shadow-lg shadow-indigo-600/20">
           <Globe2 className="size-5" aria-hidden />
         </span>
-        <h1 className="text-3xl font-semibold">跨 Wiki 身份</h1>
+        <h1 className="text-3xl font-semibold">跨 Wiki 关联</h1>
       </header>
 
       <FederationWorkspace />

@@ -87,7 +87,7 @@ export function PageButtonInsertDialog({
           break;
       }
     } catch {
-      toast.error("动作 JSON 不是合法对象");
+      toast.error("动作 JSON 不是有效对象");
       return;
     }
     const parsed = buttonActionSchema.safeParse(action);
@@ -111,7 +111,7 @@ export function PageButtonInsertDialog({
         <DialogHeader>
           <DialogTitle>插入页面按钮</DialogTitle>
           <DialogDescription>
-            页面只在读者确认后执行；插入内容会进入 Proposal 审核。
+            读者点击并确认后才会执行操作。插入内容需要先提交审核。
           </DialogDescription>
         </DialogHeader>
         <div className="grid gap-4">
@@ -192,7 +192,7 @@ export function PageButtonInsertDialog({
                 />
               </Label>
               <Label>
-                Payload JSON
+                请求内容（JSON）
                 <Textarea
                   className="font-mono"
                   value={payloadJSON}

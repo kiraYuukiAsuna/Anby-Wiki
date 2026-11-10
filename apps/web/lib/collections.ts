@@ -19,7 +19,7 @@ export function isRuleCollectionQuery(
 
 export function collectionSummary(collection: Collection): string {
   if (collection.collectionType === "manual" || !collection.query) {
-    return "由维护者明确选择成员";
+    return "手动添加合集成员";
   }
   if (isDynamicCollectionQuery(collection.query)) {
     const target = collection.query.memberType === "page" ? "页面" : "实体";
@@ -37,8 +37,8 @@ export function collectionSummary(collection: Collection): string {
   }
   if (isRuleCollectionQuery(collection.query)) {
     return collection.query.kind === "entity_type"
-      ? `物化规则 · EntityType = ${collection.query.entityType ?? "未知"}`
-      : `物化规则 · 存在 published Claim：${collection.query.property ?? "未知"}`;
+      ? `按实体类型筛选： ${collection.query.entityType ?? "未知"}`
+      : `包含已发布属性：${collection.query.property ?? "未知"}`;
   }
-  return "版本化集合查询";
+  return "按保存的条件查询";
 }

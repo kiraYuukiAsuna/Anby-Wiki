@@ -33,6 +33,7 @@ import { governanceApi } from "@/lib/api";
 import { useSession } from "@/lib/auth";
 import { workspaceAccessNotice } from "@/lib/workspace-access";
 import { compactId } from "@/lib/display-id";
+import { PROPOSAL_STATUS_LABELS } from "@/lib/display-labels";
 import {
   isIdentityConflictMessage,
   readGovernanceError,
@@ -60,11 +61,11 @@ export function ProposalActions({ proposal }: { proposal: Proposal }) {
     try {
       const result = await governanceApi().submitProposal({ id: proposal.id });
       toast.success(
-        result.reviewTask ? "提案已进入人工审核队列" : "提案已通过策略审核",
+        result.reviewTask ? "修改建议已进入待审核列表" : "修改建议已通过策略审核",
       );
       router.refresh();
     } catch (error) {
-      await showGovernanceError(error, "提交提案失败");
+      await showGovernanceError(error, "提交修改建议失败");
     } finally {
       setPending(null);
     }
@@ -74,12 +75,12 @@ export function ProposalActions({ proposal }: { proposal: Proposal }) {
     setPending("apply");
     try {
       const result = await governanceApi().applyProposal({ id: proposal.id });
-      toast.success(result.idempotent ? "该提案已经生效" : "提案已原子生效", {
-        description: `ChangeBatch ${compactId(result.changeBatchId)} 已写入审计账本${result.revisionIds.length ? `，发布 ${result.revisionIds.length} 个页面 Revision` : ""}。`,
+      toast.success(result.idempotent ? "该修改建议已经生效" : "修改建议已生效", {
+        description: `变更批次 ${compactId(result.changeBatchId)} 已写入操作记录${result.revisionIds.length ? `，发布 ${result.revisionIds.length} 个页面版本` : ""}。`,
       });
       router.refresh();
     } catch (error) {
-      await showGovernanceError(error, "应用提案失败");
+      await showGovernanceError(error, "修改未能生效");
     } finally {
       setPending(null);
     }
@@ -88,7 +89,7 @@ export function ProposalActions({ proposal }: { proposal: Proposal }) {
   const rollback = async () => {
     const parsed = rollbackConfirmation.safeParse(confirmation);
     if (!parsed.success || !proposal.changeBatchId) {
-      toast.error("请输入 ROLLBACK 以确认整批补偿");
+      toast.error("请输入 ROLLBACK，确认撤销整批修改。");
       return;
     }
     setPending("rollback");
@@ -96,14 +97,14 @@ export function ProposalActions({ proposal }: { proposal: Proposal }) {
       const result = await governanceApi().rollbackChangeBatch({
         id: proposal.changeBatchId,
       });
-      toast.success(result.idempotent ? "该批次已回滚" : "ChangeBatch 已完整补偿", {
+      toast.success(result.idempotent ? "本批修改已撤销，无需重复操作。" : "本批修改已撤销。", {
         description: rollbackSummary(result),
       });
       setRollbackOpen(false);
       setConfirmation("");
       router.refresh();
     } catch (error) {
-      await showGovernanceError(error, "整批回滚失败");
+      await showGovernanceError(error, "整批撤销失败");
     } finally {
       setPending(null);
     }
@@ -117,13 +118,13 @@ export function ProposalActions({ proposal }: { proposal: Proposal }) {
             <ShieldCheck aria-hidden className="size-4" />
           </div>
           <div className="min-w-0">
-            <p className="text-sm font-semibold">治理操作台</p>
+            <p className="text-sm font-semibold">处理修改建议</p>
             <p className="mt-0.5 text-xs leading-5 text-muted-foreground">
               {actionDescription(proposal)}
             </p>
             {proposal.changeBatchId ? (
               <p className="mt-1 truncate font-mono text-[11px] text-muted-foreground">
-                ChangeBatch {proposal.changeBatchId}
+                变更批次 {proposal.changeBatchId}
               </p>
             ) : null}
           </div>
@@ -145,7 +146,7 @@ export function ProposalActions({ proposal }: { proposal: Proposal }) {
           proposal.status === "in_review" ? (
             <Button variant="outline" asChild>
               <WorkspaceLink href="/governance/review">
-                查看审核队列
+                查看待审核列表
                 <ArrowRight aria-hidden />
               </WorkspaceLink>
             </Button>
@@ -154,7 +155,7 @@ export function ProposalActions({ proposal }: { proposal: Proposal }) {
           {proposal.status === "approved" ? (
             <>
               <Button variant="outline" asChild>
-                <WorkspaceLink href="/governance/apply">打开待应用队列<ArrowRight aria-hidden /></WorkspaceLink>
+                <WorkspaceLink href="/governance/apply">打开待生效列表<ArrowRight aria-hidden /></WorkspaceLink>
               </Button>
               {canApply ? (
                 <Button disabled={pending !== null} onClick={() => void apply()}>
@@ -163,7 +164,7 @@ export function ProposalActions({ proposal }: { proposal: Proposal }) {
                   ) : (
                     <CheckCircle2 aria-hidden />
                   )}
-                  原子应用
+                  使本批修改生效
                 </Button>
               ) : null}
             </>
@@ -176,14 +177,14 @@ export function ProposalActions({ proposal }: { proposal: Proposal }) {
               onClick={() => setRollbackOpen(true)}
             >
               <RotateCcw aria-hidden />
-              回滚整批变更
+              撤销整批修改
             </Button>
           ) : null}
 
           {proposal.status === "rolled_back" ? (
             <span className="inline-flex items-center gap-1.5 rounded-full bg-muted px-3 py-1.5 text-xs font-medium text-muted-foreground">
               <CheckCircle2 aria-hidden className="size-3.5" />
-              已完成补偿
+              已撤销修改
             </span>
           ) : null}
         </div>
@@ -191,7 +192,7 @@ export function ProposalActions({ proposal }: { proposal: Proposal }) {
 
       {proposal.status === "applied" && !hasAppliedBatch ? (
         <div className="border-t border-amber-500/25 bg-amber-500/5 px-4 py-2.5 text-xs text-amber-800 dark:text-amber-300">
-          当前响应没有可用的 applied ChangeBatch，已禁用回滚入口以避免错误操作。
+          未找到已生效的变更批次，暂时无法撤销。
         </div>
       ) : null}
 
@@ -205,14 +206,13 @@ export function ProposalActions({ proposal }: { proposal: Proposal }) {
       >
         <DialogContent className="sm:max-w-lg">
           <DialogHeader>
-            <DialogTitle>回滚整个 ChangeBatch？</DialogTitle>
+            <DialogTitle>撤销整批修改？</DialogTitle>
             <DialogDescription>
-              系统会在一个事务中追加补偿 Revision/Claim，并逆向恢复页面生命周期、
-              实体合并、来源关系和 Collection 成员。任何对象已有后续修改时，整批操作都会拒绝。
+              撤销会恢复本批修改前的页面状态、事实、实体合并、来源关系和合集成员。若其中任何内容已有后续修改，整批撤销将停止，避免覆盖新内容。
             </DialogDescription>
           </DialogHeader>
           <div className="rounded-xl border border-destructive/20 bg-destructive/5 p-3 text-xs leading-5 text-muted-foreground">
-            这是高风险治理操作，不会删除 Revision、Snapshot 或审计历史。输入
+            这会撤销整批已生效的修改，历史版本和操作记录仍会保留。输入
             <span className="mx-1 font-mono font-semibold text-foreground">
               ROLLBACK
             </span>
@@ -249,7 +249,7 @@ export function ProposalActions({ proposal }: { proposal: Proposal }) {
               ) : (
                 <RotateCcw aria-hidden />
               )}
-              确认整批回滚
+              确认整批撤销
             </Button>
           </DialogFooter>
         </DialogContent>
@@ -261,57 +261,57 @@ export function ProposalActions({ proposal }: { proposal: Proposal }) {
 function actionDescription(proposal: Proposal): string {
   switch (proposal.status) {
     case "draft":
-      return "Operation 已冻结在草稿中；提交后进入风险策略与人工审核。";
+      return "修改内容已保存为草稿，提交后将进行风险检查和人工审核。";
     case "submitted":
     case "in_review":
-      return "提案正在审核队列中，权威状态尚未发生改变。";
+      return "修改建议正在等待审核，现有内容尚未改变。";
     case "approved":
-      return "审核证据已满足；全部有序 Operation 将写入同一个 ChangeBatch，要么全部生效，要么全部回滚。";
+      return "审核已通过，可以让本批修改一并生效。任一项失败，整批都不会生效。";
     case "applied":
-      return "权威变更已生效，可从这里持久访问其 ChangeBatch 与补偿入口。";
+      return "修改已生效，可以查看变更记录或撤销本批修改。";
     case "rolled_back":
-      return "权威状态已通过追加式补偿恢复，原始历史与审计账本仍保留。";
+      return "本批修改已撤销，历史版本和操作记录仍然保留。";
     case "conflicted":
-      return "Current 已偏离基线，请先完成冲突决议。";
+      return "相关内容已有新版本，请先解决冲突。";
     case "rejected":
-      return "提案已被拒绝，不会进入权威写入路径。";
+      return "修改建议已拒绝，现有内容不会改变。";
     default:
-      return `当前状态：${proposal.status}`;
+      return `当前状态：${PROPOSAL_STATUS_LABELS[proposal.status]}`;
   }
 }
 
 function rollbackSummary(result: RollbackChangeBatchResult): string {
   const facts = [
     result.revisionIds.length
-      ? `${result.revisionIds.length} 个补偿 Revision`
+      ? `${result.revisionIds.length} 个恢复版本`
       : "",
     result.compensationClaimIds.length
-      ? `${result.compensationClaimIds.length} 个 Claim 补偿`
+      ? `${result.compensationClaimIds.length} 条事实恢复记录`
       : "",
     result.deletedPageIds.length
-      ? `${result.deletedPageIds.length} 个新建页面已软删除`
+      ? `${result.deletedPageIds.length} 个新建页面已移除，历史记录保留`
       : "",
     result.deletedEntityIds.length
-      ? `${result.deletedEntityIds.length} 个新建实体已软删除`
+      ? `${result.deletedEntityIds.length} 个新建实体已移除，历史记录保留`
       : "",
     result.entityMergeIds.length
       ? `${result.entityMergeIds.length} 个实体合并已恢复`
       : "",
     result.collectionIds.length
-      ? `${result.collectionIds.length} 个 Collection 已恢复`
+      ? `${result.collectionIds.length} 个合集已恢复`
       : "",
     result.removedClaimSourceCount
       ? `${result.removedClaimSourceCount} 个来源关系已移除`
       : "",
   ].filter(Boolean);
-  return facts.join("；") || "该批次没有需要追加的补偿对象。";
+  return facts.join("；") || "本批没有需要撤销的修改。";
 }
 
 async function showGovernanceError(error: unknown, fallback: string) {
   const detail = await readGovernanceError(error);
   if (detail) {
     if (detail.status === 401) {
-      toast.error("请先登录再执行治理操作");
+      toast.error("请先登录，再处理修改建议。");
       return;
     }
     if (detail.status === 403) {
@@ -320,10 +320,10 @@ async function showGovernanceError(error: unknown, fallback: string) {
     }
     if (detail.status === 409) {
       const identityConflict = isIdentityConflictMessage(detail.message);
-      toast.error(identityConflict ? "提案已过期，未执行任何写入" : fallback, {
+      toast.error(identityConflict ? "修改建议已过期，未执行任何写入" : fallback, {
         description:
           detail.message ??
-          "对象状态或基线已经变化，请刷新后检查最新审计记录。",
+          "相关内容已变化，请刷新后查看最新操作记录。",
       });
       return;
     }

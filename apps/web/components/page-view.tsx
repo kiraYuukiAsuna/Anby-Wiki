@@ -166,7 +166,7 @@ export async function PageView({ data }: { data: PageWithContent }) {
               <ArrowRight className="size-4 shrink-0" aria-hidden />
             )}
             重定向自 <span className="font-medium">{redirect.fromTitle}</span>
-            {sectionTarget ? "，已定位到稳定章节" : null}
+            {sectionTarget ? "，已跳转到指定章节" : null}
             {redirect.hops > 1 ? `（${redirect.hops} 跳）` : null}
           </p>
         ) : null}
@@ -239,8 +239,8 @@ export async function PageView({ data }: { data: PageWithContent }) {
                 </h2>
                 <p className="mt-2 text-sm leading-6 text-muted-foreground">
                   {redirect.target.kind === "interwiki"
-                    ? "该目标位于站外，外部内容不属于本站权威数据。请核对地址后继续。"
-                    : "目标标题目前还没有对应的 Page。创建后，阅读路径会自动解析并继续跟随安全链路。"}
+                    ? "即将离开本站，请确认下方地址后继续。"
+                    : "目标页面尚未创建。创建后，这个链接会自动指向该页面。"}
                 </p>
                 {redirect.target.externalUrl ? (
                   <a

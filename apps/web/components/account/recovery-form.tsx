@@ -68,7 +68,7 @@ export function RecoveryForm({ mode }: { mode: "forgot" | "reset" | "verify" }) 
         await authApi().resetPassword({ securityTokenRequest: { token, password, code: code.trim() } });
         setPassword("");
         setConfirmation("");
-        setMessage("密码已重置，原有设备会话和 CLI 凭证已撤销，请重新登录。已启用的二次验证继续有效。");
+        setMessage("密码已重置，请重新登录。其他设备已退出，CLI 需要重新授权；二次验证仍然有效。");
         await mutate(AUTH_SESSION_KEY, undefined, { revalidate: false });
       }
       setCompleted(true);

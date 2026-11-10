@@ -34,17 +34,17 @@ type CollectionType = CreateCollectionRequest["collectionType"];
 
 const TYPE_META = {
   manual: {
-    label: "Manual",
+    label: "手动添加",
     icon: ListChecks,
     color: "bg-sky-100 text-sky-700",
   },
   rule: {
-    label: "Rule",
+    label: "按规则生成",
     icon: Workflow,
     color: "bg-amber-100 text-amber-700",
   },
   dynamic: {
-    label: "Dynamic",
+    label: "实时查询",
     icon: Sparkles,
     color: "bg-violet-100 text-violet-700",
   },
@@ -166,7 +166,7 @@ export function CollectionHub() {
       toast.success("专题合集已创建");
     } catch {
       toast.error("创建合集失败", {
-        description: "请检查 Page、EntityType、Property 或 Namespace 引用。",
+        description: "请检查所选页面、实体类型、属性和命名空间是否有效。",
       });
     } finally {
       setCreating(false);
@@ -259,7 +259,7 @@ export function CollectionHub() {
               >
                 <option value="dynamic">Dynamic · 实时查询</option>
                 <option value="manual">Manual · 人工策展</option>
-                <option value="rule">Rule · 规则物化</option>
+                <option value="rule">按规则生成</option>
               </select>
             </div>
 
@@ -314,8 +314,8 @@ export function CollectionHub() {
                   onChange={(event) => setScope(event.target.value)}
                   placeholder={
                     memberType === "page"
-                      ? "Namespace key（可选）"
-                      : "EntityType key（可选）"
+                      ? "命名空间 key（可选）"
+                      : "实体类型 key（可选）"
                   }
                   className="font-mono text-xs"
                 />
@@ -323,7 +323,7 @@ export function CollectionHub() {
                   <Input
                     value={property}
                     onChange={(event) => setProperty(event.target.value)}
-                    placeholder="要求存在的 Property key（可选）"
+                    placeholder="要求存在的属性 key（可选）"
                     className="font-mono text-xs"
                   />
                 ) : null}
@@ -332,7 +332,7 @@ export function CollectionHub() {
 
             <div className="space-y-2">
               <Label htmlFor="collection-description-page">
-                描述 Page ID（可选）
+                描述页面 ID（可选）
               </Label>
               <Input
                 id="collection-description-page"

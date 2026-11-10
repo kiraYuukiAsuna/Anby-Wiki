@@ -9,7 +9,7 @@ export default function AITrustPage() {
         <span className="flex size-11 items-center justify-center rounded-2xl bg-fuchsia-100 text-fuchsia-800">
           <BrainCircuit className="size-5" aria-hidden />
         </span>
-        <h1 className="text-3xl font-semibold">AI 信任策略</h1>
+        <h1 className="text-3xl font-semibold">AI 审核设置</h1>
       </header>
       <AITrustWorkspace />
     </div>

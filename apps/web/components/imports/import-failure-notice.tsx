@@ -4,17 +4,17 @@ import { cn } from "@/lib/utils";
 
 const STAGE_LABELS: Record<string, string> = {
   queued: "任务准备", fetch: "获取来源", parse: "解析内容", extract: "事实抽取",
-  plan: "页面规划", match: "实体匹配", compose: "提案合成", review: "提交审核",
+  plan: "页面规划", match: "实体匹配", compose: "修改建议合成", review: "提交审核",
 };
 
 export function importFailureMessage(error: ImportFailure | null | undefined): string | null {
   if (!error) return null;
   if (error.message) return error.message;
   if (error.code === "quality_gate" && error.stage === "extract") {
-    return "事实抽取结果未通过安全门禁；需要查看提取诊断确认拦截原因。";
+    return "提取结果未通过安全检查，请查看诊断详情。";
   }
   if (error.code === "cancelled") return "导入任务已取消。";
-  if (error.code === "worker_interrupted") return "Worker 中断，任务已自动重新排队。";
+  if (error.code === "worker_interrupted") return "处理意外中断，任务已排队重试。";
   return `${STAGE_LABELS[error.stage] ?? "导入阶段"}失败，请查看技术详情中的错误码。`;
 }
 

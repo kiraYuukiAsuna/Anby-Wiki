@@ -37,7 +37,7 @@ function FullDocumentFallback({ pageId }: { pageId: string }) {
   if (full.error || !content || (!content.html && !astJSON)) {
     return (
       <div className="rounded-xl border border-destructive/20 bg-destructive/5 p-5 text-sm">
-        <p className="font-medium text-destructive">章节投影暂不可用</p>
+        <p className="font-medium text-destructive">暂时无法加载章节</p>
         <p className="mt-1 text-muted-foreground">全文回退也未能完成，请稍后刷新。</p>
       </div>
     );
@@ -280,7 +280,7 @@ export function LazySectionDocument({
           按章节渐进加载
         </p>
         <p className="mt-1 text-xs leading-5 text-sky-800/75">
-          当前 Revision 共 {expectedSectionCount} 个分片；首屏已预取，后续内容会在接近视口时加载。
+          当前版本共 {expectedSectionCount} 部分，向下滚动时会继续加载。
         </p>
         <nav className="mt-3 flex flex-wrap gap-1.5" aria-label="章节分片">
           {items

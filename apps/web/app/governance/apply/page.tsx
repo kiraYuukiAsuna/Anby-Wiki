@@ -10,10 +10,10 @@ export default function ApplyQueuePage() {
       <header className="mb-8 flex flex-wrap items-center justify-between gap-4 border-b pb-6">
         <div className="flex items-center gap-3">
           <span className="flex size-11 items-center justify-center rounded-2xl bg-emerald-600 text-white shadow-lg shadow-emerald-600/20"><BadgeCheck className="size-5" aria-hidden /></span>
-          <h1 className="text-3xl font-semibold">待应用</h1>
+          <h1 className="text-3xl font-semibold">待生效</h1>
         </div>
         <Button asChild variant="outline" size="sm">
-          <WorkspaceLink href="/governance/review"><ArrowLeft aria-hidden />审核队列</WorkspaceLink>
+          <WorkspaceLink href="/governance/review"><ArrowLeft aria-hidden />待审核</WorkspaceLink>
         </Button>
       </header>
       <ApplyQueue />

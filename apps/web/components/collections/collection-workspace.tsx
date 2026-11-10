@@ -57,17 +57,17 @@ interface MemberDraft {
 
 const TYPE_META = {
   manual: {
-    label: "Manual Collection",
+    label: "手动合集",
     icon: ListChecks,
     color: "bg-sky-100 text-sky-700",
   },
   rule: {
-    label: "Rule Collection",
+    label: "规则合集",
     icon: Workflow,
     color: "bg-amber-100 text-amber-700",
   },
   dynamic: {
-    label: "Dynamic Collection",
+    label: "动态合集",
     icon: Sparkles,
     color: "bg-violet-100 text-violet-700",
   },
@@ -95,7 +95,7 @@ function MemberList({
         <Layers3 className="mx-auto size-8 text-muted-foreground" aria-hidden />
         <h3 className="mt-4 font-semibold">当前没有成员</h3>
         <p className="mt-2 text-sm text-muted-foreground">
-          人工添加成员、重建规则，或调整 Dynamic 查询条件。
+          添加合集成员，按规则更新成员，或调整查询条件。
         </p>
       </div>
     );
@@ -136,7 +136,7 @@ function MemberList({
                 />
               </Link>
               <p className="mt-1 text-[11px] text-muted-foreground">
-                {member.memberType === "page" ? "Page" : "Entity"} · 排序键{" "}
+                {member.memberType === "page" ? "页面" : "实体"} · 排序键{" "}
                 <span className="font-mono">{member.sortKey}</span>
               </p>
             </div>
@@ -145,7 +145,7 @@ function MemberList({
                 {member.sourceType === "manual"
                   ? "人工策展"
                   : member.sourceType === "rule"
-                    ? "规则物化"
+                    ? "按规则生成"
                     : "实时查询"}
               </p>
               {member.sourceRevisionId ? (
@@ -244,7 +244,7 @@ function ManualMemberEditor({
         !row.sortKey.trim(),
     );
     if (invalid) {
-      toast.error("请检查每个目标 ID、来源 Revision ID 与排序键");
+      toast.error("请检查每个目标 ID、来源版本 ID 与排序键");
       return;
     }
     const seen = new Set<string>();
@@ -272,13 +272,13 @@ function ManualMemberEditor({
         replaceCollectionMembersRequest: { items },
       });
       await onSaved();
-      toast.success("人工成员已原子替换", {
+      toast.success("合集成员已更新", {
         description: `${items.length} 个成员`,
       });
       onClose();
     } catch {
       toast.error("保存成员失败", {
-        description: "目标或来源 Revision 可能不属于当前 Wiki。",
+        description: "目标或来源版本可能不属于当前 Wiki。",
       });
     } finally {
       setSaving(false);
@@ -290,7 +290,7 @@ function ManualMemberEditor({
       <DialogHeader>
         <DialogTitle>维护人工成员</DialogTitle>
         <DialogDescription>
-          保存会在一个事务中替换完整成员集；每个成员需记录来源 Revision。
+          保存后，合集成员将替换为下方列表。请为每个成员填写来源版本。
         </DialogDescription>
       </DialogHeader>
       {loading ? (
@@ -314,8 +314,8 @@ function ManualMemberEditor({
                   className="h-8 rounded-lg border border-input bg-background px-2 text-xs"
                   aria-label="成员类型"
                 >
-                  <option value="page">Page</option>
-                  <option value="entity">Entity</option>
+                  <option value="page">页面</option>
+                  <option value="entity">实体</option>
                 </select>
                 <Input
                   value={row.targetID}
@@ -355,8 +355,8 @@ function ManualMemberEditor({
                   onChange={(event) =>
                     update(row.key, { sourceRevisionID: event.target.value })
                   }
-                  placeholder="来源 Revision UUID"
-                  aria-label="来源 Revision ID"
+                  placeholder="来源版本 UUID"
+                  aria-label="来源版本 ID"
                   className="font-mono text-xs"
                 />
               </div>
@@ -399,7 +399,7 @@ function RuleRebuild({
 
   const rebuild = async () => {
     if (!uuidSchema.safeParse(revisionID.trim()).success) {
-      toast.error("请输入合法来源 Revision ID");
+      toast.error("请输入有效来源版本 ID");
       return;
     }
     setSaving(true);
@@ -415,7 +415,7 @@ function RuleRebuild({
       onClose();
     } catch {
       toast.error("重建失败", {
-        description: "来源 Revision 或规则引用可能无效。",
+        description: "来源版本或规则引用可能无效。",
       });
     } finally {
       setSaving(false);
@@ -427,11 +427,11 @@ function RuleRebuild({
       <DialogHeader>
         <DialogTitle>重建规则集合</DialogTitle>
         <DialogDescription>
-          从当前 Entity / Claim 权威数据重新物化成员，并记录本次规则定义的来源 Revision。
+          按当前规则重新生成成员列表，并记录规则对应的来源版本。
         </DialogDescription>
       </DialogHeader>
       <div className="space-y-2">
-        <Label htmlFor="collection-source-revision">来源 Revision ID</Label>
+        <Label htmlFor="collection-source-revision">来源版本 ID</Label>
         <Input
           id="collection-source-revision"
           value={revisionID}
@@ -495,7 +495,7 @@ export function CollectionWorkspace({ id }: { id: string }) {
       <div className="rounded-3xl border border-destructive/20 bg-destructive/5 p-8">
         <h1 className="text-xl font-semibold">专题合集无法打开</h1>
         <p className="mt-2 text-sm text-muted-foreground">
-          它可能不存在，或当前 API 暂时不可用。
+          内容可能已移除，也可能暂时无法加载。请稍后重试。
         </p>
         <Button asChild variant="outline" className="mt-5">
           <Link href="/collections">返回专题目录</Link>
@@ -572,7 +572,7 @@ export function CollectionWorkspace({ id }: { id: string }) {
           <p className="mt-1 text-xs text-muted-foreground">当前已加载成员</p>
         </div>
         <div className="rounded-2xl border bg-card p-4 md:col-span-2">
-          <p className="text-xs font-semibold text-muted-foreground">稳定 ID</p>
+          <p className="text-xs font-semibold text-muted-foreground">ID</p>
           <p className="mt-3 truncate font-mono text-xs">{collection.id}</p>
           {collection.descriptionPageId ? (
             <Link

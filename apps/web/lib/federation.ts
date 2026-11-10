@@ -35,9 +35,9 @@ export const FEDERATION_TRUST_LEVELS: ReadonlyArray<{
   label: string;
   detail: string;
 }> = [
-  { value: "trusted", label: "可信", detail: "可作为高置信身份参照" },
+  { value: "trusted", label: "可信", detail: "可用于核对实体身份" },
   { value: "reference", label: "参考", detail: "作为普通外部参照" },
-  { value: "untrusted", label: "未受信任", detail: "仅展示，不提升事实置信度" },
+  { value: "untrusted", label: "未受信任", detail: "仅展示关联，不作为事实可信度的依据" },
 ];
 
 export const RELATION_LABEL: Record<FederationRelation, string> = {

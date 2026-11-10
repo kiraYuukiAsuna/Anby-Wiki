@@ -130,13 +130,13 @@ function CitationComposer({
         },
       });
       setCreatedID(citation.id);
-      toast.success("Citation 已创建", {
+      toast.success("引文已创建", {
         description: "不可变证据定位已保存。",
       });
     } catch {
-      toast.error("Citation 创建失败", {
+      toast.error("引文创建失败", {
         description: chunk
-          ? "引文必须是所选 SourceChunk 文本的真实子串。"
+          ? "引文必须与所选来源片段中的文字完全一致。"
           : "请检查来源版本与定位信息。",
       });
     } finally {
@@ -150,7 +150,7 @@ function CitationComposer({
         <DialogHeader>
           <DialogTitle>证据定位已创建</DialogTitle>
           <DialogDescription>
-            Citation 是不可变稳定身份，可绑定 Claim 或插入页面正文。
+            引文创建后不能修改，可作为事实依据，也可插入页面正文。
           </DialogDescription>
         </DialogHeader>
         <div className="rounded-2xl border border-emerald-200 bg-emerald-50 p-5">
@@ -163,7 +163,7 @@ function CitationComposer({
           </Button>
           <Button asChild>
             <Link href={`/citations/${createdID}`}>
-              打开 Citation
+              打开引文
               <ArrowRight aria-hidden />
             </Link>
           </Button>
@@ -175,11 +175,11 @@ function CitationComposer({
   return (
     <>
       <DialogHeader>
-        <DialogTitle>建立 Citation</DialogTitle>
+        <DialogTitle>建立引文</DialogTitle>
         <DialogDescription>
           {chunk
-            ? `定位到 SourceChunk #${chunk.ordinal}；引文会由服务端核对。`
-            : "定位到整个 SourceVersion，可选补充页码或章节。"}
+            ? `定位到来源片段 #${chunk.ordinal}；引文会由服务端核对。`
+            : "引用整个来源版本，也可以补充页码或章节。"}
         </DialogDescription>
       </DialogHeader>
       <div className="grid gap-4 sm:grid-cols-2">
@@ -255,7 +255,7 @@ function CitationComposer({
           ) : (
             <Quote aria-hidden />
           )}
-          创建 Citation
+          创建引文
         </Button>
       </DialogFooter>
     </>
@@ -361,7 +361,7 @@ function VersionPanel({ version }: { version: EvidenceSourceVersion }) {
                   <div className="flex items-center justify-between gap-3">
                     <div>
                       <p className="text-xs font-semibold">
-                        SourceChunk #{chunk.ordinal} · {chunk.chunkType}
+                        来源片段 #{chunk.ordinal} · {chunk.chunkType}
                       </p>
                       <p className="mt-1 font-mono text-[10px] text-muted-foreground">
                         {chunk.id} · {chunk.textHash.slice(0, 12)}
@@ -471,7 +471,7 @@ export function SourceWorkspace({ id }: { id: string }) {
       <div className="rounded-3xl border border-destructive/20 bg-destructive/5 p-8">
         <h1 className="text-xl font-semibold">来源无法打开</h1>
         <p className="mt-2 text-sm text-muted-foreground">
-          它可能不存在，或 API 暂时不可用。
+          内容可能已移除，也可能暂时无法加载。请稍后重试。
         </p>
         <Button asChild variant="outline" className="mt-5">
           <Link href="/sources">返回来源目录</Link>
@@ -546,7 +546,7 @@ export function SourceWorkspace({ id }: { id: string }) {
         <div className="rounded-2xl border bg-card p-5">
           <FileSearch className="size-5 text-violet-600" aria-hidden />
           <p className="mt-4 truncate font-mono text-xs">{source.id}</p>
-          <p className="mt-2 text-xs text-muted-foreground">稳定 Source ID</p>
+          <p className="mt-2 text-xs text-muted-foreground">来源 ID</p>
         </div>
       </section>
 
@@ -554,13 +554,13 @@ export function SourceWorkspace({ id }: { id: string }) {
         <section className="mt-5 rounded-2xl border bg-muted/20 p-5">
           <h2 className="text-sm font-semibold">规范化外部资源</h2>
           <dl className="mt-4 grid gap-3 text-xs sm:grid-cols-[9rem_1fr]">
-            <dt className="text-muted-foreground">Domain</dt>
+            <dt className="text-muted-foreground">网站域名</dt>
             <dd className="font-mono">{resource.domain}</dd>
-            <dt className="text-muted-foreground">Canonical URL</dt>
+            <dt className="text-muted-foreground">标准链接</dt>
             <dd className="break-all font-mono">
               {resource.canonicalUrl ?? resource.normalizedUrl}
             </dd>
-            <dt className="text-muted-foreground">Last checked</dt>
+            <dt className="text-muted-foreground">最近检查</dt>
             <dd>
               {resource.lastCheckedAt
                 ? DATE_FORMATTER.format(resource.lastCheckedAt)
@@ -575,7 +575,7 @@ export function SourceWorkspace({ id }: { id: string }) {
       {Object.keys(source.metadata).length > 0 ? (
         <details className="mt-5 rounded-2xl border bg-muted/20">
           <summary className="cursor-pointer px-5 py-4 text-sm font-medium">
-            查看来源 Metadata
+            查看来源补充信息
           </summary>
           <pre className="overflow-x-auto border-t p-5 text-xs">
             {JSON.stringify(source.metadata, null, 2)}

@@ -104,7 +104,7 @@ export function PageReferencePicker({
         <DialogHeader>
           <DialogTitle>插入页面引用</DialogTitle>
           <DialogDescription>
-            搜索既有页面，或创建指向尚未存在页面的未解析引用。
+            搜索要引用的页面，也可以填写尚未创建的页面标题。
           </DialogDescription>
         </DialogHeader>
         {selected ? (
@@ -121,7 +121,7 @@ export function PageReferencePicker({
               <p className="min-w-0 break-words text-xs text-muted-foreground">
                 引用目标：{selected.displayTitle}
                 {selected.matchedOn === "alias" ? "（经别名命中）" : ""}
-                ；显示文本与目标分离，只影响本文档内的展示。
+                ；修改显示文字不会改变链接目标。
               </p>
             </div>
             <div className="flex justify-end gap-2">

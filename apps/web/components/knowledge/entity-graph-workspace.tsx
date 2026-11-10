@@ -39,6 +39,7 @@ import {
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { knowledgeApi } from "@/lib/api";
+import { CLAIM_RANK_LABELS, CLAIM_VERIFICATION_LABELS } from "@/lib/display-labels";
 import { isUnauthorized, LOGIN_PATH, useSession } from "@/lib/auth";
 import { cn } from "@/lib/utils";
 
@@ -50,12 +51,12 @@ const DIRECTION_META: Record<
 > = {
   outbound: {
     label: "向外",
-    detail: "该 Entity 指向谁",
+    detail: "该实体指向谁",
     icon: ArrowUpRight,
   },
   inbound: {
     label: "向内",
-    detail: "谁指向该 Entity",
+    detail: "谁指向该实体",
     icon: ArrowDownLeft,
   },
   both: {
@@ -174,7 +175,7 @@ function GraphCanvas({
         viewBox={`0 0 ${GRAPH_WIDTH} ${GRAPH_HEIGHT}`}
         className="aspect-[1120/660] min-h-[32rem] w-full"
         role="img"
-        aria-label={`Entity 关系图，共 ${graph.nodes.length} 个节点和 ${graph.edges.length} 条边`}
+        aria-label={`实体关系图，共 ${graph.nodes.length} 个节点和 ${graph.edges.length} 条边`}
       >
         <defs>
           <marker
@@ -249,7 +250,7 @@ function GraphCanvas({
             );
           })}
         </g>
-        <g aria-label="Entity 节点">
+        <g aria-label="实体节点">
           {nodes.map((node) => {
             const root = node.id === graph.rootId;
             const radius = root ? 34 : node.depth === 1 ? 26 : 21;
@@ -315,7 +316,7 @@ function GraphCanvas({
         </g>
       </svg>
       <div className="pointer-events-none absolute bottom-3 left-3 rounded-lg border bg-background/85 px-2.5 py-1.5 text-[10px] text-muted-foreground backdrop-blur">
-        点击节点以它为新的中心 · 虚线边表示争议 Claim
+        点击节点以它为新的中心 · 虚线边表示争议事实
       </div>
     </div>
   );
@@ -399,16 +400,16 @@ function EdgeRow({
             {edge.verificationStatus === "human_verified" ? "人工已核验" : "AI 已核对"}
           </span>
         ) : (
-          <span>{edge.verificationStatus}</span>
+          <span>{CLAIM_VERIFICATION_LABELS[edge.verificationStatus]}</span>
         )}
         <span>·</span>
-        <span>{edge.rank}</span>
+        <span>{CLAIM_RANK_LABELS[edge.rank]}</span>
         <span>·</span>
         <Link
           href={`/claims/${edge.claimId}`}
           className="inline-flex items-center gap-1 hover:text-primary"
         >
-          Claim
+          事实
           <ExternalLink className="size-2.5" aria-hidden />
         </Link>
       </div>
@@ -535,7 +536,7 @@ export function EntityGraphWorkspace({
             htmlFor="entity-graph-search"
             className="text-xs font-semibold text-muted-foreground"
           >
-            选择中心 Entity
+            选择中心实体
           </label>
           <div className="relative mt-2">
             <Search
@@ -549,7 +550,7 @@ export function EntityGraphWorkspace({
               placeholder={
                 rootNode
                   ? `当前：${rootNode.label}，输入以切换中心`
-                  : "搜索名称、别名或 canonical key"
+                  : "搜索名称、别名或实体标识"
               }
               className="h-11 pl-9"
             />
@@ -559,7 +560,7 @@ export function EntityGraphWorkspace({
               {candidates.isLoading ? (
                 <p className="flex items-center gap-2 px-3 py-4 text-xs text-muted-foreground">
                   <LoaderCircle className="size-3.5 animate-spin" aria-hidden />
-                  查找 Entity…
+                  查找实体…
                 </p>
               ) : null}
               {candidates.data?.items.map((entity) => (
@@ -572,7 +573,7 @@ export function EntityGraphWorkspace({
               {!candidates.isLoading &&
               candidates.data?.items.length === 0 ? (
                 <p className="px-3 py-4 text-xs text-muted-foreground">
-                  没有匹配的有效 Entity
+                  没有匹配的有效实体
                 </p>
               ) : null}
             </div>
@@ -590,7 +591,7 @@ export function EntityGraphWorkspace({
           ) : (
             <RefreshCw className="size-4" aria-hidden />
           )}
-          重建边投影
+          更新关系图
         </Button>
       </section>
 
@@ -639,7 +640,7 @@ export function EntityGraphWorkspace({
         </label>
         <label className="block">
           <span className="text-xs font-semibold text-muted-foreground">
-            Property
+            属性
           </span>
           <select
             value={propertyKey}
@@ -676,7 +677,7 @@ export function EntityGraphWorkspace({
           <span className="mx-auto flex size-14 items-center justify-center rounded-2xl bg-indigo-100 text-indigo-700">
             <Network className="size-6" aria-hidden />
           </span>
-          <h2 className="mt-5 text-xl font-semibold">选择一个 Entity 开始</h2>
+          <h2 className="mt-5 text-xl font-semibold">选择一个实体开始</h2>
         </section>
       ) : null}
 
@@ -695,7 +696,7 @@ export function EntityGraphWorkspace({
           <div>
             <p className="font-medium">关系图读取失败</p>
             <p className="mt-1 text-xs opacity-85">
-              Entity 可能不存在，或边投影尚未完成；管理员可尝试重建投影。
+              实体可能不存在，或关系图尚未更新。管理员可以尝试更新关系图。
             </p>
           </div>
         </section>
@@ -744,7 +745,7 @@ export function EntityGraphWorkspace({
               <div className="mb-3 flex items-center justify-between">
                 <h2 className="text-sm font-semibold">关系明细</h2>
                 <span className="text-xs text-muted-foreground">
-                  Claim 是边的可追溯来源
+                  每条连线都可以查看对应的事实和依据。
                 </span>
               </div>
               {graph.data.edges.length > 0 ? (
@@ -759,7 +760,7 @@ export function EntityGraphWorkspace({
                 </ul>
               ) : (
                 <div className="rounded-2xl border border-dashed px-5 py-10 text-center text-sm text-muted-foreground">
-                  当前筛选下没有已发布的 Entity 关系。
+                  当前筛选下没有已发布的实体关系。
                 </div>
               )}
             </section>
@@ -767,7 +768,7 @@ export function EntityGraphWorkspace({
             <aside className="rounded-2xl border bg-card p-4">
               <h2 className="flex items-center gap-2 text-sm font-semibold">
                 <Sparkles className="size-4 text-violet-600" aria-hidden />
-                投影状态
+                更新状态
               </h2>
               <dl className="mt-4 space-y-3 text-xs">
                 <div className="flex justify-between gap-3">
@@ -787,7 +788,7 @@ export function EntityGraphWorkspace({
                   </dd>
                 </div>
                 <div className="flex justify-between gap-3">
-                  <dt className="text-muted-foreground">最近投影</dt>
+                  <dt className="text-muted-foreground">最近更新</dt>
                   <dd className="text-right">
                     {graph.data.projectionUpdatedAt
                       ? DATE_FORMATTER.format(graph.data.projectionUpdatedAt)
@@ -799,7 +800,7 @@ export function EntityGraphWorkspace({
                 <Button variant="outline" className="mt-5 w-full" asChild>
                   <Link href={`/entities/${rootNode.id}`}>
                     <Braces className="size-4" aria-hidden />
-                    查看 Entity 详情
+                    查看实体详情
                   </Link>
                 </Button>
               ) : null}

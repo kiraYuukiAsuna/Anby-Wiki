@@ -46,24 +46,24 @@ const MODE_META: Record<
   SearchMode,
   { label: string; detail: string; icon: typeof Search }
 > = {
-  auto: { label: "智能", detail: "使用当前环境的推荐模式", icon: Sparkles },
-  keyword: { label: "精确", detail: "名称、术语与正文关键词", icon: Search },
-  hybrid: { label: "混合", detail: "关键词与概念相关性融合", icon: BadgeCheck },
-  semantic: { label: "语义", detail: "按自然语言含义寻找页面", icon: Cpu },
+  auto: { label: "智能", detail: "自动选择合适的搜索方式", icon: Sparkles },
+  keyword: { label: "精确", detail: "匹配标题、别名和正文关键词", icon: Search },
+  hybrid: { label: "混合", detail: "同时匹配关键词和内容含义", icon: BadgeCheck },
+  semantic: { label: "语义", detail: "根据描述查找相关页面", icon: Cpu },
 };
 
 const FIELD_META: Array<{ value: SearchField; label: string }> = [
   { value: "title", label: "标题" },
   { value: "alias", label: "别名" },
   { value: "body", label: "正文" },
-  { value: "entity", label: "Entity" },
+  { value: "entity", label: "实体" },
 ];
 
 const MATCH_LABEL: Record<PageSearchHit["matchedOn"], string> = {
   title: "标题",
   alias: "别名",
   body: "正文",
-  entity: "Entity",
+  entity: "实体",
 };
 
 function SearchHighlight({ value }: { value: string }) {
@@ -144,7 +144,7 @@ function FacetGroup({
 function backendLabel(capabilities?: SearchCapabilities) {
   return capabilities?.backend === "meilisearch"
     ? "Meilisearch 独立索引"
-    : "PostgreSQL 开发回退";
+    : "基础搜索";
 }
 
 function normalizedMode(value: string): SearchMode {
@@ -296,7 +296,7 @@ export function SearchExplorer({
               ) : null}
             </div>
             <p className="mt-1 text-xs leading-5 text-muted-foreground">
-              聚合数量来自当前查询，不扫描页面 AST。
+              数量根据当前搜索条件统计。
             </p>
           </div>
 
@@ -315,7 +315,7 @@ export function SearchExplorer({
             onSelect={(value) => updateFacet(setLanguage, value)}
           />
           <FacetGroup
-            title="Entity 类型"
+            title="实体类型"
             icon={Waypoints}
             values={result?.facets.entityTypes ?? []}
             selected={entityType}
@@ -360,7 +360,7 @@ export function SearchExplorer({
                 value={input}
                 onChange={(event) => setInput(event.target.value)}
                 className="h-12 pl-10 text-base"
-                placeholder="试试：擅长机械维修的角色、可验证知识、都市奇幻作品…"
+                placeholder="例如：擅长机械维修的角色、都市奇幻作品…"
                 aria-label="搜索 Wiki"
               />
             </div>
@@ -478,7 +478,7 @@ export function SearchExplorer({
             <div>
               <p className="font-medium">暂时无法完成搜索</p>
               <p className="mt-1 text-xs opacity-85">
-                请稍后重试；若当前环境未启用独立索引，可切换到精确模式。
+                请稍后重试，也可以切换到“精确”搜索。
               </p>
             </div>
           </div>
@@ -487,7 +487,7 @@ export function SearchExplorer({
         {!modeAvailable ? (
           <div className="mt-4 flex gap-3 rounded-2xl border border-amber-200 bg-amber-50 p-4 text-sm text-amber-900">
             <CircleAlert className="mt-0.5 size-4 shrink-0" aria-hidden />
-            当前环境未配置此语义模式。请选择“智能”或“精确”后继续。
+            暂不支持这个搜索方式，请选择“智能”或“精确”。
           </div>
         ) : null}
 
@@ -565,7 +565,7 @@ export function SearchExplorer({
                             className="inline-flex items-center gap-1 font-medium text-primary hover:underline"
                           >
                             <Waypoints className="size-3" aria-hidden />
-                            查看 Entity
+                            查看实体
                           </Link>
                         </>
                       ) : null}

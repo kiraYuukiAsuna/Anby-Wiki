@@ -158,7 +158,7 @@ export function RevisionList({
                 <div className="mt-1 flex flex-wrap gap-x-3 gap-y-0.5 text-xs text-muted-foreground">
                   <span
                     className="min-w-0 truncate"
-                    title={`Actor ${revision.actorId}`}
+                    title={`身份 ${revision.actorId}`}
                   >
                     编辑者 {revisionAuthorLabel(revision)}
                     {revisionAuthorMeta(revision)

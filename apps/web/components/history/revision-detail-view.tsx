@@ -50,7 +50,7 @@ export function RevisionDetailView({
             </div>
             <div className="flex gap-1">
               <dt>编辑者</dt>
-              <dd title={`Actor ${revision.actorId}`}>
+              <dd title={`身份 ${revision.actorId}`}>
                 {revisionAuthorLabel(revision)}
                 {revisionAuthorMeta(revision)
                   ? ` · ${revisionAuthorMeta(revision)}`

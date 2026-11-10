@@ -98,9 +98,9 @@ export function TableOfContents({ entries }: { entries: TocEntry[] }) {
   return (
     <details className="mb-6 rounded-lg border border-border bg-muted/40 px-4 py-2 lg:hidden">
       <summary className="cursor-pointer py-1 text-sm font-medium">
-        Contents
+        目录
       </summary>
-      <nav aria-label="Contents" className="pb-2">
+      <nav aria-label="目录" className="pb-2">
         <TocList entries={entries} />
       </nav>
     </details>
@@ -113,10 +113,10 @@ export function TocSidebar({ entries }: { entries: TocEntry[] }) {
   return (
     <aside className="hidden w-56 shrink-0 lg:block">
       <nav
-        aria-label="Contents"
+        aria-label="目录"
         className="sticky top-20 border-l border-border pl-4"
       >
-        <p className="mb-2 text-sm font-medium">Contents</p>
+        <p className="mb-2 text-sm font-medium">目录</p>
         <TocList entries={entries} />
       </nav>
     </aside>

@@ -37,7 +37,7 @@ import { isUnauthorized, LOGIN_PATH, useSession } from "@/lib/auth";
 import { cn } from "@/lib/utils";
 
 const bindingSchema = z.object({
-  entityId: z.string().uuid("请选择一个 Entity"),
+  entityId: z.string().uuid("请选择一个实体"),
   role: z.enum(["primary", "mentioned"]),
   language: z.string().trim().min(1, "请填写语言标记").max(64),
 });
@@ -110,7 +110,7 @@ export function PageEntityBindingManager({
     if (!draft) return;
     const parsed = bindingSchema.safeParse(draft);
     if (!parsed.success) {
-      toast.error(parsed.error.issues[0]?.message ?? "请检查 Entity 绑定");
+      toast.error(parsed.error.issues[0]?.message ?? "请检查实体绑定");
       return;
     }
     setSaving(true);
@@ -124,12 +124,12 @@ export function PageEntityBindingManager({
       toast.success(
         parsed.data.role === "primary"
           ? "页面主实体已更新"
-          : "显式 Entity 绑定已添加",
+          : "显式实体绑定已添加",
         {
           description:
             parsed.data.role === "primary"
-              ? "搜索元数据会由 Worker 刷新；旧稳定 Entity ID 仍可解析。"
-              : "正文中的实际提及仍由 Current Revision 投影自动维护。",
+              ? "搜索结果会自动更新，原实体 ID 仍然有效。"
+              : "正文中的实体提及会随页面内容自动更新。",
         },
       );
     } catch (error) {
@@ -144,9 +144,9 @@ export function PageEntityBindingManager({
         error instanceof ResponseError &&
         error.response.status === 409
       ) {
-        toast.error("该绑定已存在，或 Entity 已经合并");
+        toast.error("该绑定已存在，或实体已经合并");
       } else {
-        toast.error("页面 Entity 绑定保存失败");
+        toast.error("页面实体绑定保存失败");
       }
     } finally {
       setSaving(false);
@@ -176,7 +176,7 @@ export function PageEntityBindingManager({
       ) {
         toast.error("当前账号没有编辑这个页面的权限");
       } else {
-        toast.error("Entity 绑定移除失败");
+        toast.error("实体绑定移除失败");
       }
     } finally {
       setSaving(false);
@@ -191,7 +191,7 @@ export function PageEntityBindingManager({
             <span className="flex size-9 shrink-0 items-center justify-center rounded-xl bg-fuchsia-100 text-fuchsia-700">
               <Waypoints className="size-4" aria-hidden />
             </span>
-            <h2 className="font-semibold">页面与 Entity</h2>
+            <h2 className="font-semibold">页面与实体</h2>
           </div>
           {session.isAuthenticated ? (
             <Button type="button" size="sm" onClick={startCreate}>
@@ -209,12 +209,12 @@ export function PageEntityBindingManager({
           {bindings.isLoading ? (
             <div className="flex min-h-32 items-center justify-center gap-2 text-sm text-muted-foreground">
               <LoaderCircle className="size-4 animate-spin" aria-hidden />
-              读取权威绑定…
+              正在加载关联实体…
             </div>
           ) : bindings.error ? (
             <div className="flex items-start gap-3 rounded-xl border border-destructive/20 bg-destructive/5 p-4">
               <TriangleAlert className="mt-0.5 size-4 text-destructive" aria-hidden />
-              <p className="text-sm text-destructive">页面 Entity 绑定暂时无法读取。</p>
+              <p className="text-sm text-destructive">页面实体绑定暂时无法读取。</p>
             </div>
           ) : items.length ? (
             <ul className="grid gap-3 md:grid-cols-2">
@@ -279,7 +279,7 @@ export function PageEntityBindingManager({
           ) : (
             <div className="rounded-xl border border-dashed bg-muted/20 px-6 py-9 text-center">
               <Waypoints className="mx-auto size-6 text-muted-foreground" aria-hidden />
-              <p className="mt-3 text-sm font-semibold">尚未绑定稳定 Entity</p>
+              <p className="mt-3 text-sm font-semibold">还没有关联实体</p>
             </div>
           )}
         </div>
@@ -293,10 +293,9 @@ export function PageEntityBindingManager({
       >
         <DialogContent className="sm:max-w-2xl">
           <DialogHeader>
-            <DialogTitle>设置页面 Entity 绑定</DialogTitle>
+            <DialogTitle>设置页面实体绑定</DialogTitle>
             <DialogDescription>
-              选择已有稳定身份。主实体在单一事务中替换，Page 指针与 binding
-              由数据库延迟约束保证一致。
+              选择要关联的实体。更换主实体时，页面的关联信息会一并更新。
             </DialogDescription>
           </DialogHeader>
           {draft ? (
@@ -331,7 +330,7 @@ export function PageEntityBindingManager({
                 </div>
               </div>
               <div className="space-y-2">
-                <Label htmlFor="page-binding-search">查找 Entity</Label>
+                <Label htmlFor="page-binding-search">查找实体</Label>
                 <div className="relative">
                   <Search
                     className="pointer-events-none absolute top-2 left-2.5 size-4 text-muted-foreground"
@@ -342,7 +341,7 @@ export function PageEntityBindingManager({
                     value={query}
                     onChange={(event) => setQuery(event.target.value)}
                     className="pl-8"
-                    placeholder="名称、别名或 canonical key"
+                    placeholder="名称、别名或实体标识"
                   />
                 </div>
               </div>
@@ -350,10 +349,10 @@ export function PageEntityBindingManager({
                 {candidates.isLoading ? (
                   <div className="flex items-center justify-center gap-2 py-10 text-xs text-muted-foreground">
                     <LoaderCircle className="size-4 animate-spin" aria-hidden />
-                    搜索稳定身份…
+                    搜索实体…
                   </div>
                 ) : candidates.error ? (
-                  <p className="p-4 text-xs text-destructive">Entity 目录暂不可用。</p>
+                  <p className="p-4 text-xs text-destructive">实体目录暂不可用。</p>
                 ) : candidates.data?.items.length ? (
                   <ul className="divide-y">
                     {candidates.data.items.map((item) => (
@@ -387,7 +386,7 @@ export function PageEntityBindingManager({
                   </ul>
                 ) : (
                   <p className="px-4 py-9 text-center text-xs text-muted-foreground">
-                    没有匹配的活动 Entity；请先通过 Proposal 创建稳定身份。
+                    没有找到可用实体。请先提交创建实体的修改建议。
                   </p>
                 )}
               </div>
@@ -423,8 +422,8 @@ export function PageEntityBindingManager({
             </DialogTitle>
             <DialogDescription>
               {removal?.role === "primary"
-                ? "搜索结果将不再携带该 Entity 元数据；正文与历史 Revision 不受影响。"
-                : "这不会删除正文中由 AST 自动投影的实际提及。"}
+                ? "移除后，搜索结果不再显示这个实体的关联信息，正文和历史版本不受影响。"
+                : "移除关联不会删除正文中对这个实体的提及。"}
               审计记录会永久保留。
             </DialogDescription>
           </DialogHeader>

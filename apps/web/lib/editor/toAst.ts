@@ -279,7 +279,7 @@ export function toAst(
   } catch (error) {
     if (error instanceof ZodError) {
       const detail = error.issues.map((issue) => `  - ${formatIssuePath(issue.path)}: ${issue.message}`).join("\n");
-      throw new AstValidationError(`toAst 产物未通过 AST v1 校验：\n${detail}`);
+      throw new AstValidationError(`内容格式校验失败：\n${detail}`);
     }
     throw error;
   }

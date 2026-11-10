@@ -82,7 +82,7 @@ function ApplyQueueItem({
               <p className="font-semibold">
                 {TARGET_LABEL[proposal.targetType]} · {proposal.targetId ? compactId(proposal.targetId) : "新建目标"}
               </p>
-              <p className="mt-1 truncate font-mono text-[11px] text-muted-foreground">Proposal {proposal.id}</p>
+              <p className="mt-1 truncate font-mono text-[11px] text-muted-foreground">修改建议 {proposal.id}</p>
             </div>
             <span className={cn("rounded-full px-2 py-1 text-[11px] font-medium", risk.className)}>{risk.label}</span>
           </div>
@@ -99,7 +99,7 @@ function ApplyQueueItem({
           </Button>
           <Button size="sm" disabled={busy} onClick={() => void onApply(proposal)}>
             {applying ? <LoaderCircle className="animate-spin" aria-hidden /> : <CheckCircle2 aria-hidden />}
-            原子应用
+            使本批修改生效
           </Button>
         </div>
       </div>
@@ -133,23 +133,23 @@ export function ApplyQueue() {
     try {
       const result = await governanceApi().applyProposal({ id: proposal.id });
       await state.mutate();
-      toast.success(result.idempotent ? "该提案已经生效" : "提案已原子生效", {
-        description: `ChangeBatch ${compactId(result.changeBatchId)} 已写入审计账本${result.revisionIds.length ? `，发布 ${result.revisionIds.length} 个页面 Revision` : ""}。`,
+      toast.success(result.idempotent ? "该修改建议已经生效" : "修改建议已生效", {
+        description: `变更批次 ${compactId(result.changeBatchId)} 已写入操作记录${result.revisionIds.length ? `，发布 ${result.revisionIds.length} 个页面版本` : ""}。`,
       });
     } catch (error) {
       const detail = await readGovernanceError(error);
       if (detail?.status === 409) {
         await state.mutate();
         const identityConflict = isIdentityConflictMessage(detail.message);
-        toast.error(identityConflict ? "提案已过期，未执行任何写入" : "原子应用未执行", {
+        toast.error(identityConflict ? "修改建议已过期，未执行任何写入" : "本批修改未生效", {
           description:
             detail.message ??
-            "对象基线已经变化，请打开提案检查冲突后再决定如何处理。",
+            "相关内容已有更新，请打开修改建议，核对冲突后再处理。",
         });
       } else if (detail?.status === 403) {
-        toast.error("当前账号没有应用权限");
+        toast.error("当前账号没有使修改生效的权限");
       } else {
-        toast.error("原子应用失败", {
+        toast.error("本批修改未能生效", {
           description: detail?.message ?? "服务暂时不可用，请记录时间并联系管理员。",
         });
       }
@@ -159,13 +159,13 @@ export function ApplyQueue() {
   };
 
   if (session.isLoading) {
-    return <div className="flex min-h-56 items-center justify-center gap-2 text-sm text-muted-foreground"><LoaderCircle className="size-4 animate-spin" aria-hidden />正在确认应用权限…</div>;
+    return <div className="flex min-h-56 items-center justify-center gap-2 text-sm text-muted-foreground"><LoaderCircle className="size-4 animate-spin" aria-hidden />正在检查发布权限…</div>;
   }
   if (!session.isAuthenticated) {
     return (
       <div className="rounded-2xl border border-dashed bg-muted/25 px-6 py-12 text-center">
         <LockKeyhole className="mx-auto size-8 text-muted-foreground" aria-hidden />
-        <h2 className="mt-4 text-lg font-semibold">登录后查看待应用队列</h2>
+        <h2 className="mt-4 text-lg font-semibold">登录后查看待生效列表</h2>
         <Button asChild className="mt-5"><Link href={LOGIN_PATH}>前往登录</Link></Button>
       </div>
     );
@@ -177,13 +177,13 @@ export function ApplyQueue() {
     return (
       <div className="rounded-2xl border border-amber-200 bg-amber-50/65 p-8">
         <ShieldAlert className="size-7 text-amber-700" aria-hidden />
-        <h2 className="mt-4 text-lg font-semibold text-amber-950">需要应用者权限</h2>
-        <p className="mt-2 text-sm leading-6 text-amber-900/70">只有 applier 或管理员能够查看并执行原子应用。</p>
+        <h2 className="mt-4 text-lg font-semibold text-amber-950">需要发布者权限</h2>
+        <p className="mt-2 text-sm leading-6 text-amber-900/70">只有发布者或管理员可以让已批准的修改生效。</p>
       </div>
     );
   }
   if (state.error) {
-    return <p className="rounded-2xl border border-destructive/30 p-5 text-sm text-destructive">待应用队列加载失败。</p>;
+    return <p className="rounded-2xl border border-destructive/30 p-5 text-sm text-destructive">待生效列表加载失败。</p>;
   }
 
   return (
@@ -200,8 +200,8 @@ export function ApplyQueue() {
       {!state.isLoading && proposals.length === 0 ? (
         <div className="mt-5 rounded-2xl border border-dashed px-6 py-14 text-center">
           <CircleDashed className="mx-auto size-8 text-muted-foreground" aria-hidden />
-          <h3 className="mt-4 font-semibold">当前没有待应用提案</h3>
-          <Button asChild variant="outline" className="mt-5"><WorkspaceLink href="/governance/review">打开审核队列</WorkspaceLink></Button>
+          <h3 className="mt-4 font-semibold">没有等待生效的修改建议</h3>
+          <Button asChild variant="outline" className="mt-5"><WorkspaceLink href="/governance/review">打开待审核列表</WorkspaceLink></Button>
         </div>
       ) : null}
       {proposals.length ? (

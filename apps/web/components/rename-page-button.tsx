@@ -92,7 +92,7 @@ export function RenamePageButton({
           <DialogHeader>
             <DialogTitle>页面改名</DialogTitle>
             <DialogDescription>
-              旧标题会保留为别名，既有链接仍能解析到同一 Page ID。
+              旧标题仍可访问，原有链接不会失效。
             </DialogDescription>
           </DialogHeader>
           <div className="flex flex-col gap-2">

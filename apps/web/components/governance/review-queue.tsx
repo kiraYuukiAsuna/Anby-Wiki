@@ -25,9 +25,10 @@ import { Input } from "@/components/ui/input";
 import { governanceApi } from "@/lib/api";
 import { isUnauthorized, LOGIN_PATH, useSession } from "@/lib/auth";
 import { compactId } from "@/lib/display-id";
+import { PROPOSAL_TARGET_LABELS, RISK_LABELS } from "@/lib/display-labels";
 
 const createBatchSchema = z.object({
-  proposalIds: z.array(z.string().uuid()).min(1, "至少选择一个待审提案"),
+  proposalIds: z.array(z.string().uuid()).min(1, "至少选择一个待审修改建议"),
   samplePercent: z.coerce.number().int().min(1).max(100),
   waveSize: z.coerce.number().int().min(1).max(1000),
   forceFull: z.boolean(),
@@ -35,12 +36,12 @@ const createBatchSchema = z.object({
 
 function ProposalMeta({ id }: { id: string }) {
   const { data } = useSWR(["governance:proposal-meta", id], () => governanceApi().getProposal({ id }));
-  if (!data) return <p className="mt-2 text-xs text-muted-foreground">正在读取提案分组信息…</p>;
+  if (!data) return <p className="mt-2 text-xs text-muted-foreground">正在读取修改建议分组信息…</p>;
   return (
     <div className="mt-2 flex flex-wrap gap-2 text-xs">
       {data.importJobId ? <span className="rounded-full bg-blue-500/10 px-2 py-1 text-blue-700">来源 {compactId(data.importJobId)}</span> : null}
-      <span className="rounded-full bg-muted px-2 py-1">{data.targetType} {data.targetId ? compactId(data.targetId) : "new"}</span>
-      <span className="rounded-full bg-amber-500/10 px-2 py-1 text-amber-700">风险 {data.riskLevel}</span>
+      <span className="rounded-full bg-muted px-2 py-1">{PROPOSAL_TARGET_LABELS[data.targetType]} {data.targetId ? compactId(data.targetId) : "新建"}</span>
+      <span className="rounded-full bg-amber-500/10 px-2 py-1 text-amber-700">{RISK_LABELS[data.riskLevel]}</span>
     </div>
   );
 }
@@ -84,11 +85,11 @@ export function ReviewQueue() {
       await trigger({ id, approve, reason });
       await mutate();
       toast.success(
-        approve ? "提案已批准，可前往待应用队列" : "提案已拒绝",
+        approve ? "修改建议已批准，可前往待生效列表" : "修改建议已拒绝",
         approve
           ? {
               action: {
-                label: "去应用",
+                label: "前往生效列表",
                 onClick: () => router.push("/governance/apply"),
               },
             }
@@ -152,7 +153,7 @@ export function ReviewQueue() {
         router.push(LOGIN_PATH);
       } else {
         toast.error("批次创建失败", {
-          description: "请确认所选提案仍在待审状态且拥有审核权限。",
+          description: "请确认所选修改建议仍在待审状态且拥有审核权限。",
         });
       }
     } finally {
@@ -172,9 +173,9 @@ export function ReviewQueue() {
     return (
       <div className="rounded-2xl border border-dashed bg-muted/25 px-6 py-12 text-center">
         <LockKeyhole className="mx-auto size-8 text-muted-foreground" aria-hidden />
-        <h2 className="mt-4 text-lg font-semibold">登录后查看审核队列</h2>
+        <h2 className="mt-4 text-lg font-semibold">登录后查看待审核列表</h2>
         <p className="mx-auto mt-2 max-w-md text-sm leading-6 text-muted-foreground">
-          审核任务只向具备治理权限的共建者开放。
+          只有审核者和管理员可以处理审核任务。
         </p>
         <Button asChild className="mt-5">
           <Link href={LOGIN_PATH}>前往登录</Link>
@@ -198,12 +199,12 @@ export function ReviewQueue() {
   if (error) {
     return (
       <p className="rounded-lg border border-destructive/30 p-4 text-sm text-destructive">
-        审核队列加载失败。
+        待审核列表加载失败。
       </p>
     );
   }
   if (isLoading && !data) {
-    return <p className="text-sm text-muted-foreground">正在加载审核队列…</p>;
+    return <p className="text-sm text-muted-foreground">正在加载待审核列表…</p>;
   }
   if (!data?.items.length) {
     return (
@@ -212,10 +213,10 @@ export function ReviewQueue() {
           className="mx-auto size-7 text-muted-foreground"
           aria-hidden
         />
-        <p className="mt-3 text-sm text-muted-foreground">当前没有待审核提案。</p>
+        <p className="mt-3 text-sm text-muted-foreground">当前没有待审核修改建议。</p>
         <Button asChild variant="outline" size="sm" className="mt-4">
           <WorkspaceLink href="/governance/apply">
-            查看已批准待应用
+            查看已批准的修改
             <ArrowRight aria-hidden />
           </WorkspaceLink>
         </Button>
@@ -231,9 +232,9 @@ export function ReviewQueue() {
             <Checkbox
               checked={allSelected}
               onCheckedChange={(value) => toggleAll(value === true)}
-              aria-label="选择全部待审提案"
+              aria-label="选择全部待审修改建议"
             />
-            待审提案
+            待审修改建议
           </label>
           <span className="text-xs text-muted-foreground">
             已选 {selectedProposalIds.length}/{tasks.length}
@@ -248,7 +249,7 @@ export function ReviewQueue() {
                   <Checkbox
                     checked={selected.has(task.proposalId)}
                     onCheckedChange={(value) => toggleProposal(task.proposalId, value === true)}
-                    aria-label={`选择提案 ${task.proposalId}`}
+                    aria-label={`选择修改建议 ${task.proposalId}`}
                     className="mt-1"
                   />
                   <div className="min-w-0">
@@ -256,7 +257,7 @@ export function ReviewQueue() {
                       审核任务 {compactId(task.id)}
                     </p>
                     <p className="mt-1 truncate font-mono text-xs text-muted-foreground">
-                      Proposal {task.proposalId}
+                      修改建议 {task.proposalId}
                     </p>
                     <ProposalMeta id={task.proposalId} />
                   </div>
@@ -313,7 +314,7 @@ export function ReviewQueue() {
             </span>
             <h2 className="mt-4 font-semibold">批量审核</h2>
             <p className="mt-1 text-xs text-muted-foreground">
-              已选 {selectedProposalIds.length} 个待审提案
+              已选 {selectedProposalIds.length} 个待审修改建议
             </p>
           </div>
 
@@ -356,7 +357,7 @@ export function ReviewQueue() {
               <span>
                 <span className="block text-xs font-medium">强制全量审核</span>
                 <span className="mt-1 block text-[11px] leading-4 text-muted-foreground">
-                  高危提案会自动切换为全量；这里可主动提高审查强度。
+                  高风险修改会自动逐条审核；你也可以在这里选择审核全部内容。
                 </span>
               </span>
             </label>
@@ -370,7 +371,7 @@ export function ReviewQueue() {
               ) : (
                 <ShieldCheck aria-hidden />
               )}
-              冻结并开始批量审核
+              确认范围并开始审核
             </Button>
           </div>
         </div>

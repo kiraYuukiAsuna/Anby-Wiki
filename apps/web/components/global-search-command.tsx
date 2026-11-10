@@ -55,29 +55,29 @@ const QUICK_LINKS = [
     detail: "按最近更新或标题浏览条目",
     icon: BookOpenText,
   },
-  { href: "/explore", label: "搜索", detail: "关键词、混合与语义检索", icon: Search },
-  { href: "/explore/graph", label: "知识关系图", detail: "沿 Claim 探索 Entity 网络", icon: Network },
-  { href: "/entities", label: "实体与知识", detail: "稳定身份与结构化事实", icon: Waypoints },
-  { href: "/federation", label: "跨 Wiki 联邦", detail: "远端身份源与可核验映射", icon: Globe2 },
-  { href: "/collections", label: "专题合集", detail: "人工、规则与动态合集", icon: Layers3 },
-  { href: "/sources", label: "来源与证据", detail: "来源版本、分片与 Citation", icon: LibraryBig },
-  { href: "/imports", label: "AI 导入中心", detail: "队列、进度与导入治理", icon: Bot },
-  { href: "/governance/review", label: "审核队列", detail: "处理提案审核与批量审核", icon: ShieldCheck },
+  { href: "/explore", label: "搜索", detail: "按关键词或内容含义查找页面", icon: Search },
+  { href: "/explore/graph", label: "知识关系图", detail: "查看实体之间的关联和依据", icon: Network },
+  { href: "/entities", label: "实体与知识", detail: "浏览实体及相关事实", icon: Waypoints },
+  { href: "/federation", label: "跨 Wiki 关联", detail: "关联其他 Wiki 中的实体", icon: Globe2 },
+  { href: "/collections", label: "专题合集", detail: "按主题整理页面和实体", icon: Layers3 },
+  { href: "/sources", label: "来源与证据", detail: "查看资料来源和引用证据", icon: LibraryBig },
+  { href: "/imports", label: "导入资料", detail: "导入资料，查看进度和审核结果", icon: Bot },
+  { href: "/governance/review", label: "待审核", detail: "审核修改建议，支持批量处理", icon: ShieldCheck },
   {
     href: "/governance/apply",
-    label: "待应用",
+    label: "待生效",
     detail: "让已批准的变更正式生效",
     icon: BadgeCheck,
   },
-  { href: "/governance/protections", label: "页面保护", detail: "角色门槛与标题预留", icon: LockKeyhole },
-  { href: "/governance/fact-check", label: "事实一致性", detail: "冲突、证据与 Entity 引用检查", icon: ShieldAlert },
-  { href: "/governance/ai-trust", label: "AI 信任策略", detail: "Full Access 与机器 Actor 策略", icon: BrainCircuit },
-  { href: "/governance/revision-storage", label: "历史版本存储", detail: "Revision 冷热分层与归档", icon: Archive },
-  { href: "/account", label: "个人中心", detail: "个人资料与模型配置", icon: UserRound },
+  { href: "/governance/protections", label: "页面保护", detail: "设置页面编辑权限，保护指定标题", icon: LockKeyhole },
+  { href: "/governance/fact-check", label: "事实一致性", detail: "检查事实冲突、缺失证据和实体引用", icon: ShieldAlert },
+  { href: "/governance/ai-trust", label: "AI 审核设置", detail: "设置机器人的审核方式", icon: BrainCircuit },
+  { href: "/governance/revision-storage", label: "历史版本存储", detail: "查看版本存储用量，归档历史内容", icon: Archive },
+  { href: "/account", label: "个人中心", detail: "修改个人资料，管理账号安全", icon: UserRound },
   { href: "/admin/members", label: "成员与角色", detail: "协作者与当前 Wiki 权限", icon: UsersRound },
-  { href: "/settings/cli", label: "Agent CLI 授权", detail: "一次性授权码与 Token 撤销", icon: TerminalSquare },
-  { href: "/assets", label: "媒体与附件", detail: "不可变资产版本", icon: Images },
-  { href: "/components", label: "组件中心", detail: "版本化信息框与渲染", icon: Boxes },
+  { href: "/settings/cli", label: "Agent CLI 授权", detail: "连接命令行工具，管理访问授权", icon: TerminalSquare },
+  { href: "/assets", label: "媒体与附件", detail: "上传和管理图片、音视频及附件", icon: Images },
+  { href: "/components", label: "组件中心", detail: "创建和使用资料卡、信息框", icon: Boxes },
 ] as const;
 
 function useDebouncedValue(value: string, delayMs: number): string {
@@ -206,7 +206,7 @@ export function GlobalSearchCommand() {
           <DialogHeader>
             <DialogTitle>全局搜索</DialogTitle>
             <DialogDescription>
-              搜索页面内容与稳定 Entity，或直接前往知识和治理工作区。
+              搜索页面、实体，或快速打开常用功能。
             </DialogDescription>
           </DialogHeader>
           <Command
@@ -307,7 +307,7 @@ export function GlobalSearchCommand() {
               ) : null}
               {entities.length > 0 ? (
                 <Command.Group
-                  heading="稳定 Entity"
+                  heading="实体"
                   className="[&_[cmdk-group-heading]]:px-3 [&_[cmdk-group-heading]]:py-2 [&_[cmdk-group-heading]]:text-[10px] [&_[cmdk-group-heading]]:font-semibold [&_[cmdk-group-heading]]:tracking-wider [&_[cmdk-group-heading]]:text-muted-foreground [&_[cmdk-group-heading]]:uppercase"
                 >
                   {entities.map((entity) => (
@@ -339,7 +339,7 @@ export function GlobalSearchCommand() {
             {data && data.pages.total > hits.length ? (
               <p className="mt-2 min-w-0 border-t px-3 pt-2 text-xs break-words text-muted-foreground">
                 页面显示 {hits.length} 条，共 {data.pages.total} 条；另有{" "}
-                {entities.length} 个 Entity 候选
+                {entities.length} 个相关实体
               </p>
             ) : null}
           </Command>

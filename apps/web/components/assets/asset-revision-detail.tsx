@@ -58,7 +58,7 @@ export function AssetRevisionDetail({
       await navigator.clipboard.writeText(value);
       setCopied(kind);
       window.setTimeout(() => setCopied(undefined), 1600);
-      toast.success(kind === "id" ? "已复制 AssetRevision ID" : "已复制内容摘要");
+      toast.success(kind === "id" ? "已复制文件版本 ID" : "已复制内容摘要");
     } catch {
       toast.error("复制失败");
     }
@@ -112,7 +112,7 @@ export function AssetRevisionDetail({
               <div className="w-full overflow-hidden rounded-lg border bg-white">
                 <AssetPDF
                   revisionId={revision.id}
-                  title="不可变 PDF 版本预览"
+                  title="PDF 版本预览"
                   height={640}
                 />
               </div>
@@ -149,7 +149,7 @@ export function AssetRevisionDetail({
             </p>
             <dl className="mt-4 space-y-4 text-xs">
               <div>
-                <dt className="text-muted-foreground">AssetRevision ID</dt>
+                <dt className="text-muted-foreground">文件版本 ID</dt>
                 <dd className="mt-1 flex items-start gap-2">
                   <code className="min-w-0 flex-1 break-all rounded-lg bg-muted px-2.5 py-2 text-[10px]">
                     {revision.id}
@@ -158,7 +158,7 @@ export function AssetRevisionDetail({
                     type="button"
                     size="icon-sm"
                     variant="ghost"
-                    aria-label="复制 AssetRevision ID"
+                    aria-label="复制文件版本 ID"
                     onClick={() => void copy("id", revision.id)}
                   >
                     {copied === "id" ? (
@@ -170,13 +170,13 @@ export function AssetRevisionDetail({
                 </dd>
               </div>
               <div>
-                <dt className="text-muted-foreground">Asset ID</dt>
+                <dt className="text-muted-foreground">文件 ID</dt>
                 <dd className="mt-1 break-all font-mono text-[10px]">
                   {revision.assetId}
                 </dd>
               </div>
               <div>
-                <dt className="text-muted-foreground">Content hash</dt>
+                <dt className="text-muted-foreground">文件校验值</dt>
                 <dd className="mt-1 flex items-start gap-2">
                   <code className="min-w-0 flex-1 break-all text-[10px]">
                     {revision.contentHash}

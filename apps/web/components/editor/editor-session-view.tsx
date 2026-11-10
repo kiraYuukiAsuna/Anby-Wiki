@@ -220,7 +220,7 @@ function EditorSessionContent({
     if (collaborationStatus === "forbidden" || collaborationStatus === "closed") return;
     if (session.conflict) {
       toast.warning("请先处理版本冲突", {
-        description: "可查看差异、切换到最新版为基，或放弃本地修改。",
+        description: "可以查看版本差异，再选择保留或放弃本地修改。",
       });
       return;
     }
@@ -267,7 +267,7 @@ function EditorSessionContent({
         publishAst = collaboration.getAst();
       } catch {
         toast.error("协作内容校验失败，无法发布", {
-          description: "WorkingDocument 不能物化为合法 AST，请重新同步后重试。",
+          description: "草稿内容格式有误，请重新同步后重试。",
         });
         collaboration.refresh();
         return;
@@ -304,7 +304,7 @@ function EditorSessionContent({
         if (code === "conflict" && collaborationRef.current) {
           collaborationRef.current.refresh();
           toast.warning("协作内容已在其他客户端更新", {
-            description: "已重新同步 WorkingDocument；请确认最新内容后再次发布。",
+            description: "草稿已重新同步，请检查内容后再次发布。",
           });
           setPublishOpen(false);
           return;
@@ -361,7 +361,7 @@ function EditorSessionContent({
       parseDocument(session.ast);
     } catch {
       toast.error("内容校验失败，无法发布", {
-        description: "文档结构不符合 AST v1 Schema，请检查编辑内容。",
+        description: "内容格式有误，请检查最近的编辑后重试。",
       });
       return;
     }
@@ -437,7 +437,7 @@ function EditorSessionContent({
                   title={[
                     presence.actorDisplayName,
                     presence.actorUsername ? `@${presence.actorUsername}` : null,
-                    `Actor ${presence.actorId}`,
+                    `身份 ${presence.actorId}`,
                     blockID ? `Block ${blockID}` : null,
                   ]
                     .filter(Boolean)
@@ -480,7 +480,7 @@ function EditorSessionContent({
           <DialogHeader>
             <DialogTitle>发布修改</DialogTitle>
             <DialogDescription>
-              为本次修改填写摘要后发布；发布即成为页面当前版本。
+              简要说明修改内容。发布后，读者会看到这个版本。
             </DialogDescription>
           </DialogHeader>
           <div className="flex flex-col gap-4">

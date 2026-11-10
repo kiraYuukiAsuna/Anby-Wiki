@@ -9,6 +9,7 @@ import {
 import { ClaimVerificationControl } from "@/components/knowledge/claim-verification-control";
 import { ReferenceUsagePanel } from "@/components/knowledge/reference-usage-panel";
 import { fetchClaimDetail } from "@/lib/knowledge";
+import { CLAIM_ORIGIN_LABELS, CLAIM_RANK_LABELS, CLAIM_STATUS_LABELS, CLAIM_VERIFICATION_LABELS } from "@/lib/display-labels";
 
 export const dynamic = "force-dynamic";
 
@@ -30,16 +31,16 @@ export default async function ClaimDetailPage({
 
   return (
     <DetailShell
-      eyebrow="Claim"
+      eyebrow="事实"
       title={detail.property.name}
-      status={`${detail.status} · ${detail.verificationStatus}`}
+      status={`${CLAIM_STATUS_LABELS[detail.status]} · ${CLAIM_VERIFICATION_LABELS[detail.verificationStatus]}`}
     >
       <DetailSection title="事实">
         <DetailRows
           rows={[
-            { label: "Claim ID", value: detail.id },
+            { label: "事实 ID", value: detail.id },
             {
-              label: "主体 Entity",
+              label: "所属实体",
               value: (
                 <Link
                   href={`/entities/${detail.subjectEntityId}`}
@@ -54,8 +55,8 @@ export default async function ClaimDetailPage({
               value: `${detail.property.propertyKey} (${detail.valueType})`,
             },
             { label: "值", value: <span className="whitespace-pre-wrap">{displayValue(detail.value)}</span> },
-            { label: "Rank", value: detail.rank },
-            { label: "来源类型", value: detail.originType },
+            { label: "优先级", value: CLAIM_RANK_LABELS[detail.rank] },
+            { label: "来源类型", value: CLAIM_ORIGIN_LABELS[detail.originType] },
             {
               label: "取代为",
               value: detail.supersededBy ? (
@@ -73,7 +74,7 @@ export default async function ClaimDetailPage({
         />
       </DetailSection>
 
-      <DetailSection title="核验治理">
+      <DetailSection title="核验状态">
         <ClaimVerificationControl initialDetail={detail} />
       </DetailSection>
 
@@ -86,7 +87,7 @@ export default async function ClaimDetailPage({
                   href={`/citations/${source.citationId}`}
                   className="font-medium text-blue-600 hover:underline"
                 >
-                  Citation {source.citationId}
+                  引文 {source.citationId}
                 </Link>
                 <p className="mt-1 text-xs text-muted-foreground">
                   {source.supportType}
@@ -95,7 +96,7 @@ export default async function ClaimDetailPage({
             ))}
           </ul>
         ) : (
-          <p className="text-sm text-muted-foreground">该 Claim 尚未绑定 Citation。</p>
+          <p className="text-sm text-muted-foreground">这条事实还没有引用证据。</p>
         )}
       </DetailSection>
 

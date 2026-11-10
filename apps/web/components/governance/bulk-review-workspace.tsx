@@ -38,7 +38,7 @@ const decisionSchema = z.string().trim().min(1, "请记录审核依据").max(100
 const statusMeta = {
   reviewing: { label: "抽样审核中", tone: "bg-amber-500/10 text-amber-700" },
   ready: { label: "等待下一 wave", tone: "bg-blue-500/10 text-blue-700" },
-  applying: { label: "应用中", tone: "bg-violet-500/10 text-violet-700" },
+  applying: { label: "正在处理", tone: "bg-violet-500/10 text-violet-700" },
   paused: { label: "已暂停", tone: "bg-rose-500/10 text-rose-700" },
   completed: { label: "全部完成", tone: "bg-emerald-500/10 text-emerald-700" },
 } as const;
@@ -50,19 +50,19 @@ const decisionMeta = {
 } as const;
 
 const applyMeta = {
-  pending: "等待应用",
-  applied: "已应用",
-  failed: "应用失败",
+  pending: "等待生效",
+  applied: "已生效",
+  failed: "生效失败",
   skipped: "已跳过",
 } as const;
 
 const applyErrorMeta: Record<string, string> = {
-  identity_conflict: "同名页面或实体已被其他提案创建，需重新导入",
-  merge_conflict: "页面或事实基线发生冲突，需人工决议",
-  state_conflict: "提案状态或基线已变化",
-  validation_failed: "提案内容未通过应用校验",
-  permission_denied: "应用者权限不足",
-  apply_failed: "应用服务发生未分类错误",
+  identity_conflict: "同名页面或实体已被其他修改建议创建，需重新导入",
+  merge_conflict: "页面或事实已有新修改，请人工解决冲突。",
+  state_conflict: "修改建议的状态或相关内容已有变化。",
+  validation_failed: "修改内容未通过生效前的检查",
+  permission_denied: "发布者权限不足",
+  apply_failed: "处理失败，请稍后重试",
 };
 
 function BatchOverview({ batch }: { batch: BulkReviewBatch }) {
@@ -80,7 +80,7 @@ function BatchOverview({ batch }: { batch: BulkReviewBatch }) {
       <div className="flex items-start justify-between gap-4">
         <div>
           <p className="text-xs font-medium text-muted-foreground">
-            {batch.status === "reviewing" ? "审核进度" : "应用进度"}
+            {batch.status === "reviewing" ? "审核进度" : "生效进度"}
           </p>
           <p className="mt-2 text-3xl font-semibold tracking-[-0.04em]">{progress}%</p>
         </div>
@@ -100,7 +100,7 @@ function BatchOverview({ batch }: { batch: BulkReviewBatch }) {
         </div>
         <div>
           <dt className="text-muted-foreground">固定 wave</dt>
-          <dd className="mt-1 font-medium">{batch.waveSize} 个提案 / wave</dd>
+          <dd className="mt-1 font-medium">{batch.waveSize} 个修改建议 / wave</dd>
         </div>
         <div>
           <dt className="text-muted-foreground">当前 wave</dt>
@@ -153,7 +153,7 @@ function ProposalRow({
               <ChevronRight className="size-3.5 shrink-0 transition-transform group-hover:translate-x-0.5" aria-hidden />
             </Link>
             <div className="mt-1 flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-muted-foreground">
-              <span>wave {item.wave}</span>
+              <span>组 {item.wave}</span>
               <span>{item.selectedForReview ? "抽中审核" : "抽样通过后自动批准"}</span>
               <span className={decisionMeta[item.decision].tone}>{decisionMeta[item.decision].label}</span>
               <span>{applyMeta[item.applyStatus]}</span>
@@ -166,9 +166,9 @@ function ProposalRow({
           </div>
         </div>
         {item.applyStatus === "applied" ? (
-          <Check className="size-4 text-emerald-600" aria-label="已应用" />
+          <Check className="size-4 text-emerald-600" aria-label="已生效" />
         ) : item.applyStatus === "failed" || item.applyStatus === "skipped" ? (
-          <CircleAlert className="size-4 text-destructive" aria-label="应用失败" />
+          <CircleAlert className="size-4 text-destructive" aria-label="生效失败" />
         ) : null}
       </div>
 
@@ -264,7 +264,7 @@ export function BulkReviewWorkspace({ id }: { id: string }) {
         },
       });
       await refresh();
-      toast.success(approve ? "提案已批准" : "提案已拒绝");
+      toast.success(approve ? "修改建议已批准" : "修改建议已拒绝");
     } catch (actionError) {
       handleError(actionError, "决策提交失败");
     } finally {
@@ -314,7 +314,7 @@ export function BulkReviewWorkspace({ id }: { id: string }) {
       <header className="grid gap-6 border-b border-border/75 pb-8 lg:grid-cols-[minmax(0,1fr)_auto] lg:items-end">
         <div>
           <p className="text-xs font-semibold tracking-[0.18em] text-primary uppercase">
-            Frozen review batch
+            批量审核
           </p>
           <h1 className="mt-3 text-3xl font-semibold tracking-[-0.04em]">
             批次 {compactId(batch.id)}
@@ -329,7 +329,7 @@ export function BulkReviewWorkspace({ id }: { id: string }) {
                 void runAction(
                   "finalize",
                   () => governanceApi().finalizeBulkReviewBatch({ id }),
-                  "抽样审核已冻结，批次可以应用",
+                  "抽样审核已完成，可以让本批修改生效。",
                 )
               }
             >
@@ -364,7 +364,7 @@ export function BulkReviewWorkspace({ id }: { id: string }) {
                 }
               >
                 <Play aria-hidden />
-                应用下一 wave
+                处理下一组
               </Button>
             </>
           ) : null}
@@ -397,7 +397,7 @@ export function BulkReviewWorkspace({ id }: { id: string }) {
           <Clock3 className="mt-0.5 size-4 shrink-0 text-amber-700" aria-hidden />
           <p>
             还需对 <strong>{pendingSampleCount}</strong>{" "}
-            个抽中提案作出明确决策，之后才能冻结审核结果。
+            条抽中的修改建议完成审核，之后才能确认本批结果。
           </p>
         </div>
       ) : null}
@@ -406,9 +406,9 @@ export function BulkReviewWorkspace({ id }: { id: string }) {
         <section>
           <div className="flex items-end justify-between gap-4">
             <div>
-              <h2 className="text-lg font-semibold">冻结的提案集合</h2>
+              <h2 className="text-lg font-semibold">本批修改建议</h2>
               <p className="mt-1 text-xs text-muted-foreground">
-                共 {batch.items.length} 项；顺序与 wave 在批次创建后保持不变。
+                共 {batch.items.length} 项；处理顺序和分组在批次创建后固定。
               </p>
             </div>
           </div>

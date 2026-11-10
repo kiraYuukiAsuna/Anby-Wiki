@@ -74,7 +74,7 @@ export function ComponentConfigure({
   const selection = (): ComponentSelection | null => {
     const displayConfig = parseComponentObject(source);
     if (!displayConfig) {
-      toast.error("显示配置必须是合法 JSON 对象");
+      toast.error("显示配置格式不正确，请填写 JSON 对象。");
       return null;
     }
     if (!z.uuid().safeParse(entityId).success) {
@@ -92,7 +92,7 @@ export function ComponentConfigure({
     const props = parseComponentObject(source);
     if (!props || (dynamic && !z.uuid().safeParse(entityId).success)) {
       toast.error(
-        dynamic ? "请选择实体并填写有效配置" : "显示配置必须是合法 JSON 对象",
+        dynamic ? "请选择实体并填写有效配置" : "显示配置格式不正确，请填写 JSON 对象。",
       );
       return;
     }
@@ -123,8 +123,8 @@ export function ComponentConfigure({
         </DialogTitle>
         <DialogDescription>
           {dynamic
-            ? "选择实体并调整显示范围，查看实际已发布事实。"
-            : "填写资料卡内容，运行预览查看实际效果。插入时需关联一个实体。"}
+            ? "选择实体和要显示的属性，预览已发布的内容。"
+            : "填写资料卡后可预览效果。插入页面时需要选择关联的实体。"}
           使用此版本的页面会保留版本号。
         </DialogDescription>
       </DialogHeader>

@@ -34,7 +34,7 @@ const roleLabels: Record<ShareRole, string> = {
 };
 
 const shareSchema = z.object({
-  identifier: z.string().trim().min(1, "请输入用户名、邮箱或 Actor ID").max(254),
+  identifier: z.string().trim().min(1, "请输入用户名、邮箱或身份 ID").max(254),
   roleKey: z.enum(["viewer", "editor"]),
 });
 
@@ -194,7 +194,7 @@ export function PageShareManager({
               onChange={(event) =>
                 setDraft({ ...draft, identifier: event.target.value })
               }
-              placeholder="直接授权用户名、邮箱或 Actor ID"
+              placeholder="直接授权用户名、邮箱或身份 ID"
               disabled={saving}
             />
             <select

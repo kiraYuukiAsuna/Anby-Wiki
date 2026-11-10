@@ -9,7 +9,7 @@ export default function NewProposalPage() {
         <span className="flex size-11 items-center justify-center rounded-2xl bg-primary/10 text-primary">
           <FileJson2 className="size-5" aria-hidden />
         </span>
-        <h1 className="text-3xl font-semibold">新建人工提案</h1>
+        <h1 className="text-3xl font-semibold">新建人工修改建议</h1>
       </header>
       <ProposalOperationStudio />
     </div>

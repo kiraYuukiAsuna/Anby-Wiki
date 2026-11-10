@@ -78,7 +78,7 @@ export function AccountMenu() {
 
   return (
     <div className="flex shrink-0 items-center gap-1">
-      {session.systemAdmin && <Button size="sm" variant="ghost" asChild className="px-2" aria-label="系统管理台"><Link href="/admin"><ShieldCheck aria-hidden /></Link></Button>}
+      {session.systemAdmin && <Button size="sm" variant="ghost" asChild className="px-2" aria-label="系统管理"><Link href="/admin"><ShieldCheck aria-hidden /></Link></Button>}
       <Button
         type="button"
         size="sm"

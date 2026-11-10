@@ -131,7 +131,7 @@ export function ConceptArticleLinks({
               </p>
             ) : resolution.error ? (
               <div className="space-y-3 p-4">
-                <p role="alert" className="text-sm text-muted-foreground">条目解析失败，请重试。</p>
+                <p role="alert" className="text-sm text-muted-foreground">暂时无法打开条目，请重试。</p>
                 <Button variant="outline" size="sm" onClick={() => void resolution.mutate()}>
                   <RefreshCw aria-hidden />
                   重试

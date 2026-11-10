@@ -12,7 +12,7 @@ export default function AdminMembersPage() {
         <div>
           <h1 className="text-3xl font-semibold">成员与角色</h1>
           <p className="mt-2 text-sm text-muted-foreground">
-            管理当前 Wiki 的协作者和权限角色。
+            添加成员，设置他们可以进行哪些操作。
           </p>
         </div>
       </header>

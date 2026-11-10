@@ -58,19 +58,19 @@ export function MediaBlockInsertDialog({
         revisionId: revisionId.trim(),
       });
       if (type === "image" && !revision.mimeType.startsWith("image/")) {
-        toast.error("所选 AssetRevision 不是图片");
+        toast.error("所选文件版本不是图片");
         return;
       }
       if (type === "video" && !revision.mimeType.startsWith("video/")) {
-        toast.error("所选 AssetRevision 不是视频");
+        toast.error("所选文件版本不是视频");
         return;
       }
       if (type === "audio" && !revision.mimeType.startsWith("audio/")) {
-        toast.error("所选 AssetRevision 不是音频");
+        toast.error("所选文件版本不是音频");
         return;
       }
       if (type === "pdf" && revision.mimeType !== "application/pdf") {
-        toast.error("所选 AssetRevision 不是 PDF");
+        toast.error("所选文件版本不是 PDF");
         return;
       }
       if (type === "video" && posterRevisionId.trim()) {
@@ -78,7 +78,7 @@ export function MediaBlockInsertDialog({
           revisionId: posterRevisionId.trim(),
         });
         if (!poster.mimeType.startsWith("image/")) {
-          toast.error("视频封面 AssetRevision 不是图片");
+          toast.error("视频封面文件版本不是图片");
           return;
         }
       }
@@ -135,8 +135,8 @@ export function MediaBlockInsertDialog({
       onInsert(parsed.data as MediaBlock);
       onOpenChange(false);
     } catch {
-      toast.error("无法读取 AssetRevision", {
-        description: "请确认 ID 存在，并先在资产库上传文件。",
+      toast.error("无法读取文件版本", {
+        description: "请先在媒体库上传文件，再复制文件版本 ID。",
       });
     } finally {
       setSubmitting(false);
@@ -149,7 +149,7 @@ export function MediaBlockInsertDialog({
         <DialogHeader>
           <DialogTitle>插入媒体与文件</DialogTitle>
           <DialogDescription>
-            页面固定引用不可变 AssetRevision，并按媒体类型校验 MIME。
+            页面会使用你选定的文件版本，上传新版本不会替换这里的内容。
           </DialogDescription>
         </DialogHeader>
         <div className="grid gap-4">
@@ -160,15 +160,15 @@ export function MediaBlockInsertDialog({
               onChange={(event) => setType(event.target.value as MediaType)}
               className="mt-1 h-9 w-full rounded-lg border border-input bg-background px-2.5 text-sm"
             >
-              <option value="image">Image</option>
-              <option value="video">Video</option>
-              <option value="audio">Audio</option>
-              <option value="file">File</option>
+              <option value="image">图片</option>
+              <option value="video">视频</option>
+              <option value="audio">音频</option>
+              <option value="file">文件</option>
               <option value="pdf">PDF</option>
             </select>
           </Label>
           <Label>
-            AssetRevision ID
+            文件版本 ID
             <Input
               value={revisionId}
               onChange={(event) => setRevisionId(event.target.value)}
@@ -176,7 +176,7 @@ export function MediaBlockInsertDialog({
           </Label>
           {type === "image" ? (
             <Label>
-              Alt text
+              替代文字
               <Input
                 value={altText}
                 onChange={(event) => setAltText(event.target.value)}
@@ -193,7 +193,7 @@ export function MediaBlockInsertDialog({
           )}
           {type === "video" ? (
             <Label>
-              Poster AssetRevision ID（可选）
+              封面图片版本 ID（可选）
               <Input
                 value={posterRevisionId}
                 onChange={(event) => setPosterRevisionId(event.target.value)}

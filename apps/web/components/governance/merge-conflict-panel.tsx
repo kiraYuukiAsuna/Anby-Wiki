@@ -9,6 +9,7 @@ import type { MergeConflict, Proposal } from "../../../../contracts/generated/ty
 
 import { Button } from "@/components/ui/button";
 import { governanceApi } from "@/lib/api";
+import { CONFLICT_STATUS_LABELS, CONFLICT_TYPE_LABELS } from "@/lib/display-labels";
 
 export function MergeConflictPanel({ proposal }: { proposal: Proposal }) {
   const router = useRouter();
@@ -31,11 +32,11 @@ export function MergeConflictPanel({ proposal }: { proposal: Proposal }) {
           reason: resolutionReason(choice),
         },
       });
-      toast.success("冲突决议已记录");
+      toast.success("冲突处理结果已保存");
       router.refresh();
     } catch {
-      toast.error("冲突决议失败", {
-        description: "页面 Current 可能再次变化，请刷新后重新检查。",
+      toast.error("冲突处理失败", {
+        description: "页面可能又有更新，请刷新后重新检查。",
       });
     } finally {
       setResolving(null);
@@ -44,11 +45,11 @@ export function MergeConflictPanel({ proposal }: { proposal: Proposal }) {
 
   return (
     <section className="rounded-lg border border-amber-500/50 bg-amber-500/5 p-4">
-      <h2 className="text-lg font-semibold">MergeConflict 决议</h2>
+      <h2 className="text-lg font-semibold">解决冲突</h2>
       <p className="mt-1 text-sm text-muted-foreground">
         {hasIdentityConflict
-          ? "身份冲突表示其他变更已先创建同名页面或实体；原提案保持不可变，需要基于 Current 重新导入。"
-          : "逐项比较 Base / Current / Proposed。全部解决后 Proposal 恢复 approved，Apply 时仍会重新检查 Current。"}
+          ? "同名页面或实体已被其他修改创建。请根据最新内容重新导入，原修改建议会保留。"
+          : "逐项对比原版本、当前版本和建议内容。解决全部冲突后可继续生效操作；执行时仍会检查是否有新修改。"}
       </p>
       {hasIdentityConflict && proposal.importJobId ? (
         <Button className="mt-3" size="sm" variant="outline" asChild>
@@ -61,9 +62,9 @@ export function MergeConflictPanel({ proposal }: { proposal: Proposal }) {
             <header className="flex flex-wrap items-center justify-between gap-2">
               <div>
                 <p className="font-medium">
-                  {conflict.conflictType} · {conflict.targetBlockId ?? conflict.targetClaimId ?? "全局"}
+                  {CONFLICT_TYPE_LABELS[conflict.conflictType]} · {conflict.targetBlockId ?? conflict.targetClaimId ?? "全局"}
                 </p>
-                <p className="text-xs text-muted-foreground">{conflict.status}</p>
+                <p className="text-xs text-muted-foreground">{CONFLICT_STATUS_LABELS[conflict.status]}</p>
               </div>
               {conflict.status === "open" && isIdentityConflict(conflict) ? (
                 <span className="text-xs font-medium text-amber-800 dark:text-amber-300">
@@ -77,14 +78,14 @@ export function MergeConflictPanel({ proposal }: { proposal: Proposal }) {
                     disabled={resolving === conflict.id}
                     onClick={() => void resolve(conflict, "choose_current")}
                   >
-                    保留 Current
+                    保留当前内容
                   </Button>
                   <Button
                     size="sm"
                     disabled={resolving === conflict.id}
                     onClick={() => void resolve(conflict, "choose_proposed")}
                   >
-                    采用 Proposed
+                    采用建议内容
                   </Button>
                   <Button
                     size="sm"
@@ -97,14 +98,14 @@ export function MergeConflictPanel({ proposal }: { proposal: Proposal }) {
                 </div>
               ) : (
                 <span className="text-xs text-muted-foreground">
-                  已决议：{resolutionChoice(conflict)}
+                  处理结果：{resolutionChoice(conflict)}
                 </span>
               )}
             </header>
             <div className="mt-3 grid gap-2 lg:grid-cols-3">
-              <ConflictValue label="Base" value={conflict.baseValue} />
-              <ConflictValue label="Current" value={conflict.currentValue} />
-              <ConflictValue label="Proposed" value={conflict.proposedValue} />
+              <ConflictValue label="原版本" value={conflict.baseValue} />
+              <ConflictValue label="当前版本" value={conflict.currentValue} />
+              <ConflictValue label="建议内容" value={conflict.proposedValue} />
             </div>
           </article>
         ))}
@@ -132,9 +133,9 @@ function resolutionChoice(conflict: MergeConflict): string {
 function resolutionReason(choice: string): string {
   switch (choice) {
     case "choose_current":
-      return "人工选择保留 Current";
+      return "已选择保留当前内容";
     case "choose_proposed":
-      return "人工选择采用 Proposed";
+      return "已选择采用建议内容";
     default:
       return "人工忽略此变更";
   }

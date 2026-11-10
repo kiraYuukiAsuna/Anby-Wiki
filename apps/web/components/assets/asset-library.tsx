@@ -110,7 +110,7 @@ function AssetCard({ asset }: { asset: Asset }) {
     try {
       await navigator.clipboard.writeText(revision.id);
       setCopied(true);
-      toast.success("已复制 AssetRevision ID");
+      toast.success("已复制文件版本 ID");
       window.setTimeout(() => setCopied(false), 1600);
     } catch {
       toast.error("复制失败");
@@ -145,7 +145,7 @@ function AssetCard({ asset }: { asset: Asset }) {
             size="icon-sm"
             variant="ghost"
             onClick={() => void copyRevision()}
-            aria-label={`复制 ${asset.name} 的 AssetRevision ID`}
+            aria-label={`复制 ${asset.name} 的文件版本 ID`}
           >
             {copied ? (
               <Check className="text-emerald-600" aria-hidden />
@@ -240,7 +240,7 @@ export function AssetLibrary() {
       });
     } catch {
       toast.error("资产上传失败", {
-        description: "请确认对象存储已配置、文件不超过 50 MiB，并检查账户权限。",
+        description: "请确认文件不超过 50 MiB，且你有上传权限。如果仍然失败，请联系管理员检查文件存储服务。",
       });
     } finally {
       setUploading(false);
@@ -291,7 +291,7 @@ export function AssetLibrary() {
           <div className="mt-4 rounded-2xl border border-destructive/20 bg-destructive/5 p-5 text-sm">
             <p className="font-medium text-destructive">资产目录暂时不可用</p>
             <p className="mt-1 text-muted-foreground">
-              请确认 API 与对象存储已配置。
+              请稍后重试；如果仍无法加载，请联系管理员检查文件存储服务。
             </p>
           </div>
         ) : null}

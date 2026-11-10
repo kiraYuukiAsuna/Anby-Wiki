@@ -43,7 +43,7 @@ export function ConflictBanner({ pageId, onReset }: ConflictBannerProps) {
 
   const baseLabel = conflict.baseRevisionId
     ? shortId(conflict.baseRevisionId)
-    : "无基线";
+    : "没有原版本";
   const currentLabel = conflict.currentRevisionId
     ? shortId(conflict.currentRevisionId)
     : "无";
@@ -125,13 +125,12 @@ export function ConflictBanner({ pageId, onReset }: ConflictBannerProps) {
               版本差异：{baseLabel} → {currentLabel}
             </DialogTitle>
             <DialogDescription>
-              下方为你基于的版本与服务端最新版本的结构差异；
-              你的未发布修改不在此对比中，请自行对照合并。
+              下方对比的是开始编辑时的版本和最新发布版本，不包含你尚未发布的修改。请核对后合并。
             </DialogDescription>
           </DialogHeader>
           {!conflict.baseRevisionId || !conflict.currentRevisionId ? (
             <p className="rounded-lg border border-dashed border-border p-6 text-center text-sm text-muted-foreground">
-              缺少基线或最新版本，无法对比。
+              缺少原版本或最新版本，暂时无法比较。
             </p>
           ) : diffLoading ? (
             <p className="p-6 text-center text-sm text-muted-foreground">

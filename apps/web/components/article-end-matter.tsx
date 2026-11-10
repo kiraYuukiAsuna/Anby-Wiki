@@ -233,7 +233,7 @@ export function ArticleEndMatter({
             id="related-topics"
             className="scroll-mt-20 border-b border-border pb-2 pt-7 text-2xl font-semibold tracking-tight"
           >
-            Related topics
+            相关主题
           </h2>
           <div className="mt-4 grid gap-3 sm:grid-cols-2">
             {relatedItems.map((item) => (
@@ -261,7 +261,7 @@ export function ArticleEndMatter({
             id="related-outlines"
             className="scroll-mt-20 border-b border-border pb-2 text-2xl font-semibold tracking-tight"
           >
-            Related outlines
+            相关目录
           </h2>
           <div className="mt-4 flex flex-wrap gap-2">
             {collections.map((collection) => (
@@ -285,12 +285,12 @@ export function ArticleEndMatter({
             id="references"
             className="scroll-mt-20 border-b border-border pb-2 text-2xl font-semibold tracking-tight"
           >
-            References
+            参考文献
           </h2>
           {showReferenceStatus ? (
             <p className="mt-3 flex items-center gap-2 text-sm text-muted-foreground">
               <BookOpen className="size-4" aria-hidden />
-              当前版本的引用索引正在生成，完成后会自动显示可回溯的参考文献。
+              参考文献正在整理，完成后会自动显示。
             </p>
           ) : (
             <>

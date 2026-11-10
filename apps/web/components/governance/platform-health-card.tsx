@@ -50,7 +50,7 @@ export function PlatformHealthCard() {
             系统状态
           </p>
           <p className="mt-1 text-xs leading-5 text-muted-foreground">
-            API 存活与关键依赖就绪度
+            服务连接和运行状态
           </p>
         </div>
         <Button
@@ -78,7 +78,7 @@ export function PlatformHealthCard() {
       {error ? (
         <div className="mt-4 flex items-start gap-2 rounded-xl bg-destructive/6 p-3 text-xs text-destructive">
           <CircleAlert className="mt-0.5 size-3.5 shrink-0" aria-hidden />
-          <span>状态探针暂时不可达，请检查 API 网络与运行日志。</span>
+          <span>暂时无法获取服务状态，请联系管理员检查网络和运行日志。</span>
         </div>
       ) : null}
 

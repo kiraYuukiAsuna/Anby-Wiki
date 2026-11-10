@@ -42,32 +42,32 @@ const GROUPS = [
       { href: "/assets", label: "媒体与附件", icon: Images },
       { href: "/sources", label: "来源与证据", icon: LibraryBig },
       { href: "/entities", label: "实体与知识", icon: Waypoints },
-      { href: "/federation", label: "跨 Wiki 联邦", icon: Globe2 },
+      { href: "/federation", label: "跨 Wiki 关联", icon: Globe2 },
     ],
   },
   {
     label: "共建",
     items: [
       { href: "/new", label: "创建页面", icon: SquarePen },
-      { href: "/imports", label: "AI 导入中心", icon: Bot },
+      { href: "/imports", label: "导入资料", icon: Bot },
     ],
   },
   {
-    label: "治理",
+    label: "内容管理",
     items: [
       {
         href: "/governance/review",
-        label: "审核队列",
+        label: "待审核",
         icon: ShieldCheck,
       },
       {
         href: "/governance/apply",
-        label: "待应用",
+        label: "待生效",
         icon: BadgeCheck,
       },
       {
         href: "/governance/activity",
-        label: "审计与标签",
+        label: "操作记录与标签",
         icon: ScrollText,
       },
       {
@@ -82,7 +82,7 @@ const GROUPS = [
       },
       {
         href: "/governance/ai-trust",
-        label: "AI 信任策略",
+        label: "AI 审核设置",
         icon: BrainCircuit,
       },
       {
@@ -97,7 +97,7 @@ const GROUPS = [
     items: [
       {
         href: "/admin",
-        label: "系统管理台",
+        label: "系统管理",
         icon: ShieldCheck,
         exact: true,
       },

@@ -58,7 +58,7 @@ export function CollectionMembers({
   if (items.length === 0) {
     return (
       <p className="rounded-lg border border-dashed border-border p-8 text-center text-sm text-muted-foreground">
-        当前没有物化成员。
+        还没有生成合集成员。
       </p>
     );
   }
@@ -82,7 +82,7 @@ export function CollectionMembers({
                   {member.displayTitle}
                 </Link>
                 <p className="mt-1 text-xs text-muted-foreground">
-                  {member.memberType === "page" ? "Page" : "Entity"} · 排序键{" "}
+                  {member.memberType === "page" ? "页面" : "实体"} · 排序键{" "}
                   {member.sortKey}
                 </p>
               </div>
@@ -90,7 +90,7 @@ export function CollectionMembers({
                 <p>{member.sourceType === "manual" ? "人工来源" : "规则来源"}</p>
                 {member.sourceRevisionId ? (
                   <p className="font-mono" title={member.sourceRevisionId}>
-                    Revision {compactId(member.sourceRevisionId)}
+                    版本 {compactId(member.sourceRevisionId)}
                   </p>
                 ) : (
                   <p>实时查询</p>

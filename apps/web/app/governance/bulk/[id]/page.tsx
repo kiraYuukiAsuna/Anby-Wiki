@@ -17,7 +17,7 @@ export default async function BulkReviewDetailPage({
         <Button variant="ghost" size="sm" asChild>
           <WorkspaceLink href="/governance/review">
             <ArrowLeft aria-hidden />
-            返回审核队列
+            返回待审核列表
           </WorkspaceLink>
         </Button>
       </div>

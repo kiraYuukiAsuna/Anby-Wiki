@@ -108,7 +108,7 @@ function applyOperation(document: Document, operation: Record<string, unknown>):
       return;
     }
     default:
-      throw new Error(`客户端工作副本合并暂不支持 Operation: ${type}`);
+      throw new Error(`暂时无法将这种修改合入草稿：${type}`);
   }
 }
 
@@ -203,7 +203,7 @@ function buildReference(
         display_text: displayText ?? "",
       };
     default:
-      throw new Error(`未知引用 Operation: ${operationType}`);
+      throw new Error(`未知引用修改操作: ${operationType}`);
   }
 }
 
@@ -220,7 +220,7 @@ function referenceNodeType(operationType: string): InlineNode["type"] {
     case "retarget_external_link":
       return "external_link";
     default:
-      throw new Error(`Operation 不是重定向引用操作: ${operationType}`);
+      throw new Error(`修改操作不是重定向引用操作: ${operationType}`);
   }
 }
 
@@ -240,7 +240,7 @@ function requireInlineContent(document: Document, blockId: unknown): InlineNode[
 
 function nodeIndex(value: unknown, length: number): number {
   if (typeof value !== "string" || !/^(0|[1-9]\d*)$/.test(value)) {
-    throw new Error("Operation node_id 非法");
+    throw new Error("修改操作 node_id 非法");
   }
   return integerIndex(Number(value), length, false);
 }
@@ -255,14 +255,14 @@ function payloadField(
 
 function requiredString(value: unknown, name: string): string {
   if (typeof value !== "string" || value.length === 0) {
-    throw new Error(`Operation 缺少 ${name}`);
+    throw new Error(`修改操作缺少 ${name}`);
   }
   return value;
 }
 
 function optionalString(value: unknown, name: string): string | undefined {
   if (value === undefined || value === null) return undefined;
-  if (typeof value !== "string") throw new Error(`Operation ${name} 非法`);
+  if (typeof value !== "string") throw new Error(`修改操作 ${name} 非法`);
   return value;
 }
 
@@ -270,7 +270,7 @@ function requireBlock(
   document: Document,
   id: unknown,
 ): { container: BlockContainer; index: number } {
-  if (typeof id !== "string") throw new Error("Operation 缺少 block_id");
+  if (typeof id !== "string") throw new Error("修改操作缺少 block_id");
   const found = findBlock(document, id);
   if (!found) throw new Error(`目标 Block 不存在: ${id}`);
   return found;
@@ -313,9 +313,9 @@ function parseBlock(value: unknown): Block {
 }
 
 function integerIndex(value: unknown, length: number, allowEnd: boolean): number {
-  if (!Number.isInteger(value)) throw new Error("Operation index 非法");
+  if (!Number.isInteger(value)) throw new Error("修改操作 index 非法");
   const index = Number(value);
   const maximum = allowEnd ? length : length - 1;
-  if (index < 0 || index > maximum) throw new Error("Operation index 越界");
+  if (index < 0 || index > maximum) throw new Error("修改操作 index 越界");
   return index;
 }

@@ -146,7 +146,7 @@ export function ExternalContentInsertDialog({
         <DialogHeader>
           <DialogTitle>插入外部内容</DialogTitle>
           <DialogDescription>
-            预览元数据解析一次后冻结；阅读页不会再向第三方回源。
+            标题、封面和摘要会在插入时保存，之后不会随原网站更新。
           </DialogDescription>
         </DialogHeader>
         <div className="grid gap-4">
@@ -157,13 +157,13 @@ export function ExternalContentInsertDialog({
               onChange={(event) => setType(event.target.value as ExternalType)}
               className="mt-1 h-9 w-full rounded-lg border border-input bg-background px-2.5 text-sm"
             >
-              <option value="bookmark">Bookmark</option>
-              <option value="link_preview">Link preview</option>
-              <option value="embed">Interactive embed</option>
+              <option value="bookmark">书签</option>
+              <option value="link_preview">链接预览</option>
+              <option value="embed">交互内容</option>
             </select>
           </Label>
           <Label>
-            URL
+            链接地址
             <div className="mt-1 flex gap-2">
               <Input
                 type="url"

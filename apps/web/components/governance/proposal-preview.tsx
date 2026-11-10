@@ -8,6 +8,7 @@ import { DiffView } from "@/components/history/diff-view";
 import { MergeToWorkingDocument } from "@/components/governance/merge-to-working-document";
 import { MergeConflictPanel } from "@/components/governance/merge-conflict-panel";
 import { compactId } from "@/lib/display-id";
+import { PROPOSAL_STATUS_LABELS, RISK_LABELS } from "@/lib/display-labels";
 
 const RISK_STYLES: Record<string, string> = {
   low: "bg-green-500/10 text-green-700",
@@ -28,7 +29,7 @@ function Snapshot({
       <header className="border-b border-border px-3 py-2">
         <h3 className="text-sm font-semibold">{label}</h3>
         <p className="mt-0.5 truncate font-mono text-[11px] text-muted-foreground">
-          {document.revisionId || "尚未写入 Revision"} · {document.contentHash}
+          {document.revisionId || "尚未写入版本"} · {document.contentHash}
         </p>
       </header>
       <pre className="max-h-80 overflow-auto p-3 font-mono text-xs leading-relaxed">
@@ -47,7 +48,7 @@ export function ProposalPreview({
 }) {
   const impact = preview.impact;
   const metrics = [
-    ["Operation", impact.operationCount],
+    ["修改操作", impact.operationCount],
     ["新增块", impact.addedBlocks],
     ["删除块", impact.removedBlocks],
     ["修改块", impact.changedBlocks],
@@ -59,10 +60,10 @@ export function ProposalPreview({
       <header className="flex flex-wrap items-start justify-between gap-3">
         <div>
           <p className="text-xs font-medium tracking-widest text-muted-foreground uppercase">
-            Proposal Preview
+            修改预览
           </p>
           <h1 className="mt-1 text-2xl font-bold tracking-tight">
-            变更提案 {compactId(proposal.id)}
+            变更修改建议 {compactId(proposal.id)}
           </h1>
           <p className="mt-1 font-mono text-xs text-muted-foreground">
             {proposal.id}
@@ -70,20 +71,20 @@ export function ProposalPreview({
         </div>
         <div className="flex flex-wrap gap-2 text-xs">
           <span className="rounded-full bg-muted px-2.5 py-1">
-            {proposal.status}
+            {PROPOSAL_STATUS_LABELS[proposal.status]}
           </span>
           <span
             className={`rounded-full px-2.5 py-1 ${RISK_STYLES[preview.riskLevel] ?? "bg-muted"}`}
           >
-            风险 {preview.riskLevel}
+            {RISK_LABELS[preview.riskLevel]}
           </span>
           {preview.stale ? (
             <span className="rounded-full bg-red-500/10 px-2.5 py-1 text-red-700">
-              基线已过期
+              原版本已有更新
             </span>
           ) : (
             <span className="rounded-full bg-green-500/10 px-2.5 py-1 text-green-700">
-              基线有效
+              原版本仍有效
             </span>
           )}
         </div>
@@ -105,32 +106,32 @@ export function ProposalPreview({
       </section>
 
       <section>
-        <h2 className="mb-3 text-lg font-semibold">Base / Current / Proposed</h2>
+        <h2 className="mb-3 text-lg font-semibold">原版本 / 当前版本 / 建议内容</h2>
         <div className="grid gap-3 lg:grid-cols-3">
-          <Snapshot label="Base（提案基线）" document={preview.base} />
-          <Snapshot label="Current（当前线上）" document={preview.current} />
-          <Snapshot label="Proposed（应用后）" document={preview.proposed} />
+          <Snapshot label="原版本" document={preview.base} />
+          <Snapshot label="当前版本" document={preview.current} />
+          <Snapshot label="修改后预览" document={preview.proposed} />
         </div>
       </section>
 
       <div className="grid gap-6 lg:grid-cols-2">
         <section>
-          <h2 className="mb-3 text-lg font-semibold">Base → Current</h2>
+          <h2 className="mb-3 text-lg font-semibold">原版本 → 当前版本</h2>
           <DiffView diff={preview.baseToCurrent} />
         </section>
         <section>
-          <h2 className="mb-3 text-lg font-semibold">Base → Proposed</h2>
+          <h2 className="mb-3 text-lg font-semibold">原版本 → 建议内容</h2>
           <DiffView diff={preview.baseToProposed} />
         </section>
       </div>
 
       <section>
         <h2 className="mb-3 text-lg font-semibold">
-          证据链（{preview.evidence.length}）
+          修改依据（{preview.evidence.length}）
         </h2>
         {preview.evidence.length === 0 ? (
           <p className="rounded-lg border border-dashed border-border p-4 text-sm text-muted-foreground">
-            本提案没有附加证据。
+            本修改建议没有附加证据。
           </p>
         ) : (
           <ol className="space-y-2">
@@ -141,9 +142,9 @@ export function ProposalPreview({
               >
                 <span className="font-medium">证据 {index + 1}</span>
                 <dl className="mt-1 text-xs text-muted-foreground">
-                  {item.citationId ? <div>citation: {item.citationId}</div> : null}
+                  {item.citationId ? <div>引文： {item.citationId}</div> : null}
                   {item.sourceChunkId ? (
-                    <div>source chunk: {item.sourceChunkId}</div>
+                    <div>来源片段： {item.sourceChunkId}</div>
                   ) : null}
                   {item.note ? <div>备注: {item.note}</div> : null}
                 </dl>

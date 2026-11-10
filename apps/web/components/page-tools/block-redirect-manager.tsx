@@ -35,7 +35,7 @@ import { isUnauthorized, LOGIN_PATH, useSession } from "@/lib/auth";
 import { cn } from "@/lib/utils";
 
 const redirectSchema = z.object({
-  sourceBlockId: z.string().uuid("来源 Block ID 不是合法 UUID"),
+  sourceBlockId: z.string().uuid("来源内容块 ID 不是有效 UUID"),
   targetPageId: z.string().uuid("请选择目标页面"),
   targetBlockId: z.string().uuid("请选择目标章节"),
 });
@@ -145,7 +145,7 @@ export function BlockRedirectManager({
       setSourceBlockId("");
       setTargetPage(undefined);
       setTargetBlockId("");
-      toast.success("稳定章节迁移已保存", {
+      toast.success("章节跳转已保存", {
         description: `旧地址会前往「${result.targetPageTitle}」#${result.targetCurrentSlug}`,
       });
     } catch (error) {
@@ -164,7 +164,7 @@ export function BlockRedirectManager({
         toast.error("目标页面或目标章节已不存在");
       } else {
         toast.error("章节迁移未保存", {
-          description: "服务端会拒绝迁移环、自指向与悬空目标。",
+          description: "目标章节必须存在，且不能指向自身或形成循环跳转。",
         });
       }
     } finally {
@@ -185,7 +185,7 @@ export function BlockRedirectManager({
       });
       await redirects.mutate();
       toast.success("章节迁移已删除", {
-        description: "历史审计仍然保留，旧章节地址将不再跟随该映射。",
+        description: "移除后，旧章节链接将不再跳转到此目标，操作记录仍会保留。",
       });
     } catch (error) {
       if (isUnauthorized(error)) {
@@ -208,7 +208,7 @@ export function BlockRedirectManager({
             </span>
             <div>
               <h2 className="text-xl font-semibold tracking-tight">
-                稳定章节地址
+                章节链接
               </h2>
             </div>
           </div>
@@ -220,7 +220,7 @@ export function BlockRedirectManager({
           <LockKeyhole className="size-5 text-primary" aria-hidden />
           <p className="mt-5 font-semibold">页面保护策略</p>
           <p className="mt-2 text-xs leading-5 text-muted-foreground">
-            限制谁能编辑、改名、审核或应用这个页面的变更。
+            设置谁可以编辑、改名、审核或发布这个页面的修改。
           </p>
           <span className="mt-5 inline-flex items-center gap-1 text-xs font-semibold text-primary">
             管理保护
@@ -244,13 +244,13 @@ export function BlockRedirectManager({
             <div>
               <h2 className="font-semibold">添加或更新映射</h2>
               <p className="text-xs text-muted-foreground">
-                相同来源 Block ID 会更新到新目标。
+                相同来源内容块 ID 会更新到新目标。
               </p>
             </div>
           </div>
 
           <div className="mt-6 space-y-2">
-            <Label htmlFor="source-block-id">旧 Heading Block ID</Label>
+            <Label htmlFor="source-block-id">旧章节 ID</Label>
             <Input
               id="source-block-id"
               value={sourceBlockId}
@@ -286,7 +286,7 @@ export function BlockRedirectManager({
               </details>
             ) : null}
             <p className="text-[10px] leading-4 text-muted-foreground">
-              已从当前文档消失的旧 ID 仍可直接粘贴，这是本工具的主要用途。
+              也可以粘贴已删除章节的旧 ID，为旧链接设置新的目标。
             </p>
           </div>
 
@@ -426,7 +426,7 @@ export function BlockRedirectManager({
             ) : (
               <Route aria-hidden />
             )}
-            {saving ? "正在校验并保存…" : "保存稳定迁移"}
+            {saving ? "正在校验并保存…" : "保存章节跳转"}
           </Button>
         </form>
 
@@ -456,7 +456,7 @@ export function BlockRedirectManager({
                   <div className="flex flex-wrap items-start justify-between gap-4">
                     <div className="min-w-0 flex-1">
                       <p className="text-[10px] font-semibold tracking-[0.12em] text-muted-foreground uppercase">
-                        Old stable anchor
+                        旧章节链接
                       </p>
                       <p className="mt-2 truncate font-mono text-xs">
                         {redirect.sourceBlockId}

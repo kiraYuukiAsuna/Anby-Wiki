@@ -42,7 +42,7 @@ import { isUnauthorized, LOGIN_PATH, useSession } from "@/lib/auth";
 import { compactId } from "@/lib/display-id";
 
 const mergeSchema = z.object({
-  targetEntityId: z.string().uuid("请选择合法目标 Entity"),
+  targetEntityId: z.string().uuid("请选择有效目标实体"),
   reason: z
     .string()
     .trim()
@@ -84,7 +84,7 @@ function MergedEntityPanel({
 
   const startRollback = () => {
     if (!session.isAuthenticated) {
-      toast.error("请先登录后回滚 Entity 合并");
+      toast.error("请先登录后回滚实体合并");
       router.push(LOGIN_PATH);
       return;
     }
@@ -103,8 +103,8 @@ function MergedEntityPanel({
       const result = await knowledgeApi().rollbackEntityMerge({ id: merge.id });
       setRollbackResult(result);
       setRollbackOpen(false);
-      toast.success(result.idempotent ? "该合并此前已回滚" : "Entity 身份已恢复", {
-        description: `补偿 ${result.compensatedClaimIds.length} 条 Claim，移除 ${result.removedTargetLabels} 个目标标签映射。`,
+      toast.success(result.idempotent ? "该合并此前已回滚" : "实体身份已恢复", {
+        description: `恢复 ${result.compensatedClaimIds.length} 条事实，移除 ${result.removedTargetLabels} 个目标名称映射。`,
       });
       await mergeState.mutate();
       router.refresh();
@@ -113,14 +113,14 @@ function MergedEntityPanel({
         toast.error("登录状态已失效");
         router.push(LOGIN_PATH);
       } else if (error instanceof ResponseError && error.response.status === 403) {
-        toast.error("需要站点管理员权限才能回滚 Entity 合并");
+        toast.error("需要站点管理员权限才能回滚实体合并");
       } else if (error instanceof ResponseError && error.response.status === 409) {
         toast.error("无法安全回滚这次合并", {
           description:
-            "合并后的标签、Claim 或身份状态已经发生变化。为避免覆盖后续编辑，服务端拒绝了补偿。",
+            "合并后已有新的名称、事实或状态修改。为保留这些修改，本次撤销已停止。",
         });
       } else {
-        toast.error("Entity 合并回滚失败，请稍后重试");
+        toast.error("实体合并回滚失败，请稍后重试");
       }
     } finally {
       setSubmitting(false);
@@ -140,7 +140,7 @@ function MergedEntityPanel({
             />
             <div className="min-w-0">
               <p className="font-semibold text-amber-950">
-                该 Entity 已成为永久合并映射
+                这个实体已合并，原 ID 会继续指向合并后的实体。
               </p>
               {mergedIntoEntityId ? (
                 <Link
@@ -166,7 +166,7 @@ function MergedEntityPanel({
             onClick={startRollback}
           >
             <RotateCcw aria-hidden />
-            补偿回滚
+            撤销修改
           </Button>
         </div>
 
@@ -177,7 +177,7 @@ function MergedEntityPanel({
           </p>
         ) : mergeState.error ? (
           <p className="mt-4 text-xs text-destructive">
-            合并映射仍然有效，但暂时无法读取补偿账本。
+            合并仍然有效，但暂时无法加载撤销所需的记录。
           </p>
         ) : merge ? (
           <dl className="mt-4 grid gap-2 border-t border-amber-200 pt-4 text-xs sm:grid-cols-4">
@@ -188,13 +188,13 @@ function MergedEntityPanel({
               </dd>
             </div>
             <div>
-              <dt className="text-amber-800/75">标签映射</dt>
+              <dt className="text-amber-800/75">名称映射</dt>
               <dd className="mt-1 font-semibold text-amber-950">
                 {merge.labelMappings.length}
               </dd>
             </div>
             <div>
-              <dt className="text-amber-800/75">Claim 映射</dt>
+              <dt className="text-amber-800/75">事实映射</dt>
               <dd className="mt-1 font-semibold text-amber-950">
                 {merge.claimMappings.length}
               </dd>
@@ -218,27 +218,26 @@ function MergedEntityPanel({
 
       {rollbackResult ? (
         <div className="mt-3 rounded-xl border border-emerald-200 bg-emerald-50/70 p-4 text-sm text-emerald-900">
-          「{sourceTitle}」已恢复为可写身份；页面刷新后可继续治理。
+          「{sourceTitle}」已恢复，刷新后可以继续编辑。
         </div>
       ) : null}
 
       <Dialog open={rollbackOpen} onOpenChange={setRollbackOpen}>
         <DialogContent className="sm:max-w-lg">
           <DialogHeader>
-            <DialogTitle>补偿回滚 Entity 合并</DialogTitle>
+            <DialogTitle>撤销修改实体合并</DialogTitle>
             <DialogDescription>
-              恢复「{sourceTitle}」并按不可变合并账本迁回标签与 Claim。服务端会逐项核对，
-              任何后续变更都会令回滚安全失败。
+              恢复「{sourceTitle}」并恢复合并前的名称和事实。若合并后已有新修改，系统会停止撤销，保留新内容。
             </DialogDescription>
           </DialogHeader>
           {merge ? (
             <div className="rounded-xl border border-destructive/20 bg-destructive/5 p-4 text-xs leading-5">
               <p className="font-semibold text-destructive">
-                将补偿批次 {compactId(merge.id)}
+                将撤销批次 {compactId(merge.id)}
               </p>
               <p className="mt-1 text-muted-foreground">
-                最多恢复 {merge.claimMappings.length} 条 Claim，并撤销{" "}
-                {merge.labelMappings.length} 个标签映射。该动作本身也会写入审计日志。
+                最多恢复 {merge.claimMappings.length} 条事实，并撤销{" "}
+                {merge.labelMappings.length} 个名称映射。该动作本身也会写入审计日志。
               </p>
             </div>
           ) : null}
@@ -249,7 +248,7 @@ function MergedEntityPanel({
               className="mt-0.5"
             />
             <span>
-              我确认需要恢复源 Entity，并理解若合并后已有新编辑，系统会拒绝回滚而不覆盖数据。
+              我确认恢复原实体。若合并后已有新编辑，系统会停止撤销，不覆盖新内容。
             </span>
           </label>
           <DialogFooter>
@@ -272,7 +271,7 @@ function MergedEntityPanel({
               ) : (
                 <RotateCcw aria-hidden />
               )}
-              {submitting ? "核对并回滚中…" : "确认补偿回滚"}
+              {submitting ? "核对并回滚中…" : "确认撤销修改"}
             </Button>
           </DialogFooter>
         </DialogContent>
@@ -349,7 +348,7 @@ export function EntityMergePanel({
           <GitMerge className="mt-0.5 size-4 shrink-0 text-amber-700" aria-hidden />
           <div>
             <p className="font-semibold text-amber-950">
-              该 Entity 不可再治理
+              这个实体已无法编辑
             </p>
             {mergedIntoEntityId ? (
               <Link
@@ -370,7 +369,7 @@ export function EntityMergePanel({
 
   const start = () => {
     if (!session.isAuthenticated) {
-      toast.error("请先登录后发起 Entity 合并");
+      toast.error("请先登录后发起实体合并");
       router.push(LOGIN_PATH);
       return;
     }
@@ -402,8 +401,8 @@ export function EntityMergePanel({
       });
       setResult(merge);
       setOpen(false);
-      toast.success(merge.idempotent ? "该合并此前已经完成" : "Entity 合并已完成", {
-        description: `${merge.labelMappings.length} 个标签映射，${merge.claimMappings.length} 条 Claim 映射。`,
+      toast.success(merge.idempotent ? "该合并此前已经完成" : "实体合并已完成", {
+        description: `${merge.labelMappings.length} 个名称映射，${merge.claimMappings.length} 条事实映射。`,
       });
       router.refresh();
     } catch (error) {
@@ -411,13 +410,13 @@ export function EntityMergePanel({
         toast.error("登录状态已失效");
         router.push(LOGIN_PATH);
       } else if (error instanceof ResponseError && error.response.status === 403) {
-        toast.error("需要站点管理员权限才能合并 Entity");
+        toast.error("需要站点管理员权限才能合并实体");
       } else if (error instanceof ResponseError && error.response.status === 409) {
         toast.error("合并条件已变化", {
           description: "源或目标可能已被合并，或两者并非同站点、同类型实体。",
         });
       } else {
-        toast.error("Entity 合并失败，请稍后重试");
+        toast.error("实体合并失败，请稍后重试");
       }
     } finally {
       setSubmitting(false);
@@ -431,11 +430,10 @@ export function EntityMergePanel({
           <div>
             <p className="flex items-center gap-2 text-sm font-semibold">
               <GitMerge className="size-4 text-indigo-700" aria-hidden />
-              重复身份治理
+              合并重复实体
             </p>
             <p className="mt-1 max-w-xl text-xs leading-5 text-muted-foreground">
-              仅当两个 {entityTypeName} Entity
-              明确代表同一现实身份时使用。操作会保留审计与旧 ID 映射。
+              仅当两个 {entityTypeName} 确认两个实体代表同一对象后，可将它们合并。原 ID 和操作记录会保留。
             </p>
           </div>
           <Button
@@ -445,7 +443,7 @@ export function EntityMergePanel({
             onClick={start}
           >
             <GitMerge aria-hidden />
-            合并到其他 Entity
+            合并到其他实体
           </Button>
         </div>
       </div>
@@ -456,8 +454,8 @@ export function EntityMergePanel({
             合并批次 {compactId(result.id)} 已记录
           </p>
           <p className="mt-1 text-xs text-emerald-800">
-            映射了 {result.labelMappings.length} 个标签与{" "}
-            {result.claimMappings.length} 条 Claim。
+            映射了 {result.labelMappings.length} 个名称与{" "}
+            {result.claimMappings.length} 条事实。
           </p>
           <Link
             href={`/entities/${result.targetEntityId}`}
@@ -472,10 +470,9 @@ export function EntityMergePanel({
       <Dialog open={open} onOpenChange={setOpen}>
         <DialogContent className="sm:max-w-2xl">
           <DialogHeader>
-            <DialogTitle>合并重复 Entity</DialogTitle>
+            <DialogTitle>合并重复实体</DialogTitle>
             <DialogDescription>
-              将「{sourceTitle}」并入同类型的有效 Entity。源 ID
-              会保留为永久映射，标签与 Claim 由服务端在一个事务中迁移。
+              将「{sourceTitle}」合并到同类型的有效实体。名称和事实会一起转移，原 ID 仍可访问合并后的实体。
             </DialogDescription>
           </DialogHeader>
 
@@ -488,7 +485,7 @@ export function EntityMergePanel({
               <div className="text-xs leading-5">
                 <p className="font-semibold text-destructive">高风险身份变更</p>
                 <p className="mt-1 text-muted-foreground">
-                  源 Entity 当前有 {sourceLabelCount} 个标签、{sourceAliasCount}{" "}
+                  源实体当前有 {sourceLabelCount} 个名称、{sourceAliasCount}{" "}
                   个别名与 {sourcePageCount} 个页面提及。合并后不再接受新写入。
                 </p>
                 <p className="mt-1 font-mono text-[10px] text-muted-foreground">
@@ -537,7 +534,7 @@ export function EntityMergePanel({
               </dl>
             </div>
           ) : (
-            <Command shouldFilter={false} label="选择 Entity 合并目标">
+            <Command shouldFilter={false} label="选择实体合并目标">
               <div className="relative">
                 <Search
                   className="pointer-events-none absolute top-2.5 left-3 size-4 text-muted-foreground"
@@ -597,7 +594,7 @@ export function EntityMergePanel({
               id="entity-merge-reason"
               value={reason}
               onChange={(event) => setReason(event.target.value)}
-              placeholder="说明二者为何是同一身份，以及你核对了哪些标签、事实或来源…"
+              placeholder="说明二者为何是同一身份，以及你核对了哪些名称、事实或来源…"
               maxLength={1000}
             />
             <p className="text-right text-[10px] text-muted-foreground">
@@ -612,8 +609,7 @@ export function EntityMergePanel({
               className="mt-0.5"
             />
             <span>
-              我确认两者代表同一身份，并理解源 Entity
-              将变为只读映射；该操作会进入不可变审计日志。
+              我确认两者代表同一对象。合并后，原实体将只读并指向目标实体，操作记录会保留。
             </span>
           </label>
 

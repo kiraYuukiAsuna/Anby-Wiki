@@ -32,16 +32,16 @@ export default async function CitationDetailPage({
   const safeResourceUrl = safeHttpUrl(resourceUrl);
 
   return (
-    <DetailShell eyebrow="Citation" title={detail.source.title} status="不可变证据">
+    <DetailShell eyebrow="引文" title={detail.source.title} status="引用证据">
       <DetailSection title="引用定位">
         <DetailRows
           rows={[
-            { label: "Citation ID", value: detail.id },
-            { label: "Source Version", value: detail.sourceVersionId },
-            { label: "Chunk", value: detail.sourceChunkId ?? "—" },
+            { label: "引文 ID", value: detail.id },
+            { label: "来源版本", value: detail.sourceVersionId },
+            { label: "来源片段", value: detail.sourceChunkId ?? "—" },
             { label: "引文", value: detail.quotation ?? "—" },
             {
-              label: "细粒度定位",
+              label: "原文位置",
               value: detail.locator ? JSON.stringify(detail.locator) : "—",
             },
           ]}

@@ -68,7 +68,7 @@ const wikiSchema = z
     entityUrlTemplate: z
       .string()
       .trim()
-      .min(1, "请填写 Entity URL 模板")
+      .min(1, "请填写实体 URL 模板")
       .refine((value) => value.includes("{entity_id}"), {
         message: "模板必须包含 {entity_id}",
       }),
@@ -110,7 +110,7 @@ const wikiSchema = z
       context.addIssue({
         code: "custom",
         path: ["entityUrlTemplate"],
-        message: "Entity URL 模板不是合法 URL",
+        message: "实体 URL 模板不是有效 URL",
       });
     }
   });
@@ -189,7 +189,7 @@ function WikiEditor({
       onClose();
     } catch (error) {
       if (error instanceof ResponseError && error.response.status === 403) {
-        toast.error("只有站点管理员可以管理 Federation");
+        toast.error("只有管理员可以管理跨 Wiki 关联。");
       } else if (
         error instanceof ResponseError &&
         error.response.status === 409
@@ -207,7 +207,7 @@ function WikiEditor({
     <>
       <div className="grid gap-4 py-1 sm:grid-cols-2">
         <div className="space-y-2">
-          <Label htmlFor="federation-wiki-key">稳定 Key</Label>
+          <Label htmlFor="federation-wiki-key">唯一标识</Label>
           <Input
             id="federation-wiki-key"
             value={draft.wikiKey}
@@ -245,7 +245,7 @@ function WikiEditor({
           />
         </div>
         <div className="space-y-2 sm:col-span-2">
-          <Label htmlFor="federation-template">Entity URL 模板</Label>
+          <Label htmlFor="federation-template">实体 URL 模板</Label>
           <Input
             id="federation-template"
             value={draft.entityUrlTemplate}
@@ -603,11 +603,11 @@ export function FederationWorkspace() {
 
       <section aria-labelledby="federation-links-title">
         <h2 id="federation-links-title" className="text-xl font-semibold">
-          Entity 映射
+          实体映射
         </h2>
         <div className="mt-5 grid gap-3 rounded-2xl border bg-card/70 p-4 md:grid-cols-[minmax(0,1fr)_13rem_10rem]">
           <label className="relative block">
-            <span className="sr-only">搜索 Federation 映射</span>
+            <span className="sr-only">搜索跨 Wiki 关联映射</span>
             <Search
               className="pointer-events-none absolute top-2 left-2.5 size-4 text-muted-foreground"
               aria-hidden
@@ -656,7 +656,7 @@ export function FederationWorkspace() {
 
         {linksState.error ? (
           <div className="mt-5 rounded-2xl border border-destructive/20 bg-destructive/5 p-5 text-sm text-destructive">
-            Federation 映射暂时无法读取。
+            跨 Wiki 关联映射暂时无法读取。
           </div>
         ) : null}
         {linksState.isLoading ? (
@@ -675,7 +675,7 @@ export function FederationWorkspace() {
             <h3 className="mt-4 font-semibold">没有符合条件的映射</h3>
             {entitiesVisible ? (
               <Button asChild variant="outline" className="mt-5">
-                <Link href="/entities">浏览 Entity</Link>
+                <Link href="/entities">浏览实体</Link>
               </Button>
             ) : null}
           </div>
@@ -716,7 +716,7 @@ export function FederationWorkspace() {
               {wikiDraft?.id ? "编辑远端 Wiki" : "登记远端 Wiki"}
             </DialogTitle>
             <DialogDescription>
-              配置身份链接模板与本地信任边界；不会抓取或镜像远端内容。
+              设置其他 Wiki 的实体链接和信任方式。这里只保存关联，不会复制对方的内容。
             </DialogDescription>
           </DialogHeader>
           {wikiDraft ? (

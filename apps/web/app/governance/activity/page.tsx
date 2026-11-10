@@ -9,7 +9,7 @@ export default function GovernanceActivityPage() {
         <span className="flex size-11 items-center justify-center rounded-2xl bg-violet-100 text-violet-700">
           <ScrollText className="size-5" aria-hidden />
         </span>
-        <h1 className="text-3xl font-semibold">审计与变更标签</h1>
+        <h1 className="text-3xl font-semibold">操作记录与标签</h1>
       </header>
       <AuditActivity />
     </div>

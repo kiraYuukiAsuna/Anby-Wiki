@@ -49,7 +49,7 @@ const OPTIONS: Array<{
   {
     value: "human_verified",
     label: "人工已核验",
-    detail: "Reviewer 确认事实与证据链",
+    detail: "审核者已核对事实和证据",
     icon: BadgeCheck,
     tone: "border-emerald-200 bg-emerald-50 text-emerald-800",
   },
@@ -94,7 +94,7 @@ export function ClaimVerificationControl({
         OPTIONS.find((item) => item.value === verificationStatus)?.label ??
           "核验状态已更新",
         {
-          description: "引用此 Claim 的动态阅读内容会由 Worker 精准重渲染。",
+          description: "引用这条事实的页面内容会自动更新。",
         },
       );
     } catch (error) {
@@ -104,7 +104,7 @@ export function ClaimVerificationControl({
         error instanceof ResponseError &&
         error.response.status === 403
       ) {
-        toast.error("需要 Reviewer 或管理员权限才能更新核验状态");
+        toast.error("需要审核者或管理员权限才能更新核验状态。");
       } else {
         toast.error("核验状态更新失败，请稍后重试");
       }

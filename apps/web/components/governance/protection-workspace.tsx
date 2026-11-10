@@ -35,11 +35,11 @@ import { isUnauthorized, LOGIN_PATH, useSession } from "@/lib/auth";
 import { cn } from "@/lib/utils";
 
 const ACTIONS = [
-  ["edit", "编辑", "发布新的 Revision"],
+  ["edit", "编辑", "发布新的版本"],
   ["rename", "改名", "改变页面标题与别名"],
-  ["review", "审核", "作出 Proposal 决议"],
-  ["apply", "应用", "应用获批 Proposal"],
-  ["batch_rollback", "批次回滚", "补偿回滚 ChangeBatch"],
+  ["review", "审核", "审核修改建议"],
+  ["apply", "生效", "使已批准的修改生效"],
+  ["batch_rollback", "批次回滚", "撤销修改变更批次"],
 ] as const;
 
 const ACTION_LABEL: Record<PageProtection["actionType"], string> = {
@@ -47,11 +47,11 @@ const ACTION_LABEL: Record<PageProtection["actionType"], string> = {
   edit: "编辑",
   rename: "改名",
   review: "审核",
-  apply: "应用",
+  apply: "生效",
   batch_rollback: "批次回滚",
 };
 
-const uuidSchema = z.string().uuid("请选择合法页面");
+const uuidSchema = z.string().uuid("请选择有效页面");
 const titleScopeSchema = z.object({
   namespaceKey: z
     .string()
@@ -298,7 +298,7 @@ export function ProtectionWorkspace({
     return (
       <div className="flex min-h-72 items-center justify-center gap-2 text-sm text-muted-foreground">
         <LoaderCircle className="size-4 animate-spin" aria-hidden />
-        正在确认治理权限…
+        正在检查权限…
       </div>
     );
   }
@@ -328,7 +328,7 @@ export function ProtectionWorkspace({
           需要站点管理员权限
         </h2>
         <p className="mt-2 max-w-2xl text-sm leading-6 text-amber-900/70">
-          页面保护会改变谁能够创建、编辑、审核、应用或回滚知识，因此普通共建者只能查看页面本身。
+          页面保护用于设置谁可以创建、编辑、审核、生效或撤销修改，仅管理员可调整。
         </p>
       </div>
     );
@@ -526,7 +526,7 @@ export function ProtectionWorkspace({
               onChange={(event) => setExpiresAt(event.target.value)}
             />
             <p className="text-[10px] leading-4 text-muted-foreground">
-              留空表示持续生效；后续仍可随时撤销且不会抹除审计。
+              留空表示不过期。你可以随时撤销规则，操作记录会保留。
             </p>
           </div>
 

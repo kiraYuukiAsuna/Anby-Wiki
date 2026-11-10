@@ -70,7 +70,7 @@ function VersionEditor({
   const save = async () => {
     const propsSchema = parseComponentObject(schema);
     if (!propsSchema || propsSchema.type !== "object") {
-      toast.error("Props Schema 必须是根 type=object 的合法 JSON");
+      toast.error("参数格式需使用 JSON Schema，且根类型为 object。");
       return;
     }
     setSaving(true);
@@ -98,7 +98,7 @@ function VersionEditor({
       onClose();
     } catch {
       toast.error(version ? "更新草稿失败" : "创建版本失败", {
-        description: "请检查 JSON Schema 与渲染器约束。",
+        description: "请检查参数格式与组件类型是否匹配。",
       });
     } finally {
       setSaving(false);
@@ -182,7 +182,7 @@ export function ComponentWorkspace({ id }: { id: string }) {
       <div className="rounded-3xl border border-destructive/20 bg-destructive/5 p-8">
         <h1 className="text-xl font-semibold">组件无法打开</h1>
         <p className="mt-2 text-sm text-muted-foreground">
-          它可能不存在，或当前 API 暂时不可用。
+          内容可能已移除，也可能暂时无法加载。请稍后重试。
         </p>
         <Button asChild variant="outline" className="mt-5">
           <Link href="/components">返回组件中心</Link>
@@ -215,7 +215,7 @@ export function ComponentWorkspace({ id }: { id: string }) {
         });
       }
       await versionState.mutate();
-      toast.success(action === "publish" ? "版本已发布并冻结" : "版本已废弃");
+      toast.success(action === "publish" ? "版本已发布，内容不可再修改" : "版本已废弃");
     } catch {
       toast.error(action === "publish" ? "发布失败" : "废弃失败");
     } finally {
@@ -277,7 +277,7 @@ export function ComponentWorkspace({ id }: { id: string }) {
           </h2>
           <span className="flex items-center gap-1.5 text-xs text-muted-foreground">
             <LockKeyhole className="size-3.5" aria-hidden />
-            发布即冻结
+            发布后内容不可再修改
           </span>
         </div>
 
@@ -307,7 +307,7 @@ export function ComponentWorkspace({ id }: { id: string }) {
                           <h3 className="font-semibold">
                             {version.rendererRef ===
                             "builtin.entity_claim_infobox"
-                              ? "Entity / Claim 信息框"
+                              ? "实体 / 事实信息框"
                               : "通用键值卡片"}
                           </h3>
                           <span
@@ -415,7 +415,7 @@ export function ComponentWorkspace({ id }: { id: string }) {
                   </div>
                   <details className="mt-4 rounded-xl border bg-muted/20">
                     <summary className="cursor-pointer px-4 py-3 text-xs font-medium">
-                      查看 Props Schema
+                      查看参数格式
                     </summary>
                     <pre className="overflow-x-auto border-t p-4 text-[11px] leading-5">
                       {JSON.stringify(version.propsSchema, null, 2)}
