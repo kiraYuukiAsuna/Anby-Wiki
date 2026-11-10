@@ -1464,8 +1464,21 @@
 .ast-inline-editor__panel { top: 100%; min-width: min(20rem, 75vw); max-width: min(24rem, 75vw); }
 .ast-inline-editor:focus .ast-inline-editor__panel { display: grid; }
 .ast-inline-editor .ast-editable-block__field { min-width: 0; }
-.ast-callout { padding: .75rem 1rem; border-color: var(--border); background: var(--muted); font-size: 1rem; color: var(--foreground); }
-.ast-callout-title { font-size: .875rem; font-weight: 600; }
+.ast-callout { display: flex; align-items: flex-start; gap: .75rem; margin: 1rem 0; padding: .75rem 1rem; font-size: 1rem; color: var(--foreground); }
+.ast-callout__icon { flex: none; }
+.ast-callout__style { display: flex; align-items: center; justify-content: center; min-width: 2rem; min-height: 2rem; border-radius: .375rem; overflow-wrap: anywhere; max-width: 4rem; }
+button.ast-callout__style:hover { background: color-mix(in oklch, var(--foreground) 8%, transparent); }
+button.ast-callout__style:focus-visible { outline: 2px solid var(--ring); outline-offset: 2px; }
+.ast-callout__content { flex: 1; min-width: 0; }
+.ast-callout__content > [data-node-view-content-react] > :first-child { margin-top: .2rem; }
+.ast-callout__content > [data-node-view-content-react] > :last-child { margin-bottom: 0; }
+.ast-callout-panel { z-index: 80; width: min(20rem, calc(100vw - 1rem)); max-height: var(--radix-popover-content-available-height); overflow-y: auto; border: 1px solid var(--border); border-radius: .75rem; padding: 1rem; background: var(--popover); color: var(--popover-foreground); box-shadow: 0 8px 24px #0002; }
+.ast-callout-panel fieldset + fieldset { margin-top: 1rem; }
+.ast-callout-panel legend { margin-bottom: .5rem; font-size: .75rem; color: var(--muted-foreground); }
+.ast-callout-swatch { display: flex; justify-content: center; padding: .35rem; border: 2px solid transparent; border-radius: .375rem; }
+.ast-callout-swatch span { width: 1.5rem; height: 1.5rem; border-radius: .25rem; border: 1px solid var(--border); }
+.ast-callout-swatch[aria-pressed="true"] { border-color: var(--foreground); }
+.ast-callout-swatch:focus-visible { outline: 2px solid var(--ring); }
 .ast-callout[data-callout-color="orange"] { border-color: #f9731666; background: #f973161a; }
 .ast-callout[data-callout-color="yellow"] { border-color: #eab30866; background: #eab3081a; }
 .ast-callout[data-callout-color="red"] { border-color: #ef444466; background: #ef44441a; }

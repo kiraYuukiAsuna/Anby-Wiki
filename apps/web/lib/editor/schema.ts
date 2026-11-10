@@ -1,4 +1,5 @@
 import React, { useState } from "react";
+import { CalloutView } from "@/lib/editor/callout";
 import { TableView } from "@/lib/editor/table";
 import { ChevronRight } from "lucide-react";
 import { toast } from "sonner";
@@ -74,7 +75,6 @@ const blockTypesWithId = [
   "embedBlock", "astTable", "astTableRow", "astTableCell",
 ];
 
-const CALLOUT_LABELS: Record<string, string> = { info: "信息", warning: "警告", danger: "危险" };
 const FIELD_STYLE = "ast-editable-block__field";
 const CONTROL_STYLE = "ast-editable-block__control";
 
@@ -200,20 +200,6 @@ function NumberInput(props: ReactNodeViewProps & { attrName: string; label: stri
   );
 }
 
-function SelectInput(props: ReactNodeViewProps & { attrName: string; label: string; options: { value: string; label: string }[] }) {
-  const value = textValue(props.node.attrs[props.attrName]);
-  return React.createElement(Field, { label: props.label },
-    React.createElement("select", {
-      className: CONTROL_STYLE,
-      contentEditable: false,
-      value,
-      disabled: !props.editor.isEditable,
-      onChange: (event: React.ChangeEvent<HTMLSelectElement>) => updateAttr(props, props.attrName, event.currentTarget.value),
-      onKeyDown: (event: React.KeyboardEvent<HTMLSelectElement>) => event.stopPropagation(),
-    }, props.options.map((option) => React.createElement("option", { key: option.value, value: option.value }, option.label))),
-  );
-}
-
 function BlockShell(props: ReactNodeViewProps & { title: string; summary?: string; className?: string; children?: React.ReactNode; content?: boolean }) {
   return React.createElement(NodeViewWrapper, {
     as: "section",
@@ -222,7 +208,6 @@ function BlockShell(props: ReactNodeViewProps & { title: string; summary?: strin
     "data-id": props.node.attrs.id,
     "data-column-header": props.node.attrs.hasColumnHeader || undefined,
     "data-row-header": props.node.attrs.hasRowHeader || undefined,
-    "data-callout-color": props.node.attrs.color || undefined,
     style: props.node.type.name === "column" ? { flex: props.node.attrs.widthRatio } : undefined,
   },
     props.node.isAtom ? React.createElement("div", {
@@ -241,20 +226,8 @@ function BlockShell(props: ReactNodeViewProps & { title: string; summary?: strin
       ),
       React.createElement("div", { className: "ast-editable-block__grid", contentEditable: false }, props.children),
     ) : null,
-    props.node.type.name === "callout" ? React.createElement("div", { className: "ast-callout-title", contentEditable: false }, props.node.attrs.icon || CALLOUT_LABELS[props.node.attrs.kind]) : null,
     props.node.type.name === "astTable" && props.node.attrs.caption ? React.createElement("div", { className: "text-sm text-muted-foreground", contentEditable: false }, props.node.attrs.caption) : null,
     props.content ? React.createElement(NodeViewContent, { className: "ast-editable-block__content" }) : null,
-  );
-}
-
-function CalloutView(props: ReactNodeViewProps) {
-  const kind = textValue(props.node.attrs.kind) || "info";
-  return React.createElement(BlockShell, { ...props, title: "提示框", summary: CALLOUT_LABELS[kind] ?? kind, className: `ast-callout ast-callout--${kind}`, content: true },
-    React.createElement(SelectInput, { ...props, label: "类型", attrName: "kind", options: [
-      { value: "info", label: "信息" }, { value: "warning", label: "警告" }, { value: "danger", label: "危险" },
-    ] }),
-    React.createElement(TextInput, { ...props, label: "图标", attrName: "icon" }),
-    React.createElement(TextInput, { ...props, label: "颜色", attrName: "color" }),
   );
 }
 
@@ -334,12 +307,22 @@ function handleBlockKeyDown(view: EditorView, event: KeyboardEvent): boolean {
     return true;
   }
   if (event.key === "Backspace") {
-    if (!["todoBlock", "toggleBlock", "sectionHeading"].includes(block.type.name) ||
+    if (!["todoBlock", "toggleBlock", "sectionHeading", "callout"].includes(block.type.name) ||
         !summary || !selection.empty || $from.parentOffset !== 0) return false;
     const paragraph = $from.parent.type.create({ ...$from.parent.attrs, id: block.attrs.id }, $from.parent.content);
     const start = $from.before(-1);
     const tr = view.state.tr.replaceWith(start, $from.after(-1), block.content.replaceChild(0, paragraph));
     tr.setSelection(TextSelection.create(tr.doc, start + 1));
+    view.dispatch(tr.scrollIntoView());
+    return true;
+  }
+  if (block.type.name === "callout") {
+    if (!selection.empty || $from.parent.content.size !== 0 || $from.index(-1) !== block.childCount - 1) return false;
+    const tr = view.state.tr;
+    const after = $from.after(-1);
+    if (block.childCount === 1) tr.replaceWith($from.before(-1), after, $from.parent);
+    else tr.delete($from.before(), $from.after()).insert(tr.mapping.map(after), $from.parent);
+    tr.setSelection(TextSelection.create(tr.doc, tr.mapping.map(after) - 1));
     view.dispatch(tr.scrollIntoView());
     return true;
   }
@@ -556,7 +539,7 @@ export const editorExtensions = [
   InlineCode,
   TextColor,
   BackgroundColor,
-  containerNode("callout", "block*", CalloutView, { kind: { default: "info" }, icon: { default: "" }, color: { default: "default" } }),
+  containerNode("callout", "block*", (props) => React.createElement(CalloutView, { ...props, onUpdateAttrs: attrs => updateAttrs(props, attrs) }), { kind: { default: "info" }, icon: { default: "" }, color: { default: "default" } }),
   atomNode("preformatted", { kind: { default: "plain" }, caption: { default: "" }, text: { default: "" } }, PreformattedView),
   atomNode("equation", { expression: { default: "" }, caption: { default: "" } }, EquationView),
   containerNode("todoBlock", "paragraph block*", TodoView, { checked: { default: false } }),

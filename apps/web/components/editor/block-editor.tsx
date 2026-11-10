@@ -10,6 +10,7 @@ import type { Editor, JSONContent } from "@tiptap/core";
 import { Extension } from "@tiptap/core";
 import { EditorContent, useEditor } from "@tiptap/react";
 import { Suggestion, type SuggestionKeyDownProps, type SuggestionProps } from "@tiptap/suggestion";
+import { closeHistory } from "@tiptap/pm/history";
 import { Plugin, TextSelection } from "@tiptap/pm/state";
 import { toast } from "sonner";
 
@@ -23,6 +24,7 @@ import { PageReferencePicker } from "@/components/editor/page-reference-picker";
 import { PageButtonInsertDialog } from "@/components/editor/page-button-insert-dialog";
 import { clientUUID } from "@/lib/client-uuid";
 import type { Block, Document } from "@/lib/ast/schema";
+import { insertCodeBlock } from "@/lib/editor/code";
 import { fromAst } from "@/lib/editor/fromAst";
 import { createAdapterState, type AdapterState } from "@/lib/editor/ids";
 import { PresenceExtension, editorPosition, resolveEditorPosition, setPresencePeers, type EditorPeer } from "@/lib/editor/presence";
@@ -110,9 +112,10 @@ function slashMenuExtension(items: SlashItem[]) {
       return [Suggestion<SlashItem, SlashItem>({
         editor: this.editor,
         char: "/",
+        allow: ({ state, range }) => !state.doc.resolve(range.from).parent.type.spec.code,
         items: ({ query }) => items.filter((item) => itemMatches(item, query)),
         command: ({ editor, range, props }) => {
-          editor.chain().focus().deleteRange(range).run();
+          editor.chain().focus().command(({ tr }) => { closeHistory(tr); return true; }).deleteRange(range).run();
           props.run(editor);
         },
         render: () => {
@@ -208,7 +211,7 @@ export function BlockEditor({
     { title: "无序列表", subtext: "项目列表", aliases: ["bullet", "list"], group: "基础", icon: "•", run: (editor) => { editor.chain().focus().toggleBulletList().run(); } },
     { title: "有序列表", subtext: "编号列表", aliases: ["ordered", "list"], group: "基础", icon: "1.", run: (editor) => { editor.chain().focus().toggleOrderedList().run(); } },
     { title: "引用", subtext: "引用段落", aliases: ["quote"], group: "基础", icon: "❞", run: (editor) => { editor.chain().focus().toggleBlockquote().run(); } },
-    { title: "代码块", subtext: "多行代码", aliases: ["code"], group: "基础", icon: "</>", run: (editor) => { editor.chain().focus().toggleCodeBlock().run(); } },
+    { title: "代码块", subtext: "多行代码", aliases: ["code"], group: "基础", icon: "</>", run: (editor) => { insertCodeBlock(editor); } },
     { title: "分割线", subtext: "分隔内容", aliases: ["divider"], group: "基础", icon: "—", run: (editor) => { editor.chain().focus().setHorizontalRule().run(); } },
     { title: "待办", subtext: "可勾选事项", aliases: ["todo", "task"], group: "基础", icon: "☑", run: (editor) => insertTemplate(editor, { type: "todoBlock", content: [{ type: "paragraph" }] }) },
     { title: "折叠块", subtext: "可展开的正文", aliases: ["toggle"], group: "基础", icon: "▸", run: (editor) => insertTemplate(editor, { type: "toggleBlock", content: [{ type: "paragraph", content: [{ type: "text", text: "详情" }] }, { type: "paragraph" }] }) },
