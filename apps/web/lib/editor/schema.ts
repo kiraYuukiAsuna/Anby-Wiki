@@ -265,10 +265,11 @@ function InlineAtomView(props: ReactNodeViewProps & { label: string; className: 
     tabIndex: 0,
     "aria-label": `${props.label}：${text}`,
   },
-    React.createElement("span", { className: "ast-inline-editor__preview" }, text),
-    props.editor.isEditable ? React.createElement("span", { className: "ast-inline-editor__panel" },
-      props.fields.map((field) => React.createElement(TextInput, { ...props, key: field.attr, attrName: field.attr, label: field.label, type: field.type })),
-    ) : null,
+    React.createElement("span", { className: "ast-inline-editor__preview" }, text,
+      props.editor.isEditable ? React.createElement("span", { className: "ast-inline-editor__panel" },
+        props.fields.map((field) => React.createElement(TextInput, { ...props, key: field.attr, attrName: field.attr, label: field.label, type: field.type })),
+      ) : null,
+    ),
   );
 }
 

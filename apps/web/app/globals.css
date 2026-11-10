@@ -503,9 +503,9 @@
 
 
 .ast-inline-editor {
-  position: relative;
+  /* Positioned backgrounds can paint over Chromium's native caret. */
   display: inline-flex;
-  margin-inline: .15em; /* Keep the native caret clear of the atom's background. */
+  margin-inline: .15em;
   align-items: center;
   gap: 0.25rem;
   cursor: text;
@@ -519,6 +519,7 @@
 }
 
 .ast-inline-editor__preview {
+  position: relative;
   min-width: 0;
 }
 

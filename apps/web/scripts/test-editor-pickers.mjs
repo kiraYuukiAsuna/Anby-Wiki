@@ -1,11 +1,12 @@
-// Run against /dev/editor with EDITOR_TEST_URL and an installed PLAYWRIGHT_MODULE.
+// Run against /dev/editor with EDITOR_TEST_URL and installed PLAYWRIGHT_MODULE / PNG_MODULE.
 import assert from 'node:assert/strict';
 const { chromium } = await import(process.env.PLAYWRIGHT_MODULE || 'playwright');
+const { PNG } = await import(process.env.PNG_MODULE || 'pngjs');
 const baseURL = process.env.EDITOR_TEST_URL || 'http://127.0.0.1:3107';
 const id = n => `0198a1b2-c3d4-7e5f-8a9b-${String(n).padStart(12, '0')}`;
 const browser = await chromium.launch({ channel: 'chrome', headless: true });
 try {
-  const context = await browser.newContext({ viewport: { width: 1440, height: 1000 } });
+  const context = await browser.newContext({ viewport: { width: 1440, height: 1000 }, deviceScaleFactor: Number(process.env.EDITOR_TEST_SCALE || 1) });
   await context.addCookies([{ name: 'anby_session', value: 'editor-fixture', url: baseURL }]);
   const page = await context.newPage();
   const errors = [], requests = [];
@@ -51,6 +52,32 @@ try {
     const chip = el.querySelector('.ast-inline-editor').getBoundingClientRect();
     return side === 'after' ? caret.left - chip.right : chip.left - caret.right;
   }, side);
+
+  const assertPaintedCaret = async () => {
+    const style = await page.addStyleTag({content:'.tiptap { caret-color: rgb(255,0,0) !important; }'});
+    try {
+      await page.locator('[data-slot="dialog-overlay"]').waitFor({state:'detached'});
+      await page.mouse.move(0,0);
+      await root.scrollIntoViewIfNeeded();
+      const clip = await root.evaluate(el => {
+        const rect = el.querySelector('p').getBoundingClientRect();
+        return {x:Math.floor(rect.x),y:Math.floor(rect.y)-4,width:Math.ceil(rect.width),height:Math.ceil(rect.height)+8};
+      });
+      let rows = [];
+      for (let attempt=0;attempt<8;attempt++) {
+        const image = PNG.sync.read(await page.screenshot({clip,caret:'initial'}));
+        const painted = [];
+        for (let y=0;y<image.height;y++) for (let x=0;x<image.width;x++) {
+          const p=(y*image.width+x)*4;
+          if(image.data[p]>200 && image.data[p+1]<40 && image.data[p+2]<40) {painted.push(y);break;}
+        }
+        if(painted.length>rows.length) rows=painted;
+        if(rows.length>=20 && rows.at(-1)-rows[0]+1===rows.length) break;
+        await page.waitForTimeout(80);
+      }
+      assert(rows.length>=20 && rows.at(-1)-rows[0]+1===rows.length, `native caret is occluded: painted rows ${rows.join(',')}`);
+    } finally { await style.evaluate(el=>el.remove()); }
+  };
 
   const set = async content => { await page.getByRole('button',{name:'空白文档'}).click(); await root.waitFor(); await root.evaluate((el, content) => el.editor.commands.setContent({ type:'doc', content }), content); };
   const insert = async (query, title) => { await page.getByRole('button',{name:'空白文档'}).click(); await root.waitFor(); await root.click(); await page.keyboard.insertText('/'+query); await page.getByRole('button',{name:new RegExp(title)}).click(); };
@@ -121,6 +148,7 @@ try {
     assert.equal((await ast()).children[0].content[0].display_text,'小明');
     await page.waitForFunction(() => document.activeElement?.classList.contains('tiptap'));
     assert(await caretGap() >= 2, 'inserted mention background must not cover the caret');
+    await assertPaintedCaret();
     await page.keyboard.insertText('继续');
     assert.deepEqual((await ast()).children[0].content[1], {type:'text',text:'继续'});
 
@@ -132,6 +160,7 @@ try {
     await page.getByRole('button',{name:'插入',exact:true}).click();
     await page.waitForFunction(() => document.activeElement?.classList.contains('tiptap'));
     assert(await caretGap() >= 2);
+    await assertPaintedCaret();
     assert.equal((await ast()).children[0].content.length,1);
     assert.equal((await ast()).children[0].content[0].type,'date_mention');
     await page.keyboard.insertText('继续');
@@ -158,6 +187,7 @@ try {
         for (const [side,pos] of [['before',2],['after',3]]) {
           await root.evaluate((el,pos) => {el.editor.commands.setTextSelection(pos); el.editor.view.focus();},pos);
           assert(await caretGap(side)>=2, `${atom.type} ${side} caret is too close at ${width}px`);
+          if (atom.type==='mention' || atom.type==='dateMention') await assertPaintedCaret();
         }
         assert.deepEqual(await ast(),before);
       }
@@ -169,6 +199,11 @@ try {
     for(const [type,attr,label,target,name] of [['pageReference','targetPageId','页面',71,'人物介绍'],['entityReference','entityId','实体',20,'安比'],['claimReference','claimId','事实',31,'安比 · 身高'],['citationReference','citationId','引文',41,'人物图鉴']]) {
       await set([{type:'paragraph',content:[{type,attrs:{[attr]:id(99),displayText:'原引用'}}]}]);
       await editor.locator('.ast-inline-editor').focus();
+      const anchored = await editor.locator('.ast-inline-editor').evaluate(el=>{
+        const chip=el.getBoundingClientRect(), panel=el.querySelector('.ast-inline-editor__panel').getBoundingClientRect();
+        return panel.left>=chip.left && panel.left<=chip.right && panel.top>=chip.top && panel.top<=chip.bottom+2;
+      });
+      assert(anchored,'the editing panel must remain anchored to its inline atom');
       await choose(label,name);
       await wait(async()=>assert.equal((await ast()).children[0].content[0][{targetPageId:'target_page_id',entityId:'entity_id',claimId:'claim_id',citationId:'citation_id'}[attr]],id(target)));
     }
