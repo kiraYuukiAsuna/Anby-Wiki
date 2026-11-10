@@ -1,4 +1,5 @@
 import React, { useState } from "react";
+import { TableView } from "@/lib/editor/table";
 import { ChevronRight } from "lucide-react";
 import { toast } from "sonner";
 import { assetsApi } from "@/lib/api";
@@ -213,18 +214,6 @@ function SelectInput(props: ReactNodeViewProps & { attrName: string; label: stri
   );
 }
 
-function CheckboxInput(props: ReactNodeViewProps & { attrName: string; label: string }) {
-  return React.createElement("label", { className: "ast-editable-block__checkbox-row", contentEditable: false },
-    React.createElement("input", {
-      type: "checkbox",
-      checked: Boolean(props.node.attrs[props.attrName]),
-      disabled: !props.editor.isEditable,
-      onChange: (event: React.ChangeEvent<HTMLInputElement>) => updateAttr(props, props.attrName, event.currentTarget.checked),
-    }),
-    React.createElement("span", null, props.label),
-  );
-}
-
 function BlockShell(props: ReactNodeViewProps & { title: string; summary?: string; className?: string; children?: React.ReactNode; content?: boolean }) {
   return React.createElement(NodeViewWrapper, {
     as: "section",
@@ -432,31 +421,6 @@ function StructureButton({ label, disabled, onClick }: { label: string; disabled
   return React.createElement("button", { type: "button", className: "ast-editable-block__control", disabled, onMouseDown: (event: React.MouseEvent) => event.preventDefault(), onClick }, label);
 }
 
-function TableView(props: ReactNodeViewProps) {
-  const append = (column: boolean) => {
-    const pos = props.getPos();
-    if (pos === undefined) return;
-    const { state, view } = props.editor;
-    const node = state.doc.nodeAt(pos);
-    if (!node) return;
-    const cell = () => state.schema.nodes.astTableCell.create(null, state.schema.nodes.paragraph.create());
-    const tr = state.tr;
-    if (column) {
-      node.forEach((row, offset) => tr.insert(tr.mapping.map(pos + 1 + offset + row.nodeSize - 1), cell()));
-    } else {
-      tr.insert(pos + node.nodeSize - 1, state.schema.nodes.astTableRow.create(null, Array.from({ length: node.firstChild?.childCount ?? 1 }, cell)));
-    }
-    view.dispatch(tr);
-  };
-  return React.createElement(BlockShell, { ...props, title: "表格设置", content: true },
-    React.createElement(TextInput, { ...props, label: "标题", attrName: "caption" }),
-    React.createElement(CheckboxInput, { ...props, label: "首行作为表头", attrName: "hasColumnHeader" }),
-    React.createElement(CheckboxInput, { ...props, label: "首列作为表头", attrName: "hasRowHeader" }),
-    React.createElement(StructureButton, { label: "增加一行", onClick: () => append(false) }),
-    React.createElement(StructureButton, { label: "增加一列", onClick: () => append(true) }),
-  );
-}
-
 function ColumnsView(props: ReactNodeViewProps) {
   const count = props.node.childCount;
   return React.createElement(BlockShell, { ...props, title: "分栏设置", content: true },
@@ -603,9 +567,9 @@ export const editorExtensions = [
   containerNode("column", "block*", (props) => React.createElement(BlockShell, { ...props, title: "列", summary: `宽度 ${props.node.attrs.widthRatio}`, content: true }, React.createElement(NumberInput, { ...props, label: "宽度比例", attrName: "widthRatio", fallback: 1, step: 0.1 })), { widthRatio: { default: 1 } }),
   atomNode("pageButton", { label: { default: "运行操作" }, confirmation: { default: "" }, actionsJson: { default: "[]" } }, (props) => React.createElement(SimpleAttrsView, { ...props, title: "页面按钮", summaryAttr: "label", fields: [{ attr: "label", label: "按钮名称" }, { attr: "confirmation", label: "确认提示" }, { attr: "actionsJson", label: "动作 JSON", multiline: true }] })),
   atomNode("htmlBlock", { html: { default: "" }, height: { default: 240 }, caption: { default: "" } }, (props) => React.createElement(SimpleAttrsView, { ...props, title: "HTML", summaryAttr: "caption", fields: [{ attr: "height", label: "高度", number: true, fallback: 240 }, { attr: "caption", label: "标题" }, { attr: "html", label: "HTML", multiline: true }] })),
-  containerNode("astTable", "astTableRow+", TableView, { caption: { default: "" }, hasColumnHeader: { default: false }, hasRowHeader: { default: false } }),
+  containerNode("astTable", "astTableRow+", (props) => React.createElement(TableView, { ...props, onUpdateAttrs: (attrs) => updateAttrs(props, attrs) }), { caption: { default: "" }, hasColumnHeader: { default: false }, hasRowHeader: { default: false } }),
   containerNode("astTableRow", "astTableCell+", () => React.createElement(NodeViewWrapper, { as: "div", className: "ast-table-row" }, React.createElement(NodeViewContent, null))),
-  containerNode("astTableCell", "block*", () => React.createElement(NodeViewWrapper, { as: "div", className: "ast-table-cell" }, React.createElement(NodeViewContent, null))),
+  containerNode("astTableCell", "block*", (props) => React.createElement(NodeViewWrapper, { as: "div", className: "ast-table-cell", "data-id": props.node.attrs.id }, React.createElement(NodeViewContent, null))),
   atomNode("componentBlock", { componentId: { default: "" }, componentVersion: { default: 1 }, entityId: { default: "" }, displayConfig: { default: "{}" } }, ComponentBlockView),
   atomNode("imageAsset", { assetRevisionId: { default: "" }, altText: { default: "" }, caption: { default: "" } }, (props) => React.createElement(SimpleAttrsView, { ...props, title: "图片", summaryAttr: "caption", className: "ast-image", fields: [{ attr: "assetRevisionId", label: "文件" }, { attr: "altText", label: "替代文字" }, { attr: "caption", label: "说明" }] })),
   atomNode("videoAsset", { assetRevisionId: { default: "" }, posterAssetRevisionId: { default: "" }, title: { default: "" }, caption: { default: "" } }, (props) => React.createElement(SimpleAttrsView, { ...props, title: "视频", summaryAttr: "title", className: "ast-video", fields: [{ attr: "assetRevisionId", label: "文件" }, { attr: "posterAssetRevisionId", label: "封面图片" }, { attr: "title", label: "标题" }, { attr: "caption", label: "说明" }] })),

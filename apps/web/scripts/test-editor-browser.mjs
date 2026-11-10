@@ -345,17 +345,16 @@ try {
   await check('repeated table edits preserve cell text and heading hierarchy', async () => {
     await editor.locator('.ast-table-cell p').first().fill('编辑后的单元格');
     const table = editor.locator('[data-editor-block-type="astTable"]');
-    await table.locator('summary').click();
-    await table.getByRole('button', { name: '增加一行' }).click();
-    await table.getByRole('button', { name: '增加一行' }).click();
-    await table.getByRole('button', { name: '增加一列' }).click();
+    for (const action of ['在下方插入行', '在下方插入行', '在右侧插入列']) {
+      await table.getByRole('button', { name: '表格操作', exact: true }).click();
+      await page.getByRole('menuitem', { name: action, exact: true }).click();
+    }
     const saved = await ast(); const tableAst = saved.children.find((value) => value.type === 'table');
     assert.equal(tableAst.children.length, 3);
     assert.ok(tableAst.children.every((row) => row.children.length === 3));
     assert.equal(tableAst.children[0].children[0].children[0].content[0].text, '编辑后的单元格');
     assert.equal(saved.children[0].is_toggleable, true);
     assert.equal(saved.children[0].children[0].content[0].text, '可折叠标题正文');
-    await table.locator('summary').click();
   });
   await check('toggle summaries are directly editable and survive reopening', async () => {
     const toggle = editor.locator('[data-editor-block-type="toggleBlock"]');
