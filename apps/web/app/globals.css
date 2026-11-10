@@ -505,6 +505,7 @@
 .ast-inline-editor {
   position: relative;
   display: inline-flex;
+  margin-inline: .15em; /* Keep the native caret clear of the atom's background. */
   align-items: center;
   gap: 0.25rem;
   cursor: text;

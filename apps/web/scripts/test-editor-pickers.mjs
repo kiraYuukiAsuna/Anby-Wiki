@@ -46,6 +46,12 @@ try {
   const ast = async () => JSON.parse(await page.locator('[data-editor-ast]').innerText());
   const wait = async fn => { let err; for (let n=0;n<80;n++) { try { await fn(); return; } catch(e) {err=e;} await page.waitForTimeout(50); } throw err; };
   const check = async (name, fn) => { await fn(); console.log(`PASS ${name}`); };
+  const caretGap = async (side = 'after') => root.evaluate((el, side) => {
+    const caret = el.editor.view.coordsAtPos(el.editor.state.selection.from);
+    const chip = el.querySelector('.ast-inline-editor').getBoundingClientRect();
+    return side === 'after' ? caret.left - chip.right : chip.left - caret.right;
+  }, side);
+
   const set = async content => { await page.getByRole('button',{name:'空白文档'}).click(); await root.waitFor(); await root.evaluate((el, content) => el.editor.commands.setContent({ type:'doc', content }), content); };
   const insert = async (query, title) => { await page.getByRole('button',{name:'空白文档'}).click(); await root.waitFor(); await root.click(); await page.keyboard.insertText('/'+query); await page.getByRole('button',{name:new RegExp(title)}).click(); };
   const choose = async (label, text, query = text) => {
@@ -113,6 +119,51 @@ try {
     await page.getByRole('button',{name:'插入',exact:true}).click();
     await wait(async()=>assert.equal((await ast()).children[0].content[0].actor_id,id(51)));
     assert.equal((await ast()).children[0].content[0].display_text,'小明');
+    await page.waitForFunction(() => document.activeElement?.classList.contains('tiptap'));
+    assert(await caretGap() >= 2, 'inserted mention background must not cover the caret');
+    await page.keyboard.insertText('继续');
+    assert.deepEqual((await ast()).children[0].content[1], {type:'text',text:'继续'});
+
+  });
+  await check('inserted date keeps a visible caret without adding document whitespace', async()=>{
+    await insert('mention','提及');
+    await page.getByRole('button',{name:'日期',exact:true}).click();
+    await page.getByLabel('开始日期',{exact:true}).fill('2026-11-10');
+    await page.getByRole('button',{name:'插入',exact:true}).click();
+    await page.waitForFunction(() => document.activeElement?.classList.contains('tiptap'));
+    assert(await caretGap() >= 2);
+    assert.equal((await ast()).children[0].content.length,1);
+    assert.equal((await ast()).children[0].content[0].type,'date_mention');
+    await page.keyboard.insertText('继续');
+    assert.deepEqual((await ast()).children[0].content[1], {type:'text',text:'继续'});
+  });
+  await check('all inline atoms leave caret clearance on both sides, including mobile dark mode and reload', async()=>{
+    const atoms = [
+      {type:'mention',attrs:{actorId:id(51),displayText:'小明'}},
+      {type:'dateMention',attrs:{date:'2026-11-10',displayText:'今天'}},
+      {type:'pageReference',attrs:{targetPageId:id(71),displayText:'页面'}},
+      {type:'pageAnchorReference',attrs:{targetPageId:id(71),targetHeadingBlockId:id(81),displayText:'章节'}},
+      {type:'entityReference',attrs:{entityId:id(20),displayText:'实体'}},
+      {type:'claimReference',attrs:{claimId:id(31),displayText:'事实'}},
+      {type:'citationReference',attrs:{citationId:id(41),displayText:'引文'}},
+      {type:'mathInline',attrs:{expression:'x'}}
+    ];
+    for (const width of [1440,320]) {
+      await page.setViewportSize({width,height:1000});
+      await page.evaluate(dark => document.documentElement.classList.toggle('dark',dark), width===320);
+      for (const atom of atoms) {
+        await set([{type:'paragraph',content:[{type:'text',text:'前'},atom,{type:'text',text:'后'}]}]);
+        const before = await ast();
+        await page.getByRole('button',{name:'重新载入当前内容'}).click(); await root.waitFor();
+        for (const [side,pos] of [['before',2],['after',3]]) {
+          await root.evaluate((el,pos) => {el.editor.commands.setTextSelection(pos); el.editor.view.focus();},pos);
+          assert(await caretGap(side)>=2, `${atom.type} ${side} caret is too close at ${width}px`);
+        }
+        assert.deepEqual(await ast(),before);
+      }
+    }
+    await page.evaluate(() => document.documentElement.classList.remove('dark'));
+    await page.setViewportSize({width:1440,height:1000});
   });
   await check('existing page, entity, claim and citation references search by names',async()=>{
     for(const [type,attr,label,target,name] of [['pageReference','targetPageId','页面',71,'人物介绍'],['entityReference','entityId','实体',20,'安比'],['claimReference','claimId','事实',31,'安比 · 身高'],['citationReference','citationId','引文',41,'人物图鉴']]) {
