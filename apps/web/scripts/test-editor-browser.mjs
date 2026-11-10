@@ -58,6 +58,43 @@ try {
     await empty(); await page.keyboard.insertText(`/${query}`);
     await page.getByRole('button', { name: new RegExp(title) }).click();
   };
+  await check('empty toggles can acquire a body that collapses in the editor and reader', async () => {
+    await insert('toggle', '折叠块');
+    const first = editor.locator('[data-editor-block-type="toggleBlock"]').first();
+    await first.getByRole('button', { name: '添加折叠内容' }).focus();
+    await page.keyboard.press('Enter');
+    await page.keyboard.insertText('已有空段落的正文');
+    await eventually(async () => assert.equal((await ast()).children[0].children[0].content[0]?.text, '已有空段落的正文'));
+    assert.equal((await ast()).children[0].children.length, 1);
+    assert.equal(await first.getByRole('button', { name: '添加折叠内容' }).count(), 0);
+    await caret(editor.locator('.ast-outline p').first());
+    await page.keyboard.press('Enter');
+    const toggle = editor.locator('[data-editor-block-type="toggleBlock"]').nth(1);
+    await toggle.locator('p').fill('可折叠摘要');
+    assert.equal(await toggle.locator('p').count(), 1);
+    const addContent = toggle.getByRole('button', { name: '添加折叠内容' });
+    assert.equal(await addContent.count(), 1, 'an empty toggle must offer a way to add collapsible content');
+    await addContent.click();
+    await page.keyboard.insertText('真正可收起的正文');
+    await eventually(async () => assert.equal((await ast()).children[1].children[0].content[0]?.text, '真正可收起的正文'));
+    const saved = await ast();
+    assert.equal(saved.children[1].children[0].content[0].text, '真正可收起的正文');
+    await toggle.getByRole('button', { name: '折叠内容', exact: true }).click();
+    assert.equal(await toggle.getByText('真正可收起的正文').isVisible(), false);
+    assert.equal(await toggle.getByText('可折叠摘要').isVisible(), true);
+    await toggle.getByRole('button', { name: '展开内容' }).click();
+    assert.equal(await toggle.getByText('真正可收起的正文').isVisible(), true);
+    assert.deepEqual(await ast(), saved);
+    await page.getByRole('button', { name: '重新载入当前内容' }).click();
+    await editor.locator('.tiptap').waitFor();
+    assert.equal(await toggle.getByText('真正可收起的正文').isVisible(), true);
+    const reader = page.locator('[data-ast-document] details').filter({ hasText: '可折叠摘要' });
+    assert.equal(await reader.getByText('真正可收起的正文').isVisible(), false);
+    await reader.locator('summary').click();
+    assert.equal(await reader.getByText('真正可收起的正文').isVisible(), true);
+    await reader.locator('summary').click();
+    assert.equal(await reader.getByText('真正可收起的正文').isVisible(), false);
+  });
   await check('Backspace at the start removes todo and toggle wrappers without deleting content', async () => {
     for (const [query, title, selector] of [['todo', '待办', '.ast-todo'], ['toggle', '折叠块', '.ast-outline']]) {
       await insert(query, title);
@@ -65,7 +102,7 @@ try {
       await block.locator('p').first().fill('保留文字');
       if (query === 'toggle') {
         await block.locator('p').last().fill('保留隐藏内容');
-        await block.getByRole('button', { name: '折叠内容' }).click();
+        await block.getByRole('button', { name: '折叠内容', exact: true }).click();
       }
       const before = await ast();
       await caret(block.locator('p').first(), 0); await page.waitForTimeout(600);
@@ -85,7 +122,7 @@ try {
       await insert(query, title);
       const block = editor.locator(selector).first();
       await block.locator('p').first().fill('第一行'); await caret(block.locator('p').first());
-      if (query === 'toggle') await block.getByRole('button', { name: '折叠内容' }).click();
+      if (query === 'toggle') await block.getByRole('button', { name: '折叠内容', exact: true }).click();
       const before = await ast();
       await page.keyboard.press('Shift+Enter'); await page.keyboard.insertText('第二行');
       const saved = await ast(); assert.equal(saved.children.length, before.children.length);
@@ -99,7 +136,7 @@ try {
   await check('collapsing with the caret in the body keeps Enter outside the hidden subtree', async () => {
     await insert('toggle', '折叠块'); await page.keyboard.insertText('隐藏正文');
     const before = (await ast()).children[0];
-    await editor.getByRole('button', { name: '折叠内容' }).click();
+    await editor.getByRole('button', { name: '折叠内容', exact: true }).click();
     await page.keyboard.press('Enter'); await page.keyboard.insertText('收起后正文');
     const saved = await ast();
     assert.deepEqual(saved.children[0], before);
@@ -153,7 +190,7 @@ try {
     await toggle.locator('p').nth(1).fill('保留的隐藏正文');
     const before = (await ast()).children.find(b => b.type === 'toggle');
     await caret(toggle.locator('p').first());
-    await toggle.getByRole('button', { name: '折叠内容' }).click();
+    await toggle.getByRole('button', { name: '折叠内容', exact: true }).click();
     await page.keyboard.press('Enter'); await page.keyboard.insertText('块外新行');
     assert.equal(await editor.getByText('块外新行', { exact: true }).isVisible(), true);
     const saved = await ast(); const index = saved.children.findIndex(b => b.id === before.id);
@@ -190,7 +227,7 @@ try {
     const heading = editor.locator('[data-editor-block-type="sectionHeading"]').first();
     const before = (await ast()).children[0];
     await caret(heading.locator('p').first());
-    await heading.getByRole('button', { name: '折叠内容' }).click();
+    await heading.getByRole('button', { name: '折叠内容', exact: true }).click();
     await page.keyboard.press('Enter'); await page.keyboard.insertText('标题之后');
     assert.equal(await editor.getByText('标题之后', { exact: true }).isVisible(), true);
     const saved = await ast(); assert.deepEqual(saved.children[0], before);
@@ -208,7 +245,7 @@ try {
     await insert('toggle', '折叠块');
     toggle = editor.locator('[data-editor-block-type="toggleBlock"]');
     await toggle.locator('p').first().fill('前后'); await caret(toggle.locator('p').first(), 1);
-    await toggle.getByRole('button', { name: '折叠内容' }).click(); await page.keyboard.press('Enter');
+    await toggle.getByRole('button', { name: '折叠内容', exact: true }).click(); await page.keyboard.press('Enter');
     const saved = await ast();
     assert.equal(saved.children[0].content[0].text, '前');
     assert.equal(saved.children[1].type, 'toggle');
@@ -281,7 +318,7 @@ try {
     const toggle = editor.locator('[data-editor-block-type="toggleBlock"]');
     await toggle.locator('p').first().fill('修改后的折叠摘要');
     assert.equal((await ast()).children.find(b => b.type === 'toggle').content[0].text, '修改后的折叠摘要');
-    await toggle.getByRole('button', { name: '折叠内容' }).click();
+    await toggle.getByRole('button', { name: '折叠内容', exact: true }).click();
     assert.equal(await toggle.locator('p').nth(1).isVisible(), false);
     await toggle.getByRole('button', { name: '展开内容' }).click();
     const saved = await ast();

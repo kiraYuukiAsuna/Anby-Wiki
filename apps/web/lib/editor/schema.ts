@@ -314,6 +314,8 @@ function OutlineView(props: ReactNodeViewProps) {
   const [open, setOpen] = useState(true);
   const heading = props.node.type.name === "sectionHeading";
   const toggleable = !heading || props.node.attrs.isToggleable;
+  const emptyBody = props.node.childCount === 1 || (props.node.childCount === 2 &&
+    props.node.child(1).type.name === "paragraph" && props.node.child(1).content.size === 0);
   const toggle = () => {
     const pos = props.getPos();
     const { selection } = props.editor.state;
@@ -339,6 +341,18 @@ function OutlineView(props: ReactNodeViewProps) {
       onMouseDown: (event: React.MouseEvent) => event.preventDefault(), onClick: toggle,
     }, React.createElement(ChevronRight, { size: 16, style: { transform: open ? "rotate(90deg)" : undefined } })) : null,
     React.createElement(NodeViewContent, { className: "ast-outline__content" }),
+    open && toggleable && emptyBody && props.editor.isEditable ? React.createElement("button", {
+      type: "button", className: "ast-editable-block__control", contentEditable: false,
+      onMouseDown: (event: React.MouseEvent) => event.preventDefault(),
+      onClick: () => {
+        const pos = props.getPos();
+        if (pos === undefined || !props.node.firstChild) return;
+        const bodyPos = pos + 1 + props.node.firstChild.nodeSize;
+        const chain = props.editor.chain().focus();
+        if (props.node.childCount === 1) chain.insertContentAt(bodyPos, { type: "paragraph" });
+        chain.setTextSelection(bodyPos + 1).run();
+      },
+    }, "添加折叠内容") : null,
   );
 }
 
