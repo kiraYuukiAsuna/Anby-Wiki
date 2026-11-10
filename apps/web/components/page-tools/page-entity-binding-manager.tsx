@@ -424,7 +424,6 @@ export function PageEntityBindingManager({
               {removal?.role === "primary"
                 ? "移除后，搜索结果不再显示这个实体的关联信息，正文和历史版本不受影响。"
                 : "移除关联不会删除正文中对这个实体的提及。"}
-              审计记录会永久保留。
             </DialogDescription>
           </DialogHeader>
           <DialogFooter>

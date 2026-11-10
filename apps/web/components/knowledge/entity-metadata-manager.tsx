@@ -531,7 +531,6 @@ export function EntityMetadataManager({
                 : removal
                   ? `别名“${removal.value.alias}”将不再用于检索。`
                   : ""}
-              审计记录会永久保留。
             </DialogDescription>
           </DialogHeader>
           <DialogFooter>

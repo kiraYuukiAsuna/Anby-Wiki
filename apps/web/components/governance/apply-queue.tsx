@@ -134,7 +134,7 @@ export function ApplyQueue() {
       const result = await governanceApi().applyProposal({ id: proposal.id });
       await state.mutate();
       toast.success(result.idempotent ? "该修改建议已经生效" : "修改建议已生效", {
-        description: `变更批次 ${compactId(result.changeBatchId)} 已写入操作记录${result.revisionIds.length ? `，发布 ${result.revisionIds.length} 个页面版本` : ""}。`,
+        description: result.revisionIds.length ? `已发布 ${result.revisionIds.length} 个页面版本。` : undefined,
       });
     } catch (error) {
       const detail = await readGovernanceError(error);

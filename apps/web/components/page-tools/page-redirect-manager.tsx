@@ -254,7 +254,7 @@ export function PageRedirectManager({
           <DialogHeader>
             <DialogTitle>删除页面重定向</DialogTitle>
             <DialogDescription>
-              「{pageTitle}」将恢复直接阅读自身内容。历史版本与审计记录不会删除。
+              「{pageTitle}」将恢复显示自身内容。
             </DialogDescription>
           </DialogHeader>
           <label className="flex cursor-pointer items-start gap-3 rounded-xl border border-border p-3 text-xs leading-5">
@@ -263,7 +263,7 @@ export function PageRedirectManager({
               onCheckedChange={(value) => setConfirmed(value === true)}
               className="mt-0.5"
             />
-            <span>我确认移除跳转目标，操作记录会保留。</span>
+            <span>确认移除跳转目标</span>
           </label>
           <DialogFooter>
             <Button

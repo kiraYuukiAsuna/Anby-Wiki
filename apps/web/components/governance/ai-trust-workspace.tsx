@@ -4,14 +4,12 @@ import {
   Bot,
   Check,
   CircleGauge,
-  Clock3,
   LoaderCircle,
   LockKeyhole,
   Plus,
   Power,
   ShieldAlert,
   ShieldCheck,
-  Sparkles,
 } from "lucide-react";
 import Link from "next/link";
 import { useMemo, useState } from "react";
@@ -31,7 +29,6 @@ import { Label } from "@/components/ui/label";
 import { authApi, governanceApi, makeRequestId } from "@/lib/api";
 import { isUnauthorized, LOGIN_PATH, useSession } from "@/lib/auth";
 import { workspaceAccessNotice } from "@/lib/workspace-access";
-import { cn } from "@/lib/utils";
 
 const profileSchema = z.object({
   trustLevel: z.enum(["untrusted", "assisted", "trusted", "full_access"]),
@@ -44,39 +41,11 @@ const actorSchema = z.object({
 const NIL_UUID = "00000000-0000-0000-0000-000000000000";
 
 const LEVELS = [
-  {
-    value: "untrusted",
-    label: "未受信任",
-    detail: "所有变更必须人工审核",
-    icon: ShieldAlert,
-  },
-  {
-    value: "assisted",
-    label: "辅助",
-    detail: "辅助生成修改建议，抽样标记重点复核",
-    icon: ShieldCheck,
-  },
-  {
-    value: "trusted",
-    label: "受信任",
-    detail: "已受信任，仍需人工最终审核",
-    icon: Sparkles,
-  },
-  {
-    value: "full_access",
-    label: "全自动处理",
-    detail: "自动批准导入修改并使其生效",
-    icon: CircleGauge,
-  },
+  { value: "untrusted", label: "未受信任" },
+  { value: "assisted", label: "辅助" },
+  { value: "trusted", label: "受信任" },
+  { value: "full_access", label: "导入自动生效" },
 ] as const;
-
-const DATE_FORMATTER = new Intl.DateTimeFormat("zh-CN", {
-  year: "numeric",
-  month: "short",
-  day: "numeric",
-  hour: "2-digit",
-  minute: "2-digit",
-});
 
 function TrustProfileCard({
   profile,
@@ -137,11 +106,7 @@ function TrustProfileCard({
         updateAITrustProfileRequest: parsed.data,
       });
       await onSaved();
-      toast.success("AI 审核设置已更新", {
-        description: trustLevel === "full_access"
-          ? `${profile.actorDisplayName} · 全自动导入`
-          : `${profile.actorDisplayName} · ${effectiveSample}% 低风险人工抽样`,
-      });
+      toast.success("审核设置已保存");
     } catch (error) {
       if (
         error instanceof ResponseError &&
@@ -168,133 +133,96 @@ function TrustProfileCard({
               <h2 className="max-w-full truncate font-semibold">
                 {profile.actorDisplayName}
               </h2>
-              <span className="rounded-full border bg-muted/45 px-2 py-0.5 text-[10px] font-semibold tracking-wide text-muted-foreground uppercase">
-                {profile.actorType}
-              </span>
               {!profile.configured ? (
                 <span className="rounded-full bg-amber-100 px-2 py-0.5 text-[10px] font-medium text-amber-800">
-                  保守默认值
+                  默认设置
                 </span>
               ) : null}
               {disabled ? (
                 <span className="rounded-full bg-muted px-2 py-0.5 text-[10px] text-muted-foreground">已停用</span>
               ) : null}
             </div>
-            <p className="mt-1 truncate font-mono text-[10px] text-muted-foreground">
-              {profile.actorId}
-            </p>
           </div>
         </div>
-        {profile.updatedAt ? (
-          <span className="inline-flex items-center gap-1 text-[10px] text-muted-foreground">
-            <Clock3 className="size-3" aria-hidden />
-            {DATE_FORMATTER.format(profile.updatedAt)}
-          </span>
-        ) : null}
       </div>
 
-      <div className="mt-6">
-        <Label>信任等级</Label>
-        <div className="mt-2 grid gap-2 md:grid-cols-4">
-          {LEVELS.map((level) => {
-            const Icon = level.icon;
-            const selected = trustLevel === level.value;
-            return (
-              <button
-                key={level.value}
-                type="button"
+      <div className="mt-5 space-y-2">
+        <Label htmlFor={`trust-${profile.actorId}`}>信任等级</Label>
+        <select
+          id={`trust-${profile.actorId}`}
+          value={trustLevel}
+          disabled={disabled}
+          onChange={(event) => {
+            const value = event.target.value as AITrustProfile["trustLevel"];
+            setTrustLevel(value);
+            if (value === "untrusted") setSamplePercent(100);
+            if (value === "full_access") setSamplePercent(0);
+          }}
+          className="h-9 w-full rounded-lg border border-input bg-background px-2.5 text-sm disabled:opacity-50"
+        >
+          {LEVELS.map((level) => (
+            <option key={level.value} value={level.value}>{level.label}</option>
+          ))}
+        </select>
+      </div>
+
+      {trustLevel === "assisted" || trustLevel === "trusted" ? (
+        <div className="mt-4 rounded-2xl border bg-muted/25 p-4">
+          <div className="flex flex-wrap items-center justify-between gap-3">
+            <div>
+              <Label htmlFor={`sample-${profile.actorId}`}>
+                人工审核 · 重点复核比例
+              </Label>
+            </div>
+            <div className="relative w-24">
+              <Input
+                id={`sample-${profile.actorId}`}
+                type="number"
+                min={0}
+                max={100}
+                value={effectiveSample}
                 disabled={disabled}
-                aria-pressed={selected}
-                onClick={() => {
-                  setTrustLevel(level.value);
-                  if (level.value === "untrusted") setSamplePercent(100);
-                  if (level.value === "full_access") setSamplePercent(0);
-                }}
-                className={cn(
-                  "rounded-2xl border p-3 text-left transition",
-                  selected
-                    ? "border-fuchsia-300 bg-fuchsia-50 text-fuchsia-950 ring-2 ring-fuchsia-100"
-                    : "border-border/75 bg-background hover:border-fuchsia-200 hover:bg-fuchsia-50/35",
-                )}
-              >
-                <span className="flex items-center gap-2 text-xs font-semibold">
-                  <Icon
-                    className={cn(
-                      "size-3.5",
-                      selected
-                        ? "text-fuchsia-700"
-                        : "text-muted-foreground",
-                    )}
-                    aria-hidden
-                  />
-                  {level.label}
-                </span>
-                <span className="mt-1.5 block text-[10px] leading-4 text-muted-foreground">
-                  {level.detail}
-                </span>
-              </button>
-            );
-          })}
-        </div>
-      </div>
-
-      <div className="mt-6 rounded-2xl border bg-muted/25 p-4">
-        <div className="flex flex-wrap items-center justify-between gap-3">
-          <div>
-            <Label htmlFor={`sample-${profile.actorId}`}>
-              低风险人工抽样
-            </Label>
-            <p className="mt-1 text-[10px] leading-4 text-muted-foreground">
-              全自动处理会跳过抽样审核，自动批准导入修改并使其生效。
-            </p>
+                onChange={(event) =>
+                  setSamplePercent(Number(event.target.value))
+                }
+                className="pr-7 text-right font-mono"
+                aria-label="低风险人工抽样百分比"
+              />
+              <span className="pointer-events-none absolute top-1.5 right-2 text-xs text-muted-foreground">
+                %
+              </span>
+            </div>
           </div>
-          <div className="relative w-24">
-            <Input
-              id={`sample-${profile.actorId}`}
-              type="number"
-              min={0}
-              max={100}
-              value={effectiveSample}
-              disabled={disabled || trustLevel === "untrusted" || trustLevel === "full_access"}
-              onChange={(event) =>
-                setSamplePercent(Number(event.target.value))
-              }
-              className="pr-7 text-right font-mono"
-              aria-label="低风险人工抽样百分比"
-            />
-            <span className="pointer-events-none absolute top-1.5 right-2 text-xs text-muted-foreground">
-              %
-            </span>
-          </div>
+          <input
+            type="range"
+            min={0}
+            max={100}
+            step={1}
+            value={effectiveSample}
+            disabled={disabled}
+            onChange={(event) => setSamplePercent(Number(event.target.value))}
+            className="mt-4 h-1.5 w-full accent-fuchsia-700 disabled:opacity-45"
+            aria-label="调整低风险人工抽样比例"
+          />
         </div>
-        <input
-          type="range"
-          min={0}
-          max={100}
-          step={1}
-          value={effectiveSample}
-          disabled={disabled || trustLevel === "untrusted" || trustLevel === "full_access"}
-          onChange={(event) => setSamplePercent(Number(event.target.value))}
-          className="mt-4 h-1.5 w-full accent-fuchsia-700 disabled:opacity-45"
-          aria-label="调整低风险人工抽样比例"
-        />
-        {trustLevel === "untrusted" ? (
-          <p className="mt-3 text-[10px] font-medium text-amber-800">
-            未受信任的机器人提交的每条修改都需要人工审核。
-          </p>
-        ) : trustLevel === "full_access" ? (
-          <p className="mt-3 text-[10px] font-medium text-rose-800">
-            开启后，导入修改会自动批准并生效。请只为已确认可靠的专用机器人开启。
-          </p>
-        ) : null}
-      </div>
+      ) : null}
 
-      <div className="mt-5 flex flex-wrap items-center justify-between gap-4 border-t pt-4">
-        <p className="text-[10px] leading-4 text-muted-foreground">
-          只有导入修改支持全自动处理，其他修改仍需人工审核。抽样只用于标出重点复核项。
+      {trustLevel === "full_access" && profile.trustLevel !== "full_access" ? (
+        <p className="mt-3 text-xs text-rose-800 dark:text-rose-300">
+          保存后，导入修改将跳过人工审核并自动生效。
         </p>
+      ) : null}
+
+      <div className="mt-5 flex flex-wrap items-center justify-between gap-3 border-t pt-4">
+        {actor ? (
+          <Button type="button" size="sm" variant="outline" disabled={changingStatus || actor.ownerActorId === NIL_UUID} onClick={() => void changeStatus()}>
+            {changingStatus ? <LoaderCircle className="animate-spin" aria-hidden /> : <Power aria-hidden />}
+            {actor.ownerActorId === NIL_UUID ? "已永久停用" : disabled ? "启用机器人" : "停用并撤销授权"}
+          </Button>
+        ) : null}
         <Button
           type="button"
+          className="ml-auto"
           disabled={disabled || !dirty || saving}
           onClick={() => void save()}
         >
@@ -306,19 +234,6 @@ function TrustProfileCard({
           {saving ? "保存中…" : "保存设置"}
         </Button>
       </div>
-      {actor ? (
-        <div className="mt-4 flex flex-wrap items-center justify-between gap-3 border-t pt-4">
-          <p className="text-[10px] leading-4 text-muted-foreground">
-            {actor.ownerActorId === NIL_UUID
-              ? "所属用户账号已删除，这个机器人已永久停用。"
-              : "停用会撤销全部访问凭证；再次启用后需要重新授权。"}
-          </p>
-          <Button type="button" size="sm" variant="outline" disabled={changingStatus || actor.ownerActorId === NIL_UUID} onClick={() => void changeStatus()}>
-            {changingStatus ? <LoaderCircle className="animate-spin" aria-hidden /> : <Power aria-hidden />}
-            {disabled ? "启用机器人" : "停用机器人"}
-          </Button>
-        </div>
-      ) : null}
     </article>
   );
 }

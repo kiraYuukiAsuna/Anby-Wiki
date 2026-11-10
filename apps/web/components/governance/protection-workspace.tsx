@@ -512,16 +512,13 @@ export function ProtectionWorkspace({
           </div>
 
           <div className="mt-5 space-y-2">
-            <Label htmlFor="protection-expiry">到期时间（可选）</Label>
+            <Label htmlFor="protection-expiry">到期时间（默认不过期）</Label>
             <Input
               id="protection-expiry"
               type="datetime-local"
               value={expiresAt}
               onChange={(event) => setExpiresAt(event.target.value)}
             />
-            <p className="text-[10px] leading-4 text-muted-foreground">
-              留空表示不过期。你可以随时撤销规则，操作记录会保留。
-            </p>
           </div>
 
           <Button

@@ -185,7 +185,7 @@ export function BlockRedirectManager({
       });
       await redirects.mutate();
       toast.success("章节迁移已删除", {
-        description: "移除后，旧章节链接将不再跳转到此目标，操作记录仍会保留。",
+        description: "旧章节链接将不再跳转到此目标。",
       });
     } catch (error) {
       if (isUnauthorized(error)) {

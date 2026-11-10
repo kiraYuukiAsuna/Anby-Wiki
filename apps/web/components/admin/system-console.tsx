@@ -79,7 +79,6 @@ function MailSettings({ configuration, mfaEnabled, onSaved }: {
 
   return <section className="mt-7 min-w-0 rounded-2xl border bg-card p-5 sm:p-7">
     <h2 className="flex items-center gap-2 text-xl font-semibold"><Mail className="size-5" />邮件发送</h2>
-    <p className="mt-2 text-sm text-muted-foreground">邮箱验证和密码恢复使用此配置。SMTP 密码加密保存，留空可保留已有密码。</p>
     <form onSubmit={submit} className="mt-6 grid min-w-0 gap-5 sm:grid-cols-2">
       <label className="flex items-center gap-2 text-sm sm:col-span-2"><input type="checkbox" checked={form.enabled} onChange={(event) => setField("enabled", event.target.checked)} />启用邮件发送</label>
       <div><Label htmlFor="smtp-host">SMTP 主机</Label><Input id="smtp-host" className="mt-2" value={form.host} onChange={(event) => setField("host", event.target.value)} placeholder="smtp.example.com" required /></div>
@@ -101,7 +100,7 @@ function MailSettings({ configuration, mfaEnabled, onSaved }: {
     </form>
     <form onSubmit={test} className="mt-6 space-y-4 border-t pt-5">
       <div><Label htmlFor="smtp-test-email">测试收件邮箱</Label><Input id="smtp-test-email" className="mt-2" type="email" autoComplete="email" value={testEmail} onChange={(event) => setTestEmail(event.target.value)} placeholder="填写接收测试邮件的邮箱" maxLength={254} required /></div>
-      <p className="text-xs text-muted-foreground">测试使用已保存的配置，发送到填写的收件邮箱，无需再次输入密码。</p>
+      <p className="text-xs text-muted-foreground">使用已保存的配置发送测试邮件。</p>
       <Button type="submit" variant="outline" disabled={busy || !configuration.updatedAt}>{busy ? "处理中…" : "发送测试邮件"}</Button>
     </form>
   </section>;

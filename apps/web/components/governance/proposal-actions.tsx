@@ -32,7 +32,6 @@ import { Label } from "@/components/ui/label";
 import { governanceApi } from "@/lib/api";
 import { useSession } from "@/lib/auth";
 import { workspaceAccessNotice } from "@/lib/workspace-access";
-import { compactId } from "@/lib/display-id";
 import { PROPOSAL_STATUS_LABELS } from "@/lib/display-labels";
 import {
   isIdentityConflictMessage,
@@ -76,7 +75,7 @@ export function ProposalActions({ proposal }: { proposal: Proposal }) {
     try {
       const result = await governanceApi().applyProposal({ id: proposal.id });
       toast.success(result.idempotent ? "该修改建议已经生效" : "修改建议已生效", {
-        description: `变更批次 ${compactId(result.changeBatchId)} 已写入操作记录${result.revisionIds.length ? `，发布 ${result.revisionIds.length} 个页面版本` : ""}。`,
+        description: result.revisionIds.length ? `已发布 ${result.revisionIds.length} 个页面版本。` : undefined,
       });
       router.refresh();
     } catch (error) {
@@ -212,7 +211,7 @@ export function ProposalActions({ proposal }: { proposal: Proposal }) {
             </DialogDescription>
           </DialogHeader>
           <div className="rounded-xl border border-destructive/20 bg-destructive/5 p-3 text-xs leading-5 text-muted-foreground">
-            这会撤销整批已生效的修改，历史版本和操作记录仍会保留。输入
+            输入
             <span className="mx-1 font-mono font-semibold text-foreground">
               ROLLBACK
             </span>
@@ -270,7 +269,7 @@ function actionDescription(proposal: Proposal): string {
     case "applied":
       return "修改已生效，可以查看变更记录或撤销本批修改。";
     case "rolled_back":
-      return "本批修改已撤销，历史版本和操作记录仍然保留。";
+      return "本批修改已撤销。";
     case "conflicted":
       return "相关内容已有新版本，请先解决冲突。";
     case "rejected":
@@ -289,10 +288,10 @@ function rollbackSummary(result: RollbackChangeBatchResult): string {
       ? `${result.compensationClaimIds.length} 条事实恢复记录`
       : "",
     result.deletedPageIds.length
-      ? `${result.deletedPageIds.length} 个新建页面已移除，历史记录保留`
+      ? `${result.deletedPageIds.length} 个新建页面已移除`
       : "",
     result.deletedEntityIds.length
-      ? `${result.deletedEntityIds.length} 个新建实体已移除，历史记录保留`
+      ? `${result.deletedEntityIds.length} 个新建实体已移除`
       : "",
     result.entityMergeIds.length
       ? `${result.entityMergeIds.length} 个实体合并已恢复`

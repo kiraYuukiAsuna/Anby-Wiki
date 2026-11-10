@@ -237,7 +237,7 @@ function MergedEntityPanel({
               </p>
               <p className="mt-1 text-muted-foreground">
                 最多恢复 {merge.claimMappings.length} 条事实，并撤销{" "}
-                {merge.labelMappings.length} 个名称映射。该动作本身也会写入审计日志。
+                {merge.labelMappings.length} 个名称映射。
               </p>
             </div>
           ) : null}
@@ -609,7 +609,7 @@ export function EntityMergePanel({
               className="mt-0.5"
             />
             <span>
-              我确认两者代表同一对象。合并后，原实体将只读并指向目标实体，操作记录会保留。
+              我确认两者代表同一对象。合并后，原实体将只读并指向目标实体。
             </span>
           </label>
 
