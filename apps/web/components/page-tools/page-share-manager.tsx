@@ -163,7 +163,7 @@ export function PageShareManager({
           <div>
             <h2 className="font-semibold">已授权账号</h2>
             <p className="mt-1 text-sm text-muted-foreground">
-              {pageTitle} · 可在阅读页直接生成分享链接。
+              {pageTitle}
             </p>
           </div>
         </div>

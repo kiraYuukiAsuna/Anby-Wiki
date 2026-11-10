@@ -194,11 +194,6 @@ function CreateFromExample({
                 : preset.sample
             }
           />
-          {renderer === COMPONENT_RENDERERS.BuiltinEntityClaimInfobox ? (
-            <p className="mt-3 text-xs text-muted-foreground">
-              发布前可以选择一个实体，预览组件的显示效果。
-            </p>
-          ) : null}
         </div>
       </div>
       <DialogFooter>
@@ -313,7 +308,7 @@ export function ComponentHub() {
           </h2>
         </div>
         <p className="mt-2 text-sm text-muted-foreground">
-          选择模板，预览后修改。资料卡由你填写；动态信息框会随实体的已发布事实更新。
+          资料卡由你填写；动态信息框随实体的已发布事实更新。
         </p>
         <ul className="mt-5 grid gap-4 md:grid-cols-2 xl:grid-cols-3">
           {COMPONENT_PRESETS.map((item) => (

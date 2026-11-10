@@ -307,9 +307,6 @@ export function ProtectionWorkspace({
       <div className="rounded-3xl border border-dashed bg-muted/25 p-10 text-center">
         <LockKeyhole className="mx-auto size-7 text-muted-foreground" aria-hidden />
         <h2 className="mt-4 text-lg font-semibold">登录后管理页面保护</h2>
-        <p className="mt-2 text-sm text-muted-foreground">
-          该工作台只向当前站点的管理员开放。
-        </p>
         <Button asChild className="mt-5">
           <Link href={LOGIN_PATH}>前往登录</Link>
         </Button>
@@ -327,9 +324,6 @@ export function ProtectionWorkspace({
         <h2 className="mt-4 text-lg font-semibold text-amber-950">
           需要站点管理员权限
         </h2>
-        <p className="mt-2 max-w-2xl text-sm leading-6 text-amber-900/70">
-          页面保护用于设置谁可以创建、编辑、审核、生效或撤销修改，仅管理员可调整。
-        </p>
       </div>
     );
   }

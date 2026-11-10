@@ -370,7 +370,7 @@ export function AuditActivity() {
       setNewTagName("");
       setNewTagDescription("");
       await tagState.mutate();
-      toast.success("不可变 ChangeTag 已创建");
+      toast.success("标签已创建");
     } catch {
       toast.error("创建标签失败", {
         description: "标签标识不能重复，只有管理员可以创建全局标签。",
@@ -385,9 +385,6 @@ export function AuditActivity() {
       <div className="rounded-3xl border border-dashed px-6 py-16 text-center">
         <ScrollText className="mx-auto size-9 text-muted-foreground" aria-hidden />
         <h2 className="mt-4 text-lg font-semibold">登录后查看 Wiki 审计流</h2>
-        <p className="mt-2 text-sm text-muted-foreground">
-          只有审核者和管理员能查看操作详情。
-        </p>
         <Button asChild className="mt-5">
           <Link href={LOGIN_PATH}>登录</Link>
         </Button>

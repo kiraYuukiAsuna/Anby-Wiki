@@ -459,9 +459,6 @@ export function WikiMemberWorkspace() {
       <div className="rounded-lg border border-dashed bg-muted/25 p-10 text-center">
         <LockKeyhole className="mx-auto size-8 text-muted-foreground" aria-hidden />
         <h2 className="mt-4 text-lg font-semibold">登录后管理成员</h2>
-        <p className="mt-2 text-sm text-muted-foreground">
-          Wiki 成员和角色仅向管理员开放。
-        </p>
         <Button asChild className="mt-5">
           <Link href={LOGIN_PATH}>前往登录</Link>
         </Button>

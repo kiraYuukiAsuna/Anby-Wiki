@@ -226,7 +226,7 @@ export function AssetLibrary() {
     }
     setUploading(true);
     try {
-      const asset = await assetsApi().uploadAsset({
+      await assetsApi().uploadAsset({
         file,
         name: name.trim() || file.name,
       });
@@ -235,9 +235,7 @@ export function AssetLibrary() {
       setFile(null);
       setFileError("");
       setName("");
-      toast.success("资产已保存", {
-        description: `不可变版本 ${compactId(asset.currentRevision.id)}`,
-      });
+      toast.success("文件已上传");
     } catch {
       toast.error("资产上传失败", {
         description: "请确认文件不超过 50 MiB，且你有上传权限。如果仍然失败，请联系管理员检查文件存储服务。",

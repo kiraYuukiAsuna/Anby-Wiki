@@ -218,7 +218,7 @@ function WikiEditor({
             }
           />
           <p className="text-[10px] leading-4 text-muted-foreground">
-            创建后不可变，用于审计和持久引用。
+            创建后不能修改。
           </p>
         </div>
         <div className="space-y-2">
@@ -643,7 +643,7 @@ export function FederationWorkspace() {
               className="h-8 w-full rounded-lg border border-input bg-background px-2.5 text-sm outline-none focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50"
             >
               <option value="active">有效映射</option>
-              <option value="all">全部可追溯</option>
+              <option value="all">全部状态</option>
               <option value="deprecated">已弃用</option>
             </select>
           </label>

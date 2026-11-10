@@ -433,7 +433,7 @@ export function EntityMergePanel({
               合并重复实体
             </p>
             <p className="mt-1 max-w-xl text-xs leading-5 text-muted-foreground">
-              仅当两个 {entityTypeName} 确认两个实体代表同一对象后，可将它们合并。原 ID 和操作记录会保留。
+              请先确认两个实体代表同一对象。
             </p>
           </div>
           <Button
@@ -486,7 +486,7 @@ export function EntityMergePanel({
                 <p className="font-semibold text-destructive">高风险身份变更</p>
                 <p className="mt-1 text-muted-foreground">
                   源实体当前有 {sourceLabelCount} 个名称、{sourceAliasCount}{" "}
-                  个别名与 {sourcePageCount} 个页面提及。合并后不再接受新写入。
+                  个别名与 {sourcePageCount} 个页面提及。合并后请在目标实体中继续编辑。
                 </p>
                 <p className="mt-1 font-mono text-[10px] text-muted-foreground">
                   {sourceCanonicalKey} · {sourceEntityId}
@@ -543,7 +543,7 @@ export function EntityMergePanel({
                 <Command.Input
                   value={query}
                   onValueChange={setQuery}
-                  placeholder={`搜索其他${entityTypeName} Entity…`}
+                  placeholder={`搜索其他${entityTypeName}…`}
                   autoFocus
                   className="flex h-9 w-full rounded-lg border border-input bg-transparent pr-3 pl-9 text-sm outline-none focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50"
                 />

@@ -53,7 +53,7 @@ const ENTITY_TYPES = [
 
 const STATUS_OPTIONS: Array<{ value: EntityStatus; label: string }> = [
   { value: "active", label: "有效实体" },
-  { value: "all", label: "全部可追溯" },
+  { value: "all", label: "全部状态" },
   { value: "merged", label: "已合并" },
 ];
 

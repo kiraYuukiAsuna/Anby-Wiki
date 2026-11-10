@@ -399,7 +399,7 @@ export function EntityMetadataManager({
                       description: event.target.value,
                     })
                   }
-                  placeholder="用于消歧与搜索摘要"
+                  placeholder="简要描述这个实体"
                 />
               </div>
               <label className="flex cursor-pointer items-start gap-3 rounded-xl border p-3 text-xs leading-5 sm:col-span-2">

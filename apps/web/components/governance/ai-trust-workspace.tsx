@@ -127,7 +127,7 @@ function TrustProfileCard({
       requiredSamplePercent: effectiveSample,
     });
     if (!parsed.success) {
-      toast.error(parsed.error.issues[0]?.message ?? "请检查信任策略");
+      toast.error(parsed.error.issues[0]?.message ?? "请检查审核设置");
       return;
     }
     setSaving(true);
@@ -303,7 +303,7 @@ function TrustProfileCard({
           ) : (
             <Check aria-hidden />
           )}
-          {saving ? "保存中…" : "保存策略"}
+          {saving ? "保存中…" : "保存设置"}
         </Button>
       </div>
       {actor ? (
@@ -389,9 +389,6 @@ export function AITrustWorkspace() {
       <div className="rounded-3xl border border-dashed bg-muted/25 p-10 text-center">
         <LockKeyhole className="mx-auto size-8 text-muted-foreground" aria-hidden />
         <h2 className="mt-4 text-lg font-semibold">登录后管理 AI 审核设置</h2>
-        <p className="mt-2 text-sm text-muted-foreground">
-          管理员可以创建机器人账号，设置哪些修改需要重点复核。
-        </p>
         <Button asChild className="mt-5">
           <Link href={LOGIN_PATH}>前往登录</Link>
         </Button>
@@ -408,9 +405,6 @@ export function AITrustWorkspace() {
         <h2 className="mt-4 text-lg font-semibold text-amber-950">
           需要站点管理员权限
         </h2>
-        <p className="mt-2 max-w-2xl text-sm leading-6 text-amber-900/70">
-          审核者可以处理 AI 修改建议；机器人的信任等级、抽样比例和全自动处理设置仅管理员可修改。
-        </p>
       </div>
     );
   }
@@ -419,9 +413,6 @@ export function AITrustWorkspace() {
     <div className="space-y-8">
       <section className="rounded-3xl border bg-card p-5">
         <h2 className="text-lg font-semibold">创建机器人账号</h2>
-        <p className="mt-1 text-sm leading-6 text-muted-foreground">
-          用于 Agent CLI 的独立身份，归属于当前 Wiki，由创建者账号管理授权。
-        </p>
         <div className="mt-5 grid gap-4 sm:grid-cols-[minmax(0,1fr)_8rem_auto] sm:items-end">
           <div className="min-w-0">
             <Label htmlFor="machine-actor-name">机器人名称</Label>
@@ -443,18 +434,17 @@ export function AITrustWorkspace() {
         </div>
         <p className="mt-4 text-xs leading-5 text-muted-foreground">
           {cliVisible ? (
-            <>创建后到 <Link href="/settings/cli" className="underline underline-offset-4">Agent CLI</Link> 选择该身份并生成授权码。</>
+            <Link href="/settings/cli" className="underline underline-offset-4">前往 Agent CLI 授权</Link>
           ) : (
-            "切换到自己的 Wiki 后可在 Agent CLI 中选择该身份并生成授权码。"
+            "切换到自己的 Wiki 后，可为机器人授权。"
           )}
-          机器人可以读取所属 Wiki 并提交修改建议。是否需要人工审核，取决于下方的审核设置。
         </p>
         {actors.error ? <p className="mt-3 text-xs text-destructive">机器人账号暂时无法读取，请刷新重试。</p> : null}
       </section>
       <section className="grid gap-3 sm:grid-cols-3">
         {[
           { label: "机器人账号", value: items.length, icon: Bot },
-          { label: "已显式配置", value: configured, icon: ShieldCheck },
+          { label: "已设置", value: configured, icon: ShieldCheck },
           { label: "受信任的机器人", value: trusted, icon: CircleGauge },
         ].map(({ label, value, icon: Icon }) => (
           <div key={label} className="rounded-2xl border bg-card p-5">
@@ -473,9 +463,6 @@ export function AITrustWorkspace() {
             <h2 className="text-xl font-semibold tracking-tight">
               机器人审核设置
             </h2>
-            <p className="mt-1 text-sm text-muted-foreground">
-              未单独设置的机器人也会列在这里，提交的修改默认全部人工审核。
-            </p>
           </div>
           <Button
             type="button"
@@ -487,7 +474,7 @@ export function AITrustWorkspace() {
             {profiles.isValidating ? (
               <LoaderCircle className="animate-spin" aria-hidden />
             ) : null}
-            刷新策略
+            刷新
           </Button>
         </div>
 
@@ -507,7 +494,7 @@ export function AITrustWorkspace() {
           profiles.error.response.status === 403
         ) ? (
           <div className="mt-5 rounded-2xl border border-destructive/20 bg-destructive/5 p-5 text-sm">
-            <p className="font-medium text-destructive">信任策略暂时无法读取</p>
+            <p className="font-medium text-destructive">审核设置暂时无法读取</p>
             <p className="mt-1 text-muted-foreground">
               请稍后重试。如果问题持续，请联系管理员。
             </p>
@@ -518,7 +505,7 @@ export function AITrustWorkspace() {
             <Bot className="mx-auto size-8 text-muted-foreground" aria-hidden />
             <h3 className="mt-4 font-semibold">还没有机器人账号</h3>
             <p className="mt-2 text-sm text-muted-foreground">
-              在上方创建机器人账号，再到 Agent CLI 绑定授权，策略会自动出现在这里。
+              先在上方创建一个机器人。
             </p>
             {cliVisible ? (
               <Button asChild variant="outline" className="mt-5">

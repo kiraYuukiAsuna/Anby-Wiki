@@ -104,7 +104,6 @@ export function AccountSecurityPanel() {
   return (
     <section id="account-security" className="min-w-0 rounded-3xl border bg-card p-6 sm:p-7">
       <h2 className="flex items-center gap-2 text-xl font-semibold"><ShieldCheck className="size-5" />账号安全</h2>
-      <p className="mt-2 text-sm text-muted-foreground">管理邮箱、二次验证、密码和登录设备。</p>
       <div className="mt-6 grid min-w-0 gap-6 lg:grid-cols-2">
         <div className="min-w-0 rounded-xl border p-4">
           <h3 className="flex items-center gap-2 font-medium"><MailCheck className="size-4" />邮箱验证</h3>

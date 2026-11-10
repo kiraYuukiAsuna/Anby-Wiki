@@ -427,7 +427,6 @@ export function CLIAccessWorkspace() {
               ))}
             </select>
             <p className="mt-2 text-xs leading-5 text-muted-foreground">
-              机器人提交的修改以其账号署名，需要人工审核。导入修改可在 AI 审核设置中开启自动处理。
               <Link href="/governance/ai-trust" className="ml-1 underline underline-offset-4">
                 创建或管理机器人
               </Link>
@@ -480,9 +479,6 @@ export function CLIAccessWorkspace() {
             <h2 id="cli-token-list-title" className="text-lg font-semibold">
               已授权 Agent
             </h2>
-            <p className="mt-1 text-sm text-muted-foreground">
-              这里仅显示授权记录，不显示访问凭证全文。
-            </p>
           </div>
           <div className="flex flex-wrap items-center gap-3">
             <label className="flex h-8 items-center gap-2 rounded-lg border px-3 text-xs">

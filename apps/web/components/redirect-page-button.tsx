@@ -474,7 +474,7 @@ export function RedirectPageButton({
                   id="redirect-external-title"
                   value={targetTitle}
                   onChange={(event) => setTargetTitle(event.target.value)}
-                  placeholder="用于离站提示的可信展示名称"
+                  placeholder="例如：维基百科"
                 />
               </div>
               <div className="space-y-2">

@@ -130,9 +130,7 @@ function CitationComposer({
         },
       });
       setCreatedID(citation.id);
-      toast.success("引文已创建", {
-        description: "不可变证据定位已保存。",
-      });
+      toast.success("引文已创建");
     } catch {
       toast.error("引文创建失败", {
         description: chunk

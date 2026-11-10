@@ -390,7 +390,6 @@ export function ImportJobForm() {
                 </span>
                 <div className="space-y-1">
                   <p className="text-sm font-medium">{dragging ? "松开即可选择文件" : "拖放文件到这里"}</p>
-                  <p className="text-xs text-muted-foreground">上传文件或粘贴链接，整理成可审核的页面内容。</p>
                 </div>
                 <Button type="button" variant="outline" disabled={submitting}
                   aria-describedby={fileError ? "source-file-error" : "source-file-help"}
@@ -405,7 +404,7 @@ export function ImportJobForm() {
             ))}
           </div>
           <p className="text-xs leading-5 text-muted-foreground">
-            PDF 保留原生文本，并逐页识别表格、图表与图片；图片支持 PNG、JPEG。
+            图片支持 PNG、JPEG。
           </p>
         </div>
       )}
@@ -424,7 +423,7 @@ export function ImportJobForm() {
           ))}
         </select>
         <p className="text-xs leading-5 text-muted-foreground">
-          导入内容按所选机器人的审核设置处理。开启全自动处理后，修改会自动批准并生效。任务和来源仍由你管理，重试时作者不变。
+          选择已开启全自动处理的机器人时，导入修改会自动批准并生效。
         </p>
         {actorError ? (
           <p role="alert" className="text-xs text-destructive">
@@ -432,7 +431,7 @@ export function ImportJobForm() {
           </p>
         ) : actors.length === 0 ? (
           <p className="text-xs text-muted-foreground">
-            可在<Link href="/governance/ai-trust" className="mx-1 underline">AI 信任</Link>创建你自己的机器人账号。
+            <Link href="/governance/ai-trust" className="underline">创建机器人账号</Link>
           </p>
         ) : null}
       </div>

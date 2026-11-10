@@ -282,9 +282,6 @@ export function FactConsistencyWorkspace() {
       <div className="rounded-3xl border border-dashed bg-muted/25 p-10 text-center">
         <LockKeyhole className="mx-auto size-8 text-muted-foreground" aria-hidden />
         <h2 className="mt-4 text-lg font-semibold">登录后查看一致性问题</h2>
-        <p className="mt-2 text-sm text-muted-foreground">
-          检查结果可能包含尚未批准的事实，仅审核者和管理员可查看。
-        </p>
         <Button asChild className="mt-5">
           <Link href={LOGIN_PATH}>前往登录</Link>
         </Button>

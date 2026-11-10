@@ -219,9 +219,6 @@ export function BlockRedirectManager({
         >
           <LockKeyhole className="size-5 text-primary" aria-hidden />
           <p className="mt-5 font-semibold">页面保护策略</p>
-          <p className="mt-2 text-xs leading-5 text-muted-foreground">
-            设置谁可以编辑、改名、审核或发布这个页面的修改。
-          </p>
           <span className="mt-5 inline-flex items-center gap-1 text-xs font-semibold text-primary">
             管理保护
             <ArrowRight

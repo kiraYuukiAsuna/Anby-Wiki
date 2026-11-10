@@ -95,17 +95,17 @@ export function AssetRevisionDetail({
         <section className="overflow-hidden rounded-2xl border bg-card shadow-sm">
           <div className="flex min-h-80 items-center justify-center bg-[radial-gradient(circle_at_top,_var(--color-sky-100),_transparent_55%)] p-4 sm:p-8">
             {image ? (
-              <AssetImage revisionId={revision.id} alt="不可变资产版本预览" />
+              <AssetImage revisionId={revision.id} alt="图片预览" />
             ) : video ? (
               <AssetVideo
                 revisionId={revision.id}
-                title="不可变资产版本预览"
+                title="视频预览"
               />
             ) : audio ? (
               <div className="w-full max-w-2xl rounded-lg border bg-card p-5">
                 <AssetAudio
                   revisionId={revision.id}
-                  title="不可变音频版本预览"
+                  title="音频预览"
                 />
               </div>
             ) : pdf ? (

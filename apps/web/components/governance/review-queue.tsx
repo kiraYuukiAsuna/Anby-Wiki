@@ -174,9 +174,6 @@ export function ReviewQueue() {
       <div className="rounded-2xl border border-dashed bg-muted/25 px-6 py-12 text-center">
         <LockKeyhole className="mx-auto size-8 text-muted-foreground" aria-hidden />
         <h2 className="mt-4 text-lg font-semibold">登录后查看待审核列表</h2>
-        <p className="mx-auto mt-2 max-w-md text-sm leading-6 text-muted-foreground">
-          只有审核者和管理员可以处理审核任务。
-        </p>
         <Button asChild className="mt-5">
           <Link href={LOGIN_PATH}>前往登录</Link>
         </Button>

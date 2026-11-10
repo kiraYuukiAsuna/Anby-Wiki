@@ -276,9 +276,6 @@ export function RevisionStorageWorkspace() {
       <div className="rounded-3xl border border-dashed bg-muted/25 p-10 text-center">
         <LockKeyhole className="mx-auto size-8 text-muted-foreground" aria-hidden />
         <h2 className="mt-4 text-lg font-semibold">登录后管理版本存储</h2>
-        <p className="mt-2 text-sm text-muted-foreground">
-          该页面仅展示当前账户 Wiki 的存储容量和归档状态。
-        </p>
         <Button asChild className="mt-5">
           <Link href={LOGIN_PATH}>前往登录</Link>
         </Button>
@@ -439,7 +436,7 @@ export function RevisionStorageWorkspace() {
           <HardDrive className="size-5 text-primary" aria-hidden />
           <h2 className="mt-4 text-lg font-semibold">安全归档</h2>
           <p className="mt-2 text-sm leading-6 text-muted-foreground">
-            归档前会校验内容完整性，并再次确认它不是当前版本。归档后仍可查看历史、比较差异和回滚。
+            归档后仍可查看历史、比较差异和恢复版本。
           </p>
           {!stats.archiveAvailable ? (
             <p className="mt-4 rounded-xl border border-amber-200 bg-amber-50 p-3 text-xs leading-5 text-amber-900">

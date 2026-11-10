@@ -396,9 +396,6 @@ export function AIConfigWorkspace({
       <div className="rounded-3xl border border-dashed bg-muted/25 p-10 text-center">
         <LockKeyhole className="mx-auto size-8 text-muted-foreground" aria-hidden />
         <h2 className="mt-4 text-lg font-semibold">登录后管理 AI 配置</h2>
-        <p className="mt-2 text-sm text-muted-foreground">
-          供应商密钥和导入运行策略保存在当前账号下。
-        </p>
         <Button asChild className="mt-5">
           <Link href={LOGIN_PATH}>前往登录</Link>
         </Button>
