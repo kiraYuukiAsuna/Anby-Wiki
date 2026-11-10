@@ -253,7 +253,7 @@ function InlineAtomView(props: ReactNodeViewProps & { label: string; className: 
 }
 
 function handleBlockKeyDown(view: EditorView, event: KeyboardEvent): boolean {
-  if (!["Enter", "Backspace"].includes(event.key) || event.shiftKey || event.metaKey || event.ctrlKey || event.altKey ||
+  if (!["Enter", "Backspace"].includes(event.key) || event.metaKey || event.ctrlKey || event.altKey ||
       event.isComposing || view.composing || !view.editable ||
       (event.target as Element).closest("button,input,textarea,select") ||
       SuggestionPluginKey.getState(view.state)?.active) return false;
@@ -265,6 +265,27 @@ function handleBlockKeyDown(view: EditorView, event: KeyboardEvent): boolean {
   const todo = block.type.name === "todoBlock";
   const item = todo || block.type.name === "toggleBlock";
   const summary = $from.index(-1) === 0;
+  if (event.shiftKey) {
+    if (event.key !== "Enter" || !summary || !(block.type.name === "toggleBlock" ||
+        (block.type.name === "sectionHeading" && block.attrs.isToggleable))) return false;
+    const tr = view.state.tr.deleteSelection();
+    const cursor = tr.selection.$from;
+    const remaining = cursor.parent.content.cut(cursor.parentOffset);
+    tr.delete(cursor.pos, cursor.end());
+    const bodyPos = tr.selection.$from.after();
+    const body = tr.doc.nodeAt(bodyPos);
+    if (body?.type.name === "paragraph" && body.content.size === 0) {
+      tr.insert(bodyPos + 1, remaining);
+    } else {
+      tr.insert(bodyPos, view.state.schema.nodes.paragraph.create(null, remaining));
+    }
+    tr.setSelection(TextSelection.create(tr.doc, bodyPos + 1));
+    tr.ensureMarks(view.state.storedMarks ?? $from.marks());
+    const dom = view.nodeDOM($from.before(-1));
+    if (dom instanceof Element) dom.querySelector<HTMLButtonElement>(':scope > .ast-outline > button[aria-expanded="false"]')?.click();
+    view.dispatch(tr.scrollIntoView());
+    return true;
+  }
   if (event.key === "Backspace") {
     if (!["todoBlock", "toggleBlock", "sectionHeading"].includes(block.type.name) ||
         !summary || !selection.empty || $from.parentOffset !== 0) return false;
@@ -314,8 +335,6 @@ function OutlineView(props: ReactNodeViewProps) {
   const [open, setOpen] = useState(true);
   const heading = props.node.type.name === "sectionHeading";
   const toggleable = !heading || props.node.attrs.isToggleable;
-  const emptyBody = props.node.childCount === 1 || (props.node.childCount === 2 &&
-    props.node.child(1).type.name === "paragraph" && props.node.child(1).content.size === 0);
   const toggle = () => {
     const pos = props.getPos();
     const { selection } = props.editor.state;
@@ -341,18 +360,6 @@ function OutlineView(props: ReactNodeViewProps) {
       onMouseDown: (event: React.MouseEvent) => event.preventDefault(), onClick: toggle,
     }, React.createElement(ChevronRight, { size: 16, style: { transform: open ? "rotate(90deg)" : undefined } })) : null,
     React.createElement(NodeViewContent, { className: "ast-outline__content" }),
-    open && toggleable && emptyBody && props.editor.isEditable ? React.createElement("button", {
-      type: "button", className: "ast-editable-block__control", contentEditable: false,
-      onMouseDown: (event: React.MouseEvent) => event.preventDefault(),
-      onClick: () => {
-        const pos = props.getPos();
-        if (pos === undefined || !props.node.firstChild) return;
-        const bodyPos = pos + 1 + props.node.firstChild.nodeSize;
-        const chain = props.editor.chain().focus();
-        if (props.node.childCount === 1) chain.insertContentAt(bodyPos, { type: "paragraph" });
-        chain.setTextSelection(bodyPos + 1).run();
-      },
-    }, "添加折叠内容") : null,
   );
 }
 
