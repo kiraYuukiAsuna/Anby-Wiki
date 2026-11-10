@@ -89,7 +89,7 @@ export function ExternalContentInsertDialog({
         ...(caption.trim() ? { caption: caption.trim() } : {}),
       });
       if (!parsed.success) {
-        toast.error("Embed 配置无效", {
+        toast.error("嵌入内容配置无效", {
           description: parsed.error.issues[0]?.message,
         });
         return;
@@ -212,7 +212,7 @@ export function ExternalContentInsertDialog({
           ) : null}
           {type !== "link_preview" ? (
             <Label>
-              Caption（可选）
+              说明（可选）
               <Input
                 value={caption}
                 onChange={(event) => setCaption(event.target.value)}

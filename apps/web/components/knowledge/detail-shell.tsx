@@ -4,14 +4,12 @@ export function DetailShell({
   eyebrow,
   title,
   status,
-  modeLabel = "只读",
   description,
   children,
 }: {
   eyebrow: string;
   title: string;
   status: string;
-  modeLabel?: string;
   description?: string;
   children: ReactNode;
 }) {
@@ -21,9 +19,6 @@ export function DetailShell({
         <div className="mb-2 flex flex-wrap items-center gap-2 text-xs text-muted-foreground">
           <span className="uppercase tracking-[0.18em]">{eyebrow}</span>
           <span className="rounded-full border border-border px-2 py-0.5">{status}</span>
-          <span className="rounded-full border border-border px-2 py-0.5">
-            {modeLabel}
-          </span>
         </div>
         <h1 className="text-3xl font-bold tracking-tight">{title}</h1>
         {description ? (
@@ -60,7 +55,7 @@ export function DetailRows({
       {rows.map((row) => (
         <div className="contents" key={row.label}>
           <dt className="text-muted-foreground">{row.label}</dt>
-          <dd className="min-w-0 break-words font-mono text-xs sm:text-sm">
+          <dd className="min-w-0 break-words text-sm">
             {row.value}
           </dd>
         </div>

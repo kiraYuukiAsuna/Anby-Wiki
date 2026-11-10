@@ -26,7 +26,6 @@ import { z } from "zod";
 
 import type {
   PageSearchHit,
-  SearchCapabilities,
   SearchFacetValue,
 } from "../../../../contracts/generated/typescript";
 
@@ -139,12 +138,6 @@ function FacetGroup({
       </div>
     </section>
   );
-}
-
-function backendLabel(capabilities?: SearchCapabilities) {
-  return capabilities?.backend === "meilisearch"
-    ? "Meilisearch 独立索引"
-    : "基础搜索";
 }
 
 function normalizedMode(value: string): SearchMode {
@@ -295,9 +288,6 @@ export function SearchExplorer({
                 </button>
               ) : null}
             </div>
-            <p className="mt-1 text-xs leading-5 text-muted-foreground">
-              数量根据当前搜索条件统计。
-            </p>
           </div>
 
           <FacetGroup
@@ -390,6 +380,8 @@ export function SearchExplorer({
                   key={item}
                   type="button"
                   onClick={() => chooseMode(item)}
+                  aria-pressed={active}
+                  title={meta.detail}
                   disabled={!enabled}
                   className={cn(
                     "flex min-h-16 items-center gap-3 rounded-xl border px-3 text-left transition-colors",
@@ -411,9 +403,6 @@ export function SearchExplorer({
                     <span className="flex items-center gap-1.5 text-xs font-semibold">
                       {meta.label}
                       {active ? <Check className="size-3" aria-hidden /> : null}
-                    </span>
-                    <span className="mt-0.5 block truncate text-[10px]">
-                      {meta.detail}
                     </span>
                   </span>
                 </button>
@@ -451,12 +440,6 @@ export function SearchExplorer({
 
         <div className="mt-4 flex flex-wrap items-center justify-between gap-3 px-1">
           <div className="flex flex-wrap items-center gap-2 text-xs text-muted-foreground">
-            <span className="inline-flex items-center gap-1.5 rounded-full border bg-background px-2.5 py-1">
-              <Cpu className="size-3" aria-hidden />
-              {capabilities.isLoading
-                ? "读取搜索能力…"
-                : backendLabel(capabilities.data)}
-            </span>
             {result ? (
               <span>
                 {result.total.toLocaleString("zh-CN")} 条结果 ·{" "}

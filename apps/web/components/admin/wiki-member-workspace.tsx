@@ -483,9 +483,6 @@ export function WikiMemberWorkspace() {
       <div className="rounded-lg border border-destructive/25 bg-destructive/5 p-8">
         <ShieldAlert className="size-7 text-destructive" aria-hidden />
         <h2 className="mt-4 text-lg font-semibold">成员服务不可用</h2>
-        <p className="mt-2 text-sm text-muted-foreground">
-          请稍后重试。如果问题持续，请联系管理员检查登录服务。
-        </p>
       </div>
     );
   }

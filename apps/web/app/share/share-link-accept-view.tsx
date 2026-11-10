@@ -30,7 +30,7 @@ export function ShareLinkAcceptView() {
     const accept = async () => {
       const token = tokenFromHash();
       if (!token) {
-        setError("这个分享链接缺少授权 token。");
+        setError("这个分享链接分享链接不完整，请重新获取。");
         return;
       }
       try {

@@ -39,7 +39,6 @@ export function WikiSwitcher() {
       window.sessionStorage.removeItem(switchNoticeKey);
       toast.success(`已切换到「${notice.wikiName ?? session.wikiName}」`, {
         id: switchToastID,
-        description: "当前页面、目录和搜索都已使用新的 Wiki。",
         duration: switchHighlightDuration,
       });
       const startHighlight = window.setTimeout(

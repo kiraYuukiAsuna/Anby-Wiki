@@ -35,7 +35,7 @@ export default async function PageDiffPage({
           版本对比：{page.displayTitle}
         </h1>
         <p className="rounded-lg border border-dashed border-border p-6 text-center text-sm text-muted-foreground">
-          缺少 from/to 参数，请从
+          请选择两个版本进行对比，请从
           <Link
             href={`/pages/${page.id}/history`}
             className="mx-1 text-blue-600 hover:underline"

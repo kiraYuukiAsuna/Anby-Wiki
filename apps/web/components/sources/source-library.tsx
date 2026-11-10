@@ -332,7 +332,7 @@ export function SourceLibrary() {
           <span className="flex size-9 items-center justify-center rounded-xl bg-emerald-100 text-emerald-700">
             <Plus className="size-4" aria-hidden />
           </span>
-          <h2 className="mt-4 font-semibold">登记逻辑来源</h2>
+          <h2 className="mt-4 font-semibold">添加来源</h2>
           <div className="mt-5 space-y-4">
             <div className="space-y-2">
               <Label htmlFor="source-type">类型</Label>

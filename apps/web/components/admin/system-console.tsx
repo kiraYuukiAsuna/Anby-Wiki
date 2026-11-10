@@ -90,7 +90,7 @@ function MailSettings({ configuration, mfaEnabled, onSaved }: {
       <div><Label htmlFor="smtp-password">SMTP 密码或授权码</Label><Input id="smtp-password" className="mt-2" type="password" autoComplete="new-password" value={smtpPassword} onChange={(event) => setSMTPPassword(event.target.value)} placeholder={configuration.passwordConfigured ? "已配置，留空保留" : "尚未配置"} /></div>
       <div><Label htmlFor="smtp-from">发件邮箱</Label><Input id="smtp-from" className="mt-2" type="email" value={form.fromEmail} onChange={(event) => setField("fromEmail", event.target.value)} required /></div>
       <div><Label htmlFor="smtp-name">发件人名称</Label><Input id="smtp-name" className="mt-2" value={form.fromName} onChange={(event) => setField("fromName", event.target.value)} /></div>
-      <div><Label htmlFor="smtp-site">站点地址</Label><Input id="smtp-site" className="mt-2" type="url" value={form.publicUrl} onChange={(event) => setField("publicUrl", event.target.value)} placeholder="https://wiki.example.com" required /><p className="mt-2 text-xs text-muted-foreground">用于邮件中的恢复链接，填写本站正式 HTTPS 地址。</p></div>
+      <div><Label htmlFor="smtp-site">站点 HTTPS 地址</Label><Input id="smtp-site" className="mt-2" type="url" value={form.publicUrl} onChange={(event) => setField("publicUrl", event.target.value)} placeholder="https://wiki.example.com" required /></div>
       <div className="border-t pt-5 sm:col-span-2"><h3 className="font-medium">确认身份</h3><p className="mt-1 text-sm text-muted-foreground">保存配置需要重新验证。每个验证码只能使用一次。</p></div>
       <div><Label htmlFor="system-password">当前账号密码</Label><Input id="system-password" className="mt-2" type="password" autoComplete="current-password" value={password} onChange={(event) => setPassword(event.target.value)} /></div>
       {mfaEnabled && <div><Label htmlFor="system-code">验证码或恢复码</Label><Input id="system-code" className="mt-2" autoComplete="one-time-code" value={code} onChange={(event) => setCode(event.target.value)} /></div>}
@@ -162,7 +162,7 @@ export function SystemConsole() {
     finally { setBusy(false); }
   };
 
-  if (!permitted) return <div className="mt-7 rounded-2xl border p-6"><ShieldCheck className="size-6" /><h2 className="mt-3 font-semibold">需要系统管理员权限</h2><p className="mt-2 text-sm text-muted-foreground">Wiki 管理员负责本 Wiki 的成员和内容。管理全站设置还需要由运维人员授予系统管理员权限。</p>{accountVisible ? <Button className="mt-4" variant="outline" asChild><Link href="/account">返回个人中心</Link></Button> : null}</div>;
+  if (!permitted) return <div className="mt-7 rounded-2xl border p-6"><ShieldCheck className="size-6" /><h2 className="mt-3 font-semibold">需要系统管理员权限</h2><p className="mt-2 text-sm text-muted-foreground">请联系运维人员开通系统管理权限。</p>{accountVisible ? <Button className="mt-4" variant="outline" asChild><Link href="/account">返回个人中心</Link></Button> : null}</div>;
   if (mail.isLoading || (accounts.isLoading && !accounts.data)) return <p className="mt-7 flex items-center gap-2 text-sm"><LoaderCircle className="size-4 animate-spin" />正在读取系统配置…</p>;
   if (mail.error || accounts.error || !mail.data || !accounts.data) return <div className="mt-7 rounded-2xl border p-6"><p>系统配置暂不可用。</p><Button className="mt-3" onClick={() => { void mail.mutate(); void accounts.mutate(); }}>重试</Button></div>;
   const items = accounts.data.accounts;

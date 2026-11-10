@@ -59,7 +59,7 @@ export function KnowledgeProposalDetail({ proposal }: { proposal: Proposal }) {
         <div><dt className="text-xs text-muted-foreground">来源导入任务</dt><dd className="mt-1 font-mono text-xs">{proposal.importJobId ?? "—"}</dd></div>
         <div><dt className="text-xs text-muted-foreground">目标</dt><dd className="mt-1">{PROPOSAL_TARGET_LABELS[proposal.targetType]} · {proposal.targetId ?? "新对象"}</dd></div>
         <div><dt className="text-xs text-muted-foreground">风险依据</dt><dd className="mt-1">{proposal.riskReasons.join("；") || "—"}</dd></div>
-        <div><dt className="text-xs text-muted-foreground">修改建议作者</dt><dd className="mt-1 font-mono text-xs">{proposal.createdBy}</dd></div>
+        <div><dt className="text-xs text-muted-foreground">提交身份</dt><dd className="mt-1 font-mono text-xs">{proposal.createdBy}</dd></div>
         {proposal.importInitiatedBy ? <div><dt className="text-xs text-muted-foreground">导入发起人</dt><dd className="mt-1 font-mono text-xs">{proposal.importInitiatedBy}</dd></div> : null}
       </dl>
       {isWikiImport ? (

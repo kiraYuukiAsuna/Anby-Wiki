@@ -479,7 +479,7 @@ function EditorSessionContent({
         <DialogContent>
           <DialogHeader>
             <DialogTitle>发布修改</DialogTitle>
-            <DialogDescription>
+            <DialogDescription className="sr-only">
               简要说明修改内容。发布后，读者会看到这个版本。
             </DialogDescription>
           </DialogHeader>

@@ -49,9 +49,6 @@ export function PlatformHealthCard() {
             <Activity className="size-4 text-primary" aria-hidden />
             系统状态
           </p>
-          <p className="mt-1 text-xs leading-5 text-muted-foreground">
-            服务连接和运行状态
-          </p>
         </div>
         <Button
           type="button"

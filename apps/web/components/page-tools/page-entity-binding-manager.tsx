@@ -125,12 +125,6 @@ export function PageEntityBindingManager({
         parsed.data.role === "primary"
           ? "页面主实体已更新"
           : "显式实体绑定已添加",
-        {
-          description:
-            parsed.data.role === "primary"
-              ? "搜索结果会自动更新，原实体 ID 仍然有效。"
-              : "正文中的实体提及会随页面内容自动更新。",
-        },
       );
     } catch (error) {
       if (isUnauthorized(error)) {

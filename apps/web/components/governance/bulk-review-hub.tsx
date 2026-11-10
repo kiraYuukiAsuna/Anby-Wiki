@@ -61,7 +61,7 @@ function BatchCard({ batch }: { batch: BulkReviewBatchSummary }) {
               dateStyle: "medium",
               timeStyle: "short",
             }).format(batch.createdAt)}
-            · {batch.itemCount} 个修改建议 · wave {batch.waveSize}
+            · {batch.itemCount} 个修改建议 · 每组 {batch.waveSize} 项
           </p>
         </div>
         <ArrowRight

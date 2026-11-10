@@ -218,9 +218,6 @@ function SourceUsagePageRow({
             {item.citationCount} 个引文
           </p>
         </div>
-        <span className="max-w-full break-all font-mono text-[10px] text-muted-foreground">
-          版本 {item.revisionId}
-        </span>
       </div>
 
       {expanded ? (
@@ -243,7 +240,7 @@ function SourceUsagePageRow({
                     href={`/pages/${item.pageId}#${location.blockId}`}
                     className="min-w-0 flex-1 break-all font-mono text-[10px] text-muted-foreground hover:text-primary hover:underline"
                   >
-                    内容块 {location.blockId} · 位置 {location.nodeId}
+                    查看引用位置
                   </Link>
                   {location.claimId ? (
                     <Button asChild size="xs" variant="ghost">
@@ -394,10 +391,6 @@ export function ComponentUsagePanel({
                     {group.items.length} 处依赖 · {group.blockCount} 个区块 · 版本{" "}
                     {group.versions.map((item) => `v${item}`).join("、")}
                   </p>
-                  <p className="mt-1 font-mono text-[10px] text-muted-foreground">
-                    版本{" "}
-                    <span title={group.revisionId}>{compactId(group.revisionId)}</span>
-                  </p>
                 </div>
                 {group.items.length === 1 ? (
                   <Button asChild size="xs" variant="outline">
@@ -417,7 +410,7 @@ export function ComponentUsagePanel({
               {group.items.length > 1 ? (
                 <details className="mt-3 text-xs text-muted-foreground">
                   <summary className="cursor-pointer select-none hover:text-foreground">
-                    查看 {group.items.length} 个精确依赖
+                    查看 {group.items.length} 个使用位置
                   </summary>
                   <ul className="mt-2 space-y-1.5 border-l pl-3">
                     {group.items.map((item) => (
@@ -429,8 +422,7 @@ export function ComponentUsagePanel({
                           href={`/pages/${item.pageId}#${item.blockId}`}
                           className="min-w-0 flex-1 hover:text-foreground hover:underline"
                         >
-                          v{item.componentVersion} · 内容块{" "}
-                          <span title={item.blockId}>{compactId(item.blockId)}</span>
+                          v{item.componentVersion} · 查看内容块
                         </Link>
                         <Link
                           href={`/entities/${item.entityId}`}

@@ -41,7 +41,7 @@ function validatePlanning(
   context: z.RefinementCtx,
 ) {
   if (value.routeMode === "force_create" && !value.title) {
-    context.addIssue({ code: "custom", path: ["title"], message: "强制创建单页时必须填写页面标题" });
+    context.addIssue({ code: "custom", path: ["title"], message: "新建单页时必须填写页面标题" });
   }
   if (value.routeMode === "force_update" && !value.pageId) {
     context.addIssue({ code: "custom", path: ["pageId"], message: "更新指定页面时必须选择目标页面" });
@@ -89,20 +89,17 @@ const SEARCH_DEBOUNCE_MS = 200;
 const ROUTE_MODE_OPTIONS = [
   {
     value: "auto",
-    label: "智能多页面",
-    description: "根据资料内容匹配已有页面，决定新建、更新、关联或跳过。",
+    label: "自动整理",
     icon: Network,
   },
   {
     value: "force_create",
-    label: "强制创建单页",
-    description: "将资料整理为一个新页面。如果标题已被使用，任务会暂停并提示你处理。",
+    label: "新建单页",
     icon: FilePlus2,
   },
   {
     value: "force_update",
     label: "更新指定页面",
-    description: "只更新你选定的页面，不会创建其他页面。",
     icon: FilePenLine,
   },
 ] as const;
@@ -142,7 +139,7 @@ export function ImportPageTargetPicker({
       <div className="flex items-center justify-between gap-3 rounded-lg border border-border p-3">
         <span className="min-w-0">
           <span className="block truncate text-sm font-medium">{selected.displayTitle}</span>
-          <span className="block text-xs text-muted-foreground">将只为这个页面生成更新计划</span>
+          <span className="block text-xs text-muted-foreground">仅更新此页面</span>
         </span>
         <Button type="button" size="icon" variant="ghost" title="清除目标页面" onClick={() => onSelect(null)}>
           <X aria-hidden />
@@ -214,13 +211,13 @@ export function ImportJobForm() {
   const selectFile = (selected: File) => {
     const parsed = uploadFileSchema.safeParse(selected);
     setFile(parsed.success ? parsed.data : null);
-    setFileError(parsed.success ? "" : parsed.error.issues[0]?.message ?? "文件不有效");
+    setFileError(parsed.success ? "" : parsed.error.issues[0]?.message ?? "文件无效");
   };
 
   const submit = async (event: React.FormEvent) => {
     event.preventDefault();
     if (authorActorId && !actors.some((actor) => actor.actorId === authorActorId && actor.status === "active")) {
-      toast.error("选定的机器作者不可用，请刷新身份列表或选择其他作者");
+      toast.error("所选机器人不可用，请刷新或重新选择");
       return;
     }
     const pageId = routeMode === "force_update" ? targetPage?.id : undefined;
@@ -237,7 +234,7 @@ export function ImportJobForm() {
       if (sourceKind === "upload") {
         setFileError(parsed.error.issues.find((issue) => issue.path[0] === "file")?.message ?? "");
       }
-      toast.error(parsed.error.issues[0]?.message ?? "来源参数不有效");
+      toast.error(parsed.error.issues[0]?.message ?? "来源信息无效");
       return;
     }
     setSubmitting(true);
@@ -294,7 +291,7 @@ export function ImportJobForm() {
           <Label htmlFor="source-url">来源 URL</Label>
           <Input id="source-url" type="url" value={url} onChange={(event) => setURL(event.target.value)}
             placeholder="https://example.com/article" required />
-          <p className="text-xs text-muted-foreground">请填写可公开访问的 HTTP(S) 链接，不支持内网地址。</p>
+          <p className="text-xs text-muted-foreground">仅支持公开的 HTTP(S) 链接。</p>
         </div>
       ) : (
         <div className="space-y-3">
@@ -399,23 +396,20 @@ export function ImportJobForm() {
           </div>
           {fileError ? <p id="source-file-error" role="alert" className="text-xs text-destructive">{fileError}</p> : null}
           <div id="source-file-help" className="flex flex-wrap gap-1.5 text-xs text-muted-foreground">
-            {["Markdown / 文本", "HTML", "JSON / CSV", "PDF / 图片"].map((format) => (
+            {["Markdown / 文本", "HTML", "JSON / CSV", "PDF / PNG / JPEG"].map((format) => (
               <span key={format} className="rounded-md bg-muted px-2 py-1">{format}</span>
             ))}
           </div>
-          <p className="text-xs leading-5 text-muted-foreground">
-            图片支持 PNG、JPEG。
-          </p>
         </div>
       )}
       <div className="space-y-2">
-        <Label htmlFor="import-author">修改建议作者</Label>
+        <Label htmlFor="import-author">提交身份</Label>
         <select id="import-author" value={authorActorId ?? ""} disabled={submitting}
           onChange={(event) => setAuthorSelection(session ? {
             account: session.actorId, wiki: session.wikiId, id: event.target.value,
           } : null)}
           className="h-9 w-full min-w-0 rounded-md border border-input bg-background px-3 text-sm">
-          <option value="">当前账号（人工作者）</option>
+          <option value="">当前账号</option>
           {actors.map((actor) => (
             <option key={actor.actorId} value={actor.actorId} disabled={actor.status !== "active"}>
               {actor.displayName} · {actor.actorType === "import" ? "导入 Agent" : "AI Agent"}{actor.status !== "active" ? "（已停用）" : ""}
@@ -423,7 +417,7 @@ export function ImportJobForm() {
           ))}
         </select>
         <p className="text-xs leading-5 text-muted-foreground">
-          选择已开启全自动处理的机器人时，导入修改会自动批准并生效。
+          选择“导入自动生效”的机器人后，导入修改将跳过人工审核。
         </p>
         {actorError ? (
           <p role="alert" className="text-xs text-destructive">
@@ -436,7 +430,7 @@ export function ImportJobForm() {
         ) : null}
       </div>
       <fieldset className="space-y-2">
-        <legend className="text-sm font-medium">页面路由方式</legend>
+        <legend className="text-sm font-medium">导入方式</legend>
         <div className="grid gap-2">
           {ROUTE_MODE_OPTIONS.map((option) => {
             const selected = routeMode === option.value;
@@ -448,7 +442,7 @@ export function ImportJobForm() {
                 aria-pressed={selected}
                 onClick={() => setRouteMode(option.value)}
                 className={cn(
-                  "grid min-h-20 w-full grid-cols-[1.25rem_minmax(0,1fr)_1rem] items-start gap-3 rounded-lg border px-3 py-3 text-left transition-colors",
+                  "grid w-full grid-cols-[1.25rem_minmax(0,1fr)_1rem] items-start gap-3 rounded-lg border px-3 py-3 text-left transition-colors",
                   "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2",
                   selected
                     ? "border-primary bg-primary/5"
@@ -464,9 +458,6 @@ export function ImportJobForm() {
                 />
                 <span className="min-w-0">
                   <span className="block text-sm font-semibold">{option.label}</span>
-                  <span className="mt-0.5 block text-xs leading-5 text-muted-foreground">
-                    {option.description}
-                  </span>
                 </span>
                 <span
                   className={cn(
@@ -491,13 +482,12 @@ export function ImportJobForm() {
       <div className="space-y-2">
         <Label htmlFor="source-title">{routeMode === "force_create" ? "新页面标题" : "建议页面标题（可选）"}</Label>
         <Input id="source-title" value={title} onChange={(event) => setTitle(event.target.value)} maxLength={255}
-          required={routeMode === "force_create"} placeholder={routeMode === "force_create" ? "必须填写且不能与现有标题冲突" : "作为页面检索与路由的优先线索"} />
+          required={routeMode === "force_create"} placeholder={routeMode === "force_create" ? "填写未使用的页面标题" : "留空由系统命名"} />
       </div>
       <div className="space-y-2">
         <Label htmlFor="source-instructions">导入要求（可选）</Label>
         <Textarea id="source-instructions" value={instructions} onChange={(event) => setInstructions(event.target.value)}
           maxLength={4000} rows={4} placeholder="例如：重点补充角色经历；忽略营销段落；分别整理人物与组织页面。" />
-        <p className="text-xs text-muted-foreground">可以说明如何整理内容，但资料仍需经过安全检查、证据核验和审核。</p>
       </div>
       <Button type="submit" disabled={submitting}>{submitting ? "正在创建…" : "创建导入任务"}</Button>
     </form>

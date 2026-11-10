@@ -93,9 +93,6 @@ export function ClaimVerificationControl({
       toast.success(
         OPTIONS.find((item) => item.value === verificationStatus)?.label ??
           "核验状态已更新",
-        {
-          description: "引用这条事实的页面内容会自动更新。",
-        },
       );
     } catch (error) {
       if (isUnauthorized(error)) {
@@ -138,6 +135,7 @@ export function ClaimVerificationControl({
               type="button"
               disabled={!session.isAuthenticated || Boolean(saving)}
               aria-pressed={active}
+              title={option.detail}
               onClick={() => void update(option.value)}
               className={cn(
                 "flex items-start gap-3 rounded-xl border p-3 text-left transition",
@@ -157,9 +155,6 @@ export function ClaimVerificationControl({
               </span>
               <span>
                 <span className="block text-xs font-semibold">{option.label}</span>
-                <span className="mt-0.5 block text-[10px] leading-4 opacity-75">
-                  {option.detail}
-                </span>
               </span>
             </button>
           );

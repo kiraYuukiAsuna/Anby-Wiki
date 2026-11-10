@@ -110,7 +110,7 @@ export function RollbackButton({
           <DialogHeader>
             <DialogTitle>回滚到此版本</DialogTitle>
             <DialogDescription>
-              将以 {formatDateTime(revision.createdAt)} 发布的内容追加一个新版本并设为当前版本；历史版本不会被修改。
+              将以 {formatDateTime(revision.createdAt)} 的内容恢复为当前版本，现有内容保留在历史记录中。
             </DialogDescription>
           </DialogHeader>
           <div className="flex flex-col gap-2">

@@ -187,9 +187,6 @@ export function ReviewQueue() {
         <h2 className="mt-4 text-lg font-semibold text-amber-950">
           需要审核权限
         </h2>
-        <p className="mt-2 text-sm leading-6 text-amber-900/70">
-          当前账号可以继续使用站点，但不能查看或处理人工审核任务。
-        </p>
       </div>
     );
   }
@@ -261,7 +258,7 @@ export function ReviewQueue() {
                 </div>
                 <Button variant="outline" size="sm" asChild>
                   <Link href={`/governance/proposals/${task.proposalId}`}>
-                    查看三态预览
+                    查看修改对比
                   </Link>
                 </Button>
               </div>
@@ -334,7 +331,7 @@ export function ReviewQueue() {
                 </span>
               </label>
               <label className="text-xs font-medium">
-                每个 wave
+                每组数量
                 <Input
                   type="number"
                   min={1}

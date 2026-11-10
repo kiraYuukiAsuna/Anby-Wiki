@@ -52,32 +52,30 @@ const QUICK_LINKS = [
   {
     href: "/pages",
     label: "页面目录",
-    detail: "按最近更新或标题浏览条目",
     icon: BookOpenText,
   },
-  { href: "/explore", label: "搜索", detail: "按关键词或内容含义查找页面", icon: Search },
-  { href: "/explore/graph", label: "知识关系图", detail: "查看实体之间的关联和依据", icon: Network },
-  { href: "/entities", label: "实体与知识", detail: "浏览实体及相关事实", icon: Waypoints },
-  { href: "/federation", label: "跨 Wiki 关联", detail: "关联其他 Wiki 中的实体", icon: Globe2 },
-  { href: "/collections", label: "专题合集", detail: "按主题整理页面和实体", icon: Layers3 },
-  { href: "/sources", label: "来源与证据", detail: "查看资料来源和引用证据", icon: LibraryBig },
-  { href: "/imports", label: "导入资料", detail: "导入资料，查看进度和审核结果", icon: Bot },
-  { href: "/governance/review", label: "待审核", detail: "审核修改建议，支持批量处理", icon: ShieldCheck },
+  { href: "/explore", label: "搜索", icon: Search },
+  { href: "/explore/graph", label: "知识关系图", icon: Network },
+  { href: "/entities", label: "实体与知识", icon: Waypoints },
+  { href: "/federation", label: "跨 Wiki 关联", icon: Globe2 },
+  { href: "/collections", label: "专题合集", icon: Layers3 },
+  { href: "/sources", label: "来源与证据", icon: LibraryBig },
+  { href: "/imports", label: "导入资料", icon: Bot },
+  { href: "/governance/review", label: "待审核", icon: ShieldCheck },
   {
     href: "/governance/apply",
     label: "待生效",
-    detail: "让已批准的变更正式生效",
     icon: BadgeCheck,
   },
-  { href: "/governance/protections", label: "页面保护", detail: "设置页面编辑权限，保护指定标题", icon: LockKeyhole },
-  { href: "/governance/fact-check", label: "事实一致性", detail: "检查事实冲突、缺失证据和实体引用", icon: ShieldAlert },
-  { href: "/governance/ai-trust", label: "AI 审核设置", detail: "设置机器人的审核方式", icon: BrainCircuit },
-  { href: "/governance/revision-storage", label: "历史版本存储", detail: "查看版本存储用量，归档历史内容", icon: Archive },
-  { href: "/account", label: "个人中心", detail: "修改个人资料，管理账号安全", icon: UserRound },
-  { href: "/admin/members", label: "成员与角色", detail: "协作者与当前 Wiki 权限", icon: UsersRound },
-  { href: "/settings/cli", label: "Agent CLI 授权", detail: "连接命令行工具，管理访问授权", icon: TerminalSquare },
-  { href: "/assets", label: "媒体与附件", detail: "上传和管理图片、音视频及附件", icon: Images },
-  { href: "/components", label: "组件中心", detail: "创建和使用资料卡、信息框", icon: Boxes },
+  { href: "/governance/protections", label: "页面保护", icon: LockKeyhole },
+  { href: "/governance/fact-check", label: "事实一致性", icon: ShieldAlert },
+  { href: "/governance/ai-trust", label: "AI 审核设置", icon: BrainCircuit },
+  { href: "/governance/revision-storage", label: "历史版本存储", icon: Archive },
+  { href: "/account", label: "个人中心", icon: UserRound },
+  { href: "/admin/members", label: "成员与角色", icon: UsersRound },
+  { href: "/settings/cli", label: "Agent CLI 授权", icon: TerminalSquare },
+  { href: "/assets", label: "媒体与附件", icon: Images },
+  { href: "/components", label: "组件中心", icon: Boxes },
 ] as const;
 
 function useDebouncedValue(value: string, delayMs: number): string {
@@ -205,7 +203,7 @@ export function GlobalSearchCommand() {
         <DialogContent className="max-h-[calc(100dvh-2rem)] min-w-0 overflow-hidden sm:max-w-2xl">
           <DialogHeader>
             <DialogTitle>全局搜索</DialogTitle>
-            <DialogDescription>
+            <DialogDescription className="sr-only">
               搜索页面、实体，或快速打开常用功能。
             </DialogDescription>
           </DialogHeader>
@@ -243,9 +241,6 @@ export function GlobalSearchCommand() {
                           <span className="min-w-0 flex-1 overflow-hidden">
                             <span className="block truncate text-sm font-medium">
                               {link.label}
-                            </span>
-                            <span className="block truncate text-[10px] text-muted-foreground">
-                              {link.detail}
                             </span>
                           </span>
                         </Command.Item>

@@ -34,12 +34,10 @@ export default async function EntityDetailPage({
       eyebrow="实体"
       title={title}
       status={ENTITY_STATUS_LABELS[detail.status]}
-      modeLabel={detail.status === "active" ? "可编辑" : "身份映射"}
     >
       <DetailSection title="实体信息">
         <DetailRows
           rows={[
-            { label: "实体 ID", value: detail.id },
             { label: "实体标识", value: detail.canonicalKey },
             {
               label: "类型",

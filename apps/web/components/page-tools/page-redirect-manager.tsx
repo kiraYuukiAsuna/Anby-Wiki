@@ -57,7 +57,7 @@ function targetPresentation(redirect: PageRedirect) {
   switch (target.kind) {
     case PageRedirectTargetKindEnum.Page:
       return {
-        label: "已有 Page",
+        label: "已有页面",
         title: target.targetPageTitle ?? target.targetPageId ?? "未知 Page",
         detail: target.targetPageId ?? "",
         icon: FileText,
@@ -73,7 +73,7 @@ function targetPresentation(redirect: PageRedirect) {
       return {
         label: "待创建页面标题",
         title: `${target.namespace ?? "?"}:${target.targetTitle ?? "?"}`,
-        detail: "目标创建后将动态解析",
+        detail: "等待目标页面创建",
         icon: CircleHelp,
       };
     case PageRedirectTargetKindEnum.Interwiki:

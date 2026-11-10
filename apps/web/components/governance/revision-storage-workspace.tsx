@@ -179,7 +179,7 @@ function ArchiveDialog({
       </DialogTrigger>
       <DialogContent className="sm:max-w-lg">
         <DialogHeader>
-          <DialogTitle>迁移到冷存储</DialogTitle>
+          <DialogTitle>归档历史版本</DialogTitle>
           <DialogDescription>
             仅归档当前账户 Wiki 的到期历史快照，当前版本及其他 Wiki 共用的快照会保留。
             归档后仍可阅读历史版本。
@@ -303,9 +303,6 @@ export function RevisionStorageWorkspace() {
       <div className="rounded-3xl border border-destructive/20 bg-destructive/5 p-8">
         <TriangleAlert className="size-7 text-destructive" aria-hidden />
         <h2 className="mt-4 text-lg font-semibold">暂时无法读取存储状态</h2>
-        <p className="mt-2 text-sm text-muted-foreground">
-          请稍后重试。如果问题持续，请联系管理员检查服务状态。
-        </p>
         <Button
           className="mt-5"
           variant="outline"
@@ -334,34 +331,34 @@ export function RevisionStorageWorkspace() {
   return (
     <div className="space-y-8">
       <p className="text-sm text-muted-foreground">
-        仅统计当前账户拥有的 Wiki，切换协作 Wiki 不会改变此处的归档范围。
+        归档范围：我的 Wiki
       </p>
       <section className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
         <Metric
           icon={Flame}
           tone="hot"
-          label="热快照"
+          label="在线快照"
           value={stats.hotSnapshots.toLocaleString("zh-CN")}
           detail={`${formatBytes(stats.hotBytes)} · 当前版本与近期历史`}
         />
         <Metric
           icon={Snowflake}
           tone="cold"
-          label="冷快照"
+          label="归档快照"
           value={stats.coldSnapshots.toLocaleString("zh-CN")}
-          detail={`${formatBytes(stats.coldBytes)} · 按需校验并透明回源`}
+          detail={`${formatBytes(stats.coldBytes)} · 历史版本`}
         />
         <Metric
           icon={Clock3}
-          label="数据库热存储时间"
+          label="在线保留时间"
           value={formatDuration(stats.retentionSeconds)}
-          detail="超过此时间且不是当前版本时可迁移到冷存储"
+          detail="超过此时间的历史版本可归档"
         />
         <Metric
           icon={Archive}
-          label="可迁移到冷存储"
+          label="可归档快照"
           value={stats.eligibleSnapshots.toLocaleString("zh-CN")}
-          detail={`只迁移存放位置，不删除内容；默认每批最多 ${stats.defaultBatchSize} 个`}
+          detail={`默认每批 ${stats.defaultBatchSize} 个`}
         />
       </section>
 
@@ -389,7 +386,7 @@ export function RevisionStorageWorkspace() {
               ) : (
                 <TriangleAlert className="size-3" aria-hidden />
               )}
-              {stats.archiveAvailable ? "对象存储已装配" : "对象存储未装配"}
+              {stats.archiveAvailable ? "归档存储已连接" : "归档存储未配置"}
             </span>
           </div>
 
@@ -415,15 +412,15 @@ export function RevisionStorageWorkspace() {
 
           <dl className="mt-8 grid gap-3 border-t pt-5 text-sm sm:grid-cols-2">
             <div>
-              <dt className="text-xs text-muted-foreground">最早热快照</dt>
+              <dt className="text-xs text-muted-foreground">最早在线快照</dt>
               <dd className="mt-1 font-medium">
                 {stats.oldestHotCreatedAt
                   ? DATE_FORMATTER.format(stats.oldestHotCreatedAt)
-                  : "暂无热快照"}
+                  : "暂无在线快照"}
               </dd>
             </div>
             <div>
-              <dt className="text-xs text-muted-foreground">逻辑快照总量</dt>
+              <dt className="text-xs text-muted-foreground">快照总数</dt>
               <dd className="mt-1 font-medium">
                 {totalSnapshots.toLocaleString("zh-CN")} 个 ·{" "}
                 {formatBytes(stats.hotBytes + stats.coldBytes)}

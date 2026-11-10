@@ -298,9 +298,6 @@ export function FactConsistencyWorkspace() {
         <h2 className="mt-4 text-lg font-semibold text-amber-950">
           需要审核者权限
         </h2>
-        <p className="mt-2 max-w-2xl text-sm leading-6 text-amber-900/70">
-          普通读者可查看已发布事实；只有审核者和管理员能查看检查结果。
-        </p>
       </div>
     );
   }
@@ -412,9 +409,6 @@ export function FactConsistencyWorkspace() {
         ) ? (
           <div className="mt-5 rounded-2xl border border-destructive/20 bg-destructive/5 p-5 text-sm">
             <p className="font-medium text-destructive">问题队列暂时无法读取</p>
-            <p className="mt-1 text-muted-foreground">
-              请稍后重试。如果问题持续，请联系管理员检查服务状态。
-            </p>
           </div>
         ) : null}
         {!issues.isLoading && !issues.error && items.length === 0 ? (

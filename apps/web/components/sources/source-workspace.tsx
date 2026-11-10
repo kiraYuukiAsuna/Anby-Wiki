@@ -10,7 +10,6 @@ import {
   ClipboardCheck,
   ExternalLink,
   FileClock,
-  FileSearch,
   LoaderCircle,
   Quote,
   RefreshCw,
@@ -46,6 +45,7 @@ import { sourcesApi } from "@/lib/api";
 import { useSession } from "@/lib/auth";
 import { safeHttpUrl } from "@/lib/http-url";
 import { cn } from "@/lib/utils";
+import { RESOURCE_STATUS_LABELS } from "@/lib/display-labels";
 
 const VERSION_PAGE_SIZE = 20;
 const CHUNK_PAGE_SIZE = 20;
@@ -147,7 +147,7 @@ function CitationComposer({
       <>
         <DialogHeader>
           <DialogTitle>证据定位已创建</DialogTitle>
-          <DialogDescription>
+          <DialogDescription className="sr-only">
             引文创建后不能修改，可作为事实依据，也可插入页面正文。
           </DialogDescription>
         </DialogHeader>
@@ -176,7 +176,7 @@ function CitationComposer({
         <DialogTitle>建立引文</DialogTitle>
         <DialogDescription>
           {chunk
-            ? `定位到来源片段 #${chunk.ordinal}；引文会由服务端核对。`
+            ? `定位到来源片段 #${chunk.ordinal}`
             : "引用整个来源版本，也可以补充页码或章节。"}
         </DialogDescription>
       </DialogHeader>
@@ -302,13 +302,6 @@ function VersionPanel({ version }: { version: EvidenceSourceVersion }) {
           <p className="font-medium">
             获取于 {DATE_FORMATTER.format(version.fetchedAt)}
           </p>
-          <p className="mt-1 truncate font-mono text-[10px] text-muted-foreground">
-            {version.versionHash}
-          </p>
-          <p className="mt-1 text-xs text-muted-foreground">
-            {version.parseTrack} · {version.parserName}@
-            {version.parserVersion}
-          </p>
         </div>
         <Button
           type="button"
@@ -344,12 +337,12 @@ function VersionPanel({ version }: { version: EvidenceSourceVersion }) {
           ) : null}
           {chunks.error ? (
             <p className="rounded-xl border border-destructive/20 bg-destructive/5 p-4 text-sm text-destructive">
-              来源分片载入失败。
+              来源片段加载失败。
             </p>
           ) : null}
           {!chunks.isLoading && !chunks.error && items.length === 0 ? (
             <p className="rounded-xl border border-dashed p-5 text-center text-sm text-muted-foreground">
-              此版本没有可定位分片。
+              此版本没有来源片段。
             </p>
           ) : null}
           {items.length > 0 ? (
@@ -360,9 +353,6 @@ function VersionPanel({ version }: { version: EvidenceSourceVersion }) {
                     <div>
                       <p className="text-xs font-semibold">
                         来源片段 #{chunk.ordinal} · {chunk.chunkType}
-                      </p>
-                      <p className="mt-1 font-mono text-[10px] text-muted-foreground">
-                        {chunk.id} · {chunk.textHash.slice(0, 12)}
                       </p>
                     </div>
                     <Button
@@ -520,7 +510,7 @@ export function SourceWorkspace({ id }: { id: string }) {
         </div>
       </header>
 
-      <section className="mt-7 grid gap-4 md:grid-cols-3" aria-label="来源状态">
+      <section className="mt-7 grid gap-4 md:grid-cols-2" aria-label="来源状态">
         <div className="rounded-2xl border bg-card p-5">
           {healthy ? (
             <ClipboardCheck className="size-5 text-emerald-600" aria-hidden />
@@ -528,7 +518,7 @@ export function SourceWorkspace({ id }: { id: string }) {
             <ShieldAlert className="size-5 text-amber-600" aria-hidden />
           )}
           <p className="mt-4 text-sm font-semibold">
-            {resource ? resource.status : "无外部资源"}
+            {resource ? RESOURCE_STATUS_LABELS[resource.status] : "无外部资源"}
           </p>
           <p className="mt-1 text-xs text-muted-foreground">
             {resource?.httpStatus
@@ -541,16 +531,11 @@ export function SourceWorkspace({ id }: { id: string }) {
           <p className="mt-4 text-2xl font-semibold">{versionItems.length}</p>
           <p className="mt-1 text-xs text-muted-foreground">当前已加载版本</p>
         </div>
-        <div className="rounded-2xl border bg-card p-5">
-          <FileSearch className="size-5 text-violet-600" aria-hidden />
-          <p className="mt-4 truncate font-mono text-xs">{source.id}</p>
-          <p className="mt-2 text-xs text-muted-foreground">来源 ID</p>
-        </div>
       </section>
 
       {resource ? (
         <section className="mt-5 rounded-2xl border bg-muted/20 p-5">
-          <h2 className="text-sm font-semibold">规范化外部资源</h2>
+          <h2 className="text-sm font-semibold">原始链接</h2>
           <dl className="mt-4 grid gap-3 text-xs sm:grid-cols-[9rem_1fr]">
             <dt className="text-muted-foreground">网站域名</dt>
             <dd className="font-mono">{resource.domain}</dd>

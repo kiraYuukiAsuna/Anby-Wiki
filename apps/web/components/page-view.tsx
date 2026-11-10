@@ -276,7 +276,6 @@ export async function PageView({ data }: { data: PageWithContent }) {
             <LazySectionDocument
               pageId={page.id}
               revisionId={content.revision.id}
-              expectedSectionCount={content.sectionCount}
               initialBlockId={sectionTarget}
             />
           ) : document && content?.html && !terminalRedirect ? (

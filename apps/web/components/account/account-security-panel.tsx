@@ -117,7 +117,7 @@ export function AccountSecurityPanel() {
         </div>
         <div className="min-w-0 rounded-xl border p-4">
           <h3 className="flex items-center gap-2 font-medium"><KeyRound className="size-4" />二次验证</h3>
-          <p className="mt-3 text-sm text-muted-foreground">{state.mfaEnabled ? `已绑定验证器 · 剩余 ${state.recoveryCodesRemaining} 个恢复码` : "使用手机验证器生成动态验证码，提高账号安全性。"}</p>
+          <p className="mt-3 text-sm text-muted-foreground">{state.mfaEnabled ? `已绑定验证器 · 剩余 ${state.recoveryCodesRemaining} 个恢复码` : "未绑定验证器"}</p>
           <div className="mt-4 flex flex-wrap gap-2">
             {state.mfaEnabled ? <>
               <Button size="sm" variant="outline" disabled={busy} onClick={() => begin({ action: Action.RegenerateCodes })}>重新生成恢复码</Button>
@@ -137,7 +137,7 @@ export function AccountSecurityPanel() {
         </div>
       </div>}
       <div className="mt-6 flex flex-wrap items-center justify-between gap-3 border-t pt-5">
-        <div><h3 className="font-medium">登录密码</h3><p className="mt-1 text-sm text-muted-foreground">修改后，所有设备和 CLI 都需要重新登录或授权。</p></div>
+        <h3 className="font-medium">登录密码</h3>
         <Button variant="outline" disabled={busy} onClick={() => begin({ action: Action.ChangePassword })}>修改密码</Button>
       </div>
       <div className="mt-6 border-t pt-5">
@@ -158,10 +158,20 @@ export function AccountSecurityPanel() {
 
       <Dialog open={!!request} onOpenChange={(open) => { if (!open && !busy) setRequest(null); }}>
         <DialogContent showCloseButton={!busy}>
-          <DialogHeader><DialogTitle>{request && SECURITY_ACTION_LABELS[request.action]}</DialogTitle><DialogDescription>请重新验证身份。验证码每 30 秒更新，同一个验证码不能重复使用。修改邮箱须确认新邮箱；停用二次验证、修改密码或撤销全部会话后需要重新登录。</DialogDescription></DialogHeader>
+          <DialogHeader><DialogTitle>{request && SECURITY_ACTION_LABELS[request.action]}</DialogTitle><DialogDescription>
+            {request?.action === Action.ChangeEmail
+              ? "新邮箱验证成功后才会更换。"
+              : request?.action === Action.RegenerateCodes
+                ? "旧恢复码将全部失效，请保存新恢复码。"
+                : request?.action === Action.EnableMfa
+                  ? "其他设备将退出登录，CLI 需要重新授权。"
+                  : request?.action === Action.ChangePassword || request?.action === Action.DisableMfa || request?.action === Action.RevokeSessions
+                    ? "所有设备将退出登录，CLI 也需要重新授权。"
+                    : "请输入当前密码确认。"}
+          </DialogDescription></DialogHeader>
           <form onSubmit={submit} className="space-y-4">
             <div><Label htmlFor="security-password">当前密码</Label><Input id="security-password" className="mt-2" type="password" autoComplete="current-password" value={password} onChange={(event) => setPassword(event.target.value)} required /></div>
-            {(state.mfaEnabled || request?.action === Action.EnableMfa) && <div><Label htmlFor="security-code">验证码{state.mfaEnabled ? "或恢复码" : ""}</Label><Input id="security-code" className="mt-2" autoComplete="one-time-code" value={code} onChange={(event) => setCode(event.target.value)} required /></div>}
+            {(state.mfaEnabled || request?.action === Action.EnableMfa) && <div><Label htmlFor="security-code">验证码{state.mfaEnabled ? "或恢复码" : ""}</Label><Input id="security-code" placeholder="使用新的验证码，每个只能使用一次" className="mt-2" autoComplete="one-time-code" value={code} onChange={(event) => setCode(event.target.value)} required /></div>}
             {request?.action === Action.ChangeEmail && <div><Label htmlFor="security-email">新邮箱</Label><Input id="security-email" className="mt-2" type="email" autoComplete="email" value={email} onChange={(event) => setEmail(event.target.value)} required /></div>}
             {request?.action === Action.ChangePassword && <div><Label htmlFor="security-new-password">新密码（12–128 个字符）</Label><Input id="security-new-password" className="mt-2" type="password" autoComplete="new-password" value={newPassword} onChange={(event) => setNewPassword(event.target.value)} required /></div>}
             <Button className="w-full" disabled={busy} type="submit">{busy ? "处理中…" : "确认"}</Button>
@@ -169,7 +179,7 @@ export function AccountSecurityPanel() {
         </DialogContent>
       </Dialog>
       <Dialog open={recoveryCodes.length > 0} onOpenChange={(open) => { if (!open) setRecoveryCodes([]); }}>
-        <DialogContent><DialogHeader><DialogTitle>保存备用恢复码</DialogTitle><DialogDescription>这些恢复码只显示这一次，每个只能使用一次。请保存在安全的地方；重新生成后旧恢复码全部失效。</DialogDescription></DialogHeader>
+        <DialogContent><DialogHeader><DialogTitle>保存备用恢复码</DialogTitle><DialogDescription>恢复码仅显示一次，每个只能使用一次。请妥善保存；重新生成会使旧恢复码失效。</DialogDescription></DialogHeader>
           <pre className="overflow-x-auto rounded-lg bg-muted p-4 text-sm">{recoveryCodes.join("\n")}</pre>
           <Button variant="outline" onClick={() => void navigator.clipboard.writeText(recoveryCodes.join("\n")).then(() => toast.success("恢复码已复制")).catch(() => toast.error("复制失败，请手动复制"))}><Copy className="size-4" />复制全部恢复码</Button>
           <Button onClick={() => setRecoveryCodes([])}>我已保存</Button>

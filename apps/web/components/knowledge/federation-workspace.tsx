@@ -61,7 +61,7 @@ const wikiSchema = z
       .trim()
       .regex(
         /^[a-z][a-z0-9._-]{0,99}$/,
-        "Key 需以小写字母开头，仅含小写字母、数字、点、下划线或连字符",
+        "标识以小写字母开头，可含数字、点、下划线或连字符",
       ),
     displayName: z.string().trim().min(1, "请填写显示名称").max(255),
     baseUrl: z.url("请填写完整的 http(s) URL"),
@@ -194,7 +194,7 @@ function WikiEditor({
         error instanceof ResponseError &&
         error.response.status === 409
       ) {
-        toast.error("Wiki key 已存在或状态与现有映射冲突");
+        toast.error("Wiki 标识已存在，或当前关联不允许此操作");
       } else {
         toast.error("远端 Wiki 配置保存失败");
       }
@@ -715,7 +715,7 @@ export function FederationWorkspace() {
             <DialogTitle>
               {wikiDraft?.id ? "编辑远端 Wiki" : "登记远端 Wiki"}
             </DialogTitle>
-            <DialogDescription>
+            <DialogDescription className="sr-only">
               设置其他 Wiki 的实体链接和信任方式。这里只保存关联，不会复制对方的内容。
             </DialogDescription>
           </DialogHeader>

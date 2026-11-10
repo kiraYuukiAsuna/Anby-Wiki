@@ -142,11 +142,11 @@ export function AssetRevisionDetail({
         </section>
 
         <aside className="space-y-4 xl:sticky xl:top-24 xl:self-start">
-          <section className="rounded-2xl border bg-card p-5 shadow-sm">
-            <p className="flex items-center gap-2 text-sm font-semibold">
+          <details className="rounded-2xl border bg-card p-5 shadow-sm">
+            <summary className="flex cursor-pointer items-center gap-2 text-sm font-semibold">
               <Fingerprint className="size-4 text-sky-700" aria-hidden />
-              版本身份
-            </p>
+              版本信息
+            </summary>
             <dl className="mt-4 space-y-4 text-xs">
               <div>
                 <dt className="text-muted-foreground">文件版本 ID</dt>
@@ -197,10 +197,10 @@ export function AssetRevisionDetail({
                 </dd>
               </div>
             </dl>
-          </section>
+          </details>
 
           <section className="rounded-2xl border bg-card p-5 shadow-sm">
-            <p className="text-sm font-semibold">文件元数据</p>
+            <p className="text-sm font-semibold">文件信息</p>
             <dl className="mt-4 grid grid-cols-[6rem_1fr] gap-x-3 gap-y-3 text-xs">
               <dt className="text-muted-foreground">MIME</dt>
               <dd className="break-all font-medium">{revision.mimeType}</dd>

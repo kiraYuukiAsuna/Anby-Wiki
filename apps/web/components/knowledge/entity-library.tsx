@@ -285,9 +285,6 @@ export function EntityLibrary() {
         {state.error ? (
           <div className="mt-5 rounded-2xl border border-destructive/20 bg-destructive/5 p-5 text-sm">
             <p className="font-medium text-destructive">实体目录暂时不可用</p>
-            <p className="mt-1 text-muted-foreground">
-              请稍后重试。如果问题持续，请联系管理员。
-            </p>
           </div>
         ) : null}
 

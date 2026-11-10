@@ -67,7 +67,7 @@ export function ExternalLinkEditor({
       <DialogContent>
         <DialogHeader>
           <DialogTitle>插入外部链接</DialogTitle>
-          <DialogDescription>
+          <DialogDescription className="sr-only">
             输入链接地址和显示文字，即可为所选内容添加外部链接。
           </DialogDescription>
         </DialogHeader>

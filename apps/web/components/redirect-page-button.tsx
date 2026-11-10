@@ -40,7 +40,7 @@ type RedirectKind = PageRedirectTarget["kind"];
 type SelectedPage = { id: string; displayTitle: string };
 
 const pageTargetSchema = z.object({
-  pageId: z.string().uuid("请选择有效目标 Page"),
+  pageId: z.string().uuid("请选择有效目标页面"),
 });
 const sectionTargetSchema = pageTargetSchema.extend({
   anchorBlockId: z.string().uuid("请选择目标章节"),
@@ -50,7 +50,7 @@ const unresolvedTargetSchema = z.object({
     .string()
     .trim()
     .min(1, "命名空间不能为空")
-    .max(64, "命名空间 key 过长"),
+    .max(64, "命名空间标识过长"),
   title: z.string().trim().min(1, "目标标题不能为空").max(255, "目标标题过长"),
 });
 const interwikiTargetSchema = z.object({
@@ -75,7 +75,7 @@ const MODES: Array<{
   {
     kind: PageRedirectTargetKindEnum.Page,
     label: "已有页面",
-    description: "跟随完整 Page 链",
+    description: "跟随页面跳转",
     icon: FileText,
   },
   {
@@ -87,13 +87,13 @@ const MODES: Array<{
   {
     kind: PageRedirectTargetKindEnum.Unresolved,
     label: "待创建页面标题",
-    description: "页面创建后自动落地",
+    description: "页面创建后跳转",
     icon: CircleHelp,
   },
   {
     kind: PageRedirectTargetKindEnum.Interwiki,
     label: "外部 Wiki",
-    description: "经已校验外链离站",
+    description: "打开外部链接",
     icon: ExternalLink,
   },
 ];
@@ -261,7 +261,7 @@ export function RedirectPageButton({
       } else if (error instanceof ResponseError && error.response.status === 403) {
         toast.error("你没有编辑这个页面的权限");
       } else if (error instanceof ResponseError && error.response.status === 410) {
-        toast.error("目标 Page 已被删除");
+        toast.error("目标页面已被删除");
       } else if (
         error instanceof ResponseError &&
         (error.response.status === 400 || error.response.status === 422)
@@ -333,7 +333,7 @@ export function RedirectPageButton({
                 <div className="flex items-start justify-between gap-3">
                   <div className="min-w-0">
                     <p className="text-xs font-medium text-muted-foreground">
-                      目标 Page
+                      目标页面
                     </p>
                     <p className="mt-1 truncate font-semibold">
                       {targetPage.displayTitle}
@@ -397,7 +397,7 @@ export function RedirectPageButton({
                 ) : null}
               </div>
             ) : (
-              <Command shouldFilter={false} label="选择重定向目标 Page">
+              <Command shouldFilter={false} label="选择重定向目标页面">
                 <Command.Input
                   value={query}
                   onValueChange={setQuery}
@@ -413,7 +413,7 @@ export function RedirectPageButton({
                   ) : null}
                   {!searchState.isLoading && query.trim() && !hits.length ? (
                     <Command.Empty className="px-3 py-6 text-center text-sm text-muted-foreground">
-                      没有可用的目标 Page
+                      没有可用的目标页面
                     </Command.Empty>
                   ) : null}
                   {hits.map((hit) => (
@@ -445,7 +445,7 @@ export function RedirectPageButton({
           ) : kind === PageRedirectTargetKindEnum.Unresolved ? (
             <div className="grid gap-4 rounded-xl border border-border bg-muted/20 p-4 sm:grid-cols-[10rem_1fr]">
               <div className="space-y-2">
-                <Label htmlFor="redirect-namespace">命名空间 key</Label>
+                <Label htmlFor="redirect-namespace">命名空间标识</Label>
                 <Input
                   id="redirect-namespace"
                   value={namespace}

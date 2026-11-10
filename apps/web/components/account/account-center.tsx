@@ -70,9 +70,6 @@ function ProfileForm({
       <div className="flex flex-wrap items-start justify-between gap-4 border-b pb-5">
         <div>
           <h2 className="text-xl font-semibold tracking-tight">个人资料</h2>
-          <p className="mt-1 text-sm text-muted-foreground">
-            用户名创建后不可修改。
-          </p>
         </div>
         <span className="rounded-full border bg-muted/30 px-3 py-1.5 text-xs font-medium text-muted-foreground">
           @{profile.username}
@@ -81,7 +78,7 @@ function ProfileForm({
 
       <form className="mt-6 grid gap-5 sm:grid-cols-2" onSubmit={save}>
         <div>
-          <Label htmlFor="account-username">用户名</Label>
+          <Label htmlFor="account-username">用户名（不可修改）</Label>
           <Input
             id="account-username"
             className="mt-2 h-9"
@@ -90,7 +87,7 @@ function ProfileForm({
           />
         </div>
         <div>
-          <Label htmlFor="account-email">邮箱</Label>
+          <Label htmlFor="account-email">邮箱（在账号安全中修改）</Label>
           <Input
             id="account-email"
             className="mt-2 h-9"
@@ -99,7 +96,6 @@ function ProfileForm({
             value={email}
             readOnly
           />
-          <p className="mt-2 text-xs text-muted-foreground">请在下方账号安全中验证或变更邮箱。</p>
         </div>
         <div>
           <Label htmlFor="account-display-name">显示名</Label>

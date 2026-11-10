@@ -47,8 +47,8 @@ import { cn } from "@/lib/utils";
 
 const STAGES = ["fetch", "parse", "extract", "plan", "match", "compose", "review"] as const;
 const LABELS: Record<string, string> = {
-  fetch: "获取与安全扫描", parse: "解析与分块", extract: "事实候选抽取",
-  plan: "来源理解与多页面路由", match: "实体与事实匹配", compose: "页面与知识修改建议合成", review: "进入审核",
+  fetch: "获取与安全扫描", parse: "解析资料", extract: "提取事实",
+  plan: "规划页面", match: "实体与事实匹配", compose: "生成修改建议", review: "进入审核",
 };
 
 const ROUTE_META = {
@@ -139,7 +139,7 @@ const QUALITY_DIMENSIONS = [
   ["grounding", "证据支撑"],
   ["structure", "文章结构"],
   ["concision", "去重精炼"],
-  ["routing", "路由置信"],
+  ["routing", "页面匹配"],
 ] as const;
 
 type RouteMode = "auto" | "force_create" | "force_update";
@@ -174,7 +174,7 @@ function ReplanPanel({
 
   const submit = async () => {
     if (routeMode === "force_create" && !title.trim()) {
-      toast.error("强制创建单页时必须填写页面标题");
+      toast.error("新建单页时必须填写页面标题");
       return;
     }
     if (routeMode === "force_update" && !targetPage) {
@@ -211,13 +211,10 @@ function ReplanPanel({
     <section className="space-y-4 border-t border-border pt-5">
       <div>
         <h3 className="text-sm font-semibold">调整导入意图</h3>
-        <p className="mt-1 text-xs leading-5 text-muted-foreground">
-          使用现有资料和提取结果，重新生成一版导入计划。
-        </p>
       </div>
       <div className="grid gap-2 sm:grid-cols-3">
         {([
-          ["auto", "智能多页面"],
+          ["auto", "自动整理"],
           ["force_create", "创建单页"],
           ["force_update", "更新指定页"],
         ] as const).map(([value, label]) => (
@@ -346,7 +343,7 @@ export function ImportJobProgress({ id }: { id: string }) {
   if (error instanceof ResponseError && error.response.status === 403) {
     return <p className="rounded-lg border border-destructive/30 p-5 text-sm text-destructive">当前账号无权读取这个导入任务。</p>;
   }
-  if (error) return <p className="rounded-lg border border-destructive/30 p-5 text-sm text-destructive">导入任务响应解析失败，请刷新页面；如果问题持续出现，请联系管理员。</p>;
+  if (error) return <p className="rounded-lg border border-destructive/30 p-5 text-sm text-destructive">导入进度读取失败，请刷新重试。</p>;
   if (!data) return <p className="text-sm text-muted-foreground">正在加载导入进度…</p>;
   const latestRun = data.job.status === "queued" ? undefined : data.runs.at(-1);
   const latestByStage = new Map(data.stages
@@ -372,7 +369,7 @@ export function ImportJobProgress({ id }: { id: string }) {
             <p className="text-sm font-semibold">{JOB_STATUS_LABEL[data.job.status]} · {data.job.progress}%</p>
             <p className="mt-1 break-all font-mono text-xs text-muted-foreground">{data.job.id}</p>
             <p className="mt-2 break-words text-xs text-muted-foreground">
-              修改建议作者：{data.job.authorDisplayName}
+              提交身份：{data.job.authorDisplayName}
               {data.job.authorActorId !== data.job.initiatedBy ? "（机器人账号，需真人审核）" : "（人工作者）"}
             </p>
             <p className="mt-1 break-all text-xs text-muted-foreground">发起者：{data.job.initiatedBy}</p>
@@ -405,7 +402,6 @@ export function ImportJobProgress({ id }: { id: string }) {
                 ? "检测到要求模型改规则、泄露信息或跳过审核的直接指令，不能确认放行。请拒绝导入或修改来源。"
                 : "模型标记了疑似提示注入。角色设定、引用和指令讨论可能误报；请阅读完整来源后判断。"}
             </p>
-            <p className="mt-2 text-xs text-muted-foreground">以下是部分原文片段；复核结论仅用于本次导入，继续后仍须确认页面计划和审核修改建议。</p>
             <Button asChild variant="outline" className="mt-3">
               <Link href={`/sources/${safety.sourceId}`} target="_blank" rel="noopener noreferrer">查看完整来源</Link>
             </Button>
@@ -458,7 +454,7 @@ export function ImportJobProgress({ id }: { id: string }) {
               : <ShieldCheck className="mt-0.5 size-5 shrink-0 text-primary" aria-hidden />}
             <div className="min-w-0 flex-1">
               <h2 className="font-semibold">
-                {data.job.actionRequired === "quality_gate" ? "计划未通过质量门禁" : "计划等待确认"}
+                {data.job.actionRequired === "quality_gate" ? "导入计划需要调整" : "计划等待确认"}
               </h2>
               <p className="mt-1 text-sm leading-6 text-muted-foreground">
                 {data.job.actionRequired === "quality_gate"
@@ -524,14 +520,14 @@ export function ImportJobProgress({ id }: { id: string }) {
             </div>
             <span className="rounded-full bg-muted px-2.5 py-1 text-xs text-muted-foreground">
               {currentPlanVersion ? `v${currentPlanVersion.revision} · ` : ""}
-              质量 {Math.round(data.plan.qualityScore * 100)}% · {data.plan.routes.length} 条路由
+              质量 {Math.round(data.plan.qualityScore * 100)}% · {data.plan.routes.length} 个页面计划
             </span>
           </div>
           {data.plan.quality ? (
             <div className="space-y-3 border-y border-border py-4">
               <div className="flex items-center gap-2 text-sm font-medium">
                 <Gauge className="size-4 text-muted-foreground" aria-hidden />
-                五维质量
+                质量检查
               </div>
               <dl className="grid gap-3 sm:grid-cols-2">
                 {QUALITY_DIMENSIONS.map(([key, label]) => {

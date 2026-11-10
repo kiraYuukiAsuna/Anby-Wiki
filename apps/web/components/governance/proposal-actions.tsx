@@ -319,7 +319,7 @@ async function showGovernanceError(error: unknown, fallback: string) {
     }
     if (detail.status === 409) {
       const identityConflict = isIdentityConflictMessage(detail.message);
-      toast.error(identityConflict ? "修改建议已过期，未执行任何写入" : fallback, {
+      toast.error(identityConflict ? "修改建议已过期，请重新提交" : fallback, {
         description:
           detail.message ??
           "相关内容已变化，请刷新后查看最新操作记录。",

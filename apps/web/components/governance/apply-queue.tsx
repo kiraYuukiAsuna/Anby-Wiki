@@ -46,7 +46,7 @@ const TARGET_LABEL: Record<Proposal["targetType"], string> = {
   wiki: "百科导入批次",
   page: "百科页面",
   entity: "实体",
-  claim: "事实声明",
+  claim: "事实",
   collection: "专题合集",
   external_resource: "外部资源",
 };
@@ -88,9 +88,9 @@ function ApplyQueueItem({
           </div>
           <div className="mt-3 flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-muted-foreground">
             <span>已通过审核</span>
-            {proposal.importJobId ? <><span aria-hidden>·</span><span>AI 导入提议</span></> : null}
+            {proposal.importJobId ? <><span aria-hidden>·</span><span>导入修改建议</span></> : null}
             <span aria-hidden>·</span>
-            <time dateTime={proposal.updatedAt.toISOString()}>批准队列更新于 {DATE_FORMATTER.format(proposal.updatedAt)}</time>
+            <time dateTime={proposal.updatedAt.toISOString()}>更新于 {DATE_FORMATTER.format(proposal.updatedAt)}</time>
           </div>
         </div>
         <div className="flex shrink-0 gap-2">
@@ -141,7 +141,7 @@ export function ApplyQueue() {
       if (detail?.status === 409) {
         await state.mutate();
         const identityConflict = isIdentityConflictMessage(detail.message);
-        toast.error(identityConflict ? "修改建议已过期，未执行任何写入" : "本批修改未生效", {
+        toast.error(identityConflict ? "修改建议已过期，请重新提交" : "本批修改未生效", {
           description:
             detail.message ??
             "相关内容已有更新，请打开修改建议，核对冲突后再处理。",
@@ -178,7 +178,6 @@ export function ApplyQueue() {
       <div className="rounded-2xl border border-amber-200 bg-amber-50/65 p-8">
         <ShieldAlert className="size-7 text-amber-700" aria-hidden />
         <h2 className="mt-4 text-lg font-semibold text-amber-950">需要发布者权限</h2>
-        <p className="mt-2 text-sm leading-6 text-amber-900/70">只有发布者或管理员可以让已批准的修改生效。</p>
       </div>
     );
   }

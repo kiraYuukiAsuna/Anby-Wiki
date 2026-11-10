@@ -38,7 +38,6 @@ export default async function ConceptArticlesPage({
       </h1>
       {result.items.length ? (
         <>
-          <p className="mt-3 text-sm text-muted-foreground">这个概念对应多篇条目，请选择阅读内容。</p>
           <nav aria-label="概念条目" className="mt-6 space-y-2">
             {result.items.map((item) => (
               <Link

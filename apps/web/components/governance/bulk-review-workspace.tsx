@@ -37,7 +37,7 @@ const decisionSchema = z.string().trim().min(1, "请记录审核依据").max(100
 
 const statusMeta = {
   reviewing: { label: "抽样审核中", tone: "bg-amber-500/10 text-amber-700" },
-  ready: { label: "等待下一 wave", tone: "bg-blue-500/10 text-blue-700" },
+  ready: { label: "等待下一组", tone: "bg-blue-500/10 text-blue-700" },
   applying: { label: "正在处理", tone: "bg-violet-500/10 text-violet-700" },
   paused: { label: "已暂停", tone: "bg-rose-500/10 text-rose-700" },
   completed: { label: "全部完成", tone: "bg-emerald-500/10 text-emerald-700" },
@@ -99,11 +99,11 @@ function BatchOverview({ batch }: { batch: BulkReviewBatch }) {
           </dd>
         </div>
         <div>
-          <dt className="text-muted-foreground">固定 wave</dt>
-          <dd className="mt-1 font-medium">{batch.waveSize} 个修改建议 / wave</dd>
+          <dt className="text-muted-foreground">每组数量</dt>
+          <dd className="mt-1 font-medium">{batch.waveSize} 个修改建议 / 组</dd>
         </div>
         <div>
-          <dt className="text-muted-foreground">当前 wave</dt>
+          <dt className="text-muted-foreground">当前分组</dt>
           <dd className="mt-1 font-medium">{batch.currentWave || "尚未开始"}</dd>
         </div>
         <div>
@@ -359,7 +359,7 @@ export function BulkReviewWorkspace({ id }: { id: string }) {
                   void runAction(
                     "apply",
                     () => governanceApi().applyNextBulkReviewWave({ id }),
-                    "下一 wave 已处理",
+                    "下一组已处理",
                   )
                 }
               >
@@ -408,7 +408,7 @@ export function BulkReviewWorkspace({ id }: { id: string }) {
             <div>
               <h2 className="text-lg font-semibold">本批修改建议</h2>
               <p className="mt-1 text-xs text-muted-foreground">
-                共 {batch.items.length} 项；处理顺序和分组在批次创建后固定。
+                共 {batch.items.length} 项
               </p>
             </div>
           </div>

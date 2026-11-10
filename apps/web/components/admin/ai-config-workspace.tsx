@@ -150,7 +150,7 @@ function ConfigForm({
       toast.success("AI 模型配置已保存", {
         description: value.enabled
           ? "排队中的导入任务将开始处理。"
-          : "配置已保存，导入消费者保持暂停。",
+          : "配置已保存，导入资料已暂停。",
       });
     } catch (error) {
       if (error instanceof ResponseError && error.response.status === 403) {
@@ -182,7 +182,7 @@ function ConfigForm({
         toast.error(detail?.message ?? "模型配置测试失败", {
           description: detail?.reason
             ? `诊断代码：${detail.reason}`
-            : "密钥不会显示在错误信息中，请重新填写后保存再试。",
+            : "请重新填写密钥后保存。",
         });
       }
     } finally {
@@ -205,7 +205,7 @@ function ConfigForm({
               checked={enabled}
               onCheckedChange={(value) => setEnabled(value === true)}
             />
-            启用 AI 导入
+            启用导入
           </label>
         </div>
 
@@ -255,7 +255,7 @@ function ConfigForm({
             <div className="flex items-center justify-between gap-3">
               <Label htmlFor="ai-api-key">API Key</Label>
               <span className="text-[10px] font-medium text-muted-foreground">
-                {config.apiKeyConfigured ? "已加密保存 · 留空保持不变" : "尚未配置"}
+                {config.apiKeyConfigured ? "已配置，留空不修改" : "尚未配置"}
               </span>
             </div>
             <Input
@@ -295,11 +295,11 @@ function ConfigForm({
               onChange={(event) => setMaxInputTokens(event.target.value)}
             />
             <p className="mt-1.5 text-[11px] leading-5 text-muted-foreground">
-              填写模型支持的输入上限（12,800～20,000,000 Token）。系统会据此拆分资料，并为提示词和输出留出空间。
+              按模型规格填写，范围 12,800～20,000,000。
             </p>
           </div>
           <div>
-            <Label htmlFor="ai-chunk-characters">来源 Chunk 字符数</Label>
+            <Label htmlFor="ai-chunk-characters">每段资料字符数</Label>
             <Input
               id="ai-chunk-characters"
               className="mt-2 h-9"
@@ -407,11 +407,6 @@ export function AIConfigWorkspace({
       <div className="rounded-3xl border border-amber-200 bg-amber-50/65 p-8">
         <ShieldAlert className="size-7 text-amber-700" aria-hidden />
         <h2 className="mt-4 text-lg font-semibold text-amber-950">需要管理员权限</h2>
-        <p className="mt-2 max-w-2xl text-sm leading-6 text-amber-900/70">
-          {personal
-            ? "当前账号不能修改这个 Wiki 的模型、密钥和超时策略。"
-            : "编辑者可以导入资料；只有管理员能修改模型、密钥和超时设置。"}
-        </p>
       </div>
     );
   }
@@ -433,8 +428,8 @@ export function AIConfigWorkspace({
       config={config.data}
       scopeDescription={
         personal
-          ? "配置保存在当前账户的私人 Wiki，切换协作 Wiki 不会改变此处的配置。"
-          : "配置保存在当前选中的 Wiki。"
+          ? "适用于我的 Wiki"
+          : "适用于当前 Wiki"
       }
       onSave={(request) =>
         personal

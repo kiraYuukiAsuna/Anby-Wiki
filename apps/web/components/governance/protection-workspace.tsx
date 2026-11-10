@@ -56,8 +56,8 @@ const titleScopeSchema = z.object({
   namespaceKey: z
     .string()
     .trim()
-    .min(1, "请填写命名空间 key")
-    .max(64, "命名空间 key 不能超过 64 个字符"),
+    .min(1, "请填写命名空间标识")
+    .max(64, "命名空间标识不能超过 64 个字符"),
   title: z.string().trim().min(1, "请填写待保护标题").max(255),
 });
 
@@ -280,9 +280,7 @@ export function ProtectionWorkspace({
     try {
       await governanceApi().deletePageProtection({ id: rule.id });
       await catalog.mutate();
-      toast.success("保护规则已撤销", {
-        description: "规则停止生效，原记录与审计历史仍会保留。",
-      });
+      toast.success("保护规则已撤销");
     } catch (error) {
       if (isUnauthorized(error)) {
         router.push(LOGIN_PATH);
@@ -449,7 +447,7 @@ export function ProtectionWorkspace({
           ) : (
             <div className="mt-5 grid gap-4">
               <div className="space-y-2">
-                <Label htmlFor="protection-namespace">命名空间 key</Label>
+                <Label htmlFor="protection-namespace">命名空间标识</Label>
                 <Input
                   id="protection-namespace"
                   value={namespaceKey}
@@ -548,7 +546,14 @@ export function ProtectionWorkspace({
             </Button>
           </div>
 
-          {catalog.isLoading ? (
+          {catalog.error ? (
+            <div role="alert" className="mt-5 rounded-2xl border border-destructive/20 bg-destructive/5 p-5">
+              <p className="text-sm text-destructive">保护规则加载失败</p>
+              <Button type="button" variant="outline" size="sm" className="mt-3" disabled={catalog.isValidating} onClick={() => void catalog.mutate()}>
+                重试
+              </Button>
+            </div>
+          ) : catalog.isLoading ? (
             <div className="mt-5 flex min-h-48 items-center justify-center gap-2 rounded-2xl border border-dashed text-sm text-muted-foreground">
               <LoaderCircle className="size-4 animate-spin" aria-hidden />
               正在读取规则…
@@ -595,9 +600,6 @@ export function ProtectionWorkspace({
                         ) : (
                           <p className="mt-3 truncate font-semibold">{target}</p>
                         )}
-                        <p className="mt-1 font-mono text-[10px] text-muted-foreground">
-                          {rule.id}
-                        </p>
                       </div>
                       {!rule.revokedAt &&
                       (!rule.expiresAt ||
@@ -625,7 +627,7 @@ export function ProtectionWorkspace({
                           ? `撤销于 ${DATE_FORMATTER.format(rule.revokedAt)}`
                           : rule.expiresAt
                             ? `到期于 ${DATE_FORMATTER.format(rule.expiresAt)}`
-                            : "无自动到期时间"}
+                            : "不过期"}
                       </span>
                     </div>
                   </li>

@@ -1,6 +1,6 @@
 "use client";
 
-import { BookOpen, LoaderCircle, RefreshCw } from "lucide-react";
+import { LoaderCircle, RefreshCw } from "lucide-react";
 import { useRouter } from "next/navigation";
 import { useEffect, useRef, useState } from "react";
 import useSWR from "swr";
@@ -38,7 +38,7 @@ function FullDocumentFallback({ pageId }: { pageId: string }) {
     return (
       <div className="rounded-xl border border-destructive/20 bg-destructive/5 p-5 text-sm">
         <p className="font-medium text-destructive">暂时无法加载章节</p>
-        <p className="mt-1 text-muted-foreground">全文回退也未能完成，请稍后刷新。</p>
+        <p className="mt-1 text-muted-foreground">请刷新页面重试。</p>
       </div>
     );
   }
@@ -176,12 +176,10 @@ function LazySection({
 export function LazySectionDocument({
   pageId,
   revisionId,
-  expectedSectionCount,
   initialBlockId,
 }: {
   pageId: string;
   revisionId: string;
-  expectedSectionCount: number;
   initialBlockId?: string;
 }) {
   const router = useRouter();
@@ -258,7 +256,7 @@ export function LazySectionDocument({
     return (
       <div className="flex items-center justify-center gap-2 rounded-xl border border-dashed border-border py-12 text-sm text-muted-foreground">
         <LoaderCircle className="size-4 animate-spin" aria-hidden />
-        准备章节阅读…
+        正在加载正文…
       </div>
     );
   }
@@ -275,14 +273,7 @@ export function LazySectionDocument({
   return (
     <div>
       <div className="mb-6 rounded-xl border border-sky-200 bg-sky-50/60 p-4">
-        <p className="flex items-center gap-2 text-xs font-semibold text-sky-900">
-          <BookOpen className="size-4" aria-hidden />
-          按章节渐进加载
-        </p>
-        <p className="mt-1 text-xs leading-5 text-sky-800/75">
-          当前版本共 {expectedSectionCount} 部分，向下滚动时会继续加载。
-        </p>
-        <nav className="mt-3 flex flex-wrap gap-1.5" aria-label="章节分片">
+        <nav className="flex flex-wrap gap-1.5" aria-label="章节导航">
           {items
             .filter((item) => item.headingBlockId)
             .map((item) => (

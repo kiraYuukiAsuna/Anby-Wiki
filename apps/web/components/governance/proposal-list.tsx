@@ -110,7 +110,7 @@ const TARGET_LABEL: Record<Proposal["targetType"], string> = {
   wiki: "百科导入批次",
   page: "百科页面",
   entity: "实体",
-  claim: "事实声明",
+  claim: "事实",
   collection: "专题合集",
   external_resource: "外部资源",
 };
@@ -187,7 +187,7 @@ function ProposalRow({ proposal }: { proposal: Proposal }) {
               {proposal.importJobId ? (
                 <>
                   <span aria-hidden>·</span>
-                  <span>AI 导入提议</span>
+                  <span>导入修改建议</span>
                 </>
               ) : null}
               <span aria-hidden>·</span>

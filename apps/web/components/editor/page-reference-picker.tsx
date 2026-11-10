@@ -103,7 +103,7 @@ export function PageReferencePicker({
       <DialogContent className="w-[calc(100vw-2rem)] overflow-hidden sm:max-w-3xl">
         <DialogHeader>
           <DialogTitle>插入页面引用</DialogTitle>
-          <DialogDescription>
+          <DialogDescription className="sr-only">
             搜索要引用的页面，也可以填写尚未创建的页面标题。
           </DialogDescription>
         </DialogHeader>
@@ -121,7 +121,6 @@ export function PageReferencePicker({
               <p className="min-w-0 break-words text-xs text-muted-foreground">
                 引用目标：{selected.displayTitle}
                 {selected.matchedOn === "alias" ? "（经别名命中）" : ""}
-                ；修改显示文字不会改变链接目标。
               </p>
             </div>
             <div className="flex justify-end gap-2">

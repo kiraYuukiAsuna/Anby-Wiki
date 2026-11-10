@@ -6,6 +6,7 @@ import {
   DetailShell,
 } from "@/components/knowledge/detail-shell";
 import { ReferenceUsagePanel } from "@/components/knowledge/reference-usage-panel";
+import { SOURCE_TYPE_LABELS } from "@/lib/display-labels";
 import { safeHttpUrl } from "@/lib/http-url";
 import { fetchCitationDetail } from "@/lib/knowledge";
 import type {
@@ -36,9 +37,6 @@ export default async function CitationDetailPage({
       <DetailSection title="引用定位">
         <DetailRows
           rows={[
-            { label: "引文 ID", value: detail.id },
-            { label: "来源版本", value: detail.sourceVersionId },
-            { label: "来源片段", value: detail.sourceChunkId ?? "—" },
             { label: "引文", value: detail.quotation ?? "—" },
             {
               label: "原文位置",
@@ -52,10 +50,9 @@ export default async function CitationDetailPage({
         <DetailRows
           rows={[
             { label: "标题", value: detail.source.title },
-            { label: "类型", value: detail.source.sourceType },
+            { label: "类型", value: SOURCE_TYPE_LABELS[detail.source.sourceType] ?? "其他" },
             { label: "作者", value: detail.source.author ?? "—" },
             { label: "发布者", value: detail.source.publisher ?? "—" },
-            { label: "版本哈希", value: detail.sourceVersion.versionHash },
             {
               label: "外部资源",
               value: safeResourceUrl ? (

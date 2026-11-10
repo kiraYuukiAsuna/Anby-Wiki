@@ -136,9 +136,6 @@ export function NewPageFlow() {
   return (
     <div className="mx-auto flex w-full max-w-md flex-1 flex-col justify-center gap-4 px-4 py-16">
       <h1 className="text-2xl font-semibold">正在创建「{title}」…</h1>
-      <p className="text-sm text-muted-foreground">
-        创建成功后将自动进入编辑页。
-      </p>
     </div>
   );
 }

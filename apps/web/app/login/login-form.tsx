@@ -106,7 +106,7 @@ export function LoginForm() {
       }
     >
       <form className="flex flex-col gap-5" onSubmit={submit}>
-        {challenge ? <div className="flex flex-col gap-2"><Label htmlFor="login-code">验证码或备用恢复码</Label><Input id="login-code" autoComplete="one-time-code" autoFocus value={code} onChange={(event) => setCode(event.target.value)} required /><p className="text-sm text-muted-foreground">输入手机验证器的 6 位验证码，或一个未使用的恢复码。验证请求 5 分钟内有效。</p><Button type="button" variant="ghost" onClick={() => { setChallenge(""); setCode(""); }}>返回密码登录</Button></div> : <>
+        {challenge ? <div className="flex flex-col gap-2"><Label htmlFor="login-code">验证码或备用恢复码</Label><Input id="login-code" autoComplete="one-time-code" autoFocus value={code} onChange={(event) => setCode(event.target.value)} required /><p className="text-sm text-muted-foreground">输入 6 位验证码或恢复码，5 分钟内有效。</p><Button type="button" variant="ghost" onClick={() => { setChallenge(""); setCode(""); }}>返回密码登录</Button></div> : <>
         <div className="flex flex-col gap-2">
           <Label htmlFor="identifier">用户名或邮箱</Label>
           <Input

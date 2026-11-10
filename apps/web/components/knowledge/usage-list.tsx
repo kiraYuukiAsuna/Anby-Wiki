@@ -90,8 +90,6 @@ export function PageGroupedUsageList({
             {group.pageTitle}
           </Link>
           <p className="mt-1 text-xs text-muted-foreground">
-            版本{" "}
-            <span title={group.revisionId}>{compactId(group.revisionId)}</span> ·{" "}
             {group.items.length} 处{occurrenceLabel} · {group.blockCount} 个区块
           </p>
           {group.mentionTexts.length > 0 ? (
@@ -128,9 +126,7 @@ export function PageGroupedUsageList({
                       href={`/pages/${item.pageId}#${item.blockId}`}
                       className="hover:text-foreground hover:underline"
                     >
-                      内容块{" "}
-                      <span title={item.blockId}>{compactId(item.blockId)}</span> · 位置{" "}
-                      {item.nodeId}
+                      查看引用位置
                       {item.mentionText ? ` · “${item.mentionText}”` : ""}
                     </Link>
                   </li>

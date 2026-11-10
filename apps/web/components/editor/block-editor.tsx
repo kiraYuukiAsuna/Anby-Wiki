@@ -94,9 +94,7 @@ function renderSlashItems(
     const text = document.createElement("span");
     const title = document.createElement("strong");
     title.textContent = item.title;
-    const subtext = document.createElement("small");
-    subtext.textContent = item.subtext;
-    text.append(title, subtext);
+    text.append(title);
     button.append(icon, text);
     root.append(button);
   }

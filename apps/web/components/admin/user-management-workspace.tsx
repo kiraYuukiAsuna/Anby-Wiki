@@ -179,9 +179,6 @@ function UserRow({
             <p className="mt-1 truncate text-xs text-muted-foreground">
               {user.username} · {user.email}
             </p>
-            <p className="mt-1 font-mono text-[10px] text-muted-foreground">
-              {user.actorId}
-            </p>
           </div>
         </div>
       </td>
@@ -399,9 +396,6 @@ export function UserManagementWorkspace() {
       <div className="rounded-lg border border-dashed bg-muted/25 p-10 text-center">
         <LockKeyhole className="mx-auto size-8 text-muted-foreground" aria-hidden />
         <h2 className="mt-4 text-lg font-semibold">登录后管理用户</h2>
-        <p className="mt-2 text-sm text-muted-foreground">
-          用户角色仅向管理员开放。
-        </p>
         <Button asChild className="mt-5">
           <Link href={LOGIN_PATH}>前往登录</Link>
         </Button>
@@ -413,9 +407,6 @@ export function UserManagementWorkspace() {
       <div className="rounded-lg border border-amber-200 bg-amber-50/65 p-8">
         <ShieldAlert className="size-7 text-amber-700" aria-hidden />
         <h2 className="mt-4 text-lg font-semibold text-amber-950">需要管理员权限</h2>
-        <p className="mt-2 max-w-2xl text-sm leading-6 text-amber-900/70">
-          只有管理员可以查看用户、分配或移除角色。
-        </p>
       </div>
     );
   }
@@ -424,9 +415,6 @@ export function UserManagementWorkspace() {
       <div className="rounded-lg border border-destructive/25 bg-destructive/5 p-8">
         <ShieldAlert className="size-7 text-destructive" aria-hidden />
         <h2 className="mt-4 text-lg font-semibold">用户管理服务不可用</h2>
-        <p className="mt-2 text-sm text-muted-foreground">
-          请稍后重试。如果问题持续，请联系管理员检查登录服务。
-        </p>
       </div>
     );
   }
@@ -555,7 +543,6 @@ export function UserManagementWorkspace() {
           <div className="rounded-lg border border-destructive/25 bg-destructive/5 p-4 text-sm text-destructive">
             <div className="flex items-start gap-3">
               <UserX className="mt-0.5 size-4 shrink-0" aria-hidden />
-              <p>此操作完成后，该账号会从用户列表中移除。</p>
             </div>
           </div>
           <DialogFooter>

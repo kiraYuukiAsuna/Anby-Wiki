@@ -41,7 +41,6 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { collectionsApi } from "@/lib/api";
 import { useSession } from "@/lib/auth";
-import { compactId } from "@/lib/display-id";
 import { cn } from "@/lib/utils";
 
 const PAGE_SIZE = 50;
@@ -94,9 +93,6 @@ function MemberList({
       <div className="rounded-2xl border border-dashed px-6 py-14 text-center">
         <Layers3 className="mx-auto size-8 text-muted-foreground" aria-hidden />
         <h3 className="mt-4 font-semibold">当前没有成员</h3>
-        <p className="mt-2 text-sm text-muted-foreground">
-          添加合集成员，按规则更新成员，或调整查询条件。
-        </p>
       </div>
     );
   }
@@ -136,8 +132,7 @@ function MemberList({
                 />
               </Link>
               <p className="mt-1 text-[11px] text-muted-foreground">
-                {member.memberType === "page" ? "页面" : "实体"} · 排序键{" "}
-                <span className="font-mono">{member.sortKey}</span>
+                {member.memberType === "page" ? "页面" : "实体"}
               </p>
             </div>
             <div className="text-right text-[11px] text-muted-foreground">
@@ -148,11 +143,6 @@ function MemberList({
                     ? "按规则生成"
                     : "实时查询"}
               </p>
-              {member.sourceRevisionId ? (
-                <p className="mt-1 font-mono">
-                  rev {compactId(member.sourceRevisionId)}
-                </p>
-              ) : null}
             </div>
           </li>
         );
@@ -378,7 +368,7 @@ function ManualMemberEditor({
           onClick={() => void save()}
         >
           {saving ? <LoaderCircle className="animate-spin" aria-hidden /> : null}
-          保存完整成员集
+          保存成员
         </Button>
       </DialogFooter>
     </>
@@ -425,9 +415,9 @@ function RuleRebuild({
   return (
     <>
       <DialogHeader>
-        <DialogTitle>重建规则集合</DialogTitle>
+        <DialogTitle>更新成员</DialogTitle>
         <DialogDescription>
-          按当前规则重新生成成员列表，并记录规则对应的来源版本。
+          将按当前规则替换成员列表。
         </DialogDescription>
       </DialogHeader>
       <div className="space-y-2">
@@ -565,15 +555,13 @@ export function CollectionWorkspace({ id }: { id: string }) {
         </div>
       </header>
 
-      <section className="mt-7 grid gap-4 md:grid-cols-3" aria-label="合集定义">
+      <section className="mt-7 flex flex-wrap items-center gap-4" aria-label="合集定义">
         <div className="rounded-2xl border bg-card p-4">
           <Layers3 className="size-4 text-primary" aria-hidden />
           <p className="mt-3 text-2xl font-semibold">{members.length}</p>
           <p className="mt-1 text-xs text-muted-foreground">当前已加载成员</p>
         </div>
-        <div className="rounded-2xl border bg-card p-4 md:col-span-2">
-          <p className="text-xs font-semibold text-muted-foreground">ID</p>
-          <p className="mt-3 truncate font-mono text-xs">{collection.id}</p>
+        <div>
           {collection.descriptionPageId ? (
             <Link
               href={`/pages/${collection.descriptionPageId}`}
@@ -589,7 +577,7 @@ export function CollectionWorkspace({ id }: { id: string }) {
       {query ? (
         <details className="mt-5 rounded-2xl border bg-muted/20">
           <summary className="cursor-pointer px-5 py-4 text-sm font-medium">
-            查看版本化查询定义
+            查看查询条件
           </summary>
           <pre className="overflow-x-auto border-t p-5 text-[11px] leading-5">
             {JSON.stringify(query, null, 2)}

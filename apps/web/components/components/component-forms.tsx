@@ -24,9 +24,9 @@ import {
 } from "@/lib/components";
 
 const INFOBOX_FIELD_LABELS: Record<string, string> = {
-  title: "标题",
+  title: "标题（默认使用实体名称）",
   language: "标签语言",
-  property_keys: "展示属性",
+  property_keys: "展示属性（默认全部）",
 };
 
 function ComponentFormMode({
@@ -254,9 +254,6 @@ export function ComponentDefinitionForm({
         </div>
       ) : renderer === COMPONENT_RENDERERS.BuiltinEntityClaimInfobox ? (
         <>
-          <p className="text-xs text-muted-foreground">
-            这些设置作为插入时的默认值；标题留空使用实体名称，属性留空展示全部已发布事实。
-          </p>
           {fields.map((field) => (
             <div key={field.key} className="space-y-2">
               <Label htmlFor={`${id}-${field.key}`}>
@@ -288,9 +285,6 @@ export function ComponentDefinitionForm({
         </>
       ) : (
         <>
-          <p className="text-xs text-muted-foreground">
-            添加字段并填写默认内容。插入页面时可以再次修改；资料卡按字段名称排序。
-          </p>
           {fields.map((field, index) => (
             <div key={field.key} className="space-y-3 rounded-xl border p-3">
               <div className="flex items-center gap-2">
@@ -567,7 +561,7 @@ export function ComponentEntityPicker({
           aria-label="搜索实体"
           value={query}
           onValueChange={setQuery}
-          placeholder="按名称搜索，无需填写 ID…"
+          placeholder="按名称搜索…"
           className="h-9 w-full rounded-lg border px-3 text-sm outline-none focus-visible:ring-2 focus-visible:ring-ring"
         />
         <Command.List className="mt-2 max-h-40 overflow-y-auto rounded-lg border p-1">
@@ -590,7 +584,7 @@ export function ComponentEntityPicker({
           ) : null}
           {!state.isLoading && !state.error && !state.data?.items.length ? (
             <p className="p-2 text-xs text-muted-foreground">
-              没有可选实体。可先在实体中心创建实体，再返回选择。
+              暂无实体，请先创建实体。
             </p>
           ) : null}
           {state.data?.items.map((item) => (

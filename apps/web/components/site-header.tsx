@@ -47,7 +47,7 @@ export function SiteHeader() {
         >
           <WorkspaceLink href="/imports">
             <Bot aria-hidden />
-            AI 导入
+            导入资料
           </WorkspaceLink>
         </Button>
         <Button size="sm" asChild className="hidden gap-1.5 sm:inline-flex">

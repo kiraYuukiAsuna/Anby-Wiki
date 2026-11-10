@@ -68,10 +68,10 @@ const OPERATION_LABEL: Record<OperationType, string> = {
   create_page: "创建页面",
   rename_page: "页面改名",
   create_redirect: "创建重定向",
-  insert_block: "插入 Block",
-  delete_block: "删除 Block",
-  move_block: "移动 Block",
-  replace_block: "替换 Block",
+  insert_block: "插入内容块",
+  delete_block: "删除内容块",
+  move_block: "移动内容块",
+  replace_block: "替换内容块",
   insert_page_reference: "插入页面引用",
   retarget_page_reference: "重定向页面引用",
   insert_entity_reference: "插入实体引用",
@@ -474,7 +474,7 @@ export function ProposalOperationStudio() {
       }
       const parsed = operationSchema.safeParse(raw);
       if (!parsed.success) {
-        toast.error(`修改操作 ${index + 1} 边界校验失败`, {
+        toast.error(`修改操作 ${index + 1} 修改格式有误`, {
           description: parsed.error.issues[0]?.message,
         });
         return;
@@ -550,7 +550,7 @@ export function ProposalOperationStudio() {
               <ShieldCheck className="size-5" aria-hidden />
             </span>
             <div>
-              <h2 className="text-xl font-semibold">修改建议边界</h2>
+              <h2 className="text-xl font-semibold">修改目标</h2>
             </div>
           </div>
 
@@ -732,7 +732,7 @@ export function ProposalOperationStudio() {
           ) : (
             <div className="mt-6 rounded-2xl border border-dashed bg-muted/20 px-6 py-14 text-center">
               <FileJson2 className="mx-auto size-8 text-muted-foreground" aria-hidden />
-              <p className="mt-4 font-semibold">从一个契约模板开始</p>
+              <p className="mt-4 font-semibold">选择修改模板</p>
             </div>
           )}
         </section>

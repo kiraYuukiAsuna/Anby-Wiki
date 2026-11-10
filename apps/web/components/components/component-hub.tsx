@@ -160,7 +160,7 @@ function CreateFromExample({
               disabled={Boolean(registered) || creating}
             />
             <p className="text-xs text-muted-foreground">
-              使用小写字母、数字、点、横线或下划线，用于唯一标识组件。
+              可用小写字母、数字、点、横线和下划线。
             </p>
           </div>
           <ComponentDefinitionForm
@@ -173,7 +173,7 @@ function CreateFromExample({
           />
           {registered ? (
             <p className="text-xs text-muted-foreground">
-              注册项已保留。可修改配置后重试，或
+              组件已创建，版本未保存。可重试，或
               <Link className="underline" href={`/components/${registered.id}`}>
                 打开组件继续编辑
               </Link>
@@ -317,9 +317,6 @@ export function ComponentHub() {
               className="flex min-w-0 flex-col rounded-2xl border bg-card p-5"
             >
               <h3 className="font-semibold">{item.name}</h3>
-              <p className="mt-2 min-h-10 text-xs leading-5 text-muted-foreground">
-                {item.description}
-              </p>
               <div className="my-4 min-w-0 flex-1">
                 <ExamplePreview
                   renderer={item.renderer}

@@ -257,8 +257,8 @@ export function CollectionHub() {
                 className="h-8 w-full rounded-lg border border-input bg-background px-2.5 text-sm"
                 disabled={!isAuthenticated || creating || sessionLoading}
               >
-                <option value="dynamic">Dynamic · 实时查询</option>
-                <option value="manual">Manual · 人工策展</option>
+                <option value="dynamic">实时查询</option>
+                <option value="manual">手动添加</option>
                 <option value="rule">按规则生成</option>
               </select>
             </div>
@@ -314,7 +314,7 @@ export function CollectionHub() {
                   onChange={(event) => setScope(event.target.value)}
                   placeholder={
                     memberType === "page"
-                      ? "命名空间 key（可选）"
+                      ? "命名空间标识（可选）"
                       : "实体类型 key（可选）"
                   }
                   className="font-mono text-xs"

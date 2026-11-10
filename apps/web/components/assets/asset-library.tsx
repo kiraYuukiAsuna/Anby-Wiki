@@ -237,7 +237,7 @@ export function AssetLibrary() {
       setName("");
       toast.success("文件已上传");
     } catch {
-      toast.error("资产上传失败", {
+      toast.error("文件上传失败", {
         description: "请确认文件不超过 50 MiB，且你有上传权限。如果仍然失败，请联系管理员检查文件存储服务。",
       });
     } finally {
@@ -250,7 +250,7 @@ export function AssetLibrary() {
       <section aria-labelledby="asset-list-title">
         <div className="flex flex-wrap items-center justify-between gap-3">
           <h2 id="asset-list-title" className="text-xl font-semibold">
-            资产目录
+            文件目录
           </h2>
           <Button
             type="button"
@@ -287,7 +287,7 @@ export function AssetLibrary() {
 
         {error ? (
           <div className="mt-4 rounded-2xl border border-destructive/20 bg-destructive/5 p-5 text-sm">
-            <p className="font-medium text-destructive">资产目录暂时不可用</p>
+            <p className="font-medium text-destructive">文件目录暂时不可用</p>
             <p className="mt-1 text-muted-foreground">
               请稍后重试；如果仍无法加载，请联系管理员检查文件存储服务。
             </p>
@@ -341,7 +341,7 @@ export function AssetLibrary() {
           <span className="flex size-10 items-center justify-center rounded-xl bg-primary/9 text-primary">
             <Upload className="size-4.5" aria-hidden />
           </span>
-          <h2 className="mt-4 font-semibold">上传新资产</h2>
+          <h2 className="mt-4 font-semibold">上传文件</h2>
           <div className="mt-5 space-y-4">
             <div className="space-y-3">
               <div className="flex items-center justify-between gap-3">
@@ -455,9 +455,6 @@ export function AssetLibrary() {
                     <div className="space-y-1">
                       <p className="text-sm font-medium">
                         {dragging ? "松开即可选择文件" : "拖放文件到这里"}
-                      </p>
-                      <p className="text-xs text-muted-foreground">
-                        保存图片、PDF、音视频或其他附件到媒体库
                       </p>
                     </div>
                     <Button

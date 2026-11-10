@@ -281,7 +281,7 @@ export function AITrustWorkspace() {
       setActorName("");
       setCreationKey(makeRequestId());
       await refresh();
-      toast.success("机器人账号已创建，提交的修改默认需要人工审核。");
+      toast.success("机器人已创建");
     } catch (error) {
       toast.error(error instanceof ResponseError && error.response.status === 409
         ? "这个名称已被其他配置使用，请换一个名称。"
@@ -410,18 +410,12 @@ export function AITrustWorkspace() {
         ) ? (
           <div className="mt-5 rounded-2xl border border-destructive/20 bg-destructive/5 p-5 text-sm">
             <p className="font-medium text-destructive">审核设置暂时无法读取</p>
-            <p className="mt-1 text-muted-foreground">
-              请稍后重试。如果问题持续，请联系管理员。
-            </p>
           </div>
         ) : null}
         {!profiles.isLoading && !profiles.error && items.length === 0 ? (
           <div className="mt-5 rounded-3xl border border-dashed px-6 py-14 text-center">
             <Bot className="mx-auto size-8 text-muted-foreground" aria-hidden />
             <h3 className="mt-4 font-semibold">还没有机器人账号</h3>
-            <p className="mt-2 text-sm text-muted-foreground">
-              先在上方创建一个机器人。
-            </p>
             {cliVisible ? (
               <Button asChild variant="outline" className="mt-5">
                 <Link href="/settings/cli">打开 Agent CLI</Link>

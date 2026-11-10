@@ -9,7 +9,7 @@ import {
 import { ClaimVerificationControl } from "@/components/knowledge/claim-verification-control";
 import { ReferenceUsagePanel } from "@/components/knowledge/reference-usage-panel";
 import { fetchClaimDetail } from "@/lib/knowledge";
-import { CLAIM_ORIGIN_LABELS, CLAIM_RANK_LABELS, CLAIM_STATUS_LABELS, CLAIM_VERIFICATION_LABELS } from "@/lib/display-labels";
+import { CLAIM_SUPPORT_LABELS, CLAIM_ORIGIN_LABELS, CLAIM_RANK_LABELS, CLAIM_STATUS_LABELS, CLAIM_VERIFICATION_LABELS } from "@/lib/display-labels";
 
 export const dynamic = "force-dynamic";
 
@@ -38,7 +38,6 @@ export default async function ClaimDetailPage({
       <DetailSection title="事实">
         <DetailRows
           rows={[
-            { label: "事实 ID", value: detail.id },
             {
               label: "所属实体",
               value: (
@@ -46,25 +45,25 @@ export default async function ClaimDetailPage({
                   href={`/entities/${detail.subjectEntityId}`}
                   className="text-blue-600 hover:underline"
                 >
-                  {detail.subjectEntityId}
+                  查看实体
                 </Link>
               ),
             },
             {
-              label: "谓词",
-              value: `${detail.property.propertyKey} (${detail.valueType})`,
+              label: "属性",
+              value: detail.property.name,
             },
             { label: "值", value: <span className="whitespace-pre-wrap">{displayValue(detail.value)}</span> },
             { label: "优先级", value: CLAIM_RANK_LABELS[detail.rank] },
             { label: "来源类型", value: CLAIM_ORIGIN_LABELS[detail.originType] },
             {
-              label: "取代为",
+              label: "后续事实",
               value: detail.supersededBy ? (
                 <Link
                   href={`/claims/${detail.supersededBy}`}
                   className="text-blue-600 hover:underline"
                 >
-                  {detail.supersededBy}
+                  查看后续事实
                 </Link>
               ) : (
                 "—"
@@ -81,16 +80,16 @@ export default async function ClaimDetailPage({
       <DetailSection title={`证据 (${detail.sources.length})`}>
         {detail.sources.length ? (
           <ul className="divide-y divide-border">
-            {detail.sources.map((source) => (
+            {detail.sources.map((source, index) => (
               <li key={source.citationId} className="py-3 first:pt-0 last:pb-0">
                 <Link
                   href={`/citations/${source.citationId}`}
                   className="font-medium text-blue-600 hover:underline"
                 >
-                  引文 {source.citationId}
+                  引文 {index + 1}
                 </Link>
                 <p className="mt-1 text-xs text-muted-foreground">
-                  {source.supportType}
+                  {CLAIM_SUPPORT_LABELS[source.supportType]}
                 </p>
               </li>
             ))}

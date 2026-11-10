@@ -194,7 +194,7 @@ function AuditCard({
       });
       setSelectedTag("");
       await onTagged();
-      toast.success("标签已追加到审计事件");
+      toast.success("标签已添加");
     } catch {
       toast.error("标签追加失败", {
         description: "需要审核者或管理员权限。",
@@ -384,7 +384,7 @@ export function AuditActivity() {
     return (
       <div className="rounded-3xl border border-dashed px-6 py-16 text-center">
         <ScrollText className="mx-auto size-9 text-muted-foreground" aria-hidden />
-        <h2 className="mt-4 text-lg font-semibold">登录后查看 Wiki 审计流</h2>
+        <h2 className="mt-4 text-lg font-semibold">登录后查看活动记录</h2>
         <Button asChild className="mt-5">
           <Link href={LOGIN_PATH}>登录</Link>
         </Button>
@@ -424,7 +424,7 @@ export function AuditActivity() {
               void activity.setSize(1);
             }}
             className="h-9 rounded-lg border border-input bg-background px-3 text-sm"
-            aria-label="聚合类型"
+            aria-label="对象类型"
           >
             {AGGREGATE_TYPES.map(([value, label]) => (
               <option key={value} value={value}>
@@ -436,7 +436,7 @@ export function AuditActivity() {
             value={eventType}
             onChange={(event) => setEventType(event.target.value)}
             onBlur={() => void activity.setSize(1)}
-            placeholder="event_type 精确过滤"
+            placeholder="事件类型（精确匹配）"
           />
           <select
             value={tagKey}
@@ -468,7 +468,7 @@ export function AuditActivity() {
         ) : null}
         {activity.error ? (
           <div className="mt-5 rounded-2xl border border-destructive/20 bg-destructive/5 p-5 text-sm">
-            <p className="font-medium text-destructive">审计流无法读取</p>
+            <p className="font-medium text-destructive">活动记录加载失败</p>
             <p className="mt-1 text-muted-foreground">
               请确认你有审核权限。如果仍无法加载，请稍后重试。
             </p>
@@ -477,7 +477,7 @@ export function AuditActivity() {
         {!activity.isLoading && !activity.error && items.length === 0 ? (
           <div className="mt-5 rounded-2xl border border-dashed px-6 py-14 text-center">
             <Inbox className="mx-auto size-8 text-muted-foreground" aria-hidden />
-            <h3 className="mt-4 font-semibold">没有匹配的审计事件</h3>
+            <h3 className="mt-4 font-semibold">没有匹配的活动记录</h3>
           </div>
         ) : null}
         {items.length > 0 ? (
@@ -513,7 +513,7 @@ export function AuditActivity() {
       <aside className="space-y-4 xl:sticky xl:top-24 xl:self-start">
         <div className="rounded-2xl border bg-card p-5">
           <BadgeCheck className="size-5 text-violet-700" aria-hidden />
-          <h2 className="mt-4 font-semibold">ChangeTag 词表</h2>
+          <h2 className="mt-4 font-semibold">活动标签</h2>
           <div className="mt-4 flex flex-wrap gap-2">
             {(tagState.data?.items ?? []).map((tag) => (
               <TagPill key={tag.id} tag={tag} />
@@ -530,7 +530,7 @@ export function AuditActivity() {
           </p>
           <div className="mt-4 space-y-4">
             <div className="space-y-2">
-              <Label htmlFor="tag-key">机器 Key</Label>
+              <Label htmlFor="tag-key">标识</Label>
               <Input
                 id="tag-key"
                 value={newTagKey}
@@ -563,7 +563,7 @@ export function AuditActivity() {
             ) : (
               <Plus aria-hidden />
             )}
-            创建 ChangeTag
+            创建标签
           </Button>
         </form>
       </aside>

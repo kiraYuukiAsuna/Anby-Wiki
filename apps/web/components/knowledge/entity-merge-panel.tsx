@@ -225,7 +225,7 @@ function MergedEntityPanel({
       <Dialog open={rollbackOpen} onOpenChange={setRollbackOpen}>
         <DialogContent className="sm:max-w-lg">
           <DialogHeader>
-            <DialogTitle>撤销修改实体合并</DialogTitle>
+            <DialogTitle>撤销实体合并</DialogTitle>
             <DialogDescription>
               恢复「{sourceTitle}」并恢复合并前的名称和事实。若合并后已有新修改，系统会停止撤销，保留新内容。
             </DialogDescription>
@@ -483,7 +483,7 @@ export function EntityMergePanel({
                 aria-hidden
               />
               <div className="text-xs leading-5">
-                <p className="font-semibold text-destructive">高风险身份变更</p>
+                <p className="font-semibold text-destructive">合并影响</p>
                 <p className="mt-1 text-muted-foreground">
                   源实体当前有 {sourceLabelCount} 个名称、{sourceAliasCount}{" "}
                   个别名与 {sourcePageCount} 个页面提及。合并后请在目标实体中继续编辑。
@@ -633,7 +633,7 @@ export function EntityMergePanel({
               ) : (
                 <GitMerge aria-hidden />
               )}
-              {submitting ? "合并中…" : "确认合并身份"}
+              {submitting ? "合并中…" : "确认合并"}
             </Button>
           </DialogFooter>
         </DialogContent>

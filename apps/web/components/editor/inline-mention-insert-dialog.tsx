@@ -90,7 +90,7 @@ export function InlineMentionInsertDialog({
       <DialogContent>
         <DialogHeader>
           <DialogTitle>插入行内提及</DialogTitle>
-          <DialogDescription>引用人员或日期。</DialogDescription>
+          <DialogDescription className="sr-only">引用人员或日期。</DialogDescription>
         </DialogHeader>
 
         <div className="grid grid-cols-2 gap-1 rounded-md bg-muted p-1">

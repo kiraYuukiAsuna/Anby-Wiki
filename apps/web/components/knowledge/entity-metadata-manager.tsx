@@ -113,9 +113,7 @@ export function EntityMetadataManager({
       });
       await entityState.mutate();
       setLabelDraft(undefined);
-      toast.success("实体名称已添加", {
-        description: "搜索结果和动态组件会自动更新。",
-      });
+      toast.success("实体名称已添加");
     } catch (error) {
       toast.error(mutationMessage(error, "名称添加失败"));
     } finally {
@@ -362,7 +360,7 @@ export function EntityMetadataManager({
           <DialogHeader>
             <DialogTitle>添加多语言名称</DialogTitle>
             <DialogDescription>
-              名称保留大小写，会自动整理空格和字符格式。每种语言只能有一个主名称。
+              每种语言只能有一个主名称。
             </DialogDescription>
           </DialogHeader>
           {labelDraft ? (
@@ -411,7 +409,7 @@ export function EntityMetadataManager({
                   className="mt-0.5"
                 />
                 <span>
-                  设为该语言的主名称。如果已有主名称，请先添加，再在名称列表中切换。
+                  设为主名称（已有主名称时，请添加后在列表中切换）
                 </span>
               </label>
             </div>
@@ -446,7 +444,7 @@ export function EntityMetadataManager({
         <DialogContent className="sm:max-w-lg">
           <DialogHeader>
             <DialogTitle>添加实体别名</DialogTitle>
-            <DialogDescription>
+            <DialogDescription className="sr-only">
               添加别名后，可以用更多名称找到这个实体。不会因此新建或合并实体。
             </DialogDescription>
           </DialogHeader>

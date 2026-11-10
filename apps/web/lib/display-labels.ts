@@ -1,4 +1,4 @@
-import type { ClaimDetail, EntityDetail, MergeConflict, Proposal } from "../../../contracts/generated/typescript";
+import type { ExternalResourceDetail, ClaimSource, ClaimDetail, EntityDetail, MergeConflict, Proposal } from "../../../contracts/generated/typescript";
 
 export const ENTITY_STATUS_LABELS: Record<EntityDetail["status"], string> = {
   active: "可用", merged: "已合并", deleted: "已删除",
@@ -30,4 +30,15 @@ export const CONFLICT_STATUS_LABELS: Record<MergeConflict["status"], string> = {
 };
 export const CONFLICT_TYPE_LABELS: Record<MergeConflict["conflictType"], string> = {
   revision: "页面版本冲突", block_hash: "内容块已变化", claim_state: "事实状态冲突", semantic: "内容或名称冲突",
+};
+
+export const CLAIM_SUPPORT_LABELS: Record<ClaimSource["supportType"], string> = {
+  supports: "支持", contradicts: "反驳", context: "背景资料",
+};
+
+export const SOURCE_TYPE_LABELS: Record<string, string> = {
+  webpage: "网页", pdf: "PDF", book: "书籍", image: "图片", video: "视频", api: "API", database: "数据库",
+};
+export const RESOURCE_STATUS_LABELS: Record<ExternalResourceDetail["status"], string> = {
+  unknown: "尚未检查", ok: "可访问", redirect: "已跳转", broken: "链接失效", blocked: "访问受限",
 };

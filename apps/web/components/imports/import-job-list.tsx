@@ -83,13 +83,13 @@ const STATUS_META: Record<
 };
 
 const STAGE_LABEL: Record<ImportJob["currentStage"], string> = {
-  queued: "等待 Worker",
+  queued: "等待处理",
   fetch: "获取来源",
   parse: "解析内容",
   extract: "抽取知识",
   plan: "规划页面",
   match: "匹配实体",
-  compose: "生成提议",
+  compose: "生成修改建议",
   review: "进入审核",
   complete: "处理完成",
 };

@@ -224,7 +224,7 @@ function FederationLinkEditor({
           />
           {draft.id ? (
             <p className="text-[10px] text-muted-foreground">
-              关联目标创建后不能修改。如需更换，请弃用当前关联后重新添加。
+              关联目标不可修改。更换目标请先弃用此关联。
             </p>
           ) : null}
         </div>
@@ -306,7 +306,7 @@ function FederationLinkEditor({
               className="h-8 w-full rounded-lg border border-input bg-background px-2.5 text-sm outline-none focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50"
             >
               <option value="active">有效</option>
-              <option value="deprecated">弃用但保留审计</option>
+              <option value="deprecated">已弃用</option>
             </select>
           </div>
         ) : null}

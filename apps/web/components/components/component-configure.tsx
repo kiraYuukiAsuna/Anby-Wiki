@@ -121,11 +121,10 @@ export function ComponentConfigure({
         <DialogTitle>
           {onInsert ? "插入" : "预览"} {component.name} · v{version.version}
         </DialogTitle>
-        <DialogDescription>
+        <DialogDescription className="sr-only">
           {dynamic
             ? "选择实体和要显示的属性，预览已发布的内容。"
             : "填写资料卡后可预览效果。插入页面时需要选择关联的实体。"}
-          使用此版本的页面会保留版本号。
         </DialogDescription>
       </DialogHeader>
       <div className="grid max-h-[65vh] min-w-0 gap-5 overflow-y-auto lg:grid-cols-2">
@@ -140,7 +139,7 @@ export function ComponentConfigure({
         </div>
         <div className="min-w-0 rounded-xl border bg-muted/20 p-4 lg:self-start">
           <p className="mb-3 text-xs font-medium text-muted-foreground">
-            实际渲染效果
+            预览
             {preview && !currentPreview ? " · 配置已修改，请重新预览" : ""}
           </p>
           {preview ? (
@@ -151,7 +150,7 @@ export function ComponentConfigure({
             />
           ) : (
             <p className="py-16 text-center text-xs leading-5 text-muted-foreground">
-              填写内容后点击「运行预览」。
+              尚未预览
             </p>
           )}
         </div>
