@@ -181,13 +181,10 @@ export async function PageView({ data }: { data: PageWithContent }) {
           </p>
         ) : null}
 
-        <div className="mb-6 flex flex-col items-stretch gap-3 sm:flex-row sm:items-start sm:justify-between sm:gap-4">
-          <h1 className="min-w-0 break-words text-3xl font-bold tracking-tight">
-            {page.displayTitle}
-          </h1>
-          <div className="-mx-1 flex w-[calc(100%+0.5rem)] items-center gap-2 overflow-x-auto px-1 pb-1 sm:mx-0 sm:w-auto sm:shrink-0 sm:overflow-visible sm:p-0">
+        <div className="mb-6 flex min-w-0 flex-col gap-3">
+          <div role="group" aria-label="页面操作" className="-mx-1 flex items-center gap-2 overflow-x-auto px-1 py-1">
             <PageGraphButton pageId={page.id} pageTitle={page.displayTitle} canEdit={data.canEdit} />
-            <Button variant="ghost" size="sm" asChild className="gap-1">
+            <Button variant="outline" size="sm" asChild className="gap-1">
               <Link href={`/pages/${redirectSourceId}/tools`}>
                 <Wrench aria-hidden className="size-3.5" />
                 工具
@@ -214,6 +211,9 @@ export async function PageView({ data }: { data: PageWithContent }) {
               </Button>
             ) : null}
           </div>
+          <h1 className="min-w-0 break-words text-3xl font-bold tracking-tight">
+            {page.displayTitle}
+          </h1>
         </div>
 
         {terminalRedirect && redirect ? (

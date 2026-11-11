@@ -31,12 +31,12 @@ export function PageGraphButton({ pageId, pageTitle, canEdit }: { pageId: string
   const root = primary ?? (entityIds.length === 1 ? entityIds[0] : undefined);
   const loading = isLoading || bindings.isLoading;
 
-  if (root && !bindings.error) return <Button variant="ghost" size="sm" asChild className="gap-1">
+  if (root && !bindings.error) return <Button variant="outline" size="sm" asChild className="gap-1">
     <Link href={`/explore/graph?entity_id=${encodeURIComponent(root)}`}><Network className="size-3.5" aria-hidden />知识图谱</Link>
   </Button>;
 
   return <Dialog open={open} onOpenChange={setOpen}>
-    <DialogTrigger asChild><Button variant="ghost" size="sm" className="gap-1" disabled={loading || !session}>
+    <DialogTrigger asChild><Button variant="outline" size="sm" className="gap-1" disabled={loading || !session}>
       {loading ? <LoaderCircle className="size-3.5 animate-spin" aria-hidden /> : <Network className="size-3.5" aria-hidden />}知识图谱
     </Button></DialogTrigger>
     <DialogContent className="max-w-md">
