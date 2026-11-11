@@ -252,6 +252,15 @@
   line-height: 1.65;
 }
 
+.anby-block-gutter-layer { position: absolute; inset: 0; pointer-events: none; }
+.anby-block-gutter { position: absolute; left: -28px; z-index: 10; pointer-events: auto; color: var(--muted-foreground); transition-property: color, background-color, border-color; }
+.anby-block-gutter:hover, .anby-block-gutter:focus-visible { color: var(--primary); background: var(--muted); }
+.anby-block-indicator { position: absolute; border-radius: 3px; outline: 1px dashed color-mix(in oklab, var(--foreground) 20%, transparent); outline-offset: 3px; }
+.anby-block-indicator--active { outline-style: solid; outline-color: color-mix(in oklab, var(--primary) 22%, transparent); box-shadow: -4px 0 var(--primary); }
+.anby-block-gutter-tooltip { z-index: 50; max-width: min(20rem, calc(100vw - 2rem)); border: 1px solid var(--border); border-radius: .5rem; background: var(--popover); color: var(--popover-foreground); padding: .4rem .6rem; font-size: .75rem; box-shadow: 0 3px 12px #0001; }
+.anby-block-gutter-tooltip span { display: block; margin-top: .15rem; color: var(--muted-foreground); }
+.anby-tiptap-editor .tiptap hr:not(:where(.wiki-rendered *)) { height: 1rem; border: 0; background: linear-gradient(var(--border), var(--border)) center / 100% 1px no-repeat; }
+
 /* Editor typography stops at server-rendered previews. */
 .anby-tiptap-editor .tiptap p:not(:where(.wiki-rendered *)),
 .anby-tiptap-editor .tiptap h1:not(:where(.wiki-rendered *)),

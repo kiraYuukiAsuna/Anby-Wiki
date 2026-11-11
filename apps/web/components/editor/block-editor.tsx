@@ -39,6 +39,7 @@ import {
 } from "@/lib/editor/references";
 import { editorExtensions, type PMDocument } from "@/lib/editor/schema";
 import { toAst } from "@/lib/editor/toAst";
+import { BlockGutter } from "@/lib/editor/block-gutter";
 import { applyRemoteDocument } from "@/lib/editor/remote-document";
 import type { LinkPreviewMetadata } from "../../../../contracts/generated/typescript";
 
@@ -330,8 +331,9 @@ export function BlockEditor({
   if (!editor) return <div className="min-h-80 animate-pulse bg-muted" aria-label="编辑器加载中" />;
 
   return (
-    <div className="min-w-0" data-block-editor>
+    <div className="relative min-w-0" data-block-editor>
       <EditorContent editor={editor} className="anby-tiptap-editor" />
+      {editable && <BlockGutter editor={editor} />}
       {editable ? (
         <>
           <PageReferencePicker
