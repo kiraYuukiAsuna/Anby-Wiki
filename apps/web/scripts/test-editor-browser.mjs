@@ -370,24 +370,19 @@ try {
     await editor.locator('.ast-table-cell p').first().fill('编辑后的单元格');
     assert.deepEqual(await ast(), saved);
   });
-  await check('property validation rejects invalid data and keeps editing usable', async () => {
-    const column = editor.locator('[data-editor-block-type="column"]').first();
-    await column.locator('summary').click();
-    await column.getByLabel('宽度比例').fill('0');
-    await column.getByLabel('宽度比例').blur();
-    assert.equal((await ast()).children.find(b => b.type === 'column_list').children[0].width_ratio, 1);
-    assert.equal(await column.getByLabel('宽度比例').inputValue(), '1');
-    await column.getByLabel('宽度比例').fill('1.5'); await column.getByLabel('宽度比例').blur();
-    assert.equal((await ast()).children.find(b => b.type === 'column_list').children[0].width_ratio, 1.5);
-    await column.locator('summary').click();
+  await check('column width controls respect bounds and remain editable', async () => {
+    const handle = editor.getByRole('separator', { name: '调整第 1、2 栏宽度' });
+    await handle.focus(); await page.keyboard.press('Home');
+    assert.equal((await ast()).children.find(b => b.type === 'column_list').children[0].width_ratio, .1);
+    await page.keyboard.press('ArrowRight');
+    assert.ok((await ast()).children.find(b => b.type === 'column_list').children[0].width_ratio > .1);
+    await editor.getByRole('button', { name: '平均分配' }).click();
   });
   await check('column controls stop at the supported maximum', async () => {
     const columns = editor.locator('[data-editor-block-type="columnList"]');
-    await columns.locator(':scope > details > summary').click();
     for (let i = 0; i < 3; i++) await columns.getByRole('button', { name: '增加一栏' }).click();
     assert.equal((await ast()).children.find(b => b.type === 'column_list').children.length, 5);
     assert.equal(await columns.getByRole('button', { name: '增加一栏' }).isDisabled(), true);
-    await columns.locator(':scope > details > summary').click();
   });
   await check('inline code formatting survives serialization', async () => {
     await select(editor.locator('.ast-inline-code').first());

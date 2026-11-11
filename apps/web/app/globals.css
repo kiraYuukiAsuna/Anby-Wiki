@@ -1495,9 +1495,26 @@ button.ast-callout__style:focus-visible { outline: 2px solid var(--ring); outlin
 .ast-table-cell { border-radius: 0; padding: .5rem .75rem; height: 100%; font-size: .875rem; color: var(--foreground); }
 [data-column-header] > .ast-table-region > .ast-editable-block__content > [data-node-view-content-react] > .node-astTableRow:first-child .ast-table-cell,
 [data-row-header] > .ast-table-region > .ast-editable-block__content .node-astTableCell:first-child > .ast-table-cell { background: var(--muted); font-weight: 600; }
-[data-editor-block-type="columnList"] > .ast-editable-block__content > [data-node-view-content-react] { display: flex; align-items: stretch; gap: 1rem; }
+.ast-columns-content > [data-node-view-content-react] { display: flex; align-items: stretch; gap: 1rem; }
 .node-column { display: contents; }
-[data-editor-block-type="column"] { align-content: start; }
+.ast-column { position: relative; flex-basis: 0; min-width: 0; border: 1px dashed var(--border); border-radius: .5rem; padding: .5rem 0; }
+.ast-column-toolbar, .ast-column-content { padding-inline: .75rem; }
+.ast-columns { margin: 1rem 0; }
+.ast-columns-toolbar, .ast-column-toolbar { display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: .25rem; color: var(--muted-foreground); font-size: .75rem; }
+.ast-columns-toolbar { margin-bottom: .5rem; }
+.ast-columns-toolbar > span { display: flex; align-items: center; gap: .375rem; }
+.ast-column-toolbar { margin-bottom: .375rem; }
+.ast-column-resize { position: absolute; z-index: 5; right: -.9rem; top: 2.5rem; bottom: .5rem; width: .8rem; display: flex; align-items: center; justify-content: center; cursor: col-resize; touch-action: none; color: var(--muted-foreground); border-radius: .25rem; }
+.ast-column-resize > span { position: absolute; width: 2px; top: 0; bottom: 0; background: var(--border); }
+.ast-column-resize > svg { background: var(--background); z-index: 1; flex: none; }
+.ast-column-resize:is(:hover,:focus-visible) { color: var(--primary); background: var(--accent); outline: 2px solid var(--ring); outline-offset: 1px; }
+.ast-breadcrumb-editor { display: flex; align-items: center; flex-wrap: wrap; gap: .375rem; margin: .75rem 0; font-size: .875rem; }
+.ast-breadcrumb-editor ol, .ast-breadcrumb-editor li { display: flex; align-items: center; flex-wrap: wrap; gap: .375rem; list-style: none; margin: 0 !important; padding: 0 !important; min-width: 0; }
+.ast-breadcrumb-editor li { display: contents; }
+.ast-breadcrumb-editor li > :is(button,span) { min-width: 0; overflow-wrap: anywhere; padding: .25rem .375rem; border-radius: .375rem; }
+.ast-breadcrumb-editor li > button:hover { background: var(--accent); }
+.ast-breadcrumb-editor button:focus-visible { outline: 2px solid var(--ring); }
+.ast-path-item { min-width: 0; display: grid; gap: .5rem; padding: .75rem; border: 1px solid var(--border); border-radius: .5rem; }
 .ast-outline { position: relative; padding-left: 1.5rem; }
 .ast-outline__toggle { position: absolute; left: 0; top: .4rem; cursor: pointer; }
 .ast-outline__content > [data-node-view-content-react] > :not(:first-child) { margin-top: .75rem; }
@@ -1512,7 +1529,8 @@ button.ast-callout__style:focus-visible { outline: 2px solid var(--ring); outlin
 .ast-todo__content { flex: 1; min-width: 0; }
 .ast-todo[data-checked="true"] > .ast-todo__content > [data-node-view-content-react] > p:first-child { text-decoration: line-through; color: var(--muted-foreground); }
 @media (max-width: 720px) {
-  [data-editor-block-type="columnList"] > .ast-editable-block__content > [data-node-view-content-react] { flex-direction: column; }
+  .ast-columns-content > [data-node-view-content-react] { flex-direction: column; }
+  .ast-column-resize { display: none; }
 }
 .anby-tiptap-editor .tiptap h6 { font-size: .875rem; color: var(--muted-foreground); }
 .anby-tiptap-editor pre[caption]:not([caption=""])::after { content: attr(caption); display: block; margin-top: .75rem; border-top: 1px solid var(--border); padding-top: .5rem; font-family: var(--font-geist-sans), sans-serif; color: var(--muted-foreground); }

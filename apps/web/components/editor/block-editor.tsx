@@ -24,6 +24,7 @@ import { PageReferencePicker } from "@/components/editor/page-reference-picker";
 import { PageButtonInsertDialog } from "@/components/editor/page-button-insert-dialog";
 import { clientUUID } from "@/lib/client-uuid";
 import type { Block, Document } from "@/lib/ast/schema";
+import { insertColumns } from "@/lib/editor/columns";
 import { insertCodeBlock } from "@/lib/editor/code";
 import { fromAst } from "@/lib/editor/fromAst";
 import { createAdapterState, type AdapterState } from "@/lib/editor/ids";
@@ -221,7 +222,7 @@ export function BlockEditor({
     { title: "外链", subtext: "插入外部链接", aliases: ["link", "url", "外链"], group: "Anby", icon: "🔗", run: (editor: Editor) => { setLinkDefaultText(editor.state.doc.textBetween(editor.state.selection.from, editor.state.selection.to)); setLinkOpen(true); } },
     { title: "表格", subtext: "插入可编辑表格", aliases: ["table", "表格"], group: "Anby", icon: "▦", run: (editor: Editor) => insertTemplate(editor, { type: "astTable", content: [{ type: "astTableRow", content: [{ type: "astTableCell", content: [{ type: "paragraph", content: [{ type: "text", text: "单元格 1" }] }] }, { type: "astTableCell", content: [{ type: "paragraph", content: [{ type: "text", text: "单元格 2" }] }] }] }] }) },
     { title: "页面路径", subtext: "插入 Breadcrumb", aliases: ["breadcrumb", "path", "路径"], group: "Anby", icon: "⌁", run: (editor: Editor) => insertTemplate(editor, { type: "breadcrumb", attrs: { itemsJson: JSON.stringify([{ display_text: "当前页面" }]) } }) },
-    { title: "分栏", subtext: "插入双栏布局", aliases: ["columns", "layout", "分栏"], group: "Anby", icon: "▥", run: (editor: Editor) => insertTemplate(editor, { type: "columnList", content: [{ type: "column", attrs: { widthRatio: 1 }, content: [{ type: "paragraph", content: [{ type: "text", text: "左列" }] }] }, { type: "column", attrs: { widthRatio: 1 }, content: [{ type: "paragraph", content: [{ type: "text", text: "右列" }] }] }] }) },
+    { title: "分栏", subtext: "插入双栏布局", aliases: ["columns", "layout", "分栏"], group: "Anby", icon: "▥", run: (editor: Editor) => { insertColumns(editor); } },
     { title: "页面按钮", subtext: "插入声明式动作按钮", aliases: ["button", "action", "按钮"], group: "Anby", icon: "◉", run: () => setButtonOpen(true) },
     { title: "HTML 块", subtext: "插入 HTML 内容", aliases: ["html", "iframe"], group: "Anby", icon: "<>", run: () => setHTMLOpen(true) },
     { title: "媒体", subtext: "插入图片、视频、音频、文件或 PDF", aliases: ["media", "asset", "image", "pdf", "媒体"], group: "Anby", icon: "▣", run: () => setMediaOpen(true) },

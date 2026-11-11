@@ -221,8 +221,7 @@ try {
   });
   await check('breadcrumb and page button references use selectors and preserve nested content',async()=>{
     await set([{type:'breadcrumb',attrs:{itemsJson:'[{"display_text":"当前页面"}]'}}]);
-    await editor.locator('[data-editor-block-type="breadcrumb"] summary').click();
-    await page.getByRole('button',{name:'编辑页面路径'}).click();
+    await editor.getByRole('button',{name:'编辑路径项：当前页面'}).click();
     await choose('页面','人物介绍');
     await page.getByRole('button',{name:'保存页面路径'}).click();
     assert.equal((await ast()).children[0].items[0].target_page_id,id(71));

@@ -1,4 +1,5 @@
 import React, { useState } from "react";
+import { ColumnsView, ColumnView } from "@/lib/editor/columns";
 import { CalloutView } from "@/lib/editor/callout";
 import { TableView } from "@/lib/editor/table";
 import { ChevronRight } from "lucide-react";
@@ -9,14 +10,15 @@ import { AnchorPicker, BreadcrumbFields, ButtonActionsFields } from "@/component
 import { ComponentInsertDialog } from "@/components/editor/component-insert-button";
 import { Button } from "@/components/ui/button";
 import type { ComponentSelection } from "@/components/components/component-configure";
-import type { BreadcrumbItem, ButtonAction } from "@/lib/ast/schema";
+import type { ButtonAction } from "@/lib/ast/schema";
 import { BlockView } from "@/components/ast";
 import { toAst } from "@/lib/editor/toAst";
 import { Extension, Mark, Node, mergeAttributes, type JSONContent } from "@tiptap/core";
-import { ReactNodeViewRenderer, NodeViewContent, NodeViewWrapper, type ReactNodeViewProps } from "@tiptap/react";
+import { ReactNodeViewRenderer, NodeViewContent, NodeViewWrapper, useEditorState, type ReactNodeViewProps } from "@tiptap/react";
 import StarterKit from "@tiptap/starter-kit";
 import Link from "@tiptap/extension-link";
 import { SuggestionPluginKey } from "@tiptap/suggestion";
+import { closeHistory } from "@tiptap/pm/history";
 import { Plugin, TextSelection } from "@tiptap/pm/state";
 import { Mapping } from "@tiptap/pm/transform";
 import type { EditorView } from "@tiptap/pm/view";
@@ -158,7 +160,6 @@ function Field({ label, children }: { label: string; children?: React.ReactNode 
 function TextInput(props: ReactNodeViewProps & { attrName: string; label: string; multiline?: boolean; type?: string }) {
   const value = textValue(props.node.attrs[props.attrName]);
   if (resourceAttrs[props.attrName]) return React.createElement(ResourceInput, props);
-  if (props.attrName === "itemsJson") return React.createElement(BreadcrumbFields, { value: JSON.parse(value) as BreadcrumbItem[], onChange: items => updateAttr(props, "itemsJson", JSON.stringify(items)) });
   if (props.attrName === "actionsJson") return React.createElement(ButtonActionsFields, { value: JSON.parse(value) as ButtonAction[], onChange: actions => updateAttr(props, "actionsJson", JSON.stringify(actions)) });
   const common = {
     className: `${CONTROL_STYLE}${props.multiline ? " ast-editable-block__textarea" : ""}`,
@@ -208,7 +209,6 @@ function BlockShell(props: ReactNodeViewProps & { title: string; summary?: strin
     "data-id": props.node.attrs.id,
     "data-column-header": props.node.attrs.hasColumnHeader || undefined,
     "data-row-header": props.node.attrs.hasRowHeader || undefined,
-    style: props.node.type.name === "column" ? { flex: props.node.attrs.widthRatio } : undefined,
   },
     props.node.isAtom ? React.createElement("div", {
       className: "ast-editor-preview", contentEditable: false,
@@ -401,20 +401,12 @@ function TodoView(props: ReactNodeViewProps) {
   );
 }
 
-function StructureButton({ label, disabled, onClick }: { label: string; disabled?: boolean; onClick: () => void }) {
-  return React.createElement("button", { type: "button", className: "ast-editable-block__control", disabled, onMouseDown: (event: React.MouseEvent) => event.preventDefault(), onClick }, label);
-}
-
-function ColumnsView(props: ReactNodeViewProps) {
-  const count = props.node.childCount;
-  return React.createElement(BlockShell, { ...props, title: "分栏设置", content: true },
-    React.createElement(StructureButton, { label: "增加一栏", disabled: count >= 5, onClick: () => {
-      const pos = props.getPos();
-      if (pos === undefined) return;
-      const { state, view } = props.editor;
-      const node = state.doc.nodeAt(pos);
-      if (!node || node.childCount >= 5) return;
-      view.dispatch(state.tr.insert(pos + node.nodeSize - 1, state.schema.nodes.column.create(null, state.schema.nodes.paragraph.create())));
+function BreadcrumbView(props: ReactNodeViewProps) {
+  const editable = useEditorState({ editor: props.editor, selector: ({ editor }) => editor.isEditable });
+  return React.createElement(NodeViewWrapper, { contentEditable: false, "data-editor-block-type": "breadcrumb", "data-id": props.node.attrs.id },
+    React.createElement(BreadcrumbFields, { value: JSON.parse(props.node.attrs.itemsJson), editable, onChange: items => {
+      props.editor.view.dispatch(closeHistory(props.editor.state.tr));
+      return updateAttr(props, "itemsJson", JSON.stringify(items));
     } }),
   );
 }
@@ -546,9 +538,9 @@ export const editorExtensions = [
   containerNode("todoBlock", "paragraph block*", TodoView, { checked: { default: false } }),
   containerNode("toggleBlock", "paragraph block*", OutlineView, { hasChildren: { default: true } }),
   containerNode("sectionHeading", "paragraph block*", OutlineView, { level: { default: 1 }, isToggleable: { default: null }, hasChildren: { default: false } }),
-  atomNode("breadcrumb", { itemsJson: { default: "[]" } }, (props) => React.createElement(SimpleAttrsView, { ...props, title: "页面路径", fields: [{ attr: "itemsJson", label: "路径项 JSON", multiline: true }] })),
+  atomNode("breadcrumb", { itemsJson: { default: "[]" } }, BreadcrumbView),
   containerNode("columnList", "column{2,5}", ColumnsView),
-  containerNode("column", "block*", (props) => React.createElement(BlockShell, { ...props, title: "列", summary: `宽度 ${props.node.attrs.widthRatio}`, content: true }, React.createElement(NumberInput, { ...props, label: "宽度比例", attrName: "widthRatio", fallback: 1, step: 0.1 })), { widthRatio: { default: 1 } }),
+  containerNode("column", "block*", ColumnView, { widthRatio: { default: 1 } }),
   atomNode("pageButton", { label: { default: "运行操作" }, confirmation: { default: "" }, actionsJson: { default: "[]" } }, (props) => React.createElement(SimpleAttrsView, { ...props, title: "页面按钮", summaryAttr: "label", fields: [{ attr: "label", label: "按钮名称" }, { attr: "confirmation", label: "确认提示" }, { attr: "actionsJson", label: "动作 JSON", multiline: true }] })),
   atomNode("htmlBlock", { html: { default: "" }, height: { default: 240 }, caption: { default: "" } }, (props) => React.createElement(SimpleAttrsView, { ...props, title: "HTML", summaryAttr: "caption", fields: [{ attr: "height", label: "高度", number: true, fallback: 240 }, { attr: "caption", label: "标题" }, { attr: "html", label: "HTML", multiline: true }] })),
   containerNode("astTable", "astTableRow+", (props) => React.createElement(TableView, { ...props, onUpdateAttrs: (attrs) => updateAttrs(props, attrs) }), { caption: { default: "" }, hasColumnHeader: { default: false }, hasRowHeader: { default: false } }),
