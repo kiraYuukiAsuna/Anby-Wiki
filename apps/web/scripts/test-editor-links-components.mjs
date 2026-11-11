@@ -42,7 +42,7 @@ try {
   const set=async content=>{await page.getByRole('button',{name:'空白文档'}).click();await root.waitFor();await root.evaluate((el,content)=>el.editor.chain().setContent({type:'doc',content}).command(({tr})=>{tr.setMeta('addToHistory',false);return true;}).run(),content);};
   const check=async(name,fn)=>{await fn();console.log(`PASS ${name}`);};
   const wait=async fn=>{let error;for(let i=0;i<80;i++){try{await fn();return;}catch(e){error=e;}await page.waitForTimeout(50);}throw error;};
-  const open=async name=>root.getByRole('button',{name,exact:true}).click();
+  const open=async name=>{if(name==='编辑知识组件')await root.locator('.ast-component').hover();await root.getByRole('button',{name,exact:true}).click();};
   const cancel=async()=>dialog().getByRole('button',{name:'取消',exact:true}).click();
   const undo=async()=>root.evaluate(el=>el.editor.commands.undo());
   const redo=async()=>root.evaluate(el=>el.editor.commands.redo());

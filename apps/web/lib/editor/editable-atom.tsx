@@ -41,7 +41,7 @@ export function EditableAtomView(props: ReactNodeViewProps & { onUpdateAttrs: (a
     return props.onUpdateAttrs(attrs);
   };
   return <NodeViewWrapper as="section" className={`ast-editable-block ast-${block.type}`} data-editor-block-type={props.node.type.name} data-id={block.id} contentEditable={false}>
-    {editable && <div className="flex justify-end"><Button ref={trigger} type="button" variant="ghost" size="sm" onClick={() => { baseline.current = JSON.stringify(props.node.toJSON()); setDraft(block); }}><Pencil aria-hidden />编辑{block.type === "html" || block.type === "pdf" ? " " : ""}{names[block.type]}</Button></div>}
+    {editable && <div className="ast-editable-block__actions flex justify-end"><Button ref={trigger} type="button" variant="ghost" size="sm" onClick={() => { baseline.current = JSON.stringify(props.node.toJSON()); setDraft(block); }}><Pencil aria-hidden />编辑{block.type === "html" || block.type === "pdf" ? " " : ""}{names[block.type]}</Button></div>}
     {block.type === "component" ? <ComponentBlockPreview block={block} /> : <div className="ast-editor-preview" onClickCapture={event => {
       if ((event.target as Element).closest("a,button")) { event.preventDefault(); event.stopPropagation(); }
     }}><BlockView block={block} /></div>}

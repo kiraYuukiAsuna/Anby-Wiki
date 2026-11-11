@@ -1170,10 +1170,14 @@
   font-size: 0.875rem;
 }
 
-.wiki-rendered .entity-infobox {
+.wiki-rendered .entity-infobox,
+.anby-tiptap-editor .node-componentBlock:where(:has(> .ast-component > .wiki-component-preview > .entity-infobox)) {
   float: right;
   margin: 0.2rem 0 1.25rem 1.5rem;
   width: min(22rem, 48%);
+}
+
+.wiki-rendered .entity-infobox {
   overflow: hidden;
   border: 1px solid color-mix(in oklch, var(--primary) 18%, var(--border));
   border-radius: 1rem;
@@ -1414,7 +1418,8 @@
     width: 100%;
   }
 
-  .wiki-rendered .entity-infobox {
+  .wiki-rendered .entity-infobox,
+  .anby-tiptap-editor .node-componentBlock:where(:has(> .ast-component > .wiki-component-preview > .entity-infobox)) {
     float: none;
     margin: 1rem 0;
     width: 100%;
@@ -1460,6 +1465,15 @@
 .ast-editable-block { background: transparent; border-color: transparent; padding: .25rem 0; min-width: 0; }
 .ast-editable-block > details { border: 1px dashed var(--border); border-radius: .375rem; padding: .35rem .5rem; }
 .ast-editable-block__grid { grid-template-columns: repeat(auto-fit, minmax(min(12rem, 100%), 1fr)); }
+/* Float the NodeView itself so adjacent editable paragraphs share the reader's flow. */
+.anby-tiptap-editor .tiptap,
+.anby-tiptap-editor [data-node-view-content-react]:has(> .node-componentBlock > .ast-component > .wiki-component-preview > .entity-infobox) { display: flow-root; }
+.anby-tiptap-editor :is(.tiptap, [data-node-view-content-react]):where(:has(> .node-componentBlock .entity-infobox)) > p { margin-block: .75rem; }
+.ast-editable-block.ast-component { position: relative; display: block; margin: 0; padding: 0; border: 0; }
+.ast-component > .ast-editable-block__actions { position: absolute; right: 0; bottom: 100%; z-index: 10; opacity: 0; pointer-events: none; background: var(--popover); border: 1px solid var(--border); border-radius: .5rem; }
+.ast-component:is(:hover, :focus-within) > .ast-editable-block__actions,
+.node-componentBlock.ProseMirror-selectednode > .ast-component > .ast-editable-block__actions { opacity: 1; pointer-events: auto; }
+.ast-component > .wiki-component-preview > .entity-infobox { width: 100%; }
 .ast-editor-preview { min-width: 0; overflow: hidden; }
 .ast-editor-preview > * { max-width: 100%; }
 .ast-editor-preview iframe { width: 100%; }
