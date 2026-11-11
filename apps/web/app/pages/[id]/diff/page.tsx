@@ -1,12 +1,9 @@
-// /pages/[id]/diff?from=&to=：两版结构 Diff（M2-T05）。
-// from=base、to=current；from==to 时直接显示「两版相同」（不请求后端）。
 import Link from "next/link";
 import { notFound } from "next/navigation";
 
-import { DiffView } from "@/components/history/diff-view";
-import { shortId } from "@/components/history/utils";
+import { RevisionComparison } from "@/components/history/revision-comparison";
 import { Button } from "@/components/ui/button";
-import { fetchRevisionDiff } from "@/lib/history";
+import { fetchRevisionDetail, fetchRevisionDiff } from "@/lib/history";
 import { fetchPageById } from "@/lib/reading";
 import { serverApiOptions } from "@/lib/server-api";
 
@@ -48,39 +45,28 @@ export default async function PageDiffPage({
     );
   }
 
-  // from == to 契约返回空 changes；前端直接短路，不发起请求。
-  const diff =
-    from === to
-      ? { changes: [] }
-      : await (async () => {
-          const result = await fetchRevisionDiff(
-            id,
-            from,
-            to,
-            await serverApiOptions(),
-          );
-          if (result.kind === "not_found") notFound();
-          return result.data;
-        })();
+  const options = await serverApiOptions();
+  const [diffResult, beforeResult, afterResult] = await Promise.all([
+    fetchRevisionDiff(id, from, to, options),
+    fetchRevisionDetail(id, from, options, true),
+    fetchRevisionDetail(id, to, options, true),
+  ]);
+  if (diffResult.kind === "not_found" || beforeResult.kind === "not_found" || afterResult.kind === "not_found") notFound();
 
   return (
-    <div className="mx-auto flex w-full max-w-3xl flex-col gap-6 px-4 py-8">
+    <div className="mx-auto flex w-full max-w-[1600px] flex-col gap-6 px-4 py-8">
       <header className="flex flex-wrap items-center justify-between gap-3">
         <div>
           <h1 className="text-2xl font-bold tracking-tight">
             版本对比：{page.displayTitle}
           </h1>
-          <p className="mt-1 text-sm text-muted-foreground">
-            <span title={from}>{shortId(from)}</span>
-            <span className="mx-1">→</span>
-            <span title={to}>{shortId(to)}</span>
-          </p>
+
         </div>
         <Button variant="outline" size="sm" asChild>
           <Link href={`/pages/${page.id}/history`}>返回历史</Link>
         </Button>
       </header>
-      <DiffView diff={diff} />
+      <RevisionComparison key={`${from}:${to}`} pageId={id} diff={diffResult.data} before={beforeResult.data} after={afterResult.data} />
     </div>
   );
 }

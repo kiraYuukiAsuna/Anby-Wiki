@@ -10,15 +10,18 @@ import (
 	"github.com/go-chi/chi/v5"
 	"github.com/google/uuid"
 
+	"github.com/anby/wiki/backend/internal/ast"
 	"github.com/anby/wiki/backend/internal/governance"
 	"github.com/anby/wiki/backend/internal/page"
 	"github.com/anby/wiki/backend/internal/platform/httpx"
+	"github.com/anby/wiki/backend/internal/render"
 )
 
 // HistoryAPI 历史 API 依赖集合：Page 领域服务。
 type HistoryAPI struct {
-	pages *page.Service
-	auth  *governance.AuthorizationService
+	pages   *page.Service
+	auth    *governance.AuthorizationService
+	dynamic render.DynamicRenderer
 }
 
 // NewHistoryAPI 装配历史 API。
@@ -31,6 +34,11 @@ func (a *HistoryAPI) WithAuthorization(auth *governance.AuthorizationService) *H
 	return a
 }
 
+func (a *HistoryAPI) WithDynamicRenderer(dynamic render.DynamicRenderer) *HistoryAPI {
+	a.dynamic = dynamic
+	return a
+}
+
 // ---- 请求/响应 DTO（与 contracts/openapi/openapi.yaml 对应，契约为准）----
 
 // revisionListResponse Revision 历史列表（CursorPage 信封：items + next_cursor）。
@@ -39,10 +47,13 @@ type revisionListResponse struct {
 	NextCursor *string            `json:"next_cursor"`
 }
 
-// revisionDetailResponse 单版详情：Revision 元信息 + canonical AST（不含 html）。
+// revisionDetailResponse includes optional, current-renderer history preview.
 type revisionDetailResponse struct {
-	Revision revisionResponse `json:"revision"`
-	AST      json.RawMessage  `json:"ast_json"`
+	Revision        revisionResponse `json:"revision"`
+	AST             json.RawMessage  `json:"ast_json"`
+	HTML            *string          `json:"html,omitempty"`
+	RendererVersion string           `json:"renderer_version,omitempty"`
+	RenderError     bool             `json:"render_error,omitempty"`
 }
 
 type rollbackRequest struct {
@@ -92,15 +103,33 @@ func (a *HistoryAPI) getRevision(w http.ResponseWriter, r *http.Request) {
 		httpx.WriteError(w, r, http.StatusBadRequest, httpx.CodeBadRequest, "路径 rid 不是合法 UUID")
 		return
 	}
+	includeRender := r.URL.Query().Get("include_render")
+	if includeRender != "" && includeRender != "true" && includeRender != "false" {
+		httpx.WriteError(w, r, http.StatusBadRequest, httpx.CodeBadRequest, "include_render 必须为 true 或 false")
+		return
+	}
 	rev, snap, err := a.pages.GetRevision(r.Context(), pageID, revisionID)
 	if err != nil {
 		serviceError(w, r, err)
 		return
 	}
-	httpx.WriteJSON(w, http.StatusOK, revisionDetailResponse{
-		Revision: toRevisionResponse(rev),
-		AST:      snap.AST,
-	})
+	resp := revisionDetailResponse{Revision: toRevisionResponse(rev), AST: snap.AST}
+	if includeRender == "true" {
+		doc, err := ast.Parse(snap.AST)
+		if err != nil {
+			serviceError(w, r, err)
+			return
+		}
+		html, err := render.RenderHistoryHTML(r.Context(), doc, a.dynamic)
+		if err != nil {
+			// Keep the immutable AST and structural comparison available on resolver failure.
+			resp.RenderError = true
+		} else {
+			resp.HTML = &html
+			resp.RendererVersion = render.RendererVersion
+		}
+	}
+	httpx.WriteJSON(w, http.StatusOK, resp)
 }
 
 // diffRevisions GET /api/v1/pages/{id}/diff?from=&to=：当前登录 Wiki 的两版结构 Diff。

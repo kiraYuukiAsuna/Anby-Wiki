@@ -32,6 +32,7 @@ type renderContext struct {
 	ctx             context.Context
 	components      ComponentRenderer
 	claims          ClaimRenderer
+	historyBlocks   bool
 }
 
 // ComponentRenderer 由装配层实现，负责校验冻结组件版本并解析 Entity/Claim。
@@ -150,7 +151,49 @@ func renderBlocks(b *strings.Builder, blocks []*ast.Block, ctx *renderContext) e
 	return nil
 }
 
+// RenderHistoryHTML preserves reading layout while exposing stable block anchors.
+// These annotations are request-only and never change the stored projection.
+func RenderHistoryHTML(ctx context.Context, doc *ast.Document, dynamic DynamicRenderer) (string, error) {
+	if doc == nil {
+		return "", fmt.Errorf("render: doc 为 nil")
+	}
+	rc := newRenderContext(ctx, dynamic, dynamic, nil)
+	rc.historyBlocks = true
+	var b strings.Builder
+	if err := renderBlocks(&b, doc.Children, rc); err != nil {
+		return "", err
+	}
+	return b.String(), nil
+}
+
+func historyBlockAttribute(blk *ast.Block, ctx *renderContext) string {
+	if !ctx.historyBlocks {
+		return ""
+	}
+	return ` data-history-block-id="` + html.EscapeString(blk.ID) + `"`
+}
+
 func renderBlock(b *strings.Builder, blk *ast.Block, ctx *renderContext) error {
+	if !ctx.historyBlocks {
+		return renderBlockContent(b, blk, ctx)
+	}
+	var fragment strings.Builder
+	if err := renderBlockContent(&fragment, blk, ctx); err != nil {
+		return err
+	}
+	content := fragment.String()
+	// Annotate the existing root, avoiding wrappers that break floats and tables.
+	end := strings.IndexAny(content, " >")
+	if !strings.HasPrefix(content, "<") || end < 0 {
+		return fmt.Errorf("render: history block has no root element")
+	}
+	b.WriteString(content[:end])
+	b.WriteString(historyBlockAttribute(blk, ctx))
+	b.WriteString(content[end:])
+	return nil
+}
+
+func renderBlockContent(b *strings.Builder, blk *ast.Block, ctx *renderContext) error {
 	switch blk.Type {
 	case ast.BlockHeading:
 		level := blk.Level
@@ -638,7 +681,7 @@ func renderTableRow(
 	rowHeader bool,
 	ctx *renderContext,
 ) error {
-	b.WriteString("<tr>")
+	fmt.Fprintf(b, "<tr%s>", historyBlockAttribute(row, ctx))
 	for cellIndex, cell := range row.Children {
 		tag, scope := "td", ""
 		if columnHeader {
@@ -646,7 +689,7 @@ func renderTableRow(
 		} else if rowHeader && cellIndex == 0 {
 			tag, scope = "th", "row"
 		}
-		fmt.Fprintf(b, "<%s", tag)
+		fmt.Fprintf(b, "<%s%s", tag, historyBlockAttribute(cell, ctx))
 		if scope != "" {
 			fmt.Fprintf(b, ` scope="%s"`, scope)
 		}

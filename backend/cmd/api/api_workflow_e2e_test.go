@@ -970,9 +970,23 @@ func testPageWorkflow(
 	requestE2EMap(t, client, http.MethodGet,
 		fmt.Sprintf("%s/api/v1/pages/%s/revisions?page_size=10", baseURL, firstID),
 		nil, http.StatusOK)
-	requestE2EMap(t, client, http.MethodGet,
+	detail := requestE2EMap(t, client, http.MethodGet,
 		fmt.Sprintf("%s/api/v1/pages/%s/revisions/%s",
 			baseURL, firstID, updatedRevisionID), nil, http.StatusOK)
+	preview := requestE2EMap(t, client, http.MethodGet,
+		fmt.Sprintf("%s/api/v1/pages/%s/revisions/%s?include_render=true",
+			baseURL, firstID, updatedRevisionID), nil, http.StatusOK)
+	if detail["html"] != nil || preview["renderer_version"] == nil ||
+		!strings.Contains(fmt.Sprint(preview["html"]), "data-history-block-id=") ||
+		fmt.Sprint(preview["ast_json"]) != fmt.Sprint(detail["ast_json"]) {
+		t.Fatal("historical preview must be opt-in and preserve the immutable AST")
+	}
+	requestE2EMap(t, client, http.MethodGet,
+		fmt.Sprintf("%s/api/v1/pages/%s/revisions/%s?include_render=invalid",
+			baseURL, firstID, updatedRevisionID), nil, http.StatusBadRequest)
+	requestE2EMap(t, client, http.MethodGet,
+		fmt.Sprintf("%s/api/v1/pages/%s/revisions/%s?include_render=true",
+			baseURL, secondID, updatedRevisionID), nil, http.StatusNotFound)
 	requestE2EMap(t, client, http.MethodGet,
 		fmt.Sprintf("%s/api/v1/pages/%s/diff?from=%s&to=%s",
 			baseURL, firstID, firstRevisionID, updatedRevisionID), nil, http.StatusOK)

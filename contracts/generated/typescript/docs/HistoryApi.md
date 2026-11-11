@@ -95,11 +95,11 @@ example().catch(console.error);
 
 ## getRevision
 
-> RevisionDetail getRevision(id, rid)
+> RevisionDetail getRevision(id, rid, includeRender)
 
 单版详情
 
-读取当前登录 Wiki 页面指定 Revision 的元信息与 canonical AST（不含 html）。Revision 不存在或不属于该页面返回 404 （跨页访问不泄露存在性）。
+读取当前登录 Wiki 页面指定 Revision 的元信息与 canonical AST。include_render&#x3D;true 时附带使用当前阅读渲染器生成的 HTML； 引用知识数据按当前状态解析，不代表发布时的依赖快照。Revision 不存在或不属于该页面返回 404 （跨页访问不泄露存在性）。
 
 ### Example
 
@@ -125,6 +125,8 @@ async function example() {
     id: 38400000-8cf0-11bd-b23e-10b96e4ef00d,
     // string | Revision ID（UUIDv7）
     rid: 38400000-8cf0-11bd-b23e-10b96e4ef00d,
+    // boolean | 包含只读页面预览和稳定块定位属性；动态引用按当前数据解析。 (optional)
+    includeRender: true,
   } satisfies GetRevisionRequest;
 
   try {
@@ -146,6 +148,7 @@ example().catch(console.error);
 |------------- | ------------- | ------------- | -------------|
 | **id** | `string` | 页面 ID（UUIDv7） | [Defaults to `undefined`] |
 | **rid** | `string` | Revision ID（UUIDv7） | [Defaults to `undefined`] |
+| **includeRender** | `boolean` | 包含只读页面预览和稳定块定位属性；动态引用按当前数据解析。 | [Optional] [Defaults to `false`] |
 
 ### Return type
 

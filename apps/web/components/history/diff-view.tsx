@@ -1,4 +1,4 @@
-// 结构 Diff 视图（M2-T05）：/pages/[id]/diff 的展示主体（纯渲染，无客户端交互）。
+// 原始结构 Diff：历史对比的结构详情，以及冲突与提案预览共用。
 //
 // 按 DocumentDiff.changes 展示四类块级变更：
 // added（绿）/ removed（红）/ changed（黄，含字段级 before/after）/ moved（蓝，before→after path）。

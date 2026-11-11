@@ -1,7 +1,7 @@
 
 # RevisionDetail
 
-单版详情：Revision 元信息 + canonical AST（不含 html）
+单版详情：Revision 元信息 + canonical AST，可选当前渲染器生成的只读预览
 
 ## Properties
 
@@ -9,6 +9,9 @@ Name | Type
 ------------ | -------------
 `revision` | [Revision](Revision.md)
 `astJson` | { [key: string]: any; }
+`html` | string
+`rendererVersion` | string
+`renderError` | boolean
 
 ## Example
 
@@ -19,6 +22,9 @@ import type { RevisionDetail } from ''
 const example = {
   "revision": null,
   "astJson": null,
+  "html": null,
+  "rendererVersion": null,
+  "renderError": null,
 } satisfies RevisionDetail
 
 console.log(example)

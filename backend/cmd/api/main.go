@@ -416,7 +416,8 @@ func assembleAPIs(pool *pgxpool.Pool, searchBackends ...wikisearch.SearchAdapter
 		NewReadAPI(svc, projection.NewQueries(pool)).
 			WithAuthorization(authorization).
 			WithDynamicRenderer(projection.NewDynamicHTMLRenderer(pool)),
-		NewHistoryAPI(svc).WithAuthorization(authorization),
+		NewHistoryAPI(svc).WithAuthorization(authorization).
+			WithDynamicRenderer(projection.NewDynamicHTMLRenderer(pool)),
 		NewProjectionAPI(svc, projection.NewQueries(pool)).
 			WithAuthorization(authorization),
 		searchAPI,

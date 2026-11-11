@@ -48,6 +48,7 @@ export interface DiffRevisionsRequest {
 export interface GetRevisionRequest {
     id: string;
     rid: string;
+    includeRender?: boolean;
 }
 
 export interface ListRevisionsRequest {
@@ -163,6 +164,10 @@ export class HistoryApi extends runtime.BaseAPI {
 
         const queryParameters: any = {};
 
+        if (requestParameters['includeRender'] != null) {
+            queryParameters['include_render'] = requestParameters['includeRender'];
+        }
+
         const headerParameters: runtime.HTTPHeaders = {};
 
         if (this.configuration && this.configuration.accessToken) {
@@ -187,7 +192,7 @@ export class HistoryApi extends runtime.BaseAPI {
     }
 
     /**
-     * 读取当前登录 Wiki 页面指定 Revision 的元信息与 canonical AST（不含 html）。Revision 不存在或不属于该页面返回 404 （跨页访问不泄露存在性）。
+     * 读取当前登录 Wiki 页面指定 Revision 的元信息与 canonical AST。include_render=true 时附带使用当前阅读渲染器生成的 HTML； 引用知识数据按当前状态解析，不代表发布时的依赖快照。Revision 不存在或不属于该页面返回 404 （跨页访问不泄露存在性）。
      * 单版详情
      */
     async getRevisionRaw(requestParameters: GetRevisionRequest, initOverrides?: RequestInit | runtime.InitOverrideFunction): Promise<runtime.ApiResponse<RevisionDetail>> {
@@ -198,7 +203,7 @@ export class HistoryApi extends runtime.BaseAPI {
     }
 
     /**
-     * 读取当前登录 Wiki 页面指定 Revision 的元信息与 canonical AST（不含 html）。Revision 不存在或不属于该页面返回 404 （跨页访问不泄露存在性）。
+     * 读取当前登录 Wiki 页面指定 Revision 的元信息与 canonical AST。include_render=true 时附带使用当前阅读渲染器生成的 HTML； 引用知识数据按当前状态解析，不代表发布时的依赖快照。Revision 不存在或不属于该页面返回 404 （跨页访问不泄露存在性）。
      * 单版详情
      */
     async getRevision(requestParameters: GetRevisionRequest, initOverrides?: RequestInit | runtime.InitOverrideFunction): Promise<RevisionDetail> {

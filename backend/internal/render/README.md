@@ -5,6 +5,10 @@
 随 `PageWithContent.content.html` 返回。渲染直连 ContentSnapshot；
 M3 引入 RenderedPage 投影与缓存时复用本包，并按 `RendererVersion` 记录渲染版本。
 
+历史版本的 `RenderHistoryHTML` 复用同一渲染逻辑，在既有块根元素上附加
+`data-history-block-id`，表格行和单元格也保留独立定位；不插入布局包装、不写投影。
+动态引用使用当前知识数据，调用方须说明其不代表发布时的依赖快照。
+
 ## 渲染规则
 
 ### Block

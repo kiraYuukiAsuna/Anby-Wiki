@@ -20,7 +20,7 @@ export default async function RevisionDetailPage({
   const apiOptions = await serverApiOptions();
   const [pageResult, detailResult] = await Promise.all([
     fetchPageById(id),
-    fetchRevisionDetail(id, rid, apiOptions),
+    fetchRevisionDetail(id, rid, apiOptions, true),
   ]);
 
   if (pageResult.kind !== "ok" || detailResult.kind === "not_found") {

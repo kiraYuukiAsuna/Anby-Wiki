@@ -22,7 +22,7 @@ import {
 } from './Revision';
 
 /**
- * 单版详情：Revision 元信息 + canonical AST（不含 html）
+ * 单版详情：Revision 元信息 + canonical AST，可选当前渲染器生成的只读预览
  * @export
  * @interface RevisionDetail
  */
@@ -41,6 +41,24 @@ export interface RevisionDetail {
      * @memberof RevisionDetail
      */
     astJson: { [key: string]: any; };
+    /**
+     * include_render=true 且渲染成功时返回；包含 data-history-block-id 定位属性，引用数据按当前状态解析。
+     * @type {string}
+     * @memberof RevisionDetail
+     */
+    html?: string;
+    /**
+     * 生成 html 的阅读渲染器版本。
+     * @type {string}
+     * @memberof RevisionDetail
+     */
+    rendererVersion?: string;
+    /**
+     * 预览渲染失败时为 true；canonical AST 仍可用于结构对比。
+     * @type {boolean}
+     * @memberof RevisionDetail
+     */
+    renderError?: boolean;
 }
 
 /**
@@ -64,6 +82,9 @@ export function RevisionDetailFromJSONTyped(json: any, ignoreDiscriminator: bool
 
         'revision': RevisionFromJSON(json['revision']),
         'astJson': json['ast_json'],
+        'html': json['html'] == null ? undefined : json['html'],
+        'rendererVersion': json['renderer_version'] == null ? undefined : json['renderer_version'],
+        'renderError': json['render_error'] == null ? undefined : json['render_error'],
     };
 }
 
@@ -80,6 +101,9 @@ export function RevisionDetailToJSONTyped(value?: RevisionDetail | null, ignoreD
 
         'revision': RevisionToJSON(value['revision']),
         'ast_json': value['astJson'],
+        'html': value['html'],
+        'renderer_version': value['rendererVersion'],
+        'render_error': value['renderError'],
     };
 }
 

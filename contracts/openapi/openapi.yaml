@@ -3490,12 +3490,17 @@ paths:
       summary: 单版详情
       description: |
         读取当前登录 Wiki 页面指定 Revision 的元信息与
-        canonical AST（不含 html）。Revision 不存在或不属于该页面返回 404
+        canonical AST。include_render=true 时附带使用当前阅读渲染器生成的 HTML；
+        引用知识数据按当前状态解析，不代表发布时的依赖快照。Revision 不存在或不属于该页面返回 404
         （跨页访问不泄露存在性）。
       tags: [history]
       parameters:
         - $ref: "#/components/parameters/PageId"
         - $ref: "#/components/parameters/RevisionId"
+        - name: include_render
+          in: query
+          schema: { type: boolean, default: false }
+          description: 包含只读页面预览和稳定块定位属性；动态引用按当前数据解析。
       responses:
         "200":
           description: Revision 元信息 + canonical AST
@@ -10400,7 +10405,7 @@ components:
     RevisionDetail:
       type: object
       required: [revision, ast_json]
-      description: 单版详情：Revision 元信息 + canonical AST（不含 html）
+      description: 单版详情：Revision 元信息 + canonical AST，可选当前渲染器生成的只读预览
       properties:
         revision:
           $ref: "#/components/schemas/Revision"
@@ -10410,6 +10415,15 @@ components:
           description: |
             该 Revision 的 canonical Typed Block AST
             （权威 Schema：contracts/schemas/ast/v1/ast.schema.json）。
+        html:
+          type: string
+          description: include_render=true 且渲染成功时返回；包含 data-history-block-id 定位属性，引用数据按当前状态解析。
+        renderer_version:
+          type: string
+          description: 生成 html 的阅读渲染器版本。
+        render_error:
+          type: boolean
+          description: 预览渲染失败时为 true；canonical AST 仍可用于结构对比。
     RollbackRequest:
       type: object
       required: [target_revision_id]

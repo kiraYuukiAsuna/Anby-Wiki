@@ -1,7 +1,8 @@
 // 单版详情视图（M2-T05）：/pages/[id]/history/[rid] 的展示主体。
-// Revision 元信息 + 该版 AST 只读渲染（复用 components/ast）+「基于此版本回滚」。
+// Revision 元信息 + 阅读渲染器预览，失败时保留 AST 降级与回滚入口。
 import type { RevisionDetail } from "../../../../contracts/generated/typescript";
 
+import { ServerRenderedDocument } from "@/components/server-rendered-document";
 import { AstDocument } from "@/components/ast";
 import { parseDocument } from "@/lib/ast/schema";
 
@@ -79,7 +80,10 @@ export function RevisionDetailView({
         <RollbackButton pageId={pageId} revision={revision} />
       </header>
 
-      <AstDocument document={document} />
+      {detail.html !== undefined ? <>
+        <p className="mb-4 text-xs text-muted-foreground">引用数据按当前状态展示。</p>
+        <ServerRenderedDocument html={detail.html} rendererVersion={detail.rendererVersion ?? ""} />
+      </> : <AstDocument document={document} />}
     </article>
   );
 }

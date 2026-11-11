@@ -50,9 +50,10 @@ export async function fetchRevisionDetail(
   id: string,
   rid: string,
   options: ConfigurationParameters = {},
+  includeRender = false,
 ): Promise<FetchHistoryResult<RevisionDetail>> {
   const api = historyApi(options);
-  return fetchHistory(() => api.getRevision({ id, rid }));
+  return fetchHistory(() => api.getRevision({ id, rid, includeRender }));
 }
 
 /** 读取两版结构 Diff（from=base，to=current）。 */
