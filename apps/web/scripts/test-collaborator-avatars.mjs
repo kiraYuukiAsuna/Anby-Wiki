@@ -41,6 +41,16 @@ try {
   await check('click opens selectable profile details and Escape closes them',async()=>{
     await person(31).click();const details=page.getByRole('dialog',{name:'爱丽丝的资料'});await details.waitFor();assert((await details.innerText()).includes('member31@example.com'));await page.keyboard.press('Escape');await details.waitFor({state:'detached'});
   });
+  await check('hover and click profile panels share the same position and size',async()=>{
+    for(const width of [1280,720,390,320]){
+      await page.setViewportSize({width,height:900});await root.click();await person(31).hover();
+      const hoverPanel=page.locator('[data-radix-popper-content-wrapper]').filter({has:page.getByRole('tooltip')});await hoverPanel.waitFor();
+      const hover=await hoverPanel.boundingBox();await person(31).click();const details=page.getByRole('dialog',{name:'爱丽丝的资料'});await details.waitFor();const click=await details.boundingBox();
+      for(const key of ['x','y','width','height'])assert(Math.abs(hover[key]-click[key])<1,`${width}px ${key}: hover=${hover[key]}, click=${click[key]}`);
+      await page.keyboard.press('Escape');await details.waitFor({state:'detached'});
+    }
+    await page.setViewportSize({width:1280,height:900});
+  });
   await check('multiple tabs count once per person and own tabs are excluded',async()=>{
     send(31,131,{actor_display_name:'爱丽丝'});send(1,101);await page.waitForTimeout(100);assert.equal(await avatars().count(),1);assert.equal(await page.getByRole('group',{name:'1 位协作者在线'}).count(),1);
   });

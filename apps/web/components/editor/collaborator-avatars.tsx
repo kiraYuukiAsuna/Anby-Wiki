@@ -35,7 +35,7 @@ export function CollaboratorAvatars({ peers, actorId }: { peers: CollaborationPr
           <Tooltip.Trigger asChild><Popover.Trigger asChild>
             <button type="button" className={avatarClass} aria-label={presenceLabel(person)} data-collaborator-id={person.actorId}><Initial person={person} /></button>
           </Popover.Trigger></Tooltip.Trigger>
-          <Tooltip.Portal><Tooltip.Content side="bottom" sideOffset={6} collisionPadding={16} className={panelClass}><Identity person={person} /></Tooltip.Content></Tooltip.Portal>
+          <Tooltip.Portal><Tooltip.Content side="bottom" align="start" sideOffset={6} collisionPadding={16} className={panelClass}><Identity person={person} /></Tooltip.Content></Tooltip.Portal>
         </Tooltip.Root>
         <Popover.Portal><Popover.Content side="bottom" align="start" sideOffset={6} collisionPadding={16} className={panelClass} aria-label={`${presenceLabel(person)}的资料`}><Identity person={person} /></Popover.Content></Popover.Portal>
       </Popover.Root>)}
