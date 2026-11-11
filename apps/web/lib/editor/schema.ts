@@ -8,9 +8,6 @@ import { toast } from "sonner";
 import { assetsApi } from "@/lib/api";
 import { ResourcePicker, type ResourceKind, type MediaKind, type ResourceChoice } from "@/components/editor/resource-picker";
 import { AnchorPicker, BreadcrumbFields } from "@/components/editor/reference-fields";
-import { ComponentInsertDialog } from "@/components/editor/component-insert-button";
-import { Button } from "@/components/ui/button";
-import type { ComponentSelection } from "@/components/components/component-configure";
 import { BlockView } from "@/components/ast";
 import { toAst } from "@/lib/editor/toAst";
 import { Extension, Mark, Node, mergeAttributes, type JSONContent } from "@tiptap/core";
@@ -84,10 +81,6 @@ function textValue(value: unknown): string {
   return typeof value === "string" ? value : value == null ? "" : String(value);
 }
 
-function numberValue(value: unknown, fallback: number): number {
-  return typeof value === "number" && Number.isFinite(value) ? value : fallback;
-}
-
 function updateAttrs(props: ReactNodeViewProps, attrs: Record<string, unknown>) {
   const pos = props.getPos();
   if (pos === undefined || !props.editor.isEditable) return false;
@@ -140,16 +133,6 @@ function ResourceInput(props: ReactNodeViewProps & { attrName: string; label: st
   }));
 }
 
-function ComponentBlockView(props: ReactNodeViewProps) {
-  const [open, setOpen] = useState(false);
-  const attrs = props.node.attrs;
-  const selection: ComponentSelection = { componentId: textValue(attrs.componentId), componentVersion: numberValue(attrs.componentVersion, 1), entityId: textValue(attrs.entityId), displayConfig: JSON.parse(textValue(attrs.displayConfig) || "{}") };
-  return React.createElement(BlockShell, { ...props, title: "知识组件", summary: `v${selection.componentVersion}`, className: "ast-component" },
-    React.createElement(Button, { type: "button", variant: "outline", onClick: () => setOpen(true) }, "选择组件与实体"),
-    React.createElement(ComponentInsertDialog, { open, onOpenChange: setOpen, initialSelection: selection, onInsert: value => updateAttrs(props, { ...value, displayConfig: JSON.stringify(value.displayConfig) }) }),
-  );
-}
-
 function Field({ label, children }: { label: string; children?: React.ReactNode }) {
   return React.createElement("label", { className: FIELD_STYLE },
     React.createElement("span", { className: "ast-editable-block__label" }, label),
@@ -175,28 +158,6 @@ function TextInput(props: ReactNodeViewProps & { attrName: string; label: string
     props.multiline
       ? React.createElement("textarea", { ...common, rows: 4 })
       : React.createElement("input", { ...common, type: props.type ?? "text" }),
-  );
-}
-
-function NumberInput(props: ReactNodeViewProps & { attrName: string; label: string; min?: number; max?: number; step?: number; fallback: number }) {
-  const value = numberValue(props.node.attrs[props.attrName], props.fallback);
-  return React.createElement(Field, { label: props.label },
-    React.createElement("input", {
-      className: CONTROL_STYLE,
-      contentEditable: false,
-      type: "number",
-      key: value,
-      defaultValue: String(value),
-      disabled: !props.editor.isEditable,
-      min: props.min,
-      max: props.max,
-      step: props.step,
-      onBlur: (event: React.FocusEvent<HTMLInputElement>) => {
-        const next = Number(event.currentTarget.value);
-        if (!event.currentTarget.value.trim() || !Number.isFinite(next) || !updateAttr(props, props.attrName, next)) event.currentTarget.value = String(value);
-      },
-      onKeyDown: (event: React.KeyboardEvent<HTMLInputElement>) => event.stopPropagation(),
-    }),
   );
 }
 
@@ -248,12 +209,6 @@ function EquationView(props: ReactNodeViewProps) {
   ] });
 }
 
-function SimpleAttrsView(props: ReactNodeViewProps & { title: string; summaryAttr?: string; fields: { attr: string; label: string; multiline?: boolean; number?: boolean; fallback?: number }[]; className?: string }) {
-  const summary = props.summaryAttr ? textValue(props.node.attrs[props.summaryAttr]) : undefined;
-  return React.createElement(LeafView, { ...props, title: props.title, summary, className: props.className, fields: props.fields.map((field) => field.number
-    ? React.createElement(NumberInput, { ...props, key: field.attr, attrName: field.attr, label: field.label, fallback: field.fallback ?? 0 })
-    : React.createElement(TextInput, { ...props, key: field.attr, attrName: field.attr, label: field.label, multiline: field.multiline })) });
-}
 
 function InlineAtomView(props: ReactNodeViewProps & { label: string; className: string; textAttrs: string[]; fields: { attr: string; label: string; type?: string }[] }) {
   const text = props.textAttrs.map((attr) => textValue(props.node.attrs[attr])).filter(Boolean).join(" ");
@@ -545,15 +500,15 @@ export const editorExtensions = [
   containerNode("astTable", "astTableRow+", (props) => React.createElement(TableView, { ...props, onUpdateAttrs: (attrs) => updateAttrs(props, attrs) }), { caption: { default: "" }, hasColumnHeader: { default: false }, hasRowHeader: { default: false } }),
   containerNode("astTableRow", "astTableCell+", () => React.createElement(NodeViewWrapper, { as: "div", className: "ast-table-row" }, React.createElement(NodeViewContent, null))),
   containerNode("astTableCell", "block*", (props) => React.createElement(NodeViewWrapper, { as: "div", className: "ast-table-cell", "data-id": props.node.attrs.id }, React.createElement(NodeViewContent, null))),
-  atomNode("componentBlock", { componentId: { default: "" }, componentVersion: { default: 1 }, entityId: { default: "" }, displayConfig: { default: "{}" } }, ComponentBlockView),
+  atomNode("componentBlock", { componentId: { default: "" }, componentVersion: { default: 1 }, entityId: { default: "" }, displayConfig: { default: "{}" } }, (props) => React.createElement(EditableAtomView, { ...props, onUpdateAttrs: attrs => updateAttrs(props, attrs) })),
   atomNode("imageAsset", { assetRevisionId: { default: "" }, altText: { default: "" }, caption: { default: "" } }, (props) => React.createElement(EditableAtomView, { ...props, onUpdateAttrs: attrs => updateAttrs(props, attrs) })),
   atomNode("videoAsset", { assetRevisionId: { default: "" }, posterAssetRevisionId: { default: "" }, title: { default: "" }, caption: { default: "" } }, (props) => React.createElement(EditableAtomView, { ...props, onUpdateAttrs: attrs => updateAttrs(props, attrs) })),
   atomNode("audioAsset", { assetRevisionId: { default: "" }, title: { default: "" }, artist: { default: "" }, album: { default: "" }, durationSeconds: { default: 0 }, caption: { default: "" } }, (props) => React.createElement(EditableAtomView, { ...props, onUpdateAttrs: attrs => updateAttrs(props, attrs) })),
   atomNode("fileAsset", { assetRevisionId: { default: "" }, name: { default: "" }, caption: { default: "" } }, (props) => React.createElement(EditableAtomView, { ...props, onUpdateAttrs: attrs => updateAttrs(props, attrs) })),
   atomNode("pdfAsset", { assetRevisionId: { default: "" }, title: { default: "" }, startPage: { default: 1 }, height: { default: 640 }, caption: { default: "" } }, (props) => React.createElement(EditableAtomView, { ...props, onUpdateAttrs: attrs => updateAttrs(props, attrs) })),
-  atomNode("bookmark", { url: { default: "" }, title: { default: "" }, description: { default: "" }, siteName: { default: "" }, caption: { default: "" } }, (props) => React.createElement(SimpleAttrsView, { ...props, title: "书签", summaryAttr: "title", className: "ast-bookmark", fields: [{ attr: "url", label: "链接地址" }, { attr: "title", label: "标题" }, { attr: "siteName", label: "站点" }, { attr: "description", label: "描述", multiline: true }, { attr: "caption", label: "说明" }] })),
-  atomNode("linkPreview", { url: { default: "" }, title: { default: "" }, description: { default: "" }, siteName: { default: "" } }, (props) => React.createElement(SimpleAttrsView, { ...props, title: "链接预览", summaryAttr: "title", className: "ast-link-preview", fields: [{ attr: "url", label: "链接地址" }, { attr: "title", label: "标题" }, { attr: "siteName", label: "站点" }, { attr: "description", label: "描述", multiline: true }] })),
-  atomNode("embedBlock", { url: { default: "" }, title: { default: "" }, provider: { default: "none" }, caption: { default: "" } }, (props) => React.createElement(SimpleAttrsView, { ...props, title: "嵌入内容", summaryAttr: "title", className: "ast-embed", fields: [{ attr: "url", label: "链接地址" }, { attr: "provider", label: "提供方" }, { attr: "title", label: "标题" }, { attr: "caption", label: "说明" }] })),
+  atomNode("bookmark", { url: { default: "" }, title: { default: "" }, description: { default: "" }, siteName: { default: "" }, caption: { default: "" } }, (props) => React.createElement(EditableAtomView, { ...props, onUpdateAttrs: attrs => updateAttrs(props, attrs) })),
+  atomNode("linkPreview", { url: { default: "" }, title: { default: "" }, description: { default: "" }, siteName: { default: "" } }, (props) => React.createElement(EditableAtomView, { ...props, onUpdateAttrs: attrs => updateAttrs(props, attrs) })),
+  atomNode("embedBlock", { url: { default: "" }, title: { default: "" }, provider: { default: "none" }, caption: { default: "" } }, (props) => React.createElement(EditableAtomView, { ...props, onUpdateAttrs: attrs => updateAttrs(props, attrs) })),
   inlineAtomNode("pageReference", { targetPageId: { default: "" }, targetHeadingBlockId: { default: "" }, displayText: { default: "" }, resolutionStatus: { default: "" }, targetNamespace: { default: "" }, normalizedTitle: { default: "" }, expectedEntityType: { default: "" } }, (props) => React.createElement(InlineAtomView, { ...props, label: "页面", className: "ast-page-ref", textAttrs: ["displayText", "normalizedTitle"], fields: [{ attr: "displayText", label: "显示文本" }, { attr: "targetPageId", label: "页面" }, { attr: "normalizedTitle", label: "待创建页面标题" }] })),
   inlineAtomNode("pageAnchorReference", { targetPageId: { default: "" }, targetHeadingBlockId: { default: "" }, displayText: { default: "" } }, (props) => React.createElement(InlineAtomView, { ...props, label: "章节链接", className: "ast-page-anchor-ref", textAttrs: ["displayText"], fields: [{ attr: "displayText", label: "显示文本" }, { attr: "targetPageId", label: "页面" }] })),
   inlineAtomNode("entityReference", { entityId: { default: "" }, displayText: { default: "" } }, (props) => React.createElement(InlineAtomView, { ...props, label: "实体", className: "ast-entity-ref", textAttrs: ["displayText"], fields: [{ attr: "displayText", label: "显示文本" }, { attr: "entityId", label: "实体" }] })),

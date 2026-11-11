@@ -358,12 +358,12 @@ export function BlockEditor({
             onInsert={(value) => insertTemplate(editor, { type: "htmlBlock", attrs: { html: value.html, height: value.height, caption: value.caption ?? "" } })}
           />}
           {mediaOpen && <MediaBlockInsertDialog open={mediaOpen} onOpenChange={setMediaOpen} onInsert={(block) => insertAstBlock(editor, block)} />}
-          <ExternalContentInsertDialog
+          {externalContentOpen && <ExternalContentInsertDialog
             open={externalContentOpen}
             onOpenChange={setExternalContentOpen}
             resolvePreview={resolveLinkPreview}
             onInsert={(block) => insertAstBlock(editor, block)}
-          />
+          />}
           <InlineMentionInsertDialog
             open={mentionOpen}
             onOpenChange={setMentionOpen}

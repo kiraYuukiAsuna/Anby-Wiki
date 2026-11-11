@@ -8,12 +8,15 @@ import { Button } from "@/components/ui/button";
 import { PageButtonInsertDialog } from "@/components/editor/page-button-insert-dialog";
 import { HTMLBlockInsertDialog } from "@/components/editor/html-block-insert-dialog";
 import { MediaBlockInsertDialog, type MediaBlock } from "@/components/editor/media-block-insert-dialog";
+import { ExternalContentInsertDialog, type ExternalBlock } from "@/components/editor/external-content-insert-dialog";
+import { ComponentInsertDialog } from "@/components/editor/component-insert-button";
+import { ComponentBlockPreview } from "@/components/editor/component-block-preview";
 import type { Block } from "@/lib/ast/schema";
 import { fromAst } from "@/lib/editor/fromAst";
 import { toAst } from "@/lib/editor/toAst";
 
-type EditableBlock = Extract<Block, { type: "button" | "html" }> | MediaBlock;
-const names = { button: "按钮", html: "HTML", image: "图片", video: "视频", audio: "音频", file: "文件", pdf: "PDF" };
+type EditableBlock = Extract<Block, { type: "button" | "html" | "component" }> | MediaBlock | ExternalBlock;
+const names = { button: "按钮", html: "HTML", image: "图片", video: "视频", audio: "音频", file: "文件", pdf: "PDF", bookmark: "书签", link_preview: "链接预览", embed: "嵌入内容", component: "知识组件" };
 
 export function EditableAtomView(props: ReactNodeViewProps & { onUpdateAttrs: (attrs: Record<string, unknown>) => boolean }) {
   const editable = useEditorState({ editor: props.editor, selector: ({ editor }) => editor.isEditable });
@@ -39,11 +42,13 @@ export function EditableAtomView(props: ReactNodeViewProps & { onUpdateAttrs: (a
   };
   return <NodeViewWrapper as="section" className={`ast-editable-block ast-${block.type}`} data-editor-block-type={props.node.type.name} data-id={block.id} contentEditable={false}>
     {editable && <div className="flex justify-end"><Button ref={trigger} type="button" variant="ghost" size="sm" onClick={() => { baseline.current = JSON.stringify(props.node.toJSON()); setDraft(block); }}><Pencil aria-hidden />编辑{block.type === "html" || block.type === "pdf" ? " " : ""}{names[block.type]}</Button></div>}
-    <div className="ast-editor-preview" onClickCapture={event => {
+    {block.type === "component" ? <ComponentBlockPreview block={block} /> : <div className="ast-editor-preview" onClickCapture={event => {
       if ((event.target as Element).closest("a,button")) { event.preventDefault(); event.stopPropagation(); }
-    }}><BlockView block={block} /></div>
+    }}><BlockView block={block} /></div>}
     {editable && draft && (draft.type === "button" ? <PageButtonInsertDialog open onOpenChange={close} initialValue={draft} onInsert={value => save({ id: draft.id, type: "button", ...value })} />
       : draft.type === "html" ? <HTMLBlockInsertDialog open onOpenChange={close} initialValue={draft} onInsert={value => save({ id: draft.id, type: "html", ...value })} />
+      : draft.type === "bookmark" || draft.type === "link_preview" || draft.type === "embed" ? <ExternalContentInsertDialog open onOpenChange={close} initialBlock={draft} onInsert={save} />
+      : draft.type === "component" ? <ComponentInsertDialog open onOpenChange={close} initialSelection={{ componentId: draft.component_id, componentVersion: draft.component_version, entityId: draft.entity_id, displayConfig: draft.display_config }} onInsert={value => save({ id: draft.id, type: "component", component_id: value.componentId, component_version: value.componentVersion, entity_id: value.entityId, display_config: value.displayConfig })} />
       : <MediaBlockInsertDialog open onOpenChange={close} initialBlock={draft} onInsert={save} />)}
   </NodeViewWrapper>;
 }

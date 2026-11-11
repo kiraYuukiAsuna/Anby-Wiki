@@ -1,7 +1,7 @@
 "use client";
 
 import { Copy, Eye, LoaderCircle, Plus } from "lucide-react";
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { toast } from "sonner";
 import { z } from "zod";
 
@@ -74,6 +74,8 @@ export function ComponentConfigure({
     entityId: string;
   } | null>(null);
   const [loading, setLoading] = useState(false);
+  const request = useRef(0);
+  useEffect(() => () => { request.current++; }, []);
   const dynamic =
     version.rendererRef === COMPONENT_RENDERERS.BuiltinEntityClaimInfobox;
   const selection = (): ComponentSelection | null => {
@@ -99,8 +101,9 @@ export function ComponentConfigure({
       toast.error(
         dynamic ? "请选择实体并填写有效配置" : "显示配置格式不正确，请填写 JSON 对象。",
       );
-      return;
+      return false;
     }
+    const pending = ++request.current;
     setLoading(true);
     try {
       const result = await componentsApi().previewWikiComponentVersion({
@@ -108,40 +111,44 @@ export function ComponentConfigure({
         version: version.version,
         previewWikiComponentRequest: { props, entityId: entityId || undefined },
       });
+      if (pending !== request.current) return false;
       setPreview({ html: result.html, source, entityId });
+      return true;
     } catch {
+      if (pending !== request.current) return false;
       setPreview(null);
       toast.error("组件预览失败", {
         description: "请检查字段配置及实体是否仍然可用。",
       });
+      return false;
     } finally {
-      setLoading(false);
+      if (pending === request.current) setLoading(false);
     }
   };
   const currentPreview =
     preview?.source === source && preview.entityId === entityId;
   return (
     <>
-      <DialogHeader>
+      {!onInsert && <DialogHeader>
         <DialogTitle>
-          {onInsert ? submitLabel : "预览"} {component.name} · v{version.version}
+          预览 {component.name} · v{version.version}
         </DialogTitle>
         <DialogDescription className="sr-only">
           {dynamic
             ? "选择实体和要显示的属性，预览已发布的内容。"
             : "填写资料卡后可预览效果。插入页面时需要选择关联的实体。"}
         </DialogDescription>
-      </DialogHeader>
+      </DialogHeader>}
       <div className="grid max-h-[65vh] min-w-0 gap-5 overflow-y-auto lg:grid-cols-2">
-        <div className="min-w-0 space-y-4">
+        <fieldset disabled={loading} className="min-w-0 space-y-4">
+          <ComponentEntityPicker value={entityId} onChange={setEntityId} />
           <ComponentPropsForm
             schema={version.propsSchema}
             renderer={version.rendererRef}
             source={source}
             onChange={setSource}
           />
-          <ComponentEntityPicker value={entityId} onChange={setEntityId} />
-        </div>
+        </fieldset>
         <div className="min-w-0 rounded-xl border bg-muted/20 p-4 lg:self-start">
           <p className="mb-3 text-xs font-medium text-muted-foreground">
             预览
@@ -161,8 +168,8 @@ export function ComponentConfigure({
         </div>
       </div>
       <DialogFooter className="flex-wrap">
-        <Button type="button" variant="outline" onClick={onClose}>
-          关闭
+        <Button type="button" variant="outline" onClick={() => { request.current++; onClose(); }}>
+          {onInsert ? "取消" : "关闭"}
         </Button>
         <Button
           type="button"
@@ -180,11 +187,12 @@ export function ComponentConfigure({
         {version.status === "published" ? (
           <Button
             type="button"
-            disabled={loading || !currentPreview || !entityId}
+            disabled={loading || !entityId || (!onInsert && !currentPreview)}
             onClick={async () => {
               const value = selection();
               if (!value) return;
               if (onInsert) {
+                if (!currentPreview && !await runPreview()) return;
                 if (onInsert(value) !== false) onClose();
               } else {
                 try {

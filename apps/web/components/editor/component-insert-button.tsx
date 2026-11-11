@@ -42,9 +42,8 @@ function ComponentPicker({ pageId, initialSelection, onClose, onInsert }: {
   const primary = bindings.data?.items.find(binding => binding.role === "primary");
   const component = selected.data;
   const unavailable = selected.error || versions.error;
-  const configured = component && version && !unavailable && !selected.isLoading && !versions.isLoading && !bindings.isLoading;
   return <>
-    {!configured ? <DialogHeader><DialogTitle>{initialSelection ? "编辑知识组件" : "插入知识组件"}</DialogTitle><DialogDescription className="sr-only">选择组件、已发布版本和关联实体。</DialogDescription></DialogHeader> : null}
+    <DialogHeader><DialogTitle>{initialSelection ? "编辑知识组件" : "插入知识组件"}</DialogTitle><DialogDescription className="sr-only">选择组件、已发布版本和关联实体。</DialogDescription></DialogHeader>
     <div className="grid gap-3 border-b pb-4 sm:grid-cols-2">
       <div className="space-y-2"><Label>组件</Label><ResourcePicker kind="component" value={selectedId} valueLabel={component?.name} onChange={item => { if (item.id !== selectedId) { setSelectedId(item.id); setSelectedVersion(0); } }} /></div>
       <div className="space-y-2"><Label htmlFor="insert-component-version">已发布版本</Label><select id="insert-component-version" value={version?.version ?? selectedVersion} className="h-9 w-full rounded-lg border bg-background px-2 text-sm" onChange={event => setSelectedVersion(Number(event.target.value))}>
@@ -78,7 +77,7 @@ export function ComponentInsertDialog({
   const { session } = useSession();
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="sm:max-w-4xl">
+      <DialogContent className="max-h-[90vh] overflow-y-auto sm:max-w-4xl" onKeyDown={event => event.stopPropagation()}>
         {open ? (
           <ComponentPicker
             key={`${session?.actorId}:${session?.wikiId}`}

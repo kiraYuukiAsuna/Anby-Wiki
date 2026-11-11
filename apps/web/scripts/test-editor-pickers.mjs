@@ -102,13 +102,12 @@ try {
   await check('editing preserves pinned version and config; cancellation and atomic undo retain original',async()=>{
     await set([{type:'componentBlock',attrs:{componentId:id(10),componentVersion:1,entityId:id(22),displayConfig:'{"title":"原来的标题"}'}}]);
     const before=await ast();
-    await editor.locator('[data-editor-block-type="componentBlock"] summary').click();
-    await page.getByRole('button',{name:'选择组件与实体'}).click();
+    await page.getByRole('button',{name:'编辑知识组件'}).click();
     assert.equal(await page.locator('#insert-component-version').inputValue(),'1');
     assert.equal(await page.getByLabel('title',{exact:true}).inputValue(),'原来的标题');
     await page.getByRole('button',{name:'关闭',exact:true}).first().click();
     assert.deepEqual(await ast(),before);
-    await page.getByRole('button',{name:'选择组件与实体'}).click();
+    await page.getByRole('button',{name:'编辑知识组件'}).click();
     await choose('实体','安比');
     await page.getByRole('button',{name:'运行预览'}).click();
     await page.getByRole('button',{name:'保存组件',exact:true}).click();
