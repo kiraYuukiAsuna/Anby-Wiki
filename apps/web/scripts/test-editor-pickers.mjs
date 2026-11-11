@@ -124,13 +124,14 @@ try {
     await wait(async()=>assert.equal((await ast()).children[0].asset_revision_id,id(61)));
     assert.equal((await ast()).children[0].alt_text,'安比头像.png');
     await set([{type:'imageAsset',attrs:{assetRevisionId:id(62),altText:'原图'}}]);
-    await editor.locator('[data-editor-block-type="imageAsset"] summary').click();
+    await editor.getByRole('button',{name:'编辑图片',exact:true}).click();
     badMedia=true;
     await choose('文件','安比头像.png');
-    await page.getByText('文件类型不匹配，请重新选择。',{exact:true}).waitFor();
+    await page.getByRole('button',{name:'保存媒体',exact:true}).click();
+    await page.getByText('所选文件版本不是图片',{exact:true}).waitFor();
     assert.equal((await ast()).children[0].asset_revision_id,id(62));
     badMedia=false;
-    await page.getByRole('dialog').last().getByRole('option').filter({hasText:'安比头像.png'}).click();
+    await page.getByRole('button',{name:'保存媒体',exact:true}).click();
     await wait(async()=>assert.equal((await ast()).children[0].asset_revision_id,id(61)));
   });
   await check('person insertion supports failed search retry without raw account IDs',async()=>{
@@ -226,10 +227,9 @@ try {
     await page.getByRole('button',{name:'保存页面路径'}).click();
     assert.equal((await ast()).children[0].items[0].target_page_id,id(71));
     await set([{type:'pageButton',attrs:{label:'添加段落',actionsJson:JSON.stringify([{type:'insert_blocks',target_page_id:id(72),blocks:[{id:id(85),type:'paragraph',content:[{type:'text',text:'待插入的文字'}]}]}])}}]);
-    await editor.locator('[data-editor-block-type="pageButton"] summary').click();
-    await page.getByRole('button',{name:'编辑按钮动作'}).click();
+    await editor.getByRole('button',{name:'编辑按钮',exact:true}).click();
     await choose('页面','人物介绍');
-    await page.getByRole('button',{name:'保存按钮动作'}).click();
+    await page.getByRole('button',{name:'保存按钮'}).click();
     assert.equal((await ast()).children[0].actions[0].target_page_id,id(71));
     assert.equal((await ast()).children[0].actions[0].blocks[0].content[0].text,'待插入的文字');
   });

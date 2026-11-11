@@ -1,16 +1,16 @@
 import React, { useState } from "react";
 import { ColumnsView, ColumnView } from "@/lib/editor/columns";
 import { CalloutView } from "@/lib/editor/callout";
+import { EditableAtomView } from "@/lib/editor/editable-atom";
 import { TableView } from "@/lib/editor/table";
 import { ChevronRight } from "lucide-react";
 import { toast } from "sonner";
 import { assetsApi } from "@/lib/api";
 import { ResourcePicker, type ResourceKind, type MediaKind, type ResourceChoice } from "@/components/editor/resource-picker";
-import { AnchorPicker, BreadcrumbFields, ButtonActionsFields } from "@/components/editor/reference-fields";
+import { AnchorPicker, BreadcrumbFields } from "@/components/editor/reference-fields";
 import { ComponentInsertDialog } from "@/components/editor/component-insert-button";
 import { Button } from "@/components/ui/button";
 import type { ComponentSelection } from "@/components/components/component-configure";
-import type { ButtonAction } from "@/lib/ast/schema";
 import { BlockView } from "@/components/ast";
 import { toAst } from "@/lib/editor/toAst";
 import { Extension, Mark, Node, mergeAttributes, type JSONContent } from "@tiptap/core";
@@ -160,7 +160,6 @@ function Field({ label, children }: { label: string; children?: React.ReactNode 
 function TextInput(props: ReactNodeViewProps & { attrName: string; label: string; multiline?: boolean; type?: string }) {
   const value = textValue(props.node.attrs[props.attrName]);
   if (resourceAttrs[props.attrName]) return React.createElement(ResourceInput, props);
-  if (props.attrName === "actionsJson") return React.createElement(ButtonActionsFields, { value: JSON.parse(value) as ButtonAction[], onChange: actions => updateAttr(props, "actionsJson", JSON.stringify(actions)) });
   const common = {
     className: `${CONTROL_STYLE}${props.multiline ? " ast-editable-block__textarea" : ""}`,
     key: value,
@@ -541,17 +540,17 @@ export const editorExtensions = [
   atomNode("breadcrumb", { itemsJson: { default: "[]" } }, BreadcrumbView),
   containerNode("columnList", "column{2,5}", ColumnsView),
   containerNode("column", "block*", ColumnView, { widthRatio: { default: 1 } }),
-  atomNode("pageButton", { label: { default: "运行操作" }, confirmation: { default: "" }, actionsJson: { default: "[]" } }, (props) => React.createElement(SimpleAttrsView, { ...props, title: "页面按钮", summaryAttr: "label", fields: [{ attr: "label", label: "按钮名称" }, { attr: "confirmation", label: "确认提示" }, { attr: "actionsJson", label: "动作 JSON", multiline: true }] })),
-  atomNode("htmlBlock", { html: { default: "" }, height: { default: 240 }, caption: { default: "" } }, (props) => React.createElement(SimpleAttrsView, { ...props, title: "HTML", summaryAttr: "caption", fields: [{ attr: "height", label: "高度", number: true, fallback: 240 }, { attr: "caption", label: "标题" }, { attr: "html", label: "HTML", multiline: true }] })),
+  atomNode("pageButton", { label: { default: "运行操作" }, confirmation: { default: "" }, actionsJson: { default: "[]" } }, (props) => React.createElement(EditableAtomView, { ...props, onUpdateAttrs: attrs => updateAttrs(props, attrs) })),
+  atomNode("htmlBlock", { html: { default: "" }, height: { default: 240 }, caption: { default: "" } }, (props) => React.createElement(EditableAtomView, { ...props, onUpdateAttrs: attrs => updateAttrs(props, attrs) })),
   containerNode("astTable", "astTableRow+", (props) => React.createElement(TableView, { ...props, onUpdateAttrs: (attrs) => updateAttrs(props, attrs) }), { caption: { default: "" }, hasColumnHeader: { default: false }, hasRowHeader: { default: false } }),
   containerNode("astTableRow", "astTableCell+", () => React.createElement(NodeViewWrapper, { as: "div", className: "ast-table-row" }, React.createElement(NodeViewContent, null))),
   containerNode("astTableCell", "block*", (props) => React.createElement(NodeViewWrapper, { as: "div", className: "ast-table-cell", "data-id": props.node.attrs.id }, React.createElement(NodeViewContent, null))),
   atomNode("componentBlock", { componentId: { default: "" }, componentVersion: { default: 1 }, entityId: { default: "" }, displayConfig: { default: "{}" } }, ComponentBlockView),
-  atomNode("imageAsset", { assetRevisionId: { default: "" }, altText: { default: "" }, caption: { default: "" } }, (props) => React.createElement(SimpleAttrsView, { ...props, title: "图片", summaryAttr: "caption", className: "ast-image", fields: [{ attr: "assetRevisionId", label: "文件" }, { attr: "altText", label: "替代文字" }, { attr: "caption", label: "说明" }] })),
-  atomNode("videoAsset", { assetRevisionId: { default: "" }, posterAssetRevisionId: { default: "" }, title: { default: "" }, caption: { default: "" } }, (props) => React.createElement(SimpleAttrsView, { ...props, title: "视频", summaryAttr: "title", className: "ast-video", fields: [{ attr: "assetRevisionId", label: "文件" }, { attr: "posterAssetRevisionId", label: "封面图片" }, { attr: "title", label: "标题" }, { attr: "caption", label: "说明" }] })),
-  atomNode("audioAsset", { assetRevisionId: { default: "" }, title: { default: "" }, artist: { default: "" }, album: { default: "" }, durationSeconds: { default: 0 }, caption: { default: "" } }, (props) => React.createElement(SimpleAttrsView, { ...props, title: "音频", summaryAttr: "title", className: "ast-audio", fields: [{ attr: "assetRevisionId", label: "文件" }, { attr: "title", label: "标题" }, { attr: "artist", label: "艺术家" }, { attr: "album", label: "专辑" }, { attr: "durationSeconds", label: "时长", number: true, fallback: 0 }, { attr: "caption", label: "说明" }] })),
-  atomNode("fileAsset", { assetRevisionId: { default: "" }, name: { default: "" }, caption: { default: "" } }, (props) => React.createElement(SimpleAttrsView, { ...props, title: "文件", summaryAttr: "name", className: "ast-file", fields: [{ attr: "assetRevisionId", label: "文件" }, { attr: "name", label: "文件名" }, { attr: "caption", label: "说明" }] })),
-  atomNode("pdfAsset", { assetRevisionId: { default: "" }, title: { default: "" }, startPage: { default: 1 }, height: { default: 640 }, caption: { default: "" } }, (props) => React.createElement(SimpleAttrsView, { ...props, title: "PDF", summaryAttr: "title", className: "ast-pdf", fields: [{ attr: "assetRevisionId", label: "文件" }, { attr: "title", label: "标题" }, { attr: "startPage", label: "起始页", number: true, fallback: 1 }, { attr: "height", label: "高度", number: true, fallback: 640 }, { attr: "caption", label: "说明" }] })),
+  atomNode("imageAsset", { assetRevisionId: { default: "" }, altText: { default: "" }, caption: { default: "" } }, (props) => React.createElement(EditableAtomView, { ...props, onUpdateAttrs: attrs => updateAttrs(props, attrs) })),
+  atomNode("videoAsset", { assetRevisionId: { default: "" }, posterAssetRevisionId: { default: "" }, title: { default: "" }, caption: { default: "" } }, (props) => React.createElement(EditableAtomView, { ...props, onUpdateAttrs: attrs => updateAttrs(props, attrs) })),
+  atomNode("audioAsset", { assetRevisionId: { default: "" }, title: { default: "" }, artist: { default: "" }, album: { default: "" }, durationSeconds: { default: 0 }, caption: { default: "" } }, (props) => React.createElement(EditableAtomView, { ...props, onUpdateAttrs: attrs => updateAttrs(props, attrs) })),
+  atomNode("fileAsset", { assetRevisionId: { default: "" }, name: { default: "" }, caption: { default: "" } }, (props) => React.createElement(EditableAtomView, { ...props, onUpdateAttrs: attrs => updateAttrs(props, attrs) })),
+  atomNode("pdfAsset", { assetRevisionId: { default: "" }, title: { default: "" }, startPage: { default: 1 }, height: { default: 640 }, caption: { default: "" } }, (props) => React.createElement(EditableAtomView, { ...props, onUpdateAttrs: attrs => updateAttrs(props, attrs) })),
   atomNode("bookmark", { url: { default: "" }, title: { default: "" }, description: { default: "" }, siteName: { default: "" }, caption: { default: "" } }, (props) => React.createElement(SimpleAttrsView, { ...props, title: "书签", summaryAttr: "title", className: "ast-bookmark", fields: [{ attr: "url", label: "链接地址" }, { attr: "title", label: "标题" }, { attr: "siteName", label: "站点" }, { attr: "description", label: "描述", multiline: true }, { attr: "caption", label: "说明" }] })),
   atomNode("linkPreview", { url: { default: "" }, title: { default: "" }, description: { default: "" }, siteName: { default: "" } }, (props) => React.createElement(SimpleAttrsView, { ...props, title: "链接预览", summaryAttr: "title", className: "ast-link-preview", fields: [{ attr: "url", label: "链接地址" }, { attr: "title", label: "标题" }, { attr: "siteName", label: "站点" }, { attr: "description", label: "描述", multiline: true }] })),
   atomNode("embedBlock", { url: { default: "" }, title: { default: "" }, provider: { default: "none" }, caption: { default: "" } }, (props) => React.createElement(SimpleAttrsView, { ...props, title: "嵌入内容", summaryAttr: "title", className: "ast-embed", fields: [{ attr: "url", label: "链接地址" }, { attr: "provider", label: "提供方" }, { attr: "title", label: "标题" }, { attr: "caption", label: "说明" }] })),

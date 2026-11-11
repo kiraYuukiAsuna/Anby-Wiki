@@ -346,18 +346,18 @@ export function BlockEditor({
             defaultDisplayText={linkDefaultText}
             onSubmit={(url, displayText) => insertExternalLink(editor, url, displayText)}
           />
-          <PageButtonInsertDialog
+          {buttonOpen && <PageButtonInsertDialog
             open={buttonOpen}
             onOpenChange={setButtonOpen}
             currentPageId={pageId}
             onInsert={(value) => insertTemplate(editor, { type: "pageButton", attrs: { label: value.label, confirmation: value.confirmation ?? "", actionsJson: JSON.stringify(value.actions) } })}
-          />
-          <HTMLBlockInsertDialog
+          />}
+          {htmlOpen && <HTMLBlockInsertDialog
             open={htmlOpen}
             onOpenChange={setHTMLOpen}
             onInsert={(value) => insertTemplate(editor, { type: "htmlBlock", attrs: { html: value.html, height: value.height, caption: value.caption ?? "" } })}
-          />
-          <MediaBlockInsertDialog open={mediaOpen} onOpenChange={setMediaOpen} onInsert={(block) => insertAstBlock(editor, block)} />
+          />}
+          {mediaOpen && <MediaBlockInsertDialog open={mediaOpen} onOpenChange={setMediaOpen} onInsert={(block) => insertAstBlock(editor, block)} />}
           <ExternalContentInsertDialog
             open={externalContentOpen}
             onOpenChange={setExternalContentOpen}

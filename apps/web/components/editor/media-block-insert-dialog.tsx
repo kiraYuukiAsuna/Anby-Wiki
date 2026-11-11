@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
 
 import { toast } from "sonner";
 
@@ -28,36 +28,44 @@ import { ResourcePicker } from "@/components/editor/resource-picker";
 import { newBlockId } from "@/lib/editor/ids";
 
 type MediaType = "image" | "video" | "audio" | "file" | "pdf";
-type MediaBlock = Extract<Block, { type: MediaType }>;
+export type MediaBlock = Extract<Block, { type: MediaType }>;
 
 export function MediaBlockInsertDialog({
   open,
   onOpenChange,
   onInsert,
+  initialBlock,
 }: {
   open: boolean;
   onOpenChange: (open: boolean) => void;
-  onInsert: (block: MediaBlock) => void;
+  initialBlock?: MediaBlock;
+  onInsert: (block: MediaBlock) => boolean | void;
 }) {
-  const [type, setType] = useState<MediaType>("image");
-  const [revisionId, setRevisionId] = useState("");
-  const [posterRevisionId, setPosterRevisionId] = useState("");
-  const [altText, setAltText] = useState("");
-  const [title, setTitle] = useState("");
-  const [artist, setArtist] = useState("");
-  const [album, setAlbum] = useState("");
-  const [duration, setDuration] = useState("");
-  const [caption, setCaption] = useState("");
-  const [startPage, setStartPage] = useState("1");
-  const [height, setHeight] = useState("640");
+  const [type, setType] = useState<MediaType>(initialBlock?.type ?? "image");
+  const [revisionId, setRevisionId] = useState(initialBlock?.asset_revision_id ?? "");
+  const [posterRevisionId, setPosterRevisionId] = useState(initialBlock?.type === "video" ? initialBlock.poster_asset_revision_id ?? "" : "");
+  const [altText, setAltText] = useState(initialBlock?.type === "image" ? initialBlock.alt_text : "");
+  const [title, setTitle] = useState(initialBlock?.type === "file" ? initialBlock.name : initialBlock && "title" in initialBlock ? initialBlock.title ?? "" : "");
+  const [artist, setArtist] = useState(initialBlock?.type === "audio" ? initialBlock.artist ?? "" : "");
+  const [album, setAlbum] = useState(initialBlock?.type === "audio" ? initialBlock.album ?? "" : "");
+  const [duration, setDuration] = useState(initialBlock?.type === "audio" ? String(initialBlock.duration_seconds ?? "") : "");
+  const [caption, setCaption] = useState(initialBlock?.caption ?? "");
+  const [startPage, setStartPage] = useState(String(initialBlock?.type === "pdf" ? initialBlock.start_page ?? 1 : 1));
+  const [height, setHeight] = useState(String(initialBlock?.type === "pdf" ? initialBlock.height : 640));
   const [submitting, setSubmitting] = useState(false);
 
+  const request = useRef(0);
+  useEffect(() => () => { request.current++; }, []);
+  const changeOpen = (next: boolean) => { if (!next) request.current++; onOpenChange(next); };
+
   const submit = async () => {
+    const pending = ++request.current;
     setSubmitting(true);
     try {
       const revision = await assetsApi().getAssetRevision({
         revisionId: revisionId.trim(),
       });
+      if (pending !== request.current) return;
       if (type === "image" && !revision.mimeType.startsWith("image/")) {
         toast.error("所选文件版本不是图片");
         return;
@@ -78,12 +86,13 @@ export function MediaBlockInsertDialog({
         const poster = await assetsApi().getAssetRevision({
           revisionId: posterRevisionId.trim(),
         });
+        if (pending !== request.current) return;
         if (!poster.mimeType.startsWith("image/")) {
           toast.error("视频封面文件版本不是图片");
           return;
         }
       }
-      const id = newBlockId();
+      const id = initialBlock?.id ?? newBlockId();
       const common = {
         id,
         asset_revision_id: revisionId.trim(),
@@ -133,28 +142,28 @@ export function MediaBlockInsertDialog({
         });
         return;
       }
-      onInsert(parsed.data as MediaBlock);
-      onOpenChange(false);
+      if (pending === request.current && onInsert(parsed.data as MediaBlock) !== false) changeOpen(false);
     } catch {
+      if (pending !== request.current) return;
       toast.error("无法读取文件版本", {
         description: "请重试选择文件，或先到媒体库上传。",
       });
     } finally {
-      setSubmitting(false);
+      if (pending === request.current) setSubmitting(false);
     }
   };
 
   return (
-    <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="max-h-[90vh] overflow-y-auto sm:max-w-lg">
+    <Dialog open={open} onOpenChange={changeOpen}>
+      <DialogContent className="max-h-[90vh] overflow-y-auto sm:max-w-lg" onKeyDown={event => event.stopPropagation()}>
         <DialogHeader>
-          <DialogTitle>插入媒体与文件</DialogTitle>
+          <DialogTitle>{initialBlock ? "编辑媒体与文件" : "插入媒体与文件"}</DialogTitle>
           <DialogDescription>
             页面会使用你选定的文件版本，上传新版本不会替换这里的内容。
           </DialogDescription>
         </DialogHeader>
-        <div className="grid gap-4">
-          <Label>
+        <fieldset disabled={submitting} className="grid min-w-0 gap-4">
+          {!initialBlock && <Label className="grid gap-2">
             类型
             <select
               value={type}
@@ -167,10 +176,10 @@ export function MediaBlockInsertDialog({
               <option value="file">文件</option>
               <option value="pdf">PDF</option>
             </select>
-          </Label>
-          <div className="space-y-2"><Label>文件</Label><ResourcePicker kind="asset" mediaKind={type} value={revisionId} onChange={item => { setRevisionId(item.id); setTitle(item.label); setAltText(item.label); }} /></div>
+          </Label>}
+          <div className="space-y-2"><Label className="grid gap-2">文件</Label><ResourcePicker kind="asset" mediaKind={type} value={revisionId} onChange={item => { setRevisionId(item.id); if (!initialBlock) { setTitle(item.label); setAltText(item.label); } }} /></div>
           {type === "image" ? (
-            <Label>
+            <Label className="grid gap-2">
               替代文字
               <Input
                 value={altText}
@@ -178,7 +187,7 @@ export function MediaBlockInsertDialog({
               />
             </Label>
           ) : (
-            <Label>
+            <Label className="grid gap-2">
               {type === "file" ? "文件名" : "标题"}
               <Input
                 value={title}
@@ -187,25 +196,25 @@ export function MediaBlockInsertDialog({
             </Label>
           )}
           {type === "video" ? (
-            <div className="space-y-2"><Label>封面图片（可选）</Label><ResourcePicker kind="asset" mediaKind="image" label="封面图片" value={posterRevisionId} clearable onChange={item => setPosterRevisionId(item.id)} /></div>
+            <div className="space-y-2"><Label className="grid gap-2">封面图片（可选）</Label><ResourcePicker kind="asset" mediaKind="image" label="封面图片" value={posterRevisionId} clearable onChange={item => setPosterRevisionId(item.id)} /></div>
           ) : null}
           {type === "audio" ? (
             <div className="grid gap-4 sm:grid-cols-2">
-              <Label>
+              <Label className="grid gap-2">
                 艺术家（可选）
                 <Input
                   value={artist}
                   onChange={(event) => setArtist(event.target.value)}
                 />
               </Label>
-              <Label>
+              <Label className="grid gap-2">
                 专辑（可选）
                 <Input
                   value={album}
                   onChange={(event) => setAlbum(event.target.value)}
                 />
               </Label>
-              <Label>
+              <Label className="grid gap-2">
                 时长秒数（可选）
                 <Input
                   type="number"
@@ -219,7 +228,7 @@ export function MediaBlockInsertDialog({
           ) : null}
           {type === "pdf" ? (
             <div className="grid gap-4 sm:grid-cols-2">
-              <Label>
+              <Label className="grid gap-2">
                 起始页
                 <Input
                   type="number"
@@ -228,7 +237,7 @@ export function MediaBlockInsertDialog({
                   onChange={(event) => setStartPage(event.target.value)}
                 />
               </Label>
-              <Label>
+              <Label className="grid gap-2">
                 阅读器高度
                 <Input
                   type="number"
@@ -240,20 +249,20 @@ export function MediaBlockInsertDialog({
               </Label>
             </div>
           ) : null}
-          <Label>
+          <Label className="grid gap-2">
             说明（可选）
             <Input
               value={caption}
               onChange={(event) => setCaption(event.target.value)}
             />
           </Label>
-        </div>
+        </fieldset>
         <DialogFooter>
-          <Button type="button" variant="outline" onClick={() => onOpenChange(false)}>
+          <Button type="button" variant="outline" onClick={() => changeOpen(false)}>
             取消
           </Button>
           <Button type="button" disabled={submitting || !revisionId} onClick={() => void submit()}>
-            插入
+            {initialBlock ? "保存媒体" : "插入"}
           </Button>
         </DialogFooter>
       </DialogContent>

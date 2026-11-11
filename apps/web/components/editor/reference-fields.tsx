@@ -1,18 +1,14 @@
 "use client";
 
 import { useId, useRef, useState } from "react";
-import dynamic from "next/dynamic";
 import { ArrowUp, ArrowDown, ChevronRight, Plus, Trash2 } from "lucide-react";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { Textarea } from "@/components/ui/textarea";
 import { ResourcePicker, type ResourceChoice } from "@/components/editor/resource-picker";
-import { type ButtonAction, type BreadcrumbItem } from "@/lib/ast/schema";
-
-const BlockEditor = dynamic(() => import("@/components/editor/block-editor").then(module => module.BlockEditor), { ssr: false });
+import { type BreadcrumbItem } from "@/lib/ast/schema";
 
 export function AnchorPicker({ pageId, headingId, onChange }: { pageId: string; headingId: string; onChange: (choice: ResourceChoice) => boolean }) {
   const [open, setOpen] = useState(false);
@@ -82,31 +78,6 @@ export function BreadcrumbFields({ value, onChange, editable = true }: { value: 
           if (onChange(items.map(item => ({ ...item, display_text: item.display_text.trim() })))) setOpen(false);
         }}>保存页面路径</Button>
       </DialogFooter>
-    </DialogContent></Dialog>
-  </>;
-}
-
-export function ButtonActionsFields({ value, onChange }: { value: ButtonAction[]; onChange: (value: ButtonAction[]) => boolean }) {
-  const [open, setOpen] = useState(false);
-  const [actions, setActions] = useState(value);
-  const update = (index: number, action: ButtonAction) => setActions(actions.map((old, i) => i === index ? action : old));
-  return <>
-    <Button type="button" variant="outline" onClick={() => { setActions(value); setOpen(true); }}>编辑按钮动作</Button>
-    <Dialog open={open} onOpenChange={setOpen}><DialogContent className="max-h-[90vh] overflow-y-auto sm:max-w-3xl" onKeyDown={event => event.stopPropagation()}><DialogHeader><DialogTitle>按钮动作</DialogTitle><DialogDescription>读者点击并确认后执行。</DialogDescription></DialogHeader>
-      {actions.map((action, index) => <section key={index} className="min-w-0 space-y-3 rounded-lg border p-3">
-        {action.type === "insert_blocks" ? <>
-          <Label>目标页面</Label><ResourcePicker kind="page" value={action.target_page_id} onChange={choice => update(index, { ...action, target_page_id: choice.id })} />
-          <Label>插入内容</Label><BlockEditor initialAst={{ schema_version: 1, type: "document", children: action.blocks }} onChange={doc => update(index, { ...action, blocks: doc.children })} />
-        </> : action.type === "notification" ? <>
-          <Label>通知内容<Input value={action.message} onChange={event => update(index, { ...action, message: event.target.value })} /></Label>
-          <Label>通知级别<select className="h-9 w-full rounded-lg border bg-background px-2" value={action.tone ?? "default"} onChange={event => update(index, { ...action, tone: event.target.value as typeof action.tone })}>{["default", "success", "info", "warning", "error"].map((tone, i) => <option key={tone} value={tone}>{["默认", "成功", "信息", "警告", "错误"][i]}</option>)}</select></Label>
-        </> : action.type === "webhook" ? <>
-          <Label>公网 HTTPS URL<Input value={action.url} onChange={event => update(index, { ...action, url: event.target.value })} /></Label>
-          <Label>请求内容（JSON）<Textarea defaultValue={JSON.stringify(action.payload, null, 2)} onBlur={event => { try { const payload: unknown = JSON.parse(event.target.value); if (payload && typeof payload === "object" && !Array.isArray(payload)) update(index, { ...action, payload: payload as Record<string, unknown> }); else throw new Error("invalid payload"); } catch { event.target.value = JSON.stringify(action.payload, null, 2); toast.error("请求内容需为 JSON 对象，原内容已保留。"); } }} /></Label>
-        </> : <p className="text-sm text-muted-foreground">此旧版数据集动作已停用，原配置保留。</p>}
-        <Button type="button" variant="ghost" disabled={actions.length === 1} onClick={() => setActions(actions.filter((_, i) => i !== index))}>移除动作</Button>
-      </section>)}
-      <Button type="button" onClick={() => { if (onChange(actions)) setOpen(false); }}>保存按钮动作</Button>
     </DialogContent></Dialog>
   </>;
 }
