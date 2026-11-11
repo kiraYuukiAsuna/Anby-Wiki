@@ -182,7 +182,7 @@ export async function PageView({ data }: { data: PageWithContent }) {
         ) : null}
 
         <div className="mb-6 flex min-w-0 flex-col gap-3">
-          <div role="group" aria-label="页面操作" className="-mx-1 flex items-center gap-2 overflow-x-auto px-1 py-1">
+          <div role="group" aria-label="页面操作" className="-mx-1 flex items-center justify-end-safe gap-2 overflow-x-auto px-1 py-1">
             <PageGraphButton pageId={page.id} pageTitle={page.displayTitle} canEdit={data.canEdit} />
             <Button variant="outline" size="sm" asChild className="gap-1">
               <Link href={`/pages/${redirectSourceId}/tools`}>
