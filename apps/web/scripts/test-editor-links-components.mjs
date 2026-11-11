@@ -61,6 +61,10 @@ try {
       const after=await ast();assert.deepEqual(after.children[0],{...before.children[0],title:'新标题',url:'https://example.com/new'});await undo();assert.deepEqual(await ast(),before);await redo();assert.deepEqual(await ast(),after);await page.getByRole('button',{name:'重新载入当前内容'}).click();await root.waitFor();assert.deepEqual(await ast(),after);
     }
   });
+  await check('existing generic embeds remain editable without changing their link-only representation',async()=>{
+    const block={type:'embedBlock',attrs:{id:id(103),url:'https://example.com/legacy',title:'原嵌入标题',caption:'原说明'}};
+    await set([block]);const before=await ast();await open('编辑嵌入内容');await dialog().getByLabel('标题',{exact:true}).fill('新嵌入标题');await dialog().getByRole('button',{name:'保存链接'}).click();assert.deepEqual((await ast()).children[0],{...before.children[0],title:'新嵌入标题'});await undo();assert.deepEqual(await ast(),before);
+  });
   await check('metadata refresh validates URLs, updates only the draft and keeps manual editing available after failure',async()=>{
     await set([link()]);const before=await ast();await open('编辑链接预览');const count=resolves.length;await dialog().getByLabel('链接地址').fill('javascript:alert(1)');await dialog().getByRole('button',{name:'获取网页信息'}).click();assert.equal(resolves.length,count);await dialog().getByRole('button',{name:'保存链接'}).click();assert.deepEqual(await ast(),before);
     await dialog().getByLabel('链接地址').fill('https://example.com/new');await dialog().getByRole('button',{name:'获取网页信息'}).click();await wait(async()=>assert.equal(await dialog().getByLabel('标题',{exact:true}).inputValue(),'网页标题'));assert.deepEqual(await ast(),before);assert.equal(await dialog().getByLabel('摘要',{exact:true}).inputValue(),'网页摘要');
@@ -104,7 +108,7 @@ try {
   });
   await check('external insertion shares the form and reopening discards canceled drafts',async()=>{
     await set([{type:'paragraph'}]);const insert=async()=>{await root.click();await page.keyboard.insertText('/preview');await page.getByRole('button',{name:/外部内容/}).click();};
-    await insert();await dialog().getByLabel('标题',{exact:true}).fill('未保存');await cancel();await insert();assert.equal(await dialog().getByLabel('标题',{exact:true}).inputValue(),'');await dialog().getByLabel('类型').selectOption('link_preview');await dialog().getByLabel('链接地址').fill('https://example.com/insert');await dialog().getByRole('button',{name:'插入',exact:true}).click();await wait(async()=>assert.equal((await ast()).children[0].title,'网页标题'));assert.equal((await ast()).children[0].type,'link_preview');
+    await insert();await dialog().getByLabel('标题',{exact:true}).fill('未保存');await cancel();await insert();assert.equal(await dialog().getByLabel('标题',{exact:true}).inputValue(),'');await dialog().getByLabel('类型').selectOption('embed');await dialog().getByLabel('链接地址').fill('https://example.com/unsupported');await dialog().getByRole('button',{name:'插入',exact:true}).click();assert.equal((await ast()).children.some(b=>b.type==='embed'),false);assert(await dialog().isVisible());await dialog().getByLabel('类型').selectOption('link_preview');await dialog().getByLabel('链接地址').fill('https://example.com/insert');await dialog().getByRole('button',{name:'插入',exact:true}).click();await wait(async()=>assert.equal((await ast()).children[0].title,'网页标题'));assert.equal((await ast()).children[0].type,'link_preview');
   });
   await check('mobile dialogs fit 320px, keep controls accessible and readonly hides editing',async()=>{
     await page.setViewportSize({width:320,height:844});await page.evaluate(()=>document.documentElement.classList.add('dark'));

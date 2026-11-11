@@ -55,8 +55,9 @@ export function ExternalContentInsertDialog({ open, onOpenChange, resolvePreview
   const submit = async () => {
     const id = initialBlock?.id ?? newBlockId();
     if (type === "embed") {
-      const provider = detectEmbedProvider(url);
-      if (!provider) { toast.error("交互式 Embed 只支持 YouTube、Vimeo 与 Figma"); return; }
+      const provider = initialBlock?.type === "embed" && url.trim() === initialBlock.url
+        ? initialBlock.provider : detectEmbedProvider(url) ?? undefined;
+      if (!provider && !initialBlock) { toast.error("交互式 Embed 只支持 YouTube、Vimeo 与 Figma"); return; }
       const parsed = embedBlockSchema.safeParse({ id, type, url: url.trim(), ...(title.trim() ? { title: title.trim() } : {}), provider, ...(caption.trim() ? { caption: caption.trim() } : {}) });
       if (!parsed.success) { toast.error("嵌入内容配置无效", { description: parsed.error.issues[0]?.message }); return; }
       if (onInsert(parsed.data) !== false) changeOpen(false);
