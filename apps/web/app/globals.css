@@ -252,21 +252,22 @@
   line-height: 1.65;
 }
 
-.anby-tiptap-editor .tiptap p,
-.anby-tiptap-editor .tiptap h1,
-.anby-tiptap-editor .tiptap h2,
-.anby-tiptap-editor .tiptap h3,
-.anby-tiptap-editor .tiptap h4,
-.anby-tiptap-editor .tiptap h5,
-.anby-tiptap-editor .tiptap h6,
-.anby-tiptap-editor .tiptap ul,
-.anby-tiptap-editor .tiptap ol,
-.anby-tiptap-editor .tiptap blockquote,
-.anby-tiptap-editor .tiptap pre {
+/* Editor typography stops at server-rendered previews. */
+.anby-tiptap-editor .tiptap p:not(:where(.wiki-rendered *)),
+.anby-tiptap-editor .tiptap h1:not(:where(.wiki-rendered *)),
+.anby-tiptap-editor .tiptap h2:not(:where(.wiki-rendered *)),
+.anby-tiptap-editor .tiptap h3:not(:where(.wiki-rendered *)),
+.anby-tiptap-editor .tiptap h4:not(:where(.wiki-rendered *)),
+.anby-tiptap-editor .tiptap h5:not(:where(.wiki-rendered *)),
+.anby-tiptap-editor .tiptap h6:not(:where(.wiki-rendered *)),
+.anby-tiptap-editor .tiptap ul:not(:where(.wiki-rendered *)),
+.anby-tiptap-editor .tiptap ol:not(:where(.wiki-rendered *)),
+.anby-tiptap-editor .tiptap blockquote:not(:where(.wiki-rendered *)),
+.anby-tiptap-editor .tiptap pre:not(:where(.wiki-rendered *)) {
   margin: 0;
 }
 
-.anby-tiptap-editor .tiptap p {
+.anby-tiptap-editor .tiptap p:not(:where(.wiki-rendered *)) {
   min-height: 1.5em;
 }
 
@@ -274,29 +275,29 @@
   margin-top: 0.7rem;
 }
 
-.anby-tiptap-editor .tiptap h1 {
+.anby-tiptap-editor .tiptap h1:not(:where(.wiki-rendered *)) {
   font-size: 1.7rem;
   font-weight: 750;
   line-height: 1.25;
 }
 
-.anby-tiptap-editor .tiptap h2 {
+.anby-tiptap-editor .tiptap h2:not(:where(.wiki-rendered *)) {
   font-size: 1.35rem;
   font-weight: 700;
   line-height: 1.3;
 }
 
-.anby-tiptap-editor .tiptap h3 {
+.anby-tiptap-editor .tiptap h3:not(:where(.wiki-rendered *)) {
   font-size: 1.15rem;
   font-weight: 650;
 }
 
-.anby-tiptap-editor .tiptap ul,
-.anby-tiptap-editor .tiptap ol {
+.anby-tiptap-editor .tiptap ul:not(:where(.wiki-rendered *)),
+.anby-tiptap-editor .tiptap ol:not(:where(.wiki-rendered *)) {
   padding-left: 1.35rem;
 }
 
-.anby-tiptap-editor .tiptap blockquote {
+.anby-tiptap-editor .tiptap blockquote:not(:where(.wiki-rendered *)) {
   border-left: 3px solid var(--border);
   padding-left: 0.85rem;
   color: var(--muted-foreground);
@@ -1270,7 +1271,7 @@
 .wiki-rendered [data-component-renderer="key-value"] {
   margin-block: 1rem;
   display: grid;
-  grid-template-columns: minmax(8rem, 0.6fr) minmax(0, 1.4fr);
+  grid-template-columns: minmax(0, 0.8fr) minmax(0, 1.2fr);
   overflow: hidden;
   border: 1px solid var(--border);
   border-radius: 0.85rem;
@@ -1296,17 +1297,16 @@
 
 .wiki-rendered.wiki-component-preview .entity-infobox {
   float: none;
-  width: 100%;
+  width: min(22rem, 100%);
   margin: 0;
 }
 
 .wiki-rendered.wiki-component-preview [data-component-renderer="key-value"] {
   margin: 0;
-  grid-template-columns: minmax(0, 0.8fr) minmax(0, 1.2fr);
 }
 
-.wiki-rendered.wiki-component-preview dt,
-.wiki-rendered.wiki-component-preview dd {
+.wiki-rendered [data-component-renderer] dt,
+.wiki-rendered [data-component-renderer] dd {
   min-width: 0;
   overflow-wrap: anywhere;
 }
@@ -1446,16 +1446,16 @@
 
 /* The editable surface uses the reader's typography and actual block previews. */
 .anby-tiptap-editor .tiptap { line-height: 1.75; overflow-wrap: anywhere; }
-.anby-tiptap-editor .tiptap h1 { font-size: 1.875rem; }
-.anby-tiptap-editor .tiptap h2 { font-size: 1.5rem; }
-.anby-tiptap-editor .tiptap h3 { font-size: 1.25rem; }
-.anby-tiptap-editor .tiptap h4 { font-size: 1.125rem; font-weight: 600; }
-.anby-tiptap-editor .tiptap h5, .anby-tiptap-editor .tiptap h6 { font-size: 1rem; font-weight: 600; }
-.anby-tiptap-editor .tiptap ul { list-style: disc; }
-.anby-tiptap-editor .tiptap ol { list-style: decimal; }
-.anby-tiptap-editor .tiptap pre { overflow-x: auto; border: 1px solid var(--border); border-radius: .5rem; padding: 1rem; background: var(--muted); font-family: var(--font-geist-mono), monospace; font-size: .875rem; }
-.anby-tiptap-editor .tiptap :not(pre) > code { border-radius: .25rem; padding: .125rem .25rem; background: var(--muted); font-family: var(--font-geist-mono), monospace; font-size: .875em; }
-.anby-tiptap-editor .tiptap a { color: var(--primary); text-decoration: underline; }
+.anby-tiptap-editor .tiptap h1:not(:where(.wiki-rendered *)) { font-size: 1.875rem; }
+.anby-tiptap-editor .tiptap h2:not(:where(.wiki-rendered *)) { font-size: 1.5rem; }
+.anby-tiptap-editor .tiptap h3:not(:where(.wiki-rendered *)) { font-size: 1.25rem; }
+.anby-tiptap-editor .tiptap h4:not(:where(.wiki-rendered *)) { font-size: 1.125rem; font-weight: 600; }
+.anby-tiptap-editor .tiptap h5:not(:where(.wiki-rendered *)), .anby-tiptap-editor .tiptap h6:not(:where(.wiki-rendered *)) { font-size: 1rem; font-weight: 600; }
+.anby-tiptap-editor .tiptap ul:not(:where(.wiki-rendered *)) { list-style: disc; }
+.anby-tiptap-editor .tiptap ol:not(:where(.wiki-rendered *)) { list-style: decimal; }
+.anby-tiptap-editor .tiptap pre:not(:where(.wiki-rendered *)) { overflow-x: auto; border: 1px solid var(--border); border-radius: .5rem; padding: 1rem; background: var(--muted); font-family: var(--font-geist-mono), monospace; font-size: .875rem; }
+.anby-tiptap-editor .tiptap :not(pre) > code:not(:where(.wiki-rendered *)) { border-radius: .25rem; padding: .125rem .25rem; background: var(--muted); font-family: var(--font-geist-mono), monospace; font-size: .875em; }
+.anby-tiptap-editor .tiptap a:not(:where(.wiki-rendered *)) { color: var(--primary); text-decoration: underline; }
 .anby-tiptap-editor .react-renderer, .ast-editable-block__content { min-width: 0; }
 .ast-editable-block { background: transparent; border-color: transparent; padding: .25rem 0; min-width: 0; }
 .ast-editable-block > details { border: 1px dashed var(--border); border-radius: .375rem; padding: .35rem .5rem; }
@@ -1532,7 +1532,7 @@ button.ast-callout__style:focus-visible { outline: 2px solid var(--ring); outlin
   .ast-columns-content > [data-node-view-content-react] { flex-direction: column; }
   .ast-column-resize { display: none; }
 }
-.anby-tiptap-editor .tiptap h6 { font-size: .875rem; color: var(--muted-foreground); }
+.anby-tiptap-editor .tiptap h6:not(:where(.wiki-rendered *)) { font-size: .875rem; color: var(--muted-foreground); }
 .anby-tiptap-editor pre[caption]:not([caption=""])::after { content: attr(caption); display: block; margin-top: .75rem; border-top: 1px solid var(--border); padding-top: .5rem; font-family: var(--font-geist-sans), sans-serif; color: var(--muted-foreground); }
 :is(.wiki-rendered, [data-ast-document]) :is(p, h1, h2, h3, h4, h5, h6, summary, .todo-content, [role="checkbox"] + span) { white-space: pre-wrap; }
 
