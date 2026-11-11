@@ -17,6 +17,7 @@ import { AstDocument } from "@/components/ast";
 import { ArticleEndMatter } from "@/components/article-end-matter";
 import { ConceptArticleLinks } from "@/components/concept-article-links";
 import { LazySectionDocument } from "@/components/lazy-section-document";
+import { PageGraphButton } from "@/components/page-graph-button";
 import { PageButtonRuntime } from "@/components/page-button-runtime";
 import { PageShareLinkDialog } from "@/components/page-share-link-dialog";
 import { RenamePageButton } from "@/components/rename-page-button";
@@ -185,6 +186,7 @@ export async function PageView({ data }: { data: PageWithContent }) {
             {page.displayTitle}
           </h1>
           <div className="-mx-1 flex w-[calc(100%+0.5rem)] items-center gap-2 overflow-x-auto px-1 pb-1 sm:mx-0 sm:w-auto sm:shrink-0 sm:overflow-visible sm:p-0">
+            <PageGraphButton pageId={page.id} pageTitle={page.displayTitle} canEdit={data.canEdit} />
             <Button variant="ghost" size="sm" asChild className="gap-1">
               <Link href={`/pages/${redirectSourceId}/tools`}>
                 <Wrench aria-hidden className="size-3.5" />
