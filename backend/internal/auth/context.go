@@ -22,6 +22,7 @@ type Principal struct {
 	ActorType       string
 	DisplayName     string
 	Username        string
+	Email           string
 	Method          string
 }
 

@@ -447,7 +447,7 @@ func (s *Service) resolveActorPrincipal(
 	var principal Principal
 	err := s.pool.QueryRow(ctx, `SELECT
 		a.id,w.id,COALESCE(a.wiki_id,$3),w.name,n.id,a.actor_type,a.display_name,
-		COALESCE(la.username,'')
+		COALESCE(la.username,''),COALESCE(la.email,'')
 		FROM actor a
 		JOIN wiki_site w ON w.id=$2
 		JOIN namespace n ON n.wiki_id=w.id AND n.namespace_key='main'
@@ -478,7 +478,7 @@ func (s *Service) resolveActorPrincipal(
 			)`, actorID, targetWikiID, uuid.Nil, MachineActorKeyPrefix).Scan(
 		&principal.ActorID, &principal.WikiID, &principal.HomeWikiID, &principal.WikiName,
 		&principal.MainNamespaceID,
-		&principal.ActorType, &principal.DisplayName, &principal.Username,
+		&principal.ActorType, &principal.DisplayName, &principal.Username, &principal.Email,
 	)
 	if errors.Is(err, pgx.ErrNoRows) {
 		return Principal{}, ErrUnauthenticated

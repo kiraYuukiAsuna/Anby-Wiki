@@ -36,7 +36,9 @@ idempotent; reusing the key with different bytes closes the connection.
 ## Presence
 
 Clients send `{"type":"presence","cursor":{...}}`. The server adds the
-authenticated `actor_id`, `actor_username`, `actor_display_name` and `client_id`.
+authenticated `actor_id`, `actor_username`, `actor_display_name`, optional
+`actor_email` (local account email) and `client_id`. Only authorized editors in
+the same page room receive this profile information.
 These identity fields are never taken from the client payload.
 The cursor uses version 1 with `anchor` and `head`; each has a stable AST
 `block_id`, a UTF-16 `offset` (inline atoms occupy one position), and an optional
@@ -44,7 +46,8 @@ base64 Yjs `relative_position` limited to 256 decoded bytes. Legacy block-only
 cursors remain accepted. The editor resolves relative positions after concurrent
 edits and renders named caret/selection decorations; deleted positions disappear.
 Presence is limited to 4 KiB and is not persisted. A 10-second heartbeat repeats
-the latest cursor; the server excludes the sending connection and remote entries
+the latest cursor, or an empty cursor object before the user selects text. Clients
+announce presence as soon as synchronization completes; the server excludes the sending connection and remote entries
 expire after 30 seconds.
 
 ## Reconnect

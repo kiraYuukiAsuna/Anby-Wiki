@@ -366,11 +366,13 @@ func presenceMessage(value []byte, principal authdomain.Principal, clientID uuid
 		ActorID          uuid.UUID       `json:"actor_id"`
 		ClientID         uuid.UUID       `json:"client_id"`
 		ActorUsername    string          `json:"actor_username,omitempty"`
+		ActorEmail       string          `json:"actor_email,omitempty"`
 		ActorDisplayName string          `json:"actor_display_name,omitempty"`
 		Cursor           json.RawMessage `json:"cursor"`
 	}{
 		Type: "presence", ActorID: principal.ActorID, ClientID: clientID,
 		ActorUsername:    principal.Username,
+		ActorEmail:       principal.Email,
 		ActorDisplayName: principal.DisplayName,
 		Cursor:           input.Cursor,
 	})

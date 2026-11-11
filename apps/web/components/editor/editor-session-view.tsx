@@ -11,10 +11,10 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import dynamic from "next/dynamic";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { UsersRound } from "lucide-react";
 import { toast } from "sonner";
 import { ResponseError } from "../../../../contracts/generated/typescript";
 
+import { CollaboratorAvatars, presenceLabel } from "@/components/editor/collaborator-avatars";
 import { ConflictBanner } from "@/components/editor/conflict-banner";
 import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
@@ -192,6 +192,7 @@ function EditorSessionContent({
       },
       onStatus: (status) => {
         setCollaborationStatus(status);
+        if (status === "offline" || status === "closed" || status === "forbidden") setRemotePresence({});
         setEditorReady(collaboration.hasWorkingState() && status !== "closed" && status !== "forbidden");
       },
       onPresence: receivePresence,
@@ -384,19 +385,19 @@ function EditorSessionContent({
 
   return (
     <div className="mx-auto flex w-full max-w-5xl flex-1 flex-col gap-4 px-4 py-6">
-      <div className="flex items-center gap-3">
-        <div className="min-w-0 flex-1">
+      <div className="flex flex-wrap items-center gap-3">
+        <div className="min-w-0 flex-1 basis-full sm:basis-auto">
           <h1 className="truncate text-xl font-semibold">
             编辑：{displayTitle}
           </h1>
-          <p className="text-xs text-muted-foreground">
-            {baseRevisionId ? "基于当前发布版本编辑" : "首次发布（页面尚无内容）"}
-            {session.dirty ? " · 有未发布改动" : " · 无改动"}
-            {" · "}
+          <div className="mt-1 flex flex-wrap items-center gap-x-1.5 gap-y-1 text-xs text-muted-foreground">
+            <span>{session.dirty ? "有未发布改动" : "无改动"}</span>
+            <span aria-hidden>·</span>
             <span data-collaboration-status={collaborationStatus}>
               {collaborationStatusLabel(collaborationStatus)}
             </span>
-          </p>
+            {collaborationStatus === "online" && <CollaboratorAvatars peers={Object.values(remotePresence)} actorId={actorId} />}
+          </div>
         </div>
         <Button variant="outline" size="sm" asChild>
           <Link href={`/pages/${pageId}`}>返回阅读</Link>
@@ -414,41 +415,6 @@ function EditorSessionContent({
         pageId={pageId}
         onReset={() => setEditorEpoch((epoch) => epoch + 1)}
       />
-
-      {Object.keys(remotePresence).length > 0 ? (
-        <div
-          className="flex flex-wrap items-center gap-2 border-y border-border py-2 text-xs text-muted-foreground"
-          data-collaboration-presence
-        >
-          <UsersRound className="size-4" />
-          <span>{Object.keys(remotePresence).length} 位协作者在线</span>
-          {Object.values(remotePresence)
-            .slice(0, 4)
-            .map((presence) => {
-              const blockID =
-                typeof presence.cursor.block_id === "string"
-                  ? presence.cursor.block_id
-                  : null;
-              const label = presenceLabel(presence);
-              return (
-                <span
-                  key={presence.clientId}
-                  className="rounded border bg-muted/40 px-1.5 py-0.5 font-medium text-foreground"
-                  title={[
-                    presence.actorDisplayName,
-                    presence.actorUsername ? `@${presence.actorUsername}` : null,
-                    `身份 ${presence.actorId}`,
-                    blockID ? `Block ${blockID}` : null,
-                  ]
-                    .filter(Boolean)
-                    .join(" · ")}
-                >
-                  {label}
-                </span>
-              );
-            })}
-        </div>
-      ) : null}
 
       <div className="rounded-lg border border-border p-4">
         {session.ast && session.actorId === actorId ? (
@@ -521,12 +487,6 @@ function EditorSessionContent({
       </Dialog>
     </div>
   );
-}
-
-function presenceLabel(presence: CollaborationPresence): string {
-  if (presence.actorDisplayName) return presence.actorDisplayName;
-  if (presence.actorUsername) return `@${presence.actorUsername}`;
-  return `成员 ${presence.actorId.slice(0, 8)}`;
 }
 
 function collaborationStatusLabel(status: CollaborationStatus): string {

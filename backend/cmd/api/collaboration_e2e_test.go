@@ -43,6 +43,7 @@ type e2ePresence struct {
 	Cursor           map[string]any `json:"cursor"`
 	ClientID         uuid.UUID      `json:"client_id"`
 	ActorUsername    string         `json:"actor_username"`
+	ActorEmail       string         `json:"actor_email"`
 	ActorDisplayName string         `json:"actor_display_name"`
 }
 
@@ -133,7 +134,7 @@ func TestCollaborationE2E(t *testing.T) {
 		t.Fatalf("presence actor = %s, want %s", presence.ActorID, firstActor)
 	}
 	if presence.ClientID != firstClientID || presence.ActorUsername != firstUsername ||
-		presence.ActorDisplayName != firstUsername {
+		presence.ActorDisplayName != firstUsername || presence.ActorEmail != firstUsername+"@example.invalid" {
 		t.Fatal("presence did not resolve the authenticated actor and client")
 	}
 	if presence.Cursor["selection"] != "text" {

@@ -15,10 +15,11 @@ func TestPresenceMessageAddsAuthenticatedActor(t *testing.T) {
 
 	actorID := uuid.New()
 	raw, err := presenceMessage(
-		[]byte(`{"type":"presence","cursor":{"block_id":"block-1"}}`),
+		[]byte(`{"type":"presence","actor_id":"spoofed","actor_username":"mallory","actor_display_name":"Mallory","actor_email":"spoofed@example.com","cursor":{"block_id":"block-1"}}`),
 		authdomain.Principal{
 			ActorID:     actorID,
 			Username:    "alice",
+			Email:       "alice@example.com",
 			DisplayName: "Alice Chen",
 		},
 		uuid.New(),
@@ -30,6 +31,7 @@ func TestPresenceMessageAddsAuthenticatedActor(t *testing.T) {
 		Type             string         `json:"type"`
 		ActorID          uuid.UUID      `json:"actor_id"`
 		ActorUsername    string         `json:"actor_username"`
+		ActorEmail       string         `json:"actor_email"`
 		ActorDisplayName string         `json:"actor_display_name"`
 		Cursor           map[string]any `json:"cursor"`
 	}
@@ -39,11 +41,29 @@ func TestPresenceMessageAddsAuthenticatedActor(t *testing.T) {
 	if message.Type != "presence" || message.ActorID != actorID {
 		t.Fatalf("unexpected presence envelope: %#v", message)
 	}
-	if message.ActorUsername != "alice" || message.ActorDisplayName != "Alice Chen" {
+	if message.ActorUsername != "alice" || message.ActorDisplayName != "Alice Chen" || message.ActorEmail != "alice@example.com" {
 		t.Fatalf("unexpected actor label: %#v", message)
 	}
 	if message.Cursor["block_id"] != "block-1" {
 		t.Fatalf("unexpected cursor: %#v", message.Cursor)
+	}
+}
+
+func TestPresenceMessageBeforeCursorSelection(t *testing.T) {
+	t.Parallel()
+	raw, err := presenceMessage([]byte(`{"type":"presence","actor_email":"spoofed@example.com","cursor":{}}`), authdomain.Principal{ActorID: uuid.New()}, uuid.New())
+	if err != nil {
+		t.Fatal(err)
+	}
+	var message map[string]json.RawMessage
+	if err := json.Unmarshal(raw, &message); err != nil {
+		t.Fatal(err)
+	}
+	if _, exists := message["actor_email"]; exists {
+		t.Fatal("missing authenticated email must not use client-provided email")
+	}
+	if string(message["cursor"]) != "{}" {
+		t.Fatal("empty cursor was not preserved")
 	}
 }
 

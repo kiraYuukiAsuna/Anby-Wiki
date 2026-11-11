@@ -42,6 +42,7 @@ export interface CollaborationPresence {
   actorId: string;
   clientId: string;
   actorUsername?: string;
+  actorEmail?: string;
   actorDisplayName?: string;
   cursor: Record<string, unknown>;
 }
@@ -299,6 +300,7 @@ export class CollaborationClient {
       actor_id?: string;
       client_id?: string;
       actor_username?: string;
+      actor_email?: string;
       actor_display_name?: string;
       cursor?: unknown;
       up_to_sequence?: number;
@@ -327,6 +329,7 @@ export class CollaborationClient {
         actorId: message.actor_id,
         clientId: message.client_id ?? message.actor_id,
         actorUsername: cleanPresenceLabel(message.actor_username),
+        actorEmail: cleanPresenceLabel(message.actor_email),
         actorDisplayName: cleanPresenceLabel(message.actor_display_name),
         cursor: message.cursor,
       });
@@ -452,7 +455,6 @@ export class CollaborationClient {
 
   private transmitPresence(): void {
     if (
-      !this.lastPresence ||
       !this.ready ||
       this.socket?.readyState !== WebSocket.OPEN
     ) {
@@ -462,7 +464,7 @@ export class CollaborationClient {
       this.socket.send(
         JSON.stringify({
           type: "presence",
-          cursor: this.presenceCursor(this.lastPresence),
+          cursor: this.lastPresence ? this.presenceCursor(this.lastPresence) : {},
         }),
       );
     } catch {

@@ -45,6 +45,7 @@
         "actor_id": { "type": "string", "format": "uuid" },
         "client_id": { "type": "string", "format": "uuid" },
         "actor_username": { "type": "string" },
+        "actor_email": { "type": "string", "format": "email" },
         "actor_display_name": { "type": "string" },
         "cursor": {
           "type": "object",
