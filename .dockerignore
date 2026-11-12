@@ -15,3 +15,5 @@ Secret
 artifacts
 **/__pycache__
 **/*.pyc
+
+apps/web/public/downloads/cli/

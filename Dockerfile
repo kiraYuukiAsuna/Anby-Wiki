@@ -30,6 +30,10 @@ RUN CGO_ENABLED=0 GOOS=${TARGETOS:-linux} GOARCH=${TARGETARCH:-amd64} \
     CGO_ENABLED=0 GOOS=${TARGETOS:-linux} GOARCH=${TARGETARCH:-amd64} \
     go build -trimpath -ldflags="-s -w" -o /out/wiki-perf ./cmd/perf
 
+FROM go-builder AS cli-downloads
+COPY scripts/build-cli-downloads.sh /src/scripts/build-cli-downloads.sh
+RUN sh /src/scripts/build-cli-downloads.sh /out/cli-downloads
+
 FROM ${NODE_IMAGE} AS web-builder
 ARG API_BASE_URL=http://api:8080
 ENV API_BASE_URL=${API_BASE_URL}
@@ -40,6 +44,7 @@ COPY apps/web/scripts/patch-minimatch-brace-expansion.mjs ./scripts/
 RUN npm ci
 COPY apps/web/ ./
 COPY contracts/ /src/contracts/
+COPY --from=cli-downloads /out/cli-downloads ./public/downloads/cli
 RUN npm run build
 
 FROM ${RUNTIME_IMAGE} AS go-runtime

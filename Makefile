@@ -19,7 +19,7 @@ endif
 .PHONY: \
 	help bootstrap \
 	dev dev-api dev-worker dev-web \
-	cli-build cli-install \
+	cli-build cli-install cli-downloads \
 	pg-start pg-stop pg-reset migrate-up migrate-down migrate-version migration-check \
 	test test-go test-ai \
 	format-check typecheck lint lint-go lint-web shell-check \
@@ -64,6 +64,9 @@ dev-web: ## 使用当前 shell 环境启动 Web
 cli-build: ## 构建 Anby Wiki CLI 到 bin/anby-wiki
 	mkdir -p bin
 	cd $(BACKEND_DIR) && go build -trimpath -o ../bin/anby-wiki ./cmd/anby-wiki
+
+cli-downloads: ## 构建六个平台 CLI 下载包到 Web public 目录
+	$(SH) scripts/build-cli-downloads.sh
 
 cli-install: ## 安装 Anby Wiki CLI 到当前 Go bin
 	cd $(BACKEND_DIR) && go install ./cmd/anby-wiki

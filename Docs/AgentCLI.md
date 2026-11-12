@@ -4,6 +4,21 @@
 输入输出，同时提供面向人工使用的普通命令行封装。两种模式共用同一个执行入口：
 HTTP 能力仍以 OpenAPI `operationId` 覆盖，Yjs 协作 WebSocket 仍由专用 action 覆盖。
 
+## 下载与安装
+
+登录站点后打开 `/settings/cli`，在「下载 CLI」选择平台。下载文件由本站 Web
+服务提供，支持 macOS、Windows、Linux 的 amd64/arm64，均为 tar.gz 压缩包。
+解压后运行 `./anby-wiki --help`（Windows 为 `.\anby-wiki.exe --help`），
+也可以将程序放入 PATH 目录。下载区域提供版本与 SHA-256 校验文件。
+
+生产 Web 镜像构建时自动从同一份源码编译六个平台产物，版本采用构建参数
+`VERSION`，随 Web 镜像发布或回滚。静态下载路径为
+`/downloads/cli/anby-wiki-<darwin|linux|windows>-<amd64|arm64>.tar.gz`，
+下载无需 Token；使用 API 仍需授权。macOS 包未签名或公证。
+
+本地开发先运行 `make cli-downloads`（可设置 `VERSION`），再启动 Web。
+下载产物不提交到 Git。
+
 ## 构建与安装
 
 ```sh

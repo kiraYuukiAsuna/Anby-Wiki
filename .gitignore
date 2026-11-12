@@ -30,3 +30,5 @@ __pycache__/
 data/
 Secret/
 artifacts/
+
+apps/web/public/downloads/cli/

@@ -1602,6 +1602,10 @@ BlockEditor 通过 `next/dynamic({ssr:false})` 仅在客户端加载，服务端
 
 ## Agent CLI
 
+- `/settings/cli` 提供本站 CLI 下载入口，支持 macOS/Windows/Linux 的 amd64/arm64
+  tar.gz 包、版本和 SHA-256 校验文件。Web 镜像构建时生成并携带六个平台产物；
+  本地使用 `make cli-downloads`。macOS 包未签名或公证。
+
 - `backend/cmd/anby-wiki` 提供 Go CLI；不带子命令或使用 `--input` 时保持供 Agent
   使用的单一 JSON envelope，传入子命令时提供面向人工的普通命令行参数封装，退出码
   仍区分成功、输入/契约错误和远端错误。

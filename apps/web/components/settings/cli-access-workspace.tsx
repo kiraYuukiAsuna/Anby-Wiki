@@ -3,6 +3,7 @@
 import {
   Check,
   Copy,
+  Download,
   KeyRound,
   LoaderCircle,
   RefreshCw,
@@ -405,6 +406,37 @@ export function CLIAccessWorkspace() {
 
   return (
     <div className="space-y-10">
+      <section aria-labelledby="cli-download-title">
+        <h2 id="cli-download-title" className="text-lg font-semibold">下载 CLI</h2>
+        <p className="mt-1 text-sm text-muted-foreground">
+          选择电脑的平台，解压后运行 anby-wiki，再生成授权码。
+        </p>
+        <div className="mt-4 flex flex-wrap gap-2">
+          {[
+            ["darwin-arm64", "macOS · Apple 芯片"],
+            ["darwin-amd64", "macOS · Intel"],
+            ["windows-amd64", "Windows · x64"],
+            ["windows-arm64", "Windows · ARM64"],
+            ["linux-amd64", "Linux · x64"],
+            ["linux-arm64", "Linux · ARM64"],
+          ].map(([platform, label]) => (
+            <Button key={platform} asChild variant="outline">
+              <a href={`/downloads/cli/anby-wiki-${platform}.tar.gz`} download>
+                <Download aria-hidden />
+                {label}
+              </a>
+            </Button>
+          ))}
+        </div>
+        <div className="mt-3 flex gap-4 text-xs text-muted-foreground">
+          <a href="/downloads/cli/VERSION.txt" className="underline underline-offset-4">
+            查看版本
+          </a>
+          <a href="/downloads/cli/SHA256SUMS.txt" download className="underline underline-offset-4">
+            SHA-256 校验文件
+          </a>
+        </div>
+      </section>
       <section className="border-y py-7">
         <div>
           <div className="flex items-center gap-2">
