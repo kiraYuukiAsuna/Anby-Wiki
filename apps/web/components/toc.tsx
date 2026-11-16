@@ -114,7 +114,7 @@ export function TocSidebar({ entries }: { entries: TocEntry[] }) {
     <aside className="hidden w-56 shrink-0 lg:block">
       <nav
         aria-label="目录"
-        className="sticky top-20 border-l border-border pl-4"
+        className="sticky top-20 max-h-[calc(100dvh-6rem)] overflow-y-auto overscroll-contain border-l border-border pl-4 pr-2 [scrollbar-gutter:stable]"
       >
         <p className="mb-2 text-sm font-medium">目录</p>
         <TocList entries={entries} />
