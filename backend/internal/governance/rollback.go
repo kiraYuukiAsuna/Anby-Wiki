@@ -193,6 +193,10 @@ func (s *RollbackService) Rollback(
 			}
 		}
 
+		if err := s.pages.CancelBatchTranslationsInTx(ctx, tx, batchID); err != nil {
+			return err
+		}
+
 		auditID, err := s.ids.New()
 		if err != nil {
 			return err

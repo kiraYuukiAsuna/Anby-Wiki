@@ -6,7 +6,9 @@ All URIs are relative to *http://localhost:3000*
 |------------- | ------------- | -------------|
 | [**getPageByID**](ReadingApi.md#getpagebyid) | **GET** /api/v1/pages/{id} | 按 ID 读取页面当前版本 |
 | [**getPageByTitle**](ReadingApi.md#getpagebytitle) | **GET** /api/v1/pages/by-title | 按标题/别名读取页面当前版本 |
+| [**listPageTranslations**](ReadingApi.md#listpagetranslations) | **GET** /api/v1/pages/{id}/translations | 获取可读的中英语言版本及翻译状态 |
 | [**listPublishedPages**](ReadingApi.md#listpublishedpages) | **GET** /api/v1/pages | 浏览百科页面目录 |
+| [**requestPageTranslation**](ReadingApi.md#requestpagetranslation) | **POST** /api/v1/pages/{id}/translations | 后台生成缺少的语言版本，失败时重试，不覆盖已有版本 |
 
 
 
@@ -175,6 +177,79 @@ example().catch(console.error);
 [[Back to top]](#) [[Back to API list]](../README.md#api-endpoints) [[Back to Model list]](../README.md#models) [[Back to README]](../README.md)
 
 
+## listPageTranslations
+
+> PageTranslations listPageTranslations(id)
+
+获取可读的中英语言版本及翻译状态
+
+### Example
+
+```ts
+import {
+  Configuration,
+  ReadingApi,
+} from '';
+import type { ListPageTranslationsRequest } from '';
+
+async function example() {
+  console.log("🚀 Testing  SDK...");
+  const config = new Configuration({
+    // Configure HTTP bearer authorization: cliBearer
+    accessToken: "YOUR BEARER TOKEN",
+    // To configure API key authorization: sessionCookie
+    apiKey: "YOUR API KEY",
+  });
+  const api = new ReadingApi(config);
+
+  const body = {
+    // string | 页面 ID（UUIDv7）
+    id: 38400000-8cf0-11bd-b23e-10b96e4ef00d,
+  } satisfies ListPageTranslationsRequest;
+
+  try {
+    const data = await api.listPageTranslations(body);
+    console.log(data);
+  } catch (error) {
+    console.error(error);
+  }
+}
+
+// Run the test
+example().catch(console.error);
+```
+
+### Parameters
+
+
+| Name | Type | Description  | Notes |
+|------------- | ------------- | ------------- | -------------|
+| **id** | `string` | 页面 ID（UUIDv7） | [Defaults to `undefined`] |
+
+### Return type
+
+[**PageTranslations**](PageTranslations.md)
+
+### Authorization
+
+[cliBearer](../README.md#cliBearer), [sessionCookie](../README.md#sessionCookie)
+
+### HTTP request headers
+
+- **Content-Type**: Not defined
+- **Accept**: `application/json`
+
+
+### HTTP response details
+| Status code | Description | Response headers |
+|-------------|-------------|------------------|
+| **200** | Language variants |  -  |
+| **404** | 资源不存在 |  -  |
+| **500** | 服务端内部错误 |  -  |
+
+[[Back to top]](#) [[Back to API list]](../README.md#api-endpoints) [[Back to Model list]](../README.md#models) [[Back to README]](../README.md)
+
+
 ## listPublishedPages
 
 > PageCatalogPage listPublishedPages(cursor, pageSize, page, status, sort)
@@ -257,6 +332,81 @@ example().catch(console.error);
 |-------------|-------------|------------------|
 | **200** | 页面目录 |  -  |
 | **400** | 请求格式错误 |  -  |
+| **500** | 服务端内部错误 |  -  |
+
+[[Back to top]](#) [[Back to API list]](../README.md#api-endpoints) [[Back to Model list]](../README.md#models) [[Back to README]](../README.md)
+
+
+## requestPageTranslation
+
+> requestPageTranslation(id)
+
+后台生成缺少的语言版本，失败时重试，不覆盖已有版本
+
+### Example
+
+```ts
+import {
+  Configuration,
+  ReadingApi,
+} from '';
+import type { RequestPageTranslationRequest } from '';
+
+async function example() {
+  console.log("🚀 Testing  SDK...");
+  const config = new Configuration({
+    // Configure HTTP bearer authorization: cliBearer
+    accessToken: "YOUR BEARER TOKEN",
+    // To configure API key authorization: sessionCookie
+    apiKey: "YOUR API KEY",
+  });
+  const api = new ReadingApi(config);
+
+  const body = {
+    // string | 页面 ID（UUIDv7）
+    id: 38400000-8cf0-11bd-b23e-10b96e4ef00d,
+  } satisfies RequestPageTranslationRequest;
+
+  try {
+    const data = await api.requestPageTranslation(body);
+    console.log(data);
+  } catch (error) {
+    console.error(error);
+  }
+}
+
+// Run the test
+example().catch(console.error);
+```
+
+### Parameters
+
+
+| Name | Type | Description  | Notes |
+|------------- | ------------- | ------------- | -------------|
+| **id** | `string` | 页面 ID（UUIDv7） | [Defaults to `undefined`] |
+
+### Return type
+
+`void` (Empty response body)
+
+### Authorization
+
+[cliBearer](../README.md#cliBearer), [sessionCookie](../README.md#sessionCookie)
+
+### HTTP request headers
+
+- **Content-Type**: Not defined
+- **Accept**: `application/json`
+
+
+### HTTP response details
+| Status code | Description | Response headers |
+|-------------|-------------|------------------|
+| **202** | Translation queued or already exists |  -  |
+| **400** | 请求格式错误 |  -  |
+| **403** | 无操作权限或浏览器写请求来源不受信任。 非安全方法统一使用 Go CrossOriginProtection 校验浏览器来源；优先检查 Sec-Fetch-Site，缺失时比较 Origin 与 Host。无来源头的 CLI/服务端调用 继续执行原有认证和授权。  |  -  |
+| **404** | 资源不存在 |  -  |
 | **500** | 服务端内部错误 |  -  |
 
 [[Back to top]](#) [[Back to API list]](../README.md#api-endpoints) [[Back to Model list]](../README.md#models) [[Back to README]](../README.md)

@@ -6,6 +6,7 @@
 
 Name | Type
 ------------ | -------------
+`defaultLanguage` | string
 `email` | string
 `displayName` | string
 `wikiName` | string
@@ -17,6 +18,7 @@ import type { UpdateAccountProfileRequest } from ''
 
 // TODO: Update the object below with actual values
 const example = {
+  "defaultLanguage": null,
   "email": null,
   "displayName": null,
   "wikiName": null,

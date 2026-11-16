@@ -104,6 +104,28 @@ func TestAccountSecurityE2E(t *testing.T) {
 		return session, principal
 	}
 	owner, principal := register("security_owner")
+	t.Run("default reading language", func(t *testing.T) {
+		profile, err := service.GetProfile(ctx, owner.ActorID, owner.WikiID)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if profile.DefaultLanguage != "zh-Hans" {
+			t.Fatalf("default=%s", profile.DefaultLanguage)
+		}
+		input := UpdateProfileInput{ActorID: profile.ActorID, WikiID: profile.WikiID, Email: profile.Email, DisplayName: profile.DisplayName, WikiName: profile.WikiName, DefaultLanguage: "en"}
+		if _, err = service.UpdateProfile(ctx, input); err != nil {
+			t.Fatal(err)
+		}
+		input.DefaultLanguage = ""
+		if _, err = service.UpdateProfile(ctx, input); err != nil {
+			t.Fatal(err)
+		}
+		profile, err = service.GetProfile(ctx, owner.ActorID, owner.WikiID)
+		if err != nil || profile.DefaultLanguage != "en" {
+			t.Fatalf("preference not retained: %s %v", profile.DefaultLanguage, err)
+		}
+	})
+
 	otherSession, other := register("security_other")
 	if _, err := service.GetMailConfig(ctx, other); !errors.Is(err, ErrSecurityForbidden) {
 		t.Fatal("Wiki admin obtained SMTP authority")

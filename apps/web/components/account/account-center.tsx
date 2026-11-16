@@ -22,6 +22,7 @@ import { AUTH_SESSION_KEY, isUnauthorized, useSession } from "@/lib/auth";
 const ACCOUNT_PROFILE_KEY = "account:profile";
 
 const profileSchema = z.object({
+  defaultLanguage: z.enum(["zh-Hans", "en"]),
   displayName: z.string().trim().min(1, "请输入显示名").max(128, "显示名最多 128 个字符"),
   email: z.string().trim().email("请输入有效邮箱").max(254, "邮箱最多 254 个字符"),
   wikiName: z.string().trim().min(1, "请输入知识空间名称").max(128, "知识空间名称最多 128 个字符"),
@@ -36,13 +37,14 @@ function ProfileForm({
 }) {
   const [displayName, setDisplayName] = useState(profile.displayName);
   const email = profile.email;
+  const [defaultLanguage, setDefaultLanguage] = useState<string>(profile.defaultLanguage);
   const [wikiName, setWikiName] = useState(profile.wikiName);
   const [saving, setSaving] = useState(false);
 
   const save = async (event: React.FormEvent) => {
     event.preventDefault();
     if (saving) return;
-    const parsed = profileSchema.safeParse({ displayName, email, wikiName });
+    const parsed = profileSchema.safeParse({ displayName, email, wikiName, defaultLanguage });
     if (!parsed.success) {
       toast.error(parsed.error.issues[0]?.message ?? "请检查个人资料");
       return;
@@ -115,6 +117,13 @@ function ProfileForm({
             value={wikiName}
             onChange={(event) => setWikiName(event.target.value)}
           />
+        </div>
+        <div>
+          <Label htmlFor="account-default-language">默认阅读语言</Label>
+          <select id="account-default-language" className="mt-2 flex h-9 w-full rounded-md border bg-background px-3 text-sm" value={defaultLanguage} onChange={(event) => setDefaultLanguage(event.target.value)}>
+            <option value="zh-Hans">中文</option>
+            <option value="en">English</option>
+          </select>
         </div>
         <div className="flex justify-end border-t pt-5 sm:col-span-2">
           <Button type="submit" disabled={saving}>

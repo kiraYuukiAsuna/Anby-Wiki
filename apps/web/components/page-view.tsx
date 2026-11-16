@@ -2,6 +2,9 @@
 // 渲染重定向/别名提示条、正文 AST、目录与 Revision 信息条；
 // 标题行右侧的「编辑」入口由当前请求的页面编辑权限控制。
 import Link from "next/link";
+import { preferredPageVariant } from "@/lib/reading-language";
+import { redirect as navigate } from "next/navigation";
+import { PageLanguageSwitcher } from "@/components/page-language-switcher";
 import {
   ArrowRight,
   ArrowUpRight,
@@ -28,7 +31,7 @@ import { ServerRenderedDocument } from "@/components/server-rendered-document";
 import { StableAnchorResolver } from "@/components/stable-anchor-resolver";
 import { TableOfContents, TocSidebar } from "@/components/toc";
 import { Button } from "@/components/ui/button";
-import { collectionsApi, projectionApi } from "@/lib/api";
+import { accountApi, readingApi, collectionsApi, projectionApi } from "@/lib/api";
 import { parseDocument } from "@/lib/ast/schema";
 import { extractToc } from "@/lib/ast/toc";
 import { serverApiOptions } from "@/lib/server-api";
@@ -57,7 +60,7 @@ function withoutExplicitPageLinks(
   };
 }
 
-export async function PageView({ data }: { data: PageWithContent }) {
+export async function PageView({ data, language }: { data: PageWithContent; language?: string }) {
   const { page } = data;
   // 生成客户端把 nullable content 标为非空类型，运行时仍可能为 null（未发布）。
   const content = data.content ?? null;
@@ -75,6 +78,16 @@ export async function PageView({ data }: { data: PageWithContent }) {
       ? redirect.target.anchorBlockId
       : undefined;
   const apiOptions = await serverApiOptions();
+  const [translationsResult, profileResult] = await Promise.allSettled([
+    readingApi(apiOptions).listPageTranslations({ id: page.id }),
+    accountApi(apiOptions).getAccountProfile(),
+  ]);
+  const translations = translationsResult.status === "fulfilled" ? translationsResult.value : undefined;
+  const preferredLanguage = language ?? (profileResult.status === "fulfilled" ? profileResult.value.defaultLanguage : undefined);
+  const preferred = preferredPageVariant(translations?.items ?? [], page.id, preferredLanguage, redirect?.fromPageId);
+  if (preferred) {
+    navigate(`/pages/${preferred.pageId}?language=${encodeURIComponent(preferred.language)}`);
+  }
   const projections = projectionApi(apiOptions);
   const collectionsClient = collectionsApi(apiOptions);
 
@@ -181,6 +194,7 @@ export async function PageView({ data }: { data: PageWithContent }) {
           </p>
         ) : null}
 
+        {translations ? <PageLanguageSwitcher pageId={page.id} language={page.language} canTranslate={data.canEdit && Boolean(content)} initial={translations} /> : null}
         <div className="mb-6 flex min-w-0 flex-col gap-3">
           <div role="group" aria-label="页面操作" className="-mx-1 flex items-center justify-end-safe gap-2 overflow-x-auto px-1 py-1">
             <PageGraphButton pageId={page.id} pageTitle={page.displayTitle} canEdit={data.canEdit} />

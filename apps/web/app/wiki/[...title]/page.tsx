@@ -10,7 +10,9 @@ export const dynamic = "force-dynamic";
 
 export default async function WikiTitlePage({
   params,
+  searchParams,
 }: {
+  searchParams: Promise<{ language?: string }>;
   params: Promise<{ title: string[] }>;
 }) {
   const { title: rawSegments } = await params;
@@ -43,5 +45,5 @@ export default async function WikiTitlePage({
     );
   }
 
-  return <PageView data={result.data} />;
+  return <PageView data={result.data} language={(await searchParams).language} />;
 }

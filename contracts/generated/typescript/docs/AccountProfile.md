@@ -12,6 +12,7 @@ Name | Type
 `email` | string
 `displayName` | string
 `wikiName` | string
+`defaultLanguage` | string
 `createdAt` | Date
 `updatedAt` | Date
 
@@ -28,6 +29,7 @@ const example = {
   "email": null,
   "displayName": null,
   "wikiName": null,
+  "defaultLanguage": null,
   "createdAt": null,
   "updatedAt": null,
 } satisfies AccountProfile

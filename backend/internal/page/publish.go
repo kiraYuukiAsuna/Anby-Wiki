@@ -206,6 +206,18 @@ func (s *Service) publishWithinTx(ctx context.Context, tx pgx.Tx, d publishDraft
 	}); err != nil {
 		return nil, err
 	}
+	if d.auditEventType == EventTypeRevisionPublished && d.changeBatchID != nil && NormalizeLanguage(p.Language) != "" {
+		var imported bool
+		if err := tx.QueryRow(ctx, `SELECT EXISTS(SELECT 1 FROM change_batch WHERE id=$1 AND import_job_id IS NOT NULL)`, *d.changeBatchID).Scan(&imported); err != nil {
+			return nil, err
+		}
+		if imported {
+			p.CurrentRevisionID = &rev.ID
+			if _, err := s.requestTranslationInTx(ctx, tx, p, d.actorID); err != nil {
+				return nil, err
+			}
+		}
+	}
 	return rev, nil
 }
 

@@ -203,7 +203,8 @@ func run(args []string) int {
 		slog.Int("registered_builders", registry.Len()),
 	)
 
-	consumer := projection.New(pool, projection.Config{Logger: logger})
+	consumer := projection.New(pool, projection.Config{Logger: logger, RegisteredEventsOnly: true})
+	translationConsumer := projection.New(pool, projection.Config{Logger: logger, RegisteredEventsOnly: true, BatchSize: 1})
 	// M3-T04 未解析链接 Resolver：page.created / page.renamed 直接消费；
 	// page.revision_published 在 Builder 分发成功后追加 ResolvePageLinks hook，
 	// 兜底 created/renamed 与 published 事件的乱序到达（最终一致）。
@@ -357,7 +358,7 @@ func run(args []string) int {
 
 	var importRunner interface{ Run(context.Context) error }
 	if strings.TrimSpace(cfg.AIConfigMasterKey) != "" && strings.TrimSpace(cfg.AIKernelInternalToken) != "" {
-		assembled, err := assembleImportRunner(ctx, pool, cfg, logger)
+		assembled, err := assembleImportRunner(ctx, pool, cfg, logger, translationConsumer)
 		if err != nil {
 			logger.Error("装配 AI 导入 Worker 失败", slog.Any("error", err))
 			return exitError
@@ -373,6 +374,8 @@ func run(args []string) int {
 		defer close(runDone)
 		_ = consumer.Run(ctx)
 	}()
+	translationDone := make(chan struct{})
+	go func() { defer close(translationDone); _ = translationConsumer.Run(ctx) }()
 	importDone := make(chan struct{})
 	if importRunner == nil {
 		close(importDone)
@@ -409,6 +412,7 @@ func run(args []string) int {
 	logger.Info("收到退出信号，等待在途事件处理完成")
 	<-runDone
 	<-importDone
+	<-translationDone
 	<-linkHealthDone
 	<-revisionArchiveDone
 	<-metricsDone

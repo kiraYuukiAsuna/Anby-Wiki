@@ -7,8 +7,8 @@ func TestLoadAndValidateOperations(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if got := len(contract.List()); got != 198 {
-		t.Fatalf("operation count=%d, want 198", got)
+	if got := len(contract.List()); got != 200 {
+		t.Fatalf("operation count=%d, want 200", got)
 	}
 	page, err := contract.Describe("createPage")
 	if err != nil {

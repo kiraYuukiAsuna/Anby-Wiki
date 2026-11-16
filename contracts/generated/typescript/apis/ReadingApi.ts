@@ -19,6 +19,11 @@ import {
     PageCatalogPageToJSON,
 } from '../models/PageCatalogPage';
 import {
+    type PageTranslations,
+    PageTranslationsFromJSON,
+    PageTranslationsToJSON,
+} from '../models/PageTranslations';
+import {
     type PageWithContent,
     PageWithContentFromJSON,
     PageWithContentToJSON,
@@ -35,12 +40,20 @@ export interface GetPageByTitleRequest {
     contentMode?: GetPageByTitleContentModeEnum;
 }
 
+export interface ListPageTranslationsRequest {
+    id: string;
+}
+
 export interface ListPublishedPagesRequest {
     cursor?: string;
     pageSize?: number;
     page?: number;
     status?: ListPublishedPagesStatusEnum;
     sort?: ListPublishedPagesSortEnum;
+}
+
+export interface RequestPageTranslationRequest {
+    id: string;
 }
 
 /**
@@ -181,6 +194,59 @@ export class ReadingApi extends runtime.BaseAPI {
     }
 
     /**
+     * Creates request options for listPageTranslations without sending the request
+     */
+    async listPageTranslationsRequestOpts(requestParameters: ListPageTranslationsRequest): Promise<runtime.RequestOpts> {
+        if (requestParameters['id'] == null) {
+            throw new runtime.RequiredError(
+                'id',
+                'Required parameter "id" was null or undefined when calling listPageTranslations().'
+            );
+        }
+
+        const queryParameters: any = {};
+
+        const headerParameters: runtime.HTTPHeaders = {};
+
+        if (this.configuration && this.configuration.accessToken) {
+            const token = this.configuration.accessToken;
+            const tokenString = await token("cliBearer", []);
+
+            if (tokenString) {
+                headerParameters["Authorization"] = `Bearer ${tokenString}`;
+            }
+        }
+
+        let urlPath = `/api/v1/pages/{id}/translations`;
+        urlPath = urlPath.replace('{id}', encodeURIComponent(String(requestParameters['id'])));
+
+        return {
+            path: urlPath,
+            method: 'GET',
+            headers: headerParameters,
+            query: queryParameters,
+        };
+    }
+
+    /**
+     * 获取可读的中英语言版本及翻译状态
+     */
+    async listPageTranslationsRaw(requestParameters: ListPageTranslationsRequest, initOverrides?: RequestInit | runtime.InitOverrideFunction): Promise<runtime.ApiResponse<PageTranslations>> {
+        const requestOptions = await this.listPageTranslationsRequestOpts(requestParameters);
+        const response = await this.request(requestOptions, initOverrides);
+
+        return new runtime.JSONApiResponse(response, (jsonValue) => PageTranslationsFromJSON(jsonValue));
+    }
+
+    /**
+     * 获取可读的中英语言版本及翻译状态
+     */
+    async listPageTranslations(requestParameters: ListPageTranslationsRequest, initOverrides?: RequestInit | runtime.InitOverrideFunction): Promise<PageTranslations> {
+        const response = await this.listPageTranslationsRaw(requestParameters, initOverrides);
+        return await response.value();
+    }
+
+    /**
      * Creates request options for listPublishedPages without sending the request
      */
     async listPublishedPagesRequestOpts(requestParameters: ListPublishedPagesRequest): Promise<runtime.RequestOpts> {
@@ -245,6 +311,58 @@ export class ReadingApi extends runtime.BaseAPI {
     async listPublishedPages(requestParameters: ListPublishedPagesRequest = {}, initOverrides?: RequestInit | runtime.InitOverrideFunction): Promise<PageCatalogPage> {
         const response = await this.listPublishedPagesRaw(requestParameters, initOverrides);
         return await response.value();
+    }
+
+    /**
+     * Creates request options for requestPageTranslation without sending the request
+     */
+    async requestPageTranslationRequestOpts(requestParameters: RequestPageTranslationRequest): Promise<runtime.RequestOpts> {
+        if (requestParameters['id'] == null) {
+            throw new runtime.RequiredError(
+                'id',
+                'Required parameter "id" was null or undefined when calling requestPageTranslation().'
+            );
+        }
+
+        const queryParameters: any = {};
+
+        const headerParameters: runtime.HTTPHeaders = {};
+
+        if (this.configuration && this.configuration.accessToken) {
+            const token = this.configuration.accessToken;
+            const tokenString = await token("cliBearer", []);
+
+            if (tokenString) {
+                headerParameters["Authorization"] = `Bearer ${tokenString}`;
+            }
+        }
+
+        let urlPath = `/api/v1/pages/{id}/translations`;
+        urlPath = urlPath.replace('{id}', encodeURIComponent(String(requestParameters['id'])));
+
+        return {
+            path: urlPath,
+            method: 'POST',
+            headers: headerParameters,
+            query: queryParameters,
+        };
+    }
+
+    /**
+     * 后台生成缺少的语言版本，失败时重试，不覆盖已有版本
+     */
+    async requestPageTranslationRaw(requestParameters: RequestPageTranslationRequest, initOverrides?: RequestInit | runtime.InitOverrideFunction): Promise<runtime.ApiResponse<void>> {
+        const requestOptions = await this.requestPageTranslationRequestOpts(requestParameters);
+        const response = await this.request(requestOptions, initOverrides);
+
+        return new runtime.VoidApiResponse(response);
+    }
+
+    /**
+     * 后台生成缺少的语言版本，失败时重试，不覆盖已有版本
+     */
+    async requestPageTranslation(requestParameters: RequestPageTranslationRequest, initOverrides?: RequestInit | runtime.InitOverrideFunction): Promise<void> {
+        await this.requestPageTranslationRaw(requestParameters, initOverrides);
     }
 
 }

@@ -136,6 +136,7 @@ func NewRouter(logger *slog.Logger, deps Deps, writeAPI *WriteAPI, readAPI *Read
 			}
 			if writeAPI != nil {
 				r.Post("/pages", writeAPI.createPage)
+				r.Post("/pages/{id}/translations", writeAPI.requestPageTranslation)
 				r.Post("/pages/{id}/rename", writeAPI.renamePage)
 				r.Get("/pages/{id}/redirect", writeAPI.getRedirect)
 				r.Post("/pages/{id}/redirect", writeAPI.createRedirect)
@@ -152,6 +153,7 @@ func NewRouter(logger *slog.Logger, deps Deps, writeAPI *WriteAPI, readAPI *Read
 			if readAPI != nil {
 				r.Get("/pages", readAPI.listPages)
 				r.Get("/pages/by-title", readAPI.getPageByTitle)
+				r.Get("/pages/{id}/translations", readAPI.listPageTranslations)
 				r.Get("/pages/{id}", readAPI.getPageByID)
 			}
 			if searchAPI != nil {

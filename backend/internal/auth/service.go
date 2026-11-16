@@ -91,23 +91,25 @@ type LoginInput struct {
 
 // Profile is the editable account profile for the current local account.
 type Profile struct {
-	ActorID     uuid.UUID
-	WikiID      uuid.UUID
-	Username    string
-	Email       string
-	DisplayName string
-	WikiName    string
-	CreatedAt   time.Time
-	UpdatedAt   time.Time
+	DefaultLanguage string
+	ActorID         uuid.UUID
+	WikiID          uuid.UUID
+	Username        string
+	Email           string
+	DisplayName     string
+	WikiName        string
+	CreatedAt       time.Time
+	UpdatedAt       time.Time
 }
 
 // UpdateProfileInput contains current-account profile fields.
 type UpdateProfileInput struct {
-	ActorID     uuid.UUID
-	WikiID      uuid.UUID
-	Email       string
-	DisplayName string
-	WikiName    string
+	DefaultLanguage string
+	ActorID         uuid.UUID
+	WikiID          uuid.UUID
+	Email           string
+	DisplayName     string
+	WikiName        string
 }
 
 // Session contains the opaque cookie value. Only its SHA-256 hash is stored.
@@ -609,6 +611,9 @@ func (s *Service) GetProfile(ctx context.Context, actorID, _ uuid.UUID) (Profile
 
 // UpdateProfile updates only fields owned by the current local account.
 func (s *Service) UpdateProfile(ctx context.Context, input UpdateProfileInput) (Profile, error) {
+	if input.DefaultLanguage != "" && input.DefaultLanguage != "zh-Hans" && input.DefaultLanguage != "en" {
+		return Profile{}, &ValidationError{Field: "default_language", Message: "请选择中文或 English"}
+	}
 	_, normalizedEmail, displayName, wikiName, err := validateProfileUpdate(input)
 	if err != nil {
 		return Profile{}, err
@@ -629,7 +634,7 @@ func (s *Service) UpdateProfile(ctx context.Context, input UpdateProfileInput) (
 			return ErrAccountNotFound
 		}
 		tag, err = tx.Exec(ctx, `UPDATE local_account
-			SET updated_at=now()
+			SET updated_at=now(), default_language=COALESCE(NULLIF($3,''),default_language)
 			WHERE actor_id=$1 AND status='active'
 				AND normalized_email=$2
 				AND EXISTS (
@@ -637,7 +642,7 @@ func (s *Service) UpdateProfile(ctx context.Context, input UpdateProfileInput) (
 					WHERE a.id=local_account.actor_id
 						AND a.status='active'
 				)`,
-			input.ActorID, normalizedEmail)
+			input.ActorID, normalizedEmail, input.DefaultLanguage)
 		if err != nil {
 			return err
 		}
@@ -675,7 +680,7 @@ func (s *Service) scanProfile(
 	var profile Profile
 	err := querier.QueryRow(ctx, `SELECT
 		a.id,a.wiki_id,la.username,la.email,a.display_name,w.name,
-		la.created_at,la.updated_at
+		la.created_at,la.updated_at,la.default_language
 		FROM actor a
 		JOIN local_account la ON la.actor_id=a.id
 		JOIN wiki_site w ON w.id=a.wiki_id
@@ -683,7 +688,7 @@ func (s *Service) scanProfile(
 			AND a.status='active' AND la.status='active'`,
 		actorID).Scan(
 		&profile.ActorID, &profile.WikiID, &profile.Username, &profile.Email,
-		&profile.DisplayName, &profile.WikiName, &profile.CreatedAt, &profile.UpdatedAt,
+		&profile.DisplayName, &profile.WikiName, &profile.CreatedAt, &profile.UpdatedAt, &profile.DefaultLanguage,
 	)
 	if errors.Is(err, pgx.ErrNoRows) {
 		return Profile{}, ErrAccountNotFound

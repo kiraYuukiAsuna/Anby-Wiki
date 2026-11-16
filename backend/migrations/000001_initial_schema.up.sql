@@ -1456,6 +1456,7 @@ CREATE TABLE external_identity (
 CREATE INDEX external_identity_actor_idx ON external_identity (actor_id);
 
 CREATE TABLE local_account (
+    default_language text NOT NULL DEFAULT 'zh-Hans' CHECK (default_language IN ('zh-Hans','en')),
     id                  uuid        PRIMARY KEY,
     actor_id            uuid        NOT NULL UNIQUE REFERENCES actor (id),
     username            text        NOT NULL,
@@ -2163,4 +2164,17 @@ CREATE INDEX fact_consistency_issue_queue_idx
 CREATE INDEX fact_consistency_issue_subject_idx
     ON fact_consistency_issue (subject_entity_id, status);
 
+COMMIT;
+
+BEGIN;
+CREATE TABLE page_translation (
+ source_page_id uuid PRIMARY KEY REFERENCES page(id),
+ source_revision_id uuid NOT NULL REFERENCES revision(id),
+ target_language text NOT NULL CHECK (target_language IN ('zh-Hans','en')),
+ target_page_id uuid UNIQUE REFERENCES page(id),
+ requested_by uuid NOT NULL REFERENCES actor(id),
+ event_id uuid NOT NULL REFERENCES outbox_event(id),
+ status text NOT NULL CHECK (status IN ('pending','failed','done')),
+ CHECK (source_page_id <> target_page_id)
+);
 COMMIT;

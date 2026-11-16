@@ -250,6 +250,7 @@ docs/PageCollectionList.md
 docs/PageContent.md
 docs/PageEntityBinding.md
 docs/PageEntityBindingList.md
+docs/PageLanguageVariant.md
 docs/PageProtection.md
 docs/PageProtectionList.md
 docs/PageRedirect.md
@@ -269,6 +270,7 @@ docs/PageShareLinkCreationResult.md
 docs/PageShareList.md
 docs/PageShareMutationResult.md
 docs/PageShareRemovalResult.md
+docs/PageTranslations.md
 docs/PageWithContent.md
 docs/PageWithContentRedirect.md
 docs/PagesApi.md
@@ -590,6 +592,7 @@ models/PageCollectionList.ts
 models/PageContent.ts
 models/PageEntityBinding.ts
 models/PageEntityBindingList.ts
+models/PageLanguageVariant.ts
 models/PageProtection.ts
 models/PageProtectionList.ts
 models/PageRedirect.ts
@@ -609,6 +612,7 @@ models/PageShareLinkCreationResult.ts
 models/PageShareList.ts
 models/PageShareMutationResult.ts
 models/PageShareRemovalResult.ts
+models/PageTranslations.ts
 models/PageWithContent.ts
 models/PageWithContentRedirect.ts
 models/PreviewDocument.ts

@@ -3077,6 +3077,39 @@ paths:
           $ref: "#/components/responses/UnprocessableEntity"
         "500":
           $ref: "#/components/responses/Internal"
+  /api/v1/pages/{id}/translations:
+    parameters:
+      - $ref: '#/components/parameters/PageId'
+    get:
+      operationId: listPageTranslations
+      tags: [reading]
+      summary: 获取可读的中英语言版本及翻译状态
+      responses:
+        '200':
+          description: Language variants
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/PageTranslations' }
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '500':
+          $ref: '#/components/responses/Internal'
+    post:
+      operationId: requestPageTranslation
+      tags: [reading]
+      summary: 后台生成缺少的语言版本，失败时重试，不覆盖已有版本
+      responses:
+        '202':
+          description: Translation queued or already exists
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '500':
+          $ref: '#/components/responses/Internal'
+
   /api/v1/pages/{id}:
     get:
       operationId: getPageByID
@@ -5462,12 +5495,31 @@ components:
           items:
             type: string
             enum: [editor, reviewer, applier, admin, page_viewer, page_editor]
+    PageTranslations:
+      type: object
+      additionalProperties: false
+      required: [items, status]
+      properties:
+        status: { type: string, enum: [none, pending, failed, done] }
+        items:
+          type: array
+          items:
+            $ref: '#/components/schemas/PageLanguageVariant'
+    PageLanguageVariant:
+      type: object
+      additionalProperties: false
+      required: [page_id, language, title]
+      properties:
+        page_id: { type: string, format: uuid }
+        language: { type: string }
+        title: { type: string }
     AccountProfile:
       type: object
       additionalProperties: false
       required:
         - actor_id
         - wiki_id
+        - default_language
         - username
         - email
         - display_name
@@ -5481,6 +5533,7 @@ components:
         email: { type: string, format: email }
         display_name: { type: string }
         wiki_name: { type: string }
+        default_language: { type: string, enum: [zh-Hans, en] }
         created_at: { type: string, format: date-time }
         updated_at: { type: string, format: date-time }
     UpdateAccountProfileRequest:
@@ -5488,6 +5541,7 @@ components:
       additionalProperties: false
       required: [email, display_name, wiki_name]
       properties:
+        default_language: { type: string, enum: [zh-Hans, en] }
         email:
           type: string
           format: email

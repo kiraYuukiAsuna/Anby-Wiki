@@ -1,0 +1,13 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "page.translation_requested v1 payload",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schema_version", "page_id", "source_revision_id", "target_language"],
+  "properties": {
+    "schema_version": {"const": 1},
+    "page_id": {"type": "string", "format": "uuid"},
+    "source_revision_id": {"type": "string", "format": "uuid"},
+    "target_language": {"enum": ["zh-Hans", "en"]}
+  }
+}

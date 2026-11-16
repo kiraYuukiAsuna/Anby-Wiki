@@ -90,6 +90,8 @@ func (f HandlerFunc) Handle(ctx context.Context, event Event) error {
 
 // Config Consumer 配置；零值字段使用默认值。
 type Config struct {
+	// RegisteredEventsOnly isolates slow consumers from unrelated Outbox work.
+	RegisteredEventsOnly bool
 	// BatchSize 单次领取的事件数，默认 20。
 	BatchSize int
 	// PollInterval 无事件时的轮询间隔，默认 500ms。
@@ -208,6 +210,12 @@ func (c *Consumer) Run(ctx context.Context) error {
 // claimBatch 在单事务内领取一批事件：SKIP LOCKED 选中可领取行并立即标记
 // claimed（attempt_count+1）后提交。claimed 且租约过期的行可被重新领取（崩溃恢复）。
 func (c *Consumer) claimBatch(ctx context.Context) ([]Event, error) {
+	eventTypes := make([]string, 0, len(c.handlers))
+	if c.cfg.RegisteredEventsOnly {
+		for eventType := range c.handlers {
+			eventTypes = append(eventTypes, eventType)
+		}
+	}
 	tx, err := c.pool.BeginTx(ctx, pgx.TxOptions{})
 	if err != nil {
 		return nil, fmt.Errorf("projection: 开启领取事务失败: %w", err)
@@ -218,12 +226,13 @@ func (c *Consumer) claimBatch(ctx context.Context) ([]Event, error) {
 		SELECT id, aggregate_type, aggregate_id, event_type, payload_json, attempt_count, created_at
 		FROM outbox_event
 		WHERE status IN ('pending', 'claimed')
+          AND (NOT $3::boolean OR event_type=ANY($4::text[]))
 		  AND next_attempt_at <= now()
 		  AND (status = 'pending' OR claimed_at < now() - $2::interval)
 		ORDER BY created_at
 		LIMIT $1
 		FOR UPDATE SKIP LOCKED`,
-		c.cfg.BatchSize, c.cfg.LeaseDuration.String(),
+		c.cfg.BatchSize, c.cfg.LeaseDuration.String(), c.cfg.RegisteredEventsOnly, eventTypes,
 	)
 	if err != nil {
 		return nil, fmt.Errorf("projection: 领取查询失败: %w", err)

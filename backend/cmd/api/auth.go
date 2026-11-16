@@ -42,20 +42,22 @@ type loginRequest struct {
 }
 
 type updateAccountProfileRequest struct {
-	Email       string `json:"email"`
-	DisplayName string `json:"display_name"`
-	WikiName    string `json:"wiki_name"`
+	DefaultLanguage string `json:"default_language"`
+	Email           string `json:"email"`
+	DisplayName     string `json:"display_name"`
+	WikiName        string `json:"wiki_name"`
 }
 
 type accountProfileResponse struct {
-	ActorID     string    `json:"actor_id"`
-	WikiID      string    `json:"wiki_id"`
-	Username    string    `json:"username"`
-	Email       string    `json:"email"`
-	DisplayName string    `json:"display_name"`
-	WikiName    string    `json:"wiki_name"`
-	CreatedAt   time.Time `json:"created_at"`
-	UpdatedAt   time.Time `json:"updated_at"`
+	DefaultLanguage string    `json:"default_language"`
+	ActorID         string    `json:"actor_id"`
+	WikiID          string    `json:"wiki_id"`
+	Username        string    `json:"username"`
+	Email           string    `json:"email"`
+	DisplayName     string    `json:"display_name"`
+	WikiName        string    `json:"wiki_name"`
+	CreatedAt       time.Time `json:"created_at"`
+	UpdatedAt       time.Time `json:"updated_at"`
 }
 
 type authSessionResponse struct {
@@ -164,7 +166,7 @@ func (a *AuthAPI) updateAccountProfile(w http.ResponseWriter, r *http.Request) {
 	}
 	profile, err := a.service.UpdateProfile(r.Context(), authdomain.UpdateProfileInput{
 		ActorID: actorID, WikiID: wikiIDFromRequest(r),
-		Email: payload.Email, DisplayName: payload.DisplayName, WikiName: payload.WikiName,
+		DefaultLanguage: payload.DefaultLanguage, Email: payload.Email, DisplayName: payload.DisplayName, WikiName: payload.WikiName,
 	})
 	if err != nil {
 		accountProfileError(w, r, err)
@@ -217,7 +219,7 @@ func (a *AuthAPI) logout(w http.ResponseWriter, r *http.Request) {
 func toAccountProfileResponse(profile authdomain.Profile) accountProfileResponse {
 	return accountProfileResponse{
 		ActorID: profile.ActorID.String(), WikiID: profile.WikiID.String(),
-		Username: profile.Username, Email: profile.Email,
+		DefaultLanguage: profile.DefaultLanguage, Username: profile.Username, Email: profile.Email,
 		DisplayName: profile.DisplayName, WikiName: profile.WikiName,
 		CreatedAt: profile.CreatedAt, UpdatedAt: profile.UpdatedAt,
 	}

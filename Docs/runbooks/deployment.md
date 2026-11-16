@@ -164,3 +164,9 @@ Schema，禁止回滚，必须发布 forward fix。
 
 Docker 不可用的开发机只能完成静态清单和 Shell 语法检查，不能作为真实镜像/Compose
 通过的证据；CI deploy job 或具备 Docker daemon 的发布机仍需执行真实校验。
+
+### 中英页面版本：存量数据库升级
+
+部署含 `page_translation` 的版本前，先完成 PostgreSQL 备份，再用 `psql -v ON_ERROR_STOP=1`
+执行 `scripts/upgrade-page-translations.sql`。该脚本仅新增账号语言偏好列和翻译关联表，可重复执行；
+不重建数据库、不变更迁移版本。空库直接使用初始化 Schema。随后按正常流程构建并更新 API、Worker 和 Web。

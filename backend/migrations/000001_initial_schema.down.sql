@@ -1,3 +1,7 @@
+BEGIN;
+DROP TABLE page_translation;
+COMMIT;
+
 -- Drop the complete pre-release schema in reverse dependency order.
 
 BEGIN;

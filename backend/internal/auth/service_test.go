@@ -1,6 +1,7 @@
 package auth
 
 import (
+	"context"
 	"testing"
 
 	"github.com/google/uuid"
@@ -97,5 +98,12 @@ func TestValidateProfileUpdate(t *testing.T) {
 	})
 	if err == nil {
 		t.Fatal("blank display name accepted")
+	}
+}
+
+func TestProfileRejectsUnsupportedLanguageBeforeWriting(t *testing.T) {
+	service := &Service{}
+	if _, err := service.UpdateProfile(context.Background(), UpdateProfileInput{DefaultLanguage: "fr"}); err == nil {
+		t.Fatal("unsupported language accepted")
 	}
 }

@@ -57,6 +57,12 @@ export interface AccountProfile {
     wikiName: string;
     /**
      *
+     * @type {AccountProfileDefaultLanguageEnum}
+     * @memberof AccountProfile
+     */
+    defaultLanguage: AccountProfileDefaultLanguageEnum;
+    /**
+     *
      * @type {Date}
      * @memberof AccountProfile
      */
@@ -69,6 +75,17 @@ export interface AccountProfile {
     updatedAt: Date;
 }
 
+
+/**
+ * @export
+ */
+export const AccountProfileDefaultLanguageEnum = {
+    ZhHans: 'zh-Hans',
+    En: 'en'
+} as const;
+export type AccountProfileDefaultLanguageEnum = typeof AccountProfileDefaultLanguageEnum[keyof typeof AccountProfileDefaultLanguageEnum];
+
+
 /**
  * Check if a given object implements the AccountProfile interface.
  */
@@ -79,6 +96,7 @@ export function instanceOfAccountProfile(value: object): value is AccountProfile
     if (!('email' in value) || value['email'] === undefined) return false;
     if ((!('displayName' in (value as Record<string, any>)) && !('display_name' in (value as Record<string, any>))) || ((value as Record<string, any>)['displayName'] === undefined && (value as Record<string, any>)['display_name'] === undefined)) return false;
     if ((!('wikiName' in (value as Record<string, any>)) && !('wiki_name' in (value as Record<string, any>))) || ((value as Record<string, any>)['wikiName'] === undefined && (value as Record<string, any>)['wiki_name'] === undefined)) return false;
+    if ((!('defaultLanguage' in (value as Record<string, any>)) && !('default_language' in (value as Record<string, any>))) || ((value as Record<string, any>)['defaultLanguage'] === undefined && (value as Record<string, any>)['default_language'] === undefined)) return false;
     if ((!('createdAt' in (value as Record<string, any>)) && !('created_at' in (value as Record<string, any>))) || ((value as Record<string, any>)['createdAt'] === undefined && (value as Record<string, any>)['created_at'] === undefined)) return false;
     if ((!('updatedAt' in (value as Record<string, any>)) && !('updated_at' in (value as Record<string, any>))) || ((value as Record<string, any>)['updatedAt'] === undefined && (value as Record<string, any>)['updated_at'] === undefined)) return false;
     return true;
@@ -100,6 +118,7 @@ export function AccountProfileFromJSONTyped(json: any, ignoreDiscriminator: bool
         'email': json['email'],
         'displayName': json['display_name'],
         'wikiName': json['wiki_name'],
+        'defaultLanguage': json['default_language'],
         'createdAt': (new Date(json['created_at'])),
         'updatedAt': (new Date(json['updated_at'])),
     };
@@ -122,6 +141,7 @@ export function AccountProfileToJSONTyped(value?: AccountProfile | null, ignoreD
         'email': value['email'],
         'display_name': value['displayName'],
         'wiki_name': value['wikiName'],
+        'default_language': value['defaultLanguage'],
         'created_at': value['createdAt'].toISOString(),
         'updated_at': value['updatedAt'].toISOString(),
     };

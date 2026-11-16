@@ -21,6 +21,12 @@ import { mapValues } from '../runtime';
 export interface UpdateAccountProfileRequest {
     /**
      *
+     * @type {UpdateAccountProfileRequestDefaultLanguageEnum}
+     * @memberof UpdateAccountProfileRequest
+     */
+    defaultLanguage?: UpdateAccountProfileRequestDefaultLanguageEnum;
+    /**
+     *
      * @type {string}
      * @memberof UpdateAccountProfileRequest
      */
@@ -38,6 +44,17 @@ export interface UpdateAccountProfileRequest {
      */
     wikiName: string;
 }
+
+
+/**
+ * @export
+ */
+export const UpdateAccountProfileRequestDefaultLanguageEnum = {
+    ZhHans: 'zh-Hans',
+    En: 'en'
+} as const;
+export type UpdateAccountProfileRequestDefaultLanguageEnum = typeof UpdateAccountProfileRequestDefaultLanguageEnum[keyof typeof UpdateAccountProfileRequestDefaultLanguageEnum];
+
 
 /**
  * Check if a given object implements the UpdateAccountProfileRequest interface.
@@ -59,6 +76,7 @@ export function UpdateAccountProfileRequestFromJSONTyped(json: any, ignoreDiscri
     }
     return {
 
+        'defaultLanguage': json['default_language'] == null ? undefined : json['default_language'],
         'email': json['email'],
         'displayName': json['display_name'],
         'wikiName': json['wiki_name'],
@@ -76,6 +94,7 @@ export function UpdateAccountProfileRequestToJSONTyped(value?: UpdateAccountProf
 
     return {
 
+        'default_language': value['defaultLanguage'],
         'email': value['email'],
         'display_name': value['displayName'],
         'wiki_name': value['wikiName'],
