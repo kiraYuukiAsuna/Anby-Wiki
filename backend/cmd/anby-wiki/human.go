@@ -514,9 +514,6 @@ func parseCallCommand(arguments []string, output outputMode) (
 	if len(arguments) == 0 || isHelpToken(arguments[0]) {
 		return wikicli.Input{}, output, callHelp(), nil
 	}
-	if containsHelpToken(arguments[1:]) {
-		return wikicli.Input{}, output, callHelp(), nil
-	}
 	return parseOperationCall(arguments[0], arguments[1:], output)
 }
 
@@ -535,9 +532,6 @@ func parseOperationCall(command string, arguments []string, output outputMode) (
 	string,
 	error,
 ) {
-	if containsHelpToken(arguments) {
-		return wikicli.Input{}, output, callHelp(), nil
-	}
 	operationID, err := operationIDFromCommand(command)
 	if err != nil {
 		return wikicli.Input{}, output, "", err
@@ -549,6 +543,11 @@ func parseOperationCall(command string, arguments []string, output outputMode) (
 	operation, err := contract.Describe(operationID)
 	if err != nil {
 		return wikicli.Input{}, output, "", err
+	}
+	if containsHelpToken(arguments) {
+		var help bytes.Buffer
+		err := writeOperationDescription(&help, operation)
+		return wikicli.Input{}, output, help.String(), err
 	}
 	options := callOptions{
 		humanOptions: humanOptions{jsonOutput: output == outputJSON},
@@ -1233,11 +1232,11 @@ func writeOperationDescription(stdout io.Writer, data any) error {
 	}
 	if len(operation.Parameters) > 0 {
 		_, _ = fmt.Fprintln(writer, "\nParameters:")
-		_, _ = fmt.Fprintln(writer, "NAME\tIN\tREQUIRED")
+		_, _ = fmt.Fprintln(writer, "INPUT\tIN\tTYPE\tREQUIRED\tDETAILS")
 		for _, parameter := range operation.Parameters {
 			_, _ = fmt.Fprintf(
-				writer, "%s\t%s\t%t\n",
-				parameter.Name, parameter.In, parameter.Required,
+				writer, "--%s %s=VALUE\t%s\t%s\t%t\t%s\n",
+				parameter.In, parameter.Name, parameter.In, schemaType(parameter.Schema), parameter.Required, schemaDetails(parameter.Schema),
 			)
 		}
 	}
@@ -1247,6 +1246,11 @@ func writeOperationDescription(stdout io.Writer, data any) error {
 			operation.RequestBody.Required,
 			strings.Join(operation.RequestBody.ContentTypes, ", "),
 		)
+		for _, contentType := range operation.RequestBody.ContentTypes {
+			_, _ = fmt.Fprintf(writer, "\n%s fields (required is relative to the containing object):\n", contentType)
+			_, _ = fmt.Fprintln(writer, "FIELD\tTYPE\tREQUIRED\tDETAILS")
+			writeSchemaFields(writer, "$", operation.RequestBody.Schemas[contentType], operation.RequestBody.Required)
+		}
 	}
 	if len(operation.Responses) > 0 {
 		_, _ = fmt.Fprintln(writer, "\nResponses:")
@@ -1261,10 +1265,13 @@ func writeOperationDescription(stdout io.Writer, data any) error {
 	if err := writer.Flush(); err != nil {
 		return err
 	}
+	if _, err := fmt.Fprintf(stdout, "\nUsage: anby-wiki %s [inputs] [--base-url URL] [--json]\n", commandName(operation.ID)); err != nil {
+		return err
+	}
 	if operation.RequestBody != nil {
 		_, err := fmt.Fprintf(
 			stdout,
-			"\nUse direct flags, --field key=value, --body '{...}', or --body @file.json.\n",
+			"\nTop-level fields: --field name=value (or --field 'name={\"key\":\"value\"}' for JSON).\nDirect flags also work, e.g. content_model -> --content-model, unless a CLI option or parameter has the same name.\nNested fields / arrays: --body @file.json or --body '{...}'; dotted field names do not build nested objects.\nFile uploads: --file field=/absolute/path/file (for fields with format=binary).\n",
 		)
 		return err
 	}

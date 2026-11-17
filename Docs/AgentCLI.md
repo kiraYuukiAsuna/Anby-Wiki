@@ -44,6 +44,18 @@ bin/anby-wiki collaboration run --page-id 0198... --client-id 0198...
 bin/anby-wiki get-page-by-id --id 0198... --content-mode html
 ```
 
+`describe create-page`、`create-page --help` 和 `call create-page --help` 都会显示
+该操作的详细说明，无需加 `--json`：参数位置、类型、必填项，以及请求体字段的
+说明、枚举、默认值、示例和约束。请求体以 `$.title`、`$.items[].name` 等路径展开；
+必填标记相对于所属对象，`oneOf` / `anyOf` / `allOf` 分支分别展示。
+递归引用保留 `$ref`。响应显示状态码和内容类型；完整响应 Schema 可用 `describe ... --json` 查看。
+
+顶层字段可以用 `--title '页面标题'` 或 `--field 'title=页面标题'`；字段名与 CLI
+选项或接口参数重名时，用 `--field` 明确指定请求体。嵌套对象和数组通过
+`--body @request.json` 或 `--field 'metadata={"key":"value"}'` 传入，点号路径不会自动
+创建嵌套对象。`format=binary` 字段用 `--file field=/absolute/path/file` 上传。
+这些帮助命令只读取本地内嵌契约，不发出业务请求。
+
 所有 OpenAPI operation 都可以用 kebab-case 命令名直接调用，也可以显式走 `call`：
 
 ```sh
