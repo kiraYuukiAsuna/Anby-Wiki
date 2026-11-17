@@ -54,6 +54,17 @@ type MailConfigInput struct {
 	Code          string     `json:"code"`
 }
 
+type SystemSettings struct {
+	RegistrationEnabled bool       `json:"registration_enabled"`
+	UpdatedAt           *time.Time `json:"updated_at"`
+}
+
+type SystemSettingsInput struct {
+	RegistrationEnabled bool   `json:"registration_enabled"`
+	Password            string `json:"password"`
+	Code                string `json:"code"`
+}
+
 type SystemAccount struct {
 	ActorID              uuid.UUID `json:"actor_id"`
 	Username             string    `json:"username"`
@@ -123,6 +134,64 @@ func (s *Service) mailConfiguration(ctx context.Context, querier db.Querier) (Ma
 	config.PasswordConfigured = ciphertext != ""
 	config.UpdatedAt = &updated
 	return config, ciphertext, nil
+}
+
+func (s *Service) systemSettings(ctx context.Context, querier db.Querier, fallbackRegistrationEnabled bool) (SystemSettings, error) {
+	settings := SystemSettings{RegistrationEnabled: fallbackRegistrationEnabled}
+	var updated time.Time
+	err := querier.QueryRow(ctx, `SELECT registration_enabled,updated_at FROM system_runtime_config WHERE singleton`).Scan(&settings.RegistrationEnabled, &updated)
+	if errors.Is(err, pgx.ErrNoRows) {
+		return settings, nil
+	}
+	if err != nil {
+		return settings, err
+	}
+	settings.UpdatedAt = &updated
+	return settings, nil
+}
+
+func (s *Service) RegistrationEnabled(ctx context.Context, fallbackRegistrationEnabled bool) (bool, error) {
+	settings, err := s.systemSettings(ctx, s.pool, fallbackRegistrationEnabled)
+	return settings.RegistrationEnabled, err
+}
+
+func (s *Service) GetSystemSettings(ctx context.Context, principal Principal, fallbackRegistrationEnabled bool) (SystemSettings, error) {
+	if err := s.requireSystemAdmin(ctx, principal); err != nil {
+		return SystemSettings{}, err
+	}
+	return s.systemSettings(ctx, s.pool, fallbackRegistrationEnabled)
+}
+
+func (s *Service) UpdateSystemSettings(ctx context.Context, principal Principal, input SystemSettingsInput) (SystemSettings, error) {
+	if err := s.requireSystemAdmin(ctx, principal); err != nil {
+		return SystemSettings{}, err
+	}
+	err := s.securityTx(ctx, func(tx pgx.Tx) error {
+		account, err := s.securityAccountForPrincipal(ctx, tx, principal)
+		if err != nil {
+			return err
+		}
+		if !account.SystemAdmin {
+			return ErrSecurityForbidden
+		}
+		if err := s.securityProof(ctx, tx, account, input.Password, input.Code, true); err != nil {
+			return err
+		}
+		if _, err := tx.Exec(ctx, `INSERT INTO system_runtime_config(singleton,registration_enabled)
+			VALUES (true,$1) ON CONFLICT(singleton) DO UPDATE SET
+			registration_enabled=EXCLUDED.registration_enabled,updated_at=now()`, input.RegistrationEnabled); err != nil {
+			return err
+		}
+		action := securityRegistrationDisabled
+		if input.RegistrationEnabled {
+			action = securityRegistrationEnabled
+		}
+		return s.securityAudit(ctx, tx, principal.ActorID, principal.ActorID, action)
+	})
+	if err != nil {
+		return SystemSettings{}, err
+	}
+	return s.GetSystemSettings(ctx, principal, false)
 }
 
 func (s *Service) GetMailConfig(ctx context.Context, principal Principal) (MailConfig, error) {

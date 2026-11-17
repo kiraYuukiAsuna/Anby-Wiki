@@ -8,6 +8,7 @@ All URIs are relative to *http://localhost:3000*
 | [**getAIConfig**](AdminApi.md#getaiconfig) | **GET** /api/v1/admin/ai-config | 读取站点 AI 运行时配置 |
 | [**getSystemAccounts**](AdminApi.md#getsystemaccounts) | **GET** /api/v1/system/accounts | 系统管理员读取账号安全概况与系统安全审计 |
 | [**getSystemMail**](AdminApi.md#getsystemmail) | **GET** /api/v1/system/mail | 系统管理员读取全站 SMTP 配置，密码永不返回 |
+| [**getSystemSettings**](AdminApi.md#getsystemsettings) | **GET** /api/v1/system/settings | 系统管理员读取全站运行设置 |
 | [**grantAdminUserRole**](AdminApi.md#grantadminuserrole) | **PUT** /api/v1/admin/users/{actor_id}/roles/{role_key} | 管理员授予用户角色 |
 | [**listAdminUsers**](AdminApi.md#listadminusers) | **GET** /api/v1/admin/users | 管理员列出本地用户与角色 |
 | [**revokeAdminUserRole**](AdminApi.md#revokeadminuserrole) | **DELETE** /api/v1/admin/users/{actor_id}/roles/{role_key} | 管理员撤销用户角色 |
@@ -16,6 +17,7 @@ All URIs are relative to *http://localhost:3000*
 | [**testSystemMail**](AdminApi.md#testsystemmailoperation) | **POST** /api/v1/system/mail/test | 系统管理员向指定收件邮箱发送测试邮件 |
 | [**updateAIConfig**](AdminApi.md#updateaiconfigoperation) | **PUT** /api/v1/admin/ai-config | 保存站点 AI 运行时配置 |
 | [**updateSystemMail**](AdminApi.md#updatesystemmailoperation) | **PUT** /api/v1/system/mail | 系统管理员重新认证后保存 SMTP 配置 |
+| [**updateSystemSettings**](AdminApi.md#updatesystemsettingsoperation) | **PUT** /api/v1/system/settings | 系统管理员重新认证后保存全站运行设置 |
 
 
 
@@ -305,6 +307,69 @@ This endpoint does not need any parameter.
 | Status code | Description | Response headers |
 |-------------|-------------|------------------|
 | **200** | 邮件配置 |  -  |
+| **401** | 未认证 |  -  |
+| **403** | 无操作权限或浏览器写请求来源不受信任。 非安全方法统一使用 Go CrossOriginProtection 校验浏览器来源；优先检查 Sec-Fetch-Site，缺失时比较 Origin 与 Host。无来源头的 CLI/服务端调用 继续执行原有认证和授权。  |  -  |
+
+[[Back to top]](#) [[Back to API list]](../README.md#api-endpoints) [[Back to Model list]](../README.md#models) [[Back to README]](../README.md)
+
+
+## getSystemSettings
+
+> SystemSettings getSystemSettings()
+
+系统管理员读取全站运行设置
+
+### Example
+
+```ts
+import {
+  Configuration,
+  AdminApi,
+} from '';
+import type { GetSystemSettingsRequest } from '';
+
+async function example() {
+  console.log("🚀 Testing  SDK...");
+  const config = new Configuration({
+    // To configure API key authorization: sessionCookie
+    apiKey: "YOUR API KEY",
+  });
+  const api = new AdminApi(config);
+
+  try {
+    const data = await api.getSystemSettings();
+    console.log(data);
+  } catch (error) {
+    console.error(error);
+  }
+}
+
+// Run the test
+example().catch(console.error);
+```
+
+### Parameters
+
+This endpoint does not need any parameter.
+
+### Return type
+
+[**SystemSettings**](SystemSettings.md)
+
+### Authorization
+
+[sessionCookie](../README.md#sessionCookie)
+
+### HTTP request headers
+
+- **Content-Type**: Not defined
+- **Accept**: `application/json`
+
+
+### HTTP response details
+| Status code | Description | Response headers |
+|-------------|-------------|------------------|
+| **200** | 运行设置 |  -  |
 | **401** | 未认证 |  -  |
 | **403** | 无操作权限或浏览器写请求来源不受信任。 非安全方法统一使用 Go CrossOriginProtection 校验浏览器来源；优先检查 Sec-Fetch-Site，缺失时比较 Origin 与 Host。无来源头的 CLI/服务端调用 继续执行原有认证和授权。  |  -  |
 
@@ -915,6 +980,81 @@ example().catch(console.error);
 |-------------|-------------|------------------|
 | **200** | 已保存 |  -  |
 | **400** | 请求格式错误 |  -  |
+| **403** | 无操作权限或浏览器写请求来源不受信任。 非安全方法统一使用 Go CrossOriginProtection 校验浏览器来源；优先检查 Sec-Fetch-Site，缺失时比较 Origin 与 Host。无来源头的 CLI/服务端调用 继续执行原有认证和授权。  |  -  |
+| **429** | 触发限流，需退避后重试 |  * Retry-After - 建议等待的秒数 <br>  * X-RateLimit-Limit - 当前窗口配额 <br>  * X-RateLimit-Remaining - 当前窗口剩余配额 <br>  |
+
+[[Back to top]](#) [[Back to API list]](../README.md#api-endpoints) [[Back to Model list]](../README.md#models) [[Back to README]](../README.md)
+
+
+## updateSystemSettings
+
+> SystemSettings updateSystemSettings(updateSystemSettingsRequest)
+
+系统管理员重新认证后保存全站运行设置
+
+控制服务端账号注册开关；已存在账号、会话和邀请不受影响。
+
+### Example
+
+```ts
+import {
+  Configuration,
+  AdminApi,
+} from '';
+import type { UpdateSystemSettingsOperationRequest } from '';
+
+async function example() {
+  console.log("🚀 Testing  SDK...");
+  const config = new Configuration({
+    // To configure API key authorization: sessionCookie
+    apiKey: "YOUR API KEY",
+  });
+  const api = new AdminApi(config);
+
+  const body = {
+    // UpdateSystemSettingsRequest
+    updateSystemSettingsRequest: ...,
+  } satisfies UpdateSystemSettingsOperationRequest;
+
+  try {
+    const data = await api.updateSystemSettings(body);
+    console.log(data);
+  } catch (error) {
+    console.error(error);
+  }
+}
+
+// Run the test
+example().catch(console.error);
+```
+
+### Parameters
+
+
+| Name | Type | Description  | Notes |
+|------------- | ------------- | ------------- | -------------|
+| **updateSystemSettingsRequest** | [UpdateSystemSettingsRequest](UpdateSystemSettingsRequest.md) |  | |
+
+### Return type
+
+[**SystemSettings**](SystemSettings.md)
+
+### Authorization
+
+[sessionCookie](../README.md#sessionCookie)
+
+### HTTP request headers
+
+- **Content-Type**: `application/json`
+- **Accept**: `application/json`
+
+
+### HTTP response details
+| Status code | Description | Response headers |
+|-------------|-------------|------------------|
+| **200** | 已保存 |  -  |
+| **400** | 请求格式错误 |  -  |
+| **401** | 未认证 |  -  |
 | **403** | 无操作权限或浏览器写请求来源不受信任。 非安全方法统一使用 Go CrossOriginProtection 校验浏览器来源；优先检查 Sec-Fetch-Site，缺失时比较 Origin 与 Host。无来源头的 CLI/服务端调用 继续执行原有认证和授权。  |  -  |
 | **429** | 触发限流，需退避后重试 |  * Retry-After - 建议等待的秒数 <br>  * X-RateLimit-Limit - 当前窗口配额 <br>  * X-RateLimit-Remaining - 当前窗口剩余配额 <br>  |
 

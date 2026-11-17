@@ -155,9 +155,9 @@ Anby-Wiki/
   data/deploy.lock             # flock 锁，文件存在不等于仍被占用
 ```
 
-引导账号由脚本通过本机 API 创建，同时获得自己的私人 Wiki；验证管理员权限后脚本会
-关闭注册。密码只保存在 `Secret/bootstrap-admin.json`，不会出现在日志中。新增用户
-需受控重新开启注册，每个用户的 AI 供应商、模型和 Key 分别在其登录后的
+引导账号由脚本通过本机 API 创建，同时获得自己的私人 Wiki、Wiki 管理员权限和
+系统管理员权限；验证后脚本会关闭注册。密码只保存在 `Secret/bootstrap-admin.json`，不会出现在日志中。
+新增用户时，系统管理员在 `/admin` 运行设置中开启注册；每个用户的 AI 供应商、模型和 Key 分别在其登录后的
 `/account` 个人中心配置。
 
 公网入口为 `https://anbywiki.momiya.cloud/`。宿主机默认把 Web 容器 `3000`

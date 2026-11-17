@@ -49,15 +49,18 @@ const (
 	SecurityChangePassword = "change_password"
 	SecurityRevokeSession  = "revoke_session"
 	SecurityRevokeSessions = "revoke_sessions"
-	securityResetPassword  = "reset_password"
-	securityMFALogin       = "mfa_login"
-	securityMailUpdated    = "mail_updated"
-	securityMailTested     = "mail_tested"
-	securityAdminGranted   = "system_admin_granted"
-	securityAdminRevoked   = "system_admin_revoked"
-	securityMFARecovered   = "mfa_recovery_code_used"
-	securityMFAVerified    = "mfa_login_verified"
-	securityAAD            = "anby-wiki/account-security/v1/"
+
+	securityResetPassword        = "reset_password"
+	securityMFALogin             = "mfa_login"
+	securityMailUpdated          = "mail_updated"
+	securityMailTested           = "mail_tested"
+	securityAdminGranted         = "system_admin_granted"
+	securityAdminRevoked         = "system_admin_revoked"
+	securityRegistrationEnabled  = "registration_enabled"
+	securityRegistrationDisabled = "registration_disabled"
+	securityMFARecovered         = "mfa_recovery_code_used"
+	securityMFAVerified          = "mfa_login_verified"
+	securityAAD                  = "anby-wiki/account-security/v1/"
 )
 
 type SecurityInput struct {

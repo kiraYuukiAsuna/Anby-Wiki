@@ -81,7 +81,12 @@ type authWikiMembership struct {
 }
 
 func (a *AuthAPI) register(w http.ResponseWriter, r *http.Request) {
-	if !a.registrationEnabled {
+	enabled, err := a.service.RegistrationEnabled(r.Context(), a.registrationEnabled)
+	if err != nil {
+		httpx.WriteError(w, r, http.StatusInternalServerError, httpx.CodeInternal, "无法读取注册设置")
+		return
+	}
+	if !enabled {
 		httpx.WriteError(w, r, http.StatusForbidden, httpx.CodeForbidden, "账号注册已关闭")
 		return
 	}

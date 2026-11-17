@@ -18,7 +18,7 @@
 | `prepare-production.py` | 创建根 `.env`、随机机密与 data/Secret；已有配置保留，发布标识取 Git SHA |
 | `production_environment.py` | dotenv 数据读取、公开设置校验、进程环境注入与宿主机 Nginx 的精确代理 IP 刷新；不执行环境文件内容 |
 | `production-common.sh` | 宿主机脚本共用的域名读取与 Compose 调用；不单独执行 |
-| `bootstrap-administrator.py` | 在 loopback API 初始化首个管理员并关闭公开注册；保存 Secret 凭据 |
+| `bootstrap-administrator.py` | 在 loopback API 初始化首个管理员并关闭公开注册；生产入口随后授予该账号系统管理员权限；保存 Secret 凭据 |
 | `install-nginx.sh` | 安装 `bootstrap/production` 站点，失败恢复；`--render` 只输出预览 |
 | `enable-tls.sh` | Certbot 签发/复用、安装续期 hook、启用 `certbot.timer` |
 | `reload-nginx.sh` | 成功续期后检查并 reload Nginx，不申请证书 |

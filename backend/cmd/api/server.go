@@ -119,6 +119,8 @@ func NewRouter(logger *slog.Logger, deps Deps, writeAPI *WriteAPI, readAPI *Read
 				r.Get("/system/mail", authAPI.getMailConfig)
 				r.Put("/system/mail", authAPI.updateMailConfig)
 				r.Post("/system/mail/test", authAPI.testMailConfig)
+				r.Get("/system/settings", authAPI.getSystemSettings)
+				r.Put("/system/settings", authAPI.updateSystemSettings)
 				r.Get("/system/accounts", authAPI.getSystemState)
 				r.Put("/system/administrators", authAPI.setSystemAdmin)
 				r.Post("/auth/cli/codes", authAPI.createCLIAuthCode)

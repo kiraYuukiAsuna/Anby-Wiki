@@ -100,6 +100,7 @@ BEGIN;
 DROP TABLE cli_access_token;
 DROP TABLE cli_authorization_code;
 DROP TABLE account_security_event;
+DROP TABLE IF EXISTS system_runtime_config;
 DROP TABLE system_mail_config;
 DROP TABLE account_recovery_code;
 DROP TABLE account_security_token;

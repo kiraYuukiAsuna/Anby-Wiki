@@ -6,7 +6,7 @@ import { useState } from "react";
 import { toast } from "sonner";
 import useSWR, { useSWRConfig } from "swr";
 import { z } from "zod";
-import { type SystemMailConfig, type SystemAccount, SystemMailConfigTlsModeEnum } from "../../../../contracts/generated/typescript";
+import { type SystemMailConfig, type SystemSettings, type SystemAccount, SystemMailConfigTlsModeEnum } from "../../../../contracts/generated/typescript";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -106,6 +106,48 @@ function MailSettings({ configuration, mfaEnabled, onSaved }: {
   </section>;
 }
 
+function RuntimeSettings({ settings, mfaEnabled, onSaved }: {
+  settings: SystemSettings;
+  mfaEnabled: boolean;
+  onSaved: (value: SystemSettings) => Promise<void>;
+}) {
+  const [registrationEnabled, setRegistrationEnabled] = useState(settings.registrationEnabled);
+  const [password, setPassword] = useState("");
+  const [code, setCode] = useState("");
+  const [busy, setBusy] = useState(false);
+
+  const submit = async (event: React.FormEvent) => {
+    event.preventDefault();
+    if (busy) return;
+    if (!password || (mfaEnabled && !code.trim())) { toast.error("请填写当前密码和需要的二次验证码"); return; }
+    setBusy(true);
+    try {
+      const value = await adminApi().updateSystemSettings({
+        updateSystemSettingsRequest: { registrationEnabled, password, code: code.trim() },
+      });
+      setPassword("");
+      setCode("");
+      await onSaved(value);
+      toast.success("运行设置已保存");
+    } catch (error) { toast.error(await securityErrorMessage(error)); }
+    finally { setBusy(false); }
+  };
+
+  return <section className="mt-7 min-w-0 rounded-2xl border bg-card p-5 sm:p-7">
+    <h2 className="flex items-center gap-2 text-xl font-semibold"><ShieldCheck className="size-5" />运行设置</h2>
+    <p className="mt-2 text-sm text-muted-foreground">控制服务端本地账号注册。关闭后不影响已有账号、会话或协作邀请。</p>
+    <form onSubmit={submit} className="mt-6 grid min-w-0 gap-5 sm:grid-cols-2">
+      <label className="flex items-center gap-2 text-sm sm:col-span-2"><input type="checkbox" checked={registrationEnabled} onChange={(event) => setRegistrationEnabled(event.target.checked)} />允许公开注册新账号</label>
+      <div className="border-t pt-5 sm:col-span-2"><h3 className="font-medium">确认身份</h3><p className="mt-1 text-sm text-muted-foreground">保存运行设置需要重新验证。每个验证码只能使用一次。</p></div>
+      <div><Label htmlFor="settings-password">当前账号密码</Label><Input id="settings-password" className="mt-2" type="password" autoComplete="current-password" value={password} onChange={(event) => setPassword(event.target.value)} /></div>
+      {mfaEnabled && <div><Label htmlFor="settings-code">验证码或恢复码</Label><Input id="settings-code" className="mt-2" autoComplete="one-time-code" value={code} onChange={(event) => setCode(event.target.value)} /></div>}
+      <div className="flex flex-wrap gap-3 sm:col-span-2">
+        <Button type="submit" disabled={busy || registrationEnabled === settings.registrationEnabled}>{busy ? "处理中…" : "保存运行设置"}</Button>
+      </div>
+    </form>
+  </section>;
+}
+
 function SystemPagination({ label, page, pageSize, total, disabled, onChange }: {
   label: string;
   page: number;
@@ -130,6 +172,7 @@ export function SystemConsole() {
   const permitted = !!session?.systemAdmin && session.method === "session";
   const accountVisible = !workspaceAccessNotice("/account", session);
   const mail = useSWR(permitted ? ["system:mail", session.actorId] : null, () => adminApi().getSystemMail(), { revalidateOnFocus: false });
+  const settings = useSWR(permitted ? ["system:settings", session.actorId] : null, () => adminApi().getSystemSettings(), { revalidateOnFocus: false });
   const [target, setTarget] = useState<SystemAccount | null>(null);
   const [password, setPassword] = useState("");
   const [code, setCode] = useState("");
@@ -163,11 +206,12 @@ export function SystemConsole() {
   };
 
   if (!permitted) return <div className="mt-7 rounded-2xl border p-6"><ShieldCheck className="size-6" /><h2 className="mt-3 font-semibold">需要系统管理员权限</h2><p className="mt-2 text-sm text-muted-foreground">请联系运维人员开通系统管理权限。</p>{accountVisible ? <Button className="mt-4" variant="outline" asChild><Link href="/account">返回个人中心</Link></Button> : null}</div>;
-  if (mail.isLoading || (accounts.isLoading && !accounts.data)) return <p className="mt-7 flex items-center gap-2 text-sm"><LoaderCircle className="size-4 animate-spin" />正在读取系统配置…</p>;
-  if (mail.error || accounts.error || !mail.data || !accounts.data) return <div className="mt-7 rounded-2xl border p-6"><p>系统配置暂不可用。</p><Button className="mt-3" onClick={() => { void mail.mutate(); void accounts.mutate(); }}>重试</Button></div>;
+  if (settings.isLoading || mail.isLoading || (accounts.isLoading && !accounts.data)) return <p className="mt-7 flex items-center gap-2 text-sm"><LoaderCircle className="size-4 animate-spin" />正在读取系统配置…</p>;
+  if (settings.error || mail.error || accounts.error || !settings.data || !mail.data || !accounts.data) return <div className="mt-7 rounded-2xl border p-6"><p>系统配置暂不可用。</p><Button className="mt-3" onClick={() => { void settings.mutate(); void mail.mutate(); void accounts.mutate(); }}>重试</Button></div>;
   const items = accounts.data.accounts;
 
   return <>
+    <RuntimeSettings key={settings.data.updatedAt?.toISOString() ?? "initial"} settings={settings.data} mfaEnabled={mfaEnabled} onSaved={async (value) => { await settings.mutate(value, { revalidate: false }); await accounts.mutate(); }} />
     <MailSettings key={mail.data.updatedAt?.toISOString() ?? "initial"} configuration={mail.data} mfaEnabled={mfaEnabled} onSaved={async (value) => { await mail.mutate(value, { revalidate: false }); await accounts.mutate(); }} />
     <section aria-label="账号与系统权限" aria-busy={accounts.isValidating} className="mt-6 min-w-0 rounded-2xl border bg-card p-5 sm:p-7">
       <h2 className="text-xl font-semibold">账号与系统权限</h2>

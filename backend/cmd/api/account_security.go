@@ -170,6 +170,36 @@ func (a *AuthAPI) testMailConfig(w http.ResponseWriter, r *http.Request) {
 	w.WriteHeader(http.StatusNoContent)
 }
 
+func (a *AuthAPI) getSystemSettings(w http.ResponseWriter, r *http.Request) {
+	principal, ok := securityPrincipal(w, r)
+	if !ok {
+		return
+	}
+	settings, err := a.service.GetSystemSettings(r.Context(), principal, a.registrationEnabled)
+	if err != nil {
+		securityError(w, r, err)
+		return
+	}
+	httpx.WriteJSON(w, http.StatusOK, settings)
+}
+
+func (a *AuthAPI) updateSystemSettings(w http.ResponseWriter, r *http.Request) {
+	principal, ok := securityPrincipal(w, r)
+	if !ok {
+		return
+	}
+	var input authdomain.SystemSettingsInput
+	if !decodeAuthJSON(w, r, &input) {
+		return
+	}
+	settings, err := a.service.UpdateSystemSettings(r.Context(), principal, input)
+	if err != nil {
+		securityError(w, r, err)
+		return
+	}
+	httpx.WriteJSON(w, http.StatusOK, settings)
+}
+
 func (a *AuthAPI) getSystemState(w http.ResponseWriter, r *http.Request) {
 	principal, ok := securityPrincipal(w, r)
 	if !ok {

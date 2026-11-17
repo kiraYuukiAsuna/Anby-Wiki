@@ -54,6 +54,11 @@ import {
     SystemMailConfigToJSON,
 } from '../models/SystemMailConfig';
 import {
+    type SystemSettings,
+    SystemSettingsFromJSON,
+    SystemSettingsToJSON,
+} from '../models/SystemSettings';
+import {
     type TestSystemMailRequest,
     TestSystemMailRequestFromJSON,
     TestSystemMailRequestToJSON,
@@ -68,6 +73,11 @@ import {
     UpdateSystemMailRequestFromJSON,
     UpdateSystemMailRequestToJSON,
 } from '../models/UpdateSystemMailRequest';
+import {
+    type UpdateSystemSettingsRequest,
+    UpdateSystemSettingsRequestFromJSON,
+    UpdateSystemSettingsRequestToJSON,
+} from '../models/UpdateSystemSettingsRequest';
 
 export interface DeleteAdminUserRequest {
     actorId: string;
@@ -109,6 +119,10 @@ export interface UpdateAIConfigOperationRequest {
 
 export interface UpdateSystemMailOperationRequest {
     updateSystemMailRequest: UpdateSystemMailRequest;
+}
+
+export interface UpdateSystemSettingsOperationRequest {
+    updateSystemSettingsRequest: UpdateSystemSettingsRequest;
 }
 
 /**
@@ -307,6 +321,43 @@ export class AdminApi extends runtime.BaseAPI {
      */
     async getSystemMail(initOverrides?: RequestInit | runtime.InitOverrideFunction): Promise<SystemMailConfig> {
         const response = await this.getSystemMailRaw(initOverrides);
+        return await response.value();
+    }
+
+    /**
+     * Creates request options for getSystemSettings without sending the request
+     */
+    async getSystemSettingsRequestOpts(): Promise<runtime.RequestOpts> {
+        const queryParameters: any = {};
+
+        const headerParameters: runtime.HTTPHeaders = {};
+
+
+        let urlPath = `/api/v1/system/settings`;
+
+        return {
+            path: urlPath,
+            method: 'GET',
+            headers: headerParameters,
+            query: queryParameters,
+        };
+    }
+
+    /**
+     * 系统管理员读取全站运行设置
+     */
+    async getSystemSettingsRaw(initOverrides?: RequestInit | runtime.InitOverrideFunction): Promise<runtime.ApiResponse<SystemSettings>> {
+        const requestOptions = await this.getSystemSettingsRequestOpts();
+        const response = await this.request(requestOptions, initOverrides);
+
+        return new runtime.JSONApiResponse(response, (jsonValue) => SystemSettingsFromJSON(jsonValue));
+    }
+
+    /**
+     * 系统管理员读取全站运行设置
+     */
+    async getSystemSettings(initOverrides?: RequestInit | runtime.InitOverrideFunction): Promise<SystemSettings> {
+        const response = await this.getSystemSettingsRaw(initOverrides);
         return await response.value();
     }
 
@@ -735,6 +786,55 @@ export class AdminApi extends runtime.BaseAPI {
      */
     async updateSystemMail(requestParameters: UpdateSystemMailOperationRequest, initOverrides?: RequestInit | runtime.InitOverrideFunction): Promise<SystemMailConfig> {
         const response = await this.updateSystemMailRaw(requestParameters, initOverrides);
+        return await response.value();
+    }
+
+    /**
+     * Creates request options for updateSystemSettings without sending the request
+     */
+    async updateSystemSettingsRequestOpts(requestParameters: UpdateSystemSettingsOperationRequest): Promise<runtime.RequestOpts> {
+        if (requestParameters['updateSystemSettingsRequest'] == null) {
+            throw new runtime.RequiredError(
+                'updateSystemSettingsRequest',
+                'Required parameter "updateSystemSettingsRequest" was null or undefined when calling updateSystemSettings().'
+            );
+        }
+
+        const queryParameters: any = {};
+
+        const headerParameters: runtime.HTTPHeaders = {};
+
+        headerParameters['Content-Type'] = 'application/json';
+
+
+        let urlPath = `/api/v1/system/settings`;
+
+        return {
+            path: urlPath,
+            method: 'PUT',
+            headers: headerParameters,
+            query: queryParameters,
+            body: UpdateSystemSettingsRequestToJSON(requestParameters['updateSystemSettingsRequest']),
+        };
+    }
+
+    /**
+     * 控制服务端账号注册开关；已存在账号、会话和邀请不受影响。
+     * 系统管理员重新认证后保存全站运行设置
+     */
+    async updateSystemSettingsRaw(requestParameters: UpdateSystemSettingsOperationRequest, initOverrides?: RequestInit | runtime.InitOverrideFunction): Promise<runtime.ApiResponse<SystemSettings>> {
+        const requestOptions = await this.updateSystemSettingsRequestOpts(requestParameters);
+        const response = await this.request(requestOptions, initOverrides);
+
+        return new runtime.JSONApiResponse(response, (jsonValue) => SystemSettingsFromJSON(jsonValue));
+    }
+
+    /**
+     * 控制服务端账号注册开关；已存在账号、会话和邀请不受影响。
+     * 系统管理员重新认证后保存全站运行设置
+     */
+    async updateSystemSettings(requestParameters: UpdateSystemSettingsOperationRequest, initOverrides?: RequestInit | runtime.InitOverrideFunction): Promise<SystemSettings> {
+        const response = await this.updateSystemSettingsRaw(requestParameters, initOverrides);
         return await response.value();
     }
 

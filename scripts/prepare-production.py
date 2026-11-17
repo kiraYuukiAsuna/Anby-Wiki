@@ -61,8 +61,13 @@ def main() -> None:
         raise ValueError("HTTPS deployment requires SESSION_COOKIE_SECURE=true.")
     settings = domain(values)
     revision = subprocess.check_output(["git", "-C", str(root), "rev-parse", "HEAD"], text=True).strip()
+    latest_migration = max(
+        int(path.name.split("_", 1)[0])
+        for path in (root / "backend/migrations").glob("*.up.sql")
+    )
     update(environment, {
         "RELEASE_ID": revision[:12],
+        "MIGRATION_EXPECTED_VERSION": str(latest_migration),
         "COLLABORATION_ORIGIN_PATTERNS": "https://" + settings["ANBY_DOMAIN"],
     })
     for name in ["postgres", "rustfs", "meilisearch", "upload-tmp"]:

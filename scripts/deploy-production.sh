@@ -68,6 +68,11 @@ DEPLOY_CONFIRM="DEPLOY:$release" sh "$ROOT/scripts/deploy.sh" deploy </dev/null
 python3 "$ROOT/scripts/production_environment.py" proxy-ips "$DEPLOY_ENV_FILE" \
   "$ROOT/infra/deploy/compose.production.yml"
 python3 "$ROOT/scripts/bootstrap-administrator.py" "$ROOT" "$DEPLOY_ENV_FILE"
+# Keep the default bootstrap account usable for the system console. This uses
+# the auth domain service through the operator CLI; never write the flag via SQL.
+if [ -f "$ROOT/Secret/bootstrap-admin.json" ]; then
+  production_compose --profile tools run --rm -T --interactive=false migrate wiki-system-admin -username admin
+fi
 # Apply discovered proxy peers and refreshed bootstrap registration settings.
 production_compose up -d --no-deps --wait --wait-timeout 720 api worker
 sh "$ROOT/scripts/enable-tls.sh" </dev/null

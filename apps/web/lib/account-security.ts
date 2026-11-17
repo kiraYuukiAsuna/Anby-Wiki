@@ -21,6 +21,8 @@ export const SECURITY_ACTION_LABELS: Record<string, string> = {
   mail_tested: "发送邮件配置测试",
   system_admin_granted: "授予系统管理员",
   system_admin_revoked: "撤销系统管理员",
+  registration_enabled: "开启公开注册",
+  registration_disabled: "关闭公开注册",
 };
 
 export const newPasswordSchema = z.string().refine(

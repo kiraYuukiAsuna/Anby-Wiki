@@ -136,6 +136,25 @@ func TestAccountSecurityE2E(t *testing.T) {
 	if err := service.SetSystemAdmin(ctx, principal, owner.ActorID, false, password, ""); !errors.Is(err, ErrLastSystemAdmin) {
 		t.Fatalf("last administrator check: %v", err)
 	}
+	if _, err := service.GetSystemSettings(ctx, other, true); !errors.Is(err, ErrSecurityForbidden) {
+		t.Fatal("Wiki admin obtained system runtime settings")
+	}
+	settings, err := service.GetSystemSettings(ctx, principal, true)
+	if err != nil || !settings.RegistrationEnabled {
+		t.Fatalf("registration fallback not visible to system administrator: %+v, %v", settings, err)
+	}
+	settings, err = service.UpdateSystemSettings(ctx, principal, SystemSettingsInput{RegistrationEnabled: false, Password: password})
+	if err != nil || settings.RegistrationEnabled {
+		t.Fatalf("registration disable failed: %+v, %v", settings, err)
+	}
+	registrationAllowed, err := service.RegistrationEnabled(ctx, true)
+	if err != nil || registrationAllowed {
+		t.Fatalf("registration gate ignored stored setting: %t, %v", registrationAllowed, err)
+	}
+	settings, err = service.UpdateSystemSettings(ctx, principal, SystemSettingsInput{RegistrationEnabled: true, Password: password})
+	if err != nil || !settings.RegistrationEnabled || settings.UpdatedAt == nil {
+		t.Fatalf("registration enable failed: %+v, %v", settings, err)
+	}
 	cliPrincipal := principal
 	cliPrincipal.Method = "cli_token"
 	if _, err := service.GetSecurity(ctx, cliPrincipal); !errors.Is(err, ErrSecurityForbidden) {

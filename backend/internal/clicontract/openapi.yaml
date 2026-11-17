@@ -305,6 +305,41 @@ paths:
         "403": { $ref: "#/components/responses/Forbidden" }
         "429": { $ref: "#/components/responses/RateLimited" }
         "503": { $ref: "#/components/responses/Internal" }
+  /api/v1/system/settings:
+    get:
+      operationId: getSystemSettings
+      tags: [admin]
+      summary: 系统管理员读取全站运行设置
+      security: [{ sessionCookie: [] }]
+      responses:
+        "200":
+          description: 运行设置
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/SystemSettings" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+    put:
+      operationId: updateSystemSettings
+      tags: [admin]
+      summary: 系统管理员重新认证后保存全站运行设置
+      description: 控制服务端账号注册开关；已存在账号、会话和邀请不受影响。
+      security: [{ sessionCookie: [] }]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/UpdateSystemSettingsRequest" }
+      responses:
+        "200":
+          description: 已保存
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/SystemSettings" }
+        "400": { $ref: "#/components/responses/BadRequest" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "429": { $ref: "#/components/responses/RateLimited" }
   /api/v1/system/accounts:
     get:
       operationId: getSystemAccounts
@@ -5651,6 +5686,21 @@ components:
       properties:
         configuration: { $ref: "#/components/schemas/SystemMailConfig" }
         smtp_password: { type: string, format: password, maxLength: 2048, description: 留空保留已保存的 SMTP 密码 }
+        password: { type: string, format: password, maxLength: 128 }
+        code: { type: string, maxLength: 32 }
+    SystemSettings:
+      type: object
+      additionalProperties: false
+      required: [registration_enabled]
+      properties:
+        registration_enabled: { type: boolean, description: 是否允许公开本地账号注册 }
+        updated_at: { type: string, format: date-time }
+    UpdateSystemSettingsRequest:
+      type: object
+      additionalProperties: false
+      required: [registration_enabled, password]
+      properties:
+        registration_enabled: { type: boolean }
         password: { type: string, format: password, maxLength: 128 }
         code: { type: string, maxLength: 32 }
     SystemAccount:

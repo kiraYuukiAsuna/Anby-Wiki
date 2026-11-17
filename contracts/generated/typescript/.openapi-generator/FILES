@@ -348,6 +348,7 @@ docs/SubmitPublicDatasetFormRequest.md
 docs/SystemAccount.md
 docs/SystemAccounts.md
 docs/SystemMailConfig.md
+docs/SystemSettings.md
 docs/TestSystemMailRequest.md
 docs/UpdateAIConfigRequest.md
 docs/UpdateAITrustProfileRequest.md
@@ -356,6 +357,7 @@ docs/UpdateClaimVerificationRequest.md
 docs/UpdateEntityFederationLinkRequest.md
 docs/UpdateFederatedWikiRequest.md
 docs/UpdateSystemMailRequest.md
+docs/UpdateSystemSettingsRequest.md
 docs/UpsertBlockRedirectRequest.md
 docs/UpsertPageShareRequest.md
 docs/WikiApi.md
@@ -685,6 +687,7 @@ models/SubmitPublicDatasetFormRequest.ts
 models/SystemAccount.ts
 models/SystemAccounts.ts
 models/SystemMailConfig.ts
+models/SystemSettings.ts
 models/TestSystemMailRequest.ts
 models/UpdateAIConfigRequest.ts
 models/UpdateAITrustProfileRequest.ts
@@ -693,6 +696,7 @@ models/UpdateClaimVerificationRequest.ts
 models/UpdateEntityFederationLinkRequest.ts
 models/UpdateFederatedWikiRequest.ts
 models/UpdateSystemMailRequest.ts
+models/UpdateSystemSettingsRequest.ts
 models/UpsertBlockRedirectRequest.ts
 models/UpsertPageShareRequest.ts
 models/WikiComponent.ts

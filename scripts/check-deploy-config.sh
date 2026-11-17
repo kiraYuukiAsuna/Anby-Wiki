@@ -32,6 +32,17 @@ python3 -m unittest discover -s "$ROOT/scripts" -p 'production_environment_test.
 
 grep -Fq 'sh "$ROOT/scripts/cleanup-production.sh"' "$ROOT/scripts/deploy-production.sh" ||
   fail "successful production deployment must run cleanup"
+python3 - "$ROOT/scripts/deploy-production.sh" <<'PY'
+from pathlib import Path
+import sys
+
+script = Path(sys.argv[1]).read_text(encoding="utf-8")
+bootstrap = script.find('python3 "$ROOT/scripts/bootstrap-administrator.py"')
+grant = script.find('wiki-system-admin -username admin')
+restart = script.find('production_compose up -d --no-deps --wait --wait-timeout 720 api worker', grant)
+if not (bootstrap >= 0 and bootstrap < grant and restart > grant):
+    raise SystemExit("fresh production bootstrap must grant system administrator authority before app refresh")
+PY
 if grep -Eq 'deploy-backups|pg_dump' "$ROOT/scripts/deploy-production.sh" "$ROOT/scripts/prepare-production.py"; then
   fail "production deployment must not create persistent deployment backups"
 fi
